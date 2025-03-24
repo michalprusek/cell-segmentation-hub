@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { DragState, VertexDragState } from '../types';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface EditorCanvasProps {
   loading: boolean;
@@ -38,6 +39,7 @@ const EditorCanvas = ({
   containerRef
 }: EditorCanvasProps) => {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const { t } = useLanguage();
   
   // Načtení obrázku a zjištění jeho velikosti
   useEffect(() => {
@@ -74,7 +76,7 @@ const EditorCanvas = ({
   return (
     <div 
       ref={containerRef} 
-      className="flex-1 overflow-hidden relative cursor-move bg-[#161616] bg-opacity-90 bg-[radial-gradient(#1a1f2c_1px,transparent_1px)] bg-[size:20px_20px]"
+      className="flex-1 overflow-hidden relative cursor-move bg-[#161616] bg-opacity-90 bg-[radial-gradient(#1a1f2c_1px,transparent_1px)] bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)]"
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -91,7 +93,7 @@ const EditorCanvas = ({
           >
             <div className="flex flex-col items-center bg-slate-800/80 p-6 rounded-lg shadow-lg backdrop-blur-sm">
               <Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-4" />
-              <p className="text-slate-300">Načítání dat segmentace...</p>
+              <p className="text-slate-300">{t('segmentation.loading')}</p>
             </div>
           </motion.div>
         ) : (

@@ -70,10 +70,7 @@ const StatusBar = ({ segmentation }: StatusBarProps) => {
       
       <div className="flex items-center space-x-4">
         <div className="text-sm px-2 py-1 bg-slate-700 rounded-md">
-          {polygonCount} {language === 'cs' ? 
-            (polygonCount === 1 ? 'region' : 
-             (polygonCount > 1 && polygonCount < 5) ? 'regiony' : 'regionů') : 
-            (polygonCount === 1 ? t('image') : t('images'))}
+          {polygonCount} {polygonCount === 1 ? t('image') : t('images')}
         </div>
         <div className="text-xs text-slate-500">
           ID: {segmentation.id}

@@ -68,7 +68,7 @@ const SegmentationEditor = () => {
       />
       
       {/* Main content */}
-      <div className="flex-1 flex flex-col relative overflow-hidden">
+      <div className="flex-1 flex flex-col relative overflow-hidden items-center justify-center p-4">
         {/* Left Toolbar */}
         <EditorToolbar 
           zoom={zoom}
@@ -81,6 +81,7 @@ const SegmentationEditor = () => {
           onRedo={handleRedo}
           onDeletePolygon={handleDeletePolygon}
           onResetView={handleResetView}
+          onSave={handleSave}
         />
         
         {/* Right sidebar */}
@@ -91,22 +92,24 @@ const SegmentationEditor = () => {
           onSelectPolygon={setSelectedPolygonId}
         />
         
-        {/* Canvas container */}
-        <EditorCanvas 
-          loading={loading}
-          segmentation={segmentation}
-          zoom={zoom}
-          offset={offset}
-          selectedPolygonId={selectedPolygonId}
-          hoveredVertex={hoveredVertex}
-          imageSrc={imageSrc}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          dragState={dragState}
-          vertexDragState={vertexDragState}
-          containerRef={canvasContainerRef}
-        />
+        {/* Canvas container - nyní čtvercový */}
+        <div className="w-full h-full flex items-center justify-center">
+          <EditorCanvas 
+            loading={loading}
+            segmentation={segmentation}
+            zoom={zoom}
+            offset={offset}
+            selectedPolygonId={selectedPolygonId}
+            hoveredVertex={hoveredVertex}
+            imageSrc={imageSrc}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            dragState={dragState}
+            vertexDragState={vertexDragState}
+            containerRef={canvasContainerRef}
+          />
+        </div>
         
         {/* Status */}
         <StatusBar segmentation={segmentation} />
