@@ -18,11 +18,14 @@ const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const navigate = useNavigate();
   const { user } = useAuth();
   
   useEffect(() => {
-    fetchProjects();
+    if (user) {
+      fetchProjects();
+    }
   }, [user]);
 
   const fetchProjects = async () => {
@@ -30,10 +33,12 @@ const Dashboard = () => {
 
     try {
       setLoading(true);
+      setFetchError(null);
       
       const { data: projectsData, error: projectsError } = await supabase
         .from("projects")
         .select("*")
+        .eq("user_id", user.id)
         .order("updated_at", { ascending: false });
 
       if (projectsError) {
@@ -42,6 +47,7 @@ const Dashboard = () => {
 
       const projectsWithDetails = await Promise.all(
         (projectsData || []).map(async (project) => {
+          // Get image count
           const { count, error: countError } = await supabase
             .from("images")
             .select("id", { count: "exact" })
@@ -51,9 +57,20 @@ const Dashboard = () => {
             console.error("Error fetching image count:", countError);
           }
 
+          // Get the first image for thumbnail
+          const { data: imageData, error: imageError } = await supabase
+            .from("images")
+            .select("thumbnail_url")
+            .eq("project_id", project.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .single();
+
+          const thumbnail = imageData?.thumbnail_url || "/placeholder.svg";
+
           return {
             ...project,
-            thumbnail: "/placeholder.svg",
+            thumbnail,
             date: formatDate(project.updated_at),
             imageCount: count || 0
           };
@@ -63,6 +80,7 @@ const Dashboard = () => {
       setProjects(projectsWithDetails);
     } catch (error) {
       console.error("Error fetching projects:", error);
+      setFetchError("Failed to load projects. Please try again.");
       toast.error("Failed to load projects");
     } finally {
       setLoading(false);
@@ -101,6 +119,20 @@ const Dashboard = () => {
       navigate(`/project/${projectId}`);
     }, 500);
   };
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <DashboardHeader />
+        <div className="container mx-auto px-4 py-8">
+          <div className="bg-white p-6 rounded-lg border border-red-200 text-center">
+            <p className="text-red-500 mb-4">{fetchError}</p>
+            <Button onClick={fetchProjects}>Try Again</Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-gray-50">
