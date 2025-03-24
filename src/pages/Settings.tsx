@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import UserProfileSection from "@/components/settings/UserProfileSection";
 import NotificationSection from "@/components/settings/NotificationSection";
 import AccountSection from "@/components/settings/AccountSection";
-import { useTheme } from "@/contexts/ThemeContext";
+import { useTheme, Theme } from "@/contexts/ThemeContext"; // Import Theme type from ThemeContext
 import { useLanguage, languageNames, Language } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Monitor, Moon, Sun } from "lucide-react";

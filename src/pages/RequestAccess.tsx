@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -39,15 +38,13 @@ const RequestAccess = () => {
     try {
       const { error } = await supabase
         .from("access_requests")
-        .insert([
-          {
-            email,
-            name,
-            institution,
-            reason,
-            status: "pending"
-          }
-        ]);
+        .insert({
+          email,
+          name,
+          institution,
+          purpose: reason,
+          status: "pending"
+        });
         
       if (error) throw error;
       
