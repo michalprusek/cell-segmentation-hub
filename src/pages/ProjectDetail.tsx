@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { segmentImage } from "@/lib/segmentation";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -12,6 +12,8 @@ import ProjectHeader from "@/components/project/ProjectHeader";
 import ProjectToolbar from "@/components/project/ProjectToolbar";
 import ImageCard from "@/components/project/ImageCard";
 import EmptyState from "@/components/project/EmptyState";
+import ProjectImages from "@/components/project/ProjectImages";
+import ProjectUploaderSection from "@/components/project/ProjectUploaderSection";
 import type { Json } from "@/integrations/supabase/types";
 import type { SegmentationResult } from "@/lib/segmentation";
 
@@ -253,15 +255,7 @@ const ProjectDetail = () => {
       
       <div className="container mx-auto px-4 py-8">
         {showUploader ? (
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-medium dark:text-white">{t('images.uploadImages')}</h2>
-              <Button variant="outline" size="sm" onClick={toggleUploader}>
-                {t('common.cancel')}
-              </Button>
-            </div>
-            <ImageUploader />
-          </div>
+          <ProjectUploaderSection onCancel={toggleUploader} />
         ) : (
           <ProjectToolbar 
             searchTerm={searchTerm}
@@ -283,21 +277,11 @@ const ProjectDetail = () => {
             onUpload={toggleUploader}
           />
         ) : !showUploader && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {filteredImages.map((image) => (
-              <ImageCard 
-                key={image.id}
-                id={image.id}
-                name={image.name}
-                url={image.url}
-                updatedAt={image.updatedAt}
-                segmentationStatus={image.segmentationStatus}
-                segmentationResult={image.segmentationResult}
-                onDelete={handleDeleteImage}
-                onClick={() => handleOpenSegmentationEditor(image)}
-              />
-            ))}
-          </div>
+          <ProjectImages 
+            images={filteredImages}
+            onDelete={handleDeleteImage}
+            onOpen={handleOpenSegmentationEditor}
+          />
         )}
       </div>
     </div>
