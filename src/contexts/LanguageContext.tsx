@@ -1,16 +1,16 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import enTranslations from '@/translations/en';
-import csTranslations from '@/translations/cs';
-import deTranslations from '@/translations/de';
-import esTranslations from '@/translations/es';
-import frTranslations from '@/translations/fr';
-import zhTranslations from '@/translations/zh';
+import en from '@/translations/en';
+import cs from '@/translations/cs';
+import de from '@/translations/de';
+import es from '@/translations/es';
+import fr from '@/translations/fr';
+import zh from '@/translations/zh';
 import { useAuth } from "@/contexts/AuthContext";
 
 export type Language = 'en' | 'cs' | 'de' | 'es' | 'fr' | 'zh';
-export type Translations = typeof enTranslations;
+export type Translations = typeof en;
 
 interface LanguageContextType {
   language: Language;
@@ -20,19 +20,19 @@ interface LanguageContextType {
 }
 
 const translations = {
-  en: enTranslations,
-  cs: csTranslations,
-  de: deTranslations,
-  es: esTranslations,
-  fr: frTranslations,
-  zh: zhTranslations,
+  en,
+  cs,
+  de,
+  es,
+  fr,
+  zh,
 };
 
 const LanguageContext = createContext<LanguageContextType>({
   language: 'en',
   setLanguage: () => {},
   t: (key) => key,
-  translations: enTranslations,
+  translations: en,
 });
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -149,7 +149,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t, translations: translations[language] }}>
+    <LanguageContext.Provider value={{ language, setLanguage, t, translations: translations[language] as Translations }}>
       {children}
     </LanguageContext.Provider>
   );
