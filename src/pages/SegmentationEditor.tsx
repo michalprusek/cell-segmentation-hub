@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -40,6 +40,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/contexts/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface DragState {
   isDragging: boolean;
@@ -58,6 +60,7 @@ interface VertexDragState {
 const SegmentationEditor = () => {
   const { projectId, imageId } = useParams<{ projectId: string, imageId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [projectTitle, setProjectTitle] = useState('');
   const [imageName, setImageName] = useState('');
   const [imageSrc, setImageSrc] = useState('/placeholder.svg');
@@ -92,38 +95,86 @@ const SegmentationEditor = () => {
   
   // Fetch project and image data
   useEffect(() => {
+    console.log("SegmentationEditor mounted with params:", { projectId, imageId, userId: user?.id });
+    
+    if (!projectId || !imageId) {
+      toast.error("Missing project or image ID");
+      navigate("/dashboard");
+      return;
+    }
+    
     const fetchData = async () => {
       try {
-        // In a real app, this would fetch from Supabase
-        // For demonstration, we'll use sample data
-        const projects = [
-          { id: 1, title: "HeLa Cell Spheroids" },
-          { id: 2, title: "MCF-7 Breast Cancer" },
-          { id: 3, title: "Neural Organoids" },
-          { id: 4, title: "Pancreatic Islets" },
-          { id: 5, title: "Liver Microtissues" },
-          { id: 6, title: "Embryoid Bodies" },
-        ];
+        setLoading(true);
         
-        const project = projects.find(p => p.id.toString() === projectId);
+        // Fetch project data
+        const { data: projectData, error: projectError } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", projectId)
+          .maybeSingle();
         
-        if (project) {
-          setProjectTitle(project.title);
-          setImageName(`${project.title.split(' ')[0]}_Image_${imageId}.png`);
-          
-          // Simulate loading the segmentation result
-          const result = await segmentImage('/placeholder.svg');
-          setSegmentation(result);
-          
-          // Initialize history
-          setHistory([result]);
-          setHistoryIndex(0);
-        } else {
+        if (projectError) {
+          throw new Error(`Error fetching project: ${projectError.message}`);
+        }
+        
+        if (!projectData) {
           toast.error("Project not found");
           navigate("/dashboard");
+          return;
         }
+        
+        setProjectTitle(projectData.title);
+        
+        // Fetch image data
+        const { data: imageData, error: imageError } = await supabase
+          .from("images")
+          .select("*")
+          .eq("id", imageId)
+          .eq("project_id", projectId)
+          .maybeSingle();
+        
+        if (imageError) {
+          throw new Error(`Error fetching image: ${imageError.message}`);
+        }
+        
+        if (!imageData) {
+          toast.error("Image not found");
+          navigate(`/project/${projectId}`);
+          return;
+        }
+        
+        setImageName(imageData.name || `Image_${imageId}`);
+        setImageSrc(imageData.image_url || '/placeholder.svg');
+        
+        // Get segmentation data
+        let result: SegmentationResult;
+        
+        if (imageData.segmentation_status === 'completed' && imageData.segmentation_result) {
+          // Use existing results
+          result = imageData.segmentation_result as unknown as SegmentationResult;
+        } else {
+          // Generate new segmentation (would typically be done server-side)
+          result = await segmentImage(imageData.image_url || '/placeholder.svg');
+          
+          // Update segmentation status in the database
+          await supabase
+            .from("images")
+            .update({
+              segmentation_status: 'completed',
+              segmentation_result: result as unknown as any,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", imageId);
+        }
+        
+        setSegmentation(result);
+        
+        // Initialize history
+        setHistory([result]);
+        setHistoryIndex(0);
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error in SegmentationEditor:", error);
         toast.error("Failed to load segmentation data");
       } finally {
         setLoading(false);
@@ -131,89 +182,7 @@ const SegmentationEditor = () => {
     };
     
     fetchData();
-  }, [projectId, imageId, navigate]);
-  
-  // Record history when segmentation changes
-  useEffect(() => {
-    if (!segmentation || historyIndex === -1) return;
-    
-    // If we're not at the end of the history array, truncate it
-    if (historyIndex < history.length - 1) {
-      setHistory(prev => prev.slice(0, historyIndex + 1));
-    }
-    
-    // Add current state to history
-    setHistory(prev => [...prev, {...segmentation}]);
-    setHistoryIndex(prev => prev + 1);
-  }, [segmentation]);
-  
-  // Draw on canvas when segmentation or view changes
-  useEffect(() => {
-    if (!canvasRef.current || !segmentation) return;
-    
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Load image and draw
-    const img = new Image();
-    img.onload = () => {
-      // Set canvas size to match image
-      canvas.width = img.width;
-      canvas.height = img.height;
-      
-      // Clear canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      
-      // Draw image
-      ctx.drawImage(img, 0, 0);
-      
-      // Draw polygons
-      segmentation.polygons.forEach(polygon => {
-        ctx.beginPath();
-        ctx.moveTo(polygon.points[0].x, polygon.points[0].y);
-        
-        for (let i = 1; i < polygon.points.length; i++) {
-          ctx.lineTo(polygon.points[i].x, polygon.points[i].y);
-        }
-        
-        ctx.closePath();
-        
-        // Different styling for selected polygon
-        if (polygon.id === selectedPolygonId) {
-          ctx.strokeStyle = '#FF3B30';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-          ctx.fillStyle = 'rgba(255, 59, 48, 0.2)';
-        } else {
-          ctx.strokeStyle = '#00BFFF';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          ctx.fillStyle = 'rgba(0, 191, 255, 0.2)';
-        }
-        ctx.fill();
-        
-        // Draw vertices
-        polygon.points.forEach(point => {
-          ctx.beginPath();
-          ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
-          
-          if (polygon.id === selectedPolygonId) {
-            ctx.fillStyle = '#FF3B30';
-          } else {
-            ctx.fillStyle = '#FFFFFF';
-          }
-          
-          ctx.fill();
-          ctx.strokeStyle = polygon.id === selectedPolygonId ? '#FF3B30' : '#0077FF';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-        });
-      });
-    };
-    
-    img.src = segmentation.imageSrc || '/placeholder.svg';
-  }, [segmentation, selectedPolygonId]);
+  }, [projectId, imageId, navigate, user?.id]);
   
   // Handle mouse down for dragging
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
@@ -378,15 +347,26 @@ const SegmentationEditor = () => {
   
   // Handle save
   const handleSave = async () => {
+    if (!segmentation || !imageId) return;
+    
     setSaving(true);
     
     try {
-      // In a real app, this would save to Supabase
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const { error } = await supabase
+        .from("images")
+        .update({
+          segmentation_status: 'completed',
+          segmentation_result: segmentation as unknown as any,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", imageId);
+      
+      if (error) throw new Error(error.message);
+      
       toast.success("Segmentation saved successfully");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error saving segmentation:", error);
-      toast.error("Failed to save segmentation");
+      toast.error(`Failed to save segmentation: ${error.message}`);
     } finally {
       setSaving(false);
     }
@@ -394,16 +374,107 @@ const SegmentationEditor = () => {
   
   // Navigate to previous or next image
   const navigateToImage = (direction: 'prev' | 'next') => {
-    if (!imageId) return;
+    if (!imageId || !projectId) return;
     
     const currentId = parseInt(imageId);
+    if (isNaN(currentId)) return;
+    
+    // In a real app, this would query the database for adjacent images
     const newId = direction === 'prev' ? Math.max(1, currentId - 1) : currentId + 1;
     
     navigate(`/segmentation/${projectId}/${newId}`);
   };
   
+  // Record history when segmentation changes
+  useEffect(() => {
+    if (!segmentation || historyIndex === -1) return;
+    
+    // If we're not at the end of the history array, truncate it
+    if (historyIndex < history.length - 1) {
+      setHistory(prev => prev.slice(0, historyIndex + 1));
+    }
+    
+    // Add current state to history
+    setHistory(prev => [...prev, {...segmentation}]);
+    setHistoryIndex(prev => prev + 1);
+  }, [segmentation]);
+  
+  // Draw on canvas when segmentation or view changes
+  useEffect(() => {
+    if (!canvasRef.current || !segmentation) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Load image and draw
+    const img = new Image();
+    img.onload = () => {
+      // Set canvas size to match image
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw image
+      ctx.drawImage(img, 0, 0);
+      
+      // Draw polygons
+      segmentation.polygons.forEach(polygon => {
+        ctx.beginPath();
+        ctx.moveTo(polygon.points[0].x, polygon.points[0].y);
+        
+        for (let i = 1; i < polygon.points.length; i++) {
+          ctx.lineTo(polygon.points[i].x, polygon.points[i].y);
+        }
+        
+        ctx.closePath();
+        
+        // Different styling for selected polygon
+        if (polygon.id === selectedPolygonId) {
+          ctx.strokeStyle = '#FF3B30';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(255, 59, 48, 0.2)';
+        } else {
+          ctx.strokeStyle = '#00BFFF';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.fillStyle = 'rgba(0, 191, 255, 0.2)';
+        }
+        ctx.fill();
+        
+        // Draw vertices
+        polygon.points.forEach(point => {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+          
+          if (polygon.id === selectedPolygonId) {
+            ctx.fillStyle = '#FF3B30';
+          } else {
+            ctx.fillStyle = '#FFFFFF';
+          }
+          
+          ctx.fill();
+          ctx.strokeStyle = polygon.id === selectedPolygonId ? '#FF3B30' : '#0077FF';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        });
+      });
+    };
+    
+    img.src = segmentation.imageSrc || imageSrc || '/placeholder.svg';
+  }, [segmentation, selectedPolygonId, imageSrc]);
+  
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col">
+    <motion.div 
+      className="min-h-screen bg-slate-900 text-white flex flex-col"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
+    >
       {/* Header */}
       <div className="bg-slate-800 border-b border-slate-700 p-4">
         <div className="container mx-auto flex justify-between items-center">
@@ -751,24 +822,35 @@ const SegmentationEditor = () => {
           onMouseLeave={handleMouseUp}
         >
           {loading ? (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex flex-col items-center">
-                <Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-4" />
-                <p className="text-slate-300">Loading segmentation data...</p>
-              </div>
-            </div>
+            <AnimatePresence>
+              <motion.div 
+                className="absolute inset-0 flex items-center justify-center"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.3 }}
+              >
+                <div className="flex flex-col items-center">
+                  <Loader2 className="h-10 w-10 text-blue-500 animate-spin mb-4" />
+                  <p className="text-slate-300">Loading segmentation data...</p>
+                </div>
+              </motion.div>
+            </AnimatePresence>
           ) : (
-            <div 
+            <motion.div 
               style={{ 
                 transform: `scale(${zoom}) translate(${offset.x}px, ${offset.y}px)`,
                 transformOrigin: '0 0',
               }}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.3 }}
             >
               <canvas 
                 ref={canvasRef} 
                 className="bg-slate-950 shadow-xl"
               />
-            </div>
+            </motion.div>
           )}
         </div>
         
@@ -783,7 +865,7 @@ const SegmentationEditor = () => {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 };
 

@@ -47,6 +47,17 @@ export const useProjectImageActions = ({ projectId, onImagesChange, images }: Pr
       return;
     }
     
+    console.log("Navigating to segmentation editor with:", {
+      projectId,
+      imageId: image.id
+    });
+    
+    // Ensure projectId and imageId are valid before navigation
+    if (!projectId.trim() || !image.id.trim()) {
+      toast.error("Invalid project or image ID");
+      return;
+    }
+    
     // Navigate to the segmentation editor with proper URL parameters
     navigate(`/segmentation/${projectId}/${image.id}`);
     
