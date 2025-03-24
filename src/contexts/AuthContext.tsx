@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 
 interface AuthContextType {
@@ -23,11 +23,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     // Set up the auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log("Auth state changed", event, !!session);
         setSession(session);
         setUser(session?.user ?? null);
         
@@ -41,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Got session", !!session);
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -52,6 +55,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  // Prevent redirection loop when on auth pages
+  useEffect(() => {
+    const publicRoutes = ['/sign-in', '/sign-up', '/', '/request-access', '/terms-of-service', '/privacy-policy'];
+    if (user && publicRoutes.includes(location.pathname)) {
+      // Don't redirect on public pages when user is signed in
+      console.log("User is signed in but on a public page, not redirecting");
+    }
+  }, [user, location.pathname]);
 
   const fetchUserProfile = async (userId: string) => {
     try {
@@ -113,6 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       // Note: In a real environment with email confirmation enabled,
       // users would need to confirm their email before signing in
+      navigate("/sign-in");
     } catch (error) {
       console.error("Error signing up:", error);
       throw error;

@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
 const SignUp = () => {
   const [email, setEmail] = useState("");
@@ -16,13 +17,6 @@ const SignUp = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { signUp, user } = useAuth();
-
-  // Redirect if already logged in
-  React.useEffect(() => {
-    if (user) {
-      navigate('/dashboard');
-    }
-  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,6 +47,21 @@ const SignUp = () => {
       setIsLoading(false);
     }
   };
+
+  // If already logged in, show a message instead of the form
+  if (user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full glass-morphism rounded-2xl overflow-hidden shadow-glass-lg p-10 text-center">
+          <h2 className="text-2xl font-bold mb-4">You're already logged in</h2>
+          <p className="mb-6 text-gray-600">You're already signed up and logged in.</p>
+          <Button asChild className="w-full">
+            <Link to="/dashboard">Go to Dashboard</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -126,13 +135,13 @@ const SignUp = () => {
               className="ml-2 block text-sm text-gray-700"
             >
               I agree to the{" "}
-              <a href="#" className="text-blue-600 hover:text-blue-500 transition-colors">
+              <Link to="/terms-of-service" className="text-blue-600 hover:text-blue-500 transition-colors">
                 Terms of Service
-              </a>{" "}
+              </Link>{" "}
               and{" "}
-              <a href="#" className="text-blue-600 hover:text-blue-500 transition-colors">
+              <Link to="/privacy-policy" className="text-blue-600 hover:text-blue-500 transition-colors">
                 Privacy Policy
-              </a>
+              </Link>
             </label>
           </div>
           
@@ -141,7 +150,12 @@ const SignUp = () => {
             className="w-full h-11 text-base rounded-md"
             disabled={isLoading}
           >
-            {isLoading ? "Creating account..." : "Sign up"}
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating account...
+              </>
+            ) : "Sign up"}
           </Button>
         </form>
         

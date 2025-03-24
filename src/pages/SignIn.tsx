@@ -1,28 +1,20 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { Loader2 } from "lucide-react";
 
 const SignIn = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast: uiToast } = useToast();
   const { signIn, user } = useAuth();
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      navigate('/dashboard');
-    }
-  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,12 +35,20 @@ const SignIn = () => {
     }
   };
 
-  const handleRequestAccess = () => {
-    uiToast({
-      title: "Access Request Submitted",
-      description: "We'll review your request and get back to you shortly.",
-    });
-  };
+  // If already logged in, show a message instead of the form
+  if (user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-md w-full glass-morphism rounded-2xl overflow-hidden shadow-glass-lg p-10 text-center">
+          <h2 className="text-2xl font-bold mb-4">You're already logged in</h2>
+          <p className="mb-6 text-gray-600">You're already signed in to your account.</p>
+          <Button asChild className="w-full">
+            <Link to="/dashboard">Go to Dashboard</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -118,7 +118,12 @@ const SignIn = () => {
             className="w-full h-11 text-base rounded-md"
             disabled={isLoading}
           >
-            {isLoading ? "Signing in..." : "Sign in"}
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Signing in...
+              </>
+            ) : "Sign in"}
           </Button>
         </form>
         
@@ -141,22 +146,23 @@ const SignIn = () => {
                 Sign Up
               </Button>
             </Link>
-            <Button 
-              variant="outline" 
-              className="w-full h-11 text-base rounded-md"
-              onClick={handleRequestAccess}
-            >
-              Request Access
-            </Button>
+            <Link to="/request-access">
+              <Button 
+                variant="outline" 
+                className="w-full h-11 text-base rounded-md"
+              >
+                Request Access
+              </Button>
+            </Link>
             <p className="text-center text-sm text-gray-600 mt-3">
               By signing in, you agree to our{' '}
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              <Link to="/terms-of-service" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
                 Terms of Service
-              </a>{' '}
+              </Link>{' '}
               and{' '}
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              <Link to="/privacy-policy" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
                 Privacy Policy
-              </a>
+              </Link>
             </p>
           </div>
         </div>

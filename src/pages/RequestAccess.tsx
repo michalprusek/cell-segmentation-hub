@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -67,55 +67,58 @@ const RequestAccess = () => {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <div className="flex-1 bg-gray-50 py-12">
+      <div className="flex-1 bg-gray-50 py-12 mt-16">
         <div className="container max-w-4xl mx-auto px-4">
-          <Card>
-            <CardHeader className="text-center">
-              <CardTitle className="text-2xl font-bold">Request Access</CardTitle>
-              <CardDescription>
+          <Card className="shadow-md">
+            <CardHeader className="text-center pb-2">
+              <CardTitle className="text-3xl font-bold mb-2">Request Access</CardTitle>
+              <CardDescription className="text-lg">
                 Complete this form to request access to SpheroSeg for your research
               </CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="space-y-5">
+                  <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Full Name</Label>
+                      <Label htmlFor="name" className="text-base font-medium">Full Name</Label>
                       <Input 
                         id="name" 
                         placeholder="John Doe" 
                         value={name}
                         onChange={(e) => setName(e.target.value)}
+                        className="h-12"
                         required
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
+                      <Label htmlFor="email" className="text-base font-medium">Email Address</Label>
                       <Input 
                         id="email" 
                         type="email" 
                         placeholder="john.doe@university.edu" 
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        className="h-12"
                         required
                       />
                     </div>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="institution">Institution/Organization</Label>
+                    <Label htmlFor="institution" className="text-base font-medium">Institution/Organization</Label>
                     <Input 
                       id="institution" 
                       placeholder="University of Science" 
                       value={institution}
                       onChange={(e) => setInstitution(e.target.value)}
+                      className="h-12"
                       required
                     />
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="purpose">
+                    <Label htmlFor="purpose" className="text-base font-medium">
                       How do you plan to use SpheroSeg?
                     </Label>
                     <Textarea 
@@ -124,18 +127,19 @@ const RequestAccess = () => {
                       rows={5}
                       value={purpose}
                       onChange={(e) => setPurpose(e.target.value)}
+                      className="min-h-32"
                       required
                     />
                   </div>
                 </div>
                 
-                <div className="flex justify-end space-x-4">
-                  <Button variant="outline" asChild>
+                <div className="flex justify-end space-x-4 pt-2">
+                  <Button variant="outline" size="lg" asChild>
                     <Link to="/">
                       Return Home
                     </Link>
                   </Button>
-                  <Button type="submit" disabled={isSubmitting}>
+                  <Button type="submit" size="lg" disabled={isSubmitting}>
                     {isSubmitting ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -148,16 +152,18 @@ const RequestAccess = () => {
                 </div>
               </form>
             </CardContent>
-            <CardFooter className="text-sm text-gray-500 border-t pt-4 text-center">
-              By submitting this form, you agree to our{" "}
-              <Link to="/terms-of-service" className="text-blue-600 hover:underline">
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link to="/privacy-policy" className="text-blue-600 hover:underline">
-                Privacy Policy
-              </Link>
-              .
+            <CardFooter className="text-sm text-gray-500 border-t pt-6 text-center">
+              <p>
+                By submitting this form, you agree to our{" "}
+                <Link to="/terms-of-service" className="text-blue-600 hover:underline font-medium">
+                  Terms of Service
+                </Link>{" "}
+                {" "}and{" "}
+                <Link to="/privacy-policy" className="text-blue-600 hover:underline font-medium">
+                  Privacy Policy
+                </Link>
+                .
+              </p>
             </CardFooter>
           </Card>
         </div>

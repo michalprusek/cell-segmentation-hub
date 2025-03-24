@@ -31,6 +31,19 @@ const ProjectsList = ({ projects, viewMode, onOpenProject, loading }: ProjectsLi
     );
   }
 
+  if (projects.length === 0) {
+    return (
+      <div className="bg-white p-6 rounded-lg border border-gray-200 text-center py-12">
+        <div className="max-w-md mx-auto">
+          <h3 className="text-lg font-medium mb-2">No Projects Found</h3>
+          <p className="text-gray-500 mb-6">
+            You haven't created any projects yet. Create your first project to get started.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (viewMode === "grid") {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
