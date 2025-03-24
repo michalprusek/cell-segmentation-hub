@@ -4,10 +4,14 @@ import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, Upload, X, Image as ImageIcon, CheckCircle } from "lucide-react";
 import ProjectSelector from "./ProjectSelector";
 import { uploadImage } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
+import { segmentImage } from "@/lib/segmentation";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
 
 const ImageUploader = () => {
   const [files, setFiles] = useState<(File & { preview?: string })[]>([]);
@@ -15,9 +19,17 @@ const ImageUploader = () => {
   const [selectedProject, setSelectedProject] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [uploadStatus, setUploadStatus] = useState<Record<string, 'pending' | 'uploading' | 'success' | 'error'>>({});
+  const [autoSegment, setAutoSegment] = useState(false);
+  const [totalProgress, setTotalProgress] = useState(0);
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (!selectedProject || !user) {
+      toast.error("Please select a project first");
+      return;
+    }
+
     // Create preview URLs for the accepted files
     const filesWithPreview = acceptedFiles.map(file => 
       Object.assign(file, {
@@ -30,7 +42,7 @@ const ImageUploader = () => {
     // Initialize upload status for each file
     const initialStatus: Record<string, 'pending' | 'uploading' | 'success' | 'error'> = {};
     acceptedFiles.forEach(file => {
-      initialStatus[file.name] = 'pending';
+      initialStatus[file.name] = 'uploading';
     });
     
     setUploadStatus(prev => ({...prev, ...initialStatus}));
@@ -41,13 +53,17 @@ const ImageUploader = () => {
       });
       return newProgress;
     });
-  }, []);
+
+    // Start uploading immediately
+    uploadFiles(filesWithPreview, selectedProject, user.id);
+  }, [selectedProject, user]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({ 
     onDrop,
     accept: {
       'image/*': ['.jpeg', '.jpg', '.png', '.tif', '.tiff', '.bmp']
-    }
+    },
+    noClick: !selectedProject || !user
   });
 
   const removeFile = (name: string) => {
@@ -63,18 +79,13 @@ const ImageUploader = () => {
     setUploadProgress(newProgress);
   };
 
-  const handleUpload = async () => {
-    if (!selectedProject) {
-      toast.error("Please select a project");
-      return;
-    }
-    
-    if (files.length === 0) {
+  const uploadFiles = async (filesToUpload: (File & { preview?: string })[], projectId: string, userId: string) => {
+    if (filesToUpload.length === 0) {
       toast.error("Please select at least one file");
       return;
     }
     
-    if (!user) {
+    if (!userId) {
       toast.error("You must be logged in to upload files");
       return;
     }
@@ -83,61 +94,121 @@ const ImageUploader = () => {
     
     // Set status of all pending files to uploading
     const updatedStatus = {...uploadStatus};
-    Object.keys(updatedStatus).forEach(fileName => {
-      if (updatedStatus[fileName] === 'pending') {
-        updatedStatus[fileName] = 'uploading';
-      }
+    filesToUpload.forEach(file => {
+      updatedStatus[file.name] = 'uploading';
     });
     setUploadStatus(updatedStatus);
     
-    const promises = files
-      .filter(file => uploadStatus[file.name] === 'uploading')
-      .map(async (file) => {
-        try {
-          // Simulate progress updates
-          const interval = setInterval(() => {
-            setUploadProgress(prev => {
-              const newProgress = {...prev};
-              // Don't go to 100% until actually complete
-              if (newProgress[file.name] < 90) {
-                newProgress[file.name] += Math.floor(Math.random() * 10) + 1;
-              }
-              return newProgress;
-            });
-          }, 300);
-          
-          // Upload the file
-          await uploadImage(file, selectedProject, user.id);
-          
-          // Clear interval and set progress to 100%
-          clearInterval(interval);
-          setUploadProgress(prev => ({...prev, [file.name]: 100}));
-          setUploadStatus(prev => ({...prev, [file.name]: 'success'}));
-          return { name: file.name, success: true };
-        } catch (error) {
-          console.error(`Error uploading ${file.name}:`, error);
-          setUploadStatus(prev => ({...prev, [file.name]: 'error'}));
-          return { name: file.name, success: false, error };
-        }
-      });
+    let uploadedCount = 0;
+    const uploadedImages: { id: string; url: string }[] = [];
     
-    try {
-      const results = await Promise.all(promises);
-      const successCount = results.filter(r => r.success).length;
-      
-      if (successCount === results.length) {
-        toast.success(`Successfully uploaded ${successCount} ${successCount === 1 ? 'file' : 'files'}`);
-      } else if (successCount > 0) {
-        toast.success(`Uploaded ${successCount} of ${results.length} files`);
-      } else {
-        toast.error("Failed to upload files");
+    for (const file of filesToUpload) {
+      try {
+        // Simulate progress updates
+        const progressInterval = setInterval(() => {
+          setUploadProgress(prev => {
+            const newProgress = {...prev};
+            // Don't go to 100% until actually complete
+            if (newProgress[file.name] < 90) {
+              newProgress[file.name] += Math.floor(Math.random() * 10) + 1;
+            }
+            return newProgress;
+          });
+          
+          // Update total progress
+          updateTotalProgress();
+        }, 300);
+        
+        // Upload the file
+        const uploadedImage = await uploadImage(file, projectId, userId);
+        
+        // Clear interval and set progress to 100%
+        clearInterval(progressInterval);
+        setUploadProgress(prev => ({...prev, [file.name]: 100}));
+        setUploadStatus(prev => ({...prev, [file.name]: 'success'}));
+        uploadedCount++;
+        
+        if (uploadedImage && uploadedImage.id) {
+          uploadedImages.push({
+            id: uploadedImage.id,
+            url: uploadedImage.image_url
+          });
+        }
+      } catch (error) {
+        console.error(`Error uploading ${file.name}:`, error);
+        setUploadStatus(prev => ({...prev, [file.name]: 'error'}));
       }
-    } catch (error) {
-      console.error("Error during upload:", error);
-      toast.error("An error occurred during upload");
-    } finally {
-      setUploading(false);
     }
+    
+    // Set total progress to 100% when done
+    setTotalProgress(100);
+    
+    if (uploadedCount > 0) {
+      toast.success(`Successfully uploaded ${uploadedCount} ${uploadedCount === 1 ? 'file' : 'files'}`);
+      
+      // Check if auto-segmentation is enabled
+      if (autoSegment && uploadedImages.length > 0) {
+        for (const image of uploadedImages) {
+          try {
+            // Update status to processing
+            await supabase
+              .from("images")
+              .update({ segmentation_status: 'processing' })
+              .eq("id", image.id);
+            
+            // Start segmentation in background
+            // In a real app, this would be a background process or queue
+            segmentImage(image.url).then(async (result) => {
+              await supabase
+                .from("images")
+                .update({
+                  segmentation_status: 'completed',
+                  segmentation_result: result as any,
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", image.id);
+            }).catch(async (error) => {
+              console.error("Segmentation failed:", error);
+              await supabase
+                .from("images")
+                .update({
+                  segmentation_status: 'failed',
+                  updated_at: new Date().toISOString()
+                })
+                .eq("id", image.id);
+            });
+          } catch (error) {
+            console.error("Error starting segmentation:", error);
+          }
+        }
+        
+        toast.info("Started automatic segmentation of uploaded images");
+      }
+      
+      // Navigate to project detail page after all uploads are complete
+      setTimeout(() => {
+        navigate(`/project/${projectId}`);
+      }, 1000);
+    } else {
+      toast.error("Failed to upload files");
+    }
+    
+    setUploading(false);
+  };
+
+  // Update the total progress based on individual file progress
+  const updateTotalProgress = () => {
+    const fileNames = Object.keys(uploadProgress);
+    if (fileNames.length === 0) {
+      setTotalProgress(0);
+      return;
+    }
+    
+    const totalProgressValue = fileNames.reduce((sum, fileName) => {
+      return sum + uploadProgress[fileName];
+    }, 0) / fileNames.length;
+    
+    setTotalProgress(Math.round(totalProgressValue));
   };
 
   // Clean up previews when component unmounts
@@ -177,21 +248,38 @@ const ImageUploader = () => {
         value={selectedProject} 
         onChange={setSelectedProject} 
       />
+
+      <div className="flex items-center space-x-2">
+        <Switch
+          id="auto-segment"
+          checked={autoSegment}
+          onCheckedChange={setAutoSegment}
+        />
+        <Label htmlFor="auto-segment">
+          Automatically start segmentation after upload
+        </Label>
+      </div>
       
       <div
         {...getRootProps()}
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
           isDragActive ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-blue-400"
-        }`}
+        } ${!selectedProject || !user ? "opacity-50 cursor-not-allowed" : ""}`}
       >
         <input {...getInputProps()} />
         <div className="space-y-3">
           <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 flex items-center justify-center">
             <ImageIcon className="h-6 w-6 text-blue-500" />
           </div>
-          <h4 className="text-base font-medium">Drag and drop your images here</h4>
+          <h4 className="text-base font-medium">
+            {!selectedProject 
+              ? "Select a project first" 
+              : "Drag and drop your images here"}
+          </h4>
           <p className="text-sm text-gray-500">
-            or <span className="text-blue-500 font-medium">browse files</span>
+            {selectedProject && user 
+              ? <span>or <span className="text-blue-500 font-medium">browse files</span></span>
+              : "Images will upload automatically after drop"}
           </p>
           <p className="text-xs text-gray-400">
             Supported formats: JPEG, PNG, TIFF, BMP
@@ -199,17 +287,22 @@ const ImageUploader = () => {
         </div>
       </div>
       
+      {totalProgress > 0 && totalProgress < 100 && (
+        <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
+          <div 
+            className="bg-blue-600 h-2.5 rounded-full transition-all duration-300" 
+            style={{ width: `${totalProgress}%` }}
+          ></div>
+          <p className="text-xs text-gray-500 mt-1 text-right">
+            {totalProgress}% uploaded
+          </p>
+        </div>
+      )}
+      
       {files.length > 0 && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Label>Selected Files ({files.length})</Label>
-            <Button 
-              onClick={handleUpload} 
-              disabled={uploading || !selectedProject}
-              size="sm"
-            >
-              {uploading ? "Uploading..." : "Upload All"}
-            </Button>
+            <Label>Uploaded Files ({files.length})</Label>
           </div>
           
           <div className="space-y-3 max-h-80 overflow-y-auto p-1">

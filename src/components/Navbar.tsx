@@ -61,10 +61,16 @@ const Navbar = () => {
             Features
           </Link>
           <Link 
-            to="/#about"
+            to="/terms-of-service"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
-            About
+            Terms
+          </Link>
+          <Link 
+            to="/privacy-policy"
+            className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
+          >
+            Privacy
           </Link>
           <Link 
             to="/sign-in"
@@ -73,7 +79,7 @@ const Navbar = () => {
             Login
           </Link>
           <Button asChild size="sm" className="rounded-md">
-            <Link to="/sign-in">Get Started</Link>
+            <Link to="/request-access">Request Access</Link>
           </Button>
         </nav>
 
@@ -110,11 +116,18 @@ const Navbar = () => {
               Features
             </Link>
             <Link 
-              to="/#about"
+              to="/terms-of-service"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              About
+              Terms of Service
+            </Link>
+            <Link 
+              to="/privacy-policy"
+              className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Privacy Policy
             </Link>
             <Link 
               to="/sign-in"
@@ -124,8 +137,8 @@ const Navbar = () => {
               Login
             </Link>
             <Button asChild className="w-full rounded-md">
-              <Link to="/sign-in" onClick={() => setIsMobileMenuOpen(false)}>
-                Get Started
+              <Link to="/request-access" onClick={() => setIsMobileMenuOpen(false)}>
+                Request Access
               </Link>
             </Button>
           </div>

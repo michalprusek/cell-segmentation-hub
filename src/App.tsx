@@ -16,6 +16,9 @@ import SegmentationEditor from "./pages/SegmentationEditor";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
+import TermsOfService from "./pages/TermsOfService";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import RequestAccess from "./pages/RequestAccess";
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -38,6 +41,9 @@ const App = () => (
             <Route path="/" element={<Index />} />
             <Route path="/sign-in" element={<SignIn />} />
             <Route path="/sign-up" element={<SignUp />} />
+            <Route path="/terms-of-service" element={<TermsOfService />} />
+            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/request-access" element={<RequestAccess />} />
             <Route path="/dashboard" element={
               <ProtectedRoute>
                 <Dashboard />

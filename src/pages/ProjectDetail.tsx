@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -373,14 +374,17 @@ const ProjectDetail = () => {
               <Card 
                 key={image.id} 
                 className="overflow-hidden cursor-pointer group hover:ring-2 hover:ring-blue-200 transition-all duration-200"
-                onClick={() => handleOpenSegmentationEditor(image)}
+                onClick={() => navigate(`/segmentation/${id}/${image.id}`)}
               >
-                <div className="aspect-square relative">
-                  <img 
-                    src={image.url} 
-                    alt={image.name} 
-                    className="h-full w-full object-cover"
-                  />
+                <div className="relative">
+                  {/* Use 16:9 aspect ratio for rectangular cards */}
+                  <div className="aspect-[16/9]">
+                    <img 
+                      src={image.url} 
+                      alt={image.name} 
+                      className="h-full w-full object-cover"
+                    />
+                  </div>
                   
                   <div className="absolute top-2 left-2 flex items-center space-x-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs">
                     {getStatusIcon(image.segmentationStatus)}
