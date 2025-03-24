@@ -41,7 +41,7 @@ const EditorCanvas = ({
   
   // Načtení obrázku a zjištění jeho velikosti
   useEffect(() => {
-    if (!segmentation) return;
+    if (!imageSrc) return;
     
     const img = new Image();
     img.onload = () => {
@@ -51,7 +51,7 @@ const EditorCanvas = ({
       });
     };
     
-    img.src = segmentation.imageSrc || imageSrc;
+    img.src = segmentation?.imageSrc || imageSrc;
   }, [segmentation, imageSrc]);
 
   // SVG manipulace s bodem pro lepší UX
@@ -104,7 +104,8 @@ const EditorCanvas = ({
             <div 
               style={{ 
                 transform: `scale(${zoom}) translate(${offset.x}px, ${offset.y}px)`,
-                transformOrigin: '0 0',
+                transformOrigin: 'center center',
+                willChange: 'transform',
               }}
               className="relative"
             >
@@ -113,11 +114,12 @@ const EditorCanvas = ({
                 <img 
                   src={segmentation.imageSrc || imageSrc} 
                   alt="Source"
-                  className="max-w-none"
+                  className="max-w-none pointer-events-none select-none"
                   style={{
                     maxWidth: "none",
                     display: "block"
                   }}
+                  draggable={false}
                 />
               )}
               
@@ -126,15 +128,21 @@ const EditorCanvas = ({
                 <svg 
                   width={imageSize.width}
                   height={imageSize.height}
-                  className="absolute top-0 left-0 pointer-events-none"
+                  className="absolute top-0 left-0"
                   style={{
                     maxWidth: "none"
                   }}
                 >
                   <defs>
                     <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feGaussianBlur stdDeviation="3" result="blur" />
                       <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                    </filter>
+                    <filter id="hover-glow" x="-50%" y="-50%" width="200%" height="200%">
+                      <feGaussianBlur stdDeviation="2" result="blur" />
+                      <feFlood floodColor="white" floodOpacity="0.5" result="glow" />
+                      <feComposite in="glow" in2="blur" operator="in" result="colored-blur" />
+                      <feComposite in="SourceGraphic" in2="colored-blur" operator="over" />
                     </filter>
                   </defs>
                   
@@ -149,12 +157,13 @@ const EditorCanvas = ({
                           points={points}
                           fill={isSelected ? "rgba(255, 59, 48, 0.2)" : "rgba(0, 191, 255, 0.2)"}
                           stroke={isSelected ? "#FF3B30" : "#00BFFF"}
-                          strokeWidth={isSelected ? 2 : 1.5}
+                          strokeWidth={isSelected ? 2/zoom : 1.5/zoom}
                           strokeLinejoin="round"
                           className={cn(
                             "transition-colors duration-150",
                             isSelected ? "filter-glow-red" : ""
                           )}
+                          pointerEvents="all"
                         />
                         
                         {/* Body (vertexy) */}
@@ -164,14 +173,15 @@ const EditorCanvas = ({
                           const radius = getPointRadius(polygon.id, index);
                           
                           return (
-                            <g key={`vertex-${index}`}>
+                            <g key={`vertex-${index}`} pointerEvents="all">
                               {/* Zvýraznění při hoveru */}
                               {isVertexHovered && (
                                 <circle
                                   cx={point.x}
                                   cy={point.y}
-                                  r={radius + 3}
-                                  fill="rgba(255, 255, 255, 0.2)"
+                                  r={radius * 2}
+                                  fill="rgba(255, 255, 255, 0.3)"
+                                  filter="url(#hover-glow)"
                                   className="animate-pulse"
                                 />
                               )}
@@ -183,12 +193,12 @@ const EditorCanvas = ({
                                 r={radius}
                                 fill={isSelected ? "#FF3B30" : "#FFFFFF"}
                                 stroke={isSelected ? "#FF3B30" : "#0077FF"}
-                                strokeWidth={1.5 / Math.sqrt(zoom)}
+                                strokeWidth={1.5 / zoom}
                                 className={cn(
                                   "transition-all duration-150 cursor-pointer",
                                   isVertexHovered ? "scale-110" : ""
                                 )}
-                                style={{ pointerEvents: 'all' }}
+                                style={{ cursor: 'pointer' }}
                               />
                             </g>
                           );

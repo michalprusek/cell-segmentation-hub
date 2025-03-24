@@ -33,6 +33,8 @@ export interface EditorState {
   history: SegmentationResult[];
   historyIndex: number;
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
+  isDragging: boolean;
+  isMovingVertex: boolean;
 }
 
 export interface EditorActions {
@@ -46,4 +48,7 @@ export interface EditorActions {
   handleResetView: () => void;
   handleSave: () => Promise<void>;
   isPointInPolygon: (x: number, y: number, points: Point[]) => boolean;
+  moveVertex: (polygonId: string, vertexIndex: number, newPosition: Point) => void;
+  addVertexToPolygon: (polygonId: string, position: Point, afterIndex: number) => void;
+  removeVertexFromPolygon: (polygonId: string, vertexIndex: number) => void;
 }
