@@ -14,7 +14,7 @@ import SignIn from "./pages/SignIn";
 import SignUp from "./pages/SignUp";
 import Dashboard from "./pages/Dashboard";
 import ProjectDetail from "./pages/ProjectDetail";
-import SegmentationEditor from "./pages/SegmentationEditor";
+import SegmentationEditor from "./pages/segmentation/SegmentationEditor";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
@@ -30,12 +30,13 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       retry: 1,
       staleTime: 60000, // 1 minute (reduces unnecessary refetches)
-      // Add global error handling for queries
-      onError: (error: unknown) => {
-        console.error("Query error:", error);
-        toast.error("Failed to fetch data. Please try again.");
-      },
     },
+    mutations: {
+      onError: (error: unknown) => {
+        console.error("Mutation error:", error);
+        toast.error("Failed to update data. Please try again.");
+      }
+    }
   },
 });
 
