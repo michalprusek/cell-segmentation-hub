@@ -14,6 +14,7 @@ import NewProject from "@/components/NewProject";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 
+// Use the same Project interface as in the ProjectsList component
 interface Project {
   id: string;
   title: string;

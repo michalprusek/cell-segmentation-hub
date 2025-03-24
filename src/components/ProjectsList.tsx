@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
 
 interface Project {
-  id: number;
+  id: string; // Change from number to string
   title: string;
   description: string;
   thumbnail: string;
@@ -17,10 +17,11 @@ interface Project {
 interface ProjectsListProps {
   projects: Project[];
   viewMode: "grid" | "list";
-  onOpenProject: (id: number) => void;
+  onOpenProject: (id: string) => void; // Change from number to string
+  loading?: boolean;
 }
 
-const ProjectsList = ({ projects, viewMode, onOpenProject }: ProjectsListProps) => {
+const ProjectsList = ({ projects, viewMode, onOpenProject, loading }: ProjectsListProps) => {
   if (viewMode === "grid") {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

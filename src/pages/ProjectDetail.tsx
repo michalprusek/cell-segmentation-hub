@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -19,9 +18,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { segmentImage, SegmentationResult } from "@/lib/segmentation";
+import { segmentImage } from "@/lib/segmentation";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Json } from "@/integrations/supabase/types";
+import type { SegmentationResult } from "@/lib/segmentation";
 
 interface ProjectImage {
   id: string;
@@ -48,13 +49,11 @@ const ProjectDetail = () => {
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [loading, setLoading] = useState<boolean>(true);
 
-  // Fetch project data and images
   useEffect(() => {
     const fetchData = async () => {
       if (!id || !user) return;
 
       try {
-        // Fetch project details
         const { data: project, error: projectError } = await supabase
           .from("projects")
           .select("*")
@@ -73,7 +72,6 @@ const ProjectDetail = () => {
 
         setProjectTitle(project.title);
 
-        // Fetch project images
         const { data: imagesData, error: imagesError } = await supabase
           .from("images")
           .select("*")
@@ -91,7 +89,7 @@ const ProjectDetail = () => {
           createdAt: new Date(img.created_at),
           updatedAt: new Date(img.updated_at),
           segmentationStatus: img.segmentation_status as 'pending' | 'processing' | 'completed' | 'failed',
-          segmentationResult: img.segmentation_result
+          segmentationResult: img.segmentation_result as unknown as SegmentationResult
         }));
 
         setImages(formattedImages);
@@ -107,18 +105,15 @@ const ProjectDetail = () => {
     fetchData();
   }, [id, navigate, user]);
 
-  // Filter and sort images
   useEffect(() => {
     let result = [...images];
     
-    // Apply search filter
     if (searchTerm) {
       result = result.filter(img => 
         img.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
-    // Apply sorting
     result.sort((a, b) => {
       let comparison = 0;
       
@@ -156,7 +151,6 @@ const ProjectDetail = () => {
 
   const handleDeleteImage = async (imageId: string) => {
     try {
-      // Delete image from Supabase
       const { error } = await supabase
         .from("images")
         .delete()
@@ -166,7 +160,6 @@ const ProjectDetail = () => {
         throw error;
       }
 
-      // Update local state
       setImages(prev => prev.filter(img => img.id !== imageId));
       toast.success("Image deleted successfully");
     } catch (error: any) {
@@ -179,10 +172,8 @@ const ProjectDetail = () => {
     if (!id) return;
 
     if (image.segmentationStatus === 'pending' || image.segmentationStatus === 'failed') {
-      // Start segmentation process
       toast.info("Starting segmentation process...");
       
-      // Update image status to processing
       try {
         const { error: updateError } = await supabase
           .from("images")
@@ -193,7 +184,6 @@ const ProjectDetail = () => {
           throw updateError;
         }
 
-        // Update local state
         setImages(prev => 
           prev.map(img => 
             img.id === image.id 
@@ -202,17 +192,15 @@ const ProjectDetail = () => {
           )
         );
         
-        // Simulate segmentation process
         setTimeout(async () => {
           try {
             const result = await segmentImage(image.url);
             
-            // Update image with segmentation result in Supabase
             const { error: resultUpdateError } = await supabase
               .from("images")
               .update({
                 segmentation_status: 'completed',
-                segmentation_result: result,
+                segmentation_result: result as unknown as Json,
                 updated_at: new Date().toISOString()
               })
               .eq("id", image.id);
@@ -221,7 +209,6 @@ const ProjectDetail = () => {
               throw resultUpdateError;
             }
             
-            // Update local state
             setImages(prev => 
               prev.map(img => 
                 img.id === image.id 
@@ -235,12 +222,10 @@ const ProjectDetail = () => {
               )
             );
             
-            // Navigate to editor
             navigate(`/segmentation/${id}/${image.id}`);
           } catch (error) {
             console.error("Segmentation failed:", error);
             
-            // Update image status to failed in Supabase
             await supabase
               .from("images")
               .update({
@@ -249,7 +234,6 @@ const ProjectDetail = () => {
               })
               .eq("id", image.id);
             
-            // Update local state
             setImages(prev => 
               prev.map(img => 
                 img.id === image.id 
@@ -272,7 +256,6 @@ const ProjectDetail = () => {
         toast.error("Failed to start segmentation process");
       }
     } else {
-      // Navigate directly to editor
       navigate(`/segmentation/${id}/${image.id}`);
     }
   };
@@ -291,7 +274,7 @@ const ProjectDetail = () => {
         return null;
     }
   };
-  
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white shadow-sm border-b">
@@ -399,13 +382,11 @@ const ProjectDetail = () => {
                     className="h-full w-full object-cover"
                   />
                   
-                  {/* Status badge */}
                   <div className="absolute top-2 left-2 flex items-center space-x-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs">
                     {getStatusIcon(image.segmentationStatus)}
                     <span className="capitalize">{image.segmentationStatus}</span>
                   </div>
                   
-                  {/* Delete button */}
                   <button
                     className="absolute top-2 right-2 bg-white/90 p-1 rounded-full text-gray-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
@@ -416,7 +397,6 @@ const ProjectDetail = () => {
                     <X className="h-4 w-4" />
                   </button>
                   
-                  {/* Image details overlay */}
                   <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 text-white">
                     <h3 className="text-sm font-medium truncate">{image.name}</h3>
                     <div className="flex items-center text-xs text-white/80 mt-1">
