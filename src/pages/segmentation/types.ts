@@ -32,6 +32,7 @@ export interface EditorState {
   offset: { x: number; y: number };
   history: SegmentationResult[];
   historyIndex: number;
+  hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
 }
 
 export interface EditorActions {

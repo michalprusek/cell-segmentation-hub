@@ -8,6 +8,12 @@ import {
   Redo,
   Trash2,
   Home,
+  Move,
+  MousePointer,
+  Edit,
+  Save,
+  Download,
+  Upload
 } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
 import {
@@ -16,6 +22,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { motion } from "framer-motion";
 
 interface EditorToolbarProps {
   zoom: number;
@@ -43,114 +50,220 @@ const EditorToolbar = ({
   onResetView
 }: EditorToolbarProps) => {
   return (
-    <div className="absolute top-4 left-4 z-10 bg-slate-800 border border-slate-700 rounded-lg shadow-lg flex flex-col space-y-2 p-2">
-      <TooltipProvider>
+    <motion.div 
+      className="absolute top-4 left-4 z-10 bg-slate-800/95 border border-slate-700 rounded-lg shadow-xl flex flex-col space-y-2 p-2 backdrop-blur-sm"
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.3, delay: 0.1 }}
+    >
+      <div className="px-2 py-1 text-center text-xs font-semibold text-slate-300 border-b border-slate-700 mb-1">
+        Nástroje
+      </div>
+      
+      <TooltipProvider delayDuration={300}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white"
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
+            >
+              <MousePointer className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Výběr (Shortcut: V)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
+            >
+              <Move className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Posun (Shortcut: H)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
+            >
+              <Edit className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Úprava (Shortcut: E)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      
+      <Separator className="bg-slate-700 my-1" />
+      
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
               onClick={onZoomIn}
             >
               <ZoomIn className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">Zoom In</TooltipContent>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Přiblížit (Shortcut: +)</span>
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       
-      <TooltipProvider>
+      <TooltipProvider delayDuration={300}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white"
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
               onClick={onZoomOut}
             >
               <ZoomOut className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">Zoom Out</TooltipContent>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Oddálit (Shortcut: -)</span>
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       
-      <TooltipProvider>
+      <TooltipProvider delayDuration={300}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white"
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
               onClick={onResetView}
             >
               <Home className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">Reset View</TooltipContent>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Resetovat pohled (Shortcut: R)</span>
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       
-      <Separator className="bg-slate-700" />
+      <Separator className="bg-slate-700 my-1" />
       
-      <TooltipProvider>
+      <TooltipProvider delayDuration={300}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white"
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
               onClick={onUndo}
               disabled={historyIndex <= 0}
             >
               <Undo className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">Undo</TooltipContent>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Zpět (Shortcut: Ctrl+Z)</span>
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       
-      <TooltipProvider>
+      <TooltipProvider delayDuration={300}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
               variant="ghost" 
               size="icon" 
-              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white"
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
               onClick={onRedo}
               disabled={historyIndex >= historyLength - 1}
             >
               <Redo className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">Redo</TooltipContent>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Vpřed (Shortcut: Ctrl+Shift+Z)</span>
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       
-      <Separator className="bg-slate-700" />
+      <Separator className="bg-slate-700 my-1" />
       
-      <TooltipProvider>
+      <TooltipProvider delayDuration={300}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button 
               variant="ghost" 
               size="icon" 
-              className={`h-9 w-9 hover:bg-slate-700 ${selectedPolygonId ? 'text-red-500 hover:text-red-400' : 'text-slate-500'}`}
+              className={`h-9 w-9 hover:bg-slate-700 ${selectedPolygonId ? 'text-red-500 hover:text-red-400 bg-slate-900/80' : 'text-slate-500 bg-slate-800/80'}`}
               onClick={onDeletePolygon}
               disabled={!selectedPolygonId}
             >
               <Trash2 className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="right">Delete Selected Region</TooltipContent>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Smazat vybraný region (Shortcut: Delete)</span>
+          </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       
-      <div className="px-2 text-center text-xs py-1 border-t border-slate-700 mt-1 pt-1 text-slate-400">
-        {Math.round(zoom * 100)}%
-      </div>
-    </div>
+      <Separator className="bg-slate-700 my-1" />
+      
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 text-green-500 hover:bg-slate-700 hover:text-green-400 bg-slate-800/90"
+            >
+              <Save className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Uložit segmentaci (Shortcut: Ctrl+S)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 text-blue-500 hover:bg-slate-700 hover:text-blue-400 bg-slate-800/90"
+            >
+              <Download className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Exportovat data (Shortcut: Ctrl+E)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </motion.div>
   );
 };
 

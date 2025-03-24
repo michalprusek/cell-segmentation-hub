@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { segmentImage, SegmentationResult, Point } from '@/lib/segmentation';
-import { DragState, VertexDragState } from '../types';
+import { DragState, VertexDragState, EditorState } from '../types';
 
 export const useSegmentationEditor = (
   projectId: string | undefined,
@@ -21,8 +21,15 @@ export const useSegmentationEditor = (
   const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(null);
   const [history, setHistory] = useState<SegmentationResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
+  const [hoveredVertex, setHoveredVertex] = useState<{ polygonId: string | null, vertexIndex: number | null }>({
+    polygonId: null,
+    vertexIndex: null
+  });
   
-  // References for drag states
+  // Reference pro canvas a container
+  const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  
+  // Reference pro drag states
   const dragState = useRef<DragState>({
     isDragging: false,
     startX: 0,
@@ -37,7 +44,7 @@ export const useSegmentationEditor = (
     vertexIndex: null
   });
 
-  // Helper function to check if a point is inside a polygon
+  // Pomocná funkce pro kontrolu, zda je bod uvnitř polygonu
   const isPointInPolygon = useCallback((x: number, y: number, points: Point[]): boolean => {
     let inside = false;
     for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
@@ -138,9 +145,80 @@ export const useSegmentationEditor = (
     
     fetchData();
   }, [projectId, imageId, userId]);
+  
+  // Centrování obrazu při prvním načtení
+  useEffect(() => {
+    if (segmentation && canvasContainerRef.current) {
+      centerImage();
+    }
+  }, [segmentation]);
 
-  // Handle mouse down for dragging
-  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+  // Vycentrovat obrázek
+  const centerImage = useCallback(() => {
+    if (!canvasContainerRef.current || !segmentation) return;
+    
+    const container = canvasContainerRef.current;
+    const containerRect = container.getBoundingClientRect();
+    
+    // Vytvoření dočasného obrázku pro získání rozměrů
+    const img = new Image();
+    img.src = segmentation.imageSrc || imageSrc;
+    
+    img.onload = () => {
+      const containerWidth = containerRect.width;
+      const containerHeight = containerRect.height;
+      
+      // Vypočítat offset, aby byl obrázek uprostřed
+      const offsetX = (containerWidth - img.width) / 2;
+      const offsetY = (containerHeight - img.height) / 2;
+      
+      setOffset({ x: offsetX / zoom, y: offsetY / zoom });
+    };
+  }, [segmentation, imageSrc, zoom]);
+  
+  // Kolo myši pro zoom
+  const handleWheel = useCallback((e: WheelEvent) => {
+    e.preventDefault();
+    
+    if (!canvasContainerRef.current) return;
+    
+    const container = canvasContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    
+    // Pozice myši relativně k containeru
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    
+    // Konverze pozice myši do souřadnic v aktuálním měřítku
+    const mouseXInCanvas = (mouseX / zoom) - offset.x;
+    const mouseYInCanvas = (mouseY / zoom) - offset.y;
+    
+    // Nový zoom
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    const newZoom = Math.max(0.1, Math.min(10, zoom * delta));
+    
+    // Nový offset, aby se zachovala pozice kurzoru
+    const newOffsetX = -mouseXInCanvas + (mouseX / newZoom);
+    const newOffsetY = -mouseYInCanvas + (mouseY / newZoom);
+    
+    setZoom(newZoom);
+    setOffset({ x: newOffsetX, y: newOffsetY });
+  }, [zoom, offset]);
+  
+  // Přidat a odebrat event listener pro kolečko myši
+  useEffect(() => {
+    const currentContainer = canvasContainerRef.current;
+    if (!currentContainer) return;
+    
+    currentContainer.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      currentContainer.removeEventListener('wheel', handleWheel);
+    };
+  }, [handleWheel]);
+
+  // Mouse handling - over/out na vertexech
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const containerElement = e.currentTarget;
     if (!containerElement) return;
     
@@ -148,61 +226,8 @@ export const useSegmentationEditor = (
     const x = (e.clientX - rect.left) / zoom;
     const y = (e.clientY - rect.top) / zoom;
     
-    // Check if we're clicking on a polygon or vertex
-    if (segmentation) {
-      for (const polygon of segmentation.polygons) {
-        // Check vertices first
-        for (let i = 0; i < polygon.points.length; i++) {
-          const point = polygon.points[i];
-          const dx = point.x - (x - offset.x);
-          const dy = point.y - (y - offset.y);
-          const distance = Math.sqrt(dx * dx + dy * dy);
-          
-          if (distance <= 8 / zoom) {
-            // Clicked on a vertex
-            setSelectedPolygonId(polygon.id);
-            vertexDragState.current = {
-              isDragging: true,
-              polygonId: polygon.id,
-              vertexIndex: i
-            };
-            return;
-          }
-        }
-        
-        // Check if we're clicking inside a polygon
-        const isInside = isPointInPolygon(x - offset.x, y - offset.y, polygon.points);
-        if (isInside) {
-          setSelectedPolygonId(polygon.id);
-          return;
-        }
-      }
-      
-      // If we clicked on empty space, deselect current polygon
-      setSelectedPolygonId(null);
-    }
-    
-    // If we didn't click on a vertex or polygon, start panning
-    dragState.current = {
-      isDragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      lastX: offset.x,
-      lastY: offset.y
-    };
-  }, [zoom, offset, segmentation, isPointInPolygon]);
-  
-  // Handle mouse move for dragging
-  const handleMouseMove = useCallback((e: React.MouseEvent) => {
-    const containerElement = e.currentTarget;
-    if (!containerElement) return;
-    
-    // Handle vertex dragging
+    // Pokud táhneme vertex, aktualizovat jeho pozici
     if (vertexDragState.current.isDragging && segmentation) {
-      const rect = containerElement.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / zoom - offset.x;
-      const y = (e.clientY - rect.top) / zoom - offset.y;
-      
       setSegmentation(prev => {
         if (!prev) return prev;
         
@@ -212,7 +237,10 @@ export const useSegmentationEditor = (
             if (polygon.id === vertexDragState.current.polygonId) {
               const points = [...polygon.points];
               if (vertexDragState.current.vertexIndex !== null) {
-                points[vertexDragState.current.vertexIndex] = { x, y };
+                points[vertexDragState.current.vertexIndex] = { 
+                  x: x - offset.x, 
+                  y: y - offset.y 
+                };
               }
               return { ...polygon, points };
             }
@@ -224,7 +252,7 @@ export const useSegmentationEditor = (
       return;
     }
     
-    // Handle panning
+    // Pokud táhneme celou scénu, aktualizovat offset
     if (dragState.current.isDragging) {
       const dx = e.clientX - dragState.current.startX;
       const dy = e.clientY - dragState.current.startY;
@@ -233,25 +261,114 @@ export const useSegmentationEditor = (
         x: dragState.current.lastX + dx / zoom,
         y: dragState.current.lastY + dy / zoom
       });
+      return;
     }
-  }, [zoom, offset, segmentation]);
+    
+    // Detekce najetí myši na vertex
+    if (segmentation) {
+      let found = false;
+      
+      for (const polygon of segmentation.polygons) {
+        for (let i = 0; i < polygon.points.length; i++) {
+          const point = polygon.points[i];
+          const dx = point.x - (x - offset.x);
+          const dy = point.y - (y - offset.y);
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance <= 8 / zoom) {
+            // Najetí na vertex
+            setHoveredVertex({
+              polygonId: polygon.id,
+              vertexIndex: i
+            });
+            found = true;
+            break;
+          }
+        }
+        if (found) break;
+      }
+      
+      if (!found && (hoveredVertex.polygonId !== null || hoveredVertex.vertexIndex !== null)) {
+        setHoveredVertex({ polygonId: null, vertexIndex: null });
+      }
+    }
+  }, [zoom, offset, segmentation, hoveredVertex]);
+
+  // Handle mouse down pro zahájení tažení
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    const containerElement = e.currentTarget;
+    if (!containerElement) return;
+    
+    const rect = containerElement.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / zoom;
+    const y = (e.clientY - rect.top) / zoom;
+    
+    // Kontrola, zda klikáme na polygon nebo vertex
+    if (segmentation) {
+      for (const polygon of segmentation.polygons) {
+        // Nejprve kontrola vertexů
+        for (let i = 0; i < polygon.points.length; i++) {
+          const point = polygon.points[i];
+          const dx = point.x - (x - offset.x);
+          const dy = point.y - (y - offset.y);
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          
+          if (distance <= 8 / zoom) {
+            // Klik na vertex
+            setSelectedPolygonId(polygon.id);
+            vertexDragState.current = {
+              isDragging: true,
+              polygonId: polygon.id,
+              vertexIndex: i
+            };
+            return;
+          }
+        }
+        
+        // Kontrola, zda klikáme uvnitř polygonu
+        const isInside = isPointInPolygon(x - offset.x, y - offset.y, polygon.points);
+        if (isInside) {
+          setSelectedPolygonId(polygon.id);
+          return;
+        }
+      }
+      
+      // Pokud jsme klikli na prázdné místo, odselektovat aktuální polygon
+      setSelectedPolygonId(null);
+    }
+    
+    // Pokud jsme neklikli na vertex ani polygon, začít posun plátna
+    dragState.current = {
+      isDragging: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      lastX: offset.x,
+      lastY: offset.y
+    };
+  }, [zoom, offset, segmentation, isPointInPolygon]);
   
-  // Handle mouse up to end dragging
+  // Ukončení tažení při puštění tlačítka myši
   const handleMouseUp = useCallback(() => {
     dragState.current.isDragging = false;
     vertexDragState.current.isDragging = false;
   }, []);
   
-  // Handle zoom in/out
+  // Funkce pro zoom
   const handleZoomIn = useCallback(() => {
-    setZoom(prev => Math.min(prev * 1.2, 5));
+    setZoom(prev => {
+      const newZoom = Math.min(prev * 1.2, 10);
+      return newZoom;
+    });
   }, []);
   
   const handleZoomOut = useCallback(() => {
-    setZoom(prev => Math.max(prev / 1.2, 0.5));
+    setZoom(prev => {
+      const newZoom = Math.max(prev / 1.2, 0.1);
+      return newZoom;
+    });
   }, []);
   
-  // Handle undo/redo
+  // Funkce pro undo/redo
   const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
       setHistoryIndex(prev => prev - 1);
@@ -266,7 +383,7 @@ export const useSegmentationEditor = (
     }
   }, [historyIndex, history]);
   
-  // Handle delete selected polygon
+  // Smazání vybraného polygonu
   const handleDeletePolygon = useCallback(() => {
     if (!selectedPolygonId || !segmentation) return;
     
@@ -282,13 +399,13 @@ export const useSegmentationEditor = (
     toast.success("Region deleted");
   }, [selectedPolygonId, segmentation]);
   
-  // Handle reset view
+  // Reset pohledu
   const handleResetView = useCallback(() => {
     setZoom(1);
-    setOffset({ x: 0, y: 0 });
-  }, []);
+    centerImage();
+  }, [centerImage]);
   
-  // Handle save
+  // Uložení segmentace
   const handleSave = useCallback(async () => {
     if (!segmentation || !imageId) return;
     
@@ -315,32 +432,32 @@ export const useSegmentationEditor = (
     }
   }, [segmentation, imageId]);
   
-  // Navigate to previous or next image
+  // Navigace na předchozí nebo další obrázek
   const navigateToImage = useCallback((direction: 'prev' | 'next') => {
     if (!imageId || !projectId) return;
     
     const currentId = imageId;
     
-    // In a real app, this would query the database for adjacent images
-    // For now, we just increment or decrement the ID (simplified approach)
+    // V reálné aplikaci by toto dotazovalo databázi pro sousední obrázky
+    // Pro teď jen inkrementujeme nebo dekrementujeme ID (zjednodušený přístup)
     const newId = direction === 'prev' 
       ? `${parseInt(currentId) - 1}` 
       : `${parseInt(currentId) + 1}`;
     
-    // This is a simplified approach - in a real app you would check if the image exists
+    // Toto je zjednodušený přístup - v reálné aplikaci byste kontrolovali, zda obrázek existuje
     window.location.href = `/segmentation/${projectId}/${newId}`;
   }, [imageId, projectId]);
   
-  // Record history when segmentation changes
+  // Zaznamenání historie při změně segmentace
   useEffect(() => {
     if (!segmentation || historyIndex === -1) return;
     
-    // If we're not at the end of the history array, truncate it
+    // Pokud nejsme na konci pole historie, ořížnout ho
     if (historyIndex < history.length - 1) {
       setHistory(prev => prev.slice(0, historyIndex + 1));
     }
     
-    // Add current state to history
+    // Přidat aktuální stav do historie
     setHistory(prev => [...prev, {...segmentation}]);
     setHistoryIndex(prev => prev + 1);
   }, [segmentation, historyIndex, history]);
@@ -353,12 +470,14 @@ export const useSegmentationEditor = (
     saving,
     segmentation,
     selectedPolygonId,
+    hoveredVertex,
     zoom,
     offset,
     history,
     historyIndex,
     dragState,
     vertexDragState,
+    canvasContainerRef,
     setSegmentation,
     setSelectedPolygonId,
     handleMouseDown,
@@ -372,6 +491,7 @@ export const useSegmentationEditor = (
     handleResetView,
     handleSave,
     navigateToImage,
-    isPointInPolygon
+    isPointInPolygon,
+    centerImage
   };
 };

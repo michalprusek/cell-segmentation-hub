@@ -26,12 +26,14 @@ const SegmentationEditor = () => {
     saving,
     segmentation,
     selectedPolygonId,
+    hoveredVertex,
     zoom,
     offset,
     history,
     historyIndex,
     dragState,
     vertexDragState,
+    canvasContainerRef,
     setSelectedPolygonId,
     handleMouseDown,
     handleMouseMove,
@@ -48,7 +50,7 @@ const SegmentationEditor = () => {
 
   return (
     <motion.div 
-      className="min-h-screen bg-slate-900 text-white flex flex-col"
+      className="h-screen w-screen bg-slate-900 text-white flex flex-col overflow-hidden"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -66,7 +68,7 @@ const SegmentationEditor = () => {
       />
       
       {/* Main content */}
-      <div className="flex-1 flex flex-col relative">
+      <div className="flex-1 flex flex-col relative overflow-hidden">
         {/* Left Toolbar */}
         <EditorToolbar 
           zoom={zoom}
@@ -96,12 +98,14 @@ const SegmentationEditor = () => {
           zoom={zoom}
           offset={offset}
           selectedPolygonId={selectedPolygonId}
+          hoveredVertex={hoveredVertex}
           imageSrc={imageSrc}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           dragState={dragState}
           vertexDragState={vertexDragState}
+          containerRef={canvasContainerRef}
         />
         
         {/* Status */}
