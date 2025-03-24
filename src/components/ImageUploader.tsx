@@ -153,7 +153,7 @@ const ImageUploader = () => {
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm font-medium truncate" title={file.name}>
-                      {file.name.length > 25
+                      {file.name && file.name.length > 25
                         ? `${file.name.substring(0, 25)}...`
                         : file.name}
                     </p>
