@@ -2,6 +2,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { segmentImage } from "@/lib/segmentation";
 import type { SegmentationResult } from "@/lib/segmentation";
+import { toast } from "sonner";
 
 interface ProcessImageParams {
   imageId: string;
@@ -21,10 +22,11 @@ export const updateImageProcessingStatus = async ({ imageId, imageUrl }: Process
 
     if (updateError) {
       console.error("Error updating status:", updateError);
+      toast.error("Failed to update image status");
       return;
     }
     
-    // Simulate processing (in a real app, this would be a backend process)
+    // Process the image (in a real app, this would be a backend process)
     setTimeout(async () => {
       try {
         const result = await segmentImage(imageUrl);
@@ -41,6 +43,8 @@ export const updateImageProcessingStatus = async ({ imageId, imageUrl }: Process
         if (resultUpdateError) {
           throw resultUpdateError;
         }
+        
+        toast.success("Image segmentation completed");
       } catch (error) {
         console.error("Segmentation failed:", error);
         
@@ -51,9 +55,12 @@ export const updateImageProcessingStatus = async ({ imageId, imageUrl }: Process
             updated_at: new Date().toISOString()
           })
           .eq("id", imageId);
+          
+        toast.error("Segmentation failed");
       }
     }, 2000);
   } catch (error) {
     console.error("Error updating image status:", error);
+    toast.error("Failed to process image");
   }
 };

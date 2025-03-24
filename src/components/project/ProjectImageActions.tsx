@@ -42,8 +42,12 @@ export const useProjectImageActions = ({ projectId, onImagesChange, images }: Pr
   };
 
   const handleOpenSegmentationEditor = (image: ProjectImage) => {
-    if (!projectId) return;
+    if (!projectId) {
+      toast.error("Project ID is missing");
+      return;
+    }
     
+    // Navigate to the segmentation editor with proper URL parameters
     navigate(`/segmentation/${projectId}/${image.id}`);
     
     // Only update status if pending or failed

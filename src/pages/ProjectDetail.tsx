@@ -12,6 +12,8 @@ import ProjectUploaderSection from "@/components/project/ProjectUploaderSection"
 import { useProjectData } from "@/hooks/useProjectData";
 import { useImageFilter } from "@/hooks/useImageFilter";
 import { useProjectImageActions } from "@/components/project/ProjectImageActions";
+import { motion } from "framer-motion";
+import { Button } from "@/components/ui/button";
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -43,8 +45,21 @@ const ProjectDetail = () => {
     setShowUploader(!showUploader);
   };
 
+  // Animation variants
+  const pageVariants = {
+    initial: { opacity: 0 },
+    animate: { opacity: 1, transition: { duration: 0.3 } },
+    exit: { opacity: 0, transition: { duration: 0.2 } }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <motion.div 
+      className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
+      initial="initial"
+      animate="animate"
+      exit="exit"
+      variants={pageVariants}
+    >
       <ProjectHeader 
         projectTitle={projectTitle} 
         imagesCount={filteredImages.length}
@@ -53,27 +68,51 @@ const ProjectDetail = () => {
       
       <div className="container mx-auto px-4 py-8">
         {showUploader ? (
-          <ProjectUploaderSection onCancel={toggleUploader} />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ duration: 0.3 }}
+          >
+            <ProjectUploaderSection onCancel={toggleUploader} />
+          </motion.div>
         ) : (
-          <ProjectToolbar 
-            searchTerm={searchTerm}
-            onSearchChange={handleSearch}
-            sortField={sortField}
-            sortDirection={sortDirection}
-            onSort={handleSort}
-            onToggleUploader={toggleUploader}
-          />
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <ProjectToolbar 
+              searchTerm={searchTerm}
+              onSearchChange={handleSearch}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+              onToggleUploader={toggleUploader}
+            />
+          </motion.div>
         )}
         
         {loading ? (
-          <div className="flex justify-center items-center h-64">
+          <motion.div 
+            className="flex justify-center items-center h-64"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.3 }}
+          >
             <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-          </div>
+          </motion.div>
         ) : filteredImages.length === 0 && !showUploader ? (
-          <EmptyState 
-            hasSearchTerm={!!searchTerm}
-            onUpload={toggleUploader}
-          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.3 }}
+          >
+            <EmptyState 
+              hasSearchTerm={!!searchTerm}
+              onUpload={toggleUploader}
+            />
+          </motion.div>
         ) : !showUploader && (
           <ProjectImages 
             images={filteredImages}
@@ -82,7 +121,7 @@ const ProjectDetail = () => {
           />
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };
 

@@ -28,6 +28,7 @@ const queryClient = new QueryClient({
     queries: {
       refetchOnWindowFocus: false,
       retry: 1,
+      staleTime: 60000, // 1 minute (reduces unnecessary refetches)
     },
   },
 });
@@ -40,42 +41,46 @@ const App = () => (
           <LanguageProvider>
             <AuthProvider>
               <Toaster />
-              <Sonner />
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/sign-in" element={<SignIn />} />
-                <Route path="/sign-up" element={<SignUp />} />
-                <Route path="/terms-of-service" element={<TermsOfService />} />
-                <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                <Route path="/request-access" element={<RequestAccess />} />
-                <Route path="/dashboard" element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/project/:id" element={
-                  <ProtectedRoute>
-                    <ProjectDetail />
-                  </ProtectedRoute>
-                } />
-                <Route path="/segmentation/:projectId/:imageId" element={
-                  <ProtectedRoute>
-                    <SegmentationEditor />
-                  </ProtectedRoute>
-                } />
-                <Route path="/settings" element={
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                } />
-                <Route path="/profile" element={
-                  <ProtectedRoute>
-                    <Profile />
-                  </ProtectedRoute>
-                } />
-                {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
+              <Sonner position="top-right" closeButton toastOptions={{ 
+                className: "animate-slide-in-right" 
+              }} />
+              <div className="app-container animate-fade-in">
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/sign-in" element={<SignIn />} />
+                  <Route path="/sign-up" element={<SignUp />} />
+                  <Route path="/terms-of-service" element={<TermsOfService />} />
+                  <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+                  <Route path="/request-access" element={<RequestAccess />} />
+                  <Route path="/dashboard" element={
+                    <ProtectedRoute>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/project/:id" element={
+                    <ProtectedRoute>
+                      <ProjectDetail />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/segmentation/:projectId/:imageId" element={
+                    <ProtectedRoute>
+                      <SegmentationEditor />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/settings" element={
+                    <ProtectedRoute>
+                      <Settings />
+                    </ProtectedRoute>
+                  } />
+                  <Route path="/profile" element={
+                    <ProtectedRoute>
+                      <Profile />
+                    </ProtectedRoute>
+                  } />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </div>
             </AuthProvider>
           </LanguageProvider>
         </ThemeProvider>

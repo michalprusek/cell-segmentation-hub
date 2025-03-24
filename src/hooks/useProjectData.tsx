@@ -24,17 +24,29 @@ export const useProjectData = (projectId: string | undefined, userId: string | u
   
   useEffect(() => {
     const fetchData = async () => {
-      if (!projectId || !userId) return;
+      if (!projectId || !userId) {
+        setLoading(false);
+        return;
+      }
 
       try {
+        // First check if project exists
         const { data: project, error: projectError } = await supabase
           .from("projects")
           .select("*")
           .eq("id", projectId)
+          .eq("user_id", userId)
           .single();
 
         if (projectError) {
-          throw projectError;
+          console.error("Project fetch error:", projectError);
+          if (projectError.code === 'PGRST116') {
+            toast.error("Project not found");
+            navigate("/dashboard");
+          } else {
+            throw projectError;
+          }
+          return;
         }
 
         if (!project) {
@@ -45,6 +57,7 @@ export const useProjectData = (projectId: string | undefined, userId: string | u
 
         setProjectTitle(project.title);
 
+        // Then fetch the images
         const { data: imagesData, error: imagesError } = await supabase
           .from("images")
           .select("*")

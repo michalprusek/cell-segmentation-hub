@@ -5,6 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import { Clock, X, CheckCircle, Clock3, AlertCircle, Loader2 } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { SegmentationResult } from "@/lib/segmentation";
+import { motion } from "framer-motion";
 
 interface ImageCardProps {
   id: string;
@@ -44,44 +45,62 @@ const ImageCard = ({
   };
 
   return (
-    <Card 
-      key={id} 
-      className="overflow-hidden cursor-pointer group hover:ring-2 hover:ring-blue-200 transition-all duration-200 dark:bg-gray-800 dark:border-gray-700"
-      onClick={onClick}
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.95 }}
+      whileHover={{ scale: 1.02 }}
+      transition={{ duration: 0.2 }}
     >
-      <div className="relative">
-        <div className="aspect-[16/9]">
-          <img 
-            src={url} 
-            alt={name} 
-            className="h-full w-full object-cover"
-          />
-        </div>
-        
-        <div className="absolute top-2 left-2 flex items-center space-x-1 bg-white/90 dark:bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full text-xs">
-          {getStatusIcon(segmentationStatus)}
-          <span className="capitalize">{t(`dashboard.${segmentationStatus}`)}</span>
-        </div>
-        
-        <button
-          className="absolute top-2 right-2 bg-white/90 dark:bg-black/70 p-1 rounded-full text-gray-700 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(id);
-          }}
-        >
-          <X className="h-4 w-4" />
-        </button>
-        
-        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 text-white">
-          <h3 className="text-sm font-medium truncate">{name}</h3>
-          <div className="flex items-center text-xs text-white/80 mt-1">
-            <Clock className="h-3 w-3 mr-1" />
-            <span>{formatDistanceToNow(updatedAt, { addSuffix: true })}</span>
+      <Card 
+        key={id} 
+        className="overflow-hidden cursor-pointer group hover:ring-2 hover:ring-blue-300 transition-all duration-200 dark:bg-gray-800 dark:border-gray-700 shadow-sm hover:shadow-md"
+        onClick={onClick}
+      >
+        <div className="relative">
+          <div className="aspect-[16/9]">
+            <img 
+              src={url} 
+              alt={name} 
+              className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          </div>
+          
+          <motion.div 
+            className="absolute top-2 left-2 flex items-center space-x-1 bg-white/90 dark:bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full text-xs"
+            initial={{ x: -20, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            transition={{ delay: 0.1 }}
+          >
+            {getStatusIcon(segmentationStatus)}
+            <span className="capitalize">{t(`dashboard.${segmentationStatus}`)}</span>
+          </motion.div>
+          
+          <motion.button
+            className="absolute top-2 right-2 bg-white/90 dark:bg-black/70 p-1 rounded-full text-gray-700 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.95 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(id);
+            }}
+            initial={{ x: 20, opacity: 0 }}
+            animate={{ x: 0, opacity: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <X className="h-4 w-4" />
+          </motion.button>
+          
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 text-white transform transition-transform duration-200 group-hover:translate-y-0">
+            <h3 className="text-sm font-medium truncate">{name}</h3>
+            <div className="flex items-center text-xs text-white/80 mt-1">
+              <Clock className="h-3 w-3 mr-1" />
+              <span>{formatDistanceToNow(updatedAt, { addSuffix: true })}</span>
+            </div>
           </div>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </motion.div>
   );
 };
 
