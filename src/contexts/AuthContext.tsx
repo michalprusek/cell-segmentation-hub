@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 interface AuthContextType {
@@ -23,68 +23,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
-  const location = useLocation();
 
-  useEffect(() => {
-    let mounted = true;
-    
-    // Set up the auth state listener first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log("Auth state changed", event, !!session);
-        if (mounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
-          
-          if (session?.user) {
-            await fetchUserProfile(session.user.id);
-          } else {
-            setProfile(null);
-          }
-        }
-      }
-    );
-
-    // Check for existing session
-    const initializeAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        console.log("Got session", !!session);
-        
-        if (mounted) {
-          setSession(session);
-          setUser(session?.user ?? null);
-          
-          if (session?.user) {
-            await fetchUserProfile(session.user.id);
-          }
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Error initializing auth:", error);
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    initializeAuth();
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
-
-  // Prevent redirection loop when on auth pages
-  useEffect(() => {
-    const publicRoutes = ['/sign-in', '/sign-up', '/', '/request-access', '/terms-of-service', '/privacy-policy'];
-    if (user && publicRoutes.includes(location.pathname)) {
-      // Don't redirect on public pages when user is signed in
-      console.log("User is signed in but on a public page, not redirecting");
-    }
-  }, [user, location.pathname]);
-
+  // Handle profile fetching separately to avoid delays in authentication flow
   const fetchUserProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -104,8 +44,59 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  useEffect(() => {
+    // First set up the auth state listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, newSession) => {
+        console.log("Auth state changed", event, !!newSession);
+        
+        // Update session and user immediately
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        
+        // Fetch profile for user if session exists
+        if (newSession?.user) {
+          fetchUserProfile(newSession.user.id);
+        } else {
+          setProfile(null);
+        }
+        
+        // Always update loading state
+        setLoading(false);
+      }
+    );
+
+    // Then check for an existing session
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        console.log("Got session", !!currentSession);
+        
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
+        
+        if (currentSession?.user) {
+          fetchUserProfile(currentSession.user.id);
+        }
+        
+        // Always mark loading as complete after checking
+        setLoading(false);
+      } catch (error) {
+        console.error("Error initializing auth:", error);
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const signIn = async (email: string, password: string) => {
     try {
+      setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -124,11 +115,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Error signing in:", error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const signUp = async (email: string, password: string) => {
     try {
+      setLoading(true);
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -143,17 +137,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         description: "Please check your email to confirm your account",
       });
       
-      // Note: In a real environment with email confirmation enabled,
-      // users would need to confirm their email before signing in
       navigate("/sign-in");
     } catch (error) {
       console.error("Error signing up:", error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
   const signOut = async () => {
     try {
+      setLoading(true);
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -166,6 +161,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error("Error signing out:", error);
       throw error;
+    } finally {
+      setLoading(false);
     }
   };
 

@@ -12,27 +12,18 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   
   useEffect(() => {
-    // Set a timeout to prevent infinite loading
-    const timeout = setTimeout(() => {
-      setCheckingAuth(false);
-    }, 5000);
-
-    if (!loading) {
-      clearTimeout(timeout);
-      setCheckingAuth(false);
-      
-      if (!user) {
-        navigate(`/sign-in?returnTo=${encodeURIComponent(location.pathname)}`, { replace: true });
-      }
+    // Only redirect if not loading and no user
+    if (!loading && !user && !isRedirecting) {
+      setIsRedirecting(true);
+      navigate(`/sign-in?returnTo=${encodeURIComponent(location.pathname)}`, { replace: true });
     }
+  }, [user, loading, navigate, location.pathname, isRedirecting]);
 
-    return () => clearTimeout(timeout);
-  }, [user, loading, navigate, location.pathname]);
-
-  if (loading || checkingAuth) {
+  // If loading or we have a user but data is still being loaded
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -43,6 +34,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
+  // If we have a user and not loading, render children
   return user ? <>{children}</> : null;
 };
 
