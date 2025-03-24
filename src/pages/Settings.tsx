@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,11 +8,56 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import DashboardHeader from "@/components/DashboardHeader";
+import { useAuth } from "@/contexts/AuthContext";
+import { updateUserProfile } from "@/lib/supabase";
 
 const Settings = () => {
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const { user, profile } = useAuth();
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    organization: "",
+    department: "",
+    bio: "",
+    publicProfile: false
+  });
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (user && profile) {
+      setFormData({
+        fullName: profile.username || "",
+        email: user.email || "",
+        organization: profile.organization || "",
+        department: profile.department || "",
+        bio: profile.bio || "",
+        publicProfile: profile.public_profile || false
+      });
+    }
+  }, [user, profile]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast.success("Profile settings saved successfully");
+    if (!user) return;
+
+    setLoading(true);
+    try {
+      await updateUserProfile(user.id, {
+        username: formData.fullName,
+        organization: formData.organization,
+        department: formData.department,
+        bio: formData.bio,
+        public_profile: formData.publicProfile,
+        updated_at: new Date()
+      });
+      
+      toast.success("Profile settings saved successfully");
+    } catch (error) {
+      console.error("Error saving profile:", error);
+      toast.error("Failed to save profile settings");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSaveNotifications = (e: React.FormEvent) => {
@@ -54,19 +99,37 @@ const Settings = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="fullName">Full Name</Label>
-                          <Input id="fullName" defaultValue="Jane Doe" />
+                          <Input 
+                            id="fullName" 
+                            value={formData.fullName}
+                            onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="email">Email</Label>
-                          <Input id="email" type="email" defaultValue="jane.doe@example.com" />
+                          <Input 
+                            id="email" 
+                            type="email" 
+                            value={formData.email}
+                            readOnly 
+                            disabled
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="organization">Organization</Label>
-                          <Input id="organization" defaultValue="Research Institute" />
+                          <Input 
+                            id="organization" 
+                            value={formData.organization}
+                            onChange={(e) => setFormData({...formData, organization: e.target.value})}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="department">Department</Label>
-                          <Input id="department" defaultValue="Cell Biology" />
+                          <Input 
+                            id="department" 
+                            value={formData.department}
+                            onChange={(e) => setFormData({...formData, department: e.target.value})}
+                          />
                         </div>
                       </div>
                     </div>
@@ -77,16 +140,26 @@ const Settings = () => {
                       <h3 className="text-lg font-medium">Public Profile</h3>
                       <div className="space-y-2">
                         <Label htmlFor="bio">Bio</Label>
-                        <Input id="bio" defaultValue="Researcher specializing in 3D cell cultures and spheroid analysis." />
+                        <Input 
+                          id="bio" 
+                          value={formData.bio}
+                          onChange={(e) => setFormData({...formData, bio: e.target.value})}
+                        />
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Switch id="publicProfile" defaultChecked />
+                        <Switch 
+                          id="publicProfile" 
+                          checked={formData.publicProfile}
+                          onCheckedChange={(checked) => setFormData({...formData, publicProfile: checked})}
+                        />
                         <Label htmlFor="publicProfile" className="cursor-pointer">Make my profile visible to other researchers</Label>
                       </div>
                     </div>
                     
                     <div className="flex justify-end">
-                      <Button type="submit">Save Changes</Button>
+                      <Button type="submit" disabled={loading}>
+                        {loading ? "Saving..." : "Save Changes"}
+                      </Button>
                     </div>
                   </div>
                 </form>

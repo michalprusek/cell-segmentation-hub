@@ -1,155 +1,150 @@
 
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Bell, User, Settings, LogOut, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
+import { 
+  Bell, 
+  Settings as SettingsIcon, 
+  User as UserIcon,
+  Menu,
+  LogOut,
+  X
+} from "lucide-react";
+import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 const DashboardHeader = () => {
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: "Segmentation complete",
-      description: "HeLa_Image_3.png has been successfully segmented",
-      time: "Just now",
-      read: false
-    },
-    {
-      id: 2,
-      title: "New features available",
-      description: "Check out our new segmentation algorithms",
-      time: "2 hours ago",
-      read: false
-    },
-    {
-      id: 3,
-      title: "Weekly summary",
-      description: "You've processed 12 images this week",
-      time: "1 day ago",
-      read: true
-    }
-  ]);
-  
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  
-  const unreadCount = notifications.filter(n => !n.read).length;
-  
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, read: true }))
-    );
-    toast.success("All notifications marked as read");
-  };
-  
-  const handleLogout = () => {
-    // In a real app, this would clear auth tokens, etc.
-    toast.success("Logged out successfully");
-    setTimeout(() => {
-      navigate("/sign-in");
-    }, 1000);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
   };
 
   return (
     <header className="bg-white border-b border-gray-200">
-      <div className="container mx-auto px-4 py-3">
-        <div className="flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md bg-blue-500 flex items-center justify-center">
-              <span className="text-white font-bold text-sm">S</span>
+      <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+        <div className="flex items-center">
+          <Link to="/dashboard" className="flex items-center">
+            <div className="w-9 h-9 rounded-md bg-blue-500 flex items-center justify-center">
+              <span className="text-white font-bold text-lg">S</span>
             </div>
-            <span className="font-semibold text-base">SpheroSeg</span>
+            <span className="ml-2 text-xl font-semibold hidden sm:inline-block">
+              SpheroSeg
+            </span>
           </Link>
-          
-          <div className="flex items-center gap-3">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full relative">
-                  <Bell size={20} />
-                  {unreadCount > 0 && (
-                    <span className="absolute top-1 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="end">
-                <div className="flex items-center justify-between p-4 border-b">
-                  <h3 className="font-medium">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={markAllAsRead}
-                    >
-                      Mark all as read
-                    </Button>
-                  )}
+        </div>
+
+        {/* Desktop Navigation */}
+        <div className="hidden md:flex items-center space-x-4">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="h-5 w-5" />
+                <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80">
+              <div className="p-4 text-center">
+                <h3 className="font-medium">Notifications</h3>
+                <p className="text-sm text-gray-500 mt-1">You have no new notifications</p>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="gap-2">
+                <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
+                  <UserIcon className="h-3 w-3 text-gray-600" />
                 </div>
-                <div className="max-h-80 overflow-y-auto divide-y divide-gray-100">
-                  {notifications.length > 0 ? (
-                    notifications.map((notification) => (
-                      <div 
-                        key={notification.id} 
-                        className={`p-4 hover:bg-gray-50 ${notification.read ? '' : 'bg-blue-50/50'}`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <h4 className="text-sm font-medium">{notification.title}</h4>
-                          <span className="text-xs text-gray-500">{notification.time}</span>
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">{notification.description}</p>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="p-4 text-center text-gray-500">
-                      No notifications
+                <span className="text-sm">{user?.email?.split('@')[0] || 'User'}</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => navigate("/profile")}>
+                <UserIcon className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/settings")}>
+                <SettingsIcon className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleSignOut}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Mobile Navigation */}
+        <div className="md:hidden">
+          <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-6 w-6" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="p-0">
+              <div className="p-4 border-b">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <div className="w-8 h-8 rounded-md bg-blue-500 flex items-center justify-center">
+                      <span className="text-white font-bold">S</span>
                     </div>
-                  )}
-                </div>
-                <div className="p-2 border-t">
-                  <Button variant="ghost" size="sm" className="w-full justify-between">
-                    View all notifications
-                    <ChevronRight size={16} />
+                    <span className="ml-2 font-semibold">SpheroSeg</span>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(false)}>
+                    <X className="h-5 w-5" />
                   </Button>
                 </div>
-              </PopoverContent>
-            </Popover>
-            
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full">
-                  <User size={20} />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>My Account</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/profile")}>
-                  <User className="mr-2 h-4 w-4" />
+              </div>
+              <div className="py-2">
+                <button 
+                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    navigate("/profile");
+                  }}
+                >
+                  <UserIcon className="h-5 w-5 mr-3 text-gray-500" />
                   <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/settings")}>
-                  <Settings className="mr-2 h-4 w-4" />
+                </button>
+                <button 
+                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    navigate("/settings");
+                  }}
+                >
+                  <SettingsIcon className="h-5 w-5 mr-3 text-gray-500" />
                   <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout}>
-                  <LogOut className="mr-2 h-4 w-4" />
+                </button>
+                <div className="border-t my-2"></div>
+                <button 
+                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100 text-red-500"
+                  onClick={handleSignOut}
+                >
+                  <LogOut className="h-5 w-5 mr-3" />
                   <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+                </button>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
     </header>

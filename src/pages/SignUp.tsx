@@ -1,24 +1,24 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 
-const SignIn = () => {
+const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [agreeTerms, setAgreeTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const { toast: uiToast } = useToast();
-  const { signIn, user } = useAuth();
+  const { signUp, user } = useAuth();
 
   // Redirect if already logged in
-  useEffect(() => {
+  React.useEffect(() => {
     if (user) {
       navigate('/dashboard');
     }
@@ -32,22 +32,26 @@ const SignIn = () => {
       return;
     }
     
+    if (password !== confirmPassword) {
+      toast.error("Passwords do not match");
+      return;
+    }
+    
+    if (!agreeTerms) {
+      toast.error("You must agree to the terms and conditions");
+      return;
+    }
+    
     setIsLoading(true);
     
     try {
-      await signIn(email, password);
+      await signUp(email, password);
+      navigate("/sign-in");
     } catch (error) {
-      console.error("Sign in error:", error);
+      console.error("Sign up error:", error);
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleRequestAccess = () => {
-    uiToast({
-      title: "Access Request Submitted",
-      description: "We'll review your request and get back to you shortly.",
-    });
   };
 
   return (
@@ -65,9 +69,9 @@ const SignIn = () => {
               <span className="text-white font-bold text-lg">S</span>
             </div>
           </Link>
-          <h2 className="mt-4 text-3xl font-bold text-gray-900">Sign in to your account</h2>
+          <h2 className="mt-4 text-3xl font-bold text-gray-900">Create your account</h2>
           <p className="mt-2 text-gray-600">
-            Access the spheroid segmentation platform
+            Sign up to use the spheroid segmentation platform
           </p>
         </div>
         
@@ -86,12 +90,7 @@ const SignIn = () => {
           </div>
           
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <a href="#" className="text-sm font-medium text-blue-600 hover:text-blue-500 transition-colors">
-                Forgot password?
-              </a>
-            </div>
+            <Label htmlFor="password">Password</Label>
             <Input
               id="password"
               type="password"
@@ -103,13 +102,37 @@ const SignIn = () => {
             />
           </div>
           
+          <div className="space-y-2">
+            <Label htmlFor="confirmPassword">Confirm Password</Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="h-11"
+              required
+            />
+          </div>
+          
           <div className="flex items-center">
-            <Checkbox id="remember" />
+            <Checkbox 
+              id="terms" 
+              checked={agreeTerms}
+              onCheckedChange={(checked) => setAgreeTerms(checked as boolean)}
+            />
             <label
-              htmlFor="remember"
+              htmlFor="terms"
               className="ml-2 block text-sm text-gray-700"
             >
-              Remember me
+              I agree to the{" "}
+              <a href="#" className="text-blue-600 hover:text-blue-500 transition-colors">
+                Terms of Service
+              </a>{" "}
+              and{" "}
+              <a href="#" className="text-blue-600 hover:text-blue-500 transition-colors">
+                Privacy Policy
+              </a>
             </label>
           </div>
           
@@ -118,51 +141,21 @@ const SignIn = () => {
             className="w-full h-11 text-base rounded-md"
             disabled={isLoading}
           >
-            {isLoading ? "Signing in..." : "Sign in"}
+            {isLoading ? "Creating account..." : "Sign up"}
           </Button>
         </form>
         
-        <div className="mt-8">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">Don't have an account?</span>
-            </div>
-          </div>
-          
-          <div className="mt-6 flex flex-col gap-3">
-            <Link to="/sign-up">
-              <Button 
-                variant="outline" 
-                className="w-full h-11 text-base rounded-md"
-              >
-                Sign Up
-              </Button>
+        <div className="mt-8 text-center">
+          <p className="text-sm text-gray-600">
+            Already have an account?{" "}
+            <Link to="/sign-in" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
+              Sign in
             </Link>
-            <Button 
-              variant="outline" 
-              className="w-full h-11 text-base rounded-md"
-              onClick={handleRequestAccess}
-            >
-              Request Access
-            </Button>
-            <p className="text-center text-sm text-gray-600 mt-3">
-              By signing in, you agree to our{' '}
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-                Terms of Service
-              </a>{' '}
-              and{' '}
-              <a href="#" className="font-medium text-blue-600 hover:text-blue-500 transition-colors">
-                Privacy Policy
-              </a>
-            </p>
-          </div>
+          </p>
         </div>
       </div>
     </div>
   );
 };
 
-export default SignIn;
+export default SignUp;

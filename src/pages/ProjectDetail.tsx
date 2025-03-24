@@ -20,9 +20,11 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 import { segmentImage, SegmentationResult } from "@/lib/segmentation";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface ProjectImage {
-  id: number;
+  id: string;
   name: string;
   url: string;
   createdAt: Date;
@@ -37,6 +39,7 @@ type SortDirection = 'asc' | 'desc';
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [projectTitle, setProjectTitle] = useState<string>("");
   const [images, setImages] = useState<ProjectImage[]>([]);
   const [filteredImages, setFilteredImages] = useState<ProjectImage[]>([]);
@@ -48,39 +51,51 @@ const ProjectDetail = () => {
   // Fetch project data and images
   useEffect(() => {
     const fetchData = async () => {
+      if (!id || !user) return;
+
       try {
-        // In a real app, this would fetch from Supabase
-        // For demonstration, we'll use sample data
-        const projects = [
-          { id: 1, title: "HeLa Cell Spheroids" },
-          { id: 2, title: "MCF-7 Breast Cancer" },
-          { id: 3, title: "Neural Organoids" },
-          { id: 4, title: "Pancreatic Islets" },
-          { id: 5, title: "Liver Microtissues" },
-          { id: 6, title: "Embryoid Bodies" },
-        ];
-        
-        const project = projects.find(p => p.id.toString() === id);
-        
-        if (project) {
-          setProjectTitle(project.title);
-          
-          // Generate sample images
-          const sampleImages: ProjectImage[] = Array(12).fill(null).map((_, index) => ({
-            id: index + 1,
-            name: `${project.title.split(' ')[0]}_Image_${index + 1}.png`,
-            url: `/placeholder.svg`, // In a real app, this would be the actual image URL
-            createdAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
-            updatedAt: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000),
-            segmentationStatus: ['pending', 'processing', 'completed', 'failed'][Math.floor(Math.random() * 4)] as any
-          }));
-          
-          setImages(sampleImages);
-          setFilteredImages(sampleImages);
-        } else {
+        // Fetch project details
+        const { data: project, error: projectError } = await supabase
+          .from("projects")
+          .select("*")
+          .eq("id", id)
+          .single();
+
+        if (projectError) {
+          throw projectError;
+        }
+
+        if (!project) {
           toast.error("Project not found");
           navigate("/dashboard");
+          return;
         }
+
+        setProjectTitle(project.title);
+
+        // Fetch project images
+        const { data: imagesData, error: imagesError } = await supabase
+          .from("images")
+          .select("*")
+          .eq("project_id", id)
+          .order("updated_at", { ascending: false });
+
+        if (imagesError) {
+          throw imagesError;
+        }
+
+        const formattedImages: ProjectImage[] = (imagesData || []).map(img => ({
+          id: img.id,
+          name: img.name,
+          url: img.image_url || '/placeholder.svg',
+          createdAt: new Date(img.created_at),
+          updatedAt: new Date(img.updated_at),
+          segmentationStatus: img.segmentation_status as 'pending' | 'processing' | 'completed' | 'failed',
+          segmentationResult: img.segmentation_result
+        }));
+
+        setImages(formattedImages);
+        setFilteredImages(formattedImages);
       } catch (error) {
         console.error("Error fetching project:", error);
         toast.error("Failed to load project data");
@@ -90,7 +105,7 @@ const ProjectDetail = () => {
     };
     
     fetchData();
-  }, [id, navigate]);
+  }, [id, navigate, user]);
 
   // Filter and sort images
   useEffect(() => {
@@ -139,67 +154,123 @@ const ProjectDetail = () => {
     }
   };
 
-  const handleDeleteImage = (imageId: number) => {
-    setImages(prev => prev.filter(img => img.id !== imageId));
-    toast.success("Image deleted successfully");
+  const handleDeleteImage = async (imageId: string) => {
+    try {
+      // Delete image from Supabase
+      const { error } = await supabase
+        .from("images")
+        .delete()
+        .eq("id", imageId);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      setImages(prev => prev.filter(img => img.id !== imageId));
+      toast.success("Image deleted successfully");
+    } catch (error: any) {
+      console.error("Error deleting image:", error);
+      toast.error("Failed to delete image: " + error.message);
+    }
   };
 
-  const handleOpenSegmentationEditor = (image: ProjectImage) => {
+  const handleOpenSegmentationEditor = async (image: ProjectImage) => {
+    if (!id) return;
+
     if (image.segmentationStatus === 'pending' || image.segmentationStatus === 'failed') {
       // Start segmentation process
       toast.info("Starting segmentation process...");
       
       // Update image status to processing
-      setImages(prev => 
-        prev.map(img => 
-          img.id === image.id 
-            ? { ...img, segmentationStatus: 'processing' as const } 
-            : img
-        )
-      );
-      
-      // Simulate segmentation process
-      setTimeout(async () => {
-        try {
-          const result = await segmentImage(image.url);
-          
-          // Update image with segmentation result
-          setImages(prev => 
-            prev.map(img => 
-              img.id === image.id 
-                ? { 
-                    ...img, 
-                    segmentationStatus: 'completed' as const,
-                    segmentationResult: result,
-                    updatedAt: new Date()
-                  } 
-                : img
-            )
-          );
-          
-          // Navigate to editor
-          navigate(`/segmentation/${id}/${image.id}`);
-        } catch (error) {
-          console.error("Segmentation failed:", error);
-          
-          // Update image status to failed
-          setImages(prev => 
-            prev.map(img => 
-              img.id === image.id 
-                ? { 
-                    ...img, 
-                    segmentationStatus: 'failed' as const,
-                    updatedAt: new Date()
-                  } 
-                : img
-            )
-          );
-          
-          toast.error("Segmentation failed", {
-            description: "Please try again later"
-          });
+      try {
+        const { error: updateError } = await supabase
+          .from("images")
+          .update({ segmentation_status: 'processing' })
+          .eq("id", image.id);
+
+        if (updateError) {
+          throw updateError;
         }
-      }, 2000);
+
+        // Update local state
+        setImages(prev => 
+          prev.map(img => 
+            img.id === image.id 
+              ? { ...img, segmentationStatus: 'processing' as const } 
+              : img
+          )
+        );
+        
+        // Simulate segmentation process
+        setTimeout(async () => {
+          try {
+            const result = await segmentImage(image.url);
+            
+            // Update image with segmentation result in Supabase
+            const { error: resultUpdateError } = await supabase
+              .from("images")
+              .update({
+                segmentation_status: 'completed',
+                segmentation_result: result,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", image.id);
+
+            if (resultUpdateError) {
+              throw resultUpdateError;
+            }
+            
+            // Update local state
+            setImages(prev => 
+              prev.map(img => 
+                img.id === image.id 
+                  ? { 
+                      ...img, 
+                      segmentationStatus: 'completed' as const,
+                      segmentationResult: result,
+                      updatedAt: new Date()
+                    } 
+                  : img
+              )
+            );
+            
+            // Navigate to editor
+            navigate(`/segmentation/${id}/${image.id}`);
+          } catch (error) {
+            console.error("Segmentation failed:", error);
+            
+            // Update image status to failed in Supabase
+            await supabase
+              .from("images")
+              .update({
+                segmentation_status: 'failed',
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", image.id);
+            
+            // Update local state
+            setImages(prev => 
+              prev.map(img => 
+                img.id === image.id 
+                  ? { 
+                      ...img, 
+                      segmentationStatus: 'failed' as const,
+                      updatedAt: new Date()
+                    } 
+                  : img
+              )
+            );
+            
+            toast.error("Segmentation failed", {
+              description: "Please try again later"
+            });
+          }
+        }, 2000);
+      } catch (error) {
+        console.error("Error updating image status:", error);
+        toast.error("Failed to start segmentation process");
+      }
     } else {
       // Navigate directly to editor
       navigate(`/segmentation/${id}/${image.id}`);
