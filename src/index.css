@@ -54,22 +54,35 @@
   * {
     @apply border-border;
   }
+  
+  html {
+    @apply h-full;
+  }
+  
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground h-full;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Dark mode overrides */
+  #root {
+    @apply h-full;
+  }
+
+  /* Dark mode overrides - applied globally */
+  .dark {
+    @apply text-white;
+  }
+
   .dark body {
+    @apply bg-gray-900;
+  }
+  
+  .dark .bg-gray-50 {
     @apply bg-gray-900;
   }
   
   .dark .bg-white {
     @apply bg-gray-800;
-  }
-  
-  .dark .bg-gray-50 {
-    @apply bg-gray-900;
   }
   
   .dark .border-gray-200 {
@@ -102,5 +115,15 @@
     to {
       opacity: 1;
     }
+  }
+  
+  /* Consistent dark theme background for all pages */
+  .dark .min-h-screen {
+    @apply bg-gray-900;
+  }
+  
+  /* Better contrast for text in dark mode */
+  .dark .text-gray-900 {
+    @apply text-gray-100;
   }
 }

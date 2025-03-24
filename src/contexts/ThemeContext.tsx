@@ -45,13 +45,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       root.setAttribute('data-theme', theme);
     }
 
-    // Apply additional dark mode classes to ensure consistent background
+    // Apply consistent dark mode styling to body and html
     if (root.classList.contains('dark')) {
-      document.body.classList.add('bg-gray-900', 'text-white');
-      document.body.classList.remove('bg-gray-50', 'text-gray-900');
+      document.documentElement.style.backgroundColor = '#111827'; // bg-gray-900
+      document.body.style.backgroundColor = '#111827'; // bg-gray-900
+      document.body.classList.add('dark');
+      document.body.classList.remove('light');
     } else {
-      document.body.classList.add('bg-gray-50', 'text-gray-900');
-      document.body.classList.remove('bg-gray-900', 'text-white');
+      document.documentElement.style.backgroundColor = '#f9fafb'; // bg-gray-50 
+      document.body.style.backgroundColor = '#f9fafb'; // bg-gray-50
+      document.body.classList.add('light');
+      document.body.classList.remove('dark');
     }
   };
 

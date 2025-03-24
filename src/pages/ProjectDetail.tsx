@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,8 @@ import {
   Clock3, 
   AlertCircle, 
   Loader2,
-  ArrowUpDown
+  ArrowUpDown,
+  Upload
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -22,6 +24,7 @@ import { segmentImage } from "@/lib/segmentation";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import ImageUploader from "@/components/ImageUploader";
 import type { Json } from "@/integrations/supabase/types";
 import type { SegmentationResult } from "@/lib/segmentation";
 
@@ -50,6 +53,7 @@ const ProjectDetail = () => {
   const [sortField, setSortField] = useState<SortField>('updatedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [loading, setLoading] = useState<boolean>(true);
+  const [showUploader, setShowUploader] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -179,6 +183,7 @@ const ProjectDetail = () => {
     
     navigate(`/segmentation/${id}/${image.id}`);
     
+    // Only update status if pending or failed
     if (image.segmentationStatus === 'pending' || image.segmentationStatus === 'failed') {
       updateImageProcessingStatus(image.id);
     }
@@ -186,6 +191,7 @@ const ProjectDetail = () => {
 
   const updateImageProcessingStatus = async (imageId: string) => {
     try {
+      // First update the status to processing
       const { error: updateError } = await supabase
         .from("images")
         .update({ 
@@ -199,6 +205,7 @@ const ProjectDetail = () => {
         return;
       }
 
+      // Update the local state
       setImages(prev => 
         prev.map(img => 
           img.id === imageId 
@@ -207,6 +214,7 @@ const ProjectDetail = () => {
         )
       );
       
+      // Simulate processing (in a real app, this would be a backend process)
       setTimeout(async () => {
         try {
           const image = images.find(img => img.id === imageId);
@@ -258,6 +266,10 @@ const ProjectDetail = () => {
     }
   };
 
+  const toggleUploader = () => {
+    setShowUploader(!showUploader);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
@@ -282,75 +294,89 @@ const ProjectDetail = () => {
       </div>
       
       <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
-          <div className="relative w-full md:w-auto">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-            <Input
-              className="pl-10 pr-4 w-full md:w-80 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-              placeholder={t('dashboard.searchImagesPlaceholder')}
-              value={searchTerm}
-              onChange={handleSearch}
-            />
+        {showUploader ? (
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-medium dark:text-white">Upload Images</h2>
+              <Button variant="outline" size="sm" onClick={toggleUploader}>
+                Cancel
+              </Button>
+            </div>
+            <ImageUploader />
           </div>
-          
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleSort('name')}
-              className="flex items-center dark:text-gray-300 dark:border-gray-700"
-            >
-              {t('common.name')}
-              {sortField === 'name' && (
-                sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
-              )}
-              {sortField !== 'name' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleSort('updatedAt')}
-              className="flex items-center dark:text-gray-300 dark:border-gray-700"
-            >
-              {t('dashboard.lastChange')}
-              {sortField === 'updatedAt' && (
-                sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
-              )}
-              {sortField !== 'updatedAt' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleSort('segmentationStatus')}
-              className="flex items-center dark:text-gray-300 dark:border-gray-700"
-            >
-              {t('common.status')}
-              {sortField === 'segmentationStatus' && (
-                sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
-              )}
-              {sortField !== 'segmentationStatus' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
-            </Button>
+        ) : (
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
+            <div className="relative w-full md:w-auto">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                className="pl-10 pr-4 w-full md:w-80 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+                placeholder={t('dashboard.searchImagesPlaceholder')}
+                value={searchTerm}
+                onChange={handleSearch}
+              />
+            </div>
+            
+            <div className="flex space-x-2">
+              <Button variant="outline" size="sm" className="flex items-center" onClick={toggleUploader}>
+                <Upload className="mr-1 h-4 w-4" />
+                Upload Images
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSort('name')}
+                className="flex items-center dark:text-gray-300 dark:border-gray-700"
+              >
+                {t('common.name')}
+                {sortField === 'name' && (
+                  sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+                )}
+                {sortField !== 'name' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSort('updatedAt')}
+                className="flex items-center dark:text-gray-300 dark:border-gray-700"
+              >
+                {t('dashboard.lastChange')}
+                {sortField === 'updatedAt' && (
+                  sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+                )}
+                {sortField !== 'updatedAt' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleSort('segmentationStatus')}
+                className="flex items-center dark:text-gray-300 dark:border-gray-700"
+              >
+                {t('common.status')}
+                {sortField === 'segmentationStatus' && (
+                  sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
+                )}
+                {sortField !== 'segmentationStatus' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
         
         {loading ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
           </div>
-        ) : filteredImages.length === 0 ? (
+        ) : filteredImages.length === 0 && !showUploader ? (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
             <ImageIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
             <h3 className="text-lg font-medium mb-2 dark:text-white">{t('common.noImages')}</h3>
             <p className="text-gray-500 dark:text-gray-400 mb-6">
               {searchTerm ? t('dashboard.searchImagesPlaceholder') : t('dashboard.noImagesDescription')}
             </p>
-            <Button
-              onClick={() => navigate(`/dashboard`)}
-            >
+            <Button onClick={toggleUploader}>
               {t('common.uploadImages')}
             </Button>
           </div>
-        ) : (
+        ) : !showUploader && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredImages.map((image) => (
               <Card 

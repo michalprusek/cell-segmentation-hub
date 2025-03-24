@@ -1,9 +1,14 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { supabase } from "@/integrations/supabase/client";
 
 // Example of a function to upload an image to Supabase Storage
-export const uploadImage = async (file: File, projectId: string, userId: string, bucket: string = 'spheroid-images') => {
+export const uploadImage = async (
+  file: File, 
+  projectId: string, 
+  userId: string, 
+  bucket: string = 'spheroid-images',
+  autoSegment: boolean = false
+) => {
   try {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random().toString(36).substring(2, 15)}.${fileExt}`;
@@ -36,7 +41,7 @@ export const uploadImage = async (file: File, projectId: string, userId: string,
       .from(bucket)
       .getPublicUrl(thumbnailPath);
 
-    // Insert the image record into the database
+    // Insert the image record into the database with appropriate segmentation status
     const { data, error } = await supabase
       .from('images')
       .insert([
@@ -46,7 +51,7 @@ export const uploadImage = async (file: File, projectId: string, userId: string,
           user_id: userId,
           image_url: publicUrl,
           thumbnail_url: thumbnailUrl,
-          segmentation_status: 'pending'
+          segmentation_status: autoSegment ? 'processing' : 'pending'
         }
       ])
       .select()
@@ -54,6 +59,29 @@ export const uploadImage = async (file: File, projectId: string, userId: string,
 
     if (error) {
       throw error;
+    }
+
+    // If auto-segmentation is enabled, trigger segmentation process
+    if (autoSegment) {
+      // We'd typically trigger a serverless function or background job here
+      // For now, we'll just update the status to simulate this
+      setTimeout(async () => {
+        try {
+          const { error: segmentError } = await supabase
+            .from('images')
+            .update({
+              segmentation_status: 'completed',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', data.id);
+
+          if (segmentError) {
+            console.error('Error updating segmentation status:', segmentError);
+          }
+        } catch (error) {
+          console.error('Segmentation process error:', error);
+        }
+      }, 3000);
     }
 
     return data;
