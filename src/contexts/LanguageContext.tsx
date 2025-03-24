@@ -1,12 +1,12 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from "@/integrations/supabase/client";
-import { enTranslations } from '@/translations/en';
-import { csTranslations } from '@/translations/cs';
-import { deTranslations } from '@/translations/de';
-import { esTranslations } from '@/translations/es';
-import { frTranslations } from '@/translations/fr';
-import { zhTranslations } from '@/translations/zh';
+import enTranslations from '@/translations/en';
+import csTranslations from '@/translations/cs';
+import deTranslations from '@/translations/de';
+import esTranslations from '@/translations/es';
+import frTranslations from '@/translations/fr';
+import zhTranslations from '@/translations/zh';
 import { useAuth } from "@/contexts/AuthContext";
 
 export type Language = 'en' | 'cs' | 'de' | 'es' | 'fr' | 'zh';

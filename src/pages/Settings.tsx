@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -10,10 +10,42 @@ import AppearanceSection from '@/components/settings/AppearanceSection';
 import UserProfileSection from '@/components/settings/UserProfileSection';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 const Settings = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (!user) return;
+
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (error) {
+          console.error('Error fetching profile:', error);
+        } else if (data) {
+          setProfile(data);
+        }
+      } catch (error) {
+        console.error('Unexpected error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, [user]);
 
   return (
     <motion.div 
@@ -37,30 +69,40 @@ const Settings = () => {
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('settings.pageTitle')}</h1>
         </div>
         
-        <Tabs defaultValue="account" className="w-full">
-          <TabsList className="mb-8 grid w-full grid-cols-4">
-            <TabsTrigger value="account">{t('settings.account')}</TabsTrigger>
-            <TabsTrigger value="appearance">{t('settings.appearance')}</TabsTrigger>
-            <TabsTrigger value="profile">{t('settings.profile')}</TabsTrigger>
-            <TabsTrigger value="notifications">{t('settings.notifications')}</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="account">
-            <AccountSection />
-          </TabsContent>
-          
-          <TabsContent value="appearance">
-            <AppearanceSection />
-          </TabsContent>
-          
-          <TabsContent value="profile">
-            <UserProfileSection />
-          </TabsContent>
-          
-          <TabsContent value="notifications">
-            <NotificationSection />
-          </TabsContent>
-        </Tabs>
+        {!loading && (
+          <Tabs defaultValue="account" className="w-full">
+            <TabsList className="mb-8 grid w-full grid-cols-4">
+              <TabsTrigger value="account">{t('settings.account')}</TabsTrigger>
+              <TabsTrigger value="appearance">{t('settings.appearance')}</TabsTrigger>
+              <TabsTrigger value="profile">{t('settings.profile')}</TabsTrigger>
+              <TabsTrigger value="notifications">{t('settings.notifications')}</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="account">
+              <AccountSection />
+            </TabsContent>
+            
+            <TabsContent value="appearance">
+              <AppearanceSection />
+            </TabsContent>
+            
+            <TabsContent value="profile">
+              {user && profile && (
+                <UserProfileSection userId={user.id} profile={profile} />
+              )}
+            </TabsContent>
+            
+            <TabsContent value="notifications">
+              <NotificationSection />
+            </TabsContent>
+          </Tabs>
+        )}
+        
+        {loading && (
+          <div className="flex justify-center items-center h-64">
+            <span className="text-gray-500">{t('common.loading')}</span>
+          </div>
+        )}
       </div>
     </motion.div>
   );
