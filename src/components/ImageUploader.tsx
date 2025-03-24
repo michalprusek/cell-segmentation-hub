@@ -1,6 +1,5 @@
 
 import React, { useState, useCallback, useEffect } from "react";
-import { useDropzone } from "react-dropzone";
 import { toast } from "sonner";
 import { uploadImage } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,22 +48,6 @@ const ImageUploader = () => {
       handleUpload(newFiles, projectId, user.id);
     }
   }, [projectId, user, t]);
-
-  const { getRootProps, getInputProps } = useDropzone({
-    onDrop,
-    accept: {
-      'image/jpeg': [],
-      'image/png': [],
-      'image/tiff': [],
-      'image/bmp': []
-    },
-    maxSize: 10485760,
-    disabled: !projectId, // Disable dropzone if no project selected
-    onDragEnter: () => setIsDragActive(true),
-    onDragLeave: () => setIsDragActive(false),
-    onDropAccepted: () => setIsDragActive(false),
-    onDropRejected: () => setIsDragActive(false)
-  });
 
   const handleUpload = async (filesToUpload: FileWithPreview[], selectedProjectId: string, userId: string) => {
     if (!selectedProjectId || !userId || filesToUpload.length === 0) {
