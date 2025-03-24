@@ -43,7 +43,7 @@ const Navbar = () => {
           <div className="w-10 h-10 rounded-md bg-blue-500 flex items-center justify-center">
             <span className="text-white font-bold">S</span>
           </div>
-          <span className="font-semibold text-lg">Spheroid</span>
+          <span className="font-semibold text-lg">SpheroSeg</span>
         </Link>
 
         {/* Desktop Navigation */}

@@ -48,7 +48,7 @@ const StatsOverview = () => {
     {
       title: "Total Projects",
       value: "12",
-      description: "Active research projects",
+      description: "Active spheroid studies",
       icon: <Microscope size={16} />,
       trend: {
         value: "2 new this month",
@@ -58,7 +58,7 @@ const StatsOverview = () => {
     {
       title: "Processed Images",
       value: "189",
-      description: "Successfully analyzed",
+      description: "Successfully segmented",
       icon: <Image size={16} />,
       trend: {
         value: "24% from last week",
@@ -68,11 +68,11 @@ const StatsOverview = () => {
     {
       title: "Uploaded Today",
       value: "7",
-      description: "Images awaiting processing",
+      description: "Spheroid images pending",
       icon: <FileUp size={16} />,
     },
     {
-      title: "Processing Time",
+      title: "Segmentation Time",
       value: "2.7s",
       description: "Average per image",
       icon: <FileClock size={16} />,

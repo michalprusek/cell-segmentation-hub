@@ -68,13 +68,23 @@ const Hero = () => {
           </div>
           
           <div className="pt-12 pb-8 max-w-5xl mx-auto">
-            <div className="relative glass-morphism rounded-2xl shadow-glass-lg overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10"></div>
-              <img 
-                src="/placeholder.svg" 
-                alt="Spheroid Analysis Dashboard"
-                className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
-              />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="relative glass-morphism rounded-2xl shadow-glass-lg overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10"></div>
+                <img 
+                  src="/lovable-uploads/026f6ae6-fa28-487c-8263-f49babd99dd3.png" 
+                  alt="Spheroid microscopy image"
+                  className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
+                />
+              </div>
+              <div className="relative glass-morphism rounded-2xl shadow-glass-lg overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10"></div>
+                <img 
+                  src="/lovable-uploads/19687f60-a78f-49e3-ada7-8dfc6a5fab4e.png" 
+                  alt="Spheroid microscopy image with analysis"
+                  className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
+                />
+              </div>
             </div>
           </div>
         </div>
