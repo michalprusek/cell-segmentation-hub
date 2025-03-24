@@ -68,7 +68,7 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
       setProjectName("");
       setProjectDescription("");
       
-      // Notify parent component
+      // Notify parent component about creation but don't redirect
       if (onProjectCreated && data) {
         onProjectCreated(data.id);
       }

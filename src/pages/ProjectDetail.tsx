@@ -22,6 +22,7 @@ import { formatDistanceToNow } from "date-fns";
 import { segmentImage } from "@/lib/segmentation";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import type { Json } from "@/integrations/supabase/types";
 import type { SegmentationResult } from "@/lib/segmentation";
 
@@ -42,6 +43,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [projectTitle, setProjectTitle] = useState<string>("");
   const [images, setImages] = useState<ProjectImage[]>([]);
   const [filteredImages, setFilteredImages] = useState<ProjectImage[]>([]);
@@ -162,10 +164,14 @@ const ProjectDetail = () => {
       }
 
       setImages(prev => prev.filter(img => img.id !== imageId));
-      toast.success("Image deleted successfully");
+      toast.success(t('common.success'), {
+        description: t('common.delete') + " " + t('common.success')
+      });
     } catch (error: any) {
       console.error("Error deleting image:", error);
-      toast.error("Failed to delete image: " + error.message);
+      toast.error(t('common.error'), {
+        description: t('common.delete') + " " + t('common.error') + ": " + error.message
+      });
     }
   };
 
@@ -277,8 +283,8 @@ const ProjectDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="bg-white shadow-sm border-b">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center">
             <Button 
@@ -287,12 +293,12 @@ const ProjectDetail = () => {
               className="mr-4"
               onClick={() => navigate("/dashboard")}
             >
-              Back
+              {t('common.back')}
             </Button>
             <div>
-              <h1 className="text-xl font-semibold">{projectTitle}</h1>
-              <p className="text-sm text-gray-500">
-                {loading ? "Loading..." : `${filteredImages.length} images`}
+              <h1 className="text-xl font-semibold dark:text-white">{projectTitle}</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {loading ? t('common.loading') : `${filteredImages.length} ${t('common.images').toLowerCase()}`}
               </p>
             </div>
           </div>
@@ -305,7 +311,7 @@ const ProjectDetail = () => {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
               className="pl-10 pr-4 w-full md:w-80"
-              placeholder="Search images by name..."
+              placeholder={t('dashboard.searchImagesPlaceholder')}
               value={searchTerm}
               onChange={handleSearch}
             />
@@ -318,7 +324,7 @@ const ProjectDetail = () => {
               onClick={() => handleSort('name')}
               className="flex items-center"
             >
-              Name
+              {t('common.name')}
               {sortField === 'name' && (
                 sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
               )}
@@ -330,7 +336,7 @@ const ProjectDetail = () => {
               onClick={() => handleSort('updatedAt')}
               className="flex items-center"
             >
-              Last Change
+              {t('dashboard.lastChange')}
               {sortField === 'updatedAt' && (
                 sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
               )}
@@ -342,7 +348,7 @@ const ProjectDetail = () => {
               onClick={() => handleSort('segmentationStatus')}
               className="flex items-center"
             >
-              Status
+              {t('common.status')}
               {sortField === 'segmentationStatus' && (
                 sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
               )}
@@ -356,16 +362,16 @@ const ProjectDetail = () => {
             <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
           </div>
         ) : filteredImages.length === 0 ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
             <ImageIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium mb-2">No images found</h3>
-            <p className="text-gray-500 mb-6">
-              {searchTerm ? "Try a different search term" : "Upload some images to get started"}
+            <h3 className="text-lg font-medium mb-2 dark:text-white">{t('common.noImages')}</h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-6">
+              {searchTerm ? t('dashboard.searchImagesPlaceholder') : t('dashboard.noImagesDescription')}
             </p>
             <Button
               onClick={() => navigate(`/dashboard`)}
             >
-              Upload Images
+              {t('common.uploadImages')}
             </Button>
           </div>
         ) : (
@@ -373,7 +379,7 @@ const ProjectDetail = () => {
             {filteredImages.map((image) => (
               <Card 
                 key={image.id} 
-                className="overflow-hidden cursor-pointer group hover:ring-2 hover:ring-blue-200 transition-all duration-200"
+                className="overflow-hidden cursor-pointer group hover:ring-2 hover:ring-blue-200 transition-all duration-200 dark:bg-gray-800 dark:border-gray-700"
                 onClick={() => handleOpenSegmentationEditor(image)}
               >
                 <div className="relative">
@@ -386,13 +392,13 @@ const ProjectDetail = () => {
                     />
                   </div>
                   
-                  <div className="absolute top-2 left-2 flex items-center space-x-1 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs">
+                  <div className="absolute top-2 left-2 flex items-center space-x-1 bg-white/90 dark:bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full text-xs">
                     {getStatusIcon(image.segmentationStatus)}
-                    <span className="capitalize">{image.segmentationStatus}</span>
+                    <span className="capitalize">{t(`dashboard.${image.segmentationStatus}`)}</span>
                   </div>
                   
                   <button
-                    className="absolute top-2 right-2 bg-white/90 p-1 rounded-full text-gray-700 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 bg-white/90 dark:bg-black/70 p-1 rounded-full text-gray-700 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleDeleteImage(image.id);

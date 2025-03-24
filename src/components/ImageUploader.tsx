@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,7 @@ import { toast } from "sonner";
 import { Upload, ImagePlus, FileX, CheckCircle, X } from "lucide-react";
 import { uploadImage } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import ProjectSelector from "@/components/ProjectSelector";
 
 interface FileWithPreview extends File {
@@ -28,6 +27,14 @@ const ImageUploader = () => {
   const [isUploading, setIsUploading] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
+  const params = useParams();
+  const currentProjectId = params.id;
+
+  useEffect(() => {
+    if (currentProjectId) {
+      setProjectId(currentProjectId);
+    }
+  }, [currentProjectId]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (!projectId) {
@@ -45,7 +52,6 @@ const ImageUploader = () => {
     
     setFiles(prev => [...prev, ...newFiles]);
     
-    // Start uploads immediately
     if (projectId && user) {
       handleUpload(newFiles, projectId, user.id);
     }
@@ -59,7 +65,7 @@ const ImageUploader = () => {
       'image/tiff': [],
       'image/bmp': []
     },
-    maxSize: 10485760, // 10MB
+    maxSize: 10485760,
   });
 
   const handleUpload = async (filesToUpload: FileWithPreview[], selectedProjectId: string, userId: string) => {
@@ -78,17 +84,14 @@ const ImageUploader = () => {
       const file = filesToUpload[i];
       
       try {
-        // Update status to uploading
         setFiles(prev => 
           prev.map(f => 
             f === file ? { ...f, status: "uploading" as const } : f
           )
         );
         
-        // Upload the file
         const uploadedImage = await uploadImage(file, selectedProjectId, userId);
         
-        // Update status to complete and save the image ID
         setFiles(prev => 
           prev.map(f => 
             f === file ? { 
@@ -104,7 +107,6 @@ const ImageUploader = () => {
       } catch (error) {
         console.error("Upload error:", error);
         
-        // Update status to error
         setFiles(prev => 
           prev.map(f => 
             f === file ? { ...f, status: "error" as const } : f
@@ -114,22 +116,21 @@ const ImageUploader = () => {
         errorCount++;
       }
       
-      // Update overall progress
       const newProgress = Math.round(((i + 1) / totalFiles) * 100);
       setUploadProgress(newProgress);
     }
     
     setIsUploading(false);
     
-    // Show toast with results
     if (successCount > 0) {
       toast.success(`Uploaded ${successCount} images successfully`);
       
-      // Redirect to project detail page after all uploads complete
-      if (errorCount === 0) {
+      if (errorCount === 0 && !currentProjectId) {
         setTimeout(() => {
           navigate(`/project/${selectedProjectId}`);
         }, 1000);
+      } else if (currentProjectId) {
+        window.location.reload();
       }
     }
     
@@ -142,7 +143,6 @@ const ImageUploader = () => {
     URL.revokeObjectURL(file.preview || "");
     setFiles(files.filter(f => f !== file));
     
-    // Recalculate progress
     const completedFiles = files.filter(f => f.status === "complete").length;
     const newProgress = files.length > 1 ? Math.round((completedFiles / (files.length - 1)) * 100) : 0;
     setUploadProgress(newProgress);
@@ -152,7 +152,6 @@ const ImageUploader = () => {
     setProjectId(value);
   };
 
-  // Clean up previews
   useEffect(() => {
     return () => {
       files.forEach(file => URL.revokeObjectURL(file.preview || ""));
@@ -162,7 +161,13 @@ const ImageUploader = () => {
   return (
     <div className="space-y-6">
       <div className="space-y-4">
-        <ProjectSelector value={projectId} onChange={handleProjectChange} />
+        {!currentProjectId ? (
+          <ProjectSelector value={projectId} onChange={handleProjectChange} />
+        ) : (
+          <div className="text-sm text-gray-500 mb-2">
+            Uploading to current project
+          </div>
+        )}
         
         <div className="flex items-center space-x-2">
           <Switch 
