@@ -374,7 +374,7 @@ const ProjectDetail = () => {
               <Card 
                 key={image.id} 
                 className="overflow-hidden cursor-pointer group hover:ring-2 hover:ring-blue-200 transition-all duration-200"
-                onClick={() => navigate(`/segmentation/${id}/${image.id}`)}
+                onClick={() => handleOpenSegmentationEditor(image)}
               >
                 <div className="relative">
                   {/* Use 16:9 aspect ratio for rectangular cards */}

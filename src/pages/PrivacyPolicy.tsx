@@ -14,56 +14,83 @@ const PrivacyPolicy = () => {
           <h1 className="text-3xl font-bold mb-8">Privacy Policy</h1>
           
           <div className="prose prose-blue max-w-none">
-            <h2>1. Information We Collect</h2>
+            <h2>1. Introduction</h2>
             <p>
-              SpheroSeg collects information that you provide directly to us, such as when you create 
-              an account, upload images, or contact us. This may include your name, email address, 
-              institution name, and the images you upload for segmentation.
+              This Privacy Policy explains how SpheroSeg ("we", "us", "our") collects, uses, and shares
+              your information when you use our platform for spheroid segmentation and analysis.
             </p>
             
-            <h2>2. How We Use Your Information</h2>
+            <h2>2. Information We Collect</h2>
+            <p>
+              We collect information you provide directly to us when you create an account, upload images,
+              create projects, and otherwise interact with our services.
+            </p>
+            
+            <h3>2.1 Personal Information</h3>
+            <p>
+              This includes your name, email address, institution/organization, and other information
+              you provide when setting up your account or requesting access to our services.
+            </p>
+            
+            <h3>2.2 Research Data</h3>
+            <p>
+              This includes images you upload, project details, analysis results, and other research
+              related data you create or upload to our platform.
+            </p>
+            
+            <h3>2.3 Usage Information</h3>
+            <p>
+              We collect information about how you use our platform, including log data, device information,
+              and usage patterns.
+            </p>
+            
+            <h2>3. How We Use Your Information</h2>
             <p>
               We use the information we collect to provide, maintain, and improve our services,
-              to develop new features, and to protect SpheroSeg and our users.
+              to communicate with you, and to comply with our legal obligations.
             </p>
             
-            <h2>3. Data Security</h2>
+            <h2>4. Data Security</h2>
             <p>
-              We implement reasonable security measures to protect your personal information from 
-              unauthorized access, alteration, disclosure, or destruction.
+              We implement appropriate security measures to protect your personal information and
+              research data from unauthorized access, alteration, disclosure, or destruction.
             </p>
             
-            <h2>4. Data Retention</h2>
+            <h2>5. Data Sharing</h2>
             <p>
-              We retain your personal information for as long as necessary to fulfill the purposes 
-              outlined in this Privacy Policy, unless a longer retention period is required or permitted 
-              by law.
+              We do not sell your personal information or research data. We may share your information
+              in limited circumstances, such as with your consent, to comply with legal obligations,
+              or with service providers who help us operate our platform.
             </p>
             
-            <h2>5. Your Rights</h2>
+            <h2>6. Your Choices</h2>
             <p>
-              Depending on your location, you may have rights regarding your personal information, 
-              such as the right to access, correct, or delete your data.
+              You can access, update, or delete your account information and research data through
+              your account settings. You can also contact us to request access to, correction of,
+              or deletion of any personal information we have about you.
             </p>
             
-            <h2>6. Changes to This Privacy Policy</h2>
+            <h2>7. Changes to This Policy</h2>
             <p>
-              We may update this Privacy Policy from time to time. We will notify you of any changes 
+              We may update this Privacy Policy from time to time. We will notify you of any changes
               by posting the new Privacy Policy on this page and updating the "Last Updated" date.
             </p>
             
-            <h2>7. Contact Us</h2>
+            <h2>8. Contact Us</h2>
             <p>
-              If you have any questions about this Privacy Policy or our practices, please contact us.
+              If you have any questions about this Privacy Policy, please contact us at
+              privacy@spheroseg.com.
             </p>
+            
+            <p className="text-sm text-gray-500 mt-8">Last Updated: July 1, 2023</p>
           </div>
           
           <div className="mt-8 flex justify-between">
             <Button variant="outline" asChild>
-              <Link to="/terms-of-service">Terms of Service</Link>
+              <Link to="/">Back to Home</Link>
             </Button>
             <Button asChild>
-              <Link to="/">Back to Home</Link>
+              <Link to="/terms-of-service">Terms of Service</Link>
             </Button>
           </div>
         </div>

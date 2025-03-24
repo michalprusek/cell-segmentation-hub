@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -7,8 +8,7 @@ import { toast } from "sonner";
 import DashboardHeader from "@/components/DashboardHeader";
 import DashboardActions from "@/components/DashboardActions";
 import StatsOverview from "@/components/StatsOverview";
-import ProjectsList from "@/components/ProjectsList";
-import { Project } from "@/components/ProjectsList";
+import ProjectsList, { Project } from "@/components/ProjectsList";
 import ImageUploader from "@/components/ImageUploader";
 import NewProject from "@/components/NewProject";
 import { supabase } from "@/integrations/supabase/client";

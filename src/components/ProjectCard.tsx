@@ -15,22 +15,22 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
 interface ProjectCardProps {
+  id: string;
   title: string;
   description: string;
   thumbnail: string;
   date: string;
   imageCount: number;
-  id: string;
   onClick?: () => void;
 }
 
 const ProjectCard = ({
+  id,
   title,
   description,
   thumbnail,
   date,
   imageCount,
-  id,
   onClick
 }: ProjectCardProps) => {
   const navigate = useNavigate();

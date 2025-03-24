@@ -37,6 +37,7 @@ const ProjectsList = ({ projects, viewMode, onOpenProject, loading }: ProjectsLi
         {projects.map((project) => (
           <ProjectCard
             key={project.id}
+            id={project.id}
             title={project.title}
             description={project.description}
             thumbnail={project.thumbnail}

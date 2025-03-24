@@ -1,171 +1,164 @@
 
 import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const RequestAccess = () => {
-  const navigate = useNavigate();
-  const [formData, setFormData] = useState({
-    email: "",
-    name: "",
-    institution: "",
-    purpose: "",
-    agreeToTerms: false
-  });
-  const [loading, setLoading] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [institution, setInstitution] = useState("");
+  const [purpose, setPurpose] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, checked } = e.target;
-    setFormData(prev => ({ ...prev, [name]: checked }));
-  };
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.agreeToTerms) {
-      toast.error("You must agree to the Terms of Service and Privacy Policy");
+    if (!name || !email || !institution || !purpose) {
+      toast.error("Please fill in all fields");
       return;
     }
     
-    setLoading(true);
+    setIsSubmitting(true);
     
     try {
-      // Store access request in Supabase
+      // Insert the access request
       const { error } = await supabase
-        .from('access_requests')
+        .from("access_requests")
         .insert([
           {
-            email: formData.email,
-            name: formData.name,
-            institution: formData.institution,
-            purpose: formData.purpose
+            name,
+            email,
+            institution,
+            purpose
           }
         ]);
-        
+      
       if (error) throw error;
       
       toast.success("Access request submitted successfully", {
         description: "We'll review your request and get back to you soon."
       });
       
-      // Redirect to home page after successful submission
-      setTimeout(() => {
-        navigate("/");
-      }, 3000);
-    } catch (error) {
+      // Clear form
+      setName("");
+      setEmail("");
+      setInstitution("");
+      setPurpose("");
+      
+    } catch (error: any) {
       console.error("Error submitting access request:", error);
       toast.error("Failed to submit request", {
-        description: "Please try again later or contact support."
+        description: error.message
       });
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      <div className="container mx-auto px-4 py-12 flex-1">
-        <div className="max-w-2xl mx-auto">
+      <div className="flex-1 bg-gray-50 py-12">
+        <div className="container max-w-4xl mx-auto px-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="text-2xl">Request Access to SpheroSeg</CardTitle>
+            <CardHeader className="text-center">
+              <CardTitle className="text-2xl font-bold">Request Access</CardTitle>
               <CardDescription>
-                Please fill out this form to request access to our spheroid segmentation platform.
+                Complete this form to request access to SpheroSeg for your research
               </CardDescription>
             </CardHeader>
-            
-            <form onSubmit={handleSubmit}>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email address</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    required
-                    placeholder="Your work or academic email"
-                    value={formData.email}
-                    onChange={handleChange}
-                  />
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Full Name</Label>
+                      <Input 
+                        id="name" 
+                        placeholder="John Doe" 
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email Address</Label>
+                      <Input 
+                        id="email" 
+                        type="email" 
+                        placeholder="john.doe@university.edu" 
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="institution">Institution/Organization</Label>
+                    <Input 
+                      id="institution" 
+                      placeholder="University of Science" 
+                      value={institution}
+                      onChange={(e) => setInstitution(e.target.value)}
+                      required
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="purpose">
+                      How do you plan to use SpheroSeg?
+                    </Label>
+                    <Textarea 
+                      id="purpose" 
+                      placeholder="Please describe your research and how SpheroSeg will help with your work..."
+                      rows={5}
+                      value={purpose}
+                      onChange={(e) => setPurpose(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input
-                    id="name"
-                    name="name"
-                    required
-                    placeholder="Your full name"
-                    value={formData.name}
-                    onChange={handleChange}
-                  />
+                <div className="flex justify-end space-x-4">
+                  <Button variant="outline" asChild>
+                    <Link to="/">
+                      Return Home
+                    </Link>
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Submit Request"
+                    )}
+                  </Button>
                 </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="institution">Institution/Organization</Label>
-                  <Input
-                    id="institution"
-                    name="institution"
-                    required
-                    placeholder="University, Research Center, or Company"
-                    value={formData.institution}
-                    onChange={handleChange}
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="purpose">How do you plan to use SpheroSeg?</Label>
-                  <Textarea
-                    id="purpose"
-                    name="purpose"
-                    required
-                    placeholder="Please describe your research or application"
-                    className="min-h-[120px]"
-                    value={formData.purpose}
-                    onChange={handleChange}
-                  />
-                </div>
-                
-                <div className="flex items-start space-x-2 pt-2">
-                  <input
-                    type="checkbox"
-                    id="agreeToTerms"
-                    name="agreeToTerms"
-                    className="mt-1"
-                    checked={formData.agreeToTerms}
-                    onChange={handleCheckboxChange}
-                    required
-                  />
-                  <Label htmlFor="agreeToTerms" className="font-normal text-sm">
-                    I agree to the <Link to="/terms-of-service" className="text-blue-500 hover:underline">Terms of Service</Link> and{" "}
-                    <Link to="/privacy-policy" className="text-blue-500 hover:underline">Privacy Policy</Link>
-                  </Label>
-                </div>
-              </CardContent>
-              
-              <CardFooter className="flex justify-between">
-                <Button variant="outline" asChild>
-                  <Link to="/">Back to Home</Link>
-                </Button>
-                <Button type="submit" disabled={loading}>
-                  {loading ? "Submitting..." : "Submit Request"}
-                </Button>
-              </CardFooter>
-            </form>
+              </form>
+            </CardContent>
+            <CardFooter className="text-sm text-gray-500 border-t pt-4 text-center">
+              By submitting this form, you agree to our{" "}
+              <Link to="/terms-of-service" className="text-blue-600 hover:underline">
+                Terms of Service
+              </Link>{" "}
+              and{" "}
+              <Link to="/privacy-policy" className="text-blue-600 hover:underline">
+                Privacy Policy
+              </Link>
+              .
+            </CardFooter>
           </Card>
         </div>
       </div>
