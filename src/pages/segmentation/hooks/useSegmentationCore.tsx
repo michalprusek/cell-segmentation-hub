@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { segmentImage, SegmentationResult } from '@/lib/segmentation';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * Hook pro správu základních dat segmentačního editoru
@@ -18,7 +19,9 @@ export const useSegmentationCore = (
   const [loading, setLoading] = useState(true);
   const [segmentation, setSegmentation] = useState<SegmentationResult | null>(null);
   const [saving, setSaving] = useState(false);
+  const [projectImages, setProjectImages] = useState<{id: string, name: string}[]>([]);
   const canvasContainerRef = useRef<HTMLDivElement | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     console.log("SegmentationEditor mounted with params:", { projectId, imageId, userId });
@@ -32,6 +35,7 @@ export const useSegmentationCore = (
       try {
         setLoading(true);
         
+        // Načtení projektu
         const { data: projectData, error: projectError } = await supabase
           .from("projects")
           .select("*")
@@ -49,6 +53,20 @@ export const useSegmentationCore = (
         
         setProjectTitle(projectData.title);
         
+        // Načtení všech obrázků projektu pro navigaci
+        const { data: allImages, error: allImagesError } = await supabase
+          .from("images")
+          .select("id, name")
+          .eq("project_id", projectId)
+          .order("created_at", { ascending: true });
+        
+        if (allImagesError) {
+          console.error("Error fetching project images:", allImagesError);
+        } else if (allImages) {
+          setProjectImages(allImages);
+        }
+        
+        // Načtení aktuálního obrázku
         const { data: imageData, error: imageError } = await supabase
           .from("images")
           .select("*")
@@ -70,6 +88,7 @@ export const useSegmentationCore = (
         
         let result: SegmentationResult;
         
+        // Načtení nebo vytvoření segmentace
         if (imageData.segmentation_status === 'completed' && imageData.segmentation_result) {
           result = imageData.segmentation_result as unknown as SegmentationResult;
         } else {
@@ -123,16 +142,24 @@ export const useSegmentationCore = (
     }
   };
   
+  // Funkce pro navigaci mezi obrázky
   const navigateToImage = (direction: 'prev' | 'next') => {
-    if (!imageId || !projectId) return;
+    if (!imageId || !projectId || projectImages.length === 0) return;
     
-    const currentId = imageId;
+    // Najít index aktuálního obrázku
+    const currentIndex = projectImages.findIndex(img => img.id === imageId);
+    if (currentIndex === -1) return;
     
-    const newId = direction === 'prev' 
-      ? `${parseInt(currentId) - 1}` 
-      : `${parseInt(currentId) + 1}`;
+    let newIndex;
+    if (direction === 'prev') {
+      newIndex = currentIndex > 0 ? currentIndex - 1 : projectImages.length - 1;
+    } else {
+      newIndex = (currentIndex + 1) % projectImages.length;
+    }
     
-    window.location.href = `/segmentation/${projectId}/${newId}`;
+    // Navigace na nový obrázek
+    const newImageId = projectImages[newIndex].id;
+    navigate(`/segmentation/${projectId}/${newImageId}`);
   };
 
   return {
@@ -145,6 +172,7 @@ export const useSegmentationCore = (
     setSegmentation,
     canvasContainerRef,
     handleSave,
-    navigateToImage
+    navigateToImage,
+    projectImages
   };
 };

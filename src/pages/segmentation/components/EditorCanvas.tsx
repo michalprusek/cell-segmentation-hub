@@ -172,19 +172,22 @@ const EditorCanvas = ({
                         {polygon.points.map((point, index) => {
                           const isVertexHovered = hoveredVertex.polygonId === polygon.id && 
                                                   hoveredVertex.vertexIndex === index;
+                          const isDragging = vertexDragState.current.isDragging && 
+                                            vertexDragState.current.polygonId === polygon.id && 
+                                            vertexDragState.current.vertexIndex === index;
                           const radius = getPointRadius(polygon.id, index);
                           
                           return (
                             <g key={`vertex-${index}`} pointerEvents="all">
                               {/* Zvýraznění při hoveru */}
-                              {isVertexHovered && (
+                              {(isVertexHovered || isDragging) && (
                                 <circle
                                   cx={point.x}
                                   cy={point.y}
-                                  r={radius * 2}
-                                  fill="rgba(255, 255, 255, 0.3)"
+                                  r={radius * 2.5}
+                                  fill={isDragging ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 255, 255, 0.3)"}
                                   filter="url(#hover-glow)"
-                                  className="animate-pulse"
+                                  className={isDragging ? "" : "animate-pulse"}
                                 />
                               )}
                               

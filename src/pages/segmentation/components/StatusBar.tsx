@@ -1,9 +1,6 @@
 
 import React from 'react';
-import { CheckCircle, AlertCircle, Info } from 'lucide-react';
 import { SegmentationResult } from '@/lib/segmentation';
-import { formatDistanceToNow } from 'date-fns';
-import { cs, de, enUS, es, fr, zhCN } from 'date-fns/locale';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface StatusBarProps {
@@ -13,71 +10,52 @@ interface StatusBarProps {
 const StatusBar = ({ segmentation }: StatusBarProps) => {
   const { language, t } = useLanguage();
   
-  // Mapování jazyků na locale z date-fns
-  const localeMap = {
-    en: enUS,
-    cs,
-    de,
-    es,
-    fr,
-    zh: zhCN
-  };
-  
-  // Určení správného locale pro datum
-  const dateLocale = localeMap[language as keyof typeof localeMap] || enUS;
-  
-  if (!segmentation) {
-    return (
-      <div className="bg-slate-800 border-t border-slate-700 p-2 px-4 flex justify-between items-center">
-        <div className="flex items-center">
-          <Info className="h-4 w-4 text-slate-400 mr-2" />
-          <span className="text-sm text-slate-400">{t('common.loading')}</span>
-        </div>
-        <div className="text-sm text-slate-500">
-          0 {t('projects.images').toLowerCase()}
-        </div>
-      </div>
-    );
-  }
-  
-  // Zjištění stavu
-  const isComplete = segmentation.status === 'completed';
-  const polygonCount = segmentation?.polygons.length || 0;
-  const timestamp = segmentation.timestamp 
-    ? formatDistanceToNow(new Date(segmentation.timestamp), { addSuffix: true, locale: dateLocale })
-    : '';
+  // Výpočet celkového počtu vrcholů ve všech polygonech
+  const totalVertices = React.useMemo(() => {
+    if (!segmentation) return 0;
+    
+    return segmentation.polygons.reduce((sum, polygon) => {
+      return sum + polygon.points.length;
+    }, 0);
+  }, [segmentation]);
   
   return (
-    <div className="bg-slate-800 border-t border-slate-700 p-2 px-4 flex justify-between items-center">
+    <div className="absolute bottom-0 left-0 right-0 bg-slate-800/90 backdrop-blur-sm text-white py-1.5 px-4 flex items-center justify-between text-xs">
       <div className="flex items-center space-x-4">
-        <div className="flex items-center">
-          {isComplete ? (
-            <CheckCircle className="h-4 w-4 text-green-500 mr-2" />
-          ) : (
-            <AlertCircle className="h-4 w-4 text-amber-500 mr-2" />
-          )}
-          <span className="text-sm">
-            {isComplete ? t('dashboard.completed') : t('dashboard.processing')}
-          </span>
+        <div>
+          {t('segmentation.totalPolygons', { count: segmentation?.polygons.length || 0 })}
         </div>
-        
-        {timestamp && (
-          <div className="text-sm text-slate-400">
-            {t('dashboard.lastUpdated')} {timestamp}
-          </div>
-        )}
+        <div>
+          {t('segmentation.totalVertices', { count: totalVertices })}
+        </div>
       </div>
       
-      <div className="flex items-center space-x-4">
-        <div className="text-sm px-2 py-1 bg-slate-700 rounded-md">
-          {polygonCount} {polygonCount === 1 ? t('image') : t('images')}
+      <div className="flex items-center space-x-2">
+        <div className="text-green-400">
+          {t('common.segmentation')} {segmentation ? 'ID: ' + segmentation.id.substring(0, 8) : ''}
         </div>
-        <div className="text-xs text-slate-500">
-          ID: {segmentation.id}
+        <div className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getStatusColor(segmentation?.status)}`}>
+          {segmentation?.status && t(`segmentation.${segmentation.status}Segmentation`)}
         </div>
       </div>
     </div>
   );
+};
+
+// Helper funkce pro stanovení barvy podle stavu segmentace
+const getStatusColor = (status?: 'pending' | 'processing' | 'completed' | 'failed') => {
+  switch (status) {
+    case 'completed':
+      return 'bg-green-700/40 text-green-300';
+    case 'pending':
+      return 'bg-yellow-700/40 text-yellow-300';
+    case 'processing':
+      return 'bg-blue-700/40 text-blue-300';
+    case 'failed':
+      return 'bg-red-700/40 text-red-300';
+    default:
+      return 'bg-gray-700/40 text-gray-300';
+  }
 };
 
 export default StatusBar;

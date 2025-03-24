@@ -1,5 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -14,14 +16,68 @@ const ThemeContext = createContext<ThemeContextType>({
 });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [theme, setThemeState] = useState<Theme>(
-    (localStorage.getItem('theme') as Theme) || 'system'
-  );
+  const { user } = useAuth();
+  const [theme, setThemeState] = useState<Theme>('system');
+  const [loaded, setLoaded] = useState(false);
+
+  // Načtení motivu z localStorage nebo z databáze
+  useEffect(() => {
+    const fetchUserTheme = async () => {
+      // První zkusíme načíst z localStorage
+      const localTheme = localStorage.getItem('theme') as Theme | null;
+      
+      // Pokud jsme přihlášeni, zkusíme získat motiv z profilu
+      if (user) {
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('preferred_theme')
+            .eq('id', user.id)
+            .single();
+            
+          if (!error && data && data.preferred_theme) {
+            const dbTheme = data.preferred_theme as Theme;
+            setThemeState(dbTheme);
+            localStorage.setItem('theme', dbTheme);
+            applyTheme(dbTheme);
+            setLoaded(true);
+            return;
+          }
+        } catch (error) {
+          console.error('Error loading theme preference:', error);
+        }
+      }
+      
+      // Pokud nemáme motiv z profilu, použijeme localStorage nebo výchozí hodnotu
+      if (localTheme) {
+        setThemeState(localTheme);
+        applyTheme(localTheme);
+      } else {
+        setThemeState('system');
+        applyTheme('system');
+      }
+      
+      setLoaded(true);
+    };
+    
+    fetchUserTheme();
+  }, [user]);
 
   const setTheme = (newTheme: Theme) => {
     localStorage.setItem('theme', newTheme);
     setThemeState(newTheme);
     applyTheme(newTheme);
+    
+    // Uložení do databáze, pokud jsme přihlášeni
+    if (user) {
+      supabase
+        .from('profiles')
+        .update({ preferred_theme: newTheme })
+        .eq('id', user.id)
+        .then(({ error }) => {
+          if (error) console.error('Error saving theme preference:', error);
+        });
+    }
   };
 
   const applyTheme = (theme: Theme) => {
@@ -61,6 +117,8 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Initial theme application
   useEffect(() => {
+    if (!loaded) return;
+    
     applyTheme(theme);
 
     // Listen for system theme changes if using system theme
@@ -74,7 +132,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }
-  }, [theme]);
+  }, [theme, loaded]);
+
+  if (!loaded) {
+    return null; // Nezobrazovat nic, dokud nemáme načtený motiv
+  }
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
