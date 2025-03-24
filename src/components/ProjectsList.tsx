@@ -3,6 +3,7 @@ import React from "react";
 import ProjectCard from "@/components/ProjectCard";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 interface Project {
   id: number;
@@ -59,14 +60,11 @@ const ProjectsList = ({ projects, viewMode, onOpenProject }: ProjectsListProps) 
                 <span>{project.imageCount} images</span>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-4 flex-shrink-0"
-              onClick={() => onOpenProject(project.id)}
-            >
-              <ArrowRight size={16} />
-            </Button>
+            <Link to={`/project/${project.id}`} className="ml-4 flex-shrink-0">
+              <Button variant="ghost" size="sm">
+                <ArrowRight size={16} />
+              </Button>
+            </Link>
           </div>
         ))}
       </div>

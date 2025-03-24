@@ -1,8 +1,8 @@
 
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import DashboardHeader from "@/components/DashboardHeader";
@@ -10,6 +10,7 @@ import DashboardActions from "@/components/DashboardActions";
 import StatsOverview from "@/components/StatsOverview";
 import ProjectsList from "@/components/ProjectsList";
 import ImageUploader from "@/components/ImageUploader";
+import NewProject from "@/components/NewProject";
 
 // Sample project data
 const projects = [
@@ -65,17 +66,17 @@ const projects = [
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  
-  const handleCreateProject = () => {
-    toast.success("New project created", {
-      description: "Your project is ready for images"
-    });
-  };
+  const navigate = useNavigate();
   
   const handleOpenProject = (id: number) => {
-    toast.info(`Opening project #${id}`, {
-      description: "Loading project data..."
-    });
+    navigate(`/project/${id}`);
+  };
+  
+  const handleProjectCreated = (projectId: number) => {
+    // Redirect to the new project
+    setTimeout(() => {
+      navigate(`/project/${projectId}`);
+    }, 500);
   };
   
   return (
@@ -89,13 +90,7 @@ const Dashboard = () => {
             <p className="text-gray-500">Manage your research projects and analyses</p>
           </div>
           <div className="mt-4 md:mt-0">
-            <Button 
-              onClick={handleCreateProject}
-              className="rounded-md"
-            >
-              <PlusCircle size={18} className="mr-2" />
-              New Project
-            </Button>
+            <NewProject onProjectCreated={handleProjectCreated} />
           </div>
         </div>
         

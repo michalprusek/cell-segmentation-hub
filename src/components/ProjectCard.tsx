@@ -3,6 +3,7 @@ import React from "react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Eye, MoreVertical, Calendar } from "lucide-react";
+import { Link } from "react-router-dom";
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -72,8 +73,10 @@ const ProjectCard = ({
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0 flex justify-end">
-        <Button variant="outline" size="sm" onClick={onClick}>
-          Open Project
+        <Button variant="outline" size="sm" onClick={onClick} asChild>
+          <Link to={`/project/${onClick?.toString().match(/\d+/)?.[0] || ""}`}>
+            Open Project
+          </Link>
         </Button>
       </CardFooter>
     </Card>
