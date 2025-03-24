@@ -1,6 +1,5 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { Point } from '@/lib/segmentation';
 
 /**
  * Hook pro správu zobrazení a navigace v segmentačním editoru
@@ -30,31 +29,33 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
       // Výpočet nové velikosti s ohledem na zachování poměru stran
       let newZoom = 1;
       
+      // Vždy fit to container, aby se celý obrázek vešel do plátna
       if (imgRatio > containerRatio) {
-        // Obrázek je širší než container
+        // Obrázek je širší než container - omezení podle šířky
         newZoom = (containerWidth * 0.9) / img.width;
       } else {
-        // Obrázek je vyšší než container
+        // Obrázek je vyšší než container - omezení podle výšky
         newZoom = (containerHeight * 0.9) / img.height;
       }
       
       // Omezení zoomu pro velmi malé nebo velmi velké obrázky
       newZoom = Math.max(0.1, Math.min(2, newZoom));
       
-      const offsetX = (containerWidth - (img.width * newZoom)) / 2;
-      const offsetY = (containerHeight - (img.height * newZoom)) / 2;
+      // Výpočet offsetu pro vycentrování
+      const offsetX = ((containerWidth / newZoom) - img.width) / 2;
+      const offsetY = ((containerHeight / newZoom) - img.height) / 2;
       
       setZoom(newZoom);
-      setOffset({ x: offsetX / newZoom, y: offsetY / newZoom });
+      setOffset({ x: offsetX, y: offsetY });
     };
   }, [canvasContainerRef, imageSrc]);
   
   // Inicializace při načtení
   useEffect(() => {
-    if (canvasContainerRef.current) {
+    if (canvasContainerRef.current && imageSrc) {
       centerImage();
     }
-  }, [centerImage]);
+  }, [centerImage, imageSrc]);
   
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();

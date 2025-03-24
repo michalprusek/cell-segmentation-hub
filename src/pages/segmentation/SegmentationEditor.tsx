@@ -72,14 +72,8 @@ const SegmentationEditor = () => {
         {/* Left Toolbar */}
         <EditorToolbar 
           zoom={zoom}
-          historyIndex={historyIndex}
-          historyLength={history.length}
-          selectedPolygonId={selectedPolygonId}
           onZoomIn={handleZoomIn}
           onZoomOut={handleZoomOut}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          onDeletePolygon={handleDeletePolygon}
           onResetView={handleResetView}
           onSave={handleSave}
         />
@@ -92,7 +86,7 @@ const SegmentationEditor = () => {
           onSelectPolygon={setSelectedPolygonId}
         />
         
-        {/* Canvas container - nyní čtvercový */}
+        {/* Canvas container - čtvercový */}
         <div className="w-full h-full flex items-center justify-center">
           <EditorCanvas 
             loading={loading}

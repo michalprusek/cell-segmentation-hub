@@ -63,20 +63,25 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     fetchUserTheme();
   }, [user]);
 
-  const setTheme = (newTheme: Theme) => {
+  const setTheme = async (newTheme: Theme) => {
     localStorage.setItem('theme', newTheme);
     setThemeState(newTheme);
     applyTheme(newTheme);
     
     // Uložení do databáze, pokud jsme přihlášeni
     if (user) {
-      supabase
-        .from('profiles')
-        .update({ preferred_theme: newTheme })
-        .eq('id', user.id)
-        .then(({ error }) => {
-          if (error) console.error('Error saving theme preference:', error);
-        });
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ preferred_theme: newTheme })
+          .eq('id', user.id);
+
+        if (error) {
+          console.error('Error saving theme preference:', error);
+        }
+      } catch (error) {
+        console.error('Error updating profile:', error);
+      }
     }
   };
 

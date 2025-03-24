@@ -90,22 +90,35 @@ export const useSegmentationCore = (
         
         // Načtení nebo vytvoření segmentace
         if (imageData.segmentation_status === 'completed' && imageData.segmentation_result) {
+          // Použití existujícího výsledku
           result = imageData.segmentation_result as unknown as SegmentationResult;
-        } else {
-          result = await segmentImage(imageData.image_url || '/placeholder.svg');
           
-          await supabase
-            .from("images")
-            .update({
-              segmentation_status: 'completed',
-              segmentation_result: result as unknown as any,
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", imageId);
+          // Ujistíme se, že máme správnou cestu k obrázku
+          result.imageSrc = imageData.image_url;
+          
+          setSegmentation(result);
+        } else {
+          // Pokud segmentace neexistuje nebo není dokončená, vytvoříme novou
+          try {
+            result = await segmentImage(imageData.image_url || '/placeholder.svg');
+            
+            // Uložení nové segmentace do databáze
+            await supabase
+              .from("images")
+              .update({
+                segmentation_status: 'completed',
+                segmentation_result: result as unknown as any,
+                updated_at: new Date().toISOString()
+              })
+              .eq("id", imageId);
+              
+            setSegmentation(result);
+          } catch (segmentError) {
+            console.error("Error creating segmentation:", segmentError);
+            toast.error("Failed to create segmentation");
+          }
         }
-        
-        setSegmentation(result);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error in SegmentationEditor:", error);
         toast.error("Failed to load segmentation data");
       } finally {

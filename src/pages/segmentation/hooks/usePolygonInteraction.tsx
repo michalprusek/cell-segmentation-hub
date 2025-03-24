@@ -77,8 +77,11 @@ export const usePolygonInteraction = (
             return polygon;
           })
         });
+        
+        // Aktualizujeme kurzor
+        containerElement.style.cursor = 'grabbing';
+        return;
       }
-      return;
     }
     
     // Pokud přesouváme celý pohled
@@ -90,6 +93,8 @@ export const usePolygonInteraction = (
         x: dragState.current.lastX + dx / zoom,
         y: dragState.current.lastY + dy / zoom
       });
+      
+      containerElement.style.cursor = 'grabbing';
       return;
     }
     
@@ -125,11 +130,7 @@ export const usePolygonInteraction = (
       }
       
       // Nastavení kurzoru podle stavu
-      if (dragState.current.isDragging) {
-        containerElement.style.cursor = 'grabbing';
-      } else {
-        containerElement.style.cursor = 'move';
-      }
+      containerElement.style.cursor = 'move';
     }
   }, [zoom, offset, segmentation, hoveredVertex, setOffset, setSegmentation]);
   
@@ -194,11 +195,6 @@ export const usePolygonInteraction = (
     // Ukončení tažení
     dragState.current.isDragging = false;
     vertexDragState.current.isDragging = false;
-    
-    // Reset kurzoru
-    if (document.body) {
-      document.body.style.cursor = 'default';
-    }
   }, []);
   
   const handleDeletePolygon = useCallback(() => {
