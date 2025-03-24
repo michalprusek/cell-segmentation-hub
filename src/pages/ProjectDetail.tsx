@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -175,97 +174,72 @@ const ProjectDetail = () => {
     }
   };
 
-  const handleOpenSegmentationEditor = async (image: ProjectImage) => {
+  const handleOpenSegmentationEditor = (image: ProjectImage) => {
     if (!id) return;
-
+    
+    navigate(`/segmentation/${id}/${image.id}`);
+    
     if (image.segmentationStatus === 'pending' || image.segmentationStatus === 'failed') {
-      toast.info("Starting segmentation process...");
-      
-      try {
-        const { error: updateError } = await supabase
-          .from("images")
-          .update({ segmentation_status: 'processing' })
-          .eq("id", image.id);
+      updateImageProcessingStatus(image.id);
+    }
+  };
 
-        if (updateError) {
-          throw updateError;
-        }
+  const updateImageProcessingStatus = async (imageId: string) => {
+    try {
+      const { error: updateError } = await supabase
+        .from("images")
+        .update({ 
+          segmentation_status: 'processing',
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", imageId);
 
-        setImages(prev => 
-          prev.map(img => 
-            img.id === image.id 
-              ? { ...img, segmentationStatus: 'processing' as const } 
-              : img
-          )
-        );
-        
-        setTimeout(async () => {
-          try {
-            const result = await segmentImage(image.url);
-            
-            const { error: resultUpdateError } = await supabase
-              .from("images")
-              .update({
-                segmentation_status: 'completed',
-                segmentation_result: result as unknown as Json,
-                updated_at: new Date().toISOString()
-              })
-              .eq("id", image.id);
-
-            if (resultUpdateError) {
-              throw resultUpdateError;
-            }
-            
-            setImages(prev => 
-              prev.map(img => 
-                img.id === image.id 
-                  ? { 
-                      ...img, 
-                      segmentationStatus: 'completed' as const,
-                      segmentationResult: result,
-                      updatedAt: new Date()
-                    } 
-                  : img
-              )
-            );
-            
-            // Directly navigate to the segmentation editor
-            navigate(`/segmentation/${id}/${image.id}`);
-          } catch (error) {
-            console.error("Segmentation failed:", error);
-            
-            await supabase
-              .from("images")
-              .update({
-                segmentation_status: 'failed',
-                updated_at: new Date().toISOString()
-              })
-              .eq("id", image.id);
-            
-            setImages(prev => 
-              prev.map(img => 
-                img.id === image.id 
-                  ? { 
-                      ...img, 
-                      segmentationStatus: 'failed' as const,
-                      updatedAt: new Date()
-                    } 
-                  : img
-              )
-            );
-            
-            toast.error("Segmentation failed", {
-              description: "Please try again later"
-            });
-          }
-        }, 2000);
-      } catch (error) {
-        console.error("Error updating image status:", error);
-        toast.error("Failed to start segmentation process");
+      if (updateError) {
+        console.error("Error updating status:", updateError);
+        return;
       }
-    } else {
-      // For images that are already processed or in process, directly navigate to the editor
-      navigate(`/segmentation/${id}/${image.id}`);
+
+      setImages(prev => 
+        prev.map(img => 
+          img.id === imageId 
+            ? { ...img, segmentationStatus: 'processing' as const, updatedAt: new Date() } 
+            : img
+        )
+      );
+      
+      setTimeout(async () => {
+        try {
+          const image = images.find(img => img.id === imageId);
+          if (!image) return;
+          
+          const result = await segmentImage(image.url);
+          
+          const { error: resultUpdateError } = await supabase
+            .from("images")
+            .update({
+              segmentation_status: 'completed',
+              segmentation_result: result as unknown as Json,
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", imageId);
+
+          if (resultUpdateError) {
+            throw resultUpdateError;
+          }
+        } catch (error) {
+          console.error("Segmentation failed:", error);
+          
+          await supabase
+            .from("images")
+            .update({
+              segmentation_status: 'failed',
+              updated_at: new Date().toISOString()
+            })
+            .eq("id", imageId);
+        }
+      }, 2000);
+    } catch (error) {
+      console.error("Error updating image status:", error);
     }
   };
 
@@ -385,7 +359,6 @@ const ProjectDetail = () => {
                 onClick={() => handleOpenSegmentationEditor(image)}
               >
                 <div className="relative">
-                  {/* Use 16:9 aspect ratio for rectangular cards */}
                   <div className="aspect-[16/9]">
                     <img 
                       src={image.url} 
