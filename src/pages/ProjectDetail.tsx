@@ -1,30 +1,17 @@
 
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { 
-  Search, 
-  ArrowUp, 
-  ArrowDown, 
-  Clock, 
-  Image as ImageIcon, 
-  X, 
-  CheckCircle, 
-  Clock3, 
-  AlertCircle, 
-  Loader2,
-  ArrowUpDown,
-  Upload
-} from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { formatDistanceToNow } from "date-fns";
 import { segmentImage } from "@/lib/segmentation";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import ImageUploader from "@/components/ImageUploader";
+import ProjectHeader from "@/components/project/ProjectHeader";
+import ProjectToolbar from "@/components/project/ProjectToolbar";
+import ImageCard from "@/components/project/ImageCard";
+import EmptyState from "@/components/project/EmptyState";
 import type { Json } from "@/integrations/supabase/types";
 import type { SegmentationResult } from "@/lib/segmentation";
 
@@ -46,6 +33,7 @@ const ProjectDetail = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
+  
   const [projectTitle, setProjectTitle] = useState<string>("");
   const [images, setImages] = useState<ProjectImage[]>([]);
   const [filteredImages, setFilteredImages] = useState<ProjectImage[]>([]);
@@ -251,114 +239,38 @@ const ProjectDetail = () => {
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'processing':
-        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
-      case 'pending':
-        return <Clock3 className="h-4 w-4 text-yellow-500" />;
-      case 'failed':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
-      default:
-        return null;
-    }
-  };
-
   const toggleUploader = () => {
     setShowUploader(!showUploader);
   };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="mr-4"
-              onClick={() => navigate("/dashboard")}
-            >
-              {t('common.back')}
-            </Button>
-            <div>
-              <h1 className="text-xl font-semibold dark:text-white">{projectTitle}</h1>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {loading ? t('common.loading') : `${filteredImages.length} ${t('common.images').toLowerCase()}`}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <ProjectHeader 
+        projectTitle={projectTitle} 
+        imagesCount={filteredImages.length}
+        loading={loading}
+      />
       
       <div className="container mx-auto px-4 py-8">
         {showUploader ? (
           <div className="mb-6">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-medium dark:text-white">Upload Images</h2>
+              <h2 className="text-lg font-medium dark:text-white">{t('images.uploadImages')}</h2>
               <Button variant="outline" size="sm" onClick={toggleUploader}>
-                Cancel
+                {t('common.cancel')}
               </Button>
             </div>
             <ImageUploader />
           </div>
         ) : (
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
-            <div className="relative w-full md:w-auto">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-              <Input
-                className="pl-10 pr-4 w-full md:w-80 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-                placeholder={t('dashboard.searchImagesPlaceholder')}
-                value={searchTerm}
-                onChange={handleSearch}
-              />
-            </div>
-            
-            <div className="flex space-x-2">
-              <Button variant="outline" size="sm" className="flex items-center" onClick={toggleUploader}>
-                <Upload className="mr-1 h-4 w-4" />
-                Upload Images
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSort('name')}
-                className="flex items-center dark:text-gray-300 dark:border-gray-700"
-              >
-                {t('common.name')}
-                {sortField === 'name' && (
-                  sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
-                )}
-                {sortField !== 'name' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSort('updatedAt')}
-                className="flex items-center dark:text-gray-300 dark:border-gray-700"
-              >
-                {t('dashboard.lastChange')}
-                {sortField === 'updatedAt' && (
-                  sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
-                )}
-                {sortField !== 'updatedAt' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleSort('segmentationStatus')}
-                className="flex items-center dark:text-gray-300 dark:border-gray-700"
-              >
-                {t('common.status')}
-                {sortField === 'segmentationStatus' && (
-                  sortDirection === 'asc' ? <ArrowUp className="ml-1 h-3 w-3" /> : <ArrowDown className="ml-1 h-3 w-3" />
-                )}
-                {sortField !== 'segmentationStatus' && <ArrowUpDown className="ml-1 h-3 w-3 opacity-50" />}
-              </Button>
-            </div>
-          </div>
+          <ProjectToolbar 
+            searchTerm={searchTerm}
+            onSearchChange={handleSearch}
+            sortField={sortField}
+            sortDirection={sortDirection}
+            onSort={handleSort}
+            onToggleUploader={toggleUploader}
+          />
         )}
         
         {loading ? (
@@ -366,57 +278,24 @@ const ProjectDetail = () => {
             <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
           </div>
         ) : filteredImages.length === 0 && !showUploader ? (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center">
-            <ImageIcon className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium mb-2 dark:text-white">{t('common.noImages')}</h3>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">
-              {searchTerm ? t('dashboard.searchImagesPlaceholder') : t('dashboard.noImagesDescription')}
-            </p>
-            <Button onClick={toggleUploader}>
-              {t('common.uploadImages')}
-            </Button>
-          </div>
+          <EmptyState 
+            hasSearchTerm={!!searchTerm}
+            onUpload={toggleUploader}
+          />
         ) : !showUploader && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredImages.map((image) => (
-              <Card 
-                key={image.id} 
-                className="overflow-hidden cursor-pointer group hover:ring-2 hover:ring-blue-200 transition-all duration-200 dark:bg-gray-800 dark:border-gray-700"
+              <ImageCard 
+                key={image.id}
+                id={image.id}
+                name={image.name}
+                url={image.url}
+                updatedAt={image.updatedAt}
+                segmentationStatus={image.segmentationStatus}
+                segmentationResult={image.segmentationResult}
+                onDelete={handleDeleteImage}
                 onClick={() => handleOpenSegmentationEditor(image)}
-              >
-                <div className="relative">
-                  <div className="aspect-[16/9]">
-                    <img 
-                      src={image.url} 
-                      alt={image.name} 
-                      className="h-full w-full object-cover"
-                    />
-                  </div>
-                  
-                  <div className="absolute top-2 left-2 flex items-center space-x-1 bg-white/90 dark:bg-black/70 backdrop-blur-sm px-2 py-1 rounded-full text-xs">
-                    {getStatusIcon(image.segmentationStatus)}
-                    <span className="capitalize">{t(`dashboard.${image.segmentationStatus}`)}</span>
-                  </div>
-                  
-                  <button
-                    className="absolute top-2 right-2 bg-white/90 dark:bg-black/70 p-1 rounded-full text-gray-700 dark:text-gray-300 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteImage(image.id);
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 text-white">
-                    <h3 className="text-sm font-medium truncate">{image.name}</h3>
-                    <div className="flex items-center text-xs text-white/80 mt-1">
-                      <Clock className="h-3 w-3 mr-1" />
-                      <span>{formatDistanceToNow(image.updatedAt, { addSuffix: true })}</span>
-                    </div>
-                  </div>
-                </div>
-              </Card>
+              />
             ))}
           </div>
         )}

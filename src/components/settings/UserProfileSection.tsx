@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { updateUserProfile } from "@/lib/supabase";
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface UserProfileSectionProps {
   userId: string;
@@ -13,6 +14,8 @@ interface UserProfileSectionProps {
 }
 
 const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
+  const { t } = useLanguage();
+  
   const [formData, setFormData] = useState({
     fullName: profile?.username || "",
     organization: profile?.organization || "",
@@ -37,10 +40,10 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
         updated_at: new Date()
       });
       
-      toast.success("Profile settings saved successfully");
+      toast.success(t('settings.profileUpdated'));
     } catch (error) {
       console.error("Error saving profile:", error);
-      toast.error("Failed to save profile settings");
+      toast.error(t('settings.profileUpdateFailed'));
     } finally {
       setLoading(false);
     }
@@ -50,10 +53,10 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
     <form onSubmit={handleSaveProfile}>
       <div className="space-y-6">
         <div className="space-y-4">
-          <h3 className="text-lg font-medium">Personal Information</h3>
+          <h3 className="text-lg font-medium">{t('settings.personal')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
+              <Label htmlFor="fullName">{t('settings.fullName')}</Label>
               <Input 
                 id="fullName" 
                 value={formData.fullName}
@@ -61,7 +64,7 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('common.email')}</Label>
               <Input 
                 id="email" 
                 type="email" 
@@ -71,7 +74,7 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="organization">Organization</Label>
+              <Label htmlFor="organization">{t('settings.organization')}</Label>
               <Input 
                 id="organization" 
                 value={formData.organization}
@@ -79,7 +82,7 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="department">Department</Label>
+              <Label htmlFor="department">{t('settings.department')}</Label>
               <Input 
                 id="department" 
                 value={formData.department}
@@ -90,9 +93,9 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
         </div>
         
         <div className="space-y-4">
-          <h3 className="text-lg font-medium">Public Profile</h3>
+          <h3 className="text-lg font-medium">{t('settings.publicProfile')}</h3>
           <div className="space-y-2">
-            <Label htmlFor="bio">Bio</Label>
+            <Label htmlFor="bio">{t('settings.bio')}</Label>
             <Input 
               id="bio" 
               value={formData.bio}
@@ -105,13 +108,13 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
               checked={formData.publicProfile}
               onCheckedChange={(checked) => setFormData({...formData, publicProfile: checked})}
             />
-            <Label htmlFor="publicProfile" className="cursor-pointer">Make my profile visible to other researchers</Label>
+            <Label htmlFor="publicProfile" className="cursor-pointer">{t('settings.makeProfileVisible')}</Label>
           </div>
         </div>
         
         <div className="flex justify-end">
           <Button type="submit" disabled={loading}>
-            {loading ? "Saving..." : "Save Changes"}
+            {loading ? t('settings.savingChanges') : t('settings.saveChanges')}
           </Button>
         </div>
       </div>

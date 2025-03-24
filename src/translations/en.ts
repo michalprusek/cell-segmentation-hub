@@ -92,7 +92,9 @@ export default {
     projectCreated: 'Project created successfully',
     projectDeleted: 'Project deleted successfully',
     viewProject: 'View Project',
-    projectImages: 'Project Images'
+    projectImages: 'Project Images',
+    projectSelection: 'Project Selection',
+    selectProject: 'Select a project'
   },
   images: {
     uploadImages: 'Upload Images',
@@ -100,18 +102,20 @@ export default {
     clickToSelect: 'or click to select files',
     acceptedFormats: 'Accepted formats: JPEG, PNG, TIFF, BMP (max 10MB)',
     uploadProgress: 'Upload Progress',
-    uploadingTo: 'Uploading to',
+    uploadingTo: 'Select a project first',
     currentProject: 'current project',
     autoSegment: 'Auto-segment images after upload',
     uploadCompleted: 'Upload Completed',
     uploadFailed: 'Upload Failed',
-    imagesUploaded: 'images uploaded successfully',
+    imagesUploaded: 'Images uploaded successfully',
     imagesFailed: 'Failed to upload images',
     viewAnalyses: 'View Analyses',
     noAnalysesYet: 'No analyses yet',
     runAnalysis: 'Run Analysis',
     viewResults: 'View Results',
-    dropImagesHere: 'Drop the images here...'
+    dropImagesHere: 'Drop the images here...',
+    selectProjectFirst: 'Please select a project first',
+    projectRequired: 'You must select a project before you can upload images'
   },
   settings: {
     manageSettings: 'Manage your account preferences',
@@ -135,7 +139,19 @@ export default {
       newFeatures: 'New Features',
       marketingEmails: 'Marketing Emails',
       billing: 'Billing Notifications'
-    }
+    },
+    personal: 'Personal Information',
+    fullName: 'Full Name',
+    organization: 'Organization',
+    department: 'Department',
+    publicProfile: 'Public Profile',
+    bio: 'Bio',
+    makeProfileVisible: 'Make my profile visible to other researchers',
+    dangerZone: 'Danger Zone',
+    deleteAccountWarning: 'Once you delete your account, there is no going back. All your data will be permanently deleted.',
+    currentPassword: 'Current Password',
+    newPassword: 'New Password',
+    confirmNewPassword: 'Confirm New Password'
   },
   auth: {
     signIn: 'Sign In',
@@ -180,5 +196,20 @@ export default {
     weWillContact: 'We will review your request and contact you soon',
     agreeToTerms: 'By submitting this request, you agree to our',
     and: 'and'
+  },
+  profile: {
+    title: 'Profile',
+    about: 'About',
+    activity: 'Activity',
+    projects: 'Projects',
+    recentProjects: 'Recent Projects',
+    recentAnalyses: 'Recent Analyses',
+    accountDetails: 'Account Details',
+    accountType: 'Account Type',
+    joinDate: 'Join Date',
+    lastActive: 'Last Active',
+    projectsCreated: 'Projects Created',
+    imagesUploaded: 'Images Uploaded',
+    segmentationsCompleted: 'Segmentations Completed'
   }
 };
