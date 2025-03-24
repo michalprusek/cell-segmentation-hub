@@ -1,11 +1,14 @@
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { useDropzone } from "react-dropzone";
 import { Cloud, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
+import ProjectSelector from "./ProjectSelector";
+import { uploadImage } from "@/lib/supabase";
 
 interface FileWithPreview extends File {
   preview: string;
@@ -16,8 +19,16 @@ interface FileWithPreview extends File {
 
 const ImageUploader = () => {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
+  const [selectedProject, setSelectedProject] = useState<number | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const navigate = useNavigate();
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
+    if (!selectedProject) {
+      toast.error("Please select a project first");
+      return;
+    }
+
     if (acceptedFiles?.length) {
       const newFiles = acceptedFiles.map(file => 
         Object.assign(file, {
@@ -39,7 +50,7 @@ const ImageUploader = () => {
         description: "Processing will begin automatically"
       });
     }
-  }, []);
+  }, [selectedProject]);
   
   const simulateUpload = (fileId: string) => {
     let progress = 0;
@@ -57,6 +68,17 @@ const ImageUploader = () => {
               : file
           )
         );
+        
+        // Check if all files are uploaded
+        setFiles(prevFiles => {
+          const allUploaded = prevFiles.every(file => file.status === 'success');
+          if (allUploaded && selectedProject) {
+            setTimeout(() => {
+              navigate(`/project/${selectedProject}`);
+            }, 1000);
+          }
+          return prevFiles;
+        });
         
         // Success toast
         toast.success("Image uploaded successfully", {
@@ -85,15 +107,43 @@ const ImageUploader = () => {
       'image/*': ['.jpeg', '.jpg', '.png', '.tif', '.tiff']
     },
     maxSize: 20971520, // 20MB
+    disabled: !selectedProject || isUploading
   });
+
+  const handleProcessAllImages = async () => {
+    if (!selectedProject) {
+      toast.error("Please select a project first");
+      return;
+    }
+
+    if (files.length === 0) {
+      toast.error("No images to process");
+      return;
+    }
+
+    setIsUploading(true);
+    
+    // In a real app, this would upload to Supabase
+    setTimeout(() => {
+      setIsUploading(false);
+      navigate(`/project/${selectedProject}`);
+    }, 1500);
+  };
   
   return (
     <div className="space-y-6">
+      <ProjectSelector 
+        value={selectedProject} 
+        onChange={setSelectedProject} 
+      />
+
       <div
         {...getRootProps()}
         className={`border-2 ${
           isDragActive ? "border-blue-400 bg-blue-50" : "border-dashed border-gray-300"
-        } rounded-xl p-8 transition-all duration-200 ease-in-out cursor-pointer hover:bg-gray-50`}
+        } rounded-xl p-8 transition-all duration-200 ease-in-out cursor-pointer hover:bg-gray-50 ${
+          !selectedProject ? "opacity-70 pointer-events-none" : ""
+        }`}
       >
         <input {...getInputProps()} />
         <div className="flex flex-col items-center justify-center gap-4 text-center">
@@ -102,10 +152,14 @@ const ImageUploader = () => {
           </div>
           <div>
             <p className="font-medium">
-              {isDragActive ? "Drop the files here" : "Drag & drop image files here"}
+              {!selectedProject 
+                ? "Select a project first" 
+                : isDragActive 
+                  ? "Drop the files here" 
+                  : "Drag & drop image files here"}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              or click to browse from your computer
+              {selectedProject ? "or click to browse from your computer" : ""}
             </p>
           </div>
           <p className="text-xs text-gray-400">
@@ -178,7 +232,20 @@ const ImageUploader = () => {
               Uploading...
             </Button>
           ) : (
-            <Button className="w-full">Process All Images</Button>
+            <Button 
+              className="w-full" 
+              onClick={handleProcessAllImages}
+              disabled={!selectedProject || files.length === 0 || isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                "Process All Images"
+              )}
+            </Button>
           )}
         </div>
       )}
