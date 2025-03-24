@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -9,20 +8,11 @@ import DashboardHeader from "@/components/DashboardHeader";
 import DashboardActions from "@/components/DashboardActions";
 import StatsOverview from "@/components/StatsOverview";
 import ProjectsList from "@/components/ProjectsList";
+import { Project } from "@/components/ProjectsList";
 import ImageUploader from "@/components/ImageUploader";
 import NewProject from "@/components/NewProject";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-
-// Use the same Project interface as in the ProjectsList component
-interface Project {
-  id: string;
-  title: string;
-  description: string;
-  thumbnail?: string;
-  date?: string;
-  imageCount?: number;
-}
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -41,7 +31,6 @@ const Dashboard = () => {
     try {
       setLoading(true);
       
-      // Fetch projects
       const { data: projectsData, error: projectsError } = await supabase
         .from("projects")
         .select("*")
@@ -51,7 +40,6 @@ const Dashboard = () => {
         throw projectsError;
       }
 
-      // Fetch image counts for each project
       const projectsWithDetails = await Promise.all(
         (projectsData || []).map(async (project) => {
           const { count, error: countError } = await supabase
@@ -65,7 +53,7 @@ const Dashboard = () => {
 
           return {
             ...project,
-            thumbnail: "/placeholder.svg", // Default thumbnail
+            thumbnail: "/placeholder.svg",
             date: formatDate(project.updated_at),
             imageCount: count || 0
           };
@@ -107,10 +95,8 @@ const Dashboard = () => {
   };
   
   const handleProjectCreated = (projectId: string) => {
-    // Refresh projects list
     fetchProjects();
     
-    // Redirect to the new project
     setTimeout(() => {
       navigate(`/project/${projectId}`);
     }, 500);

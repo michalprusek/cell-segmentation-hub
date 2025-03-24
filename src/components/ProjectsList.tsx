@@ -4,9 +4,10 @@ import ProjectCard from "@/components/ProjectCard";
 import { ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
-interface Project {
-  id: string; // Change from number to string
+export interface Project {
+  id: string;
   title: string;
   description: string;
   thumbnail: string;
@@ -17,11 +18,19 @@ interface Project {
 interface ProjectsListProps {
   projects: Project[];
   viewMode: "grid" | "list";
-  onOpenProject: (id: string) => void; // Change from number to string
+  onOpenProject: (id: string) => void;
   loading?: boolean;
 }
 
 const ProjectsList = ({ projects, viewMode, onOpenProject, loading }: ProjectsListProps) => {
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64">
+        <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+      </div>
+    );
+  }
+
   if (viewMode === "grid") {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
