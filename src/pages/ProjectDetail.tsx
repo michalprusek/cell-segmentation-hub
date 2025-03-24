@@ -229,6 +229,7 @@ const ProjectDetail = () => {
               )
             );
             
+            // Directly navigate to the segmentation editor
             navigate(`/segmentation/${id}/${image.id}`);
           } catch (error) {
             console.error("Segmentation failed:", error);
@@ -263,6 +264,7 @@ const ProjectDetail = () => {
         toast.error("Failed to start segmentation process");
       }
     } else {
+      // For images that are already processed or in process, directly navigate to the editor
       navigate(`/segmentation/${id}/${image.id}`);
     }
   };
@@ -310,7 +312,7 @@ const ProjectDetail = () => {
           <div className="relative w-full md:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
             <Input
-              className="pl-10 pr-4 w-full md:w-80"
+              className="pl-10 pr-4 w-full md:w-80 dark:bg-gray-800 dark:border-gray-700 dark:text-white"
               placeholder={t('dashboard.searchImagesPlaceholder')}
               value={searchTerm}
               onChange={handleSearch}
@@ -322,7 +324,7 @@ const ProjectDetail = () => {
               variant="outline"
               size="sm"
               onClick={() => handleSort('name')}
-              className="flex items-center"
+              className="flex items-center dark:text-gray-300 dark:border-gray-700"
             >
               {t('common.name')}
               {sortField === 'name' && (
@@ -334,7 +336,7 @@ const ProjectDetail = () => {
               variant="outline"
               size="sm"
               onClick={() => handleSort('updatedAt')}
-              className="flex items-center"
+              className="flex items-center dark:text-gray-300 dark:border-gray-700"
             >
               {t('dashboard.lastChange')}
               {sortField === 'updatedAt' && (
@@ -346,7 +348,7 @@ const ProjectDetail = () => {
               variant="outline"
               size="sm"
               onClick={() => handleSort('segmentationStatus')}
-              className="flex items-center"
+              className="flex items-center dark:text-gray-300 dark:border-gray-700"
             >
               {t('common.status')}
               {sortField === 'segmentationStatus' && (

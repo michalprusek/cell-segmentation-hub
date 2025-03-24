@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { 
   Bell, 
@@ -19,11 +19,19 @@ import {
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { supabase } from "@/integrations/supabase/client";
 
 const DashboardHeader = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [hasNotifications, setHasNotifications] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // This would be where you'd check for actual notifications
+    // For now, we'll set it to false since there are no notifications
+    setHasNotifications(false);
+  }, []);
 
   const handleSignOut = async () => {
     try {
@@ -34,14 +42,14 @@ const DashboardHeader = () => {
   };
 
   return (
-    <header className="bg-white border-b border-gray-200">
+    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <div className="flex items-center">
           <Link to="/dashboard" className="flex items-center">
             <div className="w-9 h-9 rounded-md bg-blue-500 flex items-center justify-center">
               <span className="text-white font-bold text-lg">S</span>
             </div>
-            <span className="ml-2 text-xl font-semibold hidden sm:inline-block">
+            <span className="ml-2 text-xl font-semibold hidden sm:inline-block dark:text-white">
               SpheroSeg
             </span>
           </Link>
@@ -51,9 +59,11 @@ const DashboardHeader = () => {
         <div className="hidden md:flex items-center space-x-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative">
+              <Button variant="ghost" size="icon" className="relative dark:text-gray-300">
                 <Bell className="h-5 w-5" />
-                <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
+                {hasNotifications && (
+                  <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
+                )}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-80">
@@ -66,24 +76,24 @@ const DashboardHeader = () => {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2">
+              <Button variant="ghost" size="sm" className="gap-2 dark:text-gray-300">
                 <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
                   <UserIcon className="h-3 w-3 text-gray-600" />
                 </div>
                 <span className="text-sm">{user?.email?.split('@')[0] || 'User'}</span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => navigate("/profile")}>
+            <DropdownMenuContent align="end" className="dark:bg-gray-800 dark:border-gray-700">
+              <DropdownMenuItem onClick={() => navigate("/profile")} className="dark:text-gray-300 dark:hover:bg-gray-700">
                 <UserIcon className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/settings")}>
+              <DropdownMenuItem onClick={() => navigate("/settings")} className="dark:text-gray-300 dark:hover:bg-gray-700">
                 <SettingsIcon className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut}>
+              <DropdownMenuSeparator className="dark:bg-gray-700" />
+              <DropdownMenuItem onClick={handleSignOut} className="dark:text-gray-300 dark:hover:bg-gray-700">
                 <LogOut className="mr-2 h-4 w-4" />
                 <span>Log out</span>
               </DropdownMenuItem>
@@ -95,27 +105,27 @@ const DashboardHeader = () => {
         <div className="md:hidden">
           <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" className="dark:text-gray-300">
                 <Menu className="h-6 w-6" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="p-0">
-              <div className="p-4 border-b">
+            <SheetContent side="right" className="p-0 dark:bg-gray-800">
+              <div className="p-4 border-b dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className="w-8 h-8 rounded-md bg-blue-500 flex items-center justify-center">
                       <span className="text-white font-bold">S</span>
                     </div>
-                    <span className="ml-2 font-semibold">SpheroSeg</span>
+                    <span className="ml-2 font-semibold dark:text-white">SpheroSeg</span>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(false)}>
+                  <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(false)} className="dark:text-gray-300">
                     <X className="h-5 w-5" />
                   </Button>
                 </div>
               </div>
               <div className="py-2">
                 <button 
-                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100"
+                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => {
                     setIsMenuOpen(false);
                     navigate("/profile");
@@ -125,7 +135,7 @@ const DashboardHeader = () => {
                   <span>Profile</span>
                 </button>
                 <button 
-                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100"
+                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
                   onClick={() => {
                     setIsMenuOpen(false);
                     navigate("/settings");
@@ -134,9 +144,9 @@ const DashboardHeader = () => {
                   <SettingsIcon className="h-5 w-5 mr-3 text-gray-500" />
                   <span>Settings</span>
                 </button>
-                <div className="border-t my-2"></div>
+                <div className="border-t my-2 dark:border-gray-700"></div>
                 <button 
-                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100 text-red-500"
+                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500"
                   onClick={handleSignOut}
                 >
                   <LogOut className="h-5 w-5 mr-3" />
