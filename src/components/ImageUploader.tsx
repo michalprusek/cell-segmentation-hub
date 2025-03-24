@@ -114,7 +114,7 @@ const ImageUploader = () => {
         </div>
       </div>
       
-      {files && files.length > 0 && (
+      {files.length > 0 && (
         <div className="space-y-4">
           <h3 className="text-lg font-medium">Uploaded Images</h3>
           
