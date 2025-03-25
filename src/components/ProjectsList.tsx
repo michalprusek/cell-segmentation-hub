@@ -64,8 +64,12 @@ const ProjectsList = ({
       {projects.map((project) => (
         <ProjectCard
           key={project.id}
-          project={project}
-          viewMode={viewMode}
+          id={project.id}
+          title={project.title}
+          description={project.description}
+          thumbnail={project.thumbnail}
+          date={project.date}
+          imageCount={project.imageCount}
           onClick={() => onOpenProject(project.id)}
         />
       ))}
