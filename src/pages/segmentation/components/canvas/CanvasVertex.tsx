@@ -47,6 +47,7 @@ const CanvasVertex = ({
           fill={isDragging ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 255, 255, 0.3)"}
           filter="url(#hover-glow)"
           className={isDragging ? "" : "animate-pulse"}
+          style={{ transformOrigin: 'center center', animationDuration: '1.5s' }}
         />
       )}
       
@@ -69,10 +70,14 @@ const CanvasVertex = ({
         stroke={isSelected ? "#FF3B30" : "#0077FF"}
         strokeWidth={1.5 / zoom}
         className={cn(
-          "transition-all duration-150",
+          "transition-transform duration-150",
           isHovered ? "scale-125" : ""
         )}
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+        style={{ 
+          cursor: isDragging ? 'grabbing' : 'grab',
+          transformOrigin: 'center center',
+          transform: isHovered ? `scale(1.25)` : 'scale(1)'
+        }}
       />
     </g>
   );

@@ -33,7 +33,7 @@ export const useMouseInteractions = (
   const { isPointInPolygon } = usePolygonDetection();
 
   /**
-   * Převod souřadnic myši na souřadnice v canvas
+   * Převod souřadnic myši na souřadnice v prostoru obrázku
    * Bere v úvahu zoom a offset pro přesnou detekci
    */
   const getCanvasCoordinates = useCallback((
@@ -41,13 +41,14 @@ export const useMouseInteractions = (
     mouseY: number, 
     containerRect: DOMRect
   ) => {
-    // Převod z pozice myši na canvas
+    // Pozice myši relativně k plátnu
     const canvasX = mouseX - containerRect.left;
     const canvasY = mouseY - containerRect.top;
     
     // Převod na souřadnice v prostoru obrázku s ohledem na zoom a offset
-    const x = canvasX / zoom - offset.x;
-    const y = canvasY / zoom - offset.y;
+    // Musíme odečíst offset a vydělit zoomem, abychom získali souřadnice v původním prostoru obrázku
+    const x = (canvasX / zoom) - offset.x;
+    const y = (canvasY / zoom) - offset.y;
     
     return { canvasX, canvasY, x, y };
   }, [zoom, offset]);
@@ -60,8 +61,7 @@ export const useMouseInteractions = (
     if (!containerElement || !segmentation) return;
     
     const rect = containerElement.getBoundingClientRect();
-    // Přesný výpočet souřadnic v prostoru plátna
-    const { x, y, canvasX, canvasY } = getCanvasCoordinates(e.clientX, e.clientY, rect);
+    const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
     
     // Pokud jsme ve stavu tažení bodu polygonu
     if (vertexDragState.current.isDragging) {
@@ -114,7 +114,7 @@ export const useMouseInteractions = (
       for (let i = 0; i < polygon.points.length; i++) {
         const point = polygon.points[i];
         
-        // Přímá detekce bodu v souřadnicích obrázku
+        // Detekce bodu přímo v souřadnicích obrázku
         if (isNearVertex(x, y, point)) {
           setHoveredVertex({
             polygonId: polygon.id,

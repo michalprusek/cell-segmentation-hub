@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
@@ -47,13 +46,10 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
       // Omezení zoomu pro velmi malé nebo velmi velké obrázky
       newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
       
-      // Přesné vycentrování - offset musí být s ohledem na zoom
-      // Vycentrujeme přesně do středu canvasu
-      const offsetX = 0;
-      const offsetY = 0;
-      
+      // Přesné vycentrování - nastavíme offset na 0,0
+      // Tím umístíme obrázek přesně na střed canvasu
       setZoom(newZoom);
-      setOffset({ x: offsetX, y: offsetY });
+      setOffset({ x: 0, y: 0 });
     };
   }, [canvasContainerRef, imageSrc]);
   

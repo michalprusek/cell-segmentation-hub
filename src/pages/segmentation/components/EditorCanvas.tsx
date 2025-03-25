@@ -62,19 +62,22 @@ const EditorCanvas = ({
     <div 
       ref={containerRef} 
       className={`flex-1 overflow-hidden relative cursor-move ${
-        theme === 'dark' ? 'bg-[#161616] bg-opacity-90' : 'bg-gray-100 bg-opacity-80'
-      } bg-[radial-gradient(#1a1f2c_1px,transparent_1px)] bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)]`}
+        theme === 'dark' 
+          ? 'bg-[#161616] bg-opacity-90 bg-[radial-gradient(#1a1f2c_1px,transparent_1px)]' 
+          : 'bg-gray-100 bg-opacity-80 bg-[radial-gradient(#d1d5db_1px,transparent_1px)]'
+      } bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)]`}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
     >
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {/* Zobrazení stavu načítání */}
-        <CanvasLoadingOverlay loading={loading} />
+        {loading && <CanvasLoadingOverlay loading={loading} />}
         
         {!loading && (
           <motion.div 
+            key="canvas-container"
             className="absolute inset-0 flex items-center justify-center overflow-visible"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
