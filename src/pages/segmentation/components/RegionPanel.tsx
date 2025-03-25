@@ -17,15 +17,17 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 
 interface RegionPanelProps {
+  loading: boolean;
   segmentation: SegmentationResult | null;
   selectedPolygonId: string | null;
-  setSelectedPolygonId: (id: string | null) => void;
+  onSelectPolygon: (id: string | null) => void;
 }
 
 const RegionPanel = ({ 
+  loading,
   segmentation, 
   selectedPolygonId, 
-  setSelectedPolygonId 
+  onSelectPolygon: setSelectedPolygonId 
 }: RegionPanelProps) => {
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(true);
@@ -65,7 +67,11 @@ const RegionPanel = ({
         
         <CollapsibleContent>
           <div className="max-h-60 overflow-y-auto py-2">
-            {segmentation.polygons.length === 0 ? (
+            {loading ? (
+              <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
+                {t('segmentation.loading') || 'Loading...'}
+              </div>
+            ) : segmentation.polygons.length === 0 ? (
               <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
                 {t('segmentation.noPolygons')}
               </div>

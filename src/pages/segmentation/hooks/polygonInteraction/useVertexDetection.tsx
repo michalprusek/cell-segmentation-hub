@@ -10,31 +10,38 @@ export const useVertexDetection = (
   zoom: number,
   offset: { x: number; y: number }
 ) => {
-  const { getScreenCoordinates } = useCoordinateTransform(zoom, offset);
+  const { getScreenCoordinates, getImageCoordinates } = useCoordinateTransform(zoom, offset);
 
   /**
    * Detekuje, zda je bod kurzoru v blízkosti bodu polygonu
    * Přepočítává souřadnice s ohledem na zoom a offset
    */
   const isNearVertex = useCallback((
-    imageX: number, 
-    imageY: number, 
+    screenX: number, 
+    screenY: number, 
     point: Point, 
     detectionRadius: number = 10
   ): boolean => {
+    // Převedení pozice kurzoru na souřadnice obrázku
+    const { x: imageX, y: imageY } = getImageCoordinates(screenX, screenY);
+    
     // Výpočet vzdálenosti mezi bodem kurzoru a bodem polygonu v prostoru obrázku
     const dx = point.x - imageX;
     const dy = point.y - imageY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Použijeme konstantní poloměr v obrazovém prostoru
-    const adjustedRadius = detectionRadius / zoom;
+    // Použijeme fixní poloměr detekce v pixelech, nezávislý na zoomu
+    const threshold = detectionRadius / zoom;
     
     // Debugging pomocí konzole
-    console.log(`isNearVertex: Cursor at image: (${imageX.toFixed(2)}, ${imageY.toFixed(2)}), Point at: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}), Distance: ${distance.toFixed(2)}, Threshold: ${adjustedRadius.toFixed(2)}`);
+    console.log(`isNearVertex: Screen cursor (${screenX.toFixed(2)}, ${screenY.toFixed(2)}), 
+                Image cursor: (${imageX.toFixed(2)}, ${imageY.toFixed(2)}), 
+                Vertex at: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}), 
+                Distance: ${distance.toFixed(2)}, 
+                Threshold: ${threshold.toFixed(2)}`);
     
-    return distance <= adjustedRadius;
-  }, [zoom]);
+    return distance <= threshold;
+  }, [zoom, getImageCoordinates]);
 
   return { isNearVertex };
 };
