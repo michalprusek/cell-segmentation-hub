@@ -30,31 +30,39 @@ export const useVertexHover = (
     const rect = containerElement.getBoundingClientRect();
     const { x, y } = getCanvasCoordinates(clientX, clientY, rect);
     
+    // Logování pro ladění
+    console.log(`Mouse at client: (${clientX}, ${clientY}), Canvas rect: (${rect.left}, ${rect.top}), Image space: (${x}, ${y})`);
+    
+    let foundVertex = false;
+    
     // Procházíme všechny polygony a jejich body
     for (const polygon of segmentation.polygons) {
       for (let i = 0; i < polygon.points.length; i++) {
         const point = polygon.points[i];
         
-        // Detekce bodu přímo v souřadnicích obrázku
-        if (isNearVertex(x, y, point)) {
+        // Detekce bodu přímo v souřadnicích obrázku s optimalizovaným poloměrem
+        if (isNearVertex(x, y, point, 12)) { // Zvětšený detekční poloměr pro větší toleranci
           if (hoveredVertex.polygonId !== polygon.id || hoveredVertex.vertexIndex !== i) {
             setHoveredVertex({
               polygonId: polygon.id,
               vertexIndex: i
             });
+            console.log(`Hover detected on polygon ${polygon.id}, vertex ${i}`);
           }
           containerElement.style.cursor = 'grab';
+          foundVertex = true;
           return true;
         }
       }
     }
     
     // Pokud jsme nenašli žádný bod pod kurzorem, resetujeme stav
-    if (hoveredVertex.polygonId !== null || hoveredVertex.vertexIndex !== null) {
+    if (!foundVertex && (hoveredVertex.polygonId !== null || hoveredVertex.vertexIndex !== null)) {
       setHoveredVertex({ polygonId: null, vertexIndex: null });
+      containerElement.style.cursor = 'move';
     }
     
-    return false;
+    return foundVertex;
   }, [segmentation, hoveredVertex, setHoveredVertex, isNearVertex, getCanvasCoordinates]);
 
   return { detectVertexHover };

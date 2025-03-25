@@ -53,10 +53,19 @@ const EditorCanvas = ({
         width: img.width,
         height: img.height
       });
+      console.log(`Image loaded with dimensions: ${img.width}x${img.height}`);
     };
     
     img.src = segmentation?.imageSrc || imageSrc;
   }, [segmentation, imageSrc]);
+
+  // Správné nastavení cursoru podle stavu
+  const getCursorStyle = () => {
+    if (vertexDragState.current.isDragging) return 'grabbing';
+    if (dragState.current.isDragging) return 'grabbing';
+    if (hoveredVertex.polygonId !== null) return 'grab';
+    return 'move';
+  };
 
   return (
     <div 
@@ -70,7 +79,8 @@ const EditorCanvas = ({
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
-      style={{cursor: dragState.current.isDragging ? 'grabbing' : 'move'}}
+      style={{cursor: getCursorStyle()}}
+      data-testid="canvas-container"
     >
       <AnimatePresence mode="wait">
         {/* Zobrazení stavu načítání */}
@@ -91,6 +101,7 @@ const EditorCanvas = ({
                 willChange: 'transform',
               }}
               className="relative"
+              data-testid="canvas-transform-container"
             >
               {/* Obrázek na pozadí */}
               {segmentation && (

@@ -51,32 +51,39 @@ export const useMouseInteractions = (
   );
 
   /**
-   * Zpracování pohybu myši
+   * Zpracování pohybu myši - optimalizováno pro výkon
    */
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const containerElement = e.currentTarget as HTMLElement;
     if (!containerElement || !segmentation) return;
     
-    // Nejdřív kontrolujeme, jestli táhneme vertex
-    if (handleVertexDrag(e, containerElement)) {
-      return;
-    }
-    
-    // Potom kontrolujeme, jestli táhneme celé plátno
-    if (handleCanvasDrag(e, containerElement)) {
-      return;
-    }
-    
-    // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
-    if (!detectVertexHover(e.clientX, e.clientY, containerElement)) {
-      // Pokud ne, nastavíme kurzor na výchozí
-      containerElement.style.cursor = 'move';
-    }
+    // Použijeme requestAnimationFrame pro optimalizaci výkonu
+    requestAnimationFrame(() => {
+      // Nejdřív kontrolujeme, jestli táhneme vertex
+      if (handleVertexDrag(e, containerElement)) {
+        return;
+      }
+      
+      // Potom kontrolujeme, jestli táhneme celé plátno
+      if (handleCanvasDrag(e, containerElement)) {
+        return;
+      }
+      
+      // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
+      // Optimalizace - pouze pokud se myš pohybuje
+      if (!detectVertexHover(e.clientX, e.clientY, containerElement)) {
+        // Pokud ne, nastavíme kurzor na výchozí
+        if (!dragState.current.isDragging) {
+          containerElement.style.cursor = 'move';
+        }
+      }
+    });
   }, [
     segmentation, 
     handleVertexDrag, 
     handleCanvasDrag, 
-    detectVertexHover
+    detectVertexHover,
+    dragState
   ]);
 
   /**
@@ -90,13 +97,17 @@ export const useMouseInteractions = (
     const rect = containerElement.getBoundingClientRect();
     const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
     
+    console.log(`Mouse down at client: (${e.clientX}, ${e.clientY}), Image space: (${x}, ${y})`);
+    
     // Nejdřív zkontrolujeme, jestli jsme klikli na vertex
     if (handleVertexClick(e.clientX, e.clientY, containerElement)) {
+      console.log("Clicked on vertex");
       return;
     }
     
     // Potom zkontrolujeme, jestli jsme klikli na polygon
     if (trySelectPolygon(x, y)) {
+      console.log("Selected polygon");
       return;
     }
     

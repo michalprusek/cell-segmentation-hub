@@ -29,7 +29,7 @@ const CanvasVertex = ({
       radius = 7;
     }
     
-    // Přizpůsobit velikost zoomu pro lepší viditelnost při různých úrovních zoomu
+    // Přizpůsobit velikost zoomu pro lepší viditelnost
     return radius / zoom;
   };
 

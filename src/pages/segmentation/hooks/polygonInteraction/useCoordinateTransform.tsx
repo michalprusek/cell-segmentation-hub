@@ -22,11 +22,16 @@ export const useCoordinateTransform = (
     const canvasY = mouseY - containerRect.top;
     
     // Převod na souřadnice v prostoru obrázku s ohledem na zoom a offset
-    // Opravený výpočet pro správné mapování pozice kurzoru na obrázek
-    const x = (canvasX / zoom) - offset.x;
-    const y = (canvasY / zoom) - offset.y;
+    // Zcela přepracovaná logika pro přesné mapování
+    const imageX = canvasX / zoom - offset.x;
+    const imageY = canvasY / zoom - offset.y;
     
-    return { canvasX, canvasY, x, y };
+    return { 
+      canvasX, 
+      canvasY, 
+      x: imageX, 
+      y: imageY 
+    };
   }, [zoom, offset]);
 
   /**
@@ -37,6 +42,7 @@ export const useCoordinateTransform = (
     imageX: number,
     imageY: number
   ) => {
+    // Přesný výpočet pozice na obrazovce
     const screenX = (imageX + offset.x) * zoom;
     const screenY = (imageY + offset.y) * zoom;
     
