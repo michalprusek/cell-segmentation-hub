@@ -1,7 +1,9 @@
 
-import React from "react";
+import React, { useState } from "react";
 import ProjectCard from "@/components/ProjectCard";
+import ProjectListItem from "@/components/ProjectListItem";
 import NewProjectCard from "@/components/NewProjectCard";
+import NewProjectListItem from "@/components/NewProjectListItem";
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export interface Project {
@@ -29,6 +31,7 @@ const ProjectsList = ({
   showCreateCard = false 
 }: ProjectsListProps) => {
   const { t } = useLanguage();
+  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   
   if (loading) {
     return (
@@ -53,7 +56,38 @@ const ProjectsList = ({
     );
   }
 
-  // Připravíme projekty bez karty na vytvoření nového projektu
+  if (viewMode === "list") {
+    const projectItems = projects.map((project) => (
+      <ProjectListItem
+        key={project.id}
+        id={project.id}
+        title={project.title}
+        description={project.description}
+        thumbnail={project.thumbnail}
+        date={project.date}
+        imageCount={project.imageCount}
+        onClick={() => onOpenProject(project.id)}
+      />
+    ));
+
+    const allItems = showCreateCard 
+      ? [...projectItems, <NewProjectListItem key="new-project" onClick={() => setNewProjectDialogOpen(true)} />]
+      : projectItems;
+
+    return (
+      <div className="flex flex-col space-y-3 max-w-3xl mx-auto">
+        {allItems}
+        {showCreateCard && (
+          <NewProjectCard 
+            isOpen={newProjectDialogOpen} 
+            onOpenChange={setNewProjectDialogOpen} 
+          />
+        )}
+      </div>
+    );
+  }
+
+  // Grid mode
   const projectItems = projects.map((project) => (
     <ProjectCard
       key={project.id}
@@ -67,17 +101,12 @@ const ProjectsList = ({
     />
   ));
 
-  // Pokud je potřeba, přidáme kartu pro vytvoření nového projektu jako poslední
   const allItems = showCreateCard 
     ? [...projectItems, <NewProjectCard key="new-project" />] 
     : projectItems;
 
   return (
-    <div className={
-      viewMode === "grid" 
-        ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        : "flex flex-col space-y-4 max-w-3xl mx-auto" // Přidání max-w-3xl pro omezení šířky v list režimu
-    }>
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {allItems}
     </div>
   );
