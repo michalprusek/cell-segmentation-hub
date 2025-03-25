@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import type { ProjectImage } from './useProjectData';
+import type { ProjectImage } from '@/types';
 
 type SortField = 'name' | 'updatedAt' | 'segmentationStatus';
 type SortDirection = 'asc' | 'desc';

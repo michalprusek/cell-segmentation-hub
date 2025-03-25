@@ -1,5 +1,6 @@
 
 import type { Database } from '@/integrations/supabase/types';
+import type { Polygon } from '@/lib/segmentation';
 
 // Re-export types from Supabase
 export type DbTables = Database['public']['Tables'];
@@ -29,8 +30,11 @@ export interface PolygonData {
 }
 
 export interface SegmentationData {
-  polygons: PolygonData[];
+  id?: string;
   imageSrc?: string;
+  polygons: PolygonData[];
+  status?: 'pending' | 'processing' | 'completed' | 'failed';
+  timestamp?: Date;
   imageWidth?: number;
   imageHeight?: number;
 }
@@ -44,4 +48,7 @@ export interface ProjectImage {
   updatedAt: Date;
   segmentationStatus: 'pending' | 'processing' | 'completed' | 'failed';
   segmentationResult?: SegmentationData;
+  project_id?: string;
+  thumbnail_url?: string;
+  status?: string;
 }

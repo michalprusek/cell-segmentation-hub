@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { ProjectImage } from '@/integrations/supabase/types';
+import { ProjectImage } from '@/types';
 import { useNavigate } from 'react-router-dom';
 
 interface ImageCardProps {
@@ -84,7 +84,7 @@ export const ImageCard = ({ image, onDelete, onOpen, className }: ImageCardProps
                 {image.name || 'Image'}
               </h3>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                {image.created_at && format(new Date(image.created_at), 'PPP')}
+                {image.createdAt && format(image.createdAt, 'PPP')}
               </p>
             </div>
             

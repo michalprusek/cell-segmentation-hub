@@ -36,7 +36,10 @@ const ProjectDetail = () => {
   } = useImageFilter(images);
   
   // Image operations
-  const { handleDeleteImage, handleOpenSegmentationEditor } = useProjectImageActions({
+  const { 
+    handleDeleteImage, 
+    handleOpenSegmentationEditor 
+  } = useProjectImageActions({
     projectId: id,
     onImagesChange: updateImages,
     images
@@ -44,6 +47,14 @@ const ProjectDetail = () => {
 
   const toggleUploader = () => {
     setShowUploader(!showUploader);
+  };
+
+  // Handler to adapt the ImageCard/ImageListItem onOpen prop to call handleOpenSegmentationEditor
+  const handleOpenImage = (imageId: string) => {
+    const image = images.find(img => img.id === imageId);
+    if (image) {
+      handleOpenSegmentationEditor(image);
+    }
   };
 
   // Animation variants
@@ -125,7 +136,7 @@ const ProjectDetail = () => {
           <ProjectImages 
             images={filteredImages}
             onDelete={handleDeleteImage}
-            onOpen={handleOpenSegmentationEditor}
+            onOpen={handleOpenImage}
             viewMode={viewMode}
           />
         )}

@@ -2,12 +2,13 @@
 import { supabase } from "@/integrations/supabase/client";
 import { segmentImage } from "@/lib/segmentation";
 import type { SegmentationResult } from "@/lib/segmentation";
+import type { SegmentationData } from "@/types";
 import { toast } from "sonner";
 
 interface ProcessImageParams {
   imageId: string;
   imageUrl: string;
-  onComplete?: (result: SegmentationResult) => void;
+  onComplete?: (result: SegmentationData) => void;
 }
 
 export const updateImageProcessingStatus = async ({ 

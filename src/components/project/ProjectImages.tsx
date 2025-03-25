@@ -3,7 +3,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ImageCard } from './ImageCard';
 import { ImageListItem } from './ImageListItem';
-import { ProjectImage } from '@/integrations/supabase/types';
+import { ProjectImage } from '@/types';
 
 interface ProjectImagesProps {
   images: ProjectImage[];

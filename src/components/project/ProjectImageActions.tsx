@@ -1,9 +1,10 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { updateImageProcessingStatus } from '@/components/project/ProjectImageProcessor';
-import type { ProjectImage } from '@/types'; // Updated import path
+import type { ProjectImage, SegmentationData } from '@/types';
 
 interface UseProjectImageActionsProps {
   projectId?: string;
@@ -66,7 +67,7 @@ export const useProjectImageActions = ({
       await updateImageProcessingStatus({
         imageId: image.id,
         imageUrl: image.url,
-        onComplete: (result) => {
+        onComplete: (result: SegmentationData) => {
           // Update the local state with the result
           const updatedImages = images.map(img => 
             img.id === image.id 

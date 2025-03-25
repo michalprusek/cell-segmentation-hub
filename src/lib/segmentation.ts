@@ -1,7 +1,8 @@
-
 // Simple segmentation service
 // This simulates image segmentation with thresholding and contour finding
 // In a real app, this would use more advanced methods like WebAssembly or call a backend API
+
+import type { PolygonData, SegmentationData } from '@/types';
 
 export interface Point {
   x: number;
@@ -13,13 +14,7 @@ export interface Polygon {
   points: Point[];
 }
 
-export interface SegmentationResult {
-  id: string;
-  imageSrc: string;
-  polygons: Polygon[];
-  status: 'pending' | 'processing' | 'completed' | 'failed';
-  timestamp: Date;
-}
+export type SegmentationResult = SegmentationData;
 
 // Apply a simple thresholding algorithm to create a binary mask
 export const applyThresholding = async (
@@ -118,7 +113,15 @@ export const segmentImage = async (imageSrc: string): Promise<SegmentationResult
     const binaryMask = await applyThresholding(imageSrc);
     
     // Find contours in the binary mask
-    const polygons = findContours(binaryMask);
+    const basicPolygons = findContours(binaryMask);
+    
+    // Convert to PolygonData with required fields
+    const polygons: PolygonData[] = basicPolygons.map(poly => ({
+      id: poly.id,
+      points: poly.points,
+      type: 'external', // Default type
+      class: 'spheroid' // Default class
+    }));
     
     return {
       id: `seg-${Date.now()}`,
