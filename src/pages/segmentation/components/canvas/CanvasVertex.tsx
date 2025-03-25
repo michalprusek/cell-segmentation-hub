@@ -31,7 +31,7 @@ const CanvasVertex = ({
     }
     
     // Inverzní vztah k zoomu pro konzistentní vizuální velikost
-    return baseRadius / zoom;
+    return Math.max(baseRadius / zoom, 3);
   };
 
   const radius = getPointRadius();
@@ -69,10 +69,12 @@ const CanvasVertex = ({
         fill={isSelected ? "#FF3B30" : "#FFFFFF"}
         stroke={isSelected ? "#FF3B30" : "#0077FF"}
         strokeWidth={1.5 / zoom}
-        className="transition-all duration-150"
+        className={cn(
+          "transition-all duration-150",
+          isHovered && "scale-125"
+        )}
         style={{ 
           cursor: isDragging ? 'grabbing' : 'grab',
-          transform: isHovered ? `scale(1.25)` : 'scale(1)',
           transformOrigin: 'center center'
         }}
       />

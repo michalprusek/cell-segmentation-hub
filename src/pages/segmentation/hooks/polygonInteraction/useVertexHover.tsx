@@ -28,10 +28,10 @@ export const useVertexHover = (
     if (!segmentation) return false;
     
     const rect = containerElement.getBoundingClientRect();
-    const { x, y } = getCanvasCoordinates(clientX, clientY, rect);
+    const { x, y, canvasX, canvasY } = getCanvasCoordinates(clientX, clientY, rect);
     
     // Logování pro ladění
-    console.log(`detectVertexHover: Mouse at client: (${clientX}, ${clientY}), Image space: (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    console.log(`detectVertexHover: Mouse at client: (${clientX}, ${clientY}), Canvas: (${canvasX}, ${canvasY}), Image space: (${x.toFixed(2)}, ${y.toFixed(2)})`);
     
     let foundVertex = false;
     
@@ -41,7 +41,8 @@ export const useVertexHover = (
         const point = polygon.points[i];
         
         // Použijeme větší detekční radius pro snazší výběr vertexu
-        if (isNearVertex(x, y, point, 15)) {
+        // Předáváme přímo canvas souřadnice (ne image souřadnice)
+        if (isNearVertex(canvasX, canvasY, point, 15)) {
           if (hoveredVertex.polygonId !== polygon.id || hoveredVertex.vertexIndex !== i) {
             setHoveredVertex({
               polygonId: polygon.id,

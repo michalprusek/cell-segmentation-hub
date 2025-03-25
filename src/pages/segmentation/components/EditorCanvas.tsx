@@ -101,6 +101,9 @@ const EditorCanvas = ({
                 transform: `translate(${offset.x * zoom}px, ${offset.y * zoom}px) scale(${zoom})`,
                 transformOrigin: '0 0',
                 willChange: 'transform',
+                position: 'absolute',
+                top: 0,
+                left: 0
               }}
               className="absolute top-0 left-0"
               data-testid="canvas-transform-container"
