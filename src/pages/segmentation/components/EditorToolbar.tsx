@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { 
   ZoomIn, 
   ZoomOut, 
-  Home,
-  Save,
+  Maximize2,
   Edit,
   Undo2,
   Redo2
@@ -105,7 +104,7 @@ const EditorToolbar = ({
               className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
               onClick={onResetView}
             >
-              <Home className="h-5 w-5" />
+              <Maximize2 className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
@@ -170,26 +169,6 @@ const EditorToolbar = ({
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
             <span>Redo (Shortcut: Ctrl+Y)</span>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-      
-      <Separator className="bg-slate-700 my-1" />
-      
-      <TooltipProvider delayDuration={300}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="h-9 w-9 text-green-500 hover:bg-slate-700 hover:text-green-400 bg-slate-800/90"
-              onClick={onSave}
-            >
-              <Save className="h-5 w-5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
-            <span>{t('tools.saveSegmentation')} (Shortcut: Ctrl+S)</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

@@ -21,6 +21,8 @@ interface EditorHeaderProps {
   imageName: string;
   saving: boolean;
   loading: boolean;
+  currentImageIndex: number;
+  totalImages: number;
   onNavigate: (direction: 'prev' | 'next') => void;
   onSave: () => Promise<void>;
 }
@@ -31,6 +33,8 @@ const EditorHeader = ({
   imageName,
   saving,
   loading,
+  currentImageIndex,
+  totalImages,
   onNavigate,
   onSave
 }: EditorHeaderProps) => {
@@ -56,6 +60,10 @@ const EditorHeader = ({
         </div>
         
         <div className="flex items-center space-x-2">
+          <div className="text-sm text-slate-400 mr-2">
+            Image {currentImageIndex + 1} of {totalImages}
+          </div>
+          
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>

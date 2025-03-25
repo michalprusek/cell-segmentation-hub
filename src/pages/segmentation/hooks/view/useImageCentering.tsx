@@ -47,10 +47,13 @@ export const useImageCentering = (
       // Omezení zoomu pro velmi malé nebo velmi velké obrázky
       newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
       
-      // Přesné vycentrování - nastavíme offset na 0,0
+      // Přesné vycentrování - vypočítáme offset tak, aby obrázek byl uprostřed
       // Tím umístíme obrázek přesně na střed canvasu
+      const centerX = (containerWidth / newZoom - img.width) / 2;
+      const centerY = (containerHeight / newZoom - img.height) / 2;
+      
       setZoom(newZoom);
-      setOffset({ x: 0, y: 0 });
+      setOffset({ x: centerX, y: centerY });
     };
   }, [canvasContainerRef, imageSrc, imageRef, setZoom, setOffset, MIN_ZOOM, MAX_ZOOM]);
 

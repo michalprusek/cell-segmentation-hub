@@ -39,6 +39,7 @@ const SegmentationEditor = () => {
     cursorPosition,
     editMode,
     canvasContainerRef,
+    projectImages,
     setSelectedPolygonId,
     handleMouseDown,
     handleMouseMove,
@@ -85,6 +86,10 @@ const SegmentationEditor = () => {
   // Calculate if we can undo/redo
   const canUndo = historyIndex > 0;
   const canRedo = history.length > 0 && historyIndex < history.length - 1;
+  
+  // Get current image index
+  const currentImageIndex = projectImages.findIndex(img => img.id === imageId);
+  const totalImages = projectImages.length;
 
   return (
     <motion.div 
@@ -101,6 +106,8 @@ const SegmentationEditor = () => {
         imageName={imageName}
         saving={saving}
         loading={loading}
+        currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
+        totalImages={totalImages}
         onNavigate={navigateToImage}
         onSave={handleSave}
       />
