@@ -1,4 +1,3 @@
-
 const cs = {
   common: {
     appName: "Segmentace Sféroidů",

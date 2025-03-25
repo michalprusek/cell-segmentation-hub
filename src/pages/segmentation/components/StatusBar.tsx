@@ -8,7 +8,7 @@ interface StatusBarProps {
 }
 
 const StatusBar = ({ segmentation }: StatusBarProps) => {
-  const { language, t } = useLanguage();
+  const { t } = useLanguage();
   
   // Výpočet celkového počtu vrcholů ve všech polygonech
   const totalVertices = React.useMemo(() => {
@@ -23,10 +23,10 @@ const StatusBar = ({ segmentation }: StatusBarProps) => {
     <div className="absolute bottom-0 left-0 right-0 bg-slate-800/90 backdrop-blur-sm text-white py-1.5 px-4 flex items-center justify-between text-xs">
       <div className="flex items-center space-x-4">
         <div>
-          {t('segmentation.totalPolygons', { count: segmentation?.polygons.length || 0 })}
+          {t('segmentation.totalPolygons').replace('{count}', String(segmentation?.polygons.length || 0))}
         </div>
         <div>
-          {t('segmentation.totalVertices', { count: totalVertices })}
+          {t('segmentation.totalVertices').replace('{count}', String(totalVertices))}
         </div>
       </div>
       

@@ -29,7 +29,7 @@ const CanvasVertex = ({
       radius = 7;
     }
     
-    // Přizpůsobit velikost zooma, ale ne příliš
+    // Přizpůsobit velikost zoomu, ale ne příliš
     return radius / (zoom > 1 ? Math.sqrt(zoom) : 1);
   };
 
@@ -49,6 +49,16 @@ const CanvasVertex = ({
         />
       )}
       
+      {/* Neviditelný větší bod pro snazší zachycení myší */}
+      <circle
+        cx={point.x}
+        cy={point.y}
+        r={radius * 3}
+        fill="transparent"
+        style={{ cursor: 'grab' }}
+        pointerEvents="all"
+      />
+      
       {/* Samotný bod */}
       <circle
         cx={point.x}
@@ -58,10 +68,10 @@ const CanvasVertex = ({
         stroke={isSelected ? "#FF3B30" : "#0077FF"}
         strokeWidth={1.5 / zoom}
         className={cn(
-          "transition-all duration-150 cursor-pointer",
+          "transition-all duration-150",
           isHovered ? "scale-110" : ""
         )}
-        style={{ cursor: 'pointer' }}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       />
     </g>
   );

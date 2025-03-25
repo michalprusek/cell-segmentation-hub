@@ -82,12 +82,16 @@ export const useMouseInteractions = (
     
     // Pokud přesouváme celý pohled
     if (dragState.current.isDragging) {
-      const dx = e.clientX - dragState.current.startX;
-      const dy = e.clientY - dragState.current.startY;
+      const dx = e.clientX - dragState.current.lastX;
+      const dy = e.clientY - dragState.current.lastY;
+      
+      // Aktualizace last pozice pro plynulý pohyb
+      dragState.current.lastX = e.clientX;
+      dragState.current.lastY = e.clientY;
       
       setOffset({
-        x: dragState.current.lastX + dx / zoom,
-        y: dragState.current.lastY + dy / zoom
+        x: offset.x + dx / zoom,
+        y: offset.y + dy / zoom
       });
       
       containerElement.style.cursor = 'grabbing';
@@ -107,7 +111,7 @@ export const useMouseInteractions = (
             vertexIndex: i
           });
           foundVertex = true;
-          containerElement.style.cursor = 'pointer';
+          containerElement.style.cursor = 'grab';
           break;
         }
       }
@@ -166,8 +170,8 @@ export const useMouseInteractions = (
       isDragging: true,
       startX: e.clientX,
       startY: e.clientY,
-      lastX: offset.x,
-      lastY: offset.y
+      lastX: e.clientX,
+      lastY: e.clientY
     };
     
     containerElement.style.cursor = 'grabbing';
