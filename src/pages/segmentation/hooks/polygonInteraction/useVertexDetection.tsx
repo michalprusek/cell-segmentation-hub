@@ -16,14 +16,16 @@ export const useVertexDetection = (zoom: number) => {
     point: Point, 
     detectionRadius: number = 15
   ): boolean => {
+    // Výpočet vzdálenosti mezi bodem kurzoru a bodem polygonu
     const dx = point.x - x;
     const dy = point.y - y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // Přizpůsobení poloměru detekce podle zoomu
-    // Inverzní závislost - čím větší zoom, tím menší detekční poloměr potřebujeme
+    // Čím větší zoom, tím menší detekční poloměr potřebujeme v prostoru obrázku
     const adjustedRadius = detectionRadius / zoom;
     
+    // Pokud je vzdálenost menší než přizpůsobený poloměr, je kurzor v blízkosti bodu
     return distance <= adjustedRadius;
   }, [zoom]);
 

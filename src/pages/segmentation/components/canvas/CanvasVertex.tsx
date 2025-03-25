@@ -24,12 +24,13 @@ const CanvasVertex = ({
     // Základní velikost bodu
     let radius = isSelected ? 5 : 4;
     
-    // Zvětšit při hoveru
-    if (isHovered) {
+    // Zvětšit při hoveru nebo tažení
+    if (isHovered || isDragging) {
       radius = 7;
     }
     
     // Přizpůsobit velikost zoomu, ale ne příliš
+    // Při větším zoomu jsou body menší v poměru k obrazu
     return radius / (zoom > 1 ? Math.sqrt(zoom) : 1);
   };
 
@@ -37,7 +38,7 @@ const CanvasVertex = ({
   
   return (
     <g pointerEvents="all">
-      {/* Zvýraznění při hoveru */}
+      {/* Zvýraznění při hoveru nebo tažení */}
       {(isHovered || isDragging) && (
         <circle
           cx={point.x}
@@ -53,9 +54,9 @@ const CanvasVertex = ({
       <circle
         cx={point.x}
         cy={point.y}
-        r={radius * 3}
+        r={radius * 3.5}
         fill="transparent"
-        style={{ cursor: 'grab' }}
+        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         pointerEvents="all"
       />
       
@@ -69,7 +70,7 @@ const CanvasVertex = ({
         strokeWidth={1.5 / zoom}
         className={cn(
           "transition-all duration-150",
-          isHovered ? "scale-110" : ""
+          isHovered ? "scale-125" : ""
         )}
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
       />

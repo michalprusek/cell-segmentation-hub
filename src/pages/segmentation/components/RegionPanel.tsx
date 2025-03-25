@@ -12,6 +12,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { SegmentationResult } from '@/lib/segmentation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface RegionPanelProps {
   loading: boolean;
@@ -26,6 +27,8 @@ const RegionPanel = ({
   selectedPolygonId,
   onSelectPolygon
 }: RegionPanelProps) => {
+  const { t } = useLanguage();
+  
   return (
     <>
       <Sheet>
@@ -36,14 +39,14 @@ const RegionPanel = ({
             className="absolute top-4 right-4 z-10 bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white"
           >
             <Layers className="h-4 w-4 mr-2" />
-            Regions
+            Segmentations
           </Button>
         </SheetTrigger>
         <SheetContent className="bg-slate-800 border-slate-700 text-white">
           <SheetHeader>
-            <SheetTitle className="text-white">Segmentation Regions</SheetTitle>
+            <SheetTitle className="text-white">{t('segmentation.title')}</SheetTitle>
             <SheetDescription className="text-slate-400">
-              View and manage detected regions
+              {t('segmentation.description')}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6">
@@ -53,9 +56,9 @@ const RegionPanel = ({
               </div>
             ) : segmentation?.polygons.length === 0 ? (
               <div className="text-center py-10 text-slate-400">
-                <div className="mb-2">No regions detected</div>
+                <div className="mb-2">{t('segmentation.noRegions')}</div>
                 <Button variant="outline" size="sm">
-                  Run Detection Again
+                  {t('segmentation.runDetectionAgain')}
                 </Button>
               </div>
             ) : (
@@ -73,24 +76,24 @@ const RegionPanel = ({
                         className="w-4 h-4 rounded-full mr-3" 
                         style={{background: selectedPolygonId === polygon.id ? '#FF3B30' : '#00BFFF'}}
                       />
-                      <span>Region {index + 1}</span>
+                      <span>{t('segmentation.region')} {index + 1}</span>
                     </div>
-                    <span className="text-xs text-slate-400">{polygon.points.length} points</span>
+                    <span className="text-xs text-slate-400">{polygon.points.length} {t('segmentation.points')}</span>
                   </div>
                 ))}
               </div>
             )}
             <Separator className="my-4 bg-slate-700" />
             <div className="space-y-4">
-              <h3 className="text-sm font-medium">Statistics</h3>
+              <h3 className="text-sm font-medium">{t('segmentation.statistics')}</h3>
               <div className="grid grid-cols-2 gap-2">
                 <div className="p-2 bg-slate-700 rounded-md">
-                  <div className="text-xs text-slate-400">Total Regions</div>
+                  <div className="text-xs text-slate-400">{t('segmentation.totalPolygons')}</div>
                   <div className="text-lg font-semibold">{segmentation?.polygons.length || 0}</div>
                 </div>
                 <div className="p-2 bg-slate-700 rounded-md">
-                  <div className="text-xs text-slate-400">Selected</div>
-                  <div className="text-lg font-semibold">{selectedPolygonId ? 'Yes' : 'No'}</div>
+                  <div className="text-xs text-slate-400">{t('segmentation.selected')}</div>
+                  <div className="text-lg font-semibold">{selectedPolygonId ? t('common.yes') : t('common.no')}</div>
                 </div>
               </div>
             </div>
@@ -111,59 +114,59 @@ const RegionPanel = ({
         </SheetTrigger>
         <SheetContent className="bg-slate-800 border-slate-700 text-white">
           <SheetHeader>
-            <SheetTitle className="text-white">Segmentation Editor Help</SheetTitle>
+            <SheetTitle className="text-white">{t('segmentation.helpTitle')}</SheetTitle>
             <SheetDescription className="text-slate-400">
-              Instructions and keyboard shortcuts
+              {t('segmentation.helpDescription')}
             </SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-4">
             <div>
-              <h3 className="text-sm font-medium mb-2">Navigation</h3>
+              <h3 className="text-sm font-medium mb-2">{t('segmentation.navigation')}</h3>
               <ul className="space-y-2 text-sm text-slate-300">
                 <li className="flex justify-between items-center">
-                  <span>Pan the image</span>
-                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">Click and drag</span>
+                  <span>{t('segmentation.panImage')}</span>
+                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">{t('segmentation.clickAndDrag')}</span>
                 </li>
                 <li className="flex justify-between items-center">
-                  <span>Zoom in/out</span>
-                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">Mouse wheel or toolbar</span>
+                  <span>{t('segmentation.zoomInOut')}</span>
+                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">{t('segmentation.mouseWheel')}</span>
                 </li>
                 <li className="flex justify-between items-center">
-                  <span>Reset view</span>
-                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">Home button</span>
+                  <span>{t('segmentation.resetView')}</span>
+                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">{t('segmentation.homeButton')}</span>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-medium mb-2">Editing</h3>
+              <h3 className="text-sm font-medium mb-2">{t('segmentation.editing')}</h3>
               <ul className="space-y-2 text-sm text-slate-300">
                 <li className="flex justify-between items-center">
-                  <span>Select a region</span>
-                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">Click on it</span>
+                  <span>{t('segmentation.selectRegion')}</span>
+                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">{t('segmentation.clickOnIt')}</span>
                 </li>
                 <li className="flex justify-between items-center">
-                  <span>Move a vertex</span>
-                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">Drag the vertex point</span>
+                  <span>{t('segmentation.moveVertex')}</span>
+                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">{t('segmentation.dragVertex')}</span>
                 </li>
                 <li className="flex justify-between items-center">
-                  <span>Delete selected region</span>
-                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">Trash icon or Delete key</span>
+                  <span>{t('segmentation.deleteRegion')}</span>
+                  <span className="text-xs bg-slate-700 px-2 py-1 rounded">{t('segmentation.deleteKey')}</span>
                 </li>
               </ul>
             </div>
             <div>
-              <h3 className="text-sm font-medium mb-2">Keyboard Shortcuts</h3>
+              <h3 className="text-sm font-medium mb-2">{t('segmentation.shortcuts')}</h3>
               <ul className="space-y-2 text-sm text-slate-300">
                 <li className="flex justify-between items-center">
-                  <span>Undo</span>
+                  <span>{t('segmentation.undo')}</span>
                   <span className="text-xs bg-slate-700 px-2 py-1 rounded">Ctrl+Z</span>
                 </li>
                 <li className="flex justify-between items-center">
-                  <span>Redo</span>
+                  <span>{t('segmentation.redo')}</span>
                   <span className="text-xs bg-slate-700 px-2 py-1 rounded">Ctrl+Y</span>
                 </li>
                 <li className="flex justify-between items-center">
-                  <span>Save</span>
+                  <span>{t('segmentation.save')}</span>
                   <span className="text-xs bg-slate-700 px-2 py-1 rounded">Ctrl+S</span>
                 </li>
               </ul>

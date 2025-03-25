@@ -40,6 +40,7 @@ export const useMouseInteractions = (
     mouseY: number, 
     containerRect: DOMRect
   ) => {
+    // Převod z pozice myši na canvas
     const x = (mouseX - containerRect.left) / zoom - offset.x;
     const y = (mouseY - containerRect.top) / zoom - offset.y;
     return { x, y };
@@ -145,6 +146,7 @@ export const useMouseInteractions = (
         const point = polygon.points[i];
         
         if (isNearVertex(x, y, point)) {
+          // Nastavíme aktivní polygon a začneme tažení bodu
           setSelectedPolygonId(polygon.id);
           vertexDragState.current = {
             isDragging: true,
