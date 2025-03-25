@@ -30,7 +30,7 @@ const CanvasPolygon = ({
         points={pointsString}
         fill={isSelected ? "rgba(255, 59, 48, 0.2)" : "rgba(0, 191, 255, 0.2)"}
         stroke={isSelected ? "#FF3B30" : "#00BFFF"}
-        strokeWidth={isSelected ? 2/zoom : 1.5/zoom}
+        strokeWidth={isSelected ? 2/Math.max(0.5, zoom) : 1.5/Math.max(0.5, zoom)}
         strokeLinejoin="round"
         className={cn(
           "transition-colors duration-150",

@@ -61,7 +61,7 @@ const EditorCanvas = ({
   return (
     <div 
       ref={containerRef} 
-      className={`flex-1 overflow-hidden relative cursor-move ${
+      className={`flex-1 overflow-hidden relative ${
         theme === 'dark' 
           ? 'bg-[#161616] bg-opacity-90 bg-[radial-gradient(#1a1f2c_1px,transparent_1px)]' 
           : 'bg-gray-100 bg-opacity-80 bg-[radial-gradient(#d1d5db_1px,transparent_1px)]'
@@ -70,6 +70,7 @@ const EditorCanvas = ({
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
+      style={{cursor: dragState.current.isDragging ? 'grabbing' : 'move'}}
     >
       <AnimatePresence mode="wait">
         {/* Zobrazení stavu načítání */}
@@ -85,7 +86,7 @@ const EditorCanvas = ({
           >
             <div 
               style={{ 
-                transform: `scale(${zoom}) translate(${offset.x}px, ${offset.y}px)`,
+                transform: `scale(${zoom}) translate(${offset.x * zoom}px, ${offset.y * zoom}px)`,
                 transformOrigin: 'center center',
                 willChange: 'transform',
               }}

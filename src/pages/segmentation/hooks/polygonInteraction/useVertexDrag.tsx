@@ -19,7 +19,7 @@ export const useVertexDrag = (
     vertexIndex: number | null;
   }>
 ) => {
-  const { isNearVertex } = useVertexDetection(zoom);
+  const { isNearVertex } = useVertexDetection(zoom, offset);
   const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
 
   /**
@@ -57,16 +57,20 @@ export const useVertexDrag = (
     }
     
     return false;
-  }, [zoom, offset, segmentation, setSegmentation, getCanvasCoordinates]);
+  }, [segmentation, setSegmentation, getCanvasCoordinates]);
 
   /**
    * Zpracování kliknutí na vertex
    */
   const handleVertexClick = useCallback((
-    x: number,
-    y: number
+    clientX: number,
+    clientY: number,
+    containerElement: HTMLElement
   ): boolean => {
     if (!segmentation) return false;
+    
+    const rect = containerElement.getBoundingClientRect();
+    const { x, y } = getCanvasCoordinates(clientX, clientY, rect);
     
     // Nejprve zkontrolujeme, zda jsme klikli na bod polygonu
     for (const polygon of segmentation.polygons) {
@@ -81,13 +85,14 @@ export const useVertexDrag = (
             polygonId: polygon.id,
             vertexIndex: i
           };
+          containerElement.style.cursor = 'grabbing';
           return true;
         }
       }
     }
     
     return false;
-  }, [segmentation, setSelectedPolygonId, isNearVertex, vertexDragState]);
+  }, [segmentation, setSelectedPolygonId, isNearVertex, getCanvasCoordinates]);
 
   return {
     handleVertexDrag,

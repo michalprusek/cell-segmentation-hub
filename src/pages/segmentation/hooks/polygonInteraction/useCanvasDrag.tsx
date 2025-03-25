@@ -32,9 +32,10 @@ export const useCanvasDrag = (
     dragState.current.lastX = e.clientX;
     dragState.current.lastY = e.clientY;
     
+    // Upravená metoda pro přesnější pohyb při různých úrovních zoomu
     setOffset({
-      x: offset.x + dx / zoom,
-      y: offset.y + dy / zoom
+      x: offset.x + (dx / zoom),
+      y: offset.y + (dy / zoom)
     });
     
     containerElement.style.cursor = 'grabbing';

@@ -47,7 +47,7 @@ export const useMouseInteractions = (
   );
   
   const { detectVertexHover } = useVertexHover(
-    zoom, segmentation, hoveredVertex, setHoveredVertex
+    zoom, offset, segmentation, hoveredVertex, setHoveredVertex
   );
 
   /**
@@ -56,9 +56,6 @@ export const useMouseInteractions = (
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const containerElement = e.currentTarget as HTMLElement;
     if (!containerElement || !segmentation) return;
-    
-    const rect = containerElement.getBoundingClientRect();
-    const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
     
     // Nejdřív kontrolujeme, jestli táhneme vertex
     if (handleVertexDrag(e, containerElement)) {
@@ -71,13 +68,12 @@ export const useMouseInteractions = (
     }
     
     // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
-    if (!detectVertexHover(x, y, containerElement)) {
+    if (!detectVertexHover(e.clientX, e.clientY, containerElement)) {
       // Pokud ne, nastavíme kurzor na výchozí
       containerElement.style.cursor = 'move';
     }
   }, [
     segmentation, 
-    getCanvasCoordinates, 
     handleVertexDrag, 
     handleCanvasDrag, 
     detectVertexHover
@@ -95,8 +91,7 @@ export const useMouseInteractions = (
     const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
     
     // Nejdřív zkontrolujeme, jestli jsme klikli na vertex
-    if (handleVertexClick(x, y)) {
-      containerElement.style.cursor = 'grabbing';
+    if (handleVertexClick(e.clientX, e.clientY, containerElement)) {
       return;
     }
     
@@ -126,7 +121,7 @@ export const useMouseInteractions = (
     // Ukončení tažení
     dragState.current.isDragging = false;
     vertexDragState.current.isDragging = false;
-  }, []);
+  }, [dragState, vertexDragState]);
 
   return {
     handleMouseMove,

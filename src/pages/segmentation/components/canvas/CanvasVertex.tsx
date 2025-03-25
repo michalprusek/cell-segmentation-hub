@@ -68,7 +68,7 @@ const CanvasVertex = ({
         r={radius}
         fill={isSelected ? "#FF3B30" : "#FFFFFF"}
         stroke={isSelected ? "#FF3B30" : "#0077FF"}
-        strokeWidth={1.5 / zoom}
+        strokeWidth={1.5 / Math.max(0.5, zoom)}
         className={cn(
           "transition-transform duration-150",
           isHovered ? "scale-125" : ""

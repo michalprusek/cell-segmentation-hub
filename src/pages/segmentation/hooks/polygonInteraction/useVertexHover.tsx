@@ -2,27 +2,33 @@
 import { useCallback } from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { useVertexDetection } from './useVertexDetection';
+import { useCoordinateTransform } from './useCoordinateTransform';
 
 /**
  * Hook pro detekci najetí myši nad vertexy
  */
 export const useVertexHover = (
   zoom: number,
+  offset: { x: number; y: number },
   segmentation: SegmentationResult | null,
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null },
   setHoveredVertex: (state: { polygonId: string | null, vertexIndex: number | null }) => void
 ) => {
-  const { isNearVertex } = useVertexDetection(zoom);
+  const { isNearVertex } = useVertexDetection(zoom, offset);
+  const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
 
   /**
    * Detekce a nastavení bodu pod kurzorem
    */
   const detectVertexHover = useCallback((
-    x: number,
-    y: number,
+    clientX: number,
+    clientY: number,
     containerElement: HTMLElement
   ): boolean => {
     if (!segmentation) return false;
+    
+    const rect = containerElement.getBoundingClientRect();
+    const { x, y } = getCanvasCoordinates(clientX, clientY, rect);
     
     // Procházíme všechny polygony a jejich body
     for (const polygon of segmentation.polygons) {
@@ -49,7 +55,7 @@ export const useVertexHover = (
     }
     
     return false;
-  }, [segmentation, hoveredVertex, setHoveredVertex, isNearVertex]);
+  }, [segmentation, hoveredVertex, setHoveredVertex, isNearVertex, getCanvasCoordinates]);
 
   return { detectVertexHover };
 };

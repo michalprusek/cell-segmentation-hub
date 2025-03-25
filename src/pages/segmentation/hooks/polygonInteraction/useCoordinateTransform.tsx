@@ -2,7 +2,7 @@
 import { useCallback } from 'react';
 
 /**
- * Hook pro transformaci souřadnic
+ * Hook pro transformaci souřadnic mezi různými souřadnými systémy
  */
 export const useCoordinateTransform = (
   zoom: number,
@@ -22,12 +22,29 @@ export const useCoordinateTransform = (
     const canvasY = mouseY - containerRect.top;
     
     // Převod na souřadnice v prostoru obrázku s ohledem na zoom a offset
-    // Musíme odečíst offset a vydělit zoomem, abychom získali souřadnice v původním prostoru obrázku
-    const x = (canvasX / zoom) - offset.x;
-    const y = (canvasY / zoom) - offset.y;
+    // Zde byl problém - nesprávný výpočet s offsetem
+    const x = (canvasX / zoom) - (offset.x * zoom);
+    const y = (canvasY / zoom) - (offset.y * zoom);
     
     return { canvasX, canvasY, x, y };
   }, [zoom, offset]);
 
-  return { getCanvasCoordinates };
+  /**
+   * Převod souřadnic obrázku na souřadnice plátna
+   * Pro správné vykreslování elementů
+   */
+  const getScreenCoordinates = useCallback((
+    imageX: number,
+    imageY: number
+  ) => {
+    const screenX = (imageX + offset.x) * zoom;
+    const screenY = (imageY + offset.y) * zoom;
+    
+    return { screenX, screenY };
+  }, [zoom, offset]);
+
+  return { 
+    getCanvasCoordinates,
+    getScreenCoordinates
+  };
 };
