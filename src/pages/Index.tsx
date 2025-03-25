@@ -55,21 +55,24 @@ const Index = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-center animate-on-scroll">
                 <div className="glass-morphism rounded-2xl overflow-hidden">
                   <img 
-                    src="/placeholder.svg" 
-                    alt="Research team"
+                    src="/lovable-uploads/8f483962-36d5-4bae-8c90-c9542f8cc2d8.png" 
+                    alt="Segmented spheroid"
                     className="w-full h-auto" 
                   />
                 </div>
                 
                 <div className="space-y-6">
                   <p className="text-gray-700 leading-relaxed">
-                    Our platform was developed by a team of researchers and engineers passionate about advancing cell analysis capabilities in biomedical research.
+                    Our platform was developed by Bc. Michal Průšek, a student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D.
+                  </p>
+                  <p className="text-gray-700 leading-relaxed">
+                    This project is a collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague (VŠCHT Praha).
                   </p>
                   <p className="text-gray-700 leading-relaxed">
                     We combine cutting-edge AI models with an intuitive interface to provide researchers with powerful tools for microscopic image analysis, focusing on spheroid segmentation with unparalleled precision.
                   </p>
                   <p className="text-gray-700 leading-relaxed">
-                    Our goal is to accelerate scientific discoveries by eliminating the technical barriers that researchers face when analyzing complex cell structures.
+                    For inquiries, please contact us at <a href="mailto:prusemic@cvut.cz" className="text-blue-600 hover:underline">prusemic@cvut.cz</a>
                   </p>
                 </div>
               </div>

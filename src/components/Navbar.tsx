@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Microscope } from "lucide-react";
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -41,7 +41,7 @@ const Navbar = () => {
           className="flex items-center gap-2 transition-opacity hover:opacity-80"
         >
           <div className="w-10 h-10 rounded-md bg-blue-500 flex items-center justify-center">
-            <span className="text-white font-bold">S</span>
+            <Microscope className="text-white w-6 h-6" />
           </div>
           <span className="font-semibold text-lg">SpheroSeg</span>
         </Link>
@@ -59,6 +59,12 @@ const Navbar = () => {
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
             Features
+          </Link>
+          <Link 
+            to="/documentation"
+            className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
+          >
+            Documentation
           </Link>
           <Link 
             to="/terms-of-service"
@@ -114,6 +120,13 @@ const Navbar = () => {
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Features
+            </Link>
+            <Link 
+              to="/documentation"
+              className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Documentation
             </Link>
             <Link 
               to="/terms-of-service"
