@@ -1,9 +1,10 @@
+
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { DownloadCloud, X, Clipboard, CheckCircle, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { SegmentationResult } from '@/lib/segmentation';
+import { SegmentationResult, Point } from '@/lib/segmentation';
 import { calculatePolygonArea, calculatePerimeter } from '@/lib/segmentation';
 import { utils, writeFile } from 'xlsx';
 import { SpheroidMetric } from '@/types';
@@ -78,7 +79,7 @@ const convertToCOCO = (segmentation: SegmentationResult): string => {
     const holes = segmentation.polygons.filter(p => p.type === 'internal');
     
     // Převod bodů do formátu COCO (všechny x-ové souřadnice, pak všechny y-ové)
-    const segmentation = [
+    const segmentationPoints = [
       polygon.points.reduce<number[]>(
         (acc, point) => [...acc, point.x, point.y],
         []
@@ -87,7 +88,7 @@ const convertToCOCO = (segmentation: SegmentationResult): string => {
     
     // Add holes to segmentation
     holes.forEach(hole => {
-      segmentation.push(
+      segmentationPoints.push(
         hole.points.reduce<number[]>(
           (acc, point) => [...acc, point.x, point.y],
           []
@@ -110,7 +111,7 @@ const convertToCOCO = (segmentation: SegmentationResult): string => {
       id: index + 1,
       image_id: 1, // Předpokládáme jeden obrázek
       category_id: 1, // Kategorie sféroidu
-      segmentation,
+      segmentation: segmentationPoints,
       bbox: [x, y, width, height],
       area: area, // Area with holes subtracted
       iscrowd: 0

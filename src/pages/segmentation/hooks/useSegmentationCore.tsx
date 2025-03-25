@@ -71,6 +71,7 @@ export const useSegmentationCore = (
           
         if (error) throw error;
         
+        // Transformace dat na správnou strukturu ProjectImage
         const formattedImages: ProjectImage[] = (data || []).map(img => ({
           id: img.id,
           name: img.name,
@@ -79,7 +80,8 @@ export const useSegmentationCore = (
           createdAt: new Date(img.created_at),
           updatedAt: new Date(img.updated_at),
           segmentationStatus: img.segmentation_status as 'pending' | 'processing' | 'completed' | 'failed',
-          segmentationResult: img.segmentation_result
+          segmentationResult: img.segmentation_result ? JSON.parse(JSON.stringify(img.segmentation_result)) : undefined,
+          project_id: img.project_id
         }));
         
         setProjectImages(formattedImages);
@@ -124,7 +126,8 @@ export const useSegmentationCore = (
         // Check for existing segmentation
         if (imageData.segmentation_status === 'completed' && imageData.segmentation_result) {
           // Deep clone with safe primitive conversion
-          const segResult = JSON.parse(JSON.stringify(imageData.segmentation_result)) as SegmentationResult;
+          const segDataStr = JSON.stringify(imageData.segmentation_result);
+          const segResult = JSON.parse(segDataStr) as SegmentationResult;
           
           // Ensure all polygons have the required type field
           segResult.polygons = segResult.polygons.map(polygon => ({
@@ -138,12 +141,15 @@ export const useSegmentationCore = (
           // Generate segmentation if needed
           const segResult = await segmentImage(imageData.image_url);
           
+          // Convert to string for database storage
+          const segResultStr = JSON.stringify(segResult);
+          
           // Update database with segmentation result
           const { error: updateError } = await supabase
             .from('images')
             .update({
               segmentation_status: 'completed',
-              segmentation_result: segResult,
+              segmentation_result: JSON.parse(segResultStr),
               updated_at: new Date().toISOString()
             })
             .eq('id', finalImageId);
@@ -187,10 +193,13 @@ export const useSegmentationCore = (
         polygons: updatedPolygons
       };
       
+      // Konvertujeme na JSON pro uložení do databáze
+      const segmentationJson = JSON.stringify(updatedSegmentation);
+      
       const { error } = await supabase
         .from('images')
         .update({
-          segmentation_result: updatedSegmentation,
+          segmentation_result: JSON.parse(segmentationJson),
           updated_at: new Date().toISOString()
         })
         .eq('id', finalImageId);

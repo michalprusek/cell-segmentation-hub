@@ -1,6 +1,6 @@
 
 import { useState, useCallback } from 'react';
-import { SegmentationResult, Point } from '@/lib/segmentation';
+import { SegmentationResult, Point, Polygon } from '@/lib/segmentation';
 import { useTempPoints } from './useTempPoints';
 import { usePathModification } from './usePathModification';
 import { toast } from 'sonner';
@@ -81,11 +81,11 @@ export const useEditModeCore = (
           // Create new polygon
           if (!segmentation) return false;
           
-          const newPolygon = {
+          const newPolygon: Polygon = {
             id: uuidv4(),
             points: [...points],
-            type: "manual", // or any other type you want
-            class: "default" // or any default class
+            type: 'external', // Vždy používáme externí typ pro nový polygon
+            class: 'spheroid' // Výchozí třída
           };
           
           setSegmentation({
