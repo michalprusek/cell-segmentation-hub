@@ -1,6 +1,6 @@
 
 import { useState, useRef } from 'react';
-import { DragState, VertexDragState } from '../../../types';
+import { DragState, VertexDragState } from '@/pages/segmentation/types';
 
 /**
  * Hook pro správu stavu polygonu v segmentačním editoru
