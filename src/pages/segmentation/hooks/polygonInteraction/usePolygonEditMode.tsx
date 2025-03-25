@@ -186,7 +186,7 @@ export const usePolygonEditMode = (
     for (let i = 0; i < polygon.points.length; i++) {
       const point = polygon.points[i];
       
-      if (isNearPoint(clickPoint, point, 10 / 1)) { // Adjust threshold based on zoom
+      if (isNearPoint(clickPoint, point, 10)) { // Adjust threshold based on zoom
         // If this is the first point, start a new sequence
         if (tempPoints.points.length === 0) {
           console.log("Starting new point sequence at vertex", i);

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import CanvasSvgFilters from './CanvasSvgFilters';
 import CanvasPolygon from './CanvasPolygon';
@@ -29,6 +29,41 @@ const CanvasPolygonLayer = ({
   editMode,
   tempPoints
 }: CanvasPolygonLayerProps) => {
+  const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
+  
+  // Track cursor position for edit mode line
+  useEffect(() => {
+    if (!editMode || tempPoints.points.length === 0) {
+      setCursorPosition(null);
+      return;
+    }
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      const svgElement = document.querySelector('svg') as SVGSVGElement;
+      if (!svgElement) return;
+      
+      const rect = svgElement.getBoundingClientRect();
+      const point = svgElement.createSVGPoint();
+      
+      point.x = e.clientX - rect.left;
+      point.y = e.clientY - rect.top;
+      
+      // Transform to SVG coordinate space if needed
+      const matrix = svgElement.getScreenCTM();
+      if (matrix) {
+        const transformedPoint = point.matrixTransform(matrix.inverse());
+        setCursorPosition({ x: transformedPoint.x, y: transformedPoint.y });
+      } else {
+        setCursorPosition({ x: point.x, y: point.y });
+      }
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [editMode, tempPoints.points.length]);
+  
   if (!segmentation || imageSize.width <= 0) return null;
   
   return (
@@ -58,6 +93,7 @@ const CanvasPolygonLayer = ({
       {/* Temporary editing path */}
       {editMode && tempPoints.points.length > 0 && (
         <>
+          {/* Points already added */}
           <polyline
             points={tempPoints.points.map(p => `${p.x},${p.y}`).join(' ')}
             fill="none"
@@ -66,6 +102,22 @@ const CanvasPolygonLayer = ({
             strokeDasharray={`${4/zoom},${4/zoom}`}
             shapeRendering="geometricPrecision"
           />
+          
+          {/* Line from last point to cursor */}
+          {cursorPosition && tempPoints.points.length > 0 && (
+            <line
+              x1={tempPoints.points[tempPoints.points.length - 1].x}
+              y1={tempPoints.points[tempPoints.points.length - 1].y}
+              x2={cursorPosition.x}
+              y2={cursorPosition.y}
+              stroke="#FF3B30"
+              strokeWidth={1.5/zoom}
+              strokeDasharray={`${4/zoom},${4/zoom}`}
+              shapeRendering="geometricPrecision"
+            />
+          )}
+          
+          {/* Vertices for the points */}
           {tempPoints.points.map((point, index) => (
             <circle
               key={`temp-point-${index}`}

@@ -53,12 +53,25 @@ const SegmentationEditor = () => {
     toggleEditMode,
   } = useSegmentationEditor(projectId, imageId, user?.id);
 
-  // Add keyboard shortcuts for edit mode
+  // Add keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Edit mode toggle with 'e' key
       if (e.key === 'e' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         toggleEditMode();
+      }
+      
+      // Undo with Ctrl+Z
+      if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleUndo();
+      }
+      
+      // Redo with Ctrl+Y or Ctrl+Shift+Z
+      if ((e.key === 'y' && (e.ctrlKey || e.metaKey)) ||
+          (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey)) {
+        e.preventDefault();
+        handleRedo();
       }
     };
 
@@ -66,7 +79,11 @@ const SegmentationEditor = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [toggleEditMode]);
+  }, [toggleEditMode, handleUndo, handleRedo]);
+
+  // Calculate if we can undo/redo
+  const canUndo = historyIndex > 0;
+  const canRedo = history.length > 0 && historyIndex < history.length - 1;
 
   return (
     <motion.div 
@@ -98,6 +115,10 @@ const SegmentationEditor = () => {
           onSave={handleSave}
           editMode={editMode}
           onToggleEditMode={toggleEditMode}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          canUndo={canUndo}
+          canRedo={canRedo}
         />
         
         {/* Right sidebar */}

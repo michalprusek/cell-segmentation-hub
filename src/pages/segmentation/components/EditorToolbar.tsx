@@ -6,7 +6,9 @@ import {
   ZoomOut, 
   Home,
   Save,
-  Edit
+  Edit,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
 import {
@@ -26,6 +28,10 @@ interface EditorToolbarProps {
   onSave: () => Promise<void>;
   editMode: boolean;
   onToggleEditMode: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 const EditorToolbar = ({
@@ -35,7 +41,11 @@ const EditorToolbar = ({
   onResetView,
   onSave,
   editMode,
-  onToggleEditMode
+  onToggleEditMode,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo
 }: EditorToolbarProps) => {
   const { t } = useLanguage();
   
@@ -120,6 +130,46 @@ const EditorToolbar = ({
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
             <span>{editMode ? "Exit Edit Mode" : "Enter Edit Mode"} (Shortcut: E)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <Separator className="bg-slate-700 my-1" />
+
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
+              onClick={onUndo}
+              disabled={!canUndo}
+            >
+              <Undo2 className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Undo (Shortcut: Ctrl+Z)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="h-9 w-9 text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90"
+              onClick={onRedo}
+              disabled={!canRedo}
+            >
+              <Redo2 className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>Redo (Shortcut: Ctrl+Y)</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

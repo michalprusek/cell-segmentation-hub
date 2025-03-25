@@ -25,7 +25,7 @@ const CanvasVertex = ({
     let baseRadius = isSelected ? 6 : 5;
     
     // Inverzní vztah k zoomu pro konzistentní vizuální velikost
-    return Math.max(baseRadius / zoom, 3);
+    return baseRadius / zoom;
   };
 
   const radius = getPointRadius();
