@@ -59,8 +59,6 @@ const ProjectsList = ({
         ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
         : "flex flex-col space-y-4"
     }>
-      {showCreateCard && <NewProjectCard />}
-      
       {projects.map((project) => (
         <ProjectCard
           key={project.id}
@@ -73,6 +71,8 @@ const ProjectsList = ({
           onClick={() => onOpenProject(project.id)}
         />
       ))}
+      
+      {showCreateCard && <NewProjectCard />}
     </div>
   );
 };
