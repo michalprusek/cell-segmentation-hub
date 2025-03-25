@@ -38,6 +38,10 @@ const SegmentationEditor = () => {
     tempPoints,
     cursorPosition,
     editMode,
+    slicingMode,
+    pointAddingMode,
+    sliceStartPoint,
+    hoveredSegment,
     canvasContainerRef,
     projectImages,
     setSelectedPolygonId,
@@ -53,6 +57,8 @@ const SegmentationEditor = () => {
     handleSave,
     navigateToImage,
     toggleEditMode,
+    toggleSlicingMode,
+    togglePointAddingMode,
   } = useSegmentationEditor(projectId, imageId, user?.id);
 
   // Add keyboard shortcuts
@@ -61,6 +67,16 @@ const SegmentationEditor = () => {
       // Edit mode toggle with 'e' key
       if (e.key === 'e' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         toggleEditMode();
+      }
+      
+      // Slicing mode toggle with 's' key
+      if (e.key === 's' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        toggleSlicingMode();
+      }
+      
+      // Point adding mode toggle with 'a' key
+      if (e.key === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        togglePointAddingMode();
       }
       
       // Undo with Ctrl+Z
@@ -81,7 +97,7 @@ const SegmentationEditor = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [toggleEditMode, handleUndo, handleRedo]);
+  }, [toggleEditMode, toggleSlicingMode, togglePointAddingMode, handleUndo, handleRedo]);
 
   // Calculate if we can undo/redo
   const canUndo = historyIndex > 0;
@@ -90,6 +106,9 @@ const SegmentationEditor = () => {
   // Get current image index
   const currentImageIndex = projectImages.findIndex(img => img.id === imageId);
   const totalImages = projectImages.length;
+  
+  // Determine which edit mode is active
+  const isAnyEditModeActive = editMode || slicingMode || pointAddingMode;
 
   return (
     <motion.div 
@@ -122,7 +141,11 @@ const SegmentationEditor = () => {
           onResetView={handleResetView}
           onSave={handleSave}
           editMode={editMode}
+          slicingMode={slicingMode}
+          pointAddingMode={pointAddingMode}
           onToggleEditMode={toggleEditMode}
+          onToggleSlicingMode={toggleSlicingMode}
+          onTogglePointAddingMode={togglePointAddingMode}
           onUndo={handleUndo}
           onRedo={handleRedo}
           canUndo={canUndo}
@@ -154,13 +177,21 @@ const SegmentationEditor = () => {
             vertexDragState={vertexDragState}
             containerRef={canvasContainerRef}
             editMode={editMode}
+            slicingMode={slicingMode}
+            pointAddingMode={pointAddingMode}
             tempPoints={tempPoints}
             cursorPosition={cursorPosition}
+            sliceStartPoint={sliceStartPoint}
+            hoveredSegment={hoveredSegment}
           />
         </div>
         
         {/* Status */}
-        <StatusBar segmentation={segmentation} />
+        <StatusBar 
+          segmentation={segmentation} 
+          editMode={isAnyEditModeActive ? 
+            (editMode ? "edit" : slicingMode ? "slice" : "add-point") : undefined}
+        />
       </div>
     </motion.div>
   );

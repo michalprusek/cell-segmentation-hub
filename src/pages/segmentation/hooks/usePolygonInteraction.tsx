@@ -37,13 +37,20 @@ export const usePolygonInteraction = (
     setSelectedPolygonId
   );
   
-  // Metody pro režim úprav polygonu
+  // Metody pro režimy úprav polygonu
   const { 
     toggleEditMode,
+    toggleSlicingMode,
+    togglePointAddingMode,
     handleEditModeClick,
+    handleEditMouseMove,
     tempPoints,
     editMode,
-    cursorPosition
+    slicingMode,
+    pointAddingMode,
+    cursorPosition,
+    sliceStartPoint,
+    hoveredSegment
   } = usePolygonEditMode(
     segmentation,
     setSegmentation,
@@ -67,8 +74,9 @@ export const usePolygonInteraction = (
     setHoveredVertex,
     dragState,
     vertexDragState,
-    editMode,
-    handleEditModeClick
+    editMode || slicingMode || pointAddingMode,
+    handleEditModeClick,
+    handleEditMouseMove
   );
   
   return {
@@ -78,13 +86,19 @@ export const usePolygonInteraction = (
     vertexDragState,
     tempPoints,
     editMode,
+    slicingMode,
+    pointAddingMode,
     cursorPosition,
+    sliceStartPoint,
+    hoveredSegment,
     setSelectedPolygonId,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
     handleDeletePolygon,
     isPointInPolygon,
-    toggleEditMode
+    toggleEditMode,
+    toggleSlicingMode,
+    togglePointAddingMode
   };
 };

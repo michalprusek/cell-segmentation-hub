@@ -28,8 +28,9 @@ export const usePolygonEventHandlers = (
     polygonId: string | null;
     vertexIndex: number | null;
   }>,
-  editMode: boolean,
-  handleEditModeClick: (x: number, y: number) => void
+  editActive: boolean,
+  handleEditModeClick: (x: number, y: number) => void,
+  handleEditMouseMove: (x: number, y: number) => void
 ) => {
   // Mouse interakce
   const { 
@@ -47,8 +48,9 @@ export const usePolygonEventHandlers = (
     dragState,
     vertexDragState,
     hoveredVertex,
-    editMode,
-    handleEditModeClick
+    editActive,
+    handleEditModeClick,
+    handleEditMouseMove
   );
   
   return {

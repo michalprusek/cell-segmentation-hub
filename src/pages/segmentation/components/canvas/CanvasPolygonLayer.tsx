@@ -16,8 +16,16 @@ interface CanvasPolygonLayerProps {
   }>;
   zoom: number;
   editMode: boolean;
+  slicingMode: boolean;
+  pointAddingMode: boolean;
   tempPoints: { points: Array<{x: number, y: number}>, startIndex: number | null, endIndex: number | null, polygonId: string | null };
   cursorPosition: Point | null;
+  sliceStartPoint: Point | null;
+  hoveredSegment: {
+    polygonId: string | null,
+    segmentIndex: number | null,
+    projectedPoint: Point | null
+  };
 }
 
 const CanvasPolygonLayer = ({ 
@@ -28,8 +36,12 @@ const CanvasPolygonLayer = ({
   vertexDragState,
   zoom,
   editMode,
+  slicingMode,
+  pointAddingMode,
   tempPoints,
-  cursorPosition
+  cursorPosition,
+  sliceStartPoint,
+  hoveredSegment
 }: CanvasPolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
   
@@ -99,16 +111,67 @@ const CanvasPolygonLayer = ({
           ))}
         </>
       )}
+      
+      {/* Slicing mode visualization */}
+      {slicingMode && (
+        <>
+          {/* Slicing indicator line */}
+          {sliceStartPoint && cursorPosition && (
+            <line
+              x1={sliceStartPoint.x}
+              y1={sliceStartPoint.y}
+              x2={cursorPosition.x}
+              y2={cursorPosition.y}
+              stroke="#FF0000"
+              strokeWidth={2/zoom}
+              strokeDasharray={`${6/zoom},${3/zoom}`}
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+          
+          {/* Slicing start point */}
+          {sliceStartPoint && (
+            <circle
+              cx={sliceStartPoint.x}
+              cy={sliceStartPoint.y}
+              r={6/zoom}
+              fill="#FF0000"
+              stroke="#FFFFFF"
+              strokeWidth={1.5/zoom}
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
+        </>
+      )}
+      
+      {/* Point adding mode visualization */}
+      {pointAddingMode && hoveredSegment.projectedPoint && (
+        <circle
+          cx={hoveredSegment.projectedPoint.x}
+          cy={hoveredSegment.projectedPoint.y}
+          r={6/zoom}
+          fill="#4CAF50"
+          stroke="#FFFFFF"
+          strokeWidth={1.5/zoom}
+          vectorEffect="non-scaling-stroke"
+          className="animate-pulse"
+          style={{ animationDuration: '1s' }}
+        />
+      )}
 
       {/* Edit mode indicator */}
-      {editMode && (
+      {(editMode || slicingMode || pointAddingMode) && (
         <rect
           x={0}
           y={0}
           width={imageSize.width}
           height={imageSize.height}
           fill="none"
-          stroke="#FF3B30"
+          stroke={
+            slicingMode ? "#FF0000" : 
+            pointAddingMode ? "#4CAF50" : 
+            "#FF3B30"
+          }
           strokeWidth={3/zoom}
           strokeDasharray={`${8/zoom},${8/zoom}`}
           pointerEvents="none"

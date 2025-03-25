@@ -31,8 +31,9 @@ export const useMouseInteractions = (
     vertexIndex: number | null;
   }>,
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null },
-  editMode: boolean,
-  handleEditModeClick: (x: number, y: number) => void
+  editActive: boolean,
+  handleEditModeClick: (x: number, y: number) => void,
+  handleEditMouseMove: (x: number, y: number) => void
 ) => {
   const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
   
@@ -71,13 +72,20 @@ export const useMouseInteractions = (
       return;
     }
     
+    const rect = containerElement.getBoundingClientRect();
+    const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
+
+    // Pokud jsme v editačním režimu, předáme pohyb myši
+    if (editActive) {
+      handleEditMouseMove(x, y);
+      return;
+    }
+    
     // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
     // Používáme requestAnimationFrame pro optimalizaci výkonu
-    if (!editMode) {
-      requestAnimationFrame(() => {
-        detectVertexHover(e.clientX, e.clientY, containerElement);
-      });
-    }
+    requestAnimationFrame(() => {
+      detectVertexHover(e.clientX, e.clientY, containerElement);
+    });
   }, [
     segmentation, 
     handleVertexDrag, 
@@ -85,7 +93,9 @@ export const useMouseInteractions = (
     detectVertexHover,
     dragState,
     vertexDragState,
-    editMode
+    editActive,
+    handleEditMouseMove,
+    getCanvasCoordinates
   ]);
 
   /**
@@ -102,7 +112,7 @@ export const useMouseInteractions = (
     console.log(`handleMouseDown: Mouse down at client: (${e.clientX}, ${e.clientY}), Canvas: (${canvasX}, ${canvasY}), Image: (${x.toFixed(2)}, ${y.toFixed(2)})`);
     
     // If in edit mode, handle differently
-    if (editMode) {
+    if (editActive) {
       handleEditModeClick(x, y);
       return;
     }
@@ -131,7 +141,7 @@ export const useMouseInteractions = (
     trySelectPolygon, 
     setSelectedPolygonId, 
     startCanvasDrag,
-    editMode,
+    editActive,
     handleEditModeClick
   ]);
 

@@ -49,6 +49,10 @@ export const useSegmentationEditor = (
       polygonInteraction.handleDeletePolygon();
     } else if (e.key === 'e' || e.key === 'E') {
       polygonInteraction.toggleEditMode();
+    } else if (e.key === 's' || e.key === 'S') {
+      polygonInteraction.toggleSlicingMode();
+    } else if (e.key === 'a' || e.key === 'A') {
+      polygonInteraction.togglePointAddingMode();
     } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
       historyManagement.handleUndo();
     } else if (e.key === 'y' && (e.ctrlKey || e.metaKey)) {
@@ -57,6 +61,8 @@ export const useSegmentationEditor = (
   }, [
     polygonInteraction.handleDeletePolygon,
     polygonInteraction.toggleEditMode,
+    polygonInteraction.toggleSlicingMode,
+    polygonInteraction.togglePointAddingMode,
     historyManagement.handleUndo,
     historyManagement.handleRedo
   ]);

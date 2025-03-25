@@ -24,8 +24,16 @@ interface EditorCanvasProps {
   vertexDragState: React.MutableRefObject<VertexDragState>;
   containerRef: React.MutableRefObject<HTMLDivElement | null>;
   editMode: boolean;
+  slicingMode: boolean;
+  pointAddingMode: boolean;
   tempPoints: TempPointsState;
   cursorPosition: Point | null;
+  sliceStartPoint: Point | null;
+  hoveredSegment: {
+    polygonId: string | null,
+    segmentIndex: number | null,
+    projectedPoint: Point | null
+  };
 }
 
 const EditorCanvas = ({
@@ -43,8 +51,12 @@ const EditorCanvas = ({
   vertexDragState,
   containerRef,
   editMode,
+  slicingMode,
+  pointAddingMode,
   tempPoints,
-  cursorPosition
+  cursorPosition,
+  sliceStartPoint,
+  hoveredSegment
 }: EditorCanvasProps) => {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const { theme } = useTheme();
@@ -69,10 +81,20 @@ const EditorCanvas = ({
   // Správné nastavení cursoru podle stavu
   const getCursorStyle = () => {
     if (editMode) return 'crosshair';
+    if (slicingMode) return 'crosshair';
+    if (pointAddingMode) return 'cell';
     if (vertexDragState.current.isDragging) return 'grabbing';
     if (dragState.current.isDragging) return 'grabbing';
     if (hoveredVertex.polygonId !== null) return 'grab';
     return 'move';
+  };
+
+  // Určení barvy okraje pro aktivní režim
+  const getActiveModeBorderClass = () => {
+    if (slicingMode) return 'border-2 border-red-500';
+    if (pointAddingMode) return 'border-2 border-green-500';
+    if (editMode) return 'border-2 border-orange-500';
+    return '';
   };
 
   return (
@@ -82,9 +104,7 @@ const EditorCanvas = ({
         theme === 'dark' 
           ? 'bg-[#161616] bg-opacity-90 bg-[radial-gradient(#1a1f2c_1px,transparent_1px)]' 
           : 'bg-gray-100 bg-opacity-80 bg-[radial-gradient(#d1d5db_1px,transparent_1px)]'
-      } bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)] ${
-        editMode ? 'border-2 border-red-500' : ''
-      }`}
+      } bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)] ${getActiveModeBorderClass()}`}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -132,8 +152,12 @@ const EditorCanvas = ({
                   vertexDragState={vertexDragState}
                   zoom={zoom}
                   editMode={editMode}
+                  slicingMode={slicingMode}
+                  pointAddingMode={pointAddingMode}
                   tempPoints={tempPoints}
                   cursorPosition={cursorPosition}
+                  sliceStartPoint={sliceStartPoint}
+                  hoveredSegment={hoveredSegment}
                 />
               )}
             </div>
@@ -144,10 +168,24 @@ const EditorCanvas = ({
       {/* Informace o zoomu */}
       <CanvasZoomInfo zoom={zoom} />
       
-      {/* Edit mode indicator */}
+      {/* Editační režim indikátor */}
       {editMode && (
+        <div className="absolute bottom-4 left-4 bg-orange-600 text-white px-3 py-1 rounded-md text-sm font-semibold shadow-lg">
+          Edit Mode - Vytváření nového polygonu
+        </div>
+      )}
+      
+      {/* Slicing režim indikátor */}
+      {slicingMode && (
         <div className="absolute bottom-4 left-4 bg-red-600 text-white px-3 py-1 rounded-md text-sm font-semibold shadow-lg">
-          Edit Mode - Click to add points
+          Slicing Mode - Rozdělení polygonu {sliceStartPoint ? "(Klikněte pro dokončení)" : "(Klikněte pro začátek)"}
+        </div>
+      )}
+      
+      {/* Point adding režim indikátor */}
+      {pointAddingMode && (
+        <div className="absolute bottom-4 left-4 bg-green-600 text-white px-3 py-1 rounded-md text-sm font-semibold shadow-lg">
+          Point Adding Mode - Přidávání bodů do polygonu
         </div>
       )}
     </div>
