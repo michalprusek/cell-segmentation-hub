@@ -19,6 +19,8 @@ const Dashboard = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [sortField, setSortField] = useState<string>("updated_at");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const navigate = useNavigate();
   const { user } = useAuth();
   
@@ -38,7 +40,7 @@ const Dashboard = () => {
       window.removeEventListener('project-created', handleProjectCreated);
       window.removeEventListener('project-deleted', handleProjectDeleted);
     };
-  }, [user]);
+  }, [user, sortField, sortDirection]);
 
   const fetchProjects = async () => {
     if (!user) return;
@@ -51,7 +53,7 @@ const Dashboard = () => {
         .from("projects")
         .select("*")
         .eq("user_id", user.id)
-        .order("updated_at", { ascending: false });
+        .order(sortField, { ascending: sortDirection === "asc" });
 
       if (projectsError) {
         throw projectsError;
@@ -128,6 +130,17 @@ const Dashboard = () => {
     fetchProjects();
   };
 
+  const handleSort = (field: string, direction: 'asc' | 'desc') => {
+    setSortField(field);
+    setSortDirection(direction);
+  };
+
+  const sortOptions = [
+    { field: "title", label: "Name (A-Z)" },
+    { field: "updated_at", label: "Last Updated" },
+    { field: "created_at", label: "Date Created" }
+  ];
+
   if (fetchError) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -169,7 +182,12 @@ const Dashboard = () => {
               <TabsTrigger value="recent">Recent Analyses</TabsTrigger>
             </TabsList>
             
-            <DashboardActions viewMode={viewMode} setViewMode={setViewMode} />
+            <DashboardActions 
+              viewMode={viewMode} 
+              setViewMode={setViewMode} 
+              onSort={handleSort}
+              sortOptions={sortOptions}
+            />
           </div>
           
           <TabsContent value="projects" className="mt-0">

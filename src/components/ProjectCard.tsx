@@ -172,8 +172,17 @@ const ProjectCard = ({
     toast.success("Project URL copied to clipboard");
   };
 
+  const handleCardClick = () => {
+    if (onClick) {
+      onClick();
+    }
+  };
+
   return (
-    <Card className="overflow-hidden transition-all duration-300 hover:shadow-md">
+    <Card 
+      className="overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer"
+      onClick={handleCardClick}
+    >
       <CardHeader className="p-0">
         <div className="relative aspect-video overflow-hidden">
           <img
@@ -226,11 +235,6 @@ const ProjectCard = ({
           </div>
         </div>
       </CardContent>
-      <CardFooter className="p-4 pt-0 flex justify-end">
-        <Button variant="outline" size="sm" onClick={onClick}>
-          Open Project
-        </Button>
-      </CardFooter>
     </Card>
   );
 };

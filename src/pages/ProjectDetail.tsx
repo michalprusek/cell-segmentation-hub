@@ -14,12 +14,14 @@ import { useImageFilter } from "@/hooks/useImageFilter";
 import { useProjectImageActions } from "@/components/project/ProjectImageActions";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import ProjectViewOptions from "@/components/project/ProjectViewOptions";
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { t } = useLanguage();
   const [showUploader, setShowUploader] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   // Fetch project data
   const { projectTitle, images, loading, updateImages } = useProjectData(id, user?.id);
@@ -82,14 +84,17 @@ const ProjectDetail = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <ProjectToolbar 
-              searchTerm={searchTerm}
-              onSearchChange={handleSearch}
-              sortField={sortField}
-              sortDirection={sortDirection}
-              onSort={handleSort}
-              onToggleUploader={toggleUploader}
-            />
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
+              <ProjectToolbar 
+                searchTerm={searchTerm}
+                onSearchChange={handleSearch}
+                sortField={sortField}
+                sortDirection={sortDirection}
+                onSort={handleSort}
+                onToggleUploader={toggleUploader}
+              />
+              <ProjectViewOptions viewMode={viewMode} setViewMode={setViewMode} />
+            </div>
           </motion.div>
         )}
         
@@ -118,6 +123,7 @@ const ProjectDetail = () => {
             images={filteredImages}
             onDelete={handleDeleteImage}
             onOpen={handleOpenSegmentationEditor}
+            viewMode={viewMode}
           />
         )}
       </div>

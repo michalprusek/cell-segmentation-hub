@@ -28,6 +28,8 @@ const UploaderOptions = ({
   useEffect(() => {
     if (projectId) {
       setShowInfoBar(false);
+    } else {
+      setShowInfoBar(true);
     }
   }, [projectId]);
 
@@ -51,7 +53,9 @@ const UploaderOptions = ({
           
           <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
             <h3 className="text-lg font-semibold mb-3 dark:text-white">{t('projects.projectSelection')}</h3>
-            <ProjectSelector value={projectId} onChange={onProjectChange} />
+            <ProjectSelector value={projectId} onChange={(value) => {
+              onProjectChange(value);
+            }} />
           </div>
         </>
       )}

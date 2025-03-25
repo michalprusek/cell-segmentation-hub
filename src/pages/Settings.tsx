@@ -12,6 +12,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import DashboardHeader from '@/components/DashboardHeader';
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -55,6 +56,7 @@ const Settings = () => {
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
+      <DashboardHeader />
       <div className="container mx-auto px-4 py-8">
         <div className="mb-6 flex items-center">
           <Button
@@ -70,13 +72,19 @@ const Settings = () => {
         </div>
         
         {!loading && (
-          <Tabs defaultValue="account" className="w-full">
+          <Tabs defaultValue="profile" className="w-full">
             <TabsList className="mb-8 grid w-full grid-cols-4">
+              <TabsTrigger value="profile">{t('settings.profile')}</TabsTrigger>
               <TabsTrigger value="account">{t('settings.account')}</TabsTrigger>
               <TabsTrigger value="appearance">{t('settings.appearance')}</TabsTrigger>
-              <TabsTrigger value="profile">{t('settings.profile')}</TabsTrigger>
               <TabsTrigger value="notifications">{t('settings.notifications')}</TabsTrigger>
             </TabsList>
+            
+            <TabsContent value="profile">
+              {user && profile && (
+                <UserProfileSection userId={user.id} profile={profile} />
+              )}
+            </TabsContent>
             
             <TabsContent value="account">
               <AccountSection />
@@ -84,12 +92,6 @@ const Settings = () => {
             
             <TabsContent value="appearance">
               <AppearanceSection />
-            </TabsContent>
-            
-            <TabsContent value="profile">
-              {user && profile && (
-                <UserProfileSection userId={user.id} profile={profile} />
-              )}
             </TabsContent>
             
             <TabsContent value="notifications">

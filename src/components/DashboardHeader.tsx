@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { 
   Bell, 
   Settings as SettingsIcon, 
@@ -26,6 +26,10 @@ const DashboardHeader = () => {
   const [hasNotifications, setHasNotifications] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Skrýt header v segmentačním editoru
+  const isSegmentationEditor = location.pathname.includes('/segmentation/');
 
   useEffect(() => {
     // This would be where you'd check for actual notifications
@@ -40,6 +44,10 @@ const DashboardHeader = () => {
       console.error("Error signing out:", error);
     }
   };
+
+  if (isSegmentationEditor) {
+    return null;
+  }
 
   return (
     <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -59,7 +67,16 @@ const DashboardHeader = () => {
         <div className="hidden md:flex items-center space-x-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="relative dark:text-gray-300">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative dark:text-gray-300"
+                onClick={() => {
+                  if (location.pathname !== "/settings") {
+                    navigate("/settings?tab=notifications");
+                  }
+                }}
+              >
                 <Bell className="h-5 w-5" />
                 {hasNotifications && (
                   <span className="absolute top-0 right-0 h-2 w-2 rounded-full bg-red-500"></span>
@@ -70,6 +87,14 @@ const DashboardHeader = () => {
               <div className="p-4 text-center">
                 <h3 className="font-medium">Notifications</h3>
                 <p className="text-sm text-gray-500 mt-1">You have no new notifications</p>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  className="mt-3 w-full"
+                  onClick={() => navigate("/settings?tab=notifications")}
+                >
+                  View all notifications
+                </Button>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -143,6 +168,19 @@ const DashboardHeader = () => {
                 >
                   <SettingsIcon className="h-5 w-5 mr-3 text-gray-500" />
                   <span>Settings</span>
+                </button>
+                <button 
+                  className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    navigate("/settings?tab=notifications");
+                  }}
+                >
+                  <Bell className="h-5 w-5 mr-3 text-gray-500" />
+                  <span>Notifications</span>
+                  {hasNotifications && (
+                    <span className="ml-2 h-2 w-2 rounded-full bg-red-500"></span>
+                  )}
                 </button>
                 <div className="border-t my-2 dark:border-gray-700"></div>
                 <button 
