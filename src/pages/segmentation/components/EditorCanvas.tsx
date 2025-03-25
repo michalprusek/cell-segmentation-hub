@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { SegmentationResult } from '@/lib/segmentation';
-import { DragState, VertexDragState } from '../types';
+import { DragState, VertexDragState, TempPointsState } from '../types';
 import CanvasLoadingOverlay from './canvas/CanvasLoadingOverlay';
 import CanvasImage from './canvas/CanvasImage';
 import CanvasPolygonLayer from './canvas/CanvasPolygonLayer';
@@ -23,6 +23,8 @@ interface EditorCanvasProps {
   dragState: React.MutableRefObject<DragState>;
   vertexDragState: React.MutableRefObject<VertexDragState>;
   containerRef: React.MutableRefObject<HTMLDivElement | null>;
+  editMode: boolean;
+  tempPoints: TempPointsState;
 }
 
 const EditorCanvas = ({
@@ -38,7 +40,9 @@ const EditorCanvas = ({
   onMouseUp,
   dragState,
   vertexDragState,
-  containerRef
+  containerRef,
+  editMode,
+  tempPoints
 }: EditorCanvasProps) => {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const { theme } = useTheme();
@@ -62,6 +66,7 @@ const EditorCanvas = ({
 
   // Správné nastavení cursoru podle stavu
   const getCursorStyle = () => {
+    if (editMode) return 'crosshair';
     if (vertexDragState.current.isDragging) return 'grabbing';
     if (dragState.current.isDragging) return 'grabbing';
     if (hoveredVertex.polygonId !== null) return 'grab';
@@ -75,7 +80,9 @@ const EditorCanvas = ({
         theme === 'dark' 
           ? 'bg-[#161616] bg-opacity-90 bg-[radial-gradient(#1a1f2c_1px,transparent_1px)]' 
           : 'bg-gray-100 bg-opacity-80 bg-[radial-gradient(#d1d5db_1px,transparent_1px)]'
-      } bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)]`}
+      } bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)] ${
+        editMode ? 'border-2 border-red-500' : ''
+      }`}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -122,6 +129,8 @@ const EditorCanvas = ({
                   hoveredVertex={hoveredVertex}
                   vertexDragState={vertexDragState}
                   zoom={zoom}
+                  editMode={editMode}
+                  tempPoints={tempPoints}
                 />
               )}
             </div>
@@ -131,6 +140,13 @@ const EditorCanvas = ({
       
       {/* Informace o zoomu */}
       <CanvasZoomInfo zoom={zoom} />
+      
+      {/* Edit mode indicator */}
+      {editMode && (
+        <div className="absolute bottom-4 left-4 bg-red-600 text-white px-3 py-1 rounded-md text-sm font-semibold shadow-lg">
+          Edit Mode - Click to add points
+        </div>
+      )}
     </div>
   );
 };

@@ -5,7 +5,8 @@ import {
   ZoomIn, 
   ZoomOut, 
   Home,
-  Save
+  Save,
+  Edit
 } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
 import {
@@ -23,6 +24,8 @@ interface EditorToolbarProps {
   onZoomOut: () => void;
   onResetView: () => void;
   onSave: () => Promise<void>;
+  editMode: boolean;
+  onToggleEditMode: () => void;
 }
 
 const EditorToolbar = ({
@@ -30,7 +33,9 @@ const EditorToolbar = ({
   onZoomIn,
   onZoomOut,
   onResetView,
-  onSave
+  onSave,
+  editMode,
+  onToggleEditMode
 }: EditorToolbarProps) => {
   const { t } = useLanguage();
   
@@ -95,6 +100,26 @@ const EditorToolbar = ({
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
             <span>{t('tools.resetView')} (Shortcut: R)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      
+      <Separator className="bg-slate-700 my-1" />
+
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant={editMode ? "default" : "ghost"}
+              size="icon" 
+              className={`h-9 w-9 ${editMode ? 'bg-red-600 text-white hover:bg-red-700' : 'text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90'}`}
+              onClick={onToggleEditMode}
+            >
+              <Edit className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>{editMode ? "Exit Edit Mode" : "Enter Edit Mode"} (Shortcut: E)</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

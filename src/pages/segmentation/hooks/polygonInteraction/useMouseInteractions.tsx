@@ -30,7 +30,9 @@ export const useMouseInteractions = (
     polygonId: string | null;
     vertexIndex: number | null;
   }>,
-  hoveredVertex: { polygonId: string | null, vertexIndex: number | null }
+  hoveredVertex: { polygonId: string | null, vertexIndex: number | null },
+  editMode: boolean,
+  handleEditModeClick: (x: number, y: number) => void
 ) => {
   const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
   
@@ -96,6 +98,12 @@ export const useMouseInteractions = (
     
     console.log(`handleMouseDown: Mouse down at client: (${e.clientX}, ${e.clientY}), Image space: (${x.toFixed(2)}, ${y.toFixed(2)})`);
     
+    // If in edit mode, handle differently
+    if (editMode) {
+      handleEditModeClick(x, y);
+      return;
+    }
+    
     // Nejdřív zkontrolujeme, jestli jsme klikli na vertex
     if (handleVertexClick(e.clientX, e.clientY, containerElement)) {
       console.log("Clicked on vertex");
@@ -119,7 +127,9 @@ export const useMouseInteractions = (
     handleVertexClick, 
     trySelectPolygon, 
     setSelectedPolygonId, 
-    startCanvasDrag
+    startCanvasDrag,
+    editMode,
+    handleEditModeClick
   ]);
 
   /**

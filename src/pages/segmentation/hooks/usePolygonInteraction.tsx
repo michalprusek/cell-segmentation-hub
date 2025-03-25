@@ -3,6 +3,7 @@ import { usePolygonDetection } from './polygonInteraction/usePolygonDetection';
 import { usePolygonState } from './polygonInteraction/usePolygonState';
 import { usePolygonModification } from './polygonInteraction/usePolygonModification';
 import { usePolygonEventHandlers } from './polygonInteraction/usePolygonEventHandlers';
+import { usePolygonEditMode } from './polygonInteraction/usePolygonEditMode';
 import { SegmentationResult } from '@/lib/segmentation';
 
 /**
@@ -21,6 +22,10 @@ export const usePolygonInteraction = (
     setSelectedPolygonId,
     hoveredVertex,
     setHoveredVertex,
+    editMode,
+    setEditMode,
+    tempPoints,
+    setTempPoints,
     dragState,
     vertexDragState
   } = usePolygonState();
@@ -34,6 +39,16 @@ export const usePolygonInteraction = (
     setSegmentation,
     selectedPolygonId,
     setSelectedPolygonId
+  );
+  
+  // Metody pro režim úprav polygonu
+  const { 
+    toggleEditMode,
+    handleEditModeClick
+  } = usePolygonEditMode(
+    segmentation,
+    setSegmentation,
+    selectedPolygonId
   );
   
   // Event handlery pro práci s polygony
@@ -52,7 +67,9 @@ export const usePolygonInteraction = (
     hoveredVertex,
     setHoveredVertex,
     dragState,
-    vertexDragState
+    vertexDragState,
+    editMode,
+    handleEditModeClick
   );
   
   return {
@@ -60,11 +77,14 @@ export const usePolygonInteraction = (
     hoveredVertex,
     dragState,
     vertexDragState,
+    tempPoints,
+    editMode,
     setSelectedPolygonId,
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
     handleDeletePolygon,
-    isPointInPolygon
+    isPointInPolygon,
+    toggleEditMode
   };
 };

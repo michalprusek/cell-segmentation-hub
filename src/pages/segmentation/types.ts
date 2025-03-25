@@ -25,6 +25,13 @@ export interface VertexDragState {
   vertexIndex: number | null;
 }
 
+export interface TempPointsState {
+  points: Array<{x: number, y: number}>;
+  startIndex: number | null;
+  endIndex: number | null;
+  polygonId: string | null;
+}
+
 export interface EditorState {
   segmentation: SegmentationResult | null;
   selectedPolygonId: string | null;
@@ -35,6 +42,8 @@ export interface EditorState {
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
   isDragging: boolean;
   isMovingVertex: boolean;
+  editMode: boolean;
+  tempPoints: TempPointsState;
 }
 
 export interface EditorActions {
@@ -51,4 +60,6 @@ export interface EditorActions {
   moveVertex: (polygonId: string, vertexIndex: number, newPosition: Point) => void;
   addVertexToPolygon: (polygonId: string, position: Point, afterIndex: number) => void;
   removeVertexFromPolygon: (polygonId: string, vertexIndex: number) => void;
+  toggleEditMode: () => void;
+  handleEditModeClick: (x: number, y: number) => void;
 }

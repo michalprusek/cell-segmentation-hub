@@ -1,6 +1,6 @@
 
 import { useState, useRef } from 'react';
-import { DragState, VertexDragState } from '@/pages/segmentation/types';
+import { DragState, VertexDragState, TempPointsState } from '@/pages/segmentation/types';
 
 /**
  * Hook pro správu stavu polygonu v segmentačním editoru
@@ -10,6 +10,14 @@ export const usePolygonState = () => {
   const [hoveredVertex, setHoveredVertex] = useState<{ polygonId: string | null, vertexIndex: number | null }>({
     polygonId: null,
     vertexIndex: null
+  });
+  
+  const [editMode, setEditMode] = useState<boolean>(false);
+  const [tempPoints, setTempPoints] = useState<TempPointsState>({
+    points: [],
+    startIndex: null,
+    endIndex: null,
+    polygonId: null
   });
   
   const dragState = useRef<DragState>({
@@ -31,6 +39,10 @@ export const usePolygonState = () => {
     setSelectedPolygonId,
     hoveredVertex,
     setHoveredVertex,
+    editMode,
+    setEditMode,
+    tempPoints,
+    setTempPoints,
     dragState,
     vertexDragState
   };

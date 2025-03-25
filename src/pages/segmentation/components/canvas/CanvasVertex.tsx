@@ -1,6 +1,5 @@
 
 import React from 'react';
-import { cn } from '@/lib/utils';
 import { Point } from '@/lib/segmentation';
 
 interface CanvasVertexProps {
@@ -44,6 +43,7 @@ const CanvasVertex = ({
           className={isDragging ? "" : "animate-pulse"}
           style={{ transformOrigin: 'center center', animationDuration: '1.5s' }}
           shapeRendering="geometricPrecision"
+          vectorEffect="non-scaling-stroke"
         />
       )}
       
@@ -71,6 +71,7 @@ const CanvasVertex = ({
           transformOrigin: 'center center'
         }}
         shapeRendering="geometricPrecision"
+        vectorEffect="non-scaling-stroke"
       />
     </g>
   );

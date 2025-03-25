@@ -15,6 +15,8 @@ interface CanvasPolygonLayerProps {
     vertexIndex: number | null;
   }>;
   zoom: number;
+  editMode: boolean;
+  tempPoints: { points: Array<{x: number, y: number}>, startIndex: number | null, endIndex: number | null, polygonId: string | null };
 }
 
 const CanvasPolygonLayer = ({ 
@@ -23,7 +25,9 @@ const CanvasPolygonLayer = ({
   selectedPolygonId, 
   hoveredVertex, 
   vertexDragState,
-  zoom 
+  zoom,
+  editMode,
+  tempPoints
 }: CanvasPolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
   
@@ -35,6 +39,7 @@ const CanvasPolygonLayer = ({
       style={{ maxWidth: "none" }}
       shapeRendering="geometricPrecision"
       vectorEffect="non-scaling-stroke"
+      xmlns="http://www.w3.org/2000/svg"
     >
       <CanvasSvgFilters />
       
@@ -49,6 +54,48 @@ const CanvasPolygonLayer = ({
           zoom={zoom}
         />
       ))}
+
+      {/* Temporary editing path */}
+      {editMode && tempPoints.points.length > 0 && (
+        <>
+          <polyline
+            points={tempPoints.points.map(p => `${p.x},${p.y}`).join(' ')}
+            fill="none"
+            stroke="#FF3B30"
+            strokeWidth={2/zoom}
+            strokeDasharray={`${4/zoom},${4/zoom}`}
+            shapeRendering="geometricPrecision"
+          />
+          {tempPoints.points.map((point, index) => (
+            <circle
+              key={`temp-point-${index}`}
+              cx={point.x}
+              cy={point.y}
+              r={5/zoom}
+              fill={index === 0 ? "#FF3B30" : "#FFFFFF"}
+              stroke="#FF3B30"
+              strokeWidth={1.5/zoom}
+              shapeRendering="geometricPrecision"
+            />
+          ))}
+        </>
+      )}
+
+      {/* Edit mode indicator */}
+      {editMode && (
+        <rect
+          x={0}
+          y={0}
+          width={imageSize.width}
+          height={imageSize.height}
+          fill="none"
+          stroke="#FF3B30"
+          strokeWidth={3/zoom}
+          strokeDasharray={`${8/zoom},${8/zoom}`}
+          pointerEvents="none"
+          shapeRendering="geometricPrecision"
+        />
+      )}
     </svg>
   );
 };

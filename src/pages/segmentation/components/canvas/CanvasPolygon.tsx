@@ -41,6 +41,7 @@ const CanvasPolygon = ({
         )}
         pointerEvents="all"
         shapeRendering="geometricPrecision"
+        vectorEffect="non-scaling-stroke"
       />
       
       {/* Body (vertexy) */}

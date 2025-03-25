@@ -34,11 +34,21 @@ export const useSegmentationEditor = (
     core.setSegmentation
   );
   
+  // Keyboard event handler
+  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+      polygonInteraction.handleDeletePolygon();
+    } else if (e.key === 'e' || e.key === 'E') {
+      polygonInteraction.toggleEditMode();
+    }
+  }, [polygonInteraction]);
+  
   // Kombinace všech stavů a funkcí z dílčích hooků
   return {
     ...core,
     ...view,
     ...polygonInteraction,
-    ...historyManagement
+    ...historyManagement,
+    handleKeyDown
   };
 };

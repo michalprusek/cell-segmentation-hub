@@ -35,6 +35,8 @@ const SegmentationEditor = () => {
     historyIndex,
     dragState,
     vertexDragState,
+    tempPoints,
+    editMode,
     canvasContainerRef,
     setSelectedPolygonId,
     handleMouseDown,
@@ -48,7 +50,23 @@ const SegmentationEditor = () => {
     handleResetView,
     handleSave,
     navigateToImage,
+    toggleEditMode,
   } = useSegmentationEditor(projectId, imageId, user?.id);
+
+  // Add keyboard shortcuts for edit mode
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Edit mode toggle with 'e' key
+      if (e.key === 'e' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        toggleEditMode();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [toggleEditMode]);
 
   return (
     <motion.div 
@@ -78,6 +96,8 @@ const SegmentationEditor = () => {
           onZoomOut={handleZoomOut}
           onResetView={handleResetView}
           onSave={handleSave}
+          editMode={editMode}
+          onToggleEditMode={toggleEditMode}
         />
         
         {/* Right sidebar */}
@@ -104,6 +124,8 @@ const SegmentationEditor = () => {
             dragState={dragState}
             vertexDragState={vertexDragState}
             containerRef={canvasContainerRef}
+            editMode={editMode}
+            tempPoints={tempPoints}
           />
         </div>
         
