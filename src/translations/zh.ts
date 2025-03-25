@@ -54,7 +54,8 @@ export default {
     privacyPolicy: '隐私政策',
     accessRequest: '访问请求',
     createAccount: '创建账户',
-    signInToAccount: '登录您的账户'
+    signInToAccount: '登录您的账户',
+    sort: '排序'
   },
   dashboard: {
     manageProjects: '管理您的研究项目和分析',
@@ -119,7 +120,7 @@ export default {
     systemDefault: '系统默认',
     languageSettings: '语言设置',
     selectLanguage: '选择语言',
-    accountSettings: '账户设置',
+    accountSettings: '账户设��',
     notificationSettings: '通知设置',
     emailNotifications: '邮件通知',
     pushNotifications: '推送通知',

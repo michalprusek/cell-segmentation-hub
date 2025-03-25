@@ -16,11 +16,12 @@ const ProjectViewOptions = ({ viewMode, setViewMode }: ProjectViewOptionsProps) 
       onValueChange={(value) => {
         if (value) setViewMode(value as "grid" | "list");
       }}
+      className="h-9"
     >
-      <ToggleGroupItem value="grid" aria-label="Grid view">
+      <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9">
         <Grid2X2 className="h-4 w-4" />
       </ToggleGroupItem>
-      <ToggleGroupItem value="list" aria-label="List view">
+      <ToggleGroupItem value="list" aria-label="List view" className="h-9">
         <ListIcon className="h-4 w-4" />
       </ToggleGroupItem>
     </ToggleGroup>

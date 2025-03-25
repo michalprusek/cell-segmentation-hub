@@ -54,7 +54,8 @@ export default {
     privacyPolicy: 'Datenschutzrichtlinie',
     accessRequest: 'Zugriffsanfrage',
     createAccount: 'Konto erstellen',
-    signInToAccount: 'Bei Ihrem Konto anmelden'
+    signInToAccount: 'Bei Ihrem Konto anmelden',
+    sort: 'Sortieren'
   },
   dashboard: {
     manageProjects: 'Verwalten Sie Ihre Forschungsprojekte und Analysen',

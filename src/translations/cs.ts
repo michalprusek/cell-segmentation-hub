@@ -1,4 +1,3 @@
-
 export default {
   common: {
     appName: 'Segmentace Sféroidů',
@@ -57,7 +56,8 @@ export default {
     createAccount: 'Vytvořit účet',
     signInToAccount: 'Přihlaste se ke svému účtu',
     yes: 'Ano',
-    no: 'Ne'
+    no: 'Ne',
+    sort: 'Seřadit'
   },
   dashboard: {
     manageProjects: 'Spravujte své výzkumné projekty a analýzy',

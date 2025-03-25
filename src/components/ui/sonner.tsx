@@ -4,11 +4,13 @@ import { Toaster as Sonner } from "sonner"
 import { X } from "lucide-react" 
 import { toast } from "sonner"
 import { Button } from "./button"
+import { useLanguage } from '@/contexts/LanguageContext';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { theme = "system" } = useTheme()
+  const { t } = useLanguage();
 
   const handleCloseAll = () => {
     toast.dismiss();
@@ -43,7 +45,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         onClick={handleCloseAll}
       >
         <X className="h-4 w-4 mr-2" />
-        Close All
+        {t('common.cancel')}
       </Button>
     </>
   )

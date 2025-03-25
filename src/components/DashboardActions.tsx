@@ -31,7 +31,7 @@ const DashboardActions = ({
   const { t } = useLanguage();
 
   return (
-    <div className="flex items-center space-x-2">
+    <div className="flex items-center space-x-2 h-9">
       {onSort && sortOptions.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -56,11 +56,11 @@ const DashboardActions = ({
       
       <ToggleGroup type="single" value={viewMode} onValueChange={(value) => {
         if (value) setViewMode(value as "grid" | "list");
-      }}>
-        <ToggleGroupItem value="grid" aria-label="Grid view">
+      }} className="h-9">
+        <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9">
           <Grid2X2 className="h-4 w-4" />
         </ToggleGroupItem>
-        <ToggleGroupItem value="list" aria-label="List view">
+        <ToggleGroupItem value="list" aria-label="List view" className="h-9">
           <ListIcon className="h-4 w-4" />
         </ToggleGroupItem>
       </ToggleGroup>

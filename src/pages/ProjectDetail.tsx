@@ -13,7 +13,6 @@ import { useProjectData } from "@/hooks/useProjectData";
 import { useImageFilter } from "@/hooks/useImageFilter";
 import { useProjectImageActions } from "@/components/project/ProjectImageActions";
 import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
 import ProjectViewOptions from "@/components/project/ProjectViewOptions";
 
 const ProjectDetail = () => {
@@ -84,16 +83,20 @@ const ProjectDetail = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
-              <ProjectToolbar 
-                searchTerm={searchTerm}
-                onSearchChange={handleSearch}
-                sortField={sortField}
-                sortDirection={sortDirection}
-                onSort={handleSort}
-                onToggleUploader={toggleUploader}
-              />
-              <ProjectViewOptions viewMode={viewMode} setViewMode={setViewMode} />
+            <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 space-y-4 md:space-y-0">
+              <div className="flex-1">
+                <ProjectToolbar 
+                  searchTerm={searchTerm}
+                  onSearchChange={handleSearch}
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  onSort={handleSort}
+                  onToggleUploader={toggleUploader}
+                />
+              </div>
+              <div className="flex justify-end items-center h-9 md:ml-2">
+                <ProjectViewOptions viewMode={viewMode} setViewMode={setViewMode} />
+              </div>
             </div>
           </motion.div>
         )}

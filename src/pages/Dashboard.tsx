@@ -13,6 +13,7 @@ import ImageUploader from "@/components/ImageUploader";
 import NewProject from "@/components/NewProject";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -23,6 +24,7 @@ const Dashboard = () => {
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useLanguage();
   
   useEffect(() => {
     if (user) {
@@ -136,9 +138,9 @@ const Dashboard = () => {
   };
 
   const sortOptions = [
-    { field: "title", label: "Name (A-Z)" },
-    { field: "updated_at", label: "Last Updated" },
-    { field: "created_at", label: "Date Created" }
+    { field: "title", label: t('dashboard.name') },
+    { field: "updated_at", label: t('dashboard.lastChange') },
+    { field: "created_at", label: t('common.date') }
   ];
 
   if (fetchError) {
@@ -148,7 +150,7 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 py-8">
           <div className="bg-white p-6 rounded-lg border border-red-200 text-center">
             <p className="text-red-500 mb-4">{fetchError}</p>
-            <Button onClick={fetchProjects}>Try Again</Button>
+            <Button onClick={fetchProjects}>{t('common.tryAgain')}</Button>
           </div>
         </div>
       </div>
@@ -162,12 +164,10 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl font-bold mb-1">Dashboard</h1>
-            <p className="text-gray-500">Manage your research projects and analyses</p>
+            <h1 className="text-2xl font-bold mb-1">{t('common.dashboard')}</h1>
+            <p className="text-gray-500">{t('dashboard.manageProjects')}</p>
           </div>
-          <div className="mt-4 md:mt-0">
-            <NewProject onProjectCreated={handleProjectCreated} />
-          </div>
+          {/* Odstraněno tlačítko New Project - nyní je projekt karta s + */}
         </div>
         
         <div className="mb-8 animate-fade-in">
@@ -177,9 +177,9 @@ const Dashboard = () => {
         <Tabs defaultValue="projects" className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
             <TabsList className="mb-4 sm:mb-0">
-              <TabsTrigger value="projects">Projects</TabsTrigger>
-              <TabsTrigger value="upload">Upload Images</TabsTrigger>
-              <TabsTrigger value="recent">Recent Analyses</TabsTrigger>
+              <TabsTrigger value="projects">{t('common.projects')}</TabsTrigger>
+              <TabsTrigger value="upload">{t('common.uploadImages')}</TabsTrigger>
+              <TabsTrigger value="recent">{t('common.recentAnalyses')}</TabsTrigger>
             </TabsList>
             
             <DashboardActions 
@@ -196,6 +196,7 @@ const Dashboard = () => {
               viewMode={viewMode} 
               onOpenProject={handleOpenProject}
               loading={loading}
+              showCreateCard={true}
             />
           </TabsContent>
           
@@ -208,11 +209,11 @@ const Dashboard = () => {
           <TabsContent value="recent" className="mt-0">
             <div className="bg-white p-6 rounded-lg border border-gray-200 text-center py-12">
               <div className="max-w-md mx-auto">
-                <h3 className="text-lg font-medium mb-2">No Recent Analyses</h3>
+                <h3 className="text-lg font-medium mb-2">{t('dashboard.noProjectsDescription')}</h3>
                 <p className="text-gray-500 mb-6">
-                  Your recently processed images and analyses will appear here.
+                  {t('dashboard.noImagesDescription')}
                 </p>
-                <Button>Upload Images to Analyze</Button>
+                <Button>{t('common.uploadImages')}</Button>
               </div>
             </div>
           </TabsContent>

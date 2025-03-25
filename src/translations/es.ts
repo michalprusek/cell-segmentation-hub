@@ -54,7 +54,8 @@ export default {
     privacyPolicy: 'Política de privacidad',
     accessRequest: 'Solicitud de acceso',
     createAccount: 'Crear cuenta',
-    signInToAccount: 'Iniciar sesión en tu cuenta'
+    signInToAccount: 'Iniciar sesión en tu cuenta',
+    sort: 'Ordenar'
   },
   dashboard: {
     manageProjects: 'Administra tus proyectos y análisis de investigación',

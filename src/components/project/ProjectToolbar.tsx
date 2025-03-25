@@ -37,7 +37,7 @@ const ProjectToolbar = ({
       </div>
       
       <div className="flex space-x-2">
-        <Button variant="outline" size="sm" className="flex items-center" onClick={onToggleUploader}>
+        <Button variant="outline" size="sm" className="flex items-center h-9" onClick={onToggleUploader}>
           <Upload className="mr-1 h-4 w-4" />
           {t('common.uploadImages')}
         </Button>
@@ -45,7 +45,7 @@ const ProjectToolbar = ({
           variant="outline"
           size="sm"
           onClick={() => onSort('name')}
-          className="flex items-center dark:text-gray-300 dark:border-gray-700"
+          className="flex items-center h-9 dark:text-gray-300 dark:border-gray-700"
         >
           {t('common.name')}
           {sortField === 'name' && (
@@ -57,7 +57,7 @@ const ProjectToolbar = ({
           variant="outline"
           size="sm"
           onClick={() => onSort('updatedAt')}
-          className="flex items-center dark:text-gray-300 dark:border-gray-700"
+          className="flex items-center h-9 dark:text-gray-300 dark:border-gray-700"
         >
           {t('dashboard.lastChange')}
           {sortField === 'updatedAt' && (
@@ -69,7 +69,7 @@ const ProjectToolbar = ({
           variant="outline"
           size="sm"
           onClick={() => onSort('segmentationStatus')}
-          className="flex items-center dark:text-gray-300 dark:border-gray-700"
+          className="flex items-center h-9 dark:text-gray-300 dark:border-gray-700"
         >
           {t('common.status')}
           {sortField === 'segmentationStatus' && (

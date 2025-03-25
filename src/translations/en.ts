@@ -1,4 +1,3 @@
-
 export default {
   common: {
     appName: 'Spheroid Segmentation',
@@ -55,7 +54,8 @@ export default {
     privacyPolicy: 'Privacy Policy',
     accessRequest: 'Access Request',
     createAccount: 'Create Account',
-    signInToAccount: 'Sign in to your account'
+    signInToAccount: 'Sign in to your account',
+    sort: 'Sort'
   },
   dashboard: {
     manageProjects: 'Manage your research projects and analyses',
