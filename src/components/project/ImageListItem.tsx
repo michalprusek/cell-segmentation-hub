@@ -46,7 +46,7 @@ const ImageListItem = ({
 
   return (
     <motion.div 
-      className="flex items-center p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+      className="flex items-center p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer w-full"
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}

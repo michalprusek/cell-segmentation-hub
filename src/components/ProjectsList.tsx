@@ -75,7 +75,7 @@ const ProjectsList = ({
       : projectItems;
 
     return (
-      <div className="flex flex-col space-y-3 max-w-3xl mx-auto">
+      <div className="flex flex-col space-y-3 w-full">
         {allItems}
         {showCreateCard && (
           <NewProjectCard 

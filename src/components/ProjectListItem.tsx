@@ -34,7 +34,7 @@ const ProjectListItem = ({
 
   return (
     <Card 
-      className="overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700"
+      className="overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 w-full"
       onClick={handleCardClick}
     >
       <div className="flex items-center p-4">
@@ -47,7 +47,7 @@ const ProjectListItem = ({
         </div>
         
         <div className="flex-1 min-w-0">
-          <h3 className="text-base font-medium truncate dark:text-white">{title}</h3>
+          <h3 className="text-lg font-medium truncate dark:text-white">{title}</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 mt-1">{description}</p>
           <div className="flex items-center mt-1">
             <ProjectMetadata date={date} imageCount={imageCount} />
