@@ -73,6 +73,8 @@ const ImageUploader = () => {
         
         const uploadedImage = await uploadImage(file, selectedProjectId, userId, undefined, autoSegment);
         
+        console.log("Uploaded image data:", uploadedImage);
+        
         setFiles(prev => 
           prev.map(f => 
             f === file ? { 

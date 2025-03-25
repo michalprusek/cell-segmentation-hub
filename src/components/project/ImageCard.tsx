@@ -55,6 +55,12 @@ export const ImageCard = ({ image, onDelete, onOpen, className }: ImageCardProps
               alt={image.name || 'Image'} 
               className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
             />
+          ) : image.url ? (
+            <img 
+              src={image.url} 
+              alt={image.name || 'Image'} 
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700">
               <span className="text-gray-400 dark:text-gray-500">No preview</span>

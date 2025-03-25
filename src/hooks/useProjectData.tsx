@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
@@ -60,7 +61,8 @@ export const useProjectData = (projectId: string | undefined, userId: string | u
         const formattedImages: ProjectImage[] = (imagesData || []).map(img => ({
           id: img.id,
           name: img.name,
-          url: img.image_url || '/placeholder.svg',
+          url: img.image_url,
+          thumbnail_url: img.thumbnail_url,
           createdAt: new Date(img.created_at),
           updatedAt: new Date(img.updated_at),
           segmentationStatus: img.segmentation_status as 'pending' | 'processing' | 'completed' | 'failed',

@@ -17,7 +17,7 @@ const ProjectThumbnail = ({ projectId, fallbackSrc, imageCount }: ProjectThumbna
         try {
           const { data, error } = await supabase
             .from("images")
-            .select("image_url")
+            .select("image_url, thumbnail_url")
             .eq("project_id", projectId)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -25,7 +25,8 @@ const ProjectThumbnail = ({ projectId, fallbackSrc, imageCount }: ProjectThumbna
 
           if (error) throw error;
           if (data) {
-            setImageUrl(data.image_url);
+            // Use thumbnail if available, otherwise use full image
+            setImageUrl(data.thumbnail_url || data.image_url);
           }
         } catch (error) {
           console.error("Error fetching project thumbnail:", error);

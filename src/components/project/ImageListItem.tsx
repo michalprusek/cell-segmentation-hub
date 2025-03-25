@@ -44,6 +44,12 @@ export const ImageListItem = ({
             alt={image.name || 'Image'}
             className="h-full w-full object-cover"
           />
+        ) : image.url ? (
+          <img
+            src={image.url}
+            alt={image.name || 'Image'}
+            className="h-full w-full object-cover"
+          />
         ) : (
           <div className="h-full w-full flex items-center justify-center">
             <span className="text-xs text-gray-400">No Image</span>

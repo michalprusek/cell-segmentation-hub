@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -71,6 +72,9 @@ export const uploadImage = async (
     const { data: { publicUrl: thumbnailUrl } } = supabase.storage
       .from(bucket)
       .getPublicUrl(thumbnailPath);
+
+    console.log("Image URL:", publicUrl);
+    console.log("Thumbnail URL:", thumbnailUrl);
 
     // Insert the image record into the database with appropriate segmentation status
     const { data, error } = await supabase
