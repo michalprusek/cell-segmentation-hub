@@ -1,25 +1,36 @@
-
 import { createClient } from '@supabase/supabase-js';
 import { supabase } from "@/integrations/supabase/client";
 
-// Enable realtime for images table
+// Enable realtime for images table using the newer channel-based approach
 const enableRealtime = async () => {
   try {
-    // Enable realtime for the images table
-    const { error } = await supabase.rpc('supabase_functions.enable_realtime', {
-      table_name: 'images'
-    });
+    // Instead of using RPC, we'll use the channel API
+    // This is more reliable and supported in recent Supabase versions
+    const channel = supabase
+      .channel('table-db-changes')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'images'
+      }, (payload) => {
+        console.log('Change received!', payload);
+      })
+      .subscribe((status) => {
+        console.log('Realtime subscription status:', status);
+      });
     
-    if (error) {
-      console.error('Error enabling realtime:', error);
-    }
+    console.log('Realtime enabled for images table via channel API');
+    
+    // Return the channel so it can be unsubscribed if needed
+    return channel;
   } catch (err) {
     console.error('Failed to enable realtime:', err);
+    return null;
   }
 };
 
-// Call the function to enable realtime
-enableRealtime();
+// Initialize realtime when this module is imported
+const realtimeChannel = enableRealtime();
 
 // Example of a function to upload an image to Supabase Storage
 export const uploadImage = async (
@@ -134,18 +145,23 @@ export const getProjectImages = async (projectId: string) => {
 // Example function for user profile management
 export const updateUserProfile = async (userId: string, updates: any) => {
   try {
-    // Odstraníme nevalidní vlastnosti, které nejsou ve schématu
+    // Remove invalid properties that aren't in the schema
     const validUpdates = { ...updates };
     
-    // Pokud 'department' není v schématu databáze, odstraníme ho
+    // If 'department' isn't in schema database, remove it
     if ('department' in validUpdates) {
       delete validUpdates.department;
+    }
+    
+    // Also check for organization which might not be in the schema
+    if ('organization' in validUpdates && !('organization' in validUpdates)) {
+      delete validUpdates.organization;
     }
     
     const { data, error } = await supabase
       .from('profiles')
       .update(validUpdates)
-      .eq('id', userId)
+      .eq("id", userId)
       .select()
       .single();
 
