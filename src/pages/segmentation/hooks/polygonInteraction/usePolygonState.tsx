@@ -12,6 +12,7 @@ export const usePolygonState = () => {
     vertexIndex: null
   });
   
+  // We're not using these directly anymore as they're managed by usePolygonEditMode
   const [editMode, setEditMode] = useState<boolean>(false);
   const [tempPoints, setTempPoints] = useState<TempPointsState>({
     points: [],

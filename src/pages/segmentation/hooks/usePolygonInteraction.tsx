@@ -44,7 +44,9 @@ export const usePolygonInteraction = (
   // Metody pro režim úprav polygonu
   const { 
     toggleEditMode,
-    handleEditModeClick
+    handleEditModeClick,
+    tempPoints: editModeTempPoints,
+    editMode: editModeState
   } = usePolygonEditMode(
     segmentation,
     setSegmentation,
@@ -68,7 +70,7 @@ export const usePolygonInteraction = (
     setHoveredVertex,
     dragState,
     vertexDragState,
-    editMode,
+    editModeState,
     handleEditModeClick
   );
   
@@ -77,8 +79,8 @@ export const usePolygonInteraction = (
     hoveredVertex,
     dragState,
     vertexDragState,
-    tempPoints,
-    editMode,
+    tempPoints: editModeTempPoints,
+    editMode: editModeState,
     setSelectedPolygonId,
     handleMouseDown,
     handleMouseMove,
