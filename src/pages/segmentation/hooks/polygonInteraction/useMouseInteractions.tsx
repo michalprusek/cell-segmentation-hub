@@ -1,8 +1,11 @@
 
 import { useCallback } from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
-import { useVertexDetection } from './useVertexDetection';
-import { usePolygonDetection } from './usePolygonDetection';
+import { useCoordinateTransform } from './useCoordinateTransform';
+import { useVertexDrag } from './useVertexDrag';
+import { usePolygonSelection } from './usePolygonSelection';
+import { useCanvasDrag } from './useCanvasDrag';
+import { useVertexHover } from './useVertexHover';
 
 /**
  * Hook pro práci s mouse interakcemi
@@ -29,29 +32,23 @@ export const useMouseInteractions = (
   }>,
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null }
 ) => {
-  const { isNearVertex } = useVertexDetection(zoom);
-  const { isPointInPolygon } = usePolygonDetection();
-
-  /**
-   * Převod souřadnic myši na souřadnice v prostoru obrázku
-   * Bere v úvahu zoom a offset pro přesnou detekci
-   */
-  const getCanvasCoordinates = useCallback((
-    mouseX: number, 
-    mouseY: number, 
-    containerRect: DOMRect
-  ) => {
-    // Pozice myši relativně k plátnu
-    const canvasX = mouseX - containerRect.left;
-    const canvasY = mouseY - containerRect.top;
-    
-    // Převod na souřadnice v prostoru obrázku s ohledem na zoom a offset
-    // Musíme odečíst offset a vydělit zoomem, abychom získali souřadnice v původním prostoru obrázku
-    const x = (canvasX / zoom) - offset.x;
-    const y = (canvasY / zoom) - offset.y;
-    
-    return { canvasX, canvasY, x, y };
-  }, [zoom, offset]);
+  const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
+  
+  const { handleVertexDrag, handleVertexClick } = useVertexDrag(
+    zoom, offset, segmentation, setSegmentation, setSelectedPolygonId, vertexDragState
+  );
+  
+  const { trySelectPolygon } = usePolygonSelection(
+    segmentation, setSelectedPolygonId
+  );
+  
+  const { handleCanvasDrag, startCanvasDrag } = useCanvasDrag(
+    zoom, offset, setOffset, dragState
+  );
+  
+  const { detectVertexHover } = useVertexHover(
+    zoom, segmentation, hoveredVertex, setHoveredVertex
+  );
 
   /**
    * Zpracování pohybu myši
@@ -63,80 +60,28 @@ export const useMouseInteractions = (
     const rect = containerElement.getBoundingClientRect();
     const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
     
-    // Pokud jsme ve stavu tažení bodu polygonu
-    if (vertexDragState.current.isDragging) {
-      const polygonId = vertexDragState.current.polygonId;
-      const vertexIndex = vertexDragState.current.vertexIndex;
-      
-      if (polygonId !== null && vertexIndex !== null) {
-        // Aktualizace pozice bodu polygonu
-        setSegmentation({
-          ...segmentation,
-          polygons: segmentation.polygons.map(polygon => {
-            if (polygon.id === polygonId) {
-              const points = [...polygon.points];
-              points[vertexIndex] = { x, y };
-              return { ...polygon, points };
-            }
-            return polygon;
-          })
-        });
-        
-        // Aktualizujeme kurzor
-        containerElement.style.cursor = 'grabbing';
-        return;
-      }
-    }
-    
-    // Pokud přesouváme celý pohled
-    if (dragState.current.isDragging) {
-      const dx = e.clientX - dragState.current.lastX;
-      const dy = e.clientY - dragState.current.lastY;
-      
-      // Aktualizace last pozice pro plynulý pohyb
-      dragState.current.lastX = e.clientX;
-      dragState.current.lastY = e.clientY;
-      
-      setOffset({
-        x: offset.x + dx / zoom,
-        y: offset.y + dy / zoom
-      });
-      
-      containerElement.style.cursor = 'grabbing';
+    // Nejdřív kontrolujeme, jestli táhneme vertex
+    if (handleVertexDrag(e, containerElement)) {
       return;
     }
     
-    // Hledání bodu polygonu pod kurzorem pro hover efekt
-    let foundVertex = false;
-    
-    // Procházíme všechny polygony a jejich body
-    for (const polygon of segmentation.polygons) {
-      for (let i = 0; i < polygon.points.length; i++) {
-        const point = polygon.points[i];
-        
-        // Detekce bodu přímo v souřadnicích obrázku
-        if (isNearVertex(x, y, point)) {
-          setHoveredVertex({
-            polygonId: polygon.id,
-            vertexIndex: i
-          });
-          foundVertex = true;
-          containerElement.style.cursor = 'grab';
-          break;
-        }
-      }
-      if (foundVertex) break;
+    // Potom kontrolujeme, jestli táhneme celé plátno
+    if (handleCanvasDrag(e, containerElement)) {
+      return;
     }
     
-    if (!foundVertex) {
-      if (hoveredVertex.polygonId !== null || hoveredVertex.vertexIndex !== null) {
-        setHoveredVertex({ polygonId: null, vertexIndex: null });
-      }
-      
-      // Nastavení kurzoru podle stavu
+    // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
+    if (!detectVertexHover(x, y, containerElement)) {
+      // Pokud ne, nastavíme kurzor na výchozí
       containerElement.style.cursor = 'move';
     }
-  }, [zoom, offset, segmentation, hoveredVertex, setOffset, setSegmentation, setHoveredVertex, getCanvasCoordinates, isNearVertex]);
+  }, [
+    segmentation, 
+    getCanvasCoordinates, 
+    handleVertexDrag, 
+    handleCanvasDrag, 
+    detectVertexHover
+  ]);
 
   /**
    * Zpracování kliknutí myši
@@ -149,44 +94,30 @@ export const useMouseInteractions = (
     const rect = containerElement.getBoundingClientRect();
     const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
     
-    // Nejprve zkontrolujeme, zda jsme klikli na bod polygonu
-    for (const polygon of segmentation.polygons) {
-      for (let i = 0; i < polygon.points.length; i++) {
-        const point = polygon.points[i];
-        
-        if (isNearVertex(x, y, point)) {
-          // Nastavíme aktivní polygon a začneme tažení bodu
-          setSelectedPolygonId(polygon.id);
-          vertexDragState.current = {
-            isDragging: true,
-            polygonId: polygon.id,
-            vertexIndex: i
-          };
-          containerElement.style.cursor = 'grabbing';
-          return;
-        }
-      }
-      
-      // Pokud jsme neklikli na bod, zkontrolujeme, zda jsme klikli dovnitř polygonu
-      const isInside = isPointInPolygon(x, y, polygon.points);
-      if (isInside) {
-        setSelectedPolygonId(polygon.id);
-        return;
-      }
+    // Nejdřív zkontrolujeme, jestli jsme klikli na vertex
+    if (handleVertexClick(x, y)) {
+      containerElement.style.cursor = 'grabbing';
+      return;
     }
     
-    // Pokud jsme neklikli na polygon ani na bod, začneme přesouvat celý pohled
+    // Potom zkontrolujeme, jestli jsme klikli na polygon
+    if (trySelectPolygon(x, y)) {
+      return;
+    }
+    
+    // Pokud jsme neklikli na polygon ani vertex, začneme táhnout plátno
     setSelectedPolygonId(null);
-    dragState.current = {
-      isDragging: true,
-      startX: e.clientX,
-      startY: e.clientY,
-      lastX: e.clientX,
-      lastY: e.clientY
-    };
+    startCanvasDrag(e);
     
     containerElement.style.cursor = 'grabbing';
-  }, [zoom, offset, segmentation, setSelectedPolygonId, getCanvasCoordinates, isNearVertex, isPointInPolygon]);
+  }, [
+    segmentation, 
+    getCanvasCoordinates, 
+    handleVertexClick, 
+    trySelectPolygon, 
+    setSelectedPolygonId, 
+    startCanvasDrag
+  ]);
 
   /**
    * Zpracování uvolnění tlačítka myši

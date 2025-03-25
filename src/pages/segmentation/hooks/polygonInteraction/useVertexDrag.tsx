@@ -1,0 +1,96 @@
+
+import { useCallback } from 'react';
+import { SegmentationResult } from '@/lib/segmentation';
+import { useVertexDetection } from './useVertexDetection';
+import { useCoordinateTransform } from './useCoordinateTransform';
+
+/**
+ * Hook pro práci s přetahováním vertexů
+ */
+export const useVertexDrag = (
+  zoom: number,
+  offset: { x: number; y: number },
+  segmentation: SegmentationResult | null,
+  setSegmentation: (seg: SegmentationResult | null) => void,
+  setSelectedPolygonId: (id: string | null) => void,
+  vertexDragState: React.MutableRefObject<{
+    isDragging: boolean;
+    polygonId: string | null;
+    vertexIndex: number | null;
+  }>
+) => {
+  const { isNearVertex } = useVertexDetection(zoom);
+  const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
+
+  /**
+   * Zpracování pohybu při tažení vertexu
+   */
+  const handleVertexDrag = useCallback((
+    e: React.MouseEvent,
+    containerElement: HTMLElement
+  ): boolean => {
+    if (!vertexDragState.current.isDragging || !segmentation) return false;
+    
+    const polygonId = vertexDragState.current.polygonId;
+    const vertexIndex = vertexDragState.current.vertexIndex;
+    
+    if (polygonId !== null && vertexIndex !== null) {
+      const rect = containerElement.getBoundingClientRect();
+      const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
+      
+      // Aktualizace pozice bodu polygonu
+      setSegmentation({
+        ...segmentation,
+        polygons: segmentation.polygons.map(polygon => {
+          if (polygon.id === polygonId) {
+            const points = [...polygon.points];
+            points[vertexIndex] = { x, y };
+            return { ...polygon, points };
+          }
+          return polygon;
+        })
+      });
+      
+      // Aktualizujeme kurzor
+      containerElement.style.cursor = 'grabbing';
+      return true;
+    }
+    
+    return false;
+  }, [zoom, offset, segmentation, setSegmentation, getCanvasCoordinates]);
+
+  /**
+   * Zpracování kliknutí na vertex
+   */
+  const handleVertexClick = useCallback((
+    x: number,
+    y: number
+  ): boolean => {
+    if (!segmentation) return false;
+    
+    // Nejprve zkontrolujeme, zda jsme klikli na bod polygonu
+    for (const polygon of segmentation.polygons) {
+      for (let i = 0; i < polygon.points.length; i++) {
+        const point = polygon.points[i];
+        
+        if (isNearVertex(x, y, point)) {
+          // Nastavíme aktivní polygon a začneme tažení bodu
+          setSelectedPolygonId(polygon.id);
+          vertexDragState.current = {
+            isDragging: true,
+            polygonId: polygon.id,
+            vertexIndex: i
+          };
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }, [segmentation, setSelectedPolygonId, isNearVertex, vertexDragState]);
+
+  return {
+    handleVertexDrag,
+    handleVertexClick
+  };
+};
