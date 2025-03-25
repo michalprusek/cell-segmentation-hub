@@ -1,10 +1,11 @@
 
 import { useState, useCallback } from 'react';
-import { SegmentationResult, Point, Polygon } from '@/lib/segmentation';
+import { SegmentationResult, Point } from '@/lib/segmentation';
 import { useTempPoints } from './useTempPoints';
 import { usePathModification } from './usePathModification';
 import { toast } from 'sonner';
 import { v4 as uuidv4 } from 'uuid';
+import { PolygonData } from '@/types';
 
 /**
  * Hook for managing the edit mode of the polygon editor
@@ -81,11 +82,12 @@ export const useEditModeCore = (
           // Create new polygon
           if (!segmentation) return false;
           
-          const newPolygon: Polygon = {
+          // Ensure type is not optional when creating a new polygon
+          const newPolygon: PolygonData = {
             id: uuidv4(),
             points: [...points],
-            type: 'external', // Vždy používáme externí typ pro nový polygon
-            class: 'spheroid' // Výchozí třída
+            type: 'external', // Always use external type for new polygon
+            class: 'spheroid' // Default class
           };
           
           setSegmentation({

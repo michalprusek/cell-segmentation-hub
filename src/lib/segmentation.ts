@@ -13,7 +13,7 @@ export interface Point {
 export interface Polygon {
   id: string;
   points: Point[];
-  type?: 'external' | 'internal';
+  type: 'external' | 'internal'; // Changed from optional to required
   class?: string;
 }
 
