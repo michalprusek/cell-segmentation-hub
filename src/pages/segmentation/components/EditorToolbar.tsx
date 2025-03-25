@@ -7,7 +7,9 @@ import {
   Maximize2,
   Edit,
   Undo2,
-  Redo2
+  Redo2,
+  Scissors,
+  PlusCircle
 } from 'lucide-react';
 import { Separator } from "@/components/ui/separator";
 import {
@@ -26,7 +28,11 @@ interface EditorToolbarProps {
   onResetView: () => void;
   onSave: () => Promise<void>;
   editMode: boolean;
+  slicingMode: boolean;
+  pointAddingMode: boolean;
   onToggleEditMode: () => void;
+  onToggleSlicingMode: () => void;
+  onTogglePointAddingMode: () => void;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -40,7 +46,11 @@ const EditorToolbar = ({
   onResetView,
   onSave,
   editMode,
+  slicingMode,
+  pointAddingMode,
   onToggleEditMode,
+  onToggleSlicingMode,
+  onTogglePointAddingMode,
   onUndo,
   onRedo,
   canUndo,
@@ -121,7 +131,7 @@ const EditorToolbar = ({
             <Button 
               variant={editMode ? "default" : "ghost"}
               size="icon" 
-              className={`h-9 w-9 ${editMode ? 'bg-red-600 text-white hover:bg-red-700' : 'text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90'}`}
+              className={`h-9 w-9 ${editMode ? 'bg-purple-600 text-white hover:bg-purple-700' : 'text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90'}`}
               onClick={onToggleEditMode}
             >
               <Edit className="h-5 w-5" />
@@ -129,6 +139,42 @@ const EditorToolbar = ({
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
             <span>{editMode ? "Exit Edit Mode" : "Enter Edit Mode"} (Shortcut: E)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant={slicingMode ? "default" : "ghost"}
+              size="icon" 
+              className={`h-9 w-9 ${slicingMode ? 'bg-red-600 text-white hover:bg-red-700' : 'text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90'}`}
+              onClick={onToggleSlicingMode}
+            >
+              <Scissors className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>{slicingMode ? "Exit Slicing Mode" : "Enter Slicing Mode"} (Shortcut: S)</span>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button 
+              variant={pointAddingMode ? "default" : "ghost"}
+              size="icon" 
+              className={`h-9 w-9 ${pointAddingMode ? 'bg-green-600 text-white hover:bg-green-700' : 'text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90'}`}
+              onClick={onTogglePointAddingMode}
+            >
+              <PlusCircle className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="right" className="bg-slate-900 border-slate-700">
+            <span>{pointAddingMode ? "Exit Point Adding Mode" : "Enter Point Adding Mode"} (Shortcut: A)</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

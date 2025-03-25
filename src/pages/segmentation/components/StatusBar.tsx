@@ -5,9 +5,10 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 interface StatusBarProps {
   segmentation: SegmentationResult | null;
+  editMode?: string;
 }
 
-const StatusBar = ({ segmentation }: StatusBarProps) => {
+const StatusBar = ({ segmentation, editMode }: StatusBarProps) => {
   const { t } = useLanguage();
   
   if (!segmentation) return null;
@@ -39,6 +40,23 @@ const StatusBar = ({ segmentation }: StatusBarProps) => {
         <div className="flex items-center space-x-1">
           <span className="text-gray-400">{t('common.segmentation')} ID:</span>
           <span className="text-blue-400">seg-{segmentation.id.substring(0, 4)}</span>
+        </div>
+      )}
+      
+      {editMode && (
+        <div className="flex items-center space-x-1">
+          <span className="text-gray-400">{t('segmentation.mode')}:</span>
+          <span className={`${
+            editMode === "edit" ? "text-purple-500" : 
+            editMode === "slice" ? "text-red-500" : 
+            "text-green-500"
+          }`}>
+            {editMode === "edit" 
+              ? t('segmentation.modes.editMode') 
+              : editMode === "slice" 
+                ? t('segmentation.modes.slicingMode') 
+                : t('segmentation.modes.pointAddingMode')}
+          </span>
         </div>
       )}
     </div>
