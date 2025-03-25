@@ -29,7 +29,7 @@ export const useVertexDetection = (
     
     // Přizpůsobení poloměru detekce podle zoomu
     // Při menším zoomu potřebujeme relativně větší detekční poloměr
-    const adjustedRadius = detectionRadius / Math.max(0.5, zoom);
+    const adjustedRadius = detectionRadius / zoom;
     
     return distance <= adjustedRadius;
   }, [zoom]);

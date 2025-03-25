@@ -23,6 +23,9 @@ const CanvasPolygon = ({
 }: CanvasPolygonProps) => {
   const pointsString = points.map(p => `${p.x},${p.y}`).join(' ');
 
+  // Adjust stroke width based on zoom level for consistent visual appearance
+  const strokeWidth = isSelected ? 2/zoom : 1.5/zoom;
+
   return (
     <g key={id}>
       {/* Polygon s výplní */}
@@ -30,7 +33,7 @@ const CanvasPolygon = ({
         points={pointsString}
         fill={isSelected ? "rgba(255, 59, 48, 0.2)" : "rgba(0, 191, 255, 0.2)"}
         stroke={isSelected ? "#FF3B30" : "#00BFFF"}
-        strokeWidth={isSelected ? 2/Math.max(0.5, zoom) : 1.5/Math.max(0.5, zoom)}
+        strokeWidth={strokeWidth}
         strokeLinejoin="round"
         className={cn(
           "transition-colors duration-150",

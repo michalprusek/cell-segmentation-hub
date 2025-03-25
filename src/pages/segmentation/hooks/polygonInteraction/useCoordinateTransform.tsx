@@ -22,9 +22,9 @@ export const useCoordinateTransform = (
     const canvasY = mouseY - containerRect.top;
     
     // Převod na souřadnice v prostoru obrázku s ohledem na zoom a offset
-    // Zde byl problém - nesprávný výpočet s offsetem
-    const x = (canvasX / zoom) - (offset.x * zoom);
-    const y = (canvasY / zoom) - (offset.y * zoom);
+    // Opravený výpočet pro správné mapování pozice kurzoru na obrázek
+    const x = (canvasX / zoom) - offset.x;
+    const y = (canvasY / zoom) - offset.y;
     
     return { canvasX, canvasY, x, y };
   }, [zoom, offset]);

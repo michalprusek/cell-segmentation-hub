@@ -29,9 +29,8 @@ const CanvasVertex = ({
       radius = 7;
     }
     
-    // Přizpůsobit velikost zoomu, ale ne příliš
-    // Při větším zoomu jsou body menší v poměru k obrazu
-    return radius / (zoom > 1 ? Math.sqrt(zoom) : 1);
+    // Přizpůsobit velikost zoomu pro lepší viditelnost při různých úrovních zoomu
+    return radius / zoom;
   };
 
   const radius = getPointRadius();
@@ -68,7 +67,7 @@ const CanvasVertex = ({
         r={radius}
         fill={isSelected ? "#FF3B30" : "#FFFFFF"}
         stroke={isSelected ? "#FF3B30" : "#0077FF"}
-        strokeWidth={1.5 / Math.max(0.5, zoom)}
+        strokeWidth={1.5 / zoom}
         className={cn(
           "transition-transform duration-150",
           isHovered ? "scale-125" : ""

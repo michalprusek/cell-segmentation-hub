@@ -86,7 +86,7 @@ const EditorCanvas = ({
           >
             <div 
               style={{ 
-                transform: `scale(${zoom}) translate(${offset.x * zoom}px, ${offset.y * zoom}px)`,
+                transform: `scale(${zoom}) translate(${offset.x}px, ${offset.y}px)`,
                 transformOrigin: 'center center',
                 willChange: 'transform',
               }}
