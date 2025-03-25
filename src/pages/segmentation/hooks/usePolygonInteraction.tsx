@@ -5,6 +5,9 @@ import { usePolygonModification } from './polygonInteraction/usePolygonModificat
 import { usePolygonEventHandlers } from './polygonInteraction/usePolygonEventHandlers';
 import { usePolygonEditMode } from './polygonInteraction/usePolygonEditMode';
 import { SegmentationResult } from '@/lib/segmentation';
+import { usePointEditor } from './polygonInteraction/geometry/usePointEditor';
+import { useCallback } from 'react';
+import { toast } from 'sonner';
 
 /**
  * Hook pro práci s polygony v segmentačním editoru
@@ -28,6 +31,9 @@ export const usePolygonInteraction = (
   
   // Metody pro detekci bodů v polygonu
   const { isPointInPolygon } = usePolygonDetection();
+  
+  // Pokročilý editor bodů
+  const pointEditor = usePointEditor(segmentation, setSegmentation);
   
   // Metody pro modifikaci polygonů
   const { handleDeletePolygon } = usePolygonModification(
@@ -79,6 +85,26 @@ export const usePolygonInteraction = (
     handleEditMouseMove
   );
   
+  /**
+   * Zjednodušení polygonu - wrapper pro pointEditor.simplifyPolygon
+   */
+  const simplifySelectedPolygon = useCallback((tolerance: number = 1.0) => {
+    if (!selectedPolygonId) {
+      toast.error("Nejprve vyberte polygon");
+      return false;
+    }
+    
+    const success = pointEditor.simplifyPolygon(selectedPolygonId, tolerance);
+    
+    if (success) {
+      toast.success("Polygon byl úspěšně zjednodušen");
+    } else {
+      toast.error("Zjednodušení polygonu selhalo");
+    }
+    
+    return success;
+  }, [selectedPolygonId, pointEditor]);
+  
   return {
     selectedPolygonId,
     hoveredVertex,
@@ -99,6 +125,10 @@ export const usePolygonInteraction = (
     isPointInPolygon,
     toggleEditMode,
     toggleSlicingMode,
-    togglePointAddingMode
+    togglePointAddingMode,
+    simplifySelectedPolygon,
+    // Exportujeme potřebné funkce z pointEditor
+    addPointToPolygon: pointEditor.addPoint,
+    removePointFromPolygon: pointEditor.removePoint
   };
 };

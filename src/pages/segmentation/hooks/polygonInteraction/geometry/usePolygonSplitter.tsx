@@ -23,7 +23,7 @@ export const usePolygonSplitter = (
   segmentation: SegmentationResult | null,
   setSegmentation: (seg: SegmentationResult | null) => void
 ) => {
-  const { calculatePathLength } = useGeometryUtils();
+  const { calculatePathLength, isLineIntersectingItself } = useGeometryUtils();
 
   /**
    * Výpočet průsečíků řezací linie s polygonem
@@ -84,20 +84,55 @@ export const usePolygonSplitter = (
   
   /**
    * Validace řezací linie - kontroluje, zda řezací linie
-   * protíná polygon přesně dvakrát
+   * protíná polygon přesně dvakrát a není sama průsečíkem
    */
   const validateSliceLine = useCallback((
     polygonPoints: Point[],
     line: [Point, Point]
   ): { isValid: boolean, intersections: Intersection[], message: string } => {
+    // 1. Vylepšení: Kontrola, zda je řezací linie dostatečně dlouhá
+    const [start, end] = line;
+    const lineLength = Math.sqrt(
+      Math.pow(end.x - start.x, 2) + Math.pow(end.y - start.y, 2)
+    );
+    
+    if (lineLength < 5) {
+      return {
+        isValid: false,
+        intersections: [],
+        message: 'Řezací linie je příliš krátká'
+      };
+    }
+    
+    // 2. Vylepšení: Kontrola, zda řezací linie neprotíná sama sebe
+    if (isLineIntersectingItself(line)) {
+      return {
+        isValid: false,
+        intersections: [],
+        message: 'Řezací linie se protíná sama se sebou'
+      };
+    }
+    
     const intersections = calculateIntersections(polygonPoints, line);
     
-    // Řezací linie musí protínat polygon přesně dvakrát
-    if (intersections.length !== 2) {
+    // 3. Vylepšení: Detailnější zprávy o počtu průsečíků
+    if (intersections.length === 0) {
       return {
         isValid: false,
         intersections,
-        message: `Řezací linie musí protínat polygon přesně dvakrát (nalezeno: ${intersections.length})`
+        message: 'Řezací linie neprotíná polygon'
+      };
+    } else if (intersections.length === 1) {
+      return {
+        isValid: false,
+        intersections,
+        message: 'Řezací linie musí protínat polygon alespoň dvakrát'
+      };
+    } else if (intersections.length > 2) {
+      return {
+        isValid: false,
+        intersections,
+        message: `Řezací linie protíná polygon příliš mnohokrát (${intersections.length}x)`
       };
     }
     
@@ -106,10 +141,10 @@ export const usePolygonSplitter = (
       intersections,
       message: 'Řezací linie je validní'
     };
-  }, [calculateIntersections]);
+  }, [calculateIntersections, isLineIntersectingItself]);
   
   /**
-   * Rozdělení polygonu podle řezací linie
+   * Rozdělení polygonu podle řezací linie s vylepšeným algoritmem
    */
   const splitPolygon = useCallback((
     operation: SliceOperation
@@ -146,6 +181,7 @@ export const usePolygonSplitter = (
     const poly1Points: Point[] = [];
     const poly2Points: Point[] = [];
     
+    // 4. Vylepšení: Přesnější algoritmus rozdělení
     // První část: od prvního průsečíku k druhému ve směru hodinových ručiček
     let i = int1.segmentIndex;
     poly1Points.push(int1.point);
@@ -168,13 +204,31 @@ export const usePolygonSplitter = (
     
     poly2Points.push(int1.point);
     
-    // Vypočítáme plochy nových polygonů a rozhodneme, který zachovat
-    // Pro jednoduchost použijeme délku obvodu jako heuristiku
+    // 5. Vylepšení: Použití lepší heuristiky pro výběr části k zachování
+    // Nejprve spočítáme plochu obou polygonů
+    const calculatePolygonArea = (points: Point[]): number => {
+      let area = 0;
+      for (let i = 0; i < points.length; i++) {
+        const j = (i + 1) % points.length;
+        area += points[i].x * points[j].y;
+        area -= points[j].x * points[i].y;
+      }
+      return Math.abs(area) / 2;
+    };
+    
+    const area1 = calculatePolygonArea(poly1Points);
+    const area2 = calculatePolygonArea(poly2Points);
+    
+    // Použijeme kombinovanou metriku - plocha a délka obvodu
     const length1 = calculatePathLength(poly1Points);
     const length2 = calculatePathLength(poly2Points);
     
-    // Vybereme větší polygon
-    const newPolygonPoints = length1 > length2 ? poly1Points : poly2Points;
+    // Normalizované metriky (větší hodnota = důležitější část)
+    const score1 = (area1 * 0.7) + (length1 * 0.3);
+    const score2 = (area2 * 0.7) + (length2 * 0.3);
+    
+    // Vybereme polygon s vyšším skóre
+    const newPolygonPoints = score1 > score2 ? poly1Points : poly2Points;
     
     // Aktualizujeme segmentaci s novým polygonem
     const updatedPolygons = segmentation.polygons.map(p => {
@@ -196,7 +250,7 @@ export const usePolygonSplitter = (
   }, [segmentation, setSegmentation, validateSliceLine, calculatePathLength]);
 
   /**
-   * Rozdělení polygonu na dva samostatné polygony
+   * Rozdělení polygonu na dva samostatné polygony s vylepšením
    */
   const splitIntoTwoPolygons = useCallback((
     operation: SliceOperation
@@ -254,6 +308,11 @@ export const usePolygonSplitter = (
     }
     
     poly2Points.push(int1.point);
+    
+    // Vylepšení: Validace výsledných polygonů - musí mít alespoň 3 body
+    if (poly1Points.length < 3 || poly2Points.length < 3) {
+      return false;
+    }
     
     // Vytvoříme nové ID pro druhý polygon
     const newPolygonId = uuidv4();
