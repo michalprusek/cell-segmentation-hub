@@ -34,6 +34,21 @@ export const useCoordinateTransform = (
   }, [zoom, offset]);
 
   /**
+   * Převod souřadnic plátna na souřadnice v prostoru obrázku
+   * Používáno pro převod pozice myši na souřadnice bodu v obrázku
+   */
+  const getImageCoordinates = useCallback((
+    canvasX: number,
+    canvasY: number
+  ) => {
+    // Přesný výpočet pozice v prostoru obrázku
+    const imageX = (canvasX / zoom) - offset.x;
+    const imageY = (canvasY / zoom) - offset.y;
+    
+    return { x: imageX, y: imageY };
+  }, [zoom, offset]);
+
+  /**
    * Převod souřadnic obrázku na souřadnice plátna
    * Pro správné vykreslování elementů
    */
@@ -50,6 +65,7 @@ export const useCoordinateTransform = (
 
   return { 
     getCanvasCoordinates,
+    getImageCoordinates,
     getScreenCoordinates
   };
 };
