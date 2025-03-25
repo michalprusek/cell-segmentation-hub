@@ -56,11 +56,14 @@ export const usePolygonInteraction = (
     pointAddingMode,
     cursorPosition,
     sliceStartPoint,
-    hoveredSegment
+    hoveredSegment,
+    isShiftPressed
   } = usePolygonEditMode(
     segmentation,
     setSegmentation,
-    selectedPolygonId
+    selectedPolygonId,
+    zoom,
+    offset
   );
   
   // Event handlery pro práci s polygony
@@ -117,6 +120,7 @@ export const usePolygonInteraction = (
     cursorPosition,
     sliceStartPoint,
     hoveredSegment,
+    isShiftPressed,
     setSelectedPolygonId,
     handleMouseDown,
     handleMouseMove,

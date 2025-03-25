@@ -30,7 +30,7 @@ export const usePathModification = (
     const polygon = segmentation.polygons[polygonIndex];
     const points = [...polygon.points];
     
-    // Create two possible new polygons and calculate their areas
+    // Create two possible new polygons and calculate their perimeters
     
     // Path 1: Replace the clockwise path with new points
     const clockwisePolygon: Point[] = [];
@@ -68,12 +68,12 @@ export const usePathModification = (
       counterClockwisePolygon.push(points[i]);
     }
     
-    // Calculate areas to determine which polygon to keep (we want the larger area)
-    const clockwiseArea = calculatePolygonArea(clockwisePolygon);
-    const counterClockwiseArea = calculatePolygonArea(counterClockwisePolygon);
+    // Calculate perimeters to determine which polygon to keep (we want the larger perimeter)
+    const clockwisePerimeter = calculatePathLength(clockwisePolygon);
+    const counterClockwisePerimeter = calculatePathLength(counterClockwisePolygon);
     
-    // Choose the polygon with larger area (this is a change from original which used path length)
-    const resultPolygon = clockwiseArea >= counterClockwiseArea 
+    // Choose the polygon with larger perimeter (changed from area)
+    const resultPolygon = clockwisePerimeter >= counterClockwisePerimeter 
       ? clockwisePolygon 
       : counterClockwisePolygon;
     
@@ -93,7 +93,7 @@ export const usePathModification = (
     toast.success("Point sequence added successfully");
     
     return true;
-  }, [segmentation, setSegmentation, calculatePolygonArea]);
+  }, [segmentation, setSegmentation, calculatePathLength]);
 
   return {
     addPointsToPolygon

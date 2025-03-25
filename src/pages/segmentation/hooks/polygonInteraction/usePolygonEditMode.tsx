@@ -1,9 +1,10 @@
 
-import { SegmentationResult } from '@/lib/segmentation';
+import { SegmentationResult, Point } from '@/lib/segmentation';
 import { useEditModeCore } from './editMode/useEditModeCore';
 import { useSlicingMode } from './editMode/useSlicingMode';
 import { usePointAddingMode } from './editMode/usePointAddingMode';
-import { useCallback } from 'react';
+import { useCallback, useState, useEffect } from 'react';
+import { useGeometryUtils } from './editMode/useGeometryUtils';
 
 /**
  * Hook for managing polygon edit modes (adding/modifying vertices, slicing)
@@ -11,13 +12,17 @@ import { useCallback } from 'react';
 export const usePolygonEditMode = (
   segmentation: SegmentationResult | null,
   setSegmentation: (seg: SegmentationResult | null) => void,
-  selectedPolygonId: string | null
+  selectedPolygonId: string | null,
+  zoom: number = 1,
+  offset: { x: number; y: number } = { x: 0, y: 0 }
 ) => {
   // Základní režim editace (přidávání vrcholů do nového polygonu)
   const editModeCore = useEditModeCore(
     segmentation,
     setSegmentation,
-    selectedPolygonId
+    selectedPolygonId,
+    zoom,
+    offset
   );
   
   // Režim rozdělování polygonů (slicing)
@@ -33,6 +38,10 @@ export const usePolygonEditMode = (
     setSegmentation, 
     selectedPolygonId
   );
+
+  const { distance } = useGeometryUtils();
+  const [lastAutoAddedPoint, setLastAutoAddedPoint] = useState<Point | null>(null);
+  const MIN_DISTANCE_FOR_AUTO_POINT = 20; // Minimální vzdálenost pro automatické přidávání bodů
 
   // Zajištění, že je aktivní vždy jen jeden režim
   const toggleEditMode = useCallback(() => {
@@ -71,6 +80,41 @@ export const usePolygonEditMode = (
     }
   }, [editModeCore, slicingMode, pointAddingMode]);
 
+  // Automatické přidávání bodů při držení Shift
+  useEffect(() => {
+    if (!editModeCore.editMode || !editModeCore.cursorPosition || !editModeCore.isShiftPressed || 
+        editModeCore.tempPoints.points.length === 0) {
+      setLastAutoAddedPoint(null);
+      return;
+    }
+    
+    const lastPoint = editModeCore.tempPoints.points[editModeCore.tempPoints.points.length - 1];
+    const currentCursor = editModeCore.cursorPosition;
+    
+    // Pokud není nastaven poslední auto přidaný bod, nastavíme ho jako poslední bod v sekvenci
+    if (!lastAutoAddedPoint) {
+      setLastAutoAddedPoint(lastPoint);
+      return;
+    }
+    
+    // Zjistíme vzdálenost od posledního auto přidaného bodu k aktuálnímu kurzoru
+    const dist = distance(lastAutoAddedPoint, currentCursor);
+    
+    // Pokud je vzdálenost větší než práh, přidáme nový bod
+    if (dist >= MIN_DISTANCE_FOR_AUTO_POINT) {
+      editModeCore.addPointToTemp(currentCursor);
+      setLastAutoAddedPoint(currentCursor);
+    }
+  }, [
+    editModeCore.editMode, 
+    editModeCore.cursorPosition, 
+    editModeCore.isShiftPressed, 
+    editModeCore.tempPoints.points, 
+    editModeCore.addPointToTemp, 
+    lastAutoAddedPoint, 
+    distance
+  ]);
+
   // Kombinované handlery pro kliknutí v různých režimech editace
   const handleEditModeClick = (x: number, y: number) => {
     if (slicingMode.slicingMode) {
@@ -78,6 +122,8 @@ export const usePolygonEditMode = (
     } else if (pointAddingMode.pointAddingMode) {
       return pointAddingMode.handlePointAddingClick(x, y);
     } else if (editModeCore.editMode) {
+      // Reset lastAutoAddedPoint při kliknutí (protože uživatel začíná nový segment)
+      setLastAutoAddedPoint(null);
       return editModeCore.handleEditModeClick(x, y);
     }
     return false;
@@ -98,6 +144,7 @@ export const usePolygonEditMode = (
     editMode: editModeCore.editMode,
     tempPoints: editModeCore.tempPoints,
     cursorPosition: editModeCore.cursorPosition || slicingMode.cursorPosition,
+    isShiftPressed: editModeCore.isShiftPressed,
     toggleEditMode,
     
     // Slicing režim

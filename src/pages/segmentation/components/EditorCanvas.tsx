@@ -34,6 +34,7 @@ interface EditorCanvasProps {
     segmentIndex: number | null,
     projectedPoint: Point | null
   };
+  isShiftPressed?: boolean;
 }
 
 const EditorCanvas = ({
@@ -56,7 +57,8 @@ const EditorCanvas = ({
   tempPoints,
   cursorPosition,
   sliceStartPoint,
-  hoveredSegment
+  hoveredSegment,
+  isShiftPressed
 }: EditorCanvasProps) => {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const { theme } = useTheme();
@@ -158,6 +160,7 @@ const EditorCanvas = ({
                   cursorPosition={cursorPosition}
                   sliceStartPoint={sliceStartPoint}
                   hoveredSegment={hoveredSegment}
+                  isShiftPressed={isShiftPressed}
                 />
               )}
             </div>
@@ -171,7 +174,7 @@ const EditorCanvas = ({
       {/* Editační režim indikátor */}
       {editMode && (
         <div className="absolute bottom-4 left-4 bg-orange-600 text-white px-3 py-1 rounded-md text-sm font-semibold shadow-lg">
-          Edit Mode - Vytváření nového polygonu
+          Edit Mode - Vytváření nového polygonu {isShiftPressed && "(Auto-přidávání při držení Shift)"}
         </div>
       )}
       

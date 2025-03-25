@@ -26,6 +26,7 @@ interface CanvasPolygonLayerProps {
     segmentIndex: number | null,
     projectedPoint: Point | null
   };
+  isShiftPressed?: boolean;
 }
 
 const CanvasPolygonLayer = ({ 
@@ -41,7 +42,8 @@ const CanvasPolygonLayer = ({
   tempPoints,
   cursorPosition,
   sliceStartPoint,
-  hoveredSegment
+  hoveredSegment,
+  isShiftPressed
 }: CanvasPolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
   
@@ -91,7 +93,7 @@ const CanvasPolygonLayer = ({
               y2={cursorPosition.y}
               stroke="#FF3B30"
               strokeWidth={1.5/zoom}
-              strokeDasharray={`${4/zoom},${4/zoom}`}
+              strokeDasharray={isShiftPressed ? `${2/zoom},${2/zoom}` : `${4/zoom},${4/zoom}`}
               vectorEffect="non-scaling-stroke"
             />
           )}
@@ -111,7 +113,7 @@ const CanvasPolygonLayer = ({
           ))}
           
           {/* Optionally show the closing line from the last point to the first point */}
-          {tempPoints.points.length > 2 && cursorPosition && (
+          {tempPoints.points.length > 2 && (
             <line
               x1={tempPoints.points[tempPoints.points.length - 1].x}
               y1={tempPoints.points[tempPoints.points.length - 1].y}
@@ -122,6 +124,21 @@ const CanvasPolygonLayer = ({
               strokeDasharray={`${8/zoom},${4/zoom}`}
               strokeOpacity={0.6}
               vectorEffect="non-scaling-stroke"
+            />
+          )}
+          
+          {/* Shift key indicator for auto-point addition */}
+          {isShiftPressed && cursorPosition && (
+            <circle
+              cx={cursorPosition.x}
+              cy={cursorPosition.y}
+              r={7/zoom}
+              fill="rgba(255, 59, 48, 0.3)"
+              stroke="#FF3B30"
+              strokeWidth={1.5/zoom}
+              strokeDasharray={`${2/zoom},${2/zoom}`}
+              vectorEffect="non-scaling-stroke"
+              className="animate-pulse"
             />
           )}
         </>
