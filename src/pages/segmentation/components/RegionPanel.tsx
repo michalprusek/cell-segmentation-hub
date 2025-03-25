@@ -1,10 +1,6 @@
 
 import React from 'react';
-import { motion, AnimatePresence } from "framer-motion";
 import { SegmentationResult } from '@/lib/segmentation';
-import { cn } from '@/lib/utils';
-import { Layers, Check, Eye } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
 
 interface RegionPanelProps {
   loading: boolean;
@@ -14,63 +10,38 @@ interface RegionPanelProps {
 }
 
 const RegionPanel = ({ loading, segmentation, selectedPolygonId, onSelectPolygon }: RegionPanelProps) => {
-  const { t } = useLanguage();
-  
   if (loading || !segmentation) {
     return null;
   }
-
+  
   return (
-    <div className="absolute top-0 right-0 p-4 z-10">
-      <AnimatePresence>
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.2 }}
-          className="bg-white/90 dark:bg-slate-800/90 backdrop-blur-sm shadow-lg rounded-lg overflow-hidden min-w-[240px]"
-        >
-          <div className="p-3 border-b dark:border-gray-700 flex items-center">
-            <Layers className="w-5 h-5 mr-2 text-blue-500" />
-            <h3 className="font-medium">Segmentations</h3>
+    <div className="absolute right-4 top-4 max-h-[70vh] w-64 overflow-auto rounded-lg bg-card shadow-lg border border-border z-10">
+      <div className="p-3 font-medium border-b border-border bg-muted/50">
+        <h3 className="text-lg font-semibold">Segmentations</h3>
+      </div>
+      
+      <div className="p-2 space-y-1">
+        {segmentation.polygons.map((polygon) => (
+          <div
+            key={polygon.id}
+            className={`p-2 cursor-pointer rounded-md transition-colors flex items-center space-x-2 ${
+              selectedPolygonId === polygon.id
+                ? 'bg-primary text-primary-foreground'
+                : 'hover:bg-muted/50'
+            }`}
+            onClick={() => onSelectPolygon(polygon.id)}
+          >
+            <div
+              className="h-3 w-3 rounded-full"
+              style={{
+                backgroundColor: selectedPolygonId === polygon.id ? '#FFFFFF' : '#00BFFF',
+                border: selectedPolygonId === polygon.id ? '1px solid #FFFFFF' : 'none',
+              }}
+            />
+            <span>{`segmentation polygon ${segmentation.polygons.findIndex(p => p.id === polygon.id) + 1}`}</span>
           </div>
-          
-          {segmentation.polygons.length === 0 ? (
-            <div className="p-4 text-center text-sm text-gray-500 dark:text-gray-400">
-              {t('segmentation.noPolygons')}
-            </div>
-          ) : (
-            <ul className="max-h-[300px] overflow-y-auto p-1">
-              {segmentation.polygons.map((polygon) => (
-                <li 
-                  key={polygon.id}
-                  className={cn(
-                    "flex items-center p-2 rounded-md cursor-pointer mb-1 transition-colors",
-                    selectedPolygonId === polygon.id
-                      ? "bg-blue-100 dark:bg-blue-900/40"
-                      : "hover:bg-gray-100 dark:hover:bg-gray-700/40"
-                  )}
-                  onClick={() => onSelectPolygon(polygon.id)}
-                >
-                  <div 
-                    className="w-3 h-3 rounded-full mr-2"
-                    style={{ backgroundColor: selectedPolygonId === polygon.id ? '#FF3B30' : '#00BFFF' }}
-                  />
-                  <span className={cn(
-                    "flex-1 text-sm",
-                    selectedPolygonId === polygon.id ? "font-medium" : ""
-                  )}>
-                    {t('segmentation.polygon')} {segmentation.polygons.indexOf(polygon) + 1}
-                  </span>
-                  
-                  {selectedPolygonId === polygon.id && (
-                    <Check className="w-4 h-4 text-blue-500 ml-2" />
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </motion.div>
-      </AnimatePresence>
+        ))}
+      </div>
     </div>
   );
 };

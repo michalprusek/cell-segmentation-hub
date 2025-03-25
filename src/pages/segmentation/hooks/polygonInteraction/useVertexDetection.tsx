@@ -22,11 +22,9 @@ export const useVertexDetection = (zoom: number) => {
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // Přizpůsobení poloměru detekce podle zoomu
-    // Čím menší zoom, tím větší detekční poloměr potřebujeme v prostoru obrázku
-    // Použití logaritmické škály pro lepší citlivost
-    const adjustedRadius = Math.max(5, detectionRadius / zoom);
+    // Čím menší zoom, tím větší detekční poloměr potřebujeme
+    const adjustedRadius = Math.max(5, detectionRadius / (zoom || 1));
     
-    // Vrátíme true, pokud je vzdálenost menší než přizpůsobený poloměr
     return distance <= adjustedRadius;
   }, [zoom]);
 

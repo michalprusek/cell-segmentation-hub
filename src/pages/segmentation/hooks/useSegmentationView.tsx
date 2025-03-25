@@ -48,8 +48,9 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
       newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
       
       // Přesné vycentrování - offset musí být s ohledem na zoom
-      const offsetX = (containerWidth / (2 * newZoom)) - (img.width / 2);
-      const offsetY = (containerHeight / (2 * newZoom)) - (img.height / 2);
+      // Vycentrujeme přesně do středu canvasu
+      const offsetX = 0;
+      const offsetY = 0;
       
       setZoom(newZoom);
       setOffset({ x: offsetX, y: offsetY });

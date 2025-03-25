@@ -52,7 +52,7 @@ const SegmentationEditor = () => {
 
   return (
     <motion.div 
-      className={`h-screen w-screen ${theme === 'light' ? 'bg-gray-100 text-gray-900' : 'bg-slate-900 text-white'} flex flex-col overflow-hidden`}
+      className={`h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

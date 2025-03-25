@@ -7,6 +7,7 @@ import CanvasLoadingOverlay from './canvas/CanvasLoadingOverlay';
 import CanvasImage from './canvas/CanvasImage';
 import CanvasPolygonLayer from './canvas/CanvasPolygonLayer';
 import CanvasZoomInfo from './canvas/CanvasZoomInfo';
+import { useTheme } from '@/contexts/ThemeContext';
 
 interface EditorCanvasProps {
   loading: boolean;
@@ -40,6 +41,7 @@ const EditorCanvas = ({
   containerRef
 }: EditorCanvasProps) => {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const { theme } = useTheme();
   
   // Načtení obrázku a zjištění jeho velikosti
   useEffect(() => {
@@ -59,7 +61,9 @@ const EditorCanvas = ({
   return (
     <div 
       ref={containerRef} 
-      className="flex-1 overflow-hidden relative cursor-move bg-[#161616] bg-opacity-90 bg-[radial-gradient(#1a1f2c_1px,transparent_1px)] bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)]"
+      className={`flex-1 overflow-hidden relative cursor-move ${
+        theme === 'dark' ? 'bg-[#161616] bg-opacity-90' : 'bg-gray-100 bg-opacity-80'
+      } bg-[radial-gradient(#1a1f2c_1px,transparent_1px)] bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)]`}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
