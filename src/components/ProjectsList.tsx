@@ -53,26 +53,32 @@ const ProjectsList = ({
     );
   }
 
+  // Připravíme projekty bez karty na vytvoření nového projektu
+  const projectItems = projects.map((project) => (
+    <ProjectCard
+      key={project.id}
+      id={project.id}
+      title={project.title}
+      description={project.description}
+      thumbnail={project.thumbnail}
+      date={project.date}
+      imageCount={project.imageCount}
+      onClick={() => onOpenProject(project.id)}
+    />
+  ));
+
+  // Pokud je potřeba, přidáme kartu pro vytvoření nového projektu jako poslední
+  const allItems = showCreateCard 
+    ? [...projectItems, <NewProjectCard key="new-project" />] 
+    : projectItems;
+
   return (
     <div className={
       viewMode === "grid" 
         ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-        : "flex flex-col space-y-4"
+        : "flex flex-col space-y-4 max-w-3xl mx-auto" // Přidání max-w-3xl pro omezení šířky v list režimu
     }>
-      {projects.map((project) => (
-        <ProjectCard
-          key={project.id}
-          id={project.id}
-          title={project.title}
-          description={project.description}
-          thumbnail={project.thumbnail}
-          date={project.date}
-          imageCount={project.imageCount}
-          onClick={() => onOpenProject(project.id)}
-        />
-      ))}
-      
-      {showCreateCard && <NewProjectCard />}
+      {allItems}
     </div>
   );
 };

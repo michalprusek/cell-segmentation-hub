@@ -94,7 +94,7 @@ const ProjectDetail = () => {
                   onToggleUploader={toggleUploader}
                 />
               </div>
-              <div className="flex justify-end items-center h-9 md:ml-2">
+              <div className="flex md:ml-2">
                 <ProjectViewOptions viewMode={viewMode} setViewMode={setViewMode} />
               </div>
             </div>
