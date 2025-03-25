@@ -1,7 +1,8 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { TempPointsState } from '@/pages/segmentation/types';
+import { toast } from 'sonner';
 
 /**
  * Hook for managing polygon edit mode
@@ -18,6 +19,38 @@ export const usePolygonEditMode = (
     endIndex: null,
     polygonId: null
   });
+  const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
+
+  // Track cursor position for edit mode line
+  useEffect(() => {
+    if (!editMode || tempPoints.points.length === 0) {
+      setCursorPosition(null);
+      return;
+    }
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      const svgElement = document.querySelector('svg') as SVGSVGElement;
+      if (!svgElement) return;
+      
+      const rect = svgElement.getBoundingClientRect();
+      const point = svgElement.createSVGPoint();
+      
+      point.x = e.clientX - rect.left;
+      point.y = e.clientY - rect.top;
+      
+      // Transform to SVG coordinate space
+      const matrix = svgElement.getScreenCTM();
+      if (matrix) {
+        const transformedPoint = point.matrixTransform(matrix.inverse());
+        setCursorPosition({ x: transformedPoint.x, y: transformedPoint.y });
+      }
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [editMode, tempPoints.points.length]);
 
   /**
    * Toggle edit mode
@@ -158,13 +191,17 @@ export const usePolygonEditMode = (
       polygons: updatedPolygons
     });
     
-    // Reset temp points
+    // Reset temp points and exit edit mode
     setTempPoints({
       points: [],
       startIndex: null,
       endIndex: null,
       polygonId: null
     });
+    
+    // Automatically exit edit mode after completing a point sequence
+    setEditMode(false);
+    toast.success("Point sequence added successfully");
   }, [segmentation, setSegmentation, calculatePathLength]);
 
   /**
@@ -223,6 +260,7 @@ export const usePolygonEditMode = (
   return {
     editMode,
     tempPoints,
+    cursorPosition,
     toggleEditMode,
     handleEditModeClick
   };

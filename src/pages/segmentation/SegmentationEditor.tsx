@@ -36,6 +36,7 @@ const SegmentationEditor = () => {
     dragState,
     vertexDragState,
     tempPoints,
+    cursorPosition,
     editMode,
     canvasContainerRef,
     setSelectedPolygonId,
@@ -147,6 +148,7 @@ const SegmentationEditor = () => {
             containerRef={canvasContainerRef}
             editMode={editMode}
             tempPoints={tempPoints}
+            cursorPosition={cursorPosition}
           />
         </div>
         

@@ -73,16 +73,19 @@ export const useMouseInteractions = (
     
     // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
     // Používáme requestAnimationFrame pro optimalizaci výkonu
-    requestAnimationFrame(() => {
-      detectVertexHover(e.clientX, e.clientY, containerElement);
-    });
+    if (!editMode) {
+      requestAnimationFrame(() => {
+        detectVertexHover(e.clientX, e.clientY, containerElement);
+      });
+    }
   }, [
     segmentation, 
     handleVertexDrag, 
     handleCanvasDrag, 
     detectVertexHover,
     dragState,
-    vertexDragState
+    vertexDragState,
+    editMode
   ]);
 
   /**
@@ -94,9 +97,9 @@ export const useMouseInteractions = (
     if (!containerElement || !segmentation) return;
     
     const rect = containerElement.getBoundingClientRect();
-    const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
+    const { x, y, canvasX, canvasY } = getCanvasCoordinates(e.clientX, e.clientY, rect);
     
-    console.log(`handleMouseDown: Mouse down at client: (${e.clientX}, ${e.clientY}), Image space: (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    console.log(`handleMouseDown: Mouse down at client: (${e.clientX}, ${e.clientY}), Canvas: (${canvasX}, ${canvasY}), Image: (${x.toFixed(2)}, ${y.toFixed(2)})`);
     
     // If in edit mode, handle differently
     if (editMode) {

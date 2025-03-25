@@ -1,6 +1,6 @@
 
-import { useCallback } from 'react';
-import { SegmentationResult } from '@/lib/segmentation';
+import { useCallback, useRef } from 'react';
+import { SegmentationResult, Point } from '@/lib/segmentation';
 import { useVertexDetection } from './useVertexDetection';
 import { useCoordinateTransform } from './useCoordinateTransform';
 
@@ -21,6 +21,9 @@ export const useVertexDrag = (
 ) => {
   const { isNearVertex } = useVertexDetection(zoom, offset);
   const { getCanvasCoordinates, getImageCoordinates } = useCoordinateTransform(zoom, offset);
+  
+  // Store the initial vertex position for a proper undo action
+  const initialVertexPosition = useRef<Point | null>(null);
 
   /**
    * Zpracování pohybu při tažení vertexu
@@ -85,6 +88,9 @@ export const useVertexDrag = (
         if (isNearVertex(canvasX, canvasY, point, 15)) {
           console.log(`Clicked on vertex at (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`);
           
+          // Store the initial position before dragging starts (for undo)
+          initialVertexPosition.current = { ...point };
+          
           // Nastavíme aktivní polygon a začneme tažení bodu
           setSelectedPolygonId(polygon.id);
           vertexDragState.current = {
@@ -103,6 +109,7 @@ export const useVertexDrag = (
 
   return {
     handleVertexDrag,
-    handleVertexClick
+    handleVertexClick,
+    initialVertexPosition
   };
 };

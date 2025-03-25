@@ -31,7 +31,14 @@ const CanvasVertex = ({
   const radius = getPointRadius();
   
   return (
-    <g pointerEvents="all" shapeRendering="geometricPrecision">
+    <g 
+      pointerEvents="all"
+      shapeRendering="auto"
+      style={{ 
+        willChange: 'transform', 
+        transformOrigin: 'center center',
+      }}
+    >
       {/* Zvýraznění při hoveru nebo tažení - semi-transparent circle */}
       {(isHovered || isDragging) && (
         <circle
@@ -42,7 +49,6 @@ const CanvasVertex = ({
           filter="url(#hover-glow)"
           className={isDragging ? "" : "animate-pulse"}
           style={{ transformOrigin: 'center center', animationDuration: '1.5s' }}
-          shapeRendering="geometricPrecision"
           vectorEffect="non-scaling-stroke"
         />
       )}
@@ -55,7 +61,7 @@ const CanvasVertex = ({
         fill="transparent"
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         pointerEvents="all"
-        shapeRendering="geometricPrecision"
+        vectorEffect="non-scaling-stroke"
       />
       
       {/* Samotný bod - zůstává na místě při hoveru */}
@@ -70,7 +76,6 @@ const CanvasVertex = ({
           cursor: isDragging ? 'grabbing' : 'grab',
           transformOrigin: 'center center'
         }}
-        shapeRendering="geometricPrecision"
         vectorEffect="non-scaling-stroke"
       />
     </g>

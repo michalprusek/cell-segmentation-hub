@@ -1,5 +1,5 @@
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useSegmentationCore } from './useSegmentationCore';
 import { useSegmentationView } from './useSegmentationView';
 import { usePolygonInteraction } from './usePolygonInteraction';
@@ -34,14 +34,32 @@ export const useSegmentationEditor = (
     core.setSegmentation
   );
   
+  // Connect vertex drag state to history management
+  useEffect(() => {
+    const isDragging = polygonInteraction.vertexDragState.current.isDragging;
+    historyManagement.setDraggingVertex(isDragging);
+  }, [
+    polygonInteraction.vertexDragState.current.isDragging,
+    historyManagement.setDraggingVertex
+  ]);
+  
   // Keyboard event handler
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Delete' || e.key === 'Backspace') {
       polygonInteraction.handleDeletePolygon();
     } else if (e.key === 'e' || e.key === 'E') {
       polygonInteraction.toggleEditMode();
+    } else if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
+      historyManagement.handleUndo();
+    } else if (e.key === 'y' && (e.ctrlKey || e.metaKey)) {
+      historyManagement.handleRedo();
     }
-  }, [polygonInteraction]);
+  }, [
+    polygonInteraction.handleDeletePolygon,
+    polygonInteraction.toggleEditMode,
+    historyManagement.handleUndo,
+    historyManagement.handleRedo
+  ]);
   
   // Kombinace všech stavů a funkcí z dílčích hooků
   return {

@@ -22,10 +22,6 @@ export const usePolygonInteraction = (
     setSelectedPolygonId,
     hoveredVertex,
     setHoveredVertex,
-    editMode,
-    setEditMode,
-    tempPoints,
-    setTempPoints,
     dragState,
     vertexDragState
   } = usePolygonState();
@@ -45,8 +41,9 @@ export const usePolygonInteraction = (
   const { 
     toggleEditMode,
     handleEditModeClick,
-    tempPoints: editModeTempPoints,
-    editMode: editModeState
+    tempPoints,
+    editMode,
+    cursorPosition
   } = usePolygonEditMode(
     segmentation,
     setSegmentation,
@@ -70,7 +67,7 @@ export const usePolygonInteraction = (
     setHoveredVertex,
     dragState,
     vertexDragState,
-    editModeState,
+    editMode,
     handleEditModeClick
   );
   
@@ -79,8 +76,9 @@ export const usePolygonInteraction = (
     hoveredVertex,
     dragState,
     vertexDragState,
-    tempPoints: editModeTempPoints,
-    editMode: editModeState,
+    tempPoints,
+    editMode,
+    cursorPosition,
     setSelectedPolygonId,
     handleMouseDown,
     handleMouseMove,

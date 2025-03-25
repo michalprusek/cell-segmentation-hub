@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from "framer-motion";
-import { SegmentationResult } from '@/lib/segmentation';
+import { SegmentationResult, Point } from '@/lib/segmentation';
 import { DragState, VertexDragState, TempPointsState } from '../types';
 import CanvasLoadingOverlay from './canvas/CanvasLoadingOverlay';
 import CanvasImage from './canvas/CanvasImage';
@@ -25,6 +25,7 @@ interface EditorCanvasProps {
   containerRef: React.MutableRefObject<HTMLDivElement | null>;
   editMode: boolean;
   tempPoints: TempPointsState;
+  cursorPosition: Point | null;
 }
 
 const EditorCanvas = ({
@@ -42,7 +43,8 @@ const EditorCanvas = ({
   vertexDragState,
   containerRef,
   editMode,
-  tempPoints
+  tempPoints,
+  cursorPosition
 }: EditorCanvasProps) => {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const { theme } = useTheme();
@@ -131,6 +133,7 @@ const EditorCanvas = ({
                   zoom={zoom}
                   editMode={editMode}
                   tempPoints={tempPoints}
+                  cursorPosition={cursorPosition}
                 />
               )}
             </div>

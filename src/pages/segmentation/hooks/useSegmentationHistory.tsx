@@ -1,6 +1,6 @@
 
-import { useState, useEffect, useCallback } from 'react';
-import { SegmentationResult } from '@/lib/segmentation';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { SegmentationResult, Point } from '@/lib/segmentation';
 import { toast } from "sonner";
 
 /**
@@ -13,6 +13,8 @@ export const useSegmentationHistory = (
   const [history, setHistory] = useState<SegmentationResult[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [ignoreNextUpdate, setIgnoreNextUpdate] = useState(false);
+  const isDraggingVertex = useRef(false);
+  const dragStartSegmentation = useRef<SegmentationResult | null>(null);
   
   // Initialize history with the first segmentation
   useEffect(() => {
@@ -28,6 +30,12 @@ export const useSegmentationHistory = (
       if (ignoreNextUpdate) {
         setIgnoreNextUpdate(false);
       }
+      return;
+    }
+    
+    // If we're dragging a vertex, we store the initial state on drag start
+    // and only add a history item when dragging finishes
+    if (isDraggingVertex.current) {
       return;
     }
     
@@ -51,6 +59,32 @@ export const useSegmentationHistory = (
       console.log("Added new history state", historyIndex + 1);
     }
   }, [segmentation, historyIndex, history, ignoreNextUpdate]);
+  
+  const setDraggingVertex = useCallback((isDragging: boolean) => {
+    if (isDragging && !isDraggingVertex.current && segmentation) {
+      // Store the initial state when dragging starts
+      dragStartSegmentation.current = structuredClone(segmentation);
+      isDraggingVertex.current = true;
+    } else if (!isDragging && isDraggingVertex.current) {
+      // Add history item when dragging ends, if the state changed
+      isDraggingVertex.current = false;
+      
+      if (dragStartSegmentation.current && segmentation && 
+          JSON.stringify(dragStartSegmentation.current.polygons) !== 
+          JSON.stringify(segmentation.polygons)) {
+        // Truncate future history if we're not at the end
+        if (historyIndex < history.length - 1) {
+          setHistory(prev => prev.slice(0, historyIndex + 1));
+        }
+        
+        // Add new history item
+        setHistory(prev => [...prev, structuredClone(segmentation)]);
+        setHistoryIndex(prev => prev + 1);
+        
+        console.log("Added vertex drag history state", historyIndex + 1);
+      }
+    }
+  }, [segmentation, historyIndex, history]);
   
   const handleUndo = useCallback(() => {
     if (historyIndex > 0) {
@@ -80,6 +114,7 @@ export const useSegmentationHistory = (
     history,
     historyIndex,
     handleUndo,
-    handleRedo
+    handleRedo,
+    setDraggingVertex
   };
 };

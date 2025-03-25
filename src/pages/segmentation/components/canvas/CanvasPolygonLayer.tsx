@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { SegmentationResult } from '@/lib/segmentation';
+import React from 'react';
+import { SegmentationResult, Point } from '@/lib/segmentation';
 import CanvasSvgFilters from './CanvasSvgFilters';
 import CanvasPolygon from './CanvasPolygon';
 
@@ -17,6 +17,7 @@ interface CanvasPolygonLayerProps {
   zoom: number;
   editMode: boolean;
   tempPoints: { points: Array<{x: number, y: number}>, startIndex: number | null, endIndex: number | null, polygonId: string | null };
+  cursorPosition: Point | null;
 }
 
 const CanvasPolygonLayer = ({ 
@@ -27,43 +28,9 @@ const CanvasPolygonLayer = ({
   vertexDragState,
   zoom,
   editMode,
-  tempPoints
+  tempPoints,
+  cursorPosition
 }: CanvasPolygonLayerProps) => {
-  const [cursorPosition, setCursorPosition] = useState<{x: number, y: number} | null>(null);
-  
-  // Track cursor position for edit mode line
-  useEffect(() => {
-    if (!editMode || tempPoints.points.length === 0) {
-      setCursorPosition(null);
-      return;
-    }
-    
-    const handleMouseMove = (e: MouseEvent) => {
-      const svgElement = document.querySelector('svg') as SVGSVGElement;
-      if (!svgElement) return;
-      
-      const rect = svgElement.getBoundingClientRect();
-      const point = svgElement.createSVGPoint();
-      
-      point.x = e.clientX - rect.left;
-      point.y = e.clientY - rect.top;
-      
-      // Transform to SVG coordinate space if needed
-      const matrix = svgElement.getScreenCTM();
-      if (matrix) {
-        const transformedPoint = point.matrixTransform(matrix.inverse());
-        setCursorPosition({ x: transformedPoint.x, y: transformedPoint.y });
-      } else {
-        setCursorPosition({ x: point.x, y: point.y });
-      }
-    };
-    
-    document.addEventListener('mousemove', handleMouseMove);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-    };
-  }, [editMode, tempPoints.points.length]);
-  
   if (!segmentation || imageSize.width <= 0) return null;
   
   return (
@@ -72,7 +39,7 @@ const CanvasPolygonLayer = ({
       height={imageSize.height}
       className="absolute top-0 left-0"
       style={{ maxWidth: "none" }}
-      shapeRendering="geometricPrecision"
+      shapeRendering="auto"
       vectorEffect="non-scaling-stroke"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -100,7 +67,7 @@ const CanvasPolygonLayer = ({
             stroke="#FF3B30"
             strokeWidth={2/zoom}
             strokeDasharray={`${4/zoom},${4/zoom}`}
-            shapeRendering="geometricPrecision"
+            vectorEffect="non-scaling-stroke"
           />
           
           {/* Line from last point to cursor */}
@@ -113,7 +80,7 @@ const CanvasPolygonLayer = ({
               stroke="#FF3B30"
               strokeWidth={1.5/zoom}
               strokeDasharray={`${4/zoom},${4/zoom}`}
-              shapeRendering="geometricPrecision"
+              vectorEffect="non-scaling-stroke"
             />
           )}
           
@@ -127,7 +94,7 @@ const CanvasPolygonLayer = ({
               fill={index === 0 ? "#FF3B30" : "#FFFFFF"}
               stroke="#FF3B30"
               strokeWidth={1.5/zoom}
-              shapeRendering="geometricPrecision"
+              vectorEffect="non-scaling-stroke"
             />
           ))}
         </>
@@ -145,7 +112,7 @@ const CanvasPolygonLayer = ({
           strokeWidth={3/zoom}
           strokeDasharray={`${8/zoom},${8/zoom}`}
           pointerEvents="none"
-          shapeRendering="geometricPrecision"
+          vectorEffect="non-scaling-stroke"
         />
       )}
     </svg>
