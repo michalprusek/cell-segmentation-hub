@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { Point, SegmentationResult } from '@/lib/segmentation';
 import { TempPointsState } from '@/pages/segmentation/types';
@@ -12,7 +11,7 @@ export const usePathModification = (
   segmentation: SegmentationResult | null,
   setSegmentation: (seg: SegmentationResult | null) => void
 ) => {
-  const { calculatePathLength } = useGeometryUtils();
+  const { calculatePathLength, calculatePolygonArea } = useGeometryUtils();
 
   /**
    * Add points to the polygon
@@ -23,88 +22,66 @@ export const usePathModification = (
     endIndex: number,
     newPoints: Point[]
   ) => {
-    if (!segmentation) return;
+    if (!segmentation) return false;
     
     const polygonIndex = segmentation.polygons.findIndex(p => p.id === polygonId);
-    if (polygonIndex === -1) return;
+    if (polygonIndex === -1) return false;
     
     const polygon = segmentation.polygons[polygonIndex];
     const points = [...polygon.points];
     
-    // There are two paths between startIndex and endIndex in a closed polygon
-    // We need to determine which one to replace
+    // Create two possible new polygons and calculate their areas
     
-    // Create two possible new point sets and calculate their perimeters
-    const clockwisePath: Point[] = [];
-    const counterClockwisePath: Point[] = [];
+    // Path 1: Replace the clockwise path with new points
+    const clockwisePolygon: Point[] = [];
     
-    // Path 1: Going from startIndex to endIndex
-    let i = startIndex;
-    while (i !== endIndex) {
-      clockwisePath.push(points[i]);
-      i = (i + 1) % points.length;
+    // Add points from original polygon up to startIndex
+    for (let i = 0; i <= startIndex; i++) {
+      clockwisePolygon.push(points[i]);
     }
-    clockwisePath.push(points[endIndex]);
     
-    // Path 2: Going from endIndex to startIndex
-    i = endIndex;
-    while (i !== startIndex) {
-      counterClockwisePath.push(points[i]);
-      i = (i + 1) % points.length;
+    // Add new internal points (excluding start and end which already exist)
+    for (let i = 1; i < newPoints.length - 1; i++) {
+      clockwisePolygon.push(newPoints[i]);
     }
-    counterClockwisePath.push(points[startIndex]);
     
-    // Calculate perimeters
-    const clockwiseLength = calculatePathLength(clockwisePath);
-    const counterClockwiseLength = calculatePathLength(counterClockwisePath);
-    
-    // The new points (excluding the start and end points which already exist)
-    const insertPoints = newPoints.slice(1, -1);
-    
-    let newPoints1: Point[];
-    
-    // Replace the shorter path with the new points
-    if (clockwiseLength <= counterClockwiseLength) {
-      // Replace clockwise path (from startIndex to endIndex)
-      newPoints1 = [];
-      
-      // Add points up to startIndex
-      for (i = 0; i <= startIndex; i++) {
-        newPoints1.push(points[i]);
-      }
-      
-      // Add new points
-      newPoints1.push(...insertPoints);
-      
-      // Add points from endIndex onwards
-      for (i = endIndex; i < points.length; i++) {
-        newPoints1.push(points[i]);
-      }
-    } else {
-      // Replace counterclockwise path (from endIndex to startIndex)
-      newPoints1 = [];
-      
-      // Add points up to endIndex
-      for (i = 0; i <= endIndex; i++) {
-        newPoints1.push(points[i]);
-      }
-      
-      // Add new points in reverse
-      for (i = insertPoints.length - 1; i >= 0; i--) {
-        newPoints1.push(insertPoints[i]);
-      }
-      
-      // Add points from startIndex onwards
-      for (i = startIndex; i < points.length; i++) {
-        newPoints1.push(points[i]);
-      }
+    // Add remaining points from endIndex onwards
+    for (let i = endIndex; i < points.length; i++) {
+      clockwisePolygon.push(points[i]);
     }
+    
+    // Path 2: Replace the counterclockwise path with new points
+    const counterClockwisePolygon: Point[] = [];
+    
+    // Add points from original polygon up to endIndex
+    for (let i = 0; i <= endIndex; i++) {
+      counterClockwisePolygon.push(points[i]);
+    }
+    
+    // Add new points in reverse (excluding end and start which already exist)
+    for (let i = newPoints.length - 2; i > 0; i--) {
+      counterClockwisePolygon.push(newPoints[i]);
+    }
+    
+    // Add remaining points from startIndex onwards
+    for (let i = startIndex; i < points.length; i++) {
+      counterClockwisePolygon.push(points[i]);
+    }
+    
+    // Calculate areas to determine which polygon to keep (we want the larger area)
+    const clockwiseArea = calculatePolygonArea(clockwisePolygon);
+    const counterClockwiseArea = calculatePolygonArea(counterClockwisePolygon);
+    
+    // Choose the polygon with larger area (this is a change from original which used path length)
+    const resultPolygon = clockwiseArea >= counterClockwiseArea 
+      ? clockwisePolygon 
+      : counterClockwisePolygon;
     
     // Update the polygon
     const updatedPolygons = [...segmentation.polygons];
     updatedPolygons[polygonIndex] = {
       ...polygon,
-      points: newPoints1
+      points: resultPolygon
     };
     
     setSegmentation({
@@ -116,7 +93,7 @@ export const usePathModification = (
     toast.success("Point sequence added successfully");
     
     return true;
-  }, [segmentation, setSegmentation, calculatePathLength]);
+  }, [segmentation, setSegmentation, calculatePolygonArea]);
 
   return {
     addPointsToPolygon

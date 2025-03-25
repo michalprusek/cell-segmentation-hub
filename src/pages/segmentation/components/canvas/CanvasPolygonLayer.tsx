@@ -82,7 +82,7 @@ const CanvasPolygonLayer = ({
             vectorEffect="non-scaling-stroke"
           />
           
-          {/* Line from last point to cursor */}
+          {/* Line from last point to cursor - vždy zobrazujeme */}
           {cursorPosition && tempPoints.points.length > 0 && (
             <line
               x1={tempPoints.points[tempPoints.points.length - 1].x}
@@ -109,6 +109,21 @@ const CanvasPolygonLayer = ({
               vectorEffect="non-scaling-stroke"
             />
           ))}
+          
+          {/* Optionally show the closing line from the last point to the first point */}
+          {tempPoints.points.length > 2 && cursorPosition && (
+            <line
+              x1={tempPoints.points[tempPoints.points.length - 1].x}
+              y1={tempPoints.points[tempPoints.points.length - 1].y}
+              x2={tempPoints.points[0].x}
+              y2={tempPoints.points[0].y}
+              stroke="#FF3B30"
+              strokeWidth={1/zoom}
+              strokeDasharray={`${8/zoom},${4/zoom}`}
+              strokeOpacity={0.6}
+              vectorEffect="non-scaling-stroke"
+            />
+          )}
         </>
       )}
       
