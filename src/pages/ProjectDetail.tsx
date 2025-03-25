@@ -49,12 +49,9 @@ const ProjectDetail = () => {
     setShowUploader(!showUploader);
   };
 
-  // Handler to adapt the ImageCard/ImageListItem onOpen prop to call handleOpenSegmentationEditor
+  // Handle opening an image - now takes the image ID directly
   const handleOpenImage = (imageId: string) => {
-    const image = images.find(img => img.id === imageId);
-    if (image) {
-      handleOpenSegmentationEditor(image);
-    }
+    handleOpenSegmentationEditor(imageId);
   };
 
   // Animation variants

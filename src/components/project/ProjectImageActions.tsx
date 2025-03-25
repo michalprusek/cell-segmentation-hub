@@ -46,18 +46,21 @@ export const useProjectImageActions = ({
   };
   
   // Process an image segmentation
-  const handleProcessImage = async (image: ProjectImage) => {
-    if (processingImages.includes(image.id)) {
+  const handleProcessImage = async (imageId: string) => {
+    if (processingImages.includes(imageId)) {
       toast.info("Image is already being processed");
       return;
     }
     
-    setProcessingImages(prev => [...prev, image.id]);
+    const image = images.find(img => img.id === imageId);
+    if (!image) return;
+    
+    setProcessingImages(prev => [...prev, imageId]);
     
     try {
       // Update local state to show processing immediately
       const updatedImages = images.map(img => 
-        img.id === image.id 
+        img.id === imageId 
           ? {...img, segmentationStatus: 'processing' as const } 
           : img
       );
@@ -65,12 +68,12 @@ export const useProjectImageActions = ({
       
       // Process the image
       await updateImageProcessingStatus({
-        imageId: image.id,
+        imageId: imageId,
         imageUrl: image.url,
         onComplete: (result: SegmentationData) => {
           // Update the local state with the result
           const updatedImages = images.map(img => 
-            img.id === image.id 
+            img.id === imageId 
               ? { 
                   ...img, 
                   segmentationStatus: 'completed' as const, 
@@ -86,29 +89,31 @@ export const useProjectImageActions = ({
       console.error("Error processing image:", error);
       toast.error("Failed to process image");
     } finally {
-      setProcessingImages(prev => prev.filter(id => id !== image.id));
+      setProcessingImages(prev => prev.filter(id => id !== imageId));
     }
   };
   
   // Open the segmentation editor for an image
-  const handleOpenSegmentationEditor = (image: ProjectImage) => {
-    console.log("Opening segmentation editor for image:", image.id);
+  const handleOpenSegmentationEditor = (imageId: string) => {
     if (!projectId) return;
+    
+    const image = images.find(img => img.id === imageId);
+    if (!image) return;
     
     if (image.segmentationStatus === 'pending') {
       // Auto-segment if not yet segmented
-      handleProcessImage(image);
+      handleProcessImage(imageId);
       
       toast.success("Image segmentation started. You will be redirected when complete.");
       
       // After a small delay, redirect to segmentation editor
       // In a real app, you'd wait for the segmentation to finish
       setTimeout(() => {
-        navigate(`/segmentation/${projectId}/${image.id}`);
+        navigate(`/segmentation/${projectId}/${imageId}`);
       }, 1000);
     } else {
       // Navigate directly if already segmented or processing
-      navigate(`/segmentation/${projectId}/${image.id}`);
+      navigate(`/segmentation/${projectId}/${imageId}`);
     }
   };
   
