@@ -17,7 +17,7 @@ const NewProjectCard = () => {
         <p className="text-gray-500 dark:text-gray-400 text-center text-sm mb-4">
           {t('projects.createProjectDesc')}
         </p>
-        <NewProject onProjectCreated={() => {}} displayAsButton={true} />
+        <NewProject onProjectCreated={() => {}} />
       </div>
     </div>
   );
