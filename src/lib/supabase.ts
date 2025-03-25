@@ -1,5 +1,25 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { supabase } from "@/integrations/supabase/client";
+
+// Enable realtime for images table
+const enableRealtime = async () => {
+  try {
+    // Enable realtime for the images table
+    const { error } = await supabase.rpc('supabase_functions.enable_realtime', {
+      table_name: 'images'
+    });
+    
+    if (error) {
+      console.error('Error enabling realtime:', error);
+    }
+  } catch (err) {
+    console.error('Failed to enable realtime:', err);
+  }
+};
+
+// Call the function to enable realtime
+enableRealtime();
 
 // Example of a function to upload an image to Supabase Storage
 export const uploadImage = async (
@@ -114,9 +134,17 @@ export const getProjectImages = async (projectId: string) => {
 // Example function for user profile management
 export const updateUserProfile = async (userId: string, updates: any) => {
   try {
+    // Odstraníme nevalidní vlastnosti, které nejsou ve schématu
+    const validUpdates = { ...updates };
+    
+    // Pokud 'department' není v schématu databáze, odstraníme ho
+    if ('department' in validUpdates) {
+      delete validUpdates.department;
+    }
+    
     const { data, error } = await supabase
       .from('profiles')
-      .update(updates)
+      .update(validUpdates)
       .eq('id', userId)
       .select()
       .single();

@@ -1,11 +1,12 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
 import { formatDistanceToNow } from "date-fns";
 import { Clock, X, CheckCircle, Clock3, AlertCircle, Loader2 } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { SegmentationResult } from "@/lib/segmentation";
 import { motion } from "framer-motion";
+import { supabase } from '@/integrations/supabase/client';
 
 interface ImageCardProps {
   id: string;
@@ -23,11 +24,38 @@ const ImageCard = ({
   name, 
   url, 
   updatedAt, 
-  segmentationStatus, 
+  segmentationStatus: initialStatus, 
   onDelete, 
   onClick 
 }: ImageCardProps) => {
   const { t } = useLanguage();
+  const [status, setStatus] = useState(initialStatus);
+
+  // Listen for realtime updates to this image
+  useEffect(() => {
+    // Set initial status
+    setStatus(initialStatus);
+    
+    // Subscribe to changes for this specific image
+    const subscription = supabase
+      .channel('table-db-changes')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'images',
+        filter: `id=eq.${id}`
+      }, (payload) => {
+        if (payload.new && payload.new.segmentation_status) {
+          setStatus(payload.new.segmentation_status);
+        }
+      })
+      .subscribe();
+      
+    // Cleanup
+    return () => {
+      supabase.removeChannel(subscription);
+    };
+  }, [id, initialStatus]);
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -72,8 +100,8 @@ const ImageCard = ({
             animate={{ x: 0, opacity: 1 }}
             transition={{ delay: 0.1 }}
           >
-            {getStatusIcon(segmentationStatus)}
-            <span className="capitalize">{t(`dashboard.${segmentationStatus}`)}</span>
+            {getStatusIcon(status)}
+            <span className="capitalize">{t(`dashboard.${status}`)}</span>
           </motion.div>
           
           <motion.button

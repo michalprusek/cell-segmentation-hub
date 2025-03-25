@@ -24,6 +24,21 @@ const FileList = ({ files, uploadProgress, onRemoveFile }: FileListProps) => {
   
   if (files.length === 0) return null;
 
+  // Helper function to format file size
+  const formatFileSize = (sizeInBytes: number): string => {
+    if (sizeInBytes === 0) return '0 KB';
+    
+    if (isNaN(sizeInBytes)) return 'Unknown size';
+    
+    if (sizeInBytes < 1024) {
+      return `${sizeInBytes} B`;
+    } else if (sizeInBytes < 1024 * 1024) {
+      return `${(sizeInBytes / 1024).toFixed(0)} KB`;
+    } else {
+      return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+  };
+
   return (
     <div className="space-y-4 bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
       <div className="flex items-center justify-between">
@@ -55,7 +70,7 @@ const FileList = ({ files, uploadProgress, onRemoveFile }: FileListProps) => {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate dark:text-white">{file.name}</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {(file.size / 1024).toFixed(0)} KB
+                    {formatFileSize(file.size)}
                   </p>
                 </div>
                 

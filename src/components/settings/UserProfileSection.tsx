@@ -19,7 +19,6 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
   const [formData, setFormData] = useState({
     fullName: profile?.username || "",
     organization: profile?.organization || "",
-    department: profile?.department || "",
     bio: profile?.bio || "",
     publicProfile: profile?.public_profile || false
   });
@@ -31,10 +30,10 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
 
     setLoading(true);
     try {
+      // Odstraněno pole 'department', které způsobovalo chybu
       await updateUserProfile(userId, {
         username: formData.fullName,
         organization: formData.organization,
-        department: formData.department,
         bio: formData.bio,
         public_profile: formData.publicProfile,
         updated_at: new Date()
@@ -79,14 +78,6 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
                 id="organization" 
                 value={formData.organization}
                 onChange={(e) => setFormData({...formData, organization: e.target.value})}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="department">{t('settings.department')}</Label>
-              <Input 
-                id="department" 
-                value={formData.department}
-                onChange={(e) => setFormData({...formData, department: e.target.value})}
               />
             </div>
           </div>
