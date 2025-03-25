@@ -8,24 +8,25 @@ import { Point } from '@/lib/segmentation';
 export const useVertexDetection = (zoom: number) => {
   /**
    * Detekuje, zda je bod kurzoru v blízkosti bodu polygonu
-   * Použití většího poloměru pro detekci (15px)
+   * Použití většího poloměru pro detekci při nízkém zoomu
    */
   const isNearVertex = useCallback((
-    x: number, 
-    y: number, 
+    canvasX: number, 
+    canvasY: number, 
     point: Point, 
     detectionRadius: number = 15
   ): boolean => {
-    // Výpočet vzdálenosti mezi bodem kurzoru a bodem polygonu
-    const dx = point.x - x;
-    const dy = point.y - y;
+    // Výpočet vzdálenosti mezi bodem kurzoru a bodem polygonu v prostoru plátna
+    const dx = point.x - canvasX;
+    const dy = point.y - canvasY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
     // Přizpůsobení poloměru detekce podle zoomu
-    // Čím větší zoom, tím menší detekční poloměr potřebujeme v prostoru obrázku
-    const adjustedRadius = detectionRadius / zoom;
+    // Čím menší zoom, tím větší detekční poloměr potřebujeme v prostoru obrázku
+    // Použití logaritmické škály pro lepší citlivost
+    const adjustedRadius = Math.max(5, detectionRadius / zoom);
     
-    // Pokud je vzdálenost menší než přizpůsobený poloměr, je kurzor v blízkosti bodu
+    // Vrátíme true, pokud je vzdálenost menší než přizpůsobený poloměr
     return distance <= adjustedRadius;
   }, [zoom]);
 

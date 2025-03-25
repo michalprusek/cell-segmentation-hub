@@ -15,7 +15,7 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
   
   // Vycentrování obrázku v plátně s přizpůsobením velikosti
   const centerImage = useCallback(() => {
-    if (!canvasContainerRef.current) return;
+    if (!canvasContainerRef.current || !imageSrc) return;
     
     const container = canvasContainerRef.current;
     const containerRect = container.getBoundingClientRect();
@@ -38,18 +38,18 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
       // Vždy fit to container, aby se celý obrázek vešel do plátna
       if (imgRatio > containerRatio) {
         // Obrázek je širší než container - omezení podle šířky
-        newZoom = (containerWidth * 0.9) / img.width;
+        newZoom = (containerWidth * 0.8) / img.width;
       } else {
         // Obrázek je vyšší než container - omezení podle výšky
-        newZoom = (containerHeight * 0.9) / img.height;
+        newZoom = (containerHeight * 0.8) / img.height;
       }
       
       // Omezení zoomu pro velmi malé nebo velmi velké obrázky
       newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom));
       
-      // Výpočet offsetu pro vycentrování
-      const offsetX = ((containerWidth / newZoom) - img.width) / 2;
-      const offsetY = ((containerHeight / newZoom) - img.height) / 2;
+      // Přesné vycentrování - offset musí být s ohledem na zoom
+      const offsetX = (containerWidth / (2 * newZoom)) - (img.width / 2);
+      const offsetY = (containerHeight / (2 * newZoom)) - (img.height / 2);
       
       setZoom(newZoom);
       setOffset({ x: offsetX, y: offsetY });
@@ -100,7 +100,7 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     
-    if (!canvasContainerRef.current) return;
+    if (!canvasContainerRef.current || !imageRef.current) return;
     
     const container = canvasContainerRef.current;
     const rect = container.getBoundingClientRect();
@@ -118,8 +118,8 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
     const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * delta));
     
     // Výpočet nového offsetu, aby zůstal bod pod kurzorem na stejné pozici
-    const newOffsetX = offset.x + (mouseXInImage - (mouseX / newZoom));
-    const newOffsetY = offset.y + (mouseYInImage - (mouseY / newZoom));
+    const newOffsetX = mouseXInImage - (mouseX / newZoom);
+    const newOffsetY = mouseYInImage - (mouseY / newZoom);
     
     // Omezení offsetu, aby obrázek příliš nevyjel z plátna
     const newOffset = constrainOffset({ x: newOffsetX, y: newOffsetY }, newZoom);
@@ -140,7 +140,7 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
   }, [handleWheel, canvasContainerRef]);
   
   const handleZoomIn = () => {
-    if (!canvasContainerRef.current) return;
+    if (!canvasContainerRef.current || !imageRef.current) return;
     
     const container = canvasContainerRef.current;
     const rect = container.getBoundingClientRect();
@@ -157,8 +157,8 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
       const newZoom = Math.min(prev * 1.2, MAX_ZOOM);
       
       // Výpočet nového offsetu, aby zůstal střed na stejné pozici
-      const newOffsetX = offset.x + (centerXInImage - (centerX / newZoom));
-      const newOffsetY = offset.y + (centerYInImage - (centerY / newZoom));
+      const newOffsetX = centerXInImage - (centerX / newZoom);
+      const newOffsetY = centerYInImage - (centerY / newZoom);
       
       // Omezení offsetu
       setOffset(constrainOffset({ x: newOffsetX, y: newOffsetY }, newZoom));
@@ -168,7 +168,7 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
   };
   
   const handleZoomOut = () => {
-    if (!canvasContainerRef.current) return;
+    if (!canvasContainerRef.current || !imageRef.current) return;
     
     const container = canvasContainerRef.current;
     const rect = container.getBoundingClientRect();
@@ -185,8 +185,8 @@ export const useSegmentationView = (canvasContainerRef: React.RefObject<HTMLDivE
       const newZoom = Math.max(prev / 1.2, MIN_ZOOM);
       
       // Výpočet nového offsetu, aby zůstal střed na stejné pozici
-      const newOffsetX = offset.x + (centerXInImage - (centerX / newZoom));
-      const newOffsetY = offset.y + (centerYInImage - (centerY / newZoom));
+      const newOffsetX = centerXInImage - (centerX / newZoom);
+      const newOffsetY = centerYInImage - (centerY / newZoom);
       
       // Omezení offsetu
       setOffset(constrainOffset({ x: newOffsetX, y: newOffsetY }, newZoom));

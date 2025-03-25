@@ -1,8 +1,9 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from "framer-motion";
 import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
 
 // Custom hooks
 import { useSegmentationEditor } from './hooks/useSegmentationEditor';
@@ -17,6 +18,7 @@ import StatusBar from './components/StatusBar';
 const SegmentationEditor = () => {
   const { projectId, imageId } = useParams<{ projectId: string, imageId: string }>();
   const { user } = useAuth();
+  const { theme } = useTheme();
   
   const {
     projectTitle,
@@ -50,7 +52,7 @@ const SegmentationEditor = () => {
 
   return (
     <motion.div 
-      className="h-screen w-screen bg-slate-900 text-white flex flex-col overflow-hidden"
+      className={`h-screen w-screen ${theme === 'light' ? 'bg-gray-100 text-gray-900' : 'bg-slate-900 text-white'} flex flex-col overflow-hidden`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

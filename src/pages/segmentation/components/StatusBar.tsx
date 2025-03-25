@@ -10,52 +10,39 @@ interface StatusBarProps {
 const StatusBar = ({ segmentation }: StatusBarProps) => {
   const { t } = useLanguage();
   
-  // Výpočet celkového počtu vrcholů ve všech polygonech
-  const totalVertices = React.useMemo(() => {
-    if (!segmentation) return 0;
-    
-    return segmentation.polygons.reduce((sum, polygon) => {
-      return sum + polygon.points.length;
-    }, 0);
-  }, [segmentation]);
+  if (!segmentation) return null;
+  
+  // Vypočítáme celkový počet bodů napříč všemi polygony
+  const totalVertices = segmentation.polygons.reduce(
+    (sum, polygon) => sum + polygon.points.length, 
+    0
+  );
   
   return (
-    <div className="absolute bottom-0 left-0 right-0 bg-slate-800/90 backdrop-blur-sm text-white py-1.5 px-4 flex items-center justify-between text-xs">
-      <div className="flex items-center space-x-4">
-        <div>
-          {t('segmentation.totalPolygons').replace('{count}', String(segmentation?.polygons.length || 0))}
-        </div>
-        <div>
-          {t('segmentation.totalVertices').replace('{count}', String(totalVertices))}
-        </div>
+    <div className="absolute bottom-0 left-0 right-0 h-8 bg-gray-800/90 dark:bg-black/80 text-white flex items-center justify-center space-x-8 text-xs">
+      <div className="flex items-center space-x-1">
+        <span className="text-gray-400">{t('segmentation.totalPolygons')}:</span>
+        <span>{segmentation.polygons.length}</span>
       </div>
       
-      <div className="flex items-center space-x-2">
-        <div className="text-green-400">
-          {t('common.segmentation')} {segmentation ? 'ID: ' + segmentation.id.substring(0, 8) : ''}
-        </div>
-        <div className={`px-2 py-0.5 rounded-full text-xs flex items-center ${getStatusColor(segmentation?.status)}`}>
-          {segmentation?.status && t(`segmentation.${segmentation.status}Segmentation`)}
-        </div>
+      <div className="flex items-center space-x-1">
+        <span className="text-gray-400">{t('segmentation.totalVertices')}:</span>
+        <span>{totalVertices}</span>
       </div>
+      
+      <div className="flex items-center space-x-1">
+        <span className="text-gray-400">{t('segmentation.completedSegmentation')}:</span>
+        <span className="text-green-500">{segmentation.id ? t('common.yes') : t('common.no')}</span>
+      </div>
+      
+      {segmentation.id && (
+        <div className="flex items-center space-x-1">
+          <span className="text-gray-400">{t('common.segmentation')} ID:</span>
+          <span className="text-blue-400">seg-{segmentation.id.substring(0, 4)}</span>
+        </div>
+      )}
     </div>
   );
-};
-
-// Helper funkce pro stanovení barvy podle stavu segmentace
-const getStatusColor = (status?: 'pending' | 'processing' | 'completed' | 'failed') => {
-  switch (status) {
-    case 'completed':
-      return 'bg-green-700/40 text-green-300';
-    case 'pending':
-      return 'bg-yellow-700/40 text-yellow-300';
-    case 'processing':
-      return 'bg-blue-700/40 text-blue-300';
-    case 'failed':
-      return 'bg-red-700/40 text-red-300';
-    default:
-      return 'bg-gray-700/40 text-gray-300';
-  }
 };
 
 export default StatusBar;
