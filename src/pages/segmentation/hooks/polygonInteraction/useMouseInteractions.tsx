@@ -57,33 +57,30 @@ export const useMouseInteractions = (
     const containerElement = e.currentTarget as HTMLElement;
     if (!containerElement || !segmentation) return;
     
-    // Použijeme requestAnimationFrame pro optimalizaci výkonu
+    // Nejdřív kontrolujeme, jestli táhneme vertex
+    if (vertexDragState.current.isDragging) {
+      handleVertexDrag(e, containerElement);
+      return;
+    }
+    
+    // Potom kontrolujeme, jestli táhneme celé plátno
+    if (dragState.current.isDragging) {
+      handleCanvasDrag(e, containerElement);
+      return;
+    }
+    
+    // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
+    // Používáme requestAnimationFrame pro optimalizaci výkonu
     requestAnimationFrame(() => {
-      // Nejdřív kontrolujeme, jestli táhneme vertex
-      if (handleVertexDrag(e, containerElement)) {
-        return;
-      }
-      
-      // Potom kontrolujeme, jestli táhneme celé plátno
-      if (handleCanvasDrag(e, containerElement)) {
-        return;
-      }
-      
-      // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
-      // Optimalizace - pouze pokud se myš pohybuje
-      if (!detectVertexHover(e.clientX, e.clientY, containerElement)) {
-        // Pokud ne, nastavíme kurzor na výchozí
-        if (!dragState.current.isDragging) {
-          containerElement.style.cursor = 'move';
-        }
-      }
+      detectVertexHover(e.clientX, e.clientY, containerElement);
     });
   }, [
     segmentation, 
     handleVertexDrag, 
     handleCanvasDrag, 
     detectVertexHover,
-    dragState
+    dragState,
+    vertexDragState
   ]);
 
   /**
@@ -97,7 +94,7 @@ export const useMouseInteractions = (
     const rect = containerElement.getBoundingClientRect();
     const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
     
-    console.log(`Mouse down at client: (${e.clientX}, ${e.clientY}), Image space: (${x}, ${y})`);
+    console.log(`handleMouseDown: Mouse down at client: (${e.clientX}, ${e.clientY}), Image space: (${x.toFixed(2)}, ${y.toFixed(2)})`);
     
     // Nejdřív zkontrolujeme, jestli jsme klikli na vertex
     if (handleVertexClick(e.clientX, e.clientY, containerElement)) {

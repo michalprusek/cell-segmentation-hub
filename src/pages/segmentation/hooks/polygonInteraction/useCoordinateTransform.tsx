@@ -22,9 +22,8 @@ export const useCoordinateTransform = (
     const canvasY = mouseY - containerRect.top;
     
     // Převod na souřadnice v prostoru obrázku s ohledem na zoom a offset
-    // Zcela přepracovaná logika pro přesné mapování
-    const imageX = canvasX / zoom - offset.x;
-    const imageY = canvasY / zoom - offset.y;
+    const imageX = (canvasX / zoom) - offset.x;
+    const imageY = (canvasY / zoom) - offset.y;
     
     return { 
       canvasX, 

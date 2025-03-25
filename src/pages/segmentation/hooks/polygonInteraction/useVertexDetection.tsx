@@ -27,12 +27,11 @@ export const useVertexDetection = (
     const dy = point.y - imageY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Optimalizovaný poloměr detekce podle zoomu
-    // Konstantní poloměr v obrazovém prostoru nehledě na zoom
+    // Použijeme konstantní poloměr v obrazovém prostoru
     const adjustedRadius = detectionRadius / zoom;
     
     // Debugging pomocí konzole
-    console.log(`Cursor at image: (${imageX.toFixed(2)}, ${imageY.toFixed(2)}), Point at: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}), Distance: ${distance.toFixed(2)}, Threshold: ${adjustedRadius.toFixed(2)}`);
+    console.log(`isNearVertex: Cursor at image: (${imageX.toFixed(2)}, ${imageY.toFixed(2)}), Point at: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}), Distance: ${distance.toFixed(2)}, Threshold: ${adjustedRadius.toFixed(2)}`);
     
     return distance <= adjustedRadius;
   }, [zoom]);

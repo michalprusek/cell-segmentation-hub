@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { SegmentationResult } from '@/lib/segmentation';
 import { DragState, VertexDragState } from '../types';
@@ -42,6 +42,7 @@ const EditorCanvas = ({
 }: EditorCanvasProps) => {
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const { theme } = useTheme();
+  const transformRef = useRef<HTMLDivElement>(null);
   
   // Načtení obrázku a zjištění jeho velikosti
   useEffect(() => {
@@ -95,12 +96,13 @@ const EditorCanvas = ({
             transition={{ duration: 0.3 }}
           >
             <div 
+              ref={transformRef}
               style={{ 
-                transform: `scale(${zoom}) translate(${offset.x}px, ${offset.y}px)`,
-                transformOrigin: 'center center',
+                transform: `translate(${offset.x * zoom}px, ${offset.y * zoom}px) scale(${zoom})`,
+                transformOrigin: '0 0',
                 willChange: 'transform',
               }}
-              className="relative"
+              className="absolute top-0 left-0"
               data-testid="canvas-transform-container"
             >
               {/* Obrázek na pozadí */}

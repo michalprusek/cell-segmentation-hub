@@ -30,19 +30,26 @@ export const useWheelZoom = (
     const mouseXInImage = mouseX / zoom - offset.x;
     const mouseYInImage = mouseY / zoom - offset.y;
     
-    // Výpočet nového zoomu
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * delta));
+    // Výpočet nového zoomu s jemnějšími kroky
+    // Použijeme delta faktor s menším krokem pro plynulejší zoom
+    const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * zoomFactor));
     
-    // Výpočet nového offsetu, aby zůstal bod pod kurzorem na stejné pozici
-    const newOffsetX = mouseXInImage - (mouseX / newZoom);
-    const newOffsetY = mouseYInImage - (mouseY / newZoom);
+    // Zaokrouhlíme na 2 desetinná místa pro stabilnější hodnoty
+    const roundedZoom = Math.round(newZoom * 100) / 100;
     
-    // Omezení offsetu, aby obrázek příliš nevyjel z plátna
-    const newOffset = constrainOffset({ x: newOffsetX, y: newOffsetY }, newZoom);
-    
-    setZoom(newZoom);
-    setOffset(newOffset);
+    // Pokud se zoom skutečně změnil
+    if (roundedZoom !== zoom) {
+      // Výpočet nového offsetu, aby bod pod kurzorem zůstal na stejném místě
+      const newOffsetX = -mouseXInImage + (mouseX / roundedZoom);
+      const newOffsetY = -mouseYInImage + (mouseY / roundedZoom);
+      
+      // Aplikace omezení na offset
+      const constrainedOffset = constrainOffset({ x: newOffsetX, y: newOffsetY }, roundedZoom);
+      
+      setZoom(roundedZoom);
+      setOffset(constrainedOffset);
+    }
   }, [zoom, offset, canvasContainerRef, constrainOffset, setZoom, setOffset, MIN_ZOOM, MAX_ZOOM]);
   
   useEffect(() => {

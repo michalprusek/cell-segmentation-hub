@@ -31,7 +31,7 @@ export const useVertexHover = (
     const { x, y } = getCanvasCoordinates(clientX, clientY, rect);
     
     // Logování pro ladění
-    console.log(`Mouse at client: (${clientX}, ${clientY}), Canvas rect: (${rect.left}, ${rect.top}), Image space: (${x}, ${y})`);
+    console.log(`detectVertexHover: Mouse at client: (${clientX}, ${clientY}), Image space: (${x.toFixed(2)}, ${y.toFixed(2)})`);
     
     let foundVertex = false;
     
@@ -40,14 +40,14 @@ export const useVertexHover = (
       for (let i = 0; i < polygon.points.length; i++) {
         const point = polygon.points[i];
         
-        // Detekce bodu přímo v souřadnicích obrázku s optimalizovaným poloměrem
-        if (isNearVertex(x, y, point, 12)) { // Zvětšený detekční poloměr pro větší toleranci
+        // Použijeme větší detekční radius pro snazší výběr vertexu
+        if (isNearVertex(x, y, point, 15)) {
           if (hoveredVertex.polygonId !== polygon.id || hoveredVertex.vertexIndex !== i) {
             setHoveredVertex({
               polygonId: polygon.id,
               vertexIndex: i
             });
-            console.log(`Hover detected on polygon ${polygon.id}, vertex ${i}`);
+            console.log(`Hover detected on polygon ${polygon.id}, vertex ${i} at (${point.x}, ${point.y})`);
           }
           containerElement.style.cursor = 'grab';
           foundVertex = true;

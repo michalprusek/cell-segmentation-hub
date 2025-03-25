@@ -20,17 +20,18 @@ const CanvasVertex = ({
   isDragging, 
   zoom 
 }: CanvasVertexProps) => {
+  // Dynamicky vypočítáme velikost vertexu v závislosti na zoomu
   const getPointRadius = () => {
-    // Základní velikost bodu
-    let radius = isSelected ? 5 : 4;
+    // Základní velikost bodu adjustovaná k zoomu
+    let baseRadius = isSelected ? 6 : 5;
     
     // Zvětšit při hoveru nebo tažení
     if (isHovered || isDragging) {
-      radius = 7;
+      baseRadius = 8;
     }
     
-    // Přizpůsobit velikost zoomu pro lepší viditelnost
-    return radius / zoom;
+    // Inverzní vztah k zoomu pro konzistentní vizuální velikost
+    return baseRadius / zoom;
   };
 
   const radius = getPointRadius();
@@ -42,7 +43,7 @@ const CanvasVertex = ({
         <circle
           cx={point.x}
           cy={point.y}
-          r={radius * 2.5}
+          r={radius * 2}
           fill={isDragging ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 255, 255, 0.3)"}
           filter="url(#hover-glow)"
           className={isDragging ? "" : "animate-pulse"}
@@ -54,7 +55,7 @@ const CanvasVertex = ({
       <circle
         cx={point.x}
         cy={point.y}
-        r={radius * 3.5}
+        r={radius * 4}
         fill="transparent"
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         pointerEvents="all"
@@ -68,14 +69,11 @@ const CanvasVertex = ({
         fill={isSelected ? "#FF3B30" : "#FFFFFF"}
         stroke={isSelected ? "#FF3B30" : "#0077FF"}
         strokeWidth={1.5 / zoom}
-        className={cn(
-          "transition-transform duration-150",
-          isHovered ? "scale-125" : ""
-        )}
+        className="transition-all duration-150"
         style={{ 
           cursor: isDragging ? 'grabbing' : 'grab',
-          transformOrigin: 'center center',
-          transform: isHovered ? `scale(1.25)` : 'scale(1)'
+          transform: isHovered ? `scale(1.25)` : 'scale(1)',
+          transformOrigin: 'center center'
         }}
       />
     </g>

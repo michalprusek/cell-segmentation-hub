@@ -38,7 +38,7 @@ export const useVertexDrag = (
       const rect = containerElement.getBoundingClientRect();
       const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
       
-      console.log(`Dragging vertex to: (${x.toFixed(2)}, ${y.toFixed(2)})`);
+      console.log(`handleVertexDrag: Dragging vertex to: (${x.toFixed(2)}, ${y.toFixed(2)})`);
       
       // Aktualizace pozice bodu polygonu
       setSegmentation({
@@ -74,14 +74,14 @@ export const useVertexDrag = (
     const rect = containerElement.getBoundingClientRect();
     const { x, y } = getCanvasCoordinates(clientX, clientY, rect);
     
-    console.log(`Checking vertex click at image coords: (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    console.log(`handleVertexClick: Checking vertex click at image coords: (${x.toFixed(2)}, ${y.toFixed(2)})`);
     
     // Nejprve zkontrolujeme, zda jsme klikli na bod polygonu
     for (const polygon of segmentation.polygons) {
       for (let i = 0; i < polygon.points.length; i++) {
         const point = polygon.points[i];
         
-        if (isNearVertex(x, y, point, 12)) { // Zvětšený detekční poloměr
+        if (isNearVertex(x, y, point, 15)) { // Zvětšený detekční poloměr
           console.log(`Clicked on vertex at (${point.x.toFixed(2)}, ${point.y.toFixed(2)})`);
           
           // Nastavíme aktivní polygon a začneme tažení bodu
