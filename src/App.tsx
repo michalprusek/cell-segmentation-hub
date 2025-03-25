@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -89,9 +88,9 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <BrowserRouter>
-        <ThemeProvider>
-          <LanguageProvider>
-            <AuthProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            <LanguageProvider>
               <Toaster />
               <Sonner position="top-right" closeButton toastOptions={{ 
                 className: "animate-slide-in-right" 
@@ -133,9 +132,9 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </div>
-            </AuthProvider>
-          </LanguageProvider>
-        </ThemeProvider>
+            </LanguageProvider>
+          </ThemeProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
