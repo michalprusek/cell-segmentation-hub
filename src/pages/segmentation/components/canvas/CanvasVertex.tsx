@@ -25,11 +25,6 @@ const CanvasVertex = ({
     // Základní velikost bodu adjustovaná k zoomu
     let baseRadius = isSelected ? 6 : 5;
     
-    // Zvětšit při hoveru nebo tažení
-    if (isHovered || isDragging) {
-      baseRadius = 8;
-    }
-    
     // Inverzní vztah k zoomu pro konzistentní vizuální velikost
     return Math.max(baseRadius / zoom, 3);
   };
@@ -37,8 +32,8 @@ const CanvasVertex = ({
   const radius = getPointRadius();
   
   return (
-    <g pointerEvents="all">
-      {/* Zvýraznění při hoveru nebo tažení */}
+    <g pointerEvents="all" shapeRendering="geometricPrecision">
+      {/* Zvýraznění při hoveru nebo tažení - semi-transparent circle */}
       {(isHovered || isDragging) && (
         <circle
           cx={point.x}
@@ -48,6 +43,7 @@ const CanvasVertex = ({
           filter="url(#hover-glow)"
           className={isDragging ? "" : "animate-pulse"}
           style={{ transformOrigin: 'center center', animationDuration: '1.5s' }}
+          shapeRendering="geometricPrecision"
         />
       )}
       
@@ -59,9 +55,10 @@ const CanvasVertex = ({
         fill="transparent"
         style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
         pointerEvents="all"
+        shapeRendering="geometricPrecision"
       />
       
-      {/* Samotný bod */}
+      {/* Samotný bod - zůstává na místě při hoveru */}
       <circle
         cx={point.x}
         cy={point.y}
@@ -69,14 +66,11 @@ const CanvasVertex = ({
         fill={isSelected ? "#FF3B30" : "#FFFFFF"}
         stroke={isSelected ? "#FF3B30" : "#0077FF"}
         strokeWidth={1.5 / zoom}
-        className={cn(
-          "transition-all duration-150",
-          isHovered && "scale-125"
-        )}
         style={{ 
           cursor: isDragging ? 'grabbing' : 'grab',
           transformOrigin: 'center center'
         }}
+        shapeRendering="geometricPrecision"
       />
     </g>
   );

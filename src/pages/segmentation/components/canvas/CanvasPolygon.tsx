@@ -27,7 +27,7 @@ const CanvasPolygon = ({
   const strokeWidth = isSelected ? 2/zoom : 1.5/zoom;
 
   return (
-    <g key={id}>
+    <g key={id} shapeRendering="geometricPrecision">
       {/* Polygon s výplní */}
       <polygon 
         points={pointsString}
@@ -40,6 +40,7 @@ const CanvasPolygon = ({
           isSelected ? "filter-glow-red" : ""
         )}
         pointerEvents="all"
+        shapeRendering="geometricPrecision"
       />
       
       {/* Body (vertexy) */}

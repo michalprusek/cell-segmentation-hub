@@ -33,6 +33,8 @@ const CanvasPolygonLayer = ({
       height={imageSize.height}
       className="absolute top-0 left-0"
       style={{ maxWidth: "none" }}
+      shapeRendering="geometricPrecision"
+      vectorEffect="non-scaling-stroke"
     >
       <CanvasSvgFilters />
       
