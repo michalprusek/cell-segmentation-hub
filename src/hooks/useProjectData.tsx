@@ -1,20 +1,9 @@
-
 import { useState, useEffect } from 'react';
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import type { SegmentationResult } from "@/lib/segmentation";
-import type { Json } from "@/integrations/supabase/types";
-
-export interface ProjectImage {
-  id: string;
-  name: string;
-  url: string;
-  createdAt: Date;
-  updatedAt: Date;
-  segmentationStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  segmentationResult?: SegmentationResult;
-}
+import type { SegmentationData } from "@/types";
+import type { ProjectImage } from "@/types";
 
 export const useProjectData = (projectId: string | undefined, userId: string | undefined) => {
   const navigate = useNavigate();
@@ -75,7 +64,7 @@ export const useProjectData = (projectId: string | undefined, userId: string | u
           createdAt: new Date(img.created_at),
           updatedAt: new Date(img.updated_at),
           segmentationStatus: img.segmentation_status as 'pending' | 'processing' | 'completed' | 'failed',
-          segmentationResult: img.segmentation_result as unknown as SegmentationResult
+          segmentationResult: img.segmentation_result as unknown as SegmentationData
         }));
 
         setImages(formattedImages);

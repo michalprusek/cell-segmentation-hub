@@ -1,20 +1,9 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { updateImageProcessingStatus } from '@/components/project/ProjectImageProcessor';
-import type { SegmentationResult } from '@/lib/segmentation';
-
-interface ProjectImage {
-  id: string;
-  name: string;
-  url: string;
-  createdAt: Date;
-  updatedAt: Date;
-  segmentationStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  segmentationResult?: SegmentationResult;
-}
+import type { ProjectImage } from '@/types'; // Updated import path
 
 interface UseProjectImageActionsProps {
   projectId?: string;
