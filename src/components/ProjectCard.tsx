@@ -79,10 +79,9 @@ const ProjectCard = ({
       
       toast.success("Project deleted successfully");
       
-      // Refresh page to update projects list
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
+      // Refresh projects list instead of page reload
+      const event = new CustomEvent('project-deleted', { detail: { projectId: id } });
+      window.dispatchEvent(event);
     } catch (error) {
       console.error("Error deleting project:", error);
       toast.error("Failed to delete project");
@@ -122,12 +121,38 @@ const ProjectCard = ({
         
       if (createError) throw createError;
       
+      // Get all images from old project
+      const { data: images, error: imagesError } = await supabase
+        .from("images")
+        .select("*")
+        .eq("project_id", id);
+        
+      if (imagesError) throw imagesError;
+      
+      // Copy images to new project
+      if (images && images.length > 0) {
+        const newImages = images.map(image => ({
+          project_id: newProject.id,
+          name: image.name,
+          image_url: image.image_url,
+          thumbnail_url: image.thumbnail_url,
+          user_id: projectData.user_id,
+          segmentation_status: image.segmentation_status,
+          segmentation_result: image.segmentation_result
+        }));
+        
+        const { error: insertError } = await supabase
+          .from("images")
+          .insert(newImages);
+          
+        if (insertError) throw insertError;
+      }
+      
       toast.success("Project duplicated successfully");
       
-      // Navigate to the new project
-      setTimeout(() => {
-        navigate(`/project/${newProject.id}`);
-      }, 1000);
+      // Refresh projects list instead of redirecting
+      const event = new CustomEvent('project-created', { detail: { projectId: newProject.id } });
+      window.dispatchEvent(event);
     } catch (error) {
       console.error("Error duplicating project:", error);
       toast.error("Failed to duplicate project");

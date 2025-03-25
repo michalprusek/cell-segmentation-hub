@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -25,6 +26,18 @@ const Dashboard = () => {
     if (user) {
       fetchProjects();
     }
+    
+    // Poslouchej události pro aktualizaci seznamu projektů
+    const handleProjectCreated = () => fetchProjects();
+    const handleProjectDeleted = () => fetchProjects();
+    
+    window.addEventListener('project-created', handleProjectCreated);
+    window.addEventListener('project-deleted', handleProjectDeleted);
+    
+    return () => {
+      window.removeEventListener('project-created', handleProjectCreated);
+      window.removeEventListener('project-deleted', handleProjectDeleted);
+    };
   }, [user]);
 
   const fetchProjects = async () => {

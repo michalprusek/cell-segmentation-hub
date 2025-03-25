@@ -30,7 +30,7 @@ const RegionPanel = ({
   onSelectPolygon: setSelectedPolygonId 
 }: RegionPanelProps) => {
   const { t } = useLanguage();
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false); // Změněno na false, aby byl panel defaultně sbalený
   
   if (!segmentation) return null;
   
