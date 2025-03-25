@@ -2,12 +2,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { Trash2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ProjectImage } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import ImageActions from './ImageActions';
 
 interface ImageCardProps {
   image: ProjectImage;
@@ -30,24 +29,16 @@ export const ImageCard = ({ image, onDelete, onOpen, className }: ImageCardProps
           "overflow-hidden border-gray-200 dark:border-gray-700 transition-all group hover:shadow-md relative", 
           className
         )}
+        onClick={() => onOpen(image.id)}
       >
         {/* Delete button */}
-        <Button
-          variant="destructive"
-          size="icon"
-          className="absolute right-2 top-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(image.id);
-          }}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <ImageActions 
+          onDelete={() => onDelete(image.id)}
+        />
         
         {/* Image preview - clickable to open segmentation editor */}
         <div 
           className="aspect-square bg-gray-100 dark:bg-gray-800 relative overflow-hidden cursor-pointer"
-          onClick={() => onOpen(image.id)}
         >
           {image.thumbnail_url ? (
             <img 

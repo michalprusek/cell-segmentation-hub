@@ -72,6 +72,7 @@ const CanvasPolygonLayer = ({
           hoveredVertex={hoveredVertex}
           vertexDragState={vertexDragState.current}
           zoom={zoom}
+          type={polygon.type || 'external'}
         />
       ))}
 

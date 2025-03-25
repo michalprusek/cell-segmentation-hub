@@ -25,7 +25,7 @@ export type UpdateProfile = DbTables['profiles']['Update'];
 export interface PolygonData {
   id: string;
   points: Array<{x: number, y: number}>;
-  type: string;
+  type: 'external' | 'internal';
   class: string;
 }
 
@@ -51,4 +51,25 @@ export interface ProjectImage {
   project_id?: string;
   thumbnail_url?: string;
   status?: string;
+}
+
+// Metric types for XLSX export
+export interface SpheroidMetric {
+  imageId: string;
+  imageName: string;
+  contourNumber: number;
+  area: number;
+  perimeter: number;
+  circularity: number;
+  compactness: number;
+  convexity: number;
+  equivalentDiameter: number;
+  aspectRatio: number;
+  feretDiameterMax: number;
+  feretDiameterMaxOrthogonal: number;
+  feretDiameterMin: number;
+  lengthMajorDiameter: number;
+  lengthMinorDiameter: number;
+  solidity: number;
+  sphericity: number;
 }

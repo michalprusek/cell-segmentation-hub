@@ -1,3 +1,4 @@
+
 // Simple segmentation service
 // This simulates image segmentation with thresholding and contour finding
 // In a real app, this would use more advanced methods like WebAssembly or call a backend API
@@ -12,6 +13,8 @@ export interface Point {
 export interface Polygon {
   id: string;
   points: Point[];
+  type?: 'external' | 'internal';
+  class?: string;
 }
 
 export type SegmentationResult = SegmentationData;
@@ -97,9 +100,14 @@ export const findContours = (imageData: ImageData): Polygon[] => {
       });
     }
     
+    // Main polygon is external
+    const isExternal = i === 0; 
+    
     polygons.push({
       id: `polygon-${i}`,
-      points
+      points,
+      type: isExternal ? 'external' : 'internal',
+      class: 'spheroid'
     });
   }
   
@@ -119,8 +127,8 @@ export const segmentImage = async (imageSrc: string): Promise<SegmentationResult
     const polygons: PolygonData[] = basicPolygons.map(poly => ({
       id: poly.id,
       points: poly.points,
-      type: 'external', // Default type
-      class: 'spheroid' // Default class
+      type: poly.type || 'external', 
+      class: poly.class || 'spheroid'
     }));
     
     return {
@@ -140,4 +148,33 @@ export const segmentImage = async (imageSrc: string): Promise<SegmentationResult
       timestamp: new Date()
     };
   }
+};
+
+// Calculate polygon area, with consideration for internal holes
+export const calculatePolygonArea = (polygon: Point[]): number => {
+  let area = 0;
+  const n = polygon.length;
+  
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    area += polygon[i].x * polygon[j].y;
+    area -= polygon[j].x * polygon[i].y;
+  }
+  
+  return Math.abs(area) / 2;
+};
+
+// Calculate polygon perimeter
+export const calculatePerimeter = (polygon: Point[]): number => {
+  let perimeter = 0;
+  const n = polygon.length;
+  
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    const dx = polygon[j].x - polygon[i].x;
+    const dy = polygon[j].y - polygon[i].y;
+    perimeter += Math.sqrt(dx * dx + dy * dy);
+  }
+  
+  return perimeter;
 };

@@ -2,11 +2,10 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
-import { Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ProjectImage } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import ImageActions from './ImageActions';
 
 interface ImageListItemProps {
   image: ProjectImage;
@@ -32,11 +31,11 @@ export const ImageListItem = ({
         'flex items-center p-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-750 group',
         className
       )}
+      onClick={() => onOpen(image.id)}
     >
       {/* Thumbnail */}
       <div 
         className="h-10 w-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0 cursor-pointer"
-        onClick={() => onOpen(image.id)}
       >
         {image.thumbnail_url ? (
           <img
@@ -58,7 +57,7 @@ export const ImageListItem = ({
       </div>
 
       {/* Image details */}
-      <div className="ml-3 flex-1 min-w-0 cursor-pointer" onClick={() => onOpen(image.id)}>
+      <div className="ml-3 flex-1 min-w-0 cursor-pointer">
         <div className="flex items-center">
           <h4 className="text-sm font-medium truncate">
             {image.name || 'Untitled Image'}
@@ -88,18 +87,12 @@ export const ImageListItem = ({
         </p>
       </div>
 
-      {/* Delete button */}
-      <Button
-        variant="destructive"
-        size="icon"
-        className="ml-4 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={(e) => {
-          e.stopPropagation();
-          onDelete(image.id);
-        }}
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      {/* Delete icon */}
+      <div onClick={(e) => e.stopPropagation()}>
+        <ImageActions 
+          onDelete={() => onDelete(image.id)}
+        />
+      </div>
     </motion.div>
   );
 };

@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { cn } from '@/lib/utils';
 import { Point } from '@/lib/segmentation';
 
 interface CanvasVertexProps {
@@ -10,76 +11,53 @@ interface CanvasVertexProps {
   isHovered: boolean;
   isDragging: boolean;
   zoom: number;
+  type?: 'external' | 'internal';
 }
 
-const CanvasVertex = ({ 
-  point, 
-  isSelected, 
-  isHovered, 
-  isDragging, 
-  zoom 
+const CanvasVertex = ({
+  point,
+  polygonId,
+  vertexIndex,
+  isSelected,
+  isHovered,
+  isDragging,
+  zoom,
+  type = 'external'
 }: CanvasVertexProps) => {
-  // Dynamicky vypočítáme velikost vertexu v závislosti na zoomu
-  const getPointRadius = () => {
-    // Základní velikost bodu adjustovaná k zoomu
-    let baseRadius = isSelected ? 6 : 5;
-    
-    // Inverzní vztah k zoomu pro konzistentní vizuální velikost
-    return baseRadius / zoom;
+  // Adjust radius based on zoom level for consistent visual appearance
+  const baseRadius = 4;
+  const radius = baseRadius / zoom;
+
+  // Determine vertex color based on polygon type
+  const getVertexColor = () => {
+    if (type === 'internal') {
+      return isDragging ? '#0077cc' : isHovered ? '#3498db' : '#0EA5E9';
+    } else {
+      return isDragging ? '#c0392b' : isHovered ? '#e74c3c' : '#ea384c';
+    }
   };
 
-  const radius = getPointRadius();
+  const vertexColor = getVertexColor();
   
   return (
-    <g 
-      pointerEvents="all"
-      shapeRendering="auto"
-      style={{ 
-        willChange: 'transform', 
-        transformOrigin: 'center center',
-      }}
-    >
-      {/* Zvýraznění při hoveru nebo tažení - semi-transparent circle */}
-      {(isHovered || isDragging) && (
-        <circle
-          cx={point.x}
-          cy={point.y}
-          r={radius * 2}
-          fill={isDragging ? "rgba(255, 255, 255, 0.5)" : "rgba(255, 255, 255, 0.3)"}
-          filter="url(#hover-glow)"
-          className={isDragging ? "" : "animate-pulse"}
-          style={{ transformOrigin: 'center center', animationDuration: '1.5s' }}
-          vectorEffect="non-scaling-stroke"
-        />
+    <circle
+      cx={point.x}
+      cy={point.y}
+      r={radius}
+      fill={vertexColor}
+      stroke="#fff"
+      strokeWidth={1.5/zoom}
+      className={cn(
+        "cursor-grab transition-all duration-100",
+        isDragging ? "cursor-grabbing" : "cursor-grab",
+        isHovered ? "z-10" : "",
+        isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : ""
       )}
-      
-      {/* Neviditelný větší bod pro snazší zachycení myší */}
-      <circle
-        cx={point.x}
-        cy={point.y}
-        r={radius * 4}
-        fill="transparent"
-        style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
-        pointerEvents="all"
-        vectorEffect="non-scaling-stroke"
-      />
-      
-      {/* Samotný bod - zůstává na místě při hoveru */}
-      <circle
-        cx={point.x}
-        cy={point.y}
-        r={radius}
-        fill={isSelected ? "#FF3B30" : "#FFFFFF"}
-        stroke={isSelected ? "#FF3B30" : "#0077FF"}
-        strokeWidth={1.5 / zoom}
-        style={{ 
-          cursor: isDragging ? 'grabbing' : 'grab',
-          transformOrigin: 'center center'
-        }}
-        vectorEffect="non-scaling-stroke"
-        filter="url(#point-shadow)"
-      />
-    </g>
+      filter={isSelected || isHovered ? "url(#point-shadow)" : ""}
+      data-polygon-id={polygonId}
+      data-vertex-index={vertexIndex}
+      vectorEffect="non-scaling-stroke"
+    />
   );
 };
 
