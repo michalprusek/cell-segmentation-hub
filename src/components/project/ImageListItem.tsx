@@ -1,104 +1,159 @@
 
 import React from 'react';
-import { formatDistanceToNow } from "date-fns";
-import { Clock, X, CheckCircle, Clock3, AlertCircle, Loader2, ArrowRight } from "lucide-react";
-import { useLanguage } from '@/contexts/LanguageContext';
-import type { SegmentationResult } from "@/lib/segmentation";
-import { motion } from "framer-motion";
-import { Button } from "@/components/ui/button";
+import { motion } from 'framer-motion';
+import { format } from 'date-fns';
+import { MoreHorizontal, Trash2, ExternalLink, Download } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { ProjectImage } from '@/integrations/supabase/types';
+import { Badge } from '@/components/ui/badge';
+import { useNavigate } from 'react-router-dom';
 
 interface ImageListItemProps {
-  id: string;
-  name: string;
-  url: string;
-  updatedAt: Date;
-  segmentationStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  segmentationResult?: SegmentationResult;
-  onDelete: (id: string) => void;
-  onClick: () => void;
+  image: ProjectImage;
+  onDelete: (imageId: string) => void;
+  onOpen: (imageId: string) => void;
+  className?: string;
 }
 
-const ImageListItem = ({ 
-  id, 
-  name, 
-  url, 
-  updatedAt, 
-  segmentationStatus, 
-  onDelete, 
-  onClick 
+export const ImageListItem = ({
+  image,
+  onDelete,
+  onOpen,
+  className,
 }: ImageListItemProps) => {
-  const { t } = useLanguage();
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
-      case 'processing':
-        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
-      case 'pending':
-        return <Clock3 className="h-4 w-4 text-yellow-500" />;
-      case 'failed':
-        return <AlertCircle className="h-4 w-4 text-red-500" />;
-      default:
-        return null;
-    }
+  const navigate = useNavigate();
+  
+  const handleExport = () => {
+    navigate(`/segmentation/${image.project_id}/${image.id}/export`);
   };
 
   return (
-    <motion.div 
-      className="flex items-center p-4 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer w-full"
+    <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      onClick={onClick}
-      whileHover={{ backgroundColor: "rgba(0,0,0,0.03)" }}
+      layout
+      className={cn(
+        'flex items-center p-3 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-750',
+        className
+      )}
     >
-      <div className="flex-shrink-0 w-16 h-16 mr-4 overflow-hidden rounded-md">
-        <img
-          src={url}
-          alt={name}
-          className="w-full h-full object-cover"
-        />
+      {/* Thumbnail */}
+      <div 
+        className="h-10 w-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0 cursor-pointer"
+        onClick={() => onOpen(image.id)}
+      >
+        {image.thumbnail_url ? (
+          <img
+            src={image.thumbnail_url}
+            alt={image.name || 'Image'}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="h-full w-full flex items-center justify-center">
+            <span className="text-xs text-gray-400">No Image</span>
+          </div>
+        )}
       </div>
-      
-      <div className="flex-1 min-w-0">
-        <h3 className="text-base font-medium truncate dark:text-white">{name}</h3>
-        <div className="flex items-center mt-1">
-          <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mr-3">
-            <Clock className="h-3 w-3 mr-1" />
-            <span>{formatDistanceToNow(updatedAt, { addSuffix: true })}</span>
-          </div>
-          
-          <div className="flex items-center space-x-1 bg-white/90 dark:bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded-full text-xs">
-            {getStatusIcon(segmentationStatus)}
-            <span className="capitalize">{t(`dashboard.${segmentationStatus}`)}</span>
-          </div>
+
+      {/* Image details */}
+      <div className="ml-3 flex-1 min-w-0" onClick={() => onOpen(image.id)}>
+        <div className="flex items-center">
+          <h4 className="text-sm font-medium truncate cursor-pointer">
+            {image.name || 'Untitled Image'}
+          </h4>
+          {image.status && (
+            <Badge
+              variant="outline"
+              className={cn(
+                'ml-2 text-xs',
+                image.status === 'processed'
+                  ? 'bg-green-100 text-green-800 hover:bg-green-200 dark:bg-green-900/30 dark:text-green-300 dark:hover:bg-green-900/40'
+                  : image.status === 'processing'
+                  ? 'bg-blue-100 text-blue-800 hover:bg-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:hover:bg-blue-900/40'
+                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+              )}
+            >
+              {image.status === 'processed'
+                ? 'Zpracováno'
+                : image.status === 'processing'
+                ? 'Zpracovává se'
+                : 'Čeká'}
+            </Badge>
+          )}
         </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+          {image.created_at &&
+            format(new Date(image.created_at), 'PPP')}
+        </p>
       </div>
-      
-      <div className="flex items-center ml-4 space-x-2">
-        <Button 
-          variant="ghost" 
-          size="icon"
-          className="text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 h-8 w-8"
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(id);
-          }}
+
+      {/* Actions */}
+      <div className="ml-4">
+        <Button
+          variant="outline"
+          size="sm"
+          className="mr-2 hidden sm:inline-flex"
+          onClick={() => onOpen(image.id)}
         >
-          <X className="h-4 w-4" />
+          <ExternalLink className="h-4 w-4 mr-1" />
+          <span>Editor</span>
         </Button>
-        <Button 
-          variant="ghost" 
-          size="icon"
-          className="text-gray-500 h-8 w-8"
+        
+        <Button
+          variant="outline"
+          size="sm"
+          className="mr-2 hidden md:inline-flex"
+          onClick={handleExport}
         >
-          <ArrowRight className="h-4 w-4" />
+          <Download className="h-4 w-4 mr-1" />
+          <span>Export</span>
         </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8">
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              className="sm:hidden"
+              onClick={() => onOpen(image.id)}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              <span>Otevřít editor</span>
+            </DropdownMenuItem>
+            
+            <DropdownMenuItem
+              className="md:hidden"
+              onClick={handleExport}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              <span>Exportovat data</span>
+            </DropdownMenuItem>
+            
+            {(window.innerWidth < 768) && <DropdownMenuSeparator />}
+            
+            <DropdownMenuItem
+              onClick={() => onDelete(image.id)}
+              className="text-red-600 dark:text-red-400 focus:text-red-700 dark:focus:text-red-300"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              <span>Smazat</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </motion.div>
   );
 };
-
-export default ImageListItem;

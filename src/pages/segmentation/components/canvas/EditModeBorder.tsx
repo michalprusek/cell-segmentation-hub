@@ -18,6 +18,13 @@ const EditModeBorder = ({
 }: EditModeBorderProps) => {
   if (!editMode && !slicingMode && !pointAddingMode) return null;
 
+  // Vylepšení viditelnosti okrajů
+  const getBorderColor = () => {
+    if (slicingMode) return "#FF3B30";
+    if (pointAddingMode) return "#4CAF50";
+    return "#FF9500";
+  };
+
   return (
     <rect
       x={0}
@@ -25,15 +32,12 @@ const EditModeBorder = ({
       width={imageSize.width}
       height={imageSize.height}
       fill="none"
-      stroke={
-        slicingMode ? "#FF0000" : 
-        pointAddingMode ? "#4CAF50" : 
-        "#FF3B30"
-      }
-      strokeWidth={3/zoom}
-      strokeDasharray={`${8/zoom},${8/zoom}`}
+      stroke={getBorderColor()}
+      strokeWidth={4/zoom}
+      strokeDasharray={`${10/zoom},${8/zoom}`}
       pointerEvents="none"
       vectorEffect="non-scaling-stroke"
+      filter="url(#border-glow)"
     />
   );
 };

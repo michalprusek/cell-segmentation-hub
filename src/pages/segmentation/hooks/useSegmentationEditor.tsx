@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useSegmentationCore } from './useSegmentationCore';
 import { useSegmentationView } from './useSegmentationView';
 import { usePolygonInteraction } from './usePolygonInteraction';
@@ -33,6 +33,31 @@ export const useSegmentationEditor = (
     core.segmentation,
     core.setSegmentation
   );
+  
+  // Sledování stisknutí Shift klávesy pro ekvidistantní přidávání bodů
+  const [isShiftPressed, setIsShiftPressed] = useState(false);
+  
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(true);
+      }
+    };
+    
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Shift') {
+        setIsShiftPressed(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
   
   // Connect vertex drag state to history management
   useEffect(() => {
@@ -73,6 +98,7 @@ export const useSegmentationEditor = (
     ...view,
     ...polygonInteraction,
     ...historyManagement,
-    handleKeyDown
+    handleKeyDown,
+    isShiftPressed
   };
 };

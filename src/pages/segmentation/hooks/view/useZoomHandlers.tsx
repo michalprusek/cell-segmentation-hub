@@ -15,61 +15,61 @@ export const useZoomHandlers = (
   MIN_ZOOM: number,
   MAX_ZOOM: number
 ) => {
+  // Opravená funkce pro zoom in, která udržuje střed displeje ve středu
   const handleZoomIn = useCallback(() => {
-    if (!canvasContainerRef.current || !imageRef.current) return;
+    if (!canvasContainerRef.current) return;
     
     const container = canvasContainerRef.current;
     const rect = container.getBoundingClientRect();
     
-    // Zoomujeme na střed canvasu
+    // Střed displeje
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
     
-    // Pozice středu v souřadnicích obrázku
-    const centerXInImage = centerX / zoom - offset.x;
-    const centerYInImage = centerY / zoom - offset.y;
+    // Pozice středu displeje v prostoru obrázku před změnou zoomu
+    const imagePointBeforeX = centerX / zoom - offset.x;
+    const imagePointBeforeY = centerY / zoom - offset.y;
     
-    setZoom(prev => {
-      const newZoom = Math.min(prev * 1.2, MAX_ZOOM);
-      
-      // Výpočet nového offsetu, aby zůstal střed na stejné pozici
-      const newOffsetX = centerXInImage - (centerX / newZoom);
-      const newOffsetY = centerYInImage - (centerY / newZoom);
-      
-      // Omezení offsetu
-      setOffset(constrainOffset({ x: newOffsetX, y: newOffsetY }, newZoom));
-      
-      return newZoom;
-    });
-  }, [canvasContainerRef, imageRef, zoom, offset, setZoom, setOffset, constrainOffset, MAX_ZOOM]);
+    // Nový zoom (zvětšení)
+    const newZoom = Math.min(zoom * 1.2, MAX_ZOOM);
+    
+    // Nový offset tak, aby stejný bod obrázku byl ve středu displeje
+    const newOffsetX = -imagePointBeforeX + (centerX / newZoom);
+    const newOffsetY = -imagePointBeforeY + (centerY / newZoom);
+    
+    // Nastavení nových hodnot
+    setZoom(newZoom);
+    setOffset(constrainOffset({ x: newOffsetX, y: newOffsetY }, newZoom));
+    
+  }, [canvasContainerRef, zoom, offset, setZoom, setOffset, constrainOffset, MAX_ZOOM]);
   
+  // Opravená funkce pro zoom out, která udržuje střed displeje ve středu
   const handleZoomOut = useCallback(() => {
-    if (!canvasContainerRef.current || !imageRef.current) return;
+    if (!canvasContainerRef.current) return;
     
     const container = canvasContainerRef.current;
     const rect = container.getBoundingClientRect();
     
-    // Zoomujeme na střed canvasu
+    // Střed displeje
     const centerX = rect.width / 2;
     const centerY = rect.height / 2;
     
-    // Pozice středu v souřadnicích obrázku
-    const centerXInImage = centerX / zoom - offset.x;
-    const centerYInImage = centerY / zoom - offset.y;
+    // Pozice středu displeje v prostoru obrázku před změnou zoomu
+    const imagePointBeforeX = centerX / zoom - offset.x;
+    const imagePointBeforeY = centerY / zoom - offset.y;
     
-    setZoom(prev => {
-      const newZoom = Math.max(prev / 1.2, MIN_ZOOM);
-      
-      // Výpočet nového offsetu, aby zůstal střed na stejné pozici
-      const newOffsetX = centerXInImage - (centerX / newZoom);
-      const newOffsetY = centerYInImage - (centerY / newZoom);
-      
-      // Omezení offsetu
-      setOffset(constrainOffset({ x: newOffsetX, y: newOffsetY }, newZoom));
-      
-      return newZoom;
-    });
-  }, [canvasContainerRef, imageRef, zoom, offset, setZoom, setOffset, constrainOffset, MIN_ZOOM]);
+    // Nový zoom (zmenšení)
+    const newZoom = Math.max(zoom / 1.2, MIN_ZOOM);
+    
+    // Nový offset tak, aby stejný bod obrázku byl ve středu displeje
+    const newOffsetX = -imagePointBeforeX + (centerX / newZoom);
+    const newOffsetY = -imagePointBeforeY + (centerY / newZoom);
+    
+    // Nastavení nových hodnot
+    setZoom(newZoom);
+    setOffset(constrainOffset({ x: newOffsetX, y: newOffsetY }, newZoom));
+    
+  }, [canvasContainerRef, zoom, offset, setZoom, setOffset, constrainOffset, MIN_ZOOM]);
 
   return { handleZoomIn, handleZoomOut };
 };

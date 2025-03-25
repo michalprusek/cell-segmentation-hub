@@ -24,10 +24,11 @@ const SlicingModeVisualizer = ({
           y1={sliceStartPoint.y}
           x2={cursorPosition.x}
           y2={cursorPosition.y}
-          stroke="#FF0000"
-          strokeWidth={2/zoom}
-          strokeDasharray={`${6/zoom},${3/zoom}`}
+          stroke="#FF3B30"
+          strokeWidth={2.5/zoom}
+          strokeDasharray={`${8/zoom},${4/zoom}`}
           vectorEffect="non-scaling-stroke"
+          filter="url(#line-glow)"
         />
       )}
       
@@ -36,10 +37,11 @@ const SlicingModeVisualizer = ({
         cx={sliceStartPoint.x}
         cy={sliceStartPoint.y}
         r={6/zoom}
-        fill="#FF0000"
+        fill="#FF3B30"
         stroke="#FFFFFF"
-        strokeWidth={1.5/zoom}
+        strokeWidth={2/zoom}
         vectorEffect="non-scaling-stroke"
+        filter="url(#point-glow)"
       />
     </>
   );

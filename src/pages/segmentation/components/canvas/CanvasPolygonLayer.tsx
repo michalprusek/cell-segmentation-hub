@@ -110,6 +110,21 @@ const CanvasPolygonLayer = ({
         imageSize={imageSize}
         zoom={zoom}
       />
+      
+      {/* Cursor to last point connection line */}
+      {editMode && tempPoints.points.length > 0 && cursorPosition && (
+        <line
+          x1={tempPoints.points[tempPoints.points.length - 1].x}
+          y1={tempPoints.points[tempPoints.points.length - 1].y}
+          x2={cursorPosition.x}
+          y2={cursorPosition.y}
+          stroke="#FF9500"
+          strokeWidth={2/zoom}
+          strokeDasharray={`${6/zoom},${4/zoom}`}
+          vectorEffect="non-scaling-stroke"
+          filter="url(#line-glow)"
+        />
+      )}
     </svg>
   );
 };

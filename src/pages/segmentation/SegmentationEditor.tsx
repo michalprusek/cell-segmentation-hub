@@ -14,6 +14,8 @@ import EditorToolbar from './components/EditorToolbar';
 import EditorCanvas from './components/EditorCanvas';
 import RegionPanel from './components/RegionPanel';
 import StatusBar from './components/StatusBar';
+import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
+import { SegmentationProvider } from './contexts/SegmentationContext';
 
 const SegmentationEditor = () => {
   const { projectId, imageId } = useParams<{ projectId: string, imageId: string }>();
@@ -59,6 +61,7 @@ const SegmentationEditor = () => {
     toggleEditMode,
     toggleSlicingMode,
     togglePointAddingMode,
+    isShiftPressed
   } = useSegmentationEditor(projectId, imageId, user?.id);
 
   // Add keyboard shortcuts
@@ -111,89 +114,95 @@ const SegmentationEditor = () => {
   const isAnyEditModeActive = editMode || slicingMode || pointAddingMode;
 
   return (
-    <motion.div 
-      className={`h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground`}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      {/* Header */}
-      <EditorHeader 
-        projectId={projectId || ''}
-        projectTitle={projectTitle}
-        imageName={imageName}
-        saving={saving}
-        loading={loading}
-        currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
-        totalImages={totalImages}
-        onNavigate={navigateToImage}
-        onSave={handleSave}
-      />
-      
-      {/* Main content */}
-      <div className="flex-1 flex flex-col relative overflow-hidden items-center justify-center p-4">
-        {/* Left Toolbar */}
-        <EditorToolbar 
-          zoom={zoom}
-          onZoomIn={handleZoomIn}
-          onZoomOut={handleZoomOut}
-          onResetView={handleResetView}
-          onSave={handleSave}
-          editMode={editMode}
-          slicingMode={slicingMode}
-          pointAddingMode={pointAddingMode}
-          onToggleEditMode={toggleEditMode}
-          onToggleSlicingMode={toggleSlicingMode}
-          onTogglePointAddingMode={togglePointAddingMode}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          canUndo={canUndo}
-          canRedo={canRedo}
-        />
-        
-        {/* Right sidebar */}
-        <RegionPanel 
+    <SegmentationProvider segmentation={segmentation}>
+      <motion.div 
+        className={`h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground`}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        {/* Header */}
+        <EditorHeader 
+          projectId={projectId || ''}
+          projectTitle={projectTitle}
+          imageName={imageName}
+          saving={saving}
           loading={loading}
-          segmentation={segmentation}
-          selectedPolygonId={selectedPolygonId}
-          onSelectPolygon={setSelectedPolygonId}
+          currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
+          totalImages={totalImages}
+          onNavigate={navigateToImage}
+          onSave={handleSave}
         />
         
-        {/* Canvas container - čtvercový */}
-        <div className="w-full h-full flex items-center justify-center">
-          <EditorCanvas 
-            loading={loading}
-            segmentation={segmentation}
+        {/* Main content */}
+        <div className="flex-1 flex flex-col relative overflow-hidden items-center justify-center p-4">
+          {/* Left Toolbar */}
+          <EditorToolbar 
             zoom={zoom}
-            offset={offset}
-            selectedPolygonId={selectedPolygonId}
-            hoveredVertex={hoveredVertex}
-            imageSrc={imageSrc}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            dragState={dragState}
-            vertexDragState={vertexDragState}
-            containerRef={canvasContainerRef}
+            onZoomIn={handleZoomIn}
+            onZoomOut={handleZoomOut}
+            onResetView={handleResetView}
+            onSave={handleSave}
             editMode={editMode}
             slicingMode={slicingMode}
             pointAddingMode={pointAddingMode}
-            tempPoints={tempPoints}
-            cursorPosition={cursorPosition}
-            sliceStartPoint={sliceStartPoint}
-            hoveredSegment={hoveredSegment}
+            onToggleEditMode={toggleEditMode}
+            onToggleSlicingMode={toggleSlicingMode}
+            onTogglePointAddingMode={togglePointAddingMode}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            canUndo={canUndo}
+            canRedo={canRedo}
           />
+          
+          {/* Right sidebar */}
+          <RegionPanel 
+            loading={loading}
+            segmentation={segmentation}
+            selectedPolygonId={selectedPolygonId}
+            onSelectPolygon={setSelectedPolygonId}
+          />
+          
+          {/* Canvas container */}
+          <div className="w-full h-full flex items-center justify-center">
+            <EditorCanvas 
+              loading={loading}
+              segmentation={segmentation}
+              zoom={zoom}
+              offset={offset}
+              selectedPolygonId={selectedPolygonId}
+              hoveredVertex={hoveredVertex}
+              imageSrc={imageSrc}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              dragState={dragState}
+              vertexDragState={vertexDragState}
+              containerRef={canvasContainerRef}
+              editMode={editMode}
+              slicingMode={slicingMode}
+              pointAddingMode={pointAddingMode}
+              tempPoints={tempPoints}
+              cursorPosition={cursorPosition}
+              sliceStartPoint={sliceStartPoint}
+              hoveredSegment={hoveredSegment}
+              isShiftPressed={isShiftPressed}
+            />
+          </div>
+          
+          {/* Status */}
+          <StatusBar 
+            segmentation={segmentation} 
+            editMode={isAnyEditModeActive ? 
+              (editMode ? "edit" : slicingMode ? "slice" : "add-point") : undefined}
+          />
+
+          {/* Keyboard shortcuts help */}
+          <KeyboardShortcutsHelp />
         </div>
-        
-        {/* Status */}
-        <StatusBar 
-          segmentation={segmentation} 
-          editMode={isAnyEditModeActive ? 
-            (editMode ? "edit" : slicingMode ? "slice" : "add-point") : undefined}
-        />
-      </div>
-    </motion.div>
+      </motion.div>
+    </SegmentationProvider>
   );
 };
 

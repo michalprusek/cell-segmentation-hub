@@ -1,92 +1,58 @@
 
 import React from 'react';
-import ImageCard from './ImageCard';
-import ImageListItem from './ImageListItem';
-import type { SegmentationResult } from "@/lib/segmentation";
-import { motion } from "framer-motion";
-
-interface ProjectImage {
-  id: string;
-  name: string;
-  url: string;
-  createdAt: Date;
-  updatedAt: Date;
-  segmentationStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  segmentationResult?: SegmentationResult;
-}
+import { motion } from 'framer-motion';
+import { ImageCard } from './ImageCard';
+import { ImageListItem } from './ImageListItem';
+import { ProjectImage } from '@/integrations/supabase/types';
 
 interface ProjectImagesProps {
   images: ProjectImage[];
-  onDelete: (id: string) => void;
-  onOpen: (image: ProjectImage) => void;
-  viewMode?: "grid" | "list";
+  onDelete: (imageId: string) => void;
+  onOpen: (imageId: string) => void;
+  viewMode: 'grid' | 'list';
 }
 
-const ProjectImages = ({ images, onDelete, onOpen, viewMode = "grid" }: ProjectImagesProps) => {
-  const container = {
-    hidden: { opacity: 0 },
-    show: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.05
-      }
-    }
-  };
-
-  // Add debug logging
-  console.log("ProjectImages rendering with", images.length, "images in", viewMode, "mode");
-
-  if (viewMode === "list") {
+const ProjectImages = ({
+  images,
+  onDelete,
+  onOpen,
+  viewMode,
+}: ProjectImagesProps) => {
+  if (viewMode === 'grid') {
     return (
-      <motion.div 
-        className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-        variants={container}
-        initial="hidden"
-        animate="show"
+      <motion.div
+        className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.3 }}
       >
-        <div className="divide-y divide-gray-200 dark:divide-gray-700">
-          {images.map((image) => (
-            <ImageListItem
-              key={image.id}
-              id={image.id}
-              name={image.name}
-              url={image.url}
-              updatedAt={image.updatedAt}
-              segmentationStatus={image.segmentationStatus}
-              segmentationResult={image.segmentationResult}
-              onDelete={onDelete}
-              onClick={() => {
-                console.log("ImageListItem clicked, opening image:", image.id);
-                onOpen(image);
-              }}
-            />
-          ))}
-        </div>
+        {images.map((image) => (
+          <ImageCard
+            key={image.id}
+            image={image}
+            onDelete={onDelete}
+            onOpen={onOpen}
+          />
+        ))}
       </motion.div>
     );
   }
 
   return (
-    <motion.div 
-      className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-      variants={container}
-      initial="hidden"
-      animate="show"
+    <motion.div
+      className="space-y-2"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.3 }}
     >
       {images.map((image) => (
-        <ImageCard 
+        <ImageListItem
           key={image.id}
-          id={image.id}
-          name={image.name}
-          url={image.url}
-          updatedAt={image.updatedAt}
-          segmentationStatus={image.segmentationStatus}
-          segmentationResult={image.segmentationResult}
+          image={image}
           onDelete={onDelete}
-          onClick={() => {
-            console.log("ImageCard clicked, opening image:", image.id);
-            onOpen(image);
-          }}
+          onOpen={onOpen}
         />
       ))}
     </motion.div>

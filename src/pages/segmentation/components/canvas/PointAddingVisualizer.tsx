@@ -24,10 +24,11 @@ const PointAddingVisualizer = ({
       r={6/zoom}
       fill="#4CAF50"
       stroke="#FFFFFF"
-      strokeWidth={1.5/zoom}
+      strokeWidth={2/zoom}
       vectorEffect="non-scaling-stroke"
       className="animate-pulse"
       style={{ animationDuration: '1s' }}
+      filter="url(#point-glow)"
     />
   );
 };

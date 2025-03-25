@@ -77,6 +77,7 @@ const CanvasVertex = ({
           transformOrigin: 'center center'
         }}
         vectorEffect="non-scaling-stroke"
+        filter="url(#point-shadow)"
       />
     </g>
   );

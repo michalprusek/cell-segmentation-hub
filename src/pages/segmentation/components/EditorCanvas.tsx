@@ -8,6 +8,7 @@ import CanvasImage from './canvas/CanvasImage';
 import CanvasPolygonLayer from './canvas/CanvasPolygonLayer';
 import CanvasZoomInfo from './canvas/CanvasZoomInfo';
 import { useTheme } from '@/contexts/ThemeContext';
+import EditorHelpTips from './EditorHelpTips';
 
 interface EditorCanvasProps {
   loading: boolean;
@@ -69,6 +70,7 @@ const EditorCanvas = ({
     if (!imageSrc) return;
     
     const img = new Image();
+    img.crossOrigin = "Anonymous";
     img.onload = () => {
       setImageSize({
         width: img.width,
@@ -93,20 +95,23 @@ const EditorCanvas = ({
 
   // Určení barvy okraje pro aktivní režim
   const getActiveModeBorderClass = () => {
-    if (slicingMode) return 'border-2 border-red-500';
-    if (pointAddingMode) return 'border-2 border-green-500';
-    if (editMode) return 'border-2 border-orange-500';
+    if (slicingMode) return 'border-2 border-red-500 shadow-lg shadow-red-500/20';
+    if (pointAddingMode) return 'border-2 border-green-500 shadow-lg shadow-green-500/20';
+    if (editMode) return 'border-2 border-orange-500 shadow-lg shadow-orange-500/20';
     return '';
+  };
+
+  // Vylepšené pozadí pro lepší kontrast
+  const getBackgroundPattern = () => {
+    return theme === 'dark' 
+      ? 'bg-[#161616] bg-opacity-90 bg-[radial-gradient(#2a2f3c_1px,transparent_1px)]' 
+      : 'bg-gray-100 bg-opacity-80 bg-[radial-gradient(#d1d5db_1px,transparent_1px)]';
   };
 
   return (
     <div 
       ref={containerRef} 
-      className={`flex-1 overflow-hidden relative ${
-        theme === 'dark' 
-          ? 'bg-[#161616] bg-opacity-90 bg-[radial-gradient(#1a1f2c_1px,transparent_1px)]' 
-          : 'bg-gray-100 bg-opacity-80 bg-[radial-gradient(#d1d5db_1px,transparent_1px)]'
-      } bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)] ${getActiveModeBorderClass()}`}
+      className={`flex-1 overflow-hidden relative ${getBackgroundPattern()} bg-[size:20px_20px] aspect-square max-h-[calc(100vh-12rem)] ${getActiveModeBorderClass()} rounded-lg`}
       onMouseDown={onMouseDown}
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
@@ -173,23 +178,32 @@ const EditorCanvas = ({
       
       {/* Editační režim indikátor */}
       {editMode && (
-        <div className="absolute bottom-4 left-4 bg-orange-600 text-white px-3 py-1 rounded-md text-sm font-semibold shadow-lg">
+        <div className="absolute bottom-4 left-4 bg-gradient-to-r from-orange-600 to-orange-500 text-white px-4 py-2 rounded-md text-sm font-semibold shadow-lg">
           Edit Mode - Vytváření nového polygonu {isShiftPressed && "(Auto-přidávání při držení Shift)"}
         </div>
       )}
       
       {/* Slicing režim indikátor */}
       {slicingMode && (
-        <div className="absolute bottom-4 left-4 bg-red-600 text-white px-3 py-1 rounded-md text-sm font-semibold shadow-lg">
+        <div className="absolute bottom-4 left-4 bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-2 rounded-md text-sm font-semibold shadow-lg">
           Slicing Mode - Rozdělení polygonu {sliceStartPoint ? "(Klikněte pro dokončení)" : "(Klikněte pro začátek)"}
         </div>
       )}
       
       {/* Point adding režim indikátor */}
       {pointAddingMode && (
-        <div className="absolute bottom-4 left-4 bg-green-600 text-white px-3 py-1 rounded-md text-sm font-semibold shadow-lg">
+        <div className="absolute bottom-4 left-4 bg-gradient-to-r from-green-600 to-green-500 text-white px-4 py-2 rounded-md text-sm font-semibold shadow-lg">
           Point Adding Mode - Přidávání bodů do polygonu
         </div>
+      )}
+
+      {/* Help tips */}
+      {(editMode || slicingMode || pointAddingMode) && (
+        <EditorHelpTips 
+          editMode={editMode} 
+          slicingMode={slicingMode} 
+          pointAddingMode={pointAddingMode} 
+        />
       )}
     </div>
   );
