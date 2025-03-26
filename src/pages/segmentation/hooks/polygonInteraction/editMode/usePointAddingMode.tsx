@@ -1,5 +1,5 @@
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { useGeometryUtils } from './useGeometryUtils';
 import { usePathModification } from './usePathModification';
@@ -31,6 +31,9 @@ export const usePointAddingMode = (
     togglePointAddingMode,
     resetPointAddingState
   } = usePointAddingState();
+  
+  // Sledování pozice kurzoru pro zobrazení spojnice
+  const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
   
   // Utility pro geometrické výpočty a hledání polygonů
   const { distance } = useGeometryUtils();
@@ -72,6 +75,45 @@ export const usePointAddingMode = (
     findPolygonById
   });
   
+  // Sledování pozice kurzoru pro vykreslení spojnice k poslednímu bodu
+  useEffect(() => {
+    if (!pointAddingMode) {
+      setCursorPosition(null);
+      return;
+    }
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      // Najdeme správný kontejner, kde se nachází canvas
+      const containerElement = document.querySelector('[data-testid="canvas-container"]') as HTMLElement;
+      if (!containerElement) return;
+      
+      const rect = containerElement.getBoundingClientRect();
+      
+      // Přepočet souřadnic myši na souřadnice obrazu
+      const canvasX = (e.clientX - rect.left);
+      const canvasY = (e.clientY - rect.top);
+      
+      // Získání aktuální hodnoty zoom a offset z atributů nebo transformace
+      const zoomMatch = containerElement.style.transform?.match(/scale\(([^)]+)\)/);
+      const zoom = zoomMatch ? parseFloat(zoomMatch[1]) : 1;
+      
+      const transformMatch = containerElement.style.transform?.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
+      const offsetX = transformMatch ? parseFloat(transformMatch[1]) : 0;
+      const offsetY = transformMatch ? parseFloat(transformMatch[2]) : 0;
+      
+      // Přepočet na souřadnice obrazu
+      const imageX = canvasX / zoom - offsetX / zoom;
+      const imageY = canvasY / zoom - offsetY / zoom;
+      
+      setCursorPosition({ x: imageX, y: imageY });
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+    };
+  }, [pointAddingMode]);
+  
   // Logování pro debugování
   useEffect(() => {
     if (pointAddingMode) {
@@ -79,10 +121,11 @@ export const usePointAddingMode = (
         selectedVertexIndex, 
         sourcePolygonId, 
         tempPoints: tempPoints.length,
-        hoveredSegment
+        hoveredSegment,
+        cursorPosition
       });
     }
-  }, [pointAddingMode, selectedVertexIndex, sourcePolygonId, tempPoints, hoveredSegment]);
+  }, [pointAddingMode, selectedVertexIndex, sourcePolygonId, tempPoints, hoveredSegment, cursorPosition]);
 
   return {
     pointAddingMode,
@@ -92,6 +135,7 @@ export const usePointAddingMode = (
     selectedVertexIndex,
     sourcePolygonId,
     selectedPolygonPoints,
+    cursorPosition,
     togglePointAddingMode,
     detectVertexUnderCursor,
     handlePointAddingClick,

@@ -76,6 +76,7 @@ const EditorModeVisualizations = ({
           selectedVertexIndex={selectedVertexIndex}
           sourcePolygonId={sourcePolygonId}
           polygonPoints={selectedPolygonPoints}
+          cursorPosition={cursorPosition}
         />
       )}
     </>

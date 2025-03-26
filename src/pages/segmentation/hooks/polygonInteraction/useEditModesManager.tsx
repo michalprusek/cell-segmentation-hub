@@ -99,11 +99,16 @@ export const useEditModesManager = (
     return editModeCore.editMode || slicingMode.slicingMode || pointAddingMode.pointAddingMode;
   }, [editModeCore.editMode, slicingMode.slicingMode, pointAddingMode.pointAddingMode]);
 
+  // Určete, který cursorPosition použít - podle aktivního režimu
+  const activeCursorPosition = pointAddingMode.pointAddingMode 
+    ? pointAddingMode.cursorPosition 
+    : (editModeCore.cursorPosition || slicingMode.cursorPosition);
+
   return {
     // Základní editační režim
     editMode: editModeCore.editMode,
     tempPoints: editModeCore.tempPoints,
-    cursorPosition: editModeCore.cursorPosition || slicingMode.cursorPosition,
+    cursorPosition: activeCursorPosition,
     isShiftPressed: editModeCore.isShiftPressed,
     toggleEditMode,
     
