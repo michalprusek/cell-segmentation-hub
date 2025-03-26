@@ -27,7 +27,7 @@ export const useEditModeCore = (
     isShiftPressed
   } = useTempPoints(editMode, zoom, offset);
   
-  const { addPointsToPolygon } = usePathModification(segmentation, setSegmentation);
+  const { modifyPolygonPath } = usePathModification(segmentation, setSegmentation);
   
   /**
    * Toggle edit mode on/off
@@ -64,7 +64,7 @@ export const useEditModeCore = (
         // If tempPoints has startIndex, endIndex, and polygonId, we're adding to existing polygon
         if (tempPoints.startIndex !== null && tempPoints.endIndex !== null && tempPoints.polygonId) {
           // Add points to existing polygon
-          const success = addPointsToPolygon(
+          const success = modifyPolygonPath(
             tempPoints.polygonId,
             tempPoints.startIndex,
             tempPoints.endIndex,
@@ -111,7 +111,7 @@ export const useEditModeCore = (
     // Add point to temporary points
     addPointToTemp(point);
     return true;
-  }, [editMode, tempPoints, segmentation, setSegmentation, addPointsToPolygon, resetTempPoints, addPointToTemp, zoom]);
+  }, [editMode, tempPoints, segmentation, setSegmentation, modifyPolygonPath, resetTempPoints, addPointToTemp, zoom]);
 
   return {
     editMode,

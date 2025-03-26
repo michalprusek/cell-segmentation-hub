@@ -1,7 +1,7 @@
 
 import { useCallback } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
-import { toast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import { useOptimalPath } from './useOptimalPath';
 
 interface PointAddingHandlersProps {
@@ -108,21 +108,13 @@ export const usePointAddingHandlers = ({
           );
           
           if (success) {
-            toast({
-              title: "Úspěch",
-              description: "Body byly úspěšně přidány do polygonu",
-              variant: "default"
-            });
+            toast.success("Body byly úspěšně přidány do polygonu");
             resetPointAddingState();
             
             // Automaticky ukončíme režim přidávání bodů po úspěšném přidání
             setPointAddingMode(false);
           } else {
-            toast({
-              title: "Chyba",
-              description: "Přidání bodů selhalo",
-              variant: "destructive"
-            });
+            toast.error("Přidání bodů selhalo");
             resetPointAddingState();
           }
         }
