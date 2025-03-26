@@ -95,7 +95,7 @@ const PointAddingVisualizer = ({
             cx={point.x}
             cy={point.y}
             r={pointRadius * 1.5}
-            fill="rgba(234, 179, 8, 0.5)"  // Yellow color
+            fill="rgba(234, 179, 8, 0.5)"  // Yellow color with transparency
             stroke="#EAB308"
             strokeWidth={strokeWidth}
             style={{ pointerEvents: 'none' }}
@@ -109,7 +109,7 @@ const PointAddingVisualizer = ({
           cx={hoveredSegment.projectedPoint.x}
           cy={hoveredSegment.projectedPoint.y}
           r={pointRadius * 1.5}
-          fill="rgba(74, 222, 128, 0.5)" // Green
+          fill="rgba(74, 222, 128, 0.5)" // Green with transparency
           stroke="#4ADE80"
           strokeWidth={strokeWidth}
           style={{ pointerEvents: 'none' }}
@@ -122,7 +122,7 @@ const PointAddingVisualizer = ({
           cx={startVertex.x}
           cy={startVertex.y}
           r={pointRadius * 1.5}
-          fill="rgba(249, 115, 22, 0.5)" // Orange
+          fill="rgba(249, 115, 22, 0.5)" // Orange with transparency
           stroke="#F97316"
           strokeWidth={strokeWidth}
           style={{ pointerEvents: 'none' }}
@@ -133,7 +133,7 @@ const PointAddingVisualizer = ({
       {/* Path connecting temporary points */}
       {tempPoints.length > 0 && startVertex && (
         <path
-          d={`M ${startVertex.x} ${startVertex.y} ${createPathData(tempPoints).substring(1)}`}
+          d={`M ${startVertex.x} ${startVertex.y} L ${tempPoints[0].x} ${tempPoints[0].y} ${createPathData(tempPoints).substring(1)}`}
           fill="none"
           stroke="#4ADE80"
           strokeWidth={strokeWidth}
