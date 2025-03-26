@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { Folder, Upload } from "lucide-react";
 
 import DashboardHeader from "@/components/DashboardHeader";
 import StatsOverview from "@/components/StatsOverview";
@@ -19,6 +20,7 @@ const Dashboard = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<string>("updated_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [activeTab, setActiveTab] = useState("projects");
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -140,14 +142,6 @@ const Dashboard = () => {
     setSortDirection(newDirection);
   };
 
-  const handleToggleUploader = () => {
-    // Fix the TypeScript error by casting the element to HTMLElement
-    const uploadTab = document.querySelector('[data-state="inactive"][value="upload"]') as HTMLElement;
-    if (uploadTab) {
-      uploadTab.click();
-    }
-  };
-
   if (fetchError) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -181,35 +175,48 @@ const Dashboard = () => {
         </div>
         
         <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
-            <div className="flex-grow"></div> {/* Spacer */}
-            <ProjectToolbar
-              sortField="name" 
-              sortDirection="asc" 
-              onSort={handleSort}
-              viewMode={viewMode}
-              setViewMode={setViewMode}
-              showSearchBar={false}
-              showUploadButton={false}
-              showExportButton={false}
-            />
-          </div>
-          
-          <div className="mt-0">
-            <ProjectsList 
-              projects={projects} 
-              viewMode={viewMode} 
-              onOpenProject={handleOpenProject}
-              loading={loading}
-              showCreateCard={true}
-            />
-          </div>
-          
-          <div className="hidden">
-            <div id="uploader-container">
-              <ImageUploader />
-            </div>
-          </div>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="mb-6">
+              <TabsTrigger value="projects" className="flex items-center gap-2">
+                <Folder className="h-4 w-4" />
+                {t('common.projects')}
+              </TabsTrigger>
+              <TabsTrigger value="upload" className="flex items-center gap-2">
+                <Upload className="h-4 w-4" />
+                {t('common.uploadImages')}
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="projects" className="mt-0">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
+                <div className="flex-grow"></div> {/* Spacer */}
+                <ProjectToolbar
+                  sortField="name" 
+                  sortDirection="asc" 
+                  onSort={handleSort}
+                  viewMode={viewMode}
+                  setViewMode={setViewMode}
+                  showSearchBar={false}
+                  showUploadButton={false}
+                  showExportButton={false}
+                />
+              </div>
+              
+              <ProjectsList 
+                projects={projects} 
+                viewMode={viewMode} 
+                onOpenProject={handleOpenProject}
+                loading={loading}
+                showCreateCard={true}
+              />
+            </TabsContent>
+            
+            <TabsContent value="upload">
+              <div className="bg-white p-6 rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
+                <ImageUploader />
+              </div>
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>
