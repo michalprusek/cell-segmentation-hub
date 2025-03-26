@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
-import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Hook for modifying polygon paths (adding/removing points)
@@ -10,90 +9,16 @@ export const usePathModification = (
   setSegmentation: (seg: SegmentationResult | null) => void
 ) => {
   /**
-   * Add points to polygon between two vertices
-   */
-  const addPointsToPolygon = useCallback((
-    polygonId: string,
-    startVertexIndex: number,
-    endVertexIndex: number,
-    points: Point[]
-  ): boolean => {
-    if (!segmentation) return false;
-    
-    // Find target polygon
-    const polygonIndex = segmentation.polygons.findIndex(p => p.id === polygonId);
-    if (polygonIndex === -1) return false;
-    
-    const polygon = segmentation.polygons[polygonIndex];
-    
-    try {
-      // Create new array of points with inserted sequence
-      const newPolygon = { ...polygon };
-      
-      // We need to create a new array of points that includes our new points
-      // between the start and end vertices. The logic depends on the order of indices.
-      const totalPoints = polygon.points.length;
-      
-      // Get points before start
-      const pointsBefore = polygon.points.slice(0, startVertexIndex + 1);
-      
-      // Get points after end (or wrap around)
-      let pointsAfter;
-      if (endVertexIndex < startVertexIndex) {
-        // Handle wrap around
-        pointsAfter = polygon.points.slice(endVertexIndex);
-      } else {
-        // Normal case
-        pointsAfter = polygon.points.slice(endVertexIndex);
-      }
-      
-      // New points (excluding first and last which are already in the polygon)
-      const newPoints = points.slice(0, -1);
-      
-      // Create complete new points array
-      if (endVertexIndex > startVertexIndex) {
-        // Normal case
-        newPolygon.points = [
-          ...pointsBefore,
-          ...newPoints,
-          ...pointsAfter
-        ];
-      } else {
-        // Wrap around case
-        newPolygon.points = [
-          ...pointsBefore,
-          ...newPoints,
-          ...pointsAfter
-        ];
-      }
-      
-      // Create new polygons array
-      const newPolygons = [...segmentation.polygons];
-      newPolygons[polygonIndex] = newPolygon;
-      
-      // Update segmentation
-      setSegmentation({
-        ...segmentation,
-        polygons: newPolygons
-      });
-      
-      return true;
-    } catch (error) {
-      console.error('Error adding points to polygon:', error);
-      return false;
-    }
-  }, [segmentation, setSegmentation]);
-
-  /**
    * Modify polygon path by replacing a segment between two points with a new path
+   * Considering the optimal path between the points
    */
   const modifyPolygonPath = useCallback((
-    polygonId: string,
-    startIndex: number,
-    endIndex: number,
+    polygonId: string | null,
+    startIndex: number | null,
+    endIndex: number | null,
     newPoints: Point[]
   ): boolean => {
-    if (!segmentation) return false;
+    if (!segmentation || !polygonId || startIndex === null || endIndex === null) return false;
     
     try {
       // Find target polygon
@@ -103,92 +28,56 @@ export const usePathModification = (
       const polygon = segmentation.polygons[polygonIndex];
       const totalPoints = polygon.points.length;
       
+      // Pokud jsou body stejné, nemůžeme provést modifikaci
+      if (startIndex === endIndex) return false;
+      
       // Create a new array of points
       let newPolygonPoints: Point[] = [];
       
-      // Handle special case for consecutive points
-      if ((endIndex === (startIndex + 1) % totalPoints) || 
-          (startIndex === (endIndex + 1) % totalPoints)) {
-        // Simple replacement - just insert our new points between the start and end vertices
-        const pointsBeforeStart = polygon.points.slice(0, Math.min(startIndex, endIndex) + 1);
-        const pointsAfterEnd = polygon.points.slice(Math.max(startIndex, endIndex));
-        
-        if (startIndex < endIndex) {
-          newPolygonPoints = [
-            ...pointsBeforeStart,
-            ...newPoints,
-            ...pointsAfterEnd
-          ];
-        } else {
-          // The path goes backward, so we need to reverse order
-          newPolygonPoints = [
-            ...pointsAfterEnd,
-            ...newPoints,
-            ...pointsBeforeStart
-          ];
+      // Find all points that should be kept (those that are not between start and end)
+      const keepPoints: Point[] = [];
+      let shouldKeep = true;
+      let currentIndex = 0;
+      
+      // Projdeme body polygonu a zachováme pouze ty, které nejsou mezi startIndex a endIndex
+      while (currentIndex < totalPoints) {
+        if (currentIndex === startIndex) {
+          // Začátek nahrazované části
+          keepPoints.push(polygon.points[currentIndex]); // Zachováme počáteční bod
+          shouldKeep = false;
+        } else if (currentIndex === endIndex) {
+          // Konec nahrazované části
+          keepPoints.push(polygon.points[currentIndex]); // Zachováme koncový bod
+          shouldKeep = true;
+        } else if (shouldKeep) {
+          // Body mimo nahrazovanou část
+          keepPoints.push(polygon.points[currentIndex]);
         }
+        
+        currentIndex++;
+        // Po dosažení konce pole začneme znovu od začátku, pokud jsme ještě nenašli endIndex
+        if (currentIndex === totalPoints && shouldKeep === false) {
+          currentIndex = 0;
+        } else if (currentIndex === totalPoints) {
+          break;
+        }
+      }
+      
+      // Najít pozici startIndex v keepPoints
+      const startKeepIndex = keepPoints.findIndex(p => 
+        p.x === polygon.points[startIndex].x && p.y === polygon.points[startIndex].y);
+      
+      if (startKeepIndex >= 0) {
+        // Vložíme nové body mezi start a end
+        newPolygonPoints = [
+          ...keepPoints.slice(0, startKeepIndex + 1),
+          ...newPoints,
+          ...keepPoints.slice(startKeepIndex + 1)
+        ];
       } else {
-        // Find the path indices in order
-        let pathIndices: number[] = [];
-        if (startIndex < endIndex) {
-          // Forward path
-          for (let i = startIndex; i <= endIndex; i++) {
-            pathIndices.push(i);
-          }
-        } else {
-          // Handle wrap around - two possible paths
-          // Path 1: Going forward over the zero index
-          let path1: number[] = [];
-          for (let i = startIndex; i < totalPoints; i++) {
-            path1.push(i);
-          }
-          for (let i = 0; i <= endIndex; i++) {
-            path1.push(i);
-          }
-          
-          // Path 2: Going backward
-          let path2: number[] = [];
-          for (let i = startIndex; i >= endIndex; i--) {
-            path2.push(i);
-          }
-          
-          // Use the shorter path
-          pathIndices = path1.length <= path2.length ? path1 : path2;
-        }
-        
-        // Identify the points to keep (those not in the path)
-        const pointsToRemove = new Set(pathIndices);
-        let keptPoints: Point[] = [];
-        for (let i = 0; i < totalPoints; i++) {
-          if (!pointsToRemove.has(i) || i === startIndex || i === endIndex) {
-            keptPoints.push(polygon.points[i]);
-          }
-        }
-        
-        // Find where to insert our new points
-        const startPoint = polygon.points[startIndex];
-        const endPoint = polygon.points[endIndex];
-        
-        // Insert the new points between start and end in kept points
-        const startInsertIndex = keptPoints.findIndex(p => 
-          p.x === startPoint.x && p.y === startPoint.y);
-        
-        if (startInsertIndex >= 0) {
-          newPolygonPoints = [
-            ...keptPoints.slice(0, startInsertIndex + 1),
-            ...newPoints,
-            ...keptPoints.slice(startInsertIndex + 1)
-          ];
-        } else {
-          // Fallback in case something went wrong
-          newPolygonPoints = [
-            polygon.points[startIndex],
-            ...newPoints,
-            polygon.points[endIndex],
-            ...polygon.points.filter((_, i) => 
-              i !== startIndex && i !== endIndex && !pathIndices.includes(i))
-          ];
-        }
+        // Fallback pokud něco selhalo
+        console.error("Failed to find start point in kept points");
+        return false;
       }
       
       // Create new polygon object
@@ -215,7 +104,6 @@ export const usePathModification = (
   }, [segmentation, setSegmentation]);
 
   return {
-    addPointsToPolygon,
     modifyPolygonPath
   };
 };

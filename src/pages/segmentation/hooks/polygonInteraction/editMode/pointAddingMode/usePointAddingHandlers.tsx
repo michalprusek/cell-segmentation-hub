@@ -58,7 +58,22 @@ export const usePointAddingHandlers = ({
     
     console.log("Point adding click:", x, y, "hoveredSegment:", hoveredSegment);
     
-    // Pokud máme zvýrazněný vrchol
+    // Pokud klikneme někam na plátno (a ne na existující bod)
+    if (!hoveredSegment.polygonId || hoveredSegment.segmentIndex === null) {
+      // Ale již byl vybrán počáteční bod, tak přidáme nový bod do dočasné sekvence
+      if (selectedVertexIndex !== null && sourcePolygonId !== null) {
+        // Přidáme bod do naší dočasné sekvence
+        console.log("Adding temp point:", x, y);
+        const newPoint = { x, y };
+        
+        // Vždy vytvoříme nové pole s novým bodem na konci
+        setTempPoints([...tempPoints, newPoint]);
+        return true;
+      }
+      return false;
+    }
+    
+    // Pokud klikneme na existující vrchol polygonu
     if (hoveredSegment.polygonId && hoveredSegment.segmentIndex !== null) {
       // Pokud ještě nebyl vybrán počáteční vrchol
       if (selectedVertexIndex === null) {
@@ -81,7 +96,7 @@ export const usePointAddingHandlers = ({
           
           console.log("Completing path from", startIndex, "to", endIndex, "with", tempPoints.length, "points");
           
-          // Najdeme optimální cestu k nahrazení
+          // Najdeme optimální cestu k nahrazení (s ohledem na co nejmenší obvod)
           const { indices, start, end } = findOptimalPath(polygon, startIndex, endIndex);
           
           // Aplikujeme modifikaci s novou cestou
@@ -113,15 +128,6 @@ export const usePointAddingHandlers = ({
         }
         return true;
       }
-    } 
-    // Pokud byl vybrán počáteční vrchol, ale klikli jsme jinam (ne na koncový vrchol)
-    else if (selectedVertexIndex !== null && sourcePolygonId !== null) {
-      // Přidáme bod do naší dočasné sekvence
-      console.log("Adding temp point:", x, y);
-      const newPoint = { x, y };
-      // Zde byla chyba - opravuji vytváření nového pole s pevným typem Point[]
-      setTempPoints([...tempPoints, newPoint]);
-      return true;
     }
     
     return false;

@@ -96,19 +96,21 @@ const PointAddingVisualizer = ({
         />
       ))}
       
-      {/* Spojnice mezi dočasnými body */}
-      {tempPoints.length > 0 && selectedVertexIndex !== null && polygonPoints[selectedVertexIndex] && (
+      {/* Spojnice mezi body */}
+      {selectedVertexIndex !== null && polygonPoints[selectedVertexIndex] && (
         <g>
           {/* Čára od počátečního bodu k prvnímu dočasnému bodu */}
-          <line
-            x1={polygonPoints[selectedVertexIndex].x}
-            y1={polygonPoints[selectedVertexIndex].y}
-            x2={tempPoints[0].x}
-            y2={tempPoints[0].y}
-            stroke="blue"
-            strokeWidth={strokeWidth}
-            strokeDasharray={`${4/zoom} ${4/zoom}`}
-          />
+          {tempPoints.length > 0 && (
+            <line
+              x1={polygonPoints[selectedVertexIndex].x}
+              y1={polygonPoints[selectedVertexIndex].y}
+              x2={tempPoints[0].x}
+              y2={tempPoints[0].y}
+              stroke="blue"
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${4/zoom} ${4/zoom}`}
+            />
+          )}
           
           {/* Čáry mezi dočasnými body */}
           {tempPoints.map((point, index) => {
@@ -122,12 +124,11 @@ const PointAddingVisualizer = ({
                 y2={tempPoints[index + 1].y}
                 stroke="blue"
                 strokeWidth={strokeWidth}
-                strokeDasharray={`${4/zoom} ${4/zoom}`}
               />
             );
           })}
           
-          {/* Čára od posledního dočasného bodu k kurzoru */}
+          {/* Čára od posledního dočasného bodu ke kurzoru */}
           {tempPoints.length > 0 && hoveredSegment.projectedPoint && (
             <line
               x1={tempPoints[tempPoints.length - 1].x}
@@ -139,21 +140,20 @@ const PointAddingVisualizer = ({
               strokeDasharray={`${4/zoom} ${4/zoom}`}
             />
           )}
+          
+          {/* Čára od počátečního bodu ke kurzoru, když ještě nemáme žádné dočasné body */}
+          {tempPoints.length === 0 && hoveredSegment.projectedPoint && (
+            <line
+              x1={polygonPoints[selectedVertexIndex].x}
+              y1={polygonPoints[selectedVertexIndex].y}
+              x2={hoveredSegment.projectedPoint.x}
+              y2={hoveredSegment.projectedPoint.y}
+              stroke="blue"
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${4/zoom} ${4/zoom}`}
+            />
+          )}
         </g>
-      )}
-      
-      {/* Čára od počátečního bodu k kurzoru, když ještě nemáme žádné dočasné body */}
-      {tempPoints.length === 0 && selectedVertexIndex !== null && 
-       polygonPoints[selectedVertexIndex] && hoveredSegment.projectedPoint && (
-        <line
-          x1={polygonPoints[selectedVertexIndex].x}
-          y1={polygonPoints[selectedVertexIndex].y}
-          x2={hoveredSegment.projectedPoint.x}
-          y2={hoveredSegment.projectedPoint.y}
-          stroke="blue"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${4/zoom} ${4/zoom}`}
-        />
       )}
     </g>
   );

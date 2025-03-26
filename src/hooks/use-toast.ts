@@ -1,6 +1,6 @@
 
 import { toast as sonnerToast, type ToastT } from "sonner";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { ReactElement } from "react";
 
 type ToastProps = {
@@ -32,8 +32,7 @@ export function toast({ title, description, variant = "default" }: ToastProps) {
 export const useToast = () => {
   const [toasts, setToasts] = useState<Toast[]>([]);
   
-  // Pro účely zobrazení v Toaster komponentě
-  // (Ve skutečnosti používáme sonner, ale toaster.tsx to očekává)
+  // Vracíme pouze funkci toast, ale zachováváme kompatibilitu s Toaster komponentou
   return { 
     toast,
     toasts 
