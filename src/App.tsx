@@ -1,3 +1,4 @@
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -21,7 +22,7 @@ import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import RequestAccess from "./pages/RequestAccess";
 import Documentation from "./pages/Documentation";
-import ProjectExport from "./pages/ProjectExport";
+import ProjectExport from "./pages/export/ProjectExport";
 import { toast } from "sonner";
 
 // Create a client for React Query
