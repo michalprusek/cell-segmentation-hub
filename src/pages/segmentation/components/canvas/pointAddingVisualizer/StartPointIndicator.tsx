@@ -25,19 +25,30 @@ const StartPointIndicator = ({ selectedVertexIndex, polygonPoints, zoom }: Start
   
   console.log("Rendering StartPointIndicator for vertex:", selectedVertexIndex, "at", point.x, point.y);
 
-  const pointRadius = getPointRadius(zoom) * 1.5; // Zvětšíme bod pro lepší viditelnost
+  const pointRadius = getPointRadius(zoom) * 1.8; // Výrazně zvětšíme bod pro lepší viditelnost
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
 
   return (
     <g>
-      {/* Zvýraznění počátečního bodu - vnější */}
+      {/* Zvýraznění počátečního bodu - vnější pulzující kruh */}
       <circle
         cx={point.x}
         cy={point.y}
-        r={pointRadius * 1.8}
+        r={pointRadius * 2}
         fill={colors.startPoint.glowColor}
         className="animate-pulse"
+        style={{ pointerEvents: 'none' }}
+      />
+      
+      {/* Střední kruh */}
+      <circle
+        cx={point.x}
+        cy={point.y}
+        r={pointRadius * 1.4}
+        fill="rgba(255, 165, 0, 0.4)"
+        stroke={colors.startPoint.stroke}
+        strokeWidth={strokeWidth * 1.5}
         style={{ pointerEvents: 'none' }}
       />
       
@@ -47,7 +58,7 @@ const StartPointIndicator = ({ selectedVertexIndex, polygonPoints, zoom }: Start
         cy={point.y}
         r={pointRadius}
         fill={colors.startPoint.fill}
-        stroke={colors.startPoint.stroke}
+        stroke="white"
         strokeWidth={strokeWidth * 1.2}
         style={{ pointerEvents: 'none' }}
       />

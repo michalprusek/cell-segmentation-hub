@@ -10,54 +10,42 @@ export const useVertexDetection = (
   zoom: number,
   offset: { x: number; y: number }
 ) => {
-  const { getScreenCoordinates, getImageCoordinates } = useCoordinateTransform(zoom, offset);
+  const { getImageCoordinates } = useCoordinateTransform(zoom, offset);
 
   /**
    * Detekuje, zda je bod kurzoru v blízkosti bodu polygonu
-   * Přepočítává souřadnice s ohledem na zoom a offset
+   * Pracuje přímo se souřadnicemi plátna bez nutnosti dalších přepočtů
    */
   const isNearVertex = useCallback((
-    mouseX: number, 
-    mouseY: number, 
+    canvasX: number, 
+    canvasY: number, 
     point: Point, 
     detectionRadius: number = 10
   ): boolean => {
-    // V případě že přijímáme screen coordinates, převedeme je na image coordinates
-    const imageCoords = getImageCoordinates(mouseX, mouseY);
+    // Převedeme bod polygonu na canvas koordináty (nikoli naopak)
+    const pointOnCanvas = {
+      x: (point.x + offset.x) * zoom,
+      y: (point.y + offset.y) * zoom
+    };
     
-    // Výpočet vzdálenosti mezi bodem kurzoru a bodem polygonu v prostoru obrázku
-    const dx = point.x - imageCoords.x;
-    const dy = point.y - imageCoords.y;
+    // Výpočet vzdálenosti mezi bodem kurzoru a bodem polygonu v prostoru plátna
+    const dx = pointOnCanvas.x - canvasX;
+    const dy = pointOnCanvas.y - canvasY;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Dynamicky upravíme radius detekce podle zoomu - OBRÁCENĚ
-    let adjustedRadius;
-    if (zoom > 4) {
-      // Při extrémním přiblížení zvětšíme radius výrazněji
-      adjustedRadius = (detectionRadius * 2) / zoom;
-    } else if (zoom > 3) {
-      // Při velkém přiblížení zvětšíme radius
-      adjustedRadius = (detectionRadius * 1.5) / zoom;
-    } else if (zoom < 0.5) {
-      // Při velkém oddálení snížíme radius výrazněji
-      adjustedRadius = (detectionRadius * 0.6) / zoom;
-    } else if (zoom < 0.7) {
-      // Při mírném oddálení snížíme radius
-      adjustedRadius = (detectionRadius * 0.8) / zoom;
-    } else {
-      // Standardní radius v normálním zoomu
-      adjustedRadius = detectionRadius / zoom;
-    }
+    // Dynamicky upravíme radius detekce podle zoomu
+    const adjustedRadius = detectionRadius * (zoom < 1 ? 1.5 : 1);
     
     // Debugging pomocí konzole
-    console.log(`isNearVertex: Mouse at (${mouseX.toFixed(2)}, ${mouseY.toFixed(2)}), 
-                Image coords: (${imageCoords.x.toFixed(2)}, ${imageCoords.y.toFixed(2)}), 
-                Vertex at: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}), 
+    console.log(`isNearVertex: Mouse at canvas (${canvasX.toFixed(2)}, ${canvasY.toFixed(2)}), 
+                Point on canvas: (${pointOnCanvas.x.toFixed(2)}, ${pointOnCanvas.y.toFixed(2)}), 
+                Original point: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}), 
                 Distance: ${distance.toFixed(2)}, 
-                Threshold: ${adjustedRadius.toFixed(2)}`);
+                Threshold: ${adjustedRadius.toFixed(2)},
+                Zoom: ${zoom}, Offset: (${offset.x.toFixed(2)}, ${offset.y.toFixed(2)})`);
     
     return distance <= adjustedRadius;
-  }, [zoom, getImageCoordinates]);
+  }, [zoom, offset]);
 
   return { isNearVertex };
 };

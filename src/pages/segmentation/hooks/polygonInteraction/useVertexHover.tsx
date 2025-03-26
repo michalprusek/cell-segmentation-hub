@@ -2,7 +2,6 @@
 import { useCallback } from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { useVertexDetection } from './useVertexDetection';
-import { useCoordinateTransform } from './useCoordinateTransform';
 
 /**
  * Hook pro detekci najetí myši nad vertexy
@@ -15,7 +14,6 @@ export const useVertexHover = (
   setHoveredVertex: (state: { polygonId: string | null, vertexIndex: number | null }) => void
 ) => {
   const { isNearVertex } = useVertexDetection(zoom, offset);
-  const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
 
   /**
    * Detekce a nastavení bodu pod kurzorem
@@ -28,10 +26,11 @@ export const useVertexHover = (
     if (!segmentation) return false;
     
     const rect = containerElement.getBoundingClientRect();
-    const { x, y, canvasX, canvasY } = getCanvasCoordinates(clientX, clientY, rect);
+    const canvasX = clientX - rect.left;
+    const canvasY = clientY - rect.top;
     
     // Logování pro ladění
-    console.log(`detectVertexHover: Mouse at client: (${clientX}, ${clientY}), Canvas: (${canvasX}, ${canvasY}), Image space: (${x.toFixed(2)}, ${y.toFixed(2)})`);
+    console.log(`detectVertexHover: Mouse at client: (${clientX}, ${clientY}), Canvas: (${canvasX}, ${canvasY})`);
     
     let foundVertex = false;
     
@@ -40,7 +39,6 @@ export const useVertexHover = (
       for (let i = 0; i < polygon.points.length; i++) {
         const point = polygon.points[i];
         
-        // Použijeme větší detekční radius pro snazší výběr vertexu
         // Předáváme přímo canvas souřadnice (ne image souřadnice)
         if (isNearVertex(canvasX, canvasY, point, 15)) {
           if (hoveredVertex.polygonId !== polygon.id || hoveredVertex.vertexIndex !== i) {
@@ -64,7 +62,7 @@ export const useVertexHover = (
     }
     
     return foundVertex;
-  }, [segmentation, hoveredVertex, setHoveredVertex, isNearVertex, getCanvasCoordinates]);
+  }, [segmentation, hoveredVertex, setHoveredVertex, isNearVertex]);
 
   return { detectVertexHover };
 };

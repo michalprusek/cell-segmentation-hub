@@ -93,12 +93,11 @@ export const usePointAddingMode = (
       const canvasX = (e.clientX - rect.left);
       const canvasY = (e.clientY - rect.top);
       
-      // Získání zoom hodnoty z DOM - důležité pro správný přepočet souřadnic
+      // Najdeme transformační kontejner a přečteme jeho transform style
       let zoom = 1;
       let offsetX = 0;
       let offsetY = 0;
       
-      // Najdeme transformační kontejner a přečteme jeho transform style
       const transformContainer = document.querySelector('[data-testid="canvas-transform-container"]');
       if (transformContainer) {
         const style = window.getComputedStyle(transformContainer);
@@ -119,15 +118,15 @@ export const usePointAddingMode = (
       }
       
       // Přepočet na souřadnice obrazu
-      const imageX = canvasX / zoom - offsetX / zoom;
-      const imageY = canvasY / zoom - offsetY / zoom;
+      const imageX = (canvasX - offsetX) / zoom;
+      const imageY = (canvasY - offsetY) / zoom;
       
-      console.log(`Mouse position: client(${e.clientX}, ${e.clientY}), canvas(${canvasX}, ${canvasY}), image(${imageX}, ${imageY}), zoom: ${zoom}`);
+      console.log(`Mouse move: client(${e.clientX}, ${e.clientY}), canvas(${canvasX}, ${canvasY}), image(${imageX}, ${imageY}), zoom: ${zoom}, offset: (${offsetX}, ${offsetY})`);
       
       setCursorPosition({ x: imageX, y: imageY });
       
-      // Detekce vrcholu pod kurzorem
-      detectVertexUnderCursor(imageX, imageY);
+      // Detekce vrcholu pod kurzorem s předáním zoomu a offsetu
+      detectVertexUnderCursor(imageX, imageY, zoom, { x: offsetX, y: offsetY });
     };
     
     document.addEventListener('mousemove', handleMouseMove);

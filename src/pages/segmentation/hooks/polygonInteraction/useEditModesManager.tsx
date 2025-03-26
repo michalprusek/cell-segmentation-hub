@@ -32,13 +32,22 @@ export const useEditModesManager = (
     polygonEditMode.slicingMode || 
     polygonEditMode.pointAddingMode;
   
-  // Transformace souřadnic při kliknutí
+  // Zpracování kliknutí v editačním režimu
   const handleEditModeClick = useCallback((x: number, y: number) => {
-    console.log("handleEditModeClick called with image coordinates:", x, y);
+    const containerElement = document.querySelector('[data-testid="canvas-container"]') as HTMLElement;
+    if (!containerElement) return false;
+    
+    const rect = containerElement.getBoundingClientRect();
+    
+    // Log přesných souřadnic pro debugging
+    console.log(`handleEditModeClick: Input coordinates: (${x}, ${y})`);
+    console.log(`Current transform: zoom=${zoom}, offset=(${offset.x}, ${offset.y})`);
+    
+    // Souřadnice jsou již v prostoru obrazu, předáme je přímo
     return polygonEditMode.handleEditModeClick(x, y);
-  }, [polygonEditMode]);
+  }, [polygonEditMode, zoom, offset]);
   
-  // Transformace souřadnic při pohybu myši
+  // Zpracování pohybu myši v editačním režimu
   const handleEditMouseMove = useCallback((x: number, y: number) => {
     return polygonEditMode.handleEditMouseMove(x, y);
   }, [polygonEditMode]);

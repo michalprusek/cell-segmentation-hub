@@ -29,7 +29,12 @@ export const useVertexDetection = ({
   /**
    * Detekuje vrchol pod kurzorem
    */
-  const detectVertexUnderCursor = useCallback((x: number, y: number) => {
+  const detectVertexUnderCursor = useCallback((
+    imageX: number,
+    imageY: number,
+    zoom: number = 1,
+    offset: { x: number, y: number } = { x: 0, y: 0 }
+  ) => {
     if (!pointAddingMode || !segmentation) {
       setHoveredSegment({
         polygonId: null,
@@ -39,11 +44,13 @@ export const useVertexDetection = ({
       return;
     }
     
-    const cursorPoint = { x, y };
-    // Zvětšíme prahovou hodnotu pro snazší detekci bodů
-    const DETECTION_THRESHOLD = 25; // Zvětšeno z 15 na 25
+    const cursorPoint = { x: imageX, y: imageY };
     
-    console.log("detectVertexUnderCursor called with:", x, y, "sourcePolygonId:", sourcePolygonId, "selectedVertexIndex:", selectedVertexIndex);
+    // Zvětšíme prahovou hodnotu pro snazší detekci bodů
+    // Při nižším zoomu potřebujeme větší prahovou hodnotu
+    const DETECTION_THRESHOLD = 35 / Math.max(0.5, zoom);
+    
+    console.log("detectVertexUnderCursor called with:", imageX, imageY, "sourcePolygonId:", sourcePolygonId, "selectedVertexIndex:", selectedVertexIndex, "zoom:", zoom);
     
     let closestVertex = {
       polygonId: null as string | null,
@@ -65,7 +72,7 @@ export const useVertexDetection = ({
           }
           
           const dist = distance(point, cursorPoint);
-          console.log("Checking vertex", index, "at", point.x, point.y, "dist:", dist);
+          console.log("Checking vertex", index, "at", point.x, point.y, "dist:", dist, "threshold:", DETECTION_THRESHOLD);
           
           if (dist < DETECTION_THRESHOLD && dist < closestVertex.distance) {
             closestVertex = {
