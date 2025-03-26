@@ -1,3 +1,4 @@
+
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { useEditModeCore } from './editMode/useEditModeCore';
 import { useSlicingMode } from './editMode/useSlicingMode';
@@ -41,11 +42,6 @@ export const usePolygonEditMode = (
   const { distance } = useGeometryUtils();
   const [lastAutoAddedPoint, setLastAutoAddedPoint] = useState<Point | null>(null);
   const MIN_DISTANCE_FOR_AUTO_POINT = 20; // Minimální vzdálenost pro automatické přidávání bodů
-
-  // Get selected polygon points for visualization
-  const selectedPolygonPoints = segmentation && selectedPolygonId
-    ? segmentation.polygons.find(p => p.id === selectedPolygonId)?.points || null
-    : null;
 
   // Zajištění, že je aktivní vždy jen jeden režim
   const toggleEditMode = useCallback(() => {
@@ -168,10 +164,11 @@ export const usePolygonEditMode = (
     hoveredSegment: pointAddingMode.hoveredSegment,
     pointAddingTempPoints: pointAddingMode.tempPoints,
     selectedVertexIndex: pointAddingMode.selectedVertexIndex,
+    sourcePolygonId: pointAddingMode.sourcePolygonId,
     togglePointAddingMode,
     
     // Selected polygon data for visualization
-    selectedPolygonPoints,
+    selectedPolygonPoints: pointAddingMode.selectedPolygonPoints,
     
     // Funkce pro ukončení všech editačních režimů
     exitAllEditModes,

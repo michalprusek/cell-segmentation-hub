@@ -26,7 +26,7 @@ const PointAddingVisualizer = ({
   sourcePolygonId,
   polygonPoints
 }: PointAddingVisualizerProps) => {
-  if (!polygonPoints) return null;
+  if (!polygonPoints && !selectedVertexIndex) return null;
   
   // Velikost bodů podle zoomu
   const pointSize = Math.max(3 / zoom, 1);
@@ -35,7 +35,7 @@ const PointAddingVisualizer = ({
   return (
     <g>
       {/* Vykreslení bodů polygonu (žluté body) */}
-      {polygonPoints.map((point, index) => {
+      {polygonPoints && selectedVertexIndex !== null && polygonPoints.map((point, index) => {
         // Přeskočíme vybraný vrchol (ten bude oranžový)
         if (index === selectedVertexIndex) return null;
         
@@ -54,7 +54,7 @@ const PointAddingVisualizer = ({
       })}
       
       {/* Vykreslení počátečního bodu (oranžový) */}
-      {selectedVertexIndex !== null && polygonPoints[selectedVertexIndex] && (
+      {selectedVertexIndex !== null && polygonPoints && polygonPoints[selectedVertexIndex] && (
         <circle
           cx={polygonPoints[selectedVertexIndex].x}
           cy={polygonPoints[selectedVertexIndex].y}
@@ -97,7 +97,7 @@ const PointAddingVisualizer = ({
       ))}
       
       {/* Spojnice mezi body */}
-      {selectedVertexIndex !== null && polygonPoints[selectedVertexIndex] && (
+      {selectedVertexIndex !== null && polygonPoints && polygonPoints[selectedVertexIndex] && (
         <g>
           {/* Čára od počátečního bodu k prvnímu dočasnému bodu */}
           {tempPoints.length > 0 && (

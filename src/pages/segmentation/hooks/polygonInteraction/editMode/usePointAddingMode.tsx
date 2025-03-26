@@ -1,5 +1,5 @@
 
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { useGeometryUtils } from './useGeometryUtils';
 import { usePathModification } from './usePathModification';
@@ -36,6 +36,14 @@ export const usePointAddingMode = (
   const { distance } = useGeometryUtils();
   const { modifyPolygonPath } = usePathModification(segmentation, setSegmentation);
   const { findPolygonById } = usePolygonFinder(segmentation);
+  
+  // Získáme body vybraného polygonu pro vizualizaci
+  const selectedPolygonPoints = useMemo(() => {
+    if (!sourcePolygonId || !segmentation) return null;
+    
+    const polygon = segmentation.polygons.find(p => p.id === sourcePolygonId);
+    return polygon ? polygon.points : null;
+  }, [segmentation, sourcePolygonId]);
   
   // Detekce vrcholů při pohybu myši
   const { detectVertexUnderCursor } = useVertexDetection({
@@ -83,6 +91,7 @@ export const usePointAddingMode = (
     tempPoints,
     selectedVertexIndex,
     sourcePolygonId,
+    selectedPolygonPoints,
     togglePointAddingMode,
     detectVertexUnderCursor,
     handlePointAddingClick,

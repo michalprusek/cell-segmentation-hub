@@ -1,3 +1,4 @@
+
 import { useCallback } from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { useCoordinateTransform } from './useCoordinateTransform';
@@ -31,7 +32,7 @@ export const useMouseInteractions = (
   }>,
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null },
   editActive: boolean,
-  handleEditModeClick: (x: number, y: number) => void,
+  handleEditModeClick: (x: number, y: number) => boolean,
   handleEditMouseMove: (x: number, y: number) => void
 ) => {
   const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
@@ -110,7 +111,9 @@ export const useMouseInteractions = (
     
     // If in edit mode, handle differently
     if (editActive) {
-      handleEditModeClick(x, y);
+      console.log("Edit mode active, handling click in edit mode");
+      const handled = handleEditModeClick(x, y);
+      console.log("Edit mode click handled:", handled);
       return;
     }
     

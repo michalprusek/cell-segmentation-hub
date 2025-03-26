@@ -1,3 +1,4 @@
+
 import { useCallback } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 
@@ -10,7 +11,10 @@ export const usePathModification = (
 ) => {
   /**
    * Modify polygon path by replacing a segment between two points with a new path
-   * Considering the optimal path between the points
+   * @param polygonId ID polygonu, jehož cestu chceme upravit
+   * @param startIndex Index počátečního bodu segmentu
+   * @param endIndex Index koncového bodu segmentu
+   * @param newPoints Nové body, které nahradí segment (včetně počátečního a koncového bodu)
    */
   const modifyPolygonPath = useCallback((
     polygonId: string | null,
@@ -31,54 +35,44 @@ export const usePathModification = (
       // Pokud jsou body stejné, nemůžeme provést modifikaci
       if (startIndex === endIndex) return false;
       
-      // Create a new array of points
+      console.log(`Modifying path from vertex ${startIndex} to ${endIndex} with ${newPoints.length} points`);
+      
+      // Vytvoříme nové pole bodů, kde zachováme body, které nejsou mezi startIndex a endIndex
       let newPolygonPoints: Point[] = [];
       
-      // Find all points that should be kept (those that are not between start and end)
-      const keepPoints: Point[] = [];
-      let shouldKeep = true;
-      let currentIndex = 0;
+      // Zjistíme, jestli jdeme od startIndex k endIndex ve směru nebo proti směru hodinových ručiček
+      const isClockwise = (endIndex > startIndex) ? 
+        (endIndex - startIndex <= totalPoints / 2) : 
+        (startIndex - endIndex > totalPoints / 2);
       
-      // Projdeme body polygonu a zachováme pouze ty, které nejsou mezi startIndex a endIndex
-      while (currentIndex < totalPoints) {
-        if (currentIndex === startIndex) {
-          // Začátek nahrazované části
-          keepPoints.push(polygon.points[currentIndex]); // Zachováme počáteční bod
-          shouldKeep = false;
-        } else if (currentIndex === endIndex) {
-          // Konec nahrazované části
-          keepPoints.push(polygon.points[currentIndex]); // Zachováme koncový bod
-          shouldKeep = true;
-        } else if (shouldKeep) {
-          // Body mimo nahrazovanou část
-          keepPoints.push(polygon.points[currentIndex]);
-        }
+      if (isClockwise) {
+        // Jdeme ve směru indexů (po směru hodinových ručiček)
+        // Body před segmentem
+        newPolygonPoints = polygon.points.slice(0, startIndex);
         
-        currentIndex++;
-        // Po dosažení konce pole začneme znovu od začátku, pokud jsme ještě nenašli endIndex
-        if (currentIndex === totalPoints && shouldKeep === false) {
-          currentIndex = 0;
-        } else if (currentIndex === totalPoints) {
-          break;
+        // Nové body (bez duplicity koncového bodu)
+        newPolygonPoints = [...newPolygonPoints, ...newPoints];
+        
+        // Body za segmentem
+        // Pokud endIndex není poslední bod, přidáme zbývající body
+        if (endIndex < totalPoints - 1) {
+          newPolygonPoints = [...newPolygonPoints.slice(0, -1), ...polygon.points.slice(endIndex)];
+        }
+      } else {
+        // Jdeme proti směru indexů (proti směru hodinových ručiček)
+        // Body za endIndex
+        newPolygonPoints = polygon.points.slice(endIndex);
+        
+        // Nové body
+        newPolygonPoints = [...newPolygonPoints, ...newPoints.slice(1)];
+        
+        // Body před startIndex
+        if (startIndex > 0) {
+          newPolygonPoints = [...newPolygonPoints, ...polygon.points.slice(0, startIndex + 1)];
         }
       }
       
-      // Najít pozici startIndex v keepPoints
-      const startKeepIndex = keepPoints.findIndex(p => 
-        p.x === polygon.points[startIndex].x && p.y === polygon.points[startIndex].y);
-      
-      if (startKeepIndex >= 0) {
-        // Vložíme nové body mezi start a end
-        newPolygonPoints = [
-          ...keepPoints.slice(0, startKeepIndex + 1),
-          ...newPoints,
-          ...keepPoints.slice(startKeepIndex + 1)
-        ];
-      } else {
-        // Fallback pokud něco selhalo
-        console.error("Failed to find start point in kept points");
-        return false;
-      }
+      console.log(`Created new polygon with ${newPolygonPoints.length} points (original had ${totalPoints})`);
       
       // Create new polygon object
       const newPolygon = {

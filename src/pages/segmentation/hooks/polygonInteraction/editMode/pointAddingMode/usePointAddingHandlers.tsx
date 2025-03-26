@@ -58,25 +58,10 @@ export const usePointAddingHandlers = ({
     
     console.log("Point adding click:", x, y, "hoveredSegment:", hoveredSegment);
     
-    // Pokud klikneme někam na plátno (a ne na existující bod)
-    if (!hoveredSegment.polygonId || hoveredSegment.segmentIndex === null) {
-      // Ale již byl vybrán počáteční bod, tak přidáme nový bod do dočasné sekvence
-      if (selectedVertexIndex !== null && sourcePolygonId !== null) {
-        // Přidáme bod do naší dočasné sekvence
-        console.log("Adding temp point:", x, y);
-        const newPoint = { x, y };
-        
-        // Vždy vytvoříme nové pole s novým bodem na konci
-        setTempPoints([...tempPoints, newPoint]);
-        return true;
-      }
-      return false;
-    }
-    
-    // Pokud klikneme na existující vrchol polygonu
-    if (hoveredSegment.polygonId && hoveredSegment.segmentIndex !== null) {
-      // Pokud ještě nebyl vybrán počáteční vrchol
-      if (selectedVertexIndex === null) {
+    // 1. Pokud ještě nemáme vybraný počáteční bod
+    if (selectedVertexIndex === null || sourcePolygonId === null) {
+      // Pokud jsme klikli na nějaký vrchol polygonu
+      if (hoveredSegment.polygonId && hoveredSegment.segmentIndex !== null) {
         // Nastavíme tento vrchol jako počáteční
         setSelectedVertexIndex(hoveredSegment.segmentIndex);
         setSourcePolygonId(hoveredSegment.polygonId);
@@ -84,51 +69,73 @@ export const usePointAddingHandlers = ({
         setTempPoints([]);
         console.log("Selected start vertex:", hoveredSegment.segmentIndex, "polygonId:", hoveredSegment.polygonId);
         return true;
-      } 
-      // Pokud již byl vybrán počáteční vrchol a klikli jsme na jiný vrchol stejného polygonu
-      else if (hoveredSegment.polygonId === sourcePolygonId && 
-              hoveredSegment.segmentIndex !== selectedVertexIndex) {
+      }
+      return false;
+    }
+    
+    // 2. Již máme vybraný počáteční bod, zkontrolujeme, zda klikáme na jiný bod stejného polygonu
+    if (hoveredSegment.polygonId === sourcePolygonId && 
+        hoveredSegment.segmentIndex !== null && 
+        hoveredSegment.segmentIndex !== selectedVertexIndex) {
+      
+      // Klikli jsme na koncový bod - dokončíme přidávání bodů
+      const polygon = findPolygonById(sourcePolygonId);
+      if (polygon) {
+        const startIndex = selectedVertexIndex;
+        const endIndex = hoveredSegment.segmentIndex;
         
-        const polygon = findPolygonById(sourcePolygonId);
-        if (polygon) {
-          const startIndex = selectedVertexIndex;
-          const endIndex = hoveredSegment.segmentIndex;
+        console.log("Completing path from", startIndex, "to", endIndex, "with", tempPoints.length, "points");
+        
+        // Najdeme optimální cestu k nahrazení (s ohledem na co nejmenší obvod)
+        const { indices, start, end } = findOptimalPath(polygon, startIndex, endIndex);
+        
+        // Vytvoříme pole bodů pro nahrazení
+        // Musíme vložit body MEZI počáteční a koncový bod
+        const replacementPoints = [
+          polygon.points[start], // Počáteční bod
+          ...tempPoints,         // Dočasné body
+          polygon.points[end]    // Koncový bod
+        ];
+        
+        // Aplikujeme modifikaci s novou cestou
+        const success = modifyPolygonPath(
+          sourcePolygonId,
+          start,
+          end,
+          replacementPoints
+        );
+        
+        if (success) {
+          toast.success("Body byly úspěšně přidány do polygonu");
+          resetPointAddingState();
           
-          console.log("Completing path from", startIndex, "to", endIndex, "with", tempPoints.length, "points");
-          
-          // Najdeme optimální cestu k nahrazení (s ohledem na co nejmenší obvod)
-          const { indices, start, end } = findOptimalPath(polygon, startIndex, endIndex);
-          
-          // Aplikujeme modifikaci s novou cestou
-          const success = modifyPolygonPath(
-            sourcePolygonId,
-            start,
-            end,
-            tempPoints
-          );
-          
-          if (success) {
-            toast.success("Body byly úspěšně přidány do polygonu");
-            resetPointAddingState();
-            
-            // Automaticky ukončíme režim přidávání bodů po úspěšném přidání
-            setPointAddingMode(false);
-          } else {
-            toast.error("Přidání bodů selhalo");
-            resetPointAddingState();
-          }
+          // Automaticky ukončíme režim přidávání bodů po úspěšném přidání
+          setPointAddingMode(false);
+        } else {
+          toast.error("Přidání bodů selhalo");
+          resetPointAddingState();
         }
         return true;
       }
+    } 
+    // 3. Klikli jsme někam do plátna, přidáme nový bod do dočasné sekvence
+    else {
+      // Přidáme bod do naší dočasné sekvence
+      console.log("Adding temp point:", x, y);
+      const newPoint = { x, y };
+      
+      // Vždy vytvoříme nové pole s novým bodem na konci
+      setTempPoints([...tempPoints, newPoint]);
+      return true;
     }
     
     return false;
   }, [
     pointAddingMode, 
     segmentation, 
-    hoveredSegment, 
     selectedVertexIndex,
     sourcePolygonId,
+    hoveredSegment,
     tempPoints,
     findPolygonById,
     findOptimalPath,
