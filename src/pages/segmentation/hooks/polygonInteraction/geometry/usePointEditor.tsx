@@ -1,3 +1,4 @@
+
 import { useCallback } from 'react';
 import { Point, SegmentationResult } from '@/lib/segmentation';
 import { useGeometryUtils } from '../editMode/useGeometryUtils';
@@ -85,7 +86,7 @@ export const usePointEditor = (
     b: Point,
     cursor: Point
   ): Point => {
-    return findClosestPointOnSegment(cursor, a, b);
+    return findClosestPointOnSegment(a, b, cursor);
   }, [findClosestPointOnSegment]);
 
   /**
@@ -298,10 +299,10 @@ export const usePointEditor = (
   }, [segmentation, setSegmentation, isPolygonSelfIntersecting]);
 
   /**
-   * Duplikace bodu polygonu - vytvoří nový bod vedle existujícího
+   * Duplikace bodu polygonu
    */
   const duplicatePoint = useCallback((
-    polygonId: string,
+    polygonId: string, 
     pointIndex: number
   ): boolean => {
     if (!segmentation) return false;
@@ -309,26 +310,18 @@ export const usePointEditor = (
     const polygon = segmentation.polygons.find(p => p.id === polygonId);
     if (!polygon) return false;
     
-    // Get the current point and adjacent points
     const point = polygon.points[pointIndex];
-    const nextPointIndex = (pointIndex + 1) % polygon.points.length;
-    const nextPoint = polygon.points[nextPointIndex];
+    if (!point) return false;
     
-    // Create a new point halfway between the current point and the next point
-    const duplicatedPoint: Point = {
-      x: (point.x + nextPoint.x) / 2,
-      y: (point.y + nextPoint.y) / 2
+    // Výpočet nové pozice - mírně posunuté od původního bodu
+    const newPoint = {
+      x: point.x + 5,
+      y: point.y + 5
     };
     
-    // Insert the duplicated point after the current point
+    // Vložíme duplikovaný bod za původní bod
     const newPoints = [...polygon.points];
-    newPoints.splice(pointIndex + 1, 0, duplicatedPoint);
-    
-    // Validace integrity: kontrola self-intersection
-    if (isPolygonSelfIntersecting(newPoints)) {
-      console.error('Duplikace bodu by způsobila self-intersection polygonu');
-      return false;
-    }
+    newPoints.splice(pointIndex + 1, 0, newPoint);
     
     // Aktualizujeme segmentaci
     const updatedPolygons = segmentation.polygons.map(p => {
@@ -347,93 +340,69 @@ export const usePointEditor = (
     });
     
     return true;
-  }, [segmentation, setSegmentation, isPolygonSelfIntersecting]);
+  }, [segmentation, setSegmentation]);
 
   /**
-   * Optimalizace polygonu - zjednodušuje polygon odstraněním redundantních bodů
+   * Zjednodušení polygonu redukcí bodů
    */
   const simplifyPolygon = useCallback((
-    polygonId: string, 
+    polygonId: string,
     tolerance: number = 1.0
   ): boolean => {
     if (!segmentation) return false;
     
     const polygon = segmentation.polygons.find(p => p.id === polygonId);
-    if (!polygon || polygon.points.length <= 3) return false;
+    if (!polygon) return false;
     
-    // Implementace Douglas-Peucker algoritmu pro zjednodušení polygonu
-    const douglasPeucker = (points: Point[], start: number, end: number, tolerance: number): number[] => {
-      // Ukončovací podmínka - pokud jsou body vedle sebe, není co zjednodušovat
-      if (end - start <= 1) return [start, end];
+    // Implementace Ramer-Douglas-Peucker algoritmu
+    const simplifyPath = (points: Point[], start: number, end: number, tolerance: number): Point[] => {
+      if (end - start <= 1) return [points[start], points[end]];
       
-      // Najdeme bod nejvíce vzdálený od přímky start-end
-      let maxDist = 0;
-      let maxIndex = start;
+      let maxDistance = 0;
+      let maxIndex = 0;
       
-      const startPoint = points[start];
-      const endPoint = points[end];
+      const line = [points[start], points[end]];
       
       for (let i = start + 1; i < end; i++) {
-        const dist = distancePointToSegment(points[i], startPoint, endPoint);
-        if (dist > maxDist) {
-          maxDist = dist;
+        const dist = distancePointToSegment(points[i], line[0], line[1]);
+        
+        if (dist > maxDistance) {
+          maxDistance = dist;
           maxIndex = i;
         }
       }
       
-      // Pokud je vzdálenost menší než tolerance, můžeme odstranit všechny body mezi
-      if (maxDist <= tolerance) {
-        return [start, end];
+      const result: Point[] = [];
+      
+      if (maxDistance > tolerance) {
+        const leftSegment = simplifyPath(points, start, maxIndex, tolerance);
+        const rightSegment = simplifyPath(points, maxIndex, end, tolerance);
+        
+        // Spojíme výsledky (vynecháme duplicitní bod)
+        result.push(...leftSegment.slice(0, -1));
+        result.push(...rightSegment);
+      } else {
+        result.push(points[start]);
+        result.push(points[end]);
       }
       
-      // Jinak rekurzivně zjednodušíme obě části
-      const leftIndices = douglasPeucker(points, start, maxIndex, tolerance);
-      const rightIndices = douglasPeucker(points, maxIndex, end, tolerance);
-      
-      // Spojíme výsledky (bez duplicity)
-      return [...leftIndices.slice(0, -1), ...rightIndices];
+      return result;
     };
     
-    // Protože pracujeme s uzavřeným polygonem, musíme najít vhodné startovní body
-    const points = polygon.points;
-    const n = points.length;
+    const { points } = polygon;
     
-    // Najdeme dva body s největší vzdáleností jako základ
-    let maxDist = 0;
-    let furthestPair: [number, number] = [0, 0];
+    // Polygon musí mít alespoň 3 body
+    if (points.length < 3) return false;
     
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        const dist = distance(points[i], points[j]);
-        if (dist > maxDist) {
-          maxDist = dist;
-          furthestPair = [i, j];
-        }
-      }
-    }
+    // Vytvoříme uzavřenou křivku (poslední bod spojíme s prvním)
+    const closedPath = [...points];
     
-    // Zjednodušíme polygon ve dvou částech
-    const indices1 = douglasPeucker(points, furthestPair[0], furthestPair[1], tolerance);
-    const indices2 = douglasPeucker(points, furthestPair[1], furthestPair[0] + n, tolerance);
+    // Zjednodušíme křivku
+    let simplifiedPath = simplifyPath(closedPath, 0, closedPath.length - 1, tolerance);
     
-    // Kombinujeme výsledky a odstraňujeme duplicity
-    let simplifiedIndices = [...indices1.slice(0, -1), ...indices2.slice(0, -1)];
-    
-    // Normalizujeme indexy (mohou být větší než n)
-    simplifiedIndices = simplifiedIndices.map(i => i % n);
-    
-    // Odstraníme duplicity a seřadíme
-    simplifiedIndices = [...new Set(simplifiedIndices)].sort((a, b) => a - b);
-    
-    // Vytvoříme nový polygon pouze s vybranými body
-    const simplifiedPoints = simplifiedIndices.map(i => points[i]);
-    
-    // Validace: zjednodušený polygon musí mít alespoň 3 body
-    if (simplifiedPoints.length < 3) return false;
-    
-    // Validace integrity: kontrola self-intersection
-    if (isPolygonSelfIntersecting(simplifiedPoints)) {
-      console.error('Zjednodušení by způsobilo self-intersection polygonu');
+    // Musíme zachovat minimálně 3 body
+    if (simplifiedPath.length < 3) {
+      console.error('Zjednodušení by vedlo k příliš malému počtu bodů');
       return false;
     }
     
@@ -442,7 +411,7 @@ export const usePointEditor = (
       if (p.id === polygonId) {
         return {
           ...p,
-          points: simplifiedPoints
+          points: simplifiedPath
         };
       }
       return p;
@@ -454,15 +423,13 @@ export const usePointEditor = (
     });
     
     return true;
-  }, [segmentation, setSegmentation, distancePointToSegment, distance, isPolygonSelfIntersecting]);
+  }, [segmentation, setSegmentation, distancePointToSegment]);
 
   return {
-    calculateInsertPosition,
-    distancePointToSegment,
-    findClosestSegment,
     addPoint,
     removePoint,
     duplicatePoint,
-    simplifyPolygon
+    simplifyPolygon,
+    findClosestSegment
   };
 };

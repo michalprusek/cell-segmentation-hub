@@ -114,7 +114,8 @@ const CanvasPolygon = ({
           const isDragging = vertexDragState.isDragging && 
                             vertexDragState.polygonId === id && 
                             vertexDragState.vertexIndex === index;
-          const isStartPoint = index === 0 && isSelected; // Only highlight start point when selected
+          
+          // Removed special highlighting for start point
           
           return (
             <VertexContextMenu
@@ -134,7 +135,7 @@ const CanvasPolygon = ({
                   isDragging={isDragging}
                   zoom={zoom}
                   type={type}
-                  isStartPoint={isStartPoint}
+                  isStartPoint={false} // Always false to remove yellow highlight
                 />
               </g>
             </VertexContextMenu>
