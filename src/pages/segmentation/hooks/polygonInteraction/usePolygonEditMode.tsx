@@ -140,10 +140,13 @@ export const usePolygonEditMode = (
   const handleEditMouseMove = useCallback((x: number, y: number) => {
     if (slicingMode.slicingMode) {
       slicingMode.updateCursorPosition(x, y);
+      return true;
     } else if (pointAddingMode.pointAddingMode) {
       pointAddingMode.detectVertexUnderCursor(x, y);
+      return true;
     }
     // Standardní editMode nepotřebuje speciální handler pro pohyb myši
+    return false;
   }, [slicingMode, pointAddingMode]);
 
   return {

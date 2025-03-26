@@ -33,7 +33,7 @@ export const useMouseInteractions = (
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null },
   editActive: boolean,
   handleEditModeClick: (x: number, y: number) => boolean,
-  handleEditMouseMove: (x: number, y: number) => void
+  handleEditMouseMove: (x: number, y: number) => boolean
 ) => {
   const { getCanvasCoordinates } = useCoordinateTransform(zoom, offset);
   
