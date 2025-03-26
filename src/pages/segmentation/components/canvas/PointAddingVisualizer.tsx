@@ -26,8 +26,8 @@ const PointAddingVisualizer = ({
   sourcePolygonId = null,
   polygonPoints = null
 }: PointAddingVisualizerProps) => {
-  // If no hovered segment, nothing to visualize
-  if (!hoveredSegment.polygonId && !hoveredSegment.projectedPoint && tempPoints.length === 0 && selectedVertexIndex === null) {
+  // If no selected vertex and no temp points, nothing to visualize
+  if (selectedVertexIndex === null && tempPoints.length === 0) {
     return null;
   }
   
@@ -104,7 +104,7 @@ const PointAddingVisualizer = ({
       })}
       
       {/* Highlight for the hovered vertex */}
-      {hoveredSegment.projectedPoint && (
+      {hoveredSegment.projectedPoint && hoveredSegment.polygonId && (
         <circle
           cx={hoveredSegment.projectedPoint.x}
           cy={hoveredSegment.projectedPoint.y}

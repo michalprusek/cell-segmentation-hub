@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { v4 as uuidv4 } from 'uuid';
@@ -107,20 +106,89 @@ export const usePathModification = (
       // Create a new array of points
       let newPolygonPoints: Point[] = [];
       
-      // Include points up to the start index
-      newPolygonPoints.push(...polygon.points.slice(0, startIndex + 1));
-      
-      // Include the new points
-      newPolygonPoints.push(...newPoints);
-      
-      // Include the end point and points after it
-      if (endIndex < startIndex) {
-        // Handle wrap around
-        newPolygonPoints.push(...polygon.points.slice(endIndex));
+      // Handle special case for consecutive points
+      if ((endIndex === (startIndex + 1) % totalPoints) || 
+          (startIndex === (endIndex + 1) % totalPoints)) {
+        // Simple replacement - just insert our new points between the start and end vertices
+        const pointsBeforeStart = polygon.points.slice(0, Math.min(startIndex, endIndex) + 1);
+        const pointsAfterEnd = polygon.points.slice(Math.max(startIndex, endIndex));
+        
+        if (startIndex < endIndex) {
+          newPolygonPoints = [
+            ...pointsBeforeStart,
+            ...newPoints,
+            ...pointsAfterEnd
+          ];
+        } else {
+          // The path goes backward, so we need to reverse order
+          newPolygonPoints = [
+            ...pointsAfterEnd,
+            ...newPoints,
+            ...pointsBeforeStart
+          ];
+        }
       } else {
-        // Normal case
-        newPolygonPoints.push(polygon.points[endIndex]);
-        newPolygonPoints.push(...polygon.points.slice(endIndex + 1));
+        // Find the path indices in order
+        let pathIndices: number[] = [];
+        if (startIndex < endIndex) {
+          // Forward path
+          for (let i = startIndex; i <= endIndex; i++) {
+            pathIndices.push(i);
+          }
+        } else {
+          // Handle wrap around - two possible paths
+          // Path 1: Going forward over the zero index
+          let path1: number[] = [];
+          for (let i = startIndex; i < totalPoints; i++) {
+            path1.push(i);
+          }
+          for (let i = 0; i <= endIndex; i++) {
+            path1.push(i);
+          }
+          
+          // Path 2: Going backward
+          let path2: number[] = [];
+          for (let i = startIndex; i >= endIndex; i--) {
+            path2.push(i);
+          }
+          
+          // Use the shorter path
+          pathIndices = path1.length <= path2.length ? path1 : path2;
+        }
+        
+        // Identify the points to keep (those not in the path)
+        const pointsToRemove = new Set(pathIndices);
+        let keptPoints: Point[] = [];
+        for (let i = 0; i < totalPoints; i++) {
+          if (!pointsToRemove.has(i) || i === startIndex || i === endIndex) {
+            keptPoints.push(polygon.points[i]);
+          }
+        }
+        
+        // Find where to insert our new points
+        const startPoint = polygon.points[startIndex];
+        const endPoint = polygon.points[endIndex];
+        
+        // Insert the new points between start and end in kept points
+        const startInsertIndex = keptPoints.findIndex(p => 
+          p.x === startPoint.x && p.y === startPoint.y);
+        
+        if (startInsertIndex >= 0) {
+          newPolygonPoints = [
+            ...keptPoints.slice(0, startInsertIndex + 1),
+            ...newPoints,
+            ...keptPoints.slice(startInsertIndex + 1)
+          ];
+        } else {
+          // Fallback in case something went wrong
+          newPolygonPoints = [
+            polygon.points[startIndex],
+            ...newPoints,
+            polygon.points[endIndex],
+            ...polygon.points.filter((_, i) => 
+              i !== startIndex && i !== endIndex && !pathIndices.includes(i))
+          ];
+        }
       }
       
       // Create new polygon object
