@@ -47,6 +47,7 @@ const CanvasPolygonLayer = ({
       xmlns="http://www.w3.org/2000/svg"
       preserveAspectRatio="xMidYMid meet"
       overflow="visible"
+      shape-rendering="crispEdges"
     >
       <CanvasSvgFilters />
       

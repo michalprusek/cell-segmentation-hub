@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { useCoordinateTransform } from './useCoordinateTransform';
@@ -78,14 +77,14 @@ export const useMouseInteractions = (
     // Pokud jsme v editačním režimu, předáme pohyb myši
     if (editActive) {
       handleEditMouseMove(x, y);
+      
+      // I v editačním režimu chceme detekovat hover nad vertexy
+      detectVertexHover(e.clientX, e.clientY, containerElement);
       return;
     }
     
-    // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
-    // Používáme requestAnimationFrame pro optimalizaci výkonu
-    requestAnimationFrame(() => {
-      detectVertexHover(e.clientX, e.clientY, containerElement);
-    });
+    // Detekujeme, zda je kurzor nad nějakým vertexem - okamžitá odezva bez debounce
+    detectVertexHover(e.clientX, e.clientY, containerElement);
   }, [
     segmentation, 
     handleVertexDrag, 
@@ -156,7 +155,7 @@ export const useMouseInteractions = (
 
   return {
     handleMouseMove,
-    handleMouseDown,
-    handleMouseUp
+    handleMouseDown: handleMouseDown,
+    handleMouseUp: handleMouseUp
   };
 };
