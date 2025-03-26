@@ -37,7 +37,11 @@ const CanvasPolygonLayer = ({
       width={imageSize.width}
       height={imageSize.height}
       className="absolute top-0 left-0"
-      style={{ maxWidth: "none" }}
+      style={{ 
+        maxWidth: "none",
+        shapeRendering: "geometricPrecision",
+        textRendering: "geometricPrecision"
+      }}
       shapeRendering="geometricPrecision"
       vectorEffect="non-scaling-stroke"
       xmlns="http://www.w3.org/2000/svg"

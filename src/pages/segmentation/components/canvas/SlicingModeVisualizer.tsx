@@ -49,7 +49,7 @@ const SlicingModeVisualizer = ({
   const pointRadius = getPointRadius();
 
   return (
-    <>
+    <g shapeRendering="geometricPrecision">
       {/* Slicing indicator line */}
       {cursorPosition && (
         <line
@@ -78,7 +78,7 @@ const SlicingModeVisualizer = ({
         filter="url(#point-glow)"
         shapeRendering="geometricPrecision"
       />
-    </>
+    </g>
   );
 };
 

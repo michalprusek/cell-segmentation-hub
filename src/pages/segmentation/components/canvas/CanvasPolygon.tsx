@@ -74,6 +74,7 @@ const CanvasPolygon = ({
         shapeRendering="geometricPrecision"
         vectorEffect="non-scaling-stroke"
         filter={isSelected ? "url(#point-shadow)" : ""}
+        style={{ imageRendering: "crisp-edges" }}
       />
       
       {/* Body (vertexy) */}

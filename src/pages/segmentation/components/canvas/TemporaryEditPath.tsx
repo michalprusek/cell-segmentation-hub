@@ -56,7 +56,7 @@ const TemporaryEditPath = ({
   const lineStrokeWidth = strokeWidth * 0.75;
 
   return (
-    <>
+    <g shapeRendering="geometricPrecision">
       {/* Body, které již byly přidány */}
       <polyline
         points={tempPoints.points.map(p => `${p.x},${p.y}`).join(' ')}
@@ -98,8 +98,6 @@ const TemporaryEditPath = ({
         />
       ))}
       
-      {/* Odstraňujeme spojnici od posledního bodu k prvnímu bodu */}
-      
       {/* Shift key indikátor pro auto-přidávání bodů */}
       {isShiftPressed && cursorPosition && (
         <circle
@@ -115,7 +113,7 @@ const TemporaryEditPath = ({
           shapeRendering="geometricPrecision"
         />
       )}
-    </>
+    </g>
   );
 };
 

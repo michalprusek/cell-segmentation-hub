@@ -79,6 +79,7 @@ const CanvasVertex = ({
       data-vertex-index={vertexIndex}
       vectorEffect="non-scaling-stroke"
       shapeRendering="geometricPrecision"
+      style={{ imageRendering: "crisp-edges" }}
     />
   );
 };
