@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { Point } from '@/lib/segmentation';
 
@@ -108,12 +107,13 @@ export const useGeometryUtils = () => {
   }, []);
 
   /**
-   * Find the closest point on a segment to a given point
+   * Project point onto line segment - renamed from findClosestPointOnSegment
+   * for consistency with existing code
    */
-  const findClosestPointOnSegment = useCallback((
-    point: Point,
+  const projectPointOnLineSegment = useCallback((
     segmentStart: Point,
-    segmentEnd: Point
+    segmentEnd: Point,
+    point: Point
   ): Point => {
     const vector = { 
       x: segmentEnd.x - segmentStart.x, 
@@ -137,6 +137,9 @@ export const useGeometryUtils = () => {
     };
   }, []);
 
+  // For backwards compatibility, keeping the old method name as well
+  const findClosestPointOnSegment = projectPointOnLineSegment;
+
   return {
     distance,
     isNearPoint,
@@ -145,6 +148,7 @@ export const useGeometryUtils = () => {
     isLineIntersectingItself,
     isPolygonSelfIntersecting,
     isPointInPolygon,
+    projectPointOnLineSegment,
     findClosestPointOnSegment
   };
 };

@@ -50,7 +50,12 @@ export const useSlicingMode = (
     }
     
     // Second click - complete slice
-    const success = splitPolygon(selectedPolygonId, sliceStartPoint, clickPoint);
+    // Fix: Pass a single object instead of three params
+    const success = splitPolygon({
+      polygonId: selectedPolygonId,
+      startPoint: sliceStartPoint,
+      endPoint: clickPoint
+    });
     
     if (success) {
       toast.success("Polygon byl úspěšně rozdělen");

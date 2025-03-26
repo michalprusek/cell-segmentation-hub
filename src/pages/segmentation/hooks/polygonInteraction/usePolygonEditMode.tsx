@@ -127,7 +127,8 @@ export const usePolygonEditMode = (
     if (slicingMode.slicingMode) {
       return slicingMode.handleSlicingClick(x, y);
     } else if (pointAddingMode.pointAddingMode) {
-      return pointAddingMode.handlePointAddingClick(x, y);
+      // Fix: Call handlePointAddingClick with no arguments as the function doesn't expect any
+      return pointAddingMode.handlePointAddingClick();
     } else if (editModeCore.editMode) {
       // Reset lastAutoAddedPoint při kliknutí (protože uživatel začíná nový segment)
       setLastAutoAddedPoint(null);
