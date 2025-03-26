@@ -29,8 +29,8 @@ export const usePolygonEventHandlers = (
     vertexIndex: number | null;
   }>,
   editActive: boolean,
-  handleEditModeClick: (x: number, y: number) => void,
-  handleEditMouseMove: (x: number, y: number) => void
+  handleEditModeClick: (x: number, y: number) => boolean,
+  handleEditMouseMove: (x: number, y: number) => boolean
 ) => {
   // Optimalizace: Použijeme debounce pro omezení počtu událostí při pohybu myši
   const mouseMoveTimeoutRef = useRef<number | null>(null);
