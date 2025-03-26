@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from "framer-motion";
@@ -45,6 +46,7 @@ const SegmentationEditor = () => {
     hoveredSegment,
     canvasContainerRef,
     projectImages,
+    sourcePolygonId,
     setSelectedPolygonId,
     handleMouseDown,
     handleMouseMove,
@@ -189,6 +191,7 @@ const SegmentationEditor = () => {
               onEditPolygon={handleEditPolygon}
               onDeleteVertex={handleDeleteVertex}
               onDuplicateVertex={handleDuplicateVertex}
+              sourcePolygonId={sourcePolygonId}
             />
           </div>
           

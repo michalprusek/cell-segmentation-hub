@@ -37,7 +37,8 @@ const CanvasPolygonLayer = ({
   onDuplicateVertex,
   pointAddingTempPoints,
   selectedVertexIndex,
-  selectedPolygonPoints
+  selectedPolygonPoints,
+  sourcePolygonId
 }: PolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
   
@@ -87,6 +88,7 @@ const CanvasPolygonLayer = ({
         isShiftPressed={isShiftPressed}
         pointAddingTempPoints={pointAddingTempPoints}
         selectedVertexIndex={selectedVertexIndex}
+        sourcePolygonId={sourcePolygonId}
         selectedPolygonPoints={selectedPolygonPoints}
       />
 

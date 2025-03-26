@@ -91,6 +91,9 @@ export const usePolygonInteraction = (
     ...polygonActions,
     
     // Detection utilities
-    isPointInPolygon
+    isPointInPolygon,
+    
+    // Explicitly expose source polygon ID for point adding mode
+    sourcePolygonId: editModes.sourcePolygonId
   };
 };

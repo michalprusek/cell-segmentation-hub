@@ -95,4 +95,5 @@ export interface PolygonLayerProps {
   pointAddingTempPoints?: Point[];
   selectedVertexIndex?: number | null;
   selectedPolygonPoints?: Point[] | null;
+  sourcePolygonId?: string | null;
 }

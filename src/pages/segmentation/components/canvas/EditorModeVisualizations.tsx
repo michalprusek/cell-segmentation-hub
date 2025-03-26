@@ -23,6 +23,7 @@ interface EditorModeVisualizationsProps {
   selectedPolygonPoints?: Point[] | null;
   pointAddingTempPoints?: Point[];
   selectedVertexIndex?: number | null;
+  sourcePolygonId?: string | null;
 }
 
 /**
@@ -40,7 +41,8 @@ const EditorModeVisualizations = ({
   isShiftPressed,
   selectedPolygonPoints,
   pointAddingTempPoints = [],
-  selectedVertexIndex
+  selectedVertexIndex,
+  sourcePolygonId
 }: EditorModeVisualizationsProps) => {
   return (
     <>
@@ -70,6 +72,7 @@ const EditorModeVisualizations = ({
           zoom={zoom}
           tempPoints={pointAddingTempPoints}
           selectedVertexIndex={selectedVertexIndex}
+          sourcePolygonId={sourcePolygonId}
           polygonPoints={selectedPolygonPoints}
         />
       )}

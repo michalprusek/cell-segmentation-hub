@@ -103,6 +103,8 @@ export const useSegmentationEditor = (
     ...historyManagement,
     handleKeyDown,
     isShiftPressed,
+    // Explicitly expose source polygon ID
+    sourcePolygonId: polygonInteraction.sourcePolygonId,
     // Explicitně exportujeme funkce pro editaci polygonů
     handleSlicePolygon: polygonInteraction.handleSlicePolygon,
     handleEditPolygon: polygonInteraction.handleEditPolygon,

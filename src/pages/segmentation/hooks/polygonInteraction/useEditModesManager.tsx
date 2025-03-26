@@ -48,6 +48,11 @@ export const useEditModesManager = (
   const selectedPolygonPoints = segmentation && selectedPolygonId
     ? segmentation.polygons.find(p => p.id === selectedPolygonId)?.points || null
     : null;
+    
+  // Get points for the active polygon in point adding mode
+  const activePolygonPoints = segmentation && pointAddingMode.sourcePolygonId
+    ? segmentation.polygons.find(p => p.id === pointAddingMode.sourcePolygonId)?.points || null
+    : selectedPolygonPoints;
 
   // Zajištění, že je aktivní vždy jen jeden režim
   const toggleEditMode = useCallback(() => {
@@ -133,7 +138,7 @@ export const useEditModesManager = (
     if (slicingMode.slicingMode) {
       return slicingMode.handleSlicingClick(x, y);
     } else if (pointAddingMode.pointAddingMode) {
-      return pointAddingMode.handlePointAddingClick();
+      return pointAddingMode.handlePointAddingClick(x, y);
     } else if (editModeCore.editMode) {
       // Reset lastAutoAddedPoint při kliknutí (protože uživatel začíná nový segment)
       setLastAutoAddedPoint(null);
@@ -147,7 +152,7 @@ export const useEditModesManager = (
     if (slicingMode.slicingMode) {
       slicingMode.updateCursorPosition(x, y);
     } else if (pointAddingMode.pointAddingMode) {
-      pointAddingMode.detectSegmentUnderCursor(x, y);
+      pointAddingMode.detectVertexUnderCursor(x, y);
     }
     // Standardní editMode nepotřebuje speciální handler pro pohyb myši
   }, [slicingMode, pointAddingMode]);
@@ -173,10 +178,11 @@ export const useEditModesManager = (
     hoveredSegment: pointAddingMode.hoveredSegment,
     pointAddingTempPoints: pointAddingMode.tempPoints,
     selectedVertexIndex: pointAddingMode.selectedVertexIndex,
+    sourcePolygonId: pointAddingMode.sourcePolygonId,
     togglePointAddingMode,
     
     // Selected polygon data for visualization
-    selectedPolygonPoints,
+    selectedPolygonPoints: activePolygonPoints,
     
     // Funkce pro ukončení všech editačních režimů
     exitAllEditModes,

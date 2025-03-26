@@ -11,6 +11,7 @@ interface PointAddingVisualizerProps {
   zoom: number;
   tempPoints?: Point[];
   selectedVertexIndex?: number | null;
+  sourcePolygonId?: string | null;
   polygonPoints?: Point[] | null;
 }
 
@@ -22,10 +23,11 @@ const PointAddingVisualizer = ({
   zoom,
   tempPoints = [],
   selectedVertexIndex = null,
+  sourcePolygonId = null,
   polygonPoints = null
 }: PointAddingVisualizerProps) => {
   // If no hovered segment, nothing to visualize
-  if (!hoveredSegment.polygonId && !hoveredSegment.projectedPoint && tempPoints.length === 0) {
+  if (!hoveredSegment.polygonId && !hoveredSegment.projectedPoint && tempPoints.length === 0 && selectedVertexIndex === null) {
     return null;
   }
   
@@ -83,13 +85,31 @@ const PointAddingVisualizer = ({
 
   return (
     <g>
+      {/* Highlight all other vertices of the same polygon in yellow */}
+      {selectedVertexIndex !== null && sourcePolygonId && polygonPoints && polygonPoints.map((point, index) => {
+        if (index === selectedVertexIndex) return null; // Skip the selected vertex
+        
+        return (
+          <circle
+            key={`highlight-vertex-${index}`}
+            cx={point.x}
+            cy={point.y}
+            r={pointRadius * 1.5}
+            fill="rgba(234, 179, 8, 0.5)"  // Yellow color
+            stroke="#EAB308"
+            strokeWidth={strokeWidth}
+            style={{ pointerEvents: 'none' }}
+          />
+        );
+      })}
+      
       {/* Highlight for the hovered vertex */}
       {hoveredSegment.projectedPoint && (
         <circle
           cx={hoveredSegment.projectedPoint.x}
           cy={hoveredSegment.projectedPoint.y}
           r={pointRadius * 1.5}
-          fill="rgba(74, 222, 128, 0.5)"
+          fill="rgba(74, 222, 128, 0.5)" // Green
           stroke="#4ADE80"
           strokeWidth={strokeWidth}
           style={{ pointerEvents: 'none' }}
@@ -102,7 +122,7 @@ const PointAddingVisualizer = ({
           cx={startVertex.x}
           cy={startVertex.y}
           r={pointRadius * 1.5}
-          fill="rgba(249, 115, 22, 0.5)"
+          fill="rgba(249, 115, 22, 0.5)" // Orange
           stroke="#F97316"
           strokeWidth={strokeWidth}
           style={{ pointerEvents: 'none' }}
@@ -117,7 +137,6 @@ const PointAddingVisualizer = ({
           fill="none"
           stroke="#4ADE80"
           strokeWidth={strokeWidth}
-          strokeDasharray={`${5/zoom},${3/zoom}`}
           style={{ pointerEvents: 'none' }}
         />
       )}
@@ -136,11 +155,25 @@ const PointAddingVisualizer = ({
         />
       ))}
       
-      {/* Line connecting last temp point to hovered point if both exist */}
+      {/* Line connecting last temp point to cursor */}
       {tempPoints.length > 0 && hoveredSegment.projectedPoint && (
         <line
           x1={tempPoints[tempPoints.length - 1].x}
           y1={tempPoints[tempPoints.length - 1].y}
+          x2={hoveredSegment.projectedPoint.x}
+          y2={hoveredSegment.projectedPoint.y}
+          stroke="#4ADE80"
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${5/zoom},${3/zoom}`}
+          style={{ pointerEvents: 'none' }}
+        />
+      )}
+      
+      {/* Line from start vertex to first temp point or cursor */}
+      {startVertex && hoveredSegment.projectedPoint && tempPoints.length === 0 && (
+        <line
+          x1={startVertex.x}
+          y1={startVertex.y}
           x2={hoveredSegment.projectedPoint.x}
           y2={hoveredSegment.projectedPoint.y}
           stroke="#4ADE80"

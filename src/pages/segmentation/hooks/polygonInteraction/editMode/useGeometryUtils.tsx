@@ -1,154 +1,122 @@
+
 import { useCallback } from 'react';
 import { Point } from '@/lib/segmentation';
 
 /**
- * Hook providing geometry utility functions for polygon editing
+ * Hook containing geometry utility functions for polygon editing
  */
 export const useGeometryUtils = () => {
   /**
-   * Calculate the distance between two points
+   * Calculate Euclidean distance between two points
    */
   const distance = useCallback((p1: Point, p2: Point): number => {
     return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
   }, []);
 
   /**
-   * Check if a point is close to another point
+   * Find the closest point on a line segment to a given point
    */
-  const isNearPoint = useCallback((p1: Point, p2: Point, threshold: number = 10): boolean => {
-    return distance(p1, p2) < threshold;
+  const findClosestPointOnSegment = useCallback((
+    p: Point, 
+    v: Point, 
+    w: Point
+  ): { point: Point, distance: number, t: number } => {
+    // Line segment defined by points v and w
+    // Return closest point on segment to point p
+    
+    const l2 = Math.pow(w.x - v.x, 2) + Math.pow(w.y - v.y, 2);
+    if (l2 === 0) {
+      // v and w are the same point
+      return { point: v, distance: distance(p, v), t: 0 };
+    }
+    
+    // Consider line extending the segment, with v at t=0 and w at t=1
+    // Closest point on infinite line is:
+    let t = ((p.x - v.x) * (w.x - v.x) + (p.y - v.y) * (w.y - v.y)) / l2;
+    
+    // Clamp to segment
+    t = Math.max(0, Math.min(1, t));
+    
+    // Find projected point
+    const projectedPoint = {
+      x: v.x + t * (w.x - v.x),
+      y: v.y + t * (w.y - v.y)
+    };
+    
+    // Calculate distance
+    const dist = distance(p, projectedPoint);
+    
+    return { point: projectedPoint, distance: dist, t };
   }, [distance]);
 
   /**
-   * Calculate the path length
+   * Determines which path between two points in a polygon forms a shorter perimeter
    */
-  const calculatePathLength = useCallback((points: Point[]): number => {
-    let length = 0;
-    for (let i = 0; i < points.length; i++) {
-      const nextIndex = (i + 1) % points.length;
-      length += distance(points[i], points[nextIndex]);
+  const findShortestPath = useCallback((
+    points: Point[],
+    startIndex: number,
+    endIndex: number
+  ) => {
+    const totalPoints = points.length;
+    
+    // Function to calculate segment length
+    const segmentLength = (idx1: number, idx2: number) => {
+      const p1 = points[idx1];
+      const p2 = points[idx2];
+      return distance(p1, p2);
+    };
+    
+    // Calculate length of path going clockwise
+    let clockwiseLength = 0;
+    let clockwiseIndices = [];
+    
+    // Handle clockwise
+    let curr = startIndex;
+    while (curr !== endIndex) {
+      const next = (curr + 1) % totalPoints;
+      clockwiseLength += segmentLength(curr, next);
+      clockwiseIndices.push(curr);
+      curr = next;
     }
-    return length;
-  }, [distance]);
-
-  /**
-   * Calculate the area of a polygon
-   */
-  const calculatePolygonArea = useCallback((points: Point[]): number => {
-    let area = 0;
-    for (let i = 0; i < points.length; i++) {
-      const j = (i + 1) % points.length;
-      area += points[i].x * points[j].y;
-      area -= points[j].x * points[i].y;
+    
+    // Calculate length of path going counter-clockwise
+    let counterClockwiseLength = 0;
+    let counterClockwiseIndices = [];
+    
+    // Handle counter-clockwise
+    curr = startIndex;
+    while (curr !== endIndex) {
+      const prev = (curr - 1 + totalPoints) % totalPoints;
+      counterClockwiseLength += segmentLength(curr, prev);
+      counterClockwiseIndices.push(curr);
+      curr = prev;
     }
-    return Math.abs(area) / 2;
-  }, []);
-
-  /**
-   * Check if a line is intersecting itself
-   */
-  const isLineIntersectingItself = useCallback((line: [Point, Point]): boolean => {
-    // Jednoduchá linie se dvěma body se nemůže protínat sama se sebou
-    return false;
-  }, []);
-
-  /**
-   * Check if a polygon is self-intersecting
-   */
-  const isPolygonSelfIntersecting = useCallback((points: Point[]): boolean => {
-    // Pro každý segment zkontrolujeme, zda se protíná s jiným segmentem
-    for (let i = 0; i < points.length; i++) {
-      const a = points[i];
-      const b = points[(i + 1) % points.length];
-      
-      for (let j = i + 2; j < points.length + (i > 0 ? 0 : -1); j++) {
-        const c = points[j % points.length];
-        const d = points[(j + 1) % points.length];
-        
-        // Kontrola, zda se úsečky AB a CD protínají
-        // Použijeme parametrické rovnice úseček:
-        // P = a + t * (b - a)
-        // Q = c + s * (d - c)
-        // a hledáme t a s, pro které P = Q a kde 0 <= t,s <= 1
-        
-        const denominator = (d.y - c.y) * (b.x - a.x) - (d.x - c.x) * (b.y - a.y);
-        
-        // Přeskočíme rovnoběžné úsečky (denominator = 0)
-        if (Math.abs(denominator) < 0.0001) continue;
-        
-        const t = ((d.x - c.x) * (a.y - c.y) - (d.y - c.y) * (a.x - c.x)) / denominator;
-        const s = ((b.x - a.x) * (a.y - c.y) - (b.y - a.y) * (a.x - c.x)) / denominator;
-        
-        // Průsečík existuje pouze pokud t a s jsou v intervalu (0, 1)
-        // Používáme striktní nerovnost, abychom ignorovali sdílené vrcholy
-        if (t > 0 && t < 1 && s > 0 && s < 1) {
-          return true;
+    
+    // Determine which path is shorter
+    if (clockwiseLength <= counterClockwiseLength) {
+      // Clockwise path is shorter
+      return {
+        path: clockwiseIndices,
+        replaceIndices: {
+          start: startIndex,
+          end: endIndex
         }
-      }
+      };
+    } else {
+      // Counter-clockwise path is shorter
+      return {
+        path: counterClockwiseIndices.reverse(),
+        replaceIndices: {
+          start: startIndex,
+          end: endIndex
+        }
+      };
     }
-    
-    return false;
-  }, []);
-
-  /**
-   * Check if a point is inside a polygon
-   */
-  const isPointInPolygon = useCallback((point: Point, polygonPoints: Point[]): boolean => {
-    let inside = false;
-    for (let i = 0, j = polygonPoints.length - 1; i < polygonPoints.length; j = i++) {
-      const xi = polygonPoints[i].x, yi = polygonPoints[i].y;
-      const xj = polygonPoints[j].x, yj = polygonPoints[j].y;
-      
-      const intersect = ((yi > point.y) !== (yj > point.y))
-          && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
-  }, []);
-
-  /**
-   * Project point onto line segment - renamed from findClosestPointOnSegment
-   * for consistency with existing code
-   */
-  const projectPointOnLineSegment = useCallback((
-    segmentStart: Point,
-    segmentEnd: Point,
-    point: Point
-  ): Point => {
-    const vector = { 
-      x: segmentEnd.x - segmentStart.x, 
-      y: segmentEnd.y - segmentStart.y 
-    };
-    const denominator = vector.x * vector.x + vector.y * vector.y;
-    
-    // Zabráníme dělení nulou (když jsou body segmentStart a segmentEnd totožné)
-    if (denominator < 0.0001) {
-      return segmentStart;
-    }
-    
-    const t = Math.max(0, Math.min(1, (
-      (point.x - segmentStart.x) * vector.x + 
-      (point.y - segmentStart.y) * vector.y
-    ) / denominator));
-    
-    return {
-      x: segmentStart.x + t * vector.x,
-      y: segmentStart.y + t * vector.y
-    };
-  }, []);
-
-  // For backwards compatibility, keeping the old method name as well
-  const findClosestPointOnSegment = projectPointOnLineSegment;
+  }, [distance]);
 
   return {
     distance,
-    isNearPoint,
-    calculatePathLength,
-    calculatePolygonArea,
-    isLineIntersectingItself,
-    isPolygonSelfIntersecting,
-    isPointInPolygon,
-    projectPointOnLineSegment,
-    findClosestPointOnSegment
+    findClosestPointOnSegment,
+    findShortestPath
   };
 };

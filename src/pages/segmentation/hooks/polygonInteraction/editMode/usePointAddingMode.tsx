@@ -16,6 +16,7 @@ export const usePointAddingMode = (
 ) => {
   const [pointAddingMode, setPointAddingMode] = useState(false);
   const [selectedVertexIndex, setSelectedVertexIndex] = useState<number | null>(null);
+  const [sourcePolygonId, setSourcePolygonId] = useState<string | null>(null);
   const [hoveredSegment, setHoveredSegment] = useState<{
     polygonId: string | null,
     segmentIndex: number | null,
@@ -29,21 +30,15 @@ export const usePointAddingMode = (
   // Temporary points being added
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   
-  const { distance, findClosestPointOnSegment } = useGeometryUtils();
-  const { addPointsToPolygon } = usePathModification(segmentation, setSegmentation);
+  const { distance, findClosestPointOnSegment, findShortestPath } = useGeometryUtils();
+  const { modifyPolygonPath } = usePathModification(segmentation, setSegmentation);
   
   /**
    * Toggle point adding mode on/off
    */
   const togglePointAddingMode = useCallback(() => {
     setPointAddingMode(prev => !prev);
-    setSelectedVertexIndex(null);
-    setTempPoints([]);
-    setHoveredSegment({
-      polygonId: null,
-      segmentIndex: null,
-      projectedPoint: null
-    });
+    resetPointAddingState();
   }, []);
 
   /**
@@ -51,6 +46,7 @@ export const usePointAddingMode = (
    */
   const resetPointAddingState = useCallback(() => {
     setSelectedVertexIndex(null);
+    setSourcePolygonId(null);
     setTempPoints([]);
     setHoveredSegment({
       polygonId: null,
@@ -60,138 +56,119 @@ export const usePointAddingMode = (
   }, []);
   
   /**
-   * Detect polygon segment under cursor to show preview where point would be added
+   * Detect any vertex on any polygon under cursor
    */
-  const detectSegmentUnderCursor = useCallback((x: number, y: number) => {
-    if (!pointAddingMode || !segmentation || !selectedPolygonId) return;
-    
-    const polygon = segmentation.polygons.find(p => p.id === selectedPolygonId);
-    if (!polygon) return;
+  const detectVertexUnderCursor = useCallback((x: number, y: number) => {
+    if (!pointAddingMode || !segmentation) return;
     
     const cursorPoint = { x, y };
-    const points = polygon.points;
     
-    // If we've already selected a start vertex, we're looking for an end vertex
-    if (selectedVertexIndex !== null) {
-      // Check if we're hovering near any vertex (except the start vertex)
-      for (let i = 0; i < points.length; i++) {
-        if (i === selectedVertexIndex) continue; // Skip the starting vertex
+    // Check for vertices on all polygons, not just selected one
+    for (const polygon of segmentation.polygons) {
+      const points = polygon.points;
+      
+      // If we've already selected a start vertex
+      if (selectedVertexIndex !== null && sourcePolygonId !== null) {
+        // Only highlight vertices of the same polygon where we started
+        if (polygon.id !== sourcePolygonId) continue;
         
-        const point = points[i];
-        if (distance(cursorPoint, point) < 15) {
-          setHoveredSegment({
-            polygonId: selectedPolygonId,
-            segmentIndex: i,
-            projectedPoint: point
-          });
-          return;
+        // Check if we're hovering near any vertex (except the start vertex)
+        for (let i = 0; i < points.length; i++) {
+          if (i === selectedVertexIndex) continue; // Skip the starting vertex
+          
+          const point = points[i];
+          if (distance(cursorPoint, point) < 15) {
+            setHoveredSegment({
+              polygonId: polygon.id,
+              segmentIndex: i,
+              projectedPoint: point
+            });
+            return;
+          }
+        }
+      } else {
+        // If we haven't selected a start vertex yet, search on all polygons
+        for (let i = 0; i < points.length; i++) {
+          const point = points[i];
+          const dist = distance(cursorPoint, point);
+          
+          if (dist < 15) {
+            setHoveredSegment({
+              polygonId: polygon.id,
+              segmentIndex: i,
+              projectedPoint: point
+            });
+            return;
+          }
         }
       }
-      
-      // If not near any vertex, clear hover state
-      setHoveredSegment({
-        polygonId: null,
-        segmentIndex: null,
-        projectedPoint: null
-      });
-      return;
     }
     
-    // If we haven't selected a start vertex yet, look for vertices to start from
-    let closestVertexIndex = -1;
-    let minDistance = Infinity;
-    
-    for (let i = 0; i < points.length; i++) {
-      const point = points[i];
-      const dist = distance(cursorPoint, point);
-      
-      if (dist < minDistance && dist < 15) {
-        minDistance = dist;
-        closestVertexIndex = i;
-      }
-    }
-    
-    if (closestVertexIndex !== -1) {
-      setHoveredSegment({
-        polygonId: selectedPolygonId,
-        segmentIndex: closestVertexIndex,
-        projectedPoint: points[closestVertexIndex]
-      });
-    } else {
-      setHoveredSegment({
-        polygonId: null,
-        segmentIndex: null,
-        projectedPoint: null
-      });
-    }
-  }, [pointAddingMode, segmentation, selectedPolygonId, selectedVertexIndex, distance]);
+    // If not near any vertex, clear hover state
+    setHoveredSegment({
+      polygonId: null,
+      segmentIndex: null,
+      projectedPoint: null
+    });
+  }, [pointAddingMode, segmentation, selectedVertexIndex, sourcePolygonId, distance]);
 
   /**
    * Handle click during point adding mode
    */
-  const handlePointAddingClick = useCallback(() => {
-    if (!pointAddingMode || !segmentation || !selectedPolygonId) return false;
+  const handlePointAddingClick = useCallback((x: number, y: number) => {
+    if (!pointAddingMode || !segmentation) return false;
     
-    const polygon = segmentation.polygons.find(p => p.id === selectedPolygonId);
-    if (!polygon) return false;
-    
-    // If we have a hovered vertex/segment
+    // If we have a hovered vertex
     if (hoveredSegment.polygonId && hoveredSegment.segmentIndex !== null) {
       // If we haven't selected a start vertex yet
       if (selectedVertexIndex === null) {
         // Set this as our start vertex
         setSelectedVertexIndex(hoveredSegment.segmentIndex);
+        setSourcePolygonId(hoveredSegment.polygonId);
         // Clear temp points
         setTempPoints([]);
         return true;
       } 
-      // If we've already selected a start vertex and have a valid end vertex
-      else if (hoveredSegment.segmentIndex !== selectedVertexIndex) {
-        // Complete the point sequence addition
-        const startIndex = selectedVertexIndex;
-        const endIndex = hoveredSegment.segmentIndex;
+      // If we've already selected a start vertex and clicked on another vertex of the same polygon
+      else if (hoveredSegment.polygonId === sourcePolygonId && 
+               hoveredSegment.segmentIndex !== selectedVertexIndex) {
         
-        // We need to include both the start and end points from the polygon
-        const allPoints = [
-          polygon.points[startIndex],
-          ...tempPoints,
-          polygon.points[endIndex]
-        ];
-        
-        // Add the point sequence to the polygon
-        const success = addPointsToPolygon(
-          selectedPolygonId,
-          startIndex,
-          endIndex,
-          allPoints
-        );
-        
-        if (success) {
-          toast.success("Body byly úspěšně přidány do polygonu");
-          resetPointAddingState();
-          // Exit point adding mode automatically after completion
-          setPointAddingMode(false);
-        } else {
-          toast.error("Přidání bodů selhalo");
-          resetPointAddingState();
+        const polygon = segmentation.polygons.find(p => p.id === sourcePolygonId);
+        if (polygon) {
+          const startIndex = selectedVertexIndex;
+          const endIndex = hoveredSegment.segmentIndex;
+          
+          // Create path including new points
+          const newPath = [...tempPoints];
+          
+          // Find the shortest path between start and end points
+          const { path, replaceIndices } = findShortestPath(
+            polygon.points, startIndex, endIndex
+          );
+          
+          // Apply the modification with the new path
+          const success = modifyPolygonPath(
+            sourcePolygonId,
+            replaceIndices.start,
+            replaceIndices.end,
+            newPath
+          );
+          
+          if (success) {
+            toast.success("Body byly úspěšně přidány do polygonu");
+            resetPointAddingState();
+          } else {
+            toast.error("Přidání bodů selhalo");
+            resetPointAddingState();
+          }
         }
-        
         return true;
       }
     } 
     // If we've selected a start vertex but clicked elsewhere (not on an end vertex)
-    else if (selectedVertexIndex !== null) {
+    else if (selectedVertexIndex !== null && sourcePolygonId !== null) {
       // Add a point to our temporary sequence
-      if (hoveredSegment.projectedPoint) {
-        setTempPoints(prev => [...prev, hoveredSegment.projectedPoint]);
-      } else {
-        // Use current cursor position if no projected point
-        const cursorPosition = { 
-          x: window.event ? (window.event as MouseEvent).offsetX : 0,
-          y: window.event ? (window.event as MouseEvent).offsetY : 0
-        };
-        setTempPoints(prev => [...prev, cursorPosition]);
-      }
+      setTempPoints(prev => [...prev, { x, y }]);
       return true;
     }
     
@@ -199,11 +176,12 @@ export const usePointAddingMode = (
   }, [
     pointAddingMode, 
     segmentation, 
-    selectedPolygonId, 
     hoveredSegment, 
     selectedVertexIndex,
+    sourcePolygonId,
     tempPoints,
-    addPointsToPolygon,
+    findShortestPath,
+    modifyPolygonPath,
     resetPointAddingState
   ]);
 
@@ -213,8 +191,9 @@ export const usePointAddingMode = (
     hoveredSegment,
     tempPoints,
     selectedVertexIndex,
+    sourcePolygonId,
     togglePointAddingMode,
-    detectSegmentUnderCursor,
+    detectVertexUnderCursor,
     handlePointAddingClick,
     resetPointAddingState
   };
