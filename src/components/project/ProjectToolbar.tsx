@@ -1,8 +1,6 @@
 
 import React from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Upload, Download, SlidersHorizontal } from "lucide-react";
+import { SlidersHorizontal } from "lucide-react";
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -12,16 +10,20 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { Button } from "@/components/ui/button";
 
 interface ProjectToolbarProps {
-  searchTerm: string;
-  onSearchChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  searchTerm?: string;
+  onSearchChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   sortField: 'name' | 'updatedAt' | 'segmentationStatus';
   sortDirection: 'asc' | 'desc';
   onSort: (field: 'name' | 'updatedAt' | 'segmentationStatus') => void;
-  onToggleUploader: () => void;
+  onToggleUploader?: () => void;
   viewMode: "grid" | "list";
   setViewMode: (mode: "grid" | "list") => void;
+  showSearchBar?: boolean;
+  showUploadButton?: boolean;
+  showExportButton?: boolean;
 }
 
 const ProjectToolbar = ({ 
@@ -32,7 +34,10 @@ const ProjectToolbar = ({
   onSort,
   onToggleUploader,
   viewMode,
-  setViewMode
+  setViewMode,
+  showSearchBar = true,
+  showUploadButton = true,
+  showExportButton = true
 }: ProjectToolbarProps) => {
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -45,28 +50,50 @@ const ProjectToolbar = ({
   };
 
   return (
-    <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
-      <div className="relative flex-grow max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4" />
-        <Input
-          className="pl-10 pr-4 w-full dark:bg-gray-800 dark:border-gray-700 dark:text-white"
-          placeholder={t('dashboard.searchImagesPlaceholder')}
-          value={searchTerm}
-          onChange={onSearchChange}
-        />
-      </div>
-      
+    <div className="flex flex-wrap justify-end items-center mb-6 gap-4">
+      {/* Toolbar actions */}
       <div className="flex gap-2 items-center">
-        <Button variant="outline" size="sm" className="flex items-center h-9" onClick={onToggleUploader}>
-          <Upload className="mr-1 h-4 w-4" />
-          {t('common.uploadImages')}
-        </Button>
+        {/* Vyhledávací pole zobrazit pouze pokud je požadováno */}
+        {showSearchBar && searchTerm !== undefined && onSearchChange && (
+          <div className="relative flex-grow max-w-md">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.3-4.3"/>
+            </svg>
+            <input
+              className="pl-10 pr-4 w-full border rounded-md h-9 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+              placeholder={t('dashboard.searchImagesPlaceholder')}
+              value={searchTerm}
+              onChange={onSearchChange}
+            />
+          </div>
+        )}
         
-        <Button variant="outline" size="sm" className="flex items-center h-9" onClick={handleExport}>
-          <Download className="mr-1 h-4 w-4" />
-          Export
-        </Button>
+        {/* Upload tlačítko zobrazit pouze pokud je požadováno */}
+        {showUploadButton && onToggleUploader && (
+          <Button variant="outline" size="sm" className="flex items-center h-9" onClick={onToggleUploader}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 h-4 w-4">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" x2="12" y1="3" y2="15"/>
+            </svg>
+            {t('common.uploadImages')}
+          </Button>
+        )}
         
+        {/* Export tlačítko zobrazit pouze pokud je požadováno */}
+        {showExportButton && projectId && (
+          <Button variant="outline" size="sm" className="flex items-center h-9" onClick={handleExport}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 h-4 w-4">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" x2="12" y1="15" y2="3"/>
+            </svg>
+            Export
+          </Button>
+        )}
+        
+        {/* Sort dropdown menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" className="flex items-center h-9">
@@ -104,7 +131,7 @@ const ProjectToolbar = ({
           </DropdownMenuContent>
         </DropdownMenu>
         
-        {/* View mode buttons now included in the toolbar */}
+        {/* View mode buttons */}
         <div className="flex items-center h-9 border rounded-md bg-background">
           <Button 
             variant={viewMode === "grid" ? "default" : "ghost"}

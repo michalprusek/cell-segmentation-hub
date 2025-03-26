@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,7 +19,6 @@ const Dashboard = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<string>("updated_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -142,10 +140,6 @@ const Dashboard = () => {
     setSortDirection(newDirection);
   };
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchTerm(e.target.value);
-  };
-
   const handleToggleUploader = () => {
     // Fix the TypeScript error by casting the element to HTMLElement
     const uploadTab = document.querySelector('[data-state="inactive"][value="upload"]') as HTMLElement;
@@ -186,26 +180,22 @@ const Dashboard = () => {
           <StatsOverview />
         </div>
         
-        <Tabs defaultValue="projects" className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
+        <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
-            <TabsList className="mb-4 sm:mb-0">
-              <TabsTrigger value="projects">{t('common.projects')}</TabsTrigger>
-              <TabsTrigger value="upload">{t('common.uploadImages')}</TabsTrigger>
-            </TabsList>
-            
+            <div className="flex-grow"></div> {/* Spacer */}
             <ProjectToolbar
-              searchTerm="" 
-              onSearchChange={() => {}} 
               sortField="name" 
               sortDirection="asc" 
               onSort={handleSort}
-              onToggleUploader={handleToggleUploader}
               viewMode={viewMode}
               setViewMode={setViewMode}
+              showSearchBar={false}
+              showUploadButton={false}
+              showExportButton={false}
             />
           </div>
           
-          <TabsContent value="projects" className="mt-0">
+          <div className="mt-0">
             <ProjectsList 
               projects={projects} 
               viewMode={viewMode} 
@@ -213,14 +203,14 @@ const Dashboard = () => {
               loading={loading}
               showCreateCard={true}
             />
-          </TabsContent>
+          </div>
           
-          <TabsContent value="upload" className="mt-0">
-            <div className="bg-white p-6 rounded-lg border border-gray-200">
+          <div className="hidden">
+            <div id="uploader-container">
               <ImageUploader />
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
+        </div>
       </div>
     </div>
   );
