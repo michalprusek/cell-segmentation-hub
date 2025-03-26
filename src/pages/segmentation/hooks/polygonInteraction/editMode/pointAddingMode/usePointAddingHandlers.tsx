@@ -92,9 +92,6 @@ export const usePointAddingHandlers = ({
         // Log pro dohledatelnost
         console.log("Optimal path found:", { start, end });
         
-        // Správně seřadíme dočasné body podle směru od start k end
-        let orderedTempPoints = [...tempPoints];
-        
         // Aplikujeme modifikaci s novou cestou
         const success = modifyPolygonPath(
           sourcePolygonId,
@@ -102,7 +99,7 @@ export const usePointAddingHandlers = ({
           end,
           [
             polygon.points[start], // Počáteční bod
-            ...orderedTempPoints,  // Dočasné body
+            ...tempPoints,  // Dočasné body
             polygon.points[end]    // Koncový bod
           ]
         );

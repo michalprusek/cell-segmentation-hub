@@ -4,7 +4,7 @@ import { Point } from '@/lib/segmentation';
 import { TempPointsState } from '@/pages/segmentation/types';
 import TemporaryEditPath from './TemporaryEditPath';
 import SlicingModeVisualizer from './SlicingModeVisualizer';
-import PointAddingVisualizer from './PointAddingVisualizer';
+import PointAddingVisualizer from './pointAddingVisualizer';
 
 interface EditorModeVisualizationsProps {
   editMode: boolean;
