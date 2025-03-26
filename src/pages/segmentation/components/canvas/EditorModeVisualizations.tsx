@@ -44,17 +44,7 @@ const EditorModeVisualizations = ({
   selectedVertexIndex,
   sourcePolygonId
 }: EditorModeVisualizationsProps) => {
-  
-  // Logování pro debugování
-  if (pointAddingMode) {
-    console.log("EditorModeVisualizations - pointAddingMode is active with:", {
-      selectedVertexIndex,
-      sourcePolygonId,
-      tempPointsLength: pointAddingTempPoints.length,
-      hoveredSegment,
-      cursorPosition
-    });
-  }
+  // Odstranil jsem console.log pro lepší výkon a čistotu kódu
   
   return (
     <>
@@ -85,7 +75,7 @@ const EditorModeVisualizations = ({
           tempPoints={pointAddingTempPoints || []}
           selectedVertexIndex={selectedVertexIndex || null}
           sourcePolygonId={sourcePolygonId || null}
-          polygonPoints={selectedPolygonPoints || null}
+          polygonPoints={selectedPolygonPoints}
           cursorPosition={cursorPosition}
         />
       )}

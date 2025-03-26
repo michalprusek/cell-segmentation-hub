@@ -10,56 +10,48 @@ interface StartPointIndicatorProps {
 }
 
 /**
- * Komponenta pro zobrazení počátečního bodu při přidávání nových bodů
+ * Komponenta pro zobrazení počátečního bodu cesty
  */
 const StartPointIndicator = ({ selectedVertexIndex, polygonPoints, zoom }: StartPointIndicatorProps) => {
-  if (selectedVertexIndex === null || !polygonPoints) {
+  if (selectedVertexIndex === null || !polygonPoints || !polygonPoints[selectedVertexIndex]) {
     return null;
   }
 
-  const point = polygonPoints[selectedVertexIndex];
-  if (!point) {
-    console.error("Selected vertex index out of bounds:", selectedVertexIndex, polygonPoints.length);
-    return null;
-  }
-  
-  console.log("Rendering StartPointIndicator for vertex:", selectedVertexIndex, "at", point.x, point.y);
-
-  const pointRadius = getPointRadius(zoom) * 1.8; // Výrazně zvětšíme bod pro lepší viditelnost
+  const pointRadius = getPointRadius(zoom);
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
+  const startPoint = polygonPoints[selectedVertexIndex];
 
   return (
     <g>
-      {/* Zvýraznění počátečního bodu - vnější pulzující kruh */}
+      {/* Pulzující efekt kolem počátečního bodu */}
       <circle
-        cx={point.x}
-        cy={point.y}
+        cx={startPoint.x}
+        cy={startPoint.y}
         r={pointRadius * 2}
         fill={colors.startPoint.glowColor}
         className="animate-pulse"
         style={{ pointerEvents: 'none' }}
       />
       
-      {/* Střední kruh */}
+      {/* Větší kruh pro zvýraznění */}
       <circle
-        cx={point.x}
-        cy={point.y}
-        r={pointRadius * 1.4}
-        fill="rgba(255, 165, 0, 0.4)"
+        cx={startPoint.x}
+        cy={startPoint.y}
+        r={pointRadius * 1.5}
+        fill={colors.startPoint.fill}
         stroke={colors.startPoint.stroke}
-        strokeWidth={strokeWidth * 1.5}
+        strokeWidth={strokeWidth * 1.2}
         style={{ pointerEvents: 'none' }}
       />
       
-      {/* Hlavní bod */}
+      {/* Menší vnitřní kruh */}
       <circle
-        cx={point.x}
-        cy={point.y}
-        r={pointRadius}
-        fill={colors.startPoint.fill}
-        stroke="white"
-        strokeWidth={strokeWidth * 1.2}
+        cx={startPoint.x}
+        cy={startPoint.y}
+        r={pointRadius * 0.8}
+        fill={colors.startPoint.innerFill}
+        stroke="none"
         style={{ pointerEvents: 'none' }}
       />
     </g>

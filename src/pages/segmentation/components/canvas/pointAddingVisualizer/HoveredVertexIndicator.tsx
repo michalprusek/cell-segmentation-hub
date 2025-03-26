@@ -20,12 +20,10 @@ const HoveredVertexIndicator = ({ hoveredSegment, zoom }: HoveredVertexIndicator
     return null;
   }
 
-  const pointRadius = getPointRadius(zoom) * 1.3; // Větší radius pro zvýraznění
+  const pointRadius = getPointRadius(zoom);
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
   const point = hoveredSegment.projectedPoint;
-
-  console.log("Rendering HoveredVertexIndicator at:", point.x, point.y);
 
   return (
     <g>
@@ -33,20 +31,9 @@ const HoveredVertexIndicator = ({ hoveredSegment, zoom }: HoveredVertexIndicator
       <circle
         cx={point.x}
         cy={point.y}
-        r={pointRadius * 2.5}
+        r={pointRadius * 2}
         fill={colors.hoverPoint.glowColor}
         className="animate-pulse"
-        style={{ pointerEvents: 'none' }}
-      />
-      
-      {/* Střední kruh */}
-      <circle
-        cx={point.x}
-        cy={point.y}
-        r={pointRadius * 1.8}
-        fill="rgba(255, 193, 7, 0.4)"
-        stroke={colors.hoverPoint.stroke}
-        strokeWidth={strokeWidth * 1.5}
         style={{ pointerEvents: 'none' }}
       />
       
@@ -54,9 +41,9 @@ const HoveredVertexIndicator = ({ hoveredSegment, zoom }: HoveredVertexIndicator
       <circle
         cx={point.x}
         cy={point.y}
-        r={pointRadius}
+        r={pointRadius * 1.4}
         fill={colors.hoverPoint.fill}
-        stroke="white"
+        stroke={colors.hoverPoint.stroke}
         strokeWidth={strokeWidth}
         style={{ pointerEvents: 'none' }}
       />

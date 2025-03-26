@@ -22,8 +22,8 @@ export const useCoordinateTransform = (
     const canvasY = mouseY - containerRect.top;
     
     // Převod na souřadnice v prostoru obrázku s ohledem na zoom a offset
-    const imageX = (canvasX - offset.x * zoom) / zoom;
-    const imageY = (canvasY - offset.y * zoom) / zoom;
+    const imageX = (canvasX / zoom) - offset.x;
+    const imageY = (canvasY / zoom) - offset.y;
     
     return { 
       canvasX, 
@@ -42,8 +42,8 @@ export const useCoordinateTransform = (
     canvasY: number
   ) => {
     // Přesný výpočet pozice v prostoru obrázku
-    const imageX = (canvasX - offset.x * zoom) / zoom;
-    const imageY = (canvasY - offset.y * zoom) / zoom;
+    const imageX = (canvasX / zoom) - offset.x;
+    const imageY = (canvasY / zoom) - offset.y;
     
     return { x: imageX, y: imageY };
   }, [zoom, offset]);
@@ -57,8 +57,8 @@ export const useCoordinateTransform = (
     imageY: number
   ) => {
     // Přesný výpočet pozice na obrazovce
-    const screenX = imageX * zoom + offset.x * zoom;
-    const screenY = imageY * zoom + offset.y * zoom;
+    const screenX = (imageX + offset.x) * zoom;
+    const screenY = (imageY + offset.y) * zoom;
     
     return { screenX, screenY };
   }, [zoom, offset]);

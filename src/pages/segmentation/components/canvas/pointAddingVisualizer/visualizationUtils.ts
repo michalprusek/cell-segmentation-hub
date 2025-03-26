@@ -1,58 +1,70 @@
 
-/**
- * Utility funkce pro vizualizaci bodů
- */
+import { Point } from '@/lib/segmentation';
 
 /**
- * Dynamicky vypočítá velikost bodu podle úrovně zoomu - OBRÁCENĚ
+ * Utility pro získání vhodné velikosti bodů podle zoomu
  */
 export const getPointRadius = (zoom: number): number => {
-  if (zoom > 4) {
-    // Při extrémním přiblížení (zoom > 4) ZVĚTŠÍME body
-    return 8 / zoom;
-  } else if (zoom > 3) {
-    // Při velkém přiblížení (zoom > 3) zvětšíme body
-    return 7 / zoom;
-  } else if (zoom < 0.5) {
-    // Při velkém oddálení (zoom < 0.5) ZMENŠÍME body výrazně
-    return 4 / zoom;
-  } else if (zoom < 0.7) {
-    // Při mírném oddálení (zoom < 0.7) zmenšíme body
-    return 5 / zoom;
-  } else {
-    // Normální velikost pro běžný zoom
-    return 6 / zoom;
-  }
+  if (zoom > 4) return 6/zoom;  
+  if (zoom > 3) return 5/zoom;
+  if (zoom < 0.5) return 3/zoom;
+  if (zoom < 0.7) return 3.5/zoom;
+  return 4/zoom;
 };
 
 /**
- * Dynamicky vypočítá tloušťku čáry podle úrovně zoomu - OBRÁCENĚ
+ * Utility pro získání vhodné tloušťky čáry podle zoomu
  */
 export const getStrokeWidth = (zoom: number): number => {
-  if (zoom > 4) return 3/zoom;
-  if (zoom > 3) return 2.5/zoom;
-  if (zoom < 0.5) return 1.8/zoom;
-  if (zoom < 0.7) return 2/zoom;
-  return 2.2/zoom;
+  if (zoom > 4) return 2.5/zoom;
+  if (zoom > 3) return 2/zoom;
+  if (zoom < 0.5) return 1/zoom;
+  if (zoom < 0.7) return 1.2/zoom;
+  return 1.5/zoom;
 };
 
 /**
- * Vrátí barvy pro vizualizaci
+ * Barvy pro různé součásti vizualizace
  */
-export const getColors = () => ({
-  startPoint: {
-    fill: '#FFA500', // orange
-    stroke: '#FF8C00', // dark orange
-    glowColor: 'rgba(255, 165, 0, 0.4)' // transparent orange
-  },
-  hoverPoint: {
-    fill: '#FFC107', // amber
-    stroke: '#FFA000', // amber darken-2
-    glowColor: 'rgba(255, 193, 7, 0.4)' // transparent amber
-  },
-  tempPoint: {
-    fill: '#3498db', // blue
-    stroke: '#2980b9', // dark blue
-    glowColor: 'rgba(52, 152, 219, 0.4)' // transparent blue
-  }
-});
+export const getColors = () => {
+  return {
+    // Počáteční bod
+    startPoint: {
+      fill: '#FFA500',      // Oranžová
+      stroke: '#FFFFFF',
+      innerFill: '#FF8C00', // Tmavší oranžová
+      glowColor: 'rgba(255, 165, 0, 0.3)'
+    },
+    // Potenciální koncový bod
+    potentialEndpoint: {
+      fill: '#3498db80',    // Modrá s průhledností
+      stroke: '#3498db'     // Modrá
+    },
+    // Bod pod kurzorem
+    hoverPoint: {
+      fill: '#3498db',      // Sytá modrá
+      stroke: '#FFFFFF',    // Bílý okraj
+      glowColor: 'rgba(52, 152, 219, 0.3)'
+    },
+    // Dočasný bod
+    tempPoint: {
+      fill: '#3498db',      // Modrá
+      stroke: '#FFFFFF'     // Bílý okraj
+    },
+    // Linka mezi body
+    line: {
+      color: '#3498db',     // Modrá
+      hoveredColor: '#4CAF50' // Zelená pro najeté
+    }
+  };
+};
+
+/**
+ * Vytvoří SVG path pro spojnici bodů
+ */
+export const createPathFromPoints = (points: Point[]): string => {
+  if (points.length === 0) return '';
+  
+  return `M ${points[0].x} ${points[0].y} ` + 
+    points.slice(1).map(point => `L ${point.x} ${point.y}`).join(' ');
+};

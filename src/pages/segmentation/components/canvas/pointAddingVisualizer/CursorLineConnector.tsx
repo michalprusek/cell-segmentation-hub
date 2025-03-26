@@ -17,45 +17,50 @@ interface CursorLineConnectorProps {
 }
 
 /**
- * Komponenta pro zobrazení spojnice od posledního bodu ke kurzoru nebo k potenciálnímu koncovému bodu
+ * Komponenta pro zobrazení spojnice od posledního bodu ke kurzoru nebo potenciálnímu koncovému bodu
  */
-const CursorLineConnector = ({
-  tempPoints,
-  hoveredSegment,
-  selectedVertexIndex,
-  cursorPosition,
+const CursorLineConnector = ({ 
+  tempPoints, 
+  hoveredSegment, 
+  selectedVertexIndex, 
+  cursorPosition, 
   polygonPoints,
-  zoom
+  zoom 
 }: CursorLineConnectorProps) => {
-  if (!selectedVertexIndex || !polygonPoints || tempPoints.length === 0) {
+  if (selectedVertexIndex === null || !polygonPoints) {
     return null;
   }
-  
+
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
-  const lastPoint = tempPoints[tempPoints.length - 1];
   
-  // Použijeme projectedPoint (nad kterým je kurzor) nebo pozici kurzoru
-  const targetPoint = hoveredSegment.projectedPoint || cursorPosition;
+  // Startovní bod spojnice - buď poslední dočasný bod nebo počáteční bod
+  const startPoint = tempPoints.length > 0
+    ? tempPoints[tempPoints.length - 1]
+    : polygonPoints[selectedVertexIndex];
   
-  // Log pro debug
-  console.log("CursorLineConnector - lastPoint:", lastPoint, "targetPoint:", targetPoint, 
-              "hoveredSegment:", hoveredSegment);
+  // Koncový bod spojnice - buď bod pod kurzorem, nebo aktuální pozice kurzoru
+  const isHoveringEndpoint = hoveredSegment.segmentIndex !== null && 
+                          hoveredSegment.segmentIndex !== selectedVertexIndex && 
+                          hoveredSegment.projectedPoint;
   
-  // Pokud nemáme validní cílový bod, vrátíme null
-  if (!targetPoint) {
-    return null;
-  }
+  const endPoint = isHoveringEndpoint
+    ? hoveredSegment.projectedPoint!
+    : (cursorPosition || startPoint);
   
+  // Styl čáry podle toho, zda míříme na koncový bod
+  const lineColor = isHoveringEndpoint ? colors.line.hoveredColor : colors.line.color;
+  const dashArray = isHoveringEndpoint ? "" : `${4/zoom},${4/zoom}`;
+
   return (
     <line
-      x1={lastPoint.x}
-      y1={lastPoint.y}
-      x2={targetPoint.x}
-      y2={targetPoint.y}
-      stroke={colors.line.color}
+      x1={startPoint.x}
+      y1={startPoint.y}
+      x2={endPoint.x}
+      y2={endPoint.y}
+      stroke={lineColor}
       strokeWidth={strokeWidth}
-      strokeDasharray={`${strokeWidth * 3} ${strokeWidth * 2}`}
+      strokeDasharray={dashArray}
       style={{ pointerEvents: 'none' }}
     />
   );

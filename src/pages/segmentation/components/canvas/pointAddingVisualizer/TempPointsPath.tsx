@@ -23,15 +23,6 @@ const TempPointsPath = ({ selectedVertexIndex, polygonPoints, tempPoints, zoom }
     return null;
   }
 
-  // Pro debugování - výpis informací o bodech do konzole
-  console.log("TempPointsPath rendering with:", {
-    selectedVertexIndex,
-    polygonPointsLength: polygonPoints.length,
-    tempPointsLength: tempPoints.length,
-    selectedVertex: polygonPoints[selectedVertexIndex],
-    tempPoints: tempPoints
-  });
-
   const pointRadius = getPointRadius(zoom);
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
@@ -51,7 +42,7 @@ const TempPointsPath = ({ selectedVertexIndex, polygonPoints, tempPoints, zoom }
       />
       
       {/* Spojnice mezi dočasnými body */}
-      {tempPoints.length > 1 && tempPoints.slice(1).map((point, i) => (
+      {tempPoints.slice(1).map((point, i) => (
         <line
           key={`temp-line-${i}`}
           x1={tempPoints[i].x}

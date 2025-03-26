@@ -93,62 +93,39 @@ export const usePointAddingMode = (
       const canvasX = (e.clientX - rect.left);
       const canvasY = (e.clientY - rect.top);
       
-      // Najdeme transformační kontejner a přečteme jeho transform style
-      let zoom = 1;
-      let offsetX = 0;
-      let offsetY = 0;
+      // Získání aktuální hodnoty zoom a offset z atributů nebo transformace
+      const zoomMatch = containerElement.style.transform?.match(/scale\(([^)]+)\)/);
+      const zoom = zoomMatch ? parseFloat(zoomMatch[1]) : 1;
       
-      const transformContainer = document.querySelector('[data-testid="canvas-transform-container"]');
-      if (transformContainer) {
-        const style = window.getComputedStyle(transformContainer);
-        const transform = style.transform || '';
-        
-        // Extrahujeme zoom hodnotu
-        const scaleMatch = transform.match(/scale\(([^)]+)\)/);
-        if (scaleMatch && scaleMatch[1]) {
-          zoom = parseFloat(scaleMatch[1]);
-        }
-        
-        // Extrahujeme translate hodnoty
-        const translateMatch = transform.match(/translate\(([^p]+)px,\s*([^p]+)px\)/);
-        if (translateMatch && translateMatch[1] && translateMatch[2]) {
-          offsetX = parseFloat(translateMatch[1]);
-          offsetY = parseFloat(translateMatch[2]);
-        }
-      }
+      const transformMatch = containerElement.style.transform?.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
+      const offsetX = transformMatch ? parseFloat(transformMatch[1]) : 0;
+      const offsetY = transformMatch ? parseFloat(transformMatch[2]) : 0;
       
       // Přepočet na souřadnice obrazu
-      const imageX = (canvasX - offsetX) / zoom;
-      const imageY = (canvasY - offsetY) / zoom;
-      
-      console.log(`Mouse move: client(${e.clientX}, ${e.clientY}), canvas(${canvasX}, ${canvasY}), image(${imageX}, ${imageY}), zoom: ${zoom}, offset: (${offsetX}, ${offsetY})`);
+      const imageX = canvasX / zoom - offsetX / zoom;
+      const imageY = canvasY / zoom - offsetY / zoom;
       
       setCursorPosition({ x: imageX, y: imageY });
-      
-      // Detekce vrcholu pod kurzorem s předáním zoomu a offsetu
-      detectVertexUnderCursor(imageX, imageY, zoom, { x: offsetX, y: offsetY });
     };
     
     document.addEventListener('mousemove', handleMouseMove);
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [pointAddingMode, detectVertexUnderCursor]);
+  }, [pointAddingMode]);
   
-  // Při aktivaci režimu přidávání bodů resetujeme stav
+  // Logování pro debugování
   useEffect(() => {
     if (pointAddingMode) {
-      // Ujistíme se, že začínáme s čistým stavem
-      resetPointAddingState();
-      
-      // Pokud máme vybraný polygon, nastavíme ho jako zdrojový
-      if (selectedPolygonId) {
-        setSourcePolygonId(selectedPolygonId);
-      }
-      
-      console.log("Point adding mode activated with polygon:", selectedPolygonId);
+      console.log("PointAddingMode state:", { 
+        selectedVertexIndex, 
+        sourcePolygonId, 
+        tempPoints: tempPoints.length,
+        hoveredSegment,
+        cursorPosition
+      });
     }
-  }, [pointAddingMode, selectedPolygonId, resetPointAddingState, setSourcePolygonId]);
+  }, [pointAddingMode, selectedVertexIndex, sourcePolygonId, tempPoints, hoveredSegment, cursorPosition]);
 
   return {
     pointAddingMode,
