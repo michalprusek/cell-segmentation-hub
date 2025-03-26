@@ -4,7 +4,7 @@ import { SegmentationResult, Point } from '@/lib/segmentation';
 import { TempPointsState } from '@/pages/segmentation/types';
 import { useGeometryUtils } from './useGeometryUtils';
 import { usePathModification } from './usePathModification';
-import { toast } from '@/components/ui/use-toast';
+import { toast } from 'sonner';
 
 /**
  * Hook for adding points to existing polygons
@@ -215,20 +215,10 @@ export const usePointAddingMode = (
           );
           
           if (success) {
-            toast({
-              title: "Body přidány",
-              description: "Body byly úspěšně přidány do polygonu",
-              variant: "default"
-            });
-            // Auto-exit the point adding mode after successful addition
-            setPointAddingMode(false);
+            toast.success("Body byly úspěšně přidány do polygonu");
             resetPointAddingState();
           } else {
-            toast({
-              title: "Chyba",
-              description: "Přidání bodů selhalo",
-              variant: "destructive"
-            });
+            toast.error("Přidání bodů selhalo");
             resetPointAddingState();
           }
         }
@@ -253,8 +243,7 @@ export const usePointAddingMode = (
     findPolygonById,
     findOptimalPath,
     modifyPolygonPath,
-    resetPointAddingState,
-    toast
+    resetPointAddingState
   ]);
 
   return {
