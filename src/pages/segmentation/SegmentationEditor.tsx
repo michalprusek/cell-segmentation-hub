@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from "framer-motion";
@@ -61,7 +62,12 @@ const SegmentationEditor = () => {
     toggleSlicingMode,
     togglePointAddingMode,
     exitAllEditModes,
-    isShiftPressed
+    isShiftPressed,
+    handleSlicePolygon,
+    handleEditPolygon,
+    handleDuplicatePolygon,
+    handleDeleteVertex,
+    handleDuplicateVertex
   } = useSegmentationEditor(projectId, imageId, user?.id);
 
   // Add keyboard shortcuts

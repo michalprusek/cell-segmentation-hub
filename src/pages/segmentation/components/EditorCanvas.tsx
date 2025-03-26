@@ -98,7 +98,7 @@ const EditorCanvas = ({
       <CanvasContent zoom={zoom} offset={offset}>
         <CanvasImage 
           src={imageSrc} 
-          isActive={!loading && !!segmentation} 
+          loading={!loading && !!segmentation} 
         />
         
         {segmentation && (
@@ -107,7 +107,7 @@ const EditorCanvas = ({
             imageSize={{ width: 1000, height: 1000 }}
             selectedPolygonId={selectedPolygonId}
             hoveredVertex={hoveredVertex}
-            vertexDragState={vertexDragState}
+            vertexDragState={vertexDragState.current}
             zoom={zoom}
             editMode={editMode}
             slicingMode={slicingMode}
@@ -129,7 +129,10 @@ const EditorCanvas = ({
         
         <CanvasUIElements 
           zoom={zoom} 
-          editMode={editMode || slicingMode || pointAddingMode}
+          editMode={editMode}
+          slicingMode={slicingMode}
+          pointAddingMode={pointAddingMode}
+          sliceStartPoint={sliceStartPoint}
         />
       </CanvasContent>
       

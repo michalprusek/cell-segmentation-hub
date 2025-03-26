@@ -1,3 +1,4 @@
+
 import type { SegmentationResult, Point, Polygon } from "@/lib/segmentation";
 
 export interface ProjectImage {
@@ -71,11 +72,11 @@ export interface PolygonLayerProps {
   imageSize: { width: number, height: number };
   selectedPolygonId: string | null;
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
-  vertexDragState: React.MutableRefObject<{
+  vertexDragState: {
     isDragging: boolean;
     polygonId: string | null;
     vertexIndex: number | null;
-  }>;
+  };
   zoom: number;
   editMode: boolean;
   slicingMode: boolean;
