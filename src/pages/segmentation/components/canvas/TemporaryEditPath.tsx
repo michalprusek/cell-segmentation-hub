@@ -18,9 +18,22 @@ const TemporaryEditPath = ({
 }: TemporaryEditPathProps) => {
   if (tempPoints.points.length === 0) return null;
 
+  // Dynamicky nastavíme poloměr bodů podle úrovně zoomu
+  const getPointRadius = () => {
+    if (zoom > 3) {
+      return 3/zoom;
+    } else if (zoom < 0.7) {
+      return 6/zoom;
+    } else {
+      return 5/zoom;
+    }
+  };
+
+  const pointRadius = getPointRadius();
+
   return (
     <>
-      {/* Points already added */}
+      {/* Body, které již byly přidány */}
       <polyline
         points={tempPoints.points.map(p => `${p.x},${p.y}`).join(' ')}
         fill="none"
@@ -30,7 +43,7 @@ const TemporaryEditPath = ({
         vectorEffect="non-scaling-stroke"
       />
       
-      {/* Line from last point to cursor */}
+      {/* Spojnice od posledního bodu ke kurzoru */}
       {cursorPosition && tempPoints.points.length > 0 && (
         <line
           x1={tempPoints.points[tempPoints.points.length - 1].x}
@@ -44,13 +57,13 @@ const TemporaryEditPath = ({
         />
       )}
       
-      {/* Vertices for the points */}
+      {/* Vertexy pro body */}
       {tempPoints.points.map((point, index) => (
         <circle
           key={`temp-point-${index}`}
           cx={point.x}
           cy={point.y}
-          r={5/zoom}
+          r={pointRadius}
           fill={index === 0 ? "#FF3B30" : "#FFFFFF"}
           stroke="#FF3B30"
           strokeWidth={1.5/zoom}
@@ -58,22 +71,9 @@ const TemporaryEditPath = ({
         />
       ))}
       
-      {/* Optionally show the closing line from the last point to the first point */}
-      {tempPoints.points.length > 2 && (
-        <line
-          x1={tempPoints.points[tempPoints.points.length - 1].x}
-          y1={tempPoints.points[tempPoints.points.length - 1].y}
-          x2={tempPoints.points[0].x}
-          y2={tempPoints.points[0].y}
-          stroke="#FF3B30"
-          strokeWidth={1/zoom}
-          strokeDasharray={`${8/zoom},${4/zoom}`}
-          strokeOpacity={0.6}
-          vectorEffect="non-scaling-stroke"
-        />
-      )}
+      {/* Odstraňujeme spojnici od posledního bodu k prvnímu bodu */}
       
-      {/* Shift key indicator for auto-point addition */}
+      {/* Shift key indikátor pro auto-přidávání bodů */}
       {isShiftPressed && cursorPosition && (
         <circle
           cx={cursorPosition.x}

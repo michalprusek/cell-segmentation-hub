@@ -51,13 +51,24 @@ const CanvasPolygonLayer = ({
 }: CanvasPolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
   
+  // Dynamicky nastavíme šířku čar podle zoomu
+  const getStrokeWidth = () => {
+    if (zoom > 3) {
+      return 1.5/zoom;
+    } else if (zoom < 0.7) {
+      return 3/zoom;
+    } else {
+      return 2/zoom;
+    }
+  };
+  
   return (
     <svg 
       width={imageSize.width}
       height={imageSize.height}
       className="absolute top-0 left-0"
       style={{ maxWidth: "none" }}
-      shapeRendering="auto"
+      shapeRendering="geometricPrecision"
       vectorEffect="non-scaling-stroke"
       xmlns="http://www.w3.org/2000/svg"
     >
@@ -112,20 +123,7 @@ const CanvasPolygonLayer = ({
         zoom={zoom}
       />
       
-      {/* Cursor to last point connection line */}
-      {editMode && tempPoints.points.length > 0 && cursorPosition && (
-        <line
-          x1={tempPoints.points[tempPoints.points.length - 1].x}
-          y1={tempPoints.points[tempPoints.points.length - 1].y}
-          x2={cursorPosition.x}
-          y2={cursorPosition.y}
-          stroke="#FF9500"
-          strokeWidth={2/zoom}
-          strokeDasharray={`${6/zoom},${4/zoom}`}
-          vectorEffect="non-scaling-stroke"
-          filter="url(#line-glow)"
-        />
-      )}
+      {/* Cursor to last point connection line - zobrazuje se v TemporaryEditPath */}
     </svg>
   );
 };

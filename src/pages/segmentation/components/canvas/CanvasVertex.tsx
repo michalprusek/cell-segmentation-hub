@@ -24,11 +24,22 @@ const CanvasVertex = ({
   zoom,
   type = 'external'
 }: CanvasVertexProps) => {
-  // Adjust radius based on zoom level for consistent visual appearance
-  const baseRadius = 4;
-  const radius = baseRadius / zoom;
+  // Dynamicky měníme poloměr bodu podle úrovně zoomu
+  // Při velkém přiblížení (zoom > 3) zmenšíme body
+  // Při velkém oddálení (zoom < 0.7) zvětšíme body
+  const getAdjustedRadius = () => {
+    if (zoom > 3) {
+      return 3/zoom;
+    } else if (zoom < 0.7) {
+      return 5/zoom;
+    } else {
+      return 4/zoom;
+    }
+  };
 
-  // Determine vertex color based on polygon type
+  const radius = getAdjustedRadius();
+
+  // Určení barvy vertexu podle typu polygonu
   const getVertexColor = () => {
     if (type === 'internal') {
       return isDragging ? '#0077cc' : isHovered ? '#3498db' : '#0EA5E9';
@@ -48,7 +59,7 @@ const CanvasVertex = ({
       stroke="#fff"
       strokeWidth={1.5/zoom}
       className={cn(
-        "cursor-grab transition-all duration-100",
+        "transition-colors duration-150",
         isDragging ? "cursor-grabbing" : "cursor-grab",
         isHovered ? "z-10" : "",
         isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : ""

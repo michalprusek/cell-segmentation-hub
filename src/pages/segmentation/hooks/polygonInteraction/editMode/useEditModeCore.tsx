@@ -53,10 +53,11 @@ export const useEditModeCore = (
       const firstPoint = points[0];
       const distance = Math.sqrt(Math.pow(point.x - firstPoint.x, 2) + Math.pow(point.y - firstPoint.y, 2));
       
-      if (distance < 10) {
+      // Detekce kliknutí na první bod - zmenšili jsme práh pro přesnější detekci
+      if (distance < 15/zoom) {
         // Complete polygon
         if (points.length < 3) {
-          toast.error("Polygon must have at least 3 points");
+          toast.error("Polygon musí mít alespoň 3 body");
           return false;
         }
         
@@ -75,6 +76,7 @@ export const useEditModeCore = (
           );
           
           if (success) {
+            toast.success("Body byly úspěšně přidány do polygonu");
             resetTempPoints();
             return true;
           }
@@ -95,7 +97,7 @@ export const useEditModeCore = (
             polygons: [...segmentation.polygons, newPolygon]
           });
           
-          toast.success("New polygon created");
+          toast.success("Nový polygon byl vytvořen");
           resetTempPoints();
           return true;
         }
@@ -105,7 +107,7 @@ export const useEditModeCore = (
     // Add point to temporary points
     addPointToTemp(point);
     return true;
-  }, [editMode, tempPoints, segmentation, setSegmentation, addPointsToPolygon, resetTempPoints, addPointToTemp]);
+  }, [editMode, tempPoints, segmentation, setSegmentation, addPointsToPolygon, resetTempPoints, addPointToTemp, zoom]);
 
   return {
     editMode,

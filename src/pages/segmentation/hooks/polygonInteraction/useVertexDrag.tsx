@@ -20,7 +20,7 @@ export const useVertexDrag = (
   }>
 ) => {
   const { isNearVertex } = useVertexDetection(zoom, offset);
-  const { getCanvasCoordinates, getImageCoordinates } = useCoordinateTransform(zoom, offset);
+  const { getImageCoordinates } = useCoordinateTransform(zoom, offset);
   
   // Store the initial vertex position for a proper undo action
   const initialVertexPosition = useRef<Point | null>(null);
@@ -39,7 +39,9 @@ export const useVertexDrag = (
     
     if (polygonId !== null && vertexIndex !== null) {
       const rect = containerElement.getBoundingClientRect();
-      const { x, y } = getCanvasCoordinates(e.clientX, e.clientY, rect);
+      // Použijeme clientX a clientY přímo, aby pozice bodu odpovídala kurzoru
+      const x = (e.clientX - rect.left) / zoom - offset.x;
+      const y = (e.clientY - rect.top) / zoom - offset.y;
       
       console.log(`handleVertexDrag: Dragging vertex to image coords: (${x.toFixed(2)}, ${y.toFixed(2)})`);
       
@@ -62,7 +64,7 @@ export const useVertexDrag = (
     }
     
     return false;
-  }, [segmentation, setSegmentation, getCanvasCoordinates]);
+  }, [segmentation, setSegmentation, zoom, offset]);
 
   /**
    * Zpracování kliknutí na vertex
@@ -75,7 +77,11 @@ export const useVertexDrag = (
     if (!segmentation) return false;
     
     const rect = containerElement.getBoundingClientRect();
-    const { x, y, canvasX, canvasY } = getCanvasCoordinates(clientX, clientY, rect);
+    // Přepočet klientských souřadnic na souřadnice obrazu
+    const canvasX = clientX - rect.left;
+    const canvasY = clientY - rect.top;
+    const x = canvasX / zoom - offset.x;
+    const y = canvasY / zoom - offset.y;
     
     console.log(`handleVertexClick: Checking vertex click at client: (${clientX}, ${clientY}), Canvas: (${canvasX}, ${canvasY}), Image: (${x.toFixed(2)}, ${y.toFixed(2)})`);
     
@@ -105,7 +111,7 @@ export const useVertexDrag = (
     }
     
     return false;
-  }, [segmentation, setSelectedPolygonId, isNearVertex, getCanvasCoordinates]);
+  }, [segmentation, setSelectedPolygonId, isNearVertex, zoom, offset]);
 
   return {
     handleVertexDrag,

@@ -24,7 +24,7 @@ export const useTempPoints = (
   
   const { getImageCoordinates } = useCoordinateTransform(zoom, offset);
 
-  // Track cursor position for edit mode line
+  // Sledování pozice kurzoru pro editační režim
   useEffect(() => {
     if (!editMode) {
       setCursorPosition(null);
@@ -32,30 +32,30 @@ export const useTempPoints = (
     }
     
     const handleMouseMove = (e: MouseEvent) => {
-      const svgElement = document.querySelector('svg') as SVGSVGElement;
-      if (!svgElement) return;
+      // Najdeme správný kontejner, kde se nachází canvas
+      const containerElement = document.querySelector('[data-testid="canvas-container"]') as HTMLElement;
+      if (!containerElement) return;
       
-      const rect = svgElement.getBoundingClientRect();
-      const point = svgElement.createSVGPoint();
+      const rect = containerElement.getBoundingClientRect();
       
-      point.x = e.clientX - rect.left;
-      point.y = e.clientY - rect.top;
+      // Přepočet souřadnic myši na souřadnice obrazu
+      const canvasX = e.clientX - rect.left;
+      const canvasY = e.clientY - rect.top;
       
-      // Transform to SVG coordinate space
-      const matrix = svgElement.getScreenCTM();
-      if (matrix) {
-        const transformedPoint = point.matrixTransform(matrix.inverse());
-        setCursorPosition({ x: transformedPoint.x, y: transformedPoint.y });
-      }
+      // Přepočet na souřadnice obrazu
+      const imageX = canvasX / zoom - offset.x;
+      const imageY = canvasY / zoom - offset.y;
+      
+      setCursorPosition({ x: imageX, y: imageY });
     };
     
     document.addEventListener('mousemove', handleMouseMove);
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [editMode]);
+  }, [editMode, zoom, offset]);
   
-  // Track shift key for auto-point addition
+  // Sledování klávesy Shift pro automatické přidávání bodů
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Shift') {
@@ -77,7 +77,7 @@ export const useTempPoints = (
     };
   }, []);
 
-  // Function to add point to temp points
+  // Funkce pro přidání bodu do dočasných bodů
   const addPointToTemp = useCallback((point: Point) => {
     setTempPoints(prev => ({
       ...prev,
@@ -85,7 +85,7 @@ export const useTempPoints = (
     }));
   }, []);
   
-  // Function to reset temp points
+  // Funkce pro reset dočasných bodů
   const resetTempPoints = useCallback(() => {
     setTempPoints({
       points: [],
