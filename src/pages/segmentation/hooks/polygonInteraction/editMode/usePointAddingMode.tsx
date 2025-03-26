@@ -93,30 +93,36 @@ export const usePointAddingMode = (
       const canvasX = (e.clientX - rect.left);
       const canvasY = (e.clientY - rect.top);
       
-      // Získání aktuální hodnoty zoom a offset z atributů nebo transformace
+      // Získání zoom hodnoty z DOM - důležité pro správný přepočet souřadnic
       let zoom = 1;
       let offsetX = 0;
       let offsetY = 0;
       
-      // Pokusíme se získat zoom a offset z transformace
-      const transform = containerElement.style.transform || '';
-      
-      // Získání hodnoty zoomu
-      const zoomMatch = transform.match(/scale\(([^)]+)\)/);
-      if (zoomMatch && zoomMatch[1]) {
-        zoom = parseFloat(zoomMatch[1]);
-      }
-      
-      // Získání hodnoty offsetu
-      const translateMatch = transform.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
-      if (translateMatch && translateMatch[1] && translateMatch[2]) {
-        offsetX = parseFloat(translateMatch[1]);
-        offsetY = parseFloat(translateMatch[2]);
+      // Najdeme transformační kontejner a přečteme jeho transform style
+      const transformContainer = document.querySelector('[data-testid="canvas-transform-container"]');
+      if (transformContainer) {
+        const style = window.getComputedStyle(transformContainer);
+        const transform = style.transform || '';
+        
+        // Extrahujeme zoom hodnotu
+        const scaleMatch = transform.match(/scale\(([^)]+)\)/);
+        if (scaleMatch && scaleMatch[1]) {
+          zoom = parseFloat(scaleMatch[1]);
+        }
+        
+        // Extrahujeme translate hodnoty
+        const translateMatch = transform.match(/translate\(([^p]+)px,\s*([^p]+)px\)/);
+        if (translateMatch && translateMatch[1] && translateMatch[2]) {
+          offsetX = parseFloat(translateMatch[1]);
+          offsetY = parseFloat(translateMatch[2]);
+        }
       }
       
       // Přepočet na souřadnice obrazu
       const imageX = canvasX / zoom - offsetX / zoom;
       const imageY = canvasY / zoom - offsetY / zoom;
+      
+      console.log(`Mouse position: client(${e.clientX}, ${e.clientY}), canvas(${canvasX}, ${canvasY}), image(${imageX}, ${imageY}), zoom: ${zoom}`);
       
       setCursorPosition({ x: imageX, y: imageY });
       

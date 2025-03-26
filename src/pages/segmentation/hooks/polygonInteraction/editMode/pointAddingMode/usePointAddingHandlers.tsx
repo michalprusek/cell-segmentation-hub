@@ -55,9 +55,13 @@ export const usePointAddingHandlers = ({
    * Obsluha kliknutí v režimu přidávání bodů
    */
   const handlePointAddingClick = useCallback((x: number, y: number) => {
-    if (!pointAddingMode || !segmentation) return false;
+    if (!pointAddingMode || !segmentation) {
+      console.log("Point adding click ignored - mode not active or no segmentation");
+      return false;
+    }
     
-    console.log("Point adding click:", x, y, "hoveredSegment:", hoveredSegment);
+    console.log("Point adding click:", x, y, "hoveredSegment:", hoveredSegment, 
+                "selectedVertexIndex:", selectedVertexIndex, "sourcePolygonId:", sourcePolygonId);
     
     // 1. Pokud ještě nemáme vybraný počáteční bod
     if (selectedVertexIndex === null || sourcePolygonId === null) {
@@ -71,6 +75,7 @@ export const usePointAddingHandlers = ({
         console.log("Selected start vertex:", hoveredSegment.segmentIndex, "polygonId:", hoveredSegment.polygonId);
         return true;
       }
+      console.log("No vertex selected yet and did not click on any vertex");
       return false;
     }
     
@@ -127,6 +132,7 @@ export const usePointAddingHandlers = ({
     else {
       // Pokud je kurzor nad vrcholem polygonu, neklikáme do volného prostoru
       if (hoveredSegment.segmentIndex !== null && hoveredSegment.polygonId === sourcePolygonId) {
+        console.log("Not adding point - cursor is over a vertex");
         return false;
       }
       

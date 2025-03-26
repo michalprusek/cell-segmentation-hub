@@ -4,7 +4,7 @@ import { Point } from '@/lib/segmentation';
 import { TempPointsState } from '@/pages/segmentation/types';
 import TemporaryEditPath from './TemporaryEditPath';
 import SlicingModeVisualizer from './SlicingModeVisualizer';
-import PointAddingVisualizer from './PointAddingVisualizer';
+import PointAddingVisualizer from './pointAddingVisualizer';
 
 interface EditorModeVisualizationsProps {
   editMode: boolean;
@@ -44,6 +44,18 @@ const EditorModeVisualizations = ({
   selectedVertexIndex,
   sourcePolygonId
 }: EditorModeVisualizationsProps) => {
+  
+  // Logování pro debugování
+  if (pointAddingMode) {
+    console.log("EditorModeVisualizations - pointAddingMode is active with:", {
+      selectedVertexIndex,
+      sourcePolygonId,
+      tempPointsLength: pointAddingTempPoints.length,
+      hoveredSegment,
+      cursorPosition
+    });
+  }
+  
   return (
     <>
       {/* Vizualizace editačního režimu - dočasné body a spojnice */}
@@ -73,7 +85,7 @@ const EditorModeVisualizations = ({
           tempPoints={pointAddingTempPoints || []}
           selectedVertexIndex={selectedVertexIndex || null}
           sourcePolygonId={sourcePolygonId || null}
-          polygonPoints={selectedPolygonPoints}
+          polygonPoints={selectedPolygonPoints || null}
           cursorPosition={cursorPosition}
         />
       )}

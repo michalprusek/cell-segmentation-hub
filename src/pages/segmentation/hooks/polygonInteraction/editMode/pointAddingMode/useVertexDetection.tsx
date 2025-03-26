@@ -40,7 +40,10 @@ export const useVertexDetection = ({
     }
     
     const cursorPoint = { x, y };
-    const DETECTION_THRESHOLD = 15; // Prahová hodnota v pixelech
+    // Zvětšíme prahovou hodnotu pro snazší detekci bodů
+    const DETECTION_THRESHOLD = 25; // Zvětšeno z 15 na 25
+    
+    console.log("detectVertexUnderCursor called with:", x, y, "sourcePolygonId:", sourcePolygonId, "selectedVertexIndex:", selectedVertexIndex);
     
     let closestVertex = {
       polygonId: null as string | null,
@@ -53,11 +56,16 @@ export const useVertexDetection = ({
       const polygon = segmentation.polygons.find(p => p.id === sourcePolygonId);
       
       if (polygon) {
+        console.log("Checking vertices in polygon:", sourcePolygonId, "with", polygon.points.length, "points");
         polygon.points.forEach((point, index) => {
           // Přeskočíme počáteční bod, pokud je již vybrán
-          if (selectedVertexIndex === index) return;
+          if (selectedVertexIndex === index) {
+            console.log("Skipping selected vertex:", index);
+            return;
+          }
           
           const dist = distance(point, cursorPoint);
+          console.log("Checking vertex", index, "at", point.x, point.y, "dist:", dist);
           
           if (dist < DETECTION_THRESHOLD && dist < closestVertex.distance) {
             closestVertex = {
@@ -65,6 +73,7 @@ export const useVertexDetection = ({
               vertexIndex: index,
               distance: dist
             };
+            console.log("Found closer vertex:", index, "with distance:", dist);
           }
         });
       }
@@ -91,6 +100,7 @@ export const useVertexDetection = ({
       const polygon = segmentation.polygons.find(p => p.id === closestVertex.polygonId);
       if (polygon) {
         const point = polygon.points[closestVertex.vertexIndex];
+        console.log("Setting hovered segment:", closestVertex.polygonId, closestVertex.vertexIndex, point);
         
         setHoveredSegment({
           polygonId: closestVertex.polygonId,

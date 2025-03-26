@@ -10,48 +10,45 @@ interface StartPointIndicatorProps {
 }
 
 /**
- * Komponenta pro zobrazení počátečního bodu cesty
+ * Komponenta pro zobrazení počátečního bodu při přidávání nových bodů
  */
 const StartPointIndicator = ({ selectedVertexIndex, polygonPoints, zoom }: StartPointIndicatorProps) => {
-  if (selectedVertexIndex === null || !polygonPoints || !polygonPoints[selectedVertexIndex]) {
+  if (selectedVertexIndex === null || !polygonPoints) {
     return null;
   }
 
-  const pointRadius = getPointRadius(zoom);
+  const point = polygonPoints[selectedVertexIndex];
+  if (!point) {
+    console.error("Selected vertex index out of bounds:", selectedVertexIndex, polygonPoints.length);
+    return null;
+  }
+  
+  console.log("Rendering StartPointIndicator for vertex:", selectedVertexIndex, "at", point.x, point.y);
+
+  const pointRadius = getPointRadius(zoom) * 1.5; // Zvětšíme bod pro lepší viditelnost
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
-  const startPoint = polygonPoints[selectedVertexIndex];
 
   return (
     <g>
-      {/* Pulzující efekt kolem počátečního bodu */}
+      {/* Zvýraznění počátečního bodu - vnější */}
       <circle
-        cx={startPoint.x}
-        cy={startPoint.y}
-        r={pointRadius * 2}
+        cx={point.x}
+        cy={point.y}
+        r={pointRadius * 1.8}
         fill={colors.startPoint.glowColor}
         className="animate-pulse"
         style={{ pointerEvents: 'none' }}
       />
       
-      {/* Větší kruh pro zvýraznění */}
+      {/* Hlavní bod */}
       <circle
-        cx={startPoint.x}
-        cy={startPoint.y}
-        r={pointRadius * 1.5}
+        cx={point.x}
+        cy={point.y}
+        r={pointRadius}
         fill={colors.startPoint.fill}
         stroke={colors.startPoint.stroke}
         strokeWidth={strokeWidth * 1.2}
-        style={{ pointerEvents: 'none' }}
-      />
-      
-      {/* Menší vnitřní kruh */}
-      <circle
-        cx={startPoint.x}
-        cy={startPoint.y}
-        r={pointRadius * 0.8}
-        fill={colors.startPoint.innerFill}
-        stroke="none"
         style={{ pointerEvents: 'none' }}
       />
     </g>

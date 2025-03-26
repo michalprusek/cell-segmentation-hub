@@ -28,7 +28,8 @@ const TempPointsPath = ({ selectedVertexIndex, polygonPoints, tempPoints, zoom }
     selectedVertexIndex,
     polygonPointsLength: polygonPoints.length,
     tempPointsLength: tempPoints.length,
-    selectedVertex: polygonPoints[selectedVertexIndex]
+    selectedVertex: polygonPoints[selectedVertexIndex],
+    tempPoints: tempPoints
   });
 
   const pointRadius = getPointRadius(zoom);
@@ -50,7 +51,7 @@ const TempPointsPath = ({ selectedVertexIndex, polygonPoints, tempPoints, zoom }
       />
       
       {/* Spojnice mezi dočasnými body */}
-      {tempPoints.slice(1).map((point, i) => (
+      {tempPoints.length > 1 && tempPoints.slice(1).map((point, i) => (
         <line
           key={`temp-line-${i}`}
           x1={tempPoints[i].x}

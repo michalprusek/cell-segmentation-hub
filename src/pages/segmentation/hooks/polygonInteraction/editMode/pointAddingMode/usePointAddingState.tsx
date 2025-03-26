@@ -3,19 +3,13 @@ import { useState, useCallback } from 'react';
 import { Point } from '@/lib/segmentation';
 
 /**
- * Hook pro správu stavů režimu přidávání bodů do polygonu
+ * Hook pro správu stavu režimu přidávání bodů
  */
 export const usePointAddingState = () => {
-  // Stav režimu přidávání bodů
-  const [pointAddingMode, setPointAddingMode] = useState(false);
-  
-  // Vybraný vrchol jako počáteční bod sekvence
+  const [pointAddingMode, setPointAddingMode] = useState<boolean>(false);
   const [selectedVertexIndex, setSelectedVertexIndex] = useState<number | null>(null);
-  
-  // ID polygonu, do kterého přidáváme body
   const [sourcePolygonId, setSourcePolygonId] = useState<string | null>(null);
-  
-  // Informace o aktuálně zvýrazněném segmentu/vrcholu
+  const [tempPoints, setTempPoints] = useState<Point[]>([]);
   const [hoveredSegment, setHoveredSegment] = useState<{
     polygonId: string | null,
     segmentIndex: number | null,
@@ -25,12 +19,23 @@ export const usePointAddingState = () => {
     segmentIndex: null,
     projectedPoint: null
   });
-  
-  // Dočasné body tvořící novou sekvenci
-  const [tempPoints, setTempPoints] = useState<Point[]>([]);
-  
+
   /**
-   * Reset všech stavů režimu přidávání bodů
+   * Přepíná režim přidávání bodů
+   */
+  const togglePointAddingMode = useCallback(() => {
+    setPointAddingMode(prev => !prev);
+    
+    // Pokud vypínáme režim, resetujeme stav
+    if (pointAddingMode) {
+      resetPointAddingState();
+    } else {
+      console.log("Entering point adding mode");
+    }
+  }, [pointAddingMode]);
+
+  /**
+   * Resetuje stav přidávání bodů
    */
   const resetPointAddingState = useCallback(() => {
     setSelectedVertexIndex(null);
@@ -41,18 +46,11 @@ export const usePointAddingState = () => {
       segmentIndex: null,
       projectedPoint: null
     });
+    
+    console.log("Point adding state has been reset");
   }, []);
 
-  /**
-   * Přepnutí režimu přidávání bodů
-   */
-  const togglePointAddingMode = useCallback(() => {
-    setPointAddingMode(prev => !prev);
-    resetPointAddingState();
-  }, [resetPointAddingState]);
-
   return {
-    // Stavy
     pointAddingMode,
     setPointAddingMode,
     selectedVertexIndex,
@@ -63,8 +61,6 @@ export const usePointAddingState = () => {
     setHoveredSegment,
     tempPoints,
     setTempPoints,
-    
-    // Akce
     togglePointAddingMode,
     resetPointAddingState
   };
