@@ -29,26 +29,37 @@ export const getColors = () => {
     startPoint: {
       fill: "#FF5722",     // Oranžová - výraznější
       stroke: "#FFFFFF",
-      innerFill: "#FFFFFF" // Bílá pro vnitřní kruh
+      innerFill: "#FFFFFF", // Bílá pro vnitřní kruh
+      glowColor: "rgba(255, 87, 34, 0.5)" // Oranžová záře
     },
     hoverPoint: {
       fill: "#FFC107",     // Žlutá - při hoveru
-      stroke: "#FF9800"    // Tmavší oranžová
+      stroke: "#FF9800",   // Tmavší oranžová
+      glowColor: "rgba(255, 193, 7, 0.5)" // Žlutá záře
     },
     potentialEndpoint: {
-      fill: "rgba(255, 235, 59, 0.5)", // Poloprůhledná žlutá
-      stroke: "#FFC107"                // Žlutá
+      fill: "rgba(255, 235, 59, 0.7)", // Méně průhledná žlutá
+      stroke: "#FFC107",              // Žlutá
+      hovered: {
+        fill: "#FFEB3B",              // Jasná žlutá
+        stroke: "#FFA000",            // Tmavší žlutá
+        glowColor: "rgba(255, 235, 59, 0.6)" // Žlutá záře
+      }
     },
     tempPoint: {
       fill: "#2196F3",     // Modrá
-      stroke: "#FFFFFF"    // Bílá
+      stroke: "#FFFFFF",   // Bílá
+      glowColor: "rgba(33, 150, 243, 0.5)" // Modrá záře
     },
     tempLine: {
-      stroke: "#2196F3"    // Modrá
+      stroke: "#2196F3",    // Modrá
+      dashStroke: "#64B5F6" // Světlejší modrá pro čárkovanou čáru
     },
     cursorLine: {
       normal: "#64B5F6",   // Světlejší modrá
-      endpoint: "#4CAF50"  // Zelená pro koncový bod
+      endpoint: "#4CAF50", // Zelená pro koncový bod
+      dashArray: "5,5"     // Vzor pro čárkovanou čáru (5px čára, 5px mezera)
     }
   };
 };
+
