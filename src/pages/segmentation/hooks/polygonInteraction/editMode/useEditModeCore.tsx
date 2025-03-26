@@ -78,6 +78,8 @@ export const useEditModeCore = (
           if (success) {
             toast.success("Body byly úspěšně přidány do polygonu");
             resetTempPoints();
+            // Exit edit mode automatically after completion
+            setEditMode(false);
             return true;
           }
         } else {
@@ -99,6 +101,8 @@ export const useEditModeCore = (
           
           toast.success("Nový polygon byl vytvořen");
           resetTempPoints();
+          // Exit edit mode automatically after polygon creation
+          setEditMode(false);
           return true;
         }
       }
@@ -118,6 +122,7 @@ export const useEditModeCore = (
     handleEditModeClick,
     resetTempPoints,
     setTempPoints,
-    addPointToTemp
+    addPointToTemp,
+    setEditMode // Export this to allow other components to directly change edit mode
   };
 };

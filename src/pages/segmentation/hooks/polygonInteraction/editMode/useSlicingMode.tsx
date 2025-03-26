@@ -1,10 +1,11 @@
+
 import { useState, useCallback } from 'react';
-import { Point, SegmentationResult } from '@/lib/segmentation';
-import { usePolygonSplitter } from '../geometry/usePolygonSplitter';
+import { SegmentationResult, Point } from '@/lib/segmentation';
 import { toast } from 'sonner';
+import { usePolygonSplitter } from '../geometry/usePolygonSplitter';
 
 /**
- * Hook pro režim rozdělování polygonů (slicing)
+ * Hook for polygon slicing mode
  */
 export const useSlicingMode = (
   segmentation: SegmentationResult | null,
@@ -15,13 +16,10 @@ export const useSlicingMode = (
   const [sliceStartPoint, setSliceStartPoint] = useState<Point | null>(null);
   const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
   
-  const { splitPolygon, splitIntoTwoPolygons } = usePolygonSplitter(
-    segmentation,
-    setSegmentation
-  );
+  const { splitPolygon } = usePolygonSplitter(segmentation, setSegmentation);
   
   /**
-   * Přepínání režimu rozdělování
+   * Toggle slicing mode on/off
    */
   const toggleSlicingMode = useCallback(() => {
     setSlicingMode(prev => !prev);
@@ -30,68 +28,42 @@ export const useSlicingMode = (
   }, []);
   
   /**
-   * Reset stavu slicingu
+   * Update cursor position for slicing mode
    */
-  const resetSlicing = useCallback(() => {
-    setSliceStartPoint(null);
-    setCursorPosition(null);
-  }, []);
-
+  const updateCursorPosition = useCallback((x: number, y: number) => {
+    if (!slicingMode) return;
+    setCursorPosition({ x, y });
+  }, [slicingMode]);
+  
   /**
-   * Zpracování kliknutí v režimu rozdělování
+   * Handle clicks in slicing mode
    */
   const handleSlicingClick = useCallback((x: number, y: number): boolean => {
-    if (!slicingMode || !segmentation || !selectedPolygonId) {
-      toast.error("Vyberte polygon a aktivujte režim rozdělování");
-      return false;
-    }
+    if (!slicingMode || !selectedPolygonId) return false;
     
     const clickPoint = { x, y };
     
-    // Pokud nemáme počáteční bod, nastavíme ho
+    // First click - set start point
     if (!sliceStartPoint) {
       setSliceStartPoint(clickPoint);
       return true;
     }
     
-    // Pokud máme počáteční bod, dokončíme řezací linii
-    const sliceOperation = {
-      polygonId: selectedPolygonId,
-      startPoint: sliceStartPoint,
-      endPoint: clickPoint
-    };
-    
-    // Always split into two polygons (changed from the original behavior)
-    const success = splitIntoTwoPolygons(sliceOperation);
+    // Second click - complete slice
+    const success = splitPolygon(selectedPolygonId, sliceStartPoint, clickPoint);
     
     if (success) {
-      toast.success("Polygon byl rozdělen na dva samostatné polygony");
+      toast.success("Polygon byl úspěšně rozdělen");
+      // Reset state and exit slicing mode automatically
+      setSliceStartPoint(null);
+      setSlicingMode(false);
     } else {
       toast.error("Rozdělení polygonu selhalo");
+      setSliceStartPoint(null);
     }
     
-    // Reset stavu po dokončení operace
-    resetSlicing();
-    
-    // Keep slicing mode active after the operation, don't exit
     return true;
-  }, [
-    slicingMode,
-    segmentation,
-    selectedPolygonId,
-    sliceStartPoint,
-    splitIntoTwoPolygons,
-    resetSlicing
-  ]);
-  
-  /**
-   * Aktualizace pozice kurzoru
-   */
-  const updateCursorPosition = useCallback((x: number, y: number) => {
-    if (slicingMode) {
-      setCursorPosition({ x, y });
-    }
-  }, [slicingMode]);
+  }, [slicingMode, selectedPolygonId, sliceStartPoint, splitPolygon]);
 
   return {
     slicingMode,
@@ -100,6 +72,6 @@ export const useSlicingMode = (
     toggleSlicingMode,
     handleSlicingClick,
     updateCursorPosition,
-    resetSlicing
+    setSlicingMode // Export this to allow other components to directly change slicing mode
   };
 };

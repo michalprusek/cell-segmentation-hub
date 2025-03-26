@@ -55,9 +55,10 @@ const CanvasPolygon = ({
     } else if (zoom > 3) {
       return 2/zoom;
     } else if (zoom < 0.5) {
-      return 3/zoom;
+      // Make lines thinner at low zoom (specifically 40%)
+      return 2/zoom; 
     } else if (zoom < 0.7) {
-      return 2.5/zoom;
+      return 2.2/zoom;
     } else {
       return 2/zoom;
     }
@@ -110,13 +111,13 @@ const CanvasPolygon = ({
           style={{ imageRendering: "crisp-edges" }}
         />
         
-        {/* Render vertices only when polygon is selected */}
-        {isSelected && points.map((point, index) => {
+        {/* Render vertices for all polygons, not just selected ones */}
+        {points.map((point, index) => {
           const isHovered = hoveredVertex.polygonId === id && hoveredVertex.vertexIndex === index;
           const isDragging = vertexDragState.isDragging && 
                             vertexDragState.polygonId === id && 
                             vertexDragState.vertexIndex === index;
-          const isStartPoint = index === 0;
+          const isStartPoint = index === 0 && isSelected; // Only highlight start point when selected
           
           return (
             <VertexContextMenu

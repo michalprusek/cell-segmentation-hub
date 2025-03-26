@@ -28,21 +28,24 @@ const CanvasVertex = ({
 }: CanvasVertexProps) => {
   // Dynamicky měníme velikost bodů podle úrovně zoomu - OBRÁCENĚ
   const getAdjustedRadius = () => {
+    // Base radius is smaller for non-selected polygons
+    const baseSize = isSelected ? 1.0 : 0.7;
+    
     if (zoom > 4) {
       // Při extrémním přiblížení (zoom > 4) ZVĚTŠÍME body
-      return 7/zoom;
+      return 7 * baseSize / zoom;
     } else if (zoom > 3) {
       // Při velkém přiblížení (zoom > 3) zvětšíme body
-      return 6/zoom;
+      return 6 * baseSize / zoom;
     } else if (zoom < 0.5) {
       // Při velkém oddálení (zoom < 0.5) ZMENŠÍME body výrazně
-      return 2.5/zoom;
+      return 2.5 * baseSize / zoom;
     } else if (zoom < 0.7) {
       // Při mírném oddálení (zoom < 0.7) zmenšíme body
-      return 3/zoom;
+      return 3 * baseSize / zoom;
     } else {
       // Normální velikost pro běžný zoom
-      return 4/zoom;
+      return 4 * baseSize / zoom;
     }
   };
 
@@ -58,16 +61,21 @@ const CanvasVertex = ({
     if (isStartPoint) {
       return '#FFA500'; // Orange for start point
     } else if (type === 'internal') {
-      return isDragging ? '#0077cc' : isHovered ? '#3498db' : '#0EA5E9';
+      return isDragging ? '#0077cc' : isHovered ? '#3498db' : (isSelected ? '#0EA5E9' : 'rgba(14, 165, 233, 0.7)');
     } else {
-      return isDragging ? '#c0392b' : isHovered ? '#e74c3c' : '#ea384c';
+      return isDragging ? '#c0392b' : isHovered ? '#e74c3c' : (isSelected ? '#ea384c' : 'rgba(234, 56, 76, 0.7)');
     }
   };
 
   const vertexColor = getVertexColor();
   
-  // Také upravujeme tloušťku okraje podle zoomu
-  const strokeWidth = 1.5/zoom;
+  // Also adjust stroke width based on selection state and zoom
+  const getStrokeWidth = () => {
+    const baseWidth = isSelected ? 1.5 : 1.0;
+    return baseWidth / zoom;
+  };
+  
+  const strokeWidth = getStrokeWidth();
   
   return (
     <circle
@@ -81,10 +89,9 @@ const CanvasVertex = ({
         "transition-colors duration-150",
         isDragging ? "cursor-grabbing" : "cursor-grab",
         isHovered ? "z-10" : "",
-        isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : "",
-        isStartPoint ? "animate-pulse" : ""
+        isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : ""
       )}
-      filter={isSelected || isHovered || isStartPoint ? "url(#point-shadow)" : ""}
+      filter={isSelected || isHovered ? "url(#point-shadow)" : ""}
       data-polygon-id={polygonId}
       data-vertex-index={vertexIndex}
       vectorEffect="non-scaling-stroke"

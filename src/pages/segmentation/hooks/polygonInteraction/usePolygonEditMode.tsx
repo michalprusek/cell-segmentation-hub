@@ -50,8 +50,8 @@ export const usePolygonEditMode = (
       editModeCore.toggleEditMode();
     } else {
       // Jinak deaktivujeme ostatní režimy a aktivujeme tento
-      if (slicingMode.slicingMode) slicingMode.toggleSlicingMode();
-      if (pointAddingMode.pointAddingMode) pointAddingMode.togglePointAddingMode();
+      if (slicingMode.slicingMode) slicingMode.setSlicingMode(false);
+      if (pointAddingMode.pointAddingMode) pointAddingMode.setPointAddingMode(false);
       editModeCore.toggleEditMode();
     }
   }, [editModeCore, slicingMode, pointAddingMode]);
@@ -62,8 +62,8 @@ export const usePolygonEditMode = (
       slicingMode.toggleSlicingMode();
     } else {
       // Jinak deaktivujeme ostatní režimy a aktivujeme tento
-      if (editModeCore.editMode) editModeCore.toggleEditMode();
-      if (pointAddingMode.pointAddingMode) pointAddingMode.togglePointAddingMode();
+      if (editModeCore.editMode) editModeCore.setEditMode(false);
+      if (pointAddingMode.pointAddingMode) pointAddingMode.setPointAddingMode(false);
       slicingMode.toggleSlicingMode();
     }
   }, [editModeCore, slicingMode, pointAddingMode]);
@@ -74,17 +74,17 @@ export const usePolygonEditMode = (
       pointAddingMode.togglePointAddingMode();
     } else {
       // Jinak deaktivujeme ostatní režimy a aktivujeme tento
-      if (editModeCore.editMode) editModeCore.toggleEditMode();
-      if (slicingMode.slicingMode) slicingMode.toggleSlicingMode();
+      if (editModeCore.editMode) editModeCore.setEditMode(false);
+      if (slicingMode.slicingMode) slicingMode.setSlicingMode(false);
       pointAddingMode.togglePointAddingMode();
     }
   }, [editModeCore, slicingMode, pointAddingMode]);
 
   // Exit all edit modes
   const exitAllEditModes = useCallback(() => {
-    if (editModeCore.editMode) editModeCore.toggleEditMode();
-    if (slicingMode.slicingMode) slicingMode.toggleSlicingMode();
-    if (pointAddingMode.pointAddingMode) pointAddingMode.togglePointAddingMode();
+    if (editModeCore.editMode) editModeCore.setEditMode(false);
+    if (slicingMode.slicingMode) slicingMode.setSlicingMode(false);
+    if (pointAddingMode.pointAddingMode) pointAddingMode.setPointAddingMode(false);
   }, [editModeCore, slicingMode, pointAddingMode]);
 
   // Automatické přidávání bodů při držení Shift
@@ -172,4 +172,3 @@ export const usePolygonEditMode = (
     handleEditMouseMove
   };
 };
-
