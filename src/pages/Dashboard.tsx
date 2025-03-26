@@ -147,8 +147,11 @@ const Dashboard = () => {
   };
 
   const handleToggleUploader = () => {
-    // Switch to the upload tab
-    document.querySelector('[data-state="inactive"][value="upload"]')?.click();
+    // Fix the TypeScript error by casting the element to HTMLElement
+    const uploadTab = document.querySelector('[data-state="inactive"][value="upload"]') as HTMLElement;
+    if (uploadTab) {
+      uploadTab.click();
+    }
   };
 
   if (fetchError) {
