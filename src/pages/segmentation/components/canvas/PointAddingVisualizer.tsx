@@ -9,185 +9,150 @@ interface PointAddingVisualizerProps {
     projectedPoint: Point | null
   };
   zoom: number;
-  tempPoints?: Point[];
-  selectedVertexIndex?: number | null;
-  sourcePolygonId?: string | null;
-  polygonPoints?: Point[] | null;
+  tempPoints: Point[];
+  selectedVertexIndex: number | null;
+  sourcePolygonId: string | null;
+  polygonPoints: Point[] | null;
 }
 
 /**
- * Visualization component for point adding mode
+ * Komponenta pro vizualizaci režimu přidávání bodů do polygonu
  */
 const PointAddingVisualizer = ({
   hoveredSegment,
   zoom,
-  tempPoints = [],
-  selectedVertexIndex = null,
-  sourcePolygonId = null,
-  polygonPoints = null
+  tempPoints,
+  selectedVertexIndex,
+  sourcePolygonId,
+  polygonPoints
 }: PointAddingVisualizerProps) => {
-  // If no source polygon selected, nothing to visualize
-  if (!sourcePolygonId) {
-    return null;
-  }
+  if (!polygonPoints) return null;
   
-  // Determine stroke width based on zoom
-  const getStrokeWidth = () => {
-    if (zoom > 4) {
-      return 2/zoom;
-    } else if (zoom > 3) {
-      return 2.5/zoom;
-    } else if (zoom < 0.5) {
-      return 1.5/zoom;
-    } else if (zoom < 0.7) {
-      return 2/zoom;
-    } else {
-      return 3/zoom;
-    }
-  };
-  
-  const strokeWidth = getStrokeWidth();
-  
-  // Get point radius based on zoom
-  const getPointRadius = () => {
-    if (zoom > 4) {
-      return 8/zoom;
-    } else if (zoom > 3) {
-      return 7/zoom;
-    } else if (zoom < 0.5) {
-      return 5/zoom;
-    } else if (zoom < 0.7) {
-      return 5.5/zoom;
-    } else {
-      return 6/zoom;
-    }
-  };
-  
-  const pointRadius = getPointRadius();
-  
-  // Helper to create path data string for temporary points
-  const createPathData = (points: Point[]) => {
-    if (points.length < 2) return '';
-    
-    let pathData = `M ${points[0].x} ${points[0].y}`;
-    
-    for (let i = 1; i < points.length; i++) {
-      pathData += ` L ${points[i].x} ${points[i].y}`;
-    }
-    
-    return pathData;
-  };
-
-  // Get starting vertex if we have a selected vertex index
-  const startVertex = selectedVertexIndex !== null && polygonPoints && polygonPoints.length > selectedVertexIndex
-    ? polygonPoints[selectedVertexIndex]
-    : null;
-
-  console.log("PointAddingVisualizer props:", {
-    tempPoints,
-    selectedVertexIndex,
-    sourcePolygonId,
-    polygonPointsLength: polygonPoints?.length,
-    startVertex
-  });
+  // Velikost bodů podle zoomu
+  const pointSize = Math.max(3 / zoom, 1);
+  const strokeWidth = Math.max(1.5 / zoom, 0.5);
 
   return (
-    <g className="point-adding-visualizer">
-      {/* Highlight all other vertices of the same polygon in yellow */}
-      {selectedVertexIndex !== null && sourcePolygonId && polygonPoints && polygonPoints.map((point, index) => {
-        if (index === selectedVertexIndex) return null; // Skip the selected vertex
+    <g>
+      {/* Vykreslení bodů polygonu (žluté body) */}
+      {polygonPoints.map((point, index) => {
+        // Přeskočíme vybraný vrchol (ten bude oranžový)
+        if (index === selectedVertexIndex) return null;
         
         return (
           <circle
-            key={`highlight-vertex-${index}`}
+            key={`vertex-${index}`}
             cx={point.x}
             cy={point.y}
-            r={pointRadius * 1.5}
-            fill="rgba(234, 179, 8, 0.5)"  // Yellow color
-            stroke="#EAB308"
+            r={pointSize * 2}
+            fill="yellow"
+            stroke="black"
             strokeWidth={strokeWidth}
-            style={{ pointerEvents: 'none' }}
+            opacity={0.8}
           />
         );
       })}
       
-      {/* Highlight for the hovered vertex */}
-      {hoveredSegment.projectedPoint && hoveredSegment.polygonId && (
+      {/* Vykreslení počátečního bodu (oranžový) */}
+      {selectedVertexIndex !== null && polygonPoints[selectedVertexIndex] && (
+        <circle
+          cx={polygonPoints[selectedVertexIndex].x}
+          cy={polygonPoints[selectedVertexIndex].y}
+          r={pointSize * 3}
+          fill="orange"
+          stroke="black"
+          strokeWidth={strokeWidth}
+          opacity={0.8}
+        />
+      )}
+      
+      {/* Zvýraznění bodu pod kurzorem (zelený) */}
+      {hoveredSegment.polygonId === sourcePolygonId && 
+       hoveredSegment.segmentIndex !== null && 
+       hoveredSegment.segmentIndex !== selectedVertexIndex && 
+       hoveredSegment.projectedPoint && (
         <circle
           cx={hoveredSegment.projectedPoint.x}
           cy={hoveredSegment.projectedPoint.y}
-          r={pointRadius * 1.5}
-          fill="rgba(74, 222, 128, 0.5)" // Green
-          stroke="#4ADE80"
+          r={pointSize * 3}
+          fill="green"
+          stroke="black"
           strokeWidth={strokeWidth}
-          style={{ pointerEvents: 'none' }}
+          opacity={0.8}
         />
       )}
       
-      {/* Highlight for the selected start vertex */}
-      {startVertex && (
-        <circle
-          cx={startVertex.x}
-          cy={startVertex.y}
-          r={pointRadius * 1.5}
-          fill="rgba(249, 115, 22, 0.5)" // Orange
-          stroke="#F97316"
-          strokeWidth={strokeWidth}
-          style={{ pointerEvents: 'none' }}
-          className="animate-pulse"
-        />
-      )}
-      
-      {/* Path connecting temporary points */}
-      {tempPoints.length > 0 && startVertex && (
-        <path
-          d={`M ${startVertex.x} ${startVertex.y} L ${tempPoints[0].x} ${tempPoints[0].y} ${createPathData(tempPoints).substring(1)}`}
-          fill="none"
-          stroke="#4ADE80"
-          strokeWidth={strokeWidth}
-          style={{ pointerEvents: 'none' }}
-        />
-      )}
-      
-      {/* Temporary points */}
+      {/* Vykreslení dočasných bodů (modré) */}
       {tempPoints.map((point, index) => (
         <circle
-          key={`temp-add-point-${index}`}
+          key={`temp-point-${index}`}
           cx={point.x}
           cy={point.y}
-          r={pointRadius}
-          fill="#4ADE80"
-          stroke="#FFFFFF"
+          r={pointSize * 2}
+          fill="blue"
+          stroke="black"
           strokeWidth={strokeWidth}
-          style={{ pointerEvents: 'none' }}
+          opacity={0.8}
         />
       ))}
       
-      {/* Line connecting last temp point to cursor */}
-      {tempPoints.length > 0 && hoveredSegment.projectedPoint && (
-        <line
-          x1={tempPoints[tempPoints.length - 1].x}
-          y1={tempPoints[tempPoints.length - 1].y}
-          x2={hoveredSegment.projectedPoint.x}
-          y2={hoveredSegment.projectedPoint.y}
-          stroke="#4ADE80"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${5/zoom},${3/zoom}`}
-          style={{ pointerEvents: 'none' }}
-        />
+      {/* Spojnice mezi dočasnými body */}
+      {tempPoints.length > 0 && selectedVertexIndex !== null && polygonPoints[selectedVertexIndex] && (
+        <g>
+          {/* Čára od počátečního bodu k prvnímu dočasnému bodu */}
+          <line
+            x1={polygonPoints[selectedVertexIndex].x}
+            y1={polygonPoints[selectedVertexIndex].y}
+            x2={tempPoints[0].x}
+            y2={tempPoints[0].y}
+            stroke="blue"
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${4/zoom} ${4/zoom}`}
+          />
+          
+          {/* Čáry mezi dočasnými body */}
+          {tempPoints.map((point, index) => {
+            if (index === tempPoints.length - 1) return null;
+            return (
+              <line
+                key={`temp-line-${index}`}
+                x1={point.x}
+                y1={point.y}
+                x2={tempPoints[index + 1].x}
+                y2={tempPoints[index + 1].y}
+                stroke="blue"
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${4/zoom} ${4/zoom}`}
+              />
+            );
+          })}
+          
+          {/* Čára od posledního dočasného bodu k kurzoru */}
+          {tempPoints.length > 0 && hoveredSegment.projectedPoint && (
+            <line
+              x1={tempPoints[tempPoints.length - 1].x}
+              y1={tempPoints[tempPoints.length - 1].y}
+              x2={hoveredSegment.projectedPoint.x}
+              y2={hoveredSegment.projectedPoint.y}
+              stroke="blue"
+              strokeWidth={strokeWidth}
+              strokeDasharray={`${4/zoom} ${4/zoom}`}
+            />
+          )}
+        </g>
       )}
       
-      {/* Line from start vertex to first temp point or cursor */}
-      {startVertex && hoveredSegment.projectedPoint && tempPoints.length === 0 && (
+      {/* Čára od počátečního bodu k kurzoru, když ještě nemáme žádné dočasné body */}
+      {tempPoints.length === 0 && selectedVertexIndex !== null && 
+       polygonPoints[selectedVertexIndex] && hoveredSegment.projectedPoint && (
         <line
-          x1={startVertex.x}
-          y1={startVertex.y}
+          x1={polygonPoints[selectedVertexIndex].x}
+          y1={polygonPoints[selectedVertexIndex].y}
           x2={hoveredSegment.projectedPoint.x}
           y2={hoveredSegment.projectedPoint.y}
-          stroke="#4ADE80"
+          stroke="blue"
           strokeWidth={strokeWidth}
-          strokeDasharray={`${5/zoom},${3/zoom}`}
-          style={{ pointerEvents: 'none' }}
+          strokeDasharray={`${4/zoom} ${4/zoom}`}
         />
       )}
     </g>
