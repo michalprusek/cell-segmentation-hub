@@ -22,8 +22,7 @@ const CanvasImage = ({ src, alt = "Image to segment", loading = true }: CanvasIm
       )}
       style={{ 
         imageRendering: "crisp-edges",
-        WebkitFontSmoothing: "none", // Adding proper webkit property instead
-        MozImageRendering: "crisp-edges"
+        WebkitFontSmoothing: "none" // Improving text rendering in WebKit browsers
       }}
       draggable={false}
       data-testid="canvas-image"
