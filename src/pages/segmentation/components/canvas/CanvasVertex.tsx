@@ -24,20 +24,20 @@ const CanvasVertex = ({
   zoom,
   type = 'external'
 }: CanvasVertexProps) => {
-  // Dynamicky měníme velikost bodů podle úrovně zoomu
+  // Dynamicky měníme velikost bodů podle úrovně zoomu - OBRÁCENĚ
   const getAdjustedRadius = () => {
     if (zoom > 4) {
-      // Při extrémním přiblížení (zoom > 4) zmenšíme body výrazněji
-      return 2.5/zoom;
-    } else if (zoom > 3) {
-      // Při velkém přiblížení (zoom > 3) zmenšíme body
-      return 3/zoom;
-    } else if (zoom < 0.5) {
-      // Při velkém oddálení (zoom < 0.5) zvětšíme body výrazně
+      // Při extrémním přiblížení (zoom > 4) ZVĚTŠÍME body
       return 7/zoom;
+    } else if (zoom > 3) {
+      // Při velkém přiblížení (zoom > 3) zvětšíme body
+      return 6/zoom;
+    } else if (zoom < 0.5) {
+      // Při velkém oddálení (zoom < 0.5) ZMENŠÍME body výrazně
+      return 2.5/zoom;
     } else if (zoom < 0.7) {
-      // Při mírném oddálení (zoom < 0.7) zvětšíme body
-      return 5/zoom;
+      // Při mírném oddálení (zoom < 0.7) zmenšíme body
+      return 3/zoom;
     } else {
       // Normální velikost pro běžný zoom
       return 4/zoom;

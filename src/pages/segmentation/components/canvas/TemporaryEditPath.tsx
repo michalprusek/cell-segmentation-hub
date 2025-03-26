@@ -18,16 +18,18 @@ const TemporaryEditPath = ({
 }: TemporaryEditPathProps) => {
   if (tempPoints.points.length === 0) return null;
 
-  // Dynamicky nastavíme poloměr bodů podle úrovně zoomu
+  // Dynamicky nastavíme poloměr bodů podle úrovně zoomu - OBRÁCENĚ
   const getPointRadius = () => {
     if (zoom > 4) {
-      return 2.5/zoom;
-    } else if (zoom > 3) {
-      return 3/zoom;
-    } else if (zoom < 0.5) {
+      // Při velkém přiblížení větší body
       return 7/zoom;
-    } else if (zoom < 0.7) {
+    } else if (zoom > 3) {
       return 6/zoom;
+    } else if (zoom < 0.5) {
+      // Při velkém oddálení menší body
+      return 2.5/zoom;
+    } else if (zoom < 0.7) {
+      return 3/zoom;
     } else {
       return 5/zoom;
     }
@@ -38,13 +40,13 @@ const TemporaryEditPath = ({
   // Dynamicky nastavíme tloušťku čar podle úrovně zoomu
   const getStrokeWidth = () => {
     if (zoom > 4) {
-      return 1/zoom;
-    } else if (zoom > 3) {
-      return 1.5/zoom;
-    } else if (zoom < 0.5) {
       return 3/zoom;
-    } else if (zoom < 0.7) {
+    } else if (zoom > 3) {
       return 2.5/zoom;
+    } else if (zoom < 0.5) {
+      return 1/zoom;
+    } else if (zoom < 0.7) {
+      return 1.5/zoom;
     } else {
       return 2/zoom;
     }

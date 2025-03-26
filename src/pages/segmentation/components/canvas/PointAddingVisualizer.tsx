@@ -17,16 +17,16 @@ const PointAddingVisualizer = ({
 }: PointAddingVisualizerProps) => {
   if (!hoveredSegment.projectedPoint) return null;
   
-  // Dynamicky nastavíme poloměr a tloušťku okraje bodu podle zoomu
+  // Dynamicky nastavíme poloměr a tloušťku okraje bodu podle zoomu - OBRÁCENĚ
   const getPointRadius = () => {
     if (zoom > 4) {
-      return 5/zoom;
-    } else if (zoom > 3) {
-      return 5.5/zoom;
-    } else if (zoom < 0.5) {
       return 8/zoom;
-    } else if (zoom < 0.7) {
+    } else if (zoom > 3) {
       return 7/zoom;
+    } else if (zoom < 0.5) {
+      return 5/zoom;
+    } else if (zoom < 0.7) {
+      return 5.5/zoom;
     } else {
       return 6/zoom;
     }
@@ -36,13 +36,13 @@ const PointAddingVisualizer = ({
   
   const getStrokeWidth = () => {
     if (zoom > 4) {
-      return 1.5/zoom;
-    } else if (zoom > 3) {
-      return 1.8/zoom;
-    } else if (zoom < 0.5) {
       return 3/zoom;
-    } else if (zoom < 0.7) {
+    } else if (zoom > 3) {
       return 2.5/zoom;
+    } else if (zoom < 0.5) {
+      return 1.5/zoom;
+    } else if (zoom < 0.7) {
+      return 1.8/zoom;
     } else {
       return 2/zoom;
     }

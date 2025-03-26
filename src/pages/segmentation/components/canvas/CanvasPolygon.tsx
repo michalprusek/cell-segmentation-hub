@@ -25,14 +25,14 @@ const CanvasPolygon = ({
 }: CanvasPolygonProps) => {
   const pointsString = points.map(p => `${p.x},${p.y}`).join(' ');
 
-  // Dynamicky upravujeme tloušťku čáry podle zoomu pro lepší viditelnost při různých úrovních přiblížení
+  // Dynamicky upravujeme tloušťku čáry podle zoomu pro lepší viditelnost - OBRÁCENĚ
   const getStrokeWidth = () => {
     if (zoom > 4) {
-      return isSelected ? 1.5/zoom : 1/zoom;
-    } else if (zoom > 3) {
-      return isSelected ? 2/zoom : 1.5/zoom;
-    } else if (zoom < 0.5) {
       return isSelected ? 4/zoom : 3/zoom;
+    } else if (zoom > 3) {
+      return isSelected ? 3/zoom : 2.5/zoom;
+    } else if (zoom < 0.5) {
+      return isSelected ? 1.5/zoom : 1/zoom;
     } else {
       return isSelected ? 2.5/zoom : 2/zoom;
     }

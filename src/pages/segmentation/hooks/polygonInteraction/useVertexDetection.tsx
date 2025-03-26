@@ -30,20 +30,20 @@ export const useVertexDetection = (
     const dy = point.y - imageCoords.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
     
-    // Dynamicky upravíme radius detekce podle zoomu
+    // Dynamicky upravíme radius detekce podle zoomu - OBRÁCENĚ
     let adjustedRadius;
     if (zoom > 4) {
-      // Při extrémním přiblížení snížíme radius výrazněji
-      adjustedRadius = (detectionRadius * 0.6) / zoom;
-    } else if (zoom > 3) {
-      // Při velkém přiblížení snížíme radius
-      adjustedRadius = (detectionRadius * 0.8) / zoom;
-    } else if (zoom < 0.5) {
-      // Při velkém oddálení zvětšíme radius výrazněji
+      // Při extrémním přiblížení zvětšíme radius výrazněji
       adjustedRadius = (detectionRadius * 2) / zoom;
-    } else if (zoom < 0.7) {
-      // Při mírném oddálení zvětšíme radius
+    } else if (zoom > 3) {
+      // Při velkém přiblížení zvětšíme radius
       adjustedRadius = (detectionRadius * 1.5) / zoom;
+    } else if (zoom < 0.5) {
+      // Při velkém oddálení snížíme radius výrazněji
+      adjustedRadius = (detectionRadius * 0.6) / zoom;
+    } else if (zoom < 0.7) {
+      // Při mírném oddálení snížíme radius
+      adjustedRadius = (detectionRadius * 0.8) / zoom;
     } else {
       // Standardní radius v normálním zoomu
       adjustedRadius = detectionRadius / zoom;

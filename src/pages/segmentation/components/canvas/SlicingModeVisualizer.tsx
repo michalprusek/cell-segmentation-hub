@@ -15,16 +15,16 @@ const SlicingModeVisualizer = ({
 }: SlicingModeVisualizerProps) => {
   if (!sliceStartPoint) return null;
   
-  // Dynamicky nastavíme tloušťku čáry a poloměr bodu podle zoomu
+  // Dynamicky nastavíme tloušťku čáry a poloměr bodu podle zoomu - OBRÁCENĚ
   const getStrokeWidth = () => {
     if (zoom > 4) {
-      return 1.5/zoom;
-    } else if (zoom > 3) {
-      return 2/zoom;
-    } else if (zoom < 0.5) {
       return 4/zoom;
-    } else if (zoom < 0.7) {
+    } else if (zoom > 3) {
       return 3/zoom;
+    } else if (zoom < 0.5) {
+      return 1.5/zoom;
+    } else if (zoom < 0.7) {
+      return 2/zoom;
     } else {
       return 2.5/zoom;
     }
@@ -34,13 +34,13 @@ const SlicingModeVisualizer = ({
   
   const getPointRadius = () => {
     if (zoom > 4) {
-      return 5/zoom;
-    } else if (zoom > 3) {
-      return 5.5/zoom;
-    } else if (zoom < 0.5) {
       return 8/zoom;
-    } else if (zoom < 0.7) {
+    } else if (zoom > 3) {
       return 7/zoom;
+    } else if (zoom < 0.5) {
+      return 5/zoom;
+    } else if (zoom < 0.7) {
+      return 5.5/zoom;
     } else {
       return 6/zoom;
     }
