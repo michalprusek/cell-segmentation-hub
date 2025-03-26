@@ -33,7 +33,11 @@ const PointAddingVisualizer = ({
   polygonPoints,
   cursorPosition
 }: PointAddingVisualizerProps) => {
-  if (!selectedVertexIndex && selectedVertexIndex !== 0) {
+  // Kontrola, zda máme všechny potřebné údaje
+  const hasSelectedVertex = selectedVertexIndex !== null;
+  const hasPolygonPoints = polygonPoints !== null;
+
+  if (!hasSelectedVertex) {
     // První fáze - uživatel ještě nevybral počáteční bod
     return (
       <g>
@@ -48,12 +52,14 @@ const PointAddingVisualizer = ({
   // Druhá fáze - uživatel vybral počáteční bod a přidává nové body
   return (
     <g>
+      {/* Zvýraznění počátečního bodu */}
       <StartPointIndicator 
         selectedVertexIndex={selectedVertexIndex} 
         polygonPoints={polygonPoints} 
         zoom={zoom} 
       />
       
+      {/* Zvýraznění potenciálních koncových bodů */}
       <PotentialEndpointIndicator 
         selectedVertexIndex={selectedVertexIndex} 
         polygonPoints={polygonPoints} 
@@ -61,6 +67,7 @@ const PointAddingVisualizer = ({
         zoom={zoom} 
       />
       
+      {/* Dočasné body a spojnice mezi nimi */}
       <TempPointsPath 
         selectedVertexIndex={selectedVertexIndex} 
         polygonPoints={polygonPoints} 
@@ -68,6 +75,7 @@ const PointAddingVisualizer = ({
         zoom={zoom} 
       />
       
+      {/* Spojnice od posledního bodu ke kurzoru */}
       <CursorLineConnector 
         tempPoints={tempPoints} 
         hoveredSegment={hoveredSegment} 

@@ -15,10 +15,10 @@ export const useOptimalPath = () => {
     const numPoints = points.length;
     
     // Dvě možné cesty mezi body:
-    // Cesta 1: startIndex -> endIndex (v pořadí indexů)
-    // Cesta 2: endIndex -> startIndex (přes začátek/konec pole)
+    // Cesta 1: startIndex -> endIndex (ve směru hodinových ručiček)
+    // Cesta 2: endIndex -> startIndex (proti směru hodinových ručiček)
     
-    // Vytvoříme indexy bodů na cestě 1
+    // Vytvoříme indexy bodů na cestě 1 (po směru hodinových ručiček)
     const path1Indices: number[] = [];
     let i = startIndex;
     while (i !== endIndex) {
@@ -27,7 +27,7 @@ export const useOptimalPath = () => {
     }
     path1Indices.push(endIndex);
     
-    // Vytvoříme indexy bodů na cestě 2
+    // Vytvoříme indexy bodů na cestě 2 (proti směru hodinových ručiček)
     const path2Indices: number[] = [];
     i = endIndex;
     while (i !== startIndex) {

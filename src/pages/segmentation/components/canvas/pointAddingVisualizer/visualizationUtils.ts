@@ -20,3 +20,34 @@ export const getPointRadius = (zoom: number): number => {
   if (zoom < 0.7) return 4.5/zoom;
   return 5/zoom;
 };
+
+/**
+ * Utility funkce pro získání barvy podle stavu
+ */
+export const getColors = () => {
+  return {
+    startPoint: {
+      fill: "#FFA500",
+      stroke: "#FFFFFF"
+    },
+    hoverPoint: {
+      fill: "#FFC107",
+      stroke: "#FFA000"
+    },
+    potentialEndpoint: {
+      fill: "#FFEB3B80",
+      stroke: "#FFC107"
+    },
+    tempPoint: {
+      fill: "#3498db",
+      stroke: "#FFFFFF"
+    },
+    tempLine: {
+      stroke: "#3498db"
+    },
+    cursorLine: {
+      normal: "#3498db",
+      endpoint: "#4CAF50"
+    }
+  };
+};

@@ -86,22 +86,25 @@ export const usePointAddingHandlers = ({
         
         console.log("Completing path from", startIndex, "to", endIndex, "with", tempPoints.length, "points");
         
-        // Najdeme optimální cestu k nahrazení (s ohledem na co nejmenší obvod)
-        const { start, end } = findOptimalPath(polygon, startIndex, endIndex);
+        // Najdeme optimální cestu k nahrazení - kterou část polygonu nahradíme
+        const { start, end, indices } = findOptimalPath(polygon, startIndex, endIndex);
         
         // Log pro dohledatelnost
-        console.log("Optimal path found:", { start, end });
+        console.log("Optimal path found:", { start, end, numIndices: indices.length });
+        
+        // Vytvoříme nové pole bodů pro vložení
+        const newPoints = [
+          polygon.points[start], // Počáteční bod
+          ...tempPoints,         // Dočasné body
+          polygon.points[end]    // Koncový bod
+        ];
         
         // Aplikujeme modifikaci s novou cestou
         const success = modifyPolygonPath(
           sourcePolygonId,
           start,
           end,
-          [
-            polygon.points[start], // Počáteční bod
-            ...tempPoints,  // Dočasné body
-            polygon.points[end]    // Koncový bod
-          ]
+          newPoints
         );
         
         if (success) {

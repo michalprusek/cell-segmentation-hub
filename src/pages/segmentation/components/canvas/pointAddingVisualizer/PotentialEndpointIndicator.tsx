@@ -1,14 +1,15 @@
 
 import React from 'react';
 import { Point } from '@/lib/segmentation';
-import { getPointRadius, getStrokeWidth } from './visualizationUtils';
+import { getPointRadius, getStrokeWidth, getColors } from './visualizationUtils';
 
 interface PotentialEndpointIndicatorProps {
   selectedVertexIndex: number | null;
   polygonPoints: Point[] | null;
   hoveredSegment: {
     polygonId: string | null,
-    segmentIndex: number | null
+    segmentIndex: number | null,
+    projectedPoint: Point | null
   };
   zoom: number;
 }
@@ -28,6 +29,7 @@ const PotentialEndpointIndicator = ({
 
   const pointRadius = getPointRadius(zoom);
   const strokeWidth = getStrokeWidth(zoom);
+  const colors = getColors();
 
   return (
     <>
@@ -44,9 +46,9 @@ const PotentialEndpointIndicator = ({
             cx={point.x}
             cy={point.y}
             r={pointRadius * (isHovered ? 1.3 : 1)}
-            fill={isHovered ? "#FFC107" : "#FFEB3B"}
-            stroke={isHovered ? "#FFA000" : "#FFC107"}
-            strokeWidth={strokeWidth * (isHovered ? 1.2 : 1)}
+            fill={isHovered ? colors.hoverPoint.fill : colors.potentialEndpoint.fill}
+            stroke={isHovered ? colors.hoverPoint.stroke : colors.potentialEndpoint.stroke}
+            strokeWidth={strokeWidth * (isHovered ? 1.2 : 0.8)}
             style={{ pointerEvents: 'none' }}
           />
         );

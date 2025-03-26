@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Point } from '@/lib/segmentation';
-import { getStrokeWidth } from './visualizationUtils';
+import { getStrokeWidth, getColors } from './visualizationUtils';
 
 interface CursorLineConnectorProps {
   tempPoints: Point[];
@@ -25,11 +25,13 @@ const CursorLineConnector = ({
   cursorPosition, 
   zoom 
 }: CursorLineConnectorProps) => {
+  // Pokud nemáme dočasné body nebo pozici kurzoru, nezobrazujeme nic
   if (tempPoints.length === 0 || !cursorPosition) {
     return null;
   }
 
   const strokeWidth = getStrokeWidth(zoom);
+  const colors = getColors();
   const lastPoint = tempPoints[tempPoints.length - 1];
   
   // Target point je buď zvýrazněný vrchol, nebo pozice kurzoru
@@ -40,17 +42,19 @@ const CursorLineConnector = ({
       ? hoveredSegment.projectedPoint
       : cursorPosition;
 
+  // Určíme, zda se spojujeme s koncovým bodem nebo jen zobrazujeme spojnici ke kurzoru
   const isConnectingToVertex = 
     hoveredSegment.segmentIndex !== null && 
     hoveredSegment.segmentIndex !== selectedVertexIndex;
 
+  // Vykreslíme spojnici
   return (
     <line
       x1={lastPoint.x}
       y1={lastPoint.y}
       x2={targetPoint.x}
       y2={targetPoint.y}
-      stroke={isConnectingToVertex ? "#4CAF50" : "#3498db"}
+      stroke={isConnectingToVertex ? colors.cursorLine.endpoint : colors.cursorLine.normal}
       strokeWidth={strokeWidth}
       strokeDasharray={isConnectingToVertex ? "" : `${4/zoom},${4/zoom}`}
       style={{ pointerEvents: 'none' }}

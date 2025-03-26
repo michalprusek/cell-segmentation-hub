@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Point } from '@/lib/segmentation';
-import { getPointRadius, getStrokeWidth } from './visualizationUtils';
+import { getPointRadius, getStrokeWidth, getColors } from './visualizationUtils';
 
 interface TempPointsPathProps {
   selectedVertexIndex: number | null;
@@ -25,6 +25,7 @@ const TempPointsPath = ({
 
   const pointRadius = getPointRadius(zoom);
   const strokeWidth = getStrokeWidth(zoom);
+  const colors = getColors();
 
   return (
     <>
@@ -35,7 +36,7 @@ const TempPointsPath = ({
           y1={polygonPoints[selectedVertexIndex].y}
           x2={tempPoints[0].x}
           y2={tempPoints[0].y}
-          stroke="#3498db"
+          stroke={colors.tempLine.stroke}
           strokeWidth={strokeWidth}
           style={{ pointerEvents: 'none' }}
         />
@@ -52,7 +53,7 @@ const TempPointsPath = ({
             y1={tempPoints[i-1].y}
             x2={point.x}
             y2={point.y}
-            stroke="#3498db"
+            stroke={colors.tempLine.stroke}
             strokeWidth={strokeWidth}
             style={{ pointerEvents: 'none' }}
           />
@@ -66,8 +67,8 @@ const TempPointsPath = ({
           cx={point.x}
           cy={point.y}
           r={pointRadius}
-          fill="#3498db"
-          stroke="#FFFFFF"
+          fill={colors.tempPoint.fill}
+          stroke={colors.tempPoint.stroke}
           strokeWidth={strokeWidth}
           style={{ pointerEvents: 'none' }}
         />

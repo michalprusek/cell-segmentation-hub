@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Point } from '@/lib/segmentation';
+import { getPointRadius, getStrokeWidth, getColors } from './visualizationUtils';
 
 interface HoveredVertexIndicatorProps {
   hoveredSegment: {
@@ -19,14 +20,18 @@ const HoveredVertexIndicator = ({ hoveredSegment, zoom }: HoveredVertexIndicator
     return null;
   }
 
+  const pointRadius = getPointRadius(zoom);
+  const strokeWidth = getStrokeWidth(zoom);
+  const colors = getColors();
+
   return (
     <circle
       cx={hoveredSegment.projectedPoint.x}
       cy={hoveredSegment.projectedPoint.y}
-      r={8/zoom}
-      fill="#FFA500"
-      stroke="#FFFFFF"
-      strokeWidth={2/zoom}
+      r={pointRadius * 1.3}
+      fill={colors.hoverPoint.fill}
+      stroke={colors.hoverPoint.stroke}
+      strokeWidth={strokeWidth}
       className="animate-pulse"
       style={{ pointerEvents: 'none' }}
     />
