@@ -1,6 +1,7 @@
 
 import { toast as sonnerToast, type ToastT } from "sonner";
 import { useState, useEffect } from "react";
+import { ReactElement } from "react";
 
 type ToastProps = {
   title?: string;
@@ -13,6 +14,7 @@ type Toast = {
   title?: string;
   description?: string;
   variant?: "default" | "destructive";
+  action?: ReactElement;
 };
 
 export function toast({ title, description, variant = "default" }: ToastProps) {
