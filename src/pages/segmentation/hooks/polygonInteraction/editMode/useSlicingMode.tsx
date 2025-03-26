@@ -1,4 +1,3 @@
-
 import { useState, useCallback } from 'react';
 import { Point, SegmentationResult } from '@/lib/segmentation';
 import { usePolygonSplitter } from '../geometry/usePolygonSplitter';
@@ -73,10 +72,8 @@ export const useSlicingMode = (
     
     // Reset stavu po dokončení operace
     resetSlicing();
-    if (success) {
-      setSlicingMode(false);
-    }
     
+    // Keep slicing mode active after the operation, don't exit
     return true;
   }, [
     slicingMode,

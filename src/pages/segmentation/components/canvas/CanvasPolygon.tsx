@@ -1,99 +1,149 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { cn } from '@/lib/utils';
-import { Point } from '@/lib/segmentation';
+import { Polygon, Point } from '@/lib/segmentation';
 import CanvasVertex from './CanvasVertex';
+import PolygonContextMenu from '../context-menu/PolygonContextMenu';
+import VertexContextMenu from '../context-menu/VertexContextMenu';
 
 interface CanvasPolygonProps {
-  id: string;
-  points: Point[];
+  polygon: Polygon;
   isSelected: boolean;
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
-  vertexDragState: { isDragging: boolean, polygonId: string | null, vertexIndex: number | null };
+  vertexDragState: {
+    isDragging: boolean;
+    polygonId: string | null;
+    vertexIndex: number | null;
+  };
   zoom: number;
-  type?: 'external' | 'internal';
+  onSelectPolygon?: (id: string) => void;
+  onDeletePolygon?: (id: string) => void;
+  onSlicePolygon?: (id: string) => void;
+  onEditPolygon?: (id: string) => void;
+  onDuplicatePolygon?: (id: string) => void;
+  onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
+  onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
 }
 
-const CanvasPolygon = ({ 
-  id, 
-  points, 
-  isSelected, 
-  hoveredVertex, 
+const CanvasPolygon = ({
+  polygon,
+  isSelected,
+  hoveredVertex,
   vertexDragState,
   zoom,
-  type = 'external'
+  onSelectPolygon,
+  onDeletePolygon,
+  onSlicePolygon,
+  onEditPolygon,
+  onDuplicatePolygon,
+  onDeleteVertex,
+  onDuplicateVertex
 }: CanvasPolygonProps) => {
-  const pointsString = points.map(p => `${p.x},${p.y}`).join(' ');
-
-  // Dynamicky upravujeme tloušťku čáry podle zoomu pro lepší viditelnost - OBRÁCENĚ
+  const { id, points, type = 'external' } = polygon;
+  
+  // Simplified string path for the polygon
+  const pathString = useMemo(() => {
+    if (!points || points.length < 3) return '';
+    return `M${points.map(p => `${p.x},${p.y}`).join(' L')} Z`;
+  }, [points]);
+  
+  // For the path stroke width, we need to adjust based on zoom level
+  // When zoomed in, the stroke appears thicker so we need to make it thinner
   const getStrokeWidth = () => {
     if (zoom > 4) {
-      return isSelected ? 4/zoom : 3/zoom;
+      return 1.5/zoom;
     } else if (zoom > 3) {
-      return isSelected ? 3/zoom : 2.5/zoom;
+      return 2/zoom;
     } else if (zoom < 0.5) {
-      return isSelected ? 1.5/zoom : 1/zoom;
+      return 3/zoom;
+    } else if (zoom < 0.7) {
+      return 2.5/zoom;
     } else {
-      return isSelected ? 2.5/zoom : 2/zoom;
+      return 2/zoom;
     }
   };
-
+  
   const strokeWidth = getStrokeWidth();
-
-  // Colors based on polygon type: red for external, blue for internal (holes)
-  const getPolygonColors = () => {
+  
+  // Determine path color based on polygon type and selection status
+  const getPathColor = () => {
     if (type === 'internal') {
-      return {
-        fill: isSelected ? "rgba(30, 144, 255, 0.25)" : "rgba(30, 144, 255, 0.20)",
-        stroke: isSelected ? "#1E90FF" : "#0EA5E9"
-      };
+      return isSelected ? '#0b84da' : '#0ea5e9';
     } else {
-      return {
-        fill: isSelected ? "rgba(234, 56, 76, 0.25)" : "rgba(234, 56, 76, 0.20)",
-        stroke: isSelected ? "#ea384c" : "#e74c3c"
-      };
+      return isSelected ? '#e11d48' : '#ef4444';
     }
   };
   
-  const { fill, stroke } = getPolygonColors();
+  const pathColor = getPathColor();
   
+  // Handle polygon click
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onSelectPolygon) {
+      onSelectPolygon(id);
+    }
+  };
+
   return (
-    <g key={id} shapeRendering="geometricPrecision">
-      {/* Polygon s výplní */}
-      <polygon 
-        points={pointsString}
-        fill={fill}
-        stroke={stroke}
-        strokeWidth={strokeWidth}
-        strokeLinejoin="round"
-        className={cn(
-          "transition-colors duration-150",
-          isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : ""
-        )}
-        pointerEvents="all"
-        shapeRendering="geometricPrecision"
-        vectorEffect="non-scaling-stroke"
-        filter={isSelected ? "url(#point-shadow)" : ""}
-        style={{ imageRendering: "crisp-edges" }}
-      />
-      
-      {/* Body (vertexy) */}
-      {points.map((point, index) => (
-        <CanvasVertex 
-          key={`vertex-${index}`}
-          point={point}
-          polygonId={id}
-          vertexIndex={index}
-          isSelected={isSelected}
-          isHovered={hoveredVertex.polygonId === id && hoveredVertex.vertexIndex === index}
-          isDragging={vertexDragState.isDragging && 
-                     vertexDragState.polygonId === id && 
-                     vertexDragState.vertexIndex === index}
-          zoom={zoom}
-          type={type}
+    <PolygonContextMenu
+      polygonId={id}
+      onDelete={() => onDeletePolygon?.(id)}
+      onSlice={() => onSlicePolygon?.(id)}
+      onEdit={() => onEditPolygon?.(id)}
+      onDuplicate={onDuplicatePolygon ? () => onDuplicatePolygon(id) : undefined}
+    >
+      <g>
+        {/* Polygon path */}
+        <path
+          d={pathString}
+          fill={type === 'internal' ? "rgba(14, 165, 233, 0.15)" : "rgba(239, 68, 68, 0.15)"}
+          stroke={pathColor}
+          strokeWidth={strokeWidth}
+          className={cn(
+            "cursor-pointer transition-colors",
+            isSelected ? "filter-glow" : ""
+          )}
+          onClick={handleClick}
+          filter={isSelected ? `url(#${type === 'internal' ? 'blue' : 'red'}-glow)` : ""}
+          vectorEffect="non-scaling-stroke"
+          shapeRendering="geometricPrecision"
+          style={{ imageRendering: "crisp-edges" }}
         />
-      ))}
-    </g>
+        
+        {/* Render vertices only when polygon is selected */}
+        {isSelected && points.map((point, index) => {
+          const isHovered = hoveredVertex.polygonId === id && hoveredVertex.vertexIndex === index;
+          const isDragging = vertexDragState.isDragging && 
+                            vertexDragState.polygonId === id && 
+                            vertexDragState.vertexIndex === index;
+          const isStartPoint = index === 0;
+          
+          return (
+            <VertexContextMenu
+              key={`${id}-vertex-${index}`}
+              polygonId={id}
+              vertexIndex={index}
+              onDelete={() => onDeleteVertex?.(id, index)}
+              onDuplicate={() => onDuplicateVertex?.(id, index)}
+            >
+              <g>
+                <CanvasVertex
+                  point={point}
+                  polygonId={id}
+                  vertexIndex={index}
+                  isSelected={isSelected}
+                  isHovered={isHovered}
+                  isDragging={isDragging}
+                  zoom={zoom}
+                  type={type}
+                  isStartPoint={isStartPoint}
+                />
+              </g>
+            </VertexContextMenu>
+          );
+        })}
+      </g>
+    </PolygonContextMenu>
   );
 };
 

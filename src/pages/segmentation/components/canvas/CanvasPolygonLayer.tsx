@@ -28,7 +28,14 @@ const CanvasPolygonLayer = ({
   cursorPosition,
   sliceStartPoint,
   hoveredSegment,
-  isShiftPressed
+  isShiftPressed,
+  onSelectPolygon,
+  onDeletePolygon,
+  onSlicePolygon,
+  onEditPolygon,
+  onDuplicatePolygon,
+  onDeleteVertex,
+  onDuplicateVertex
 }: PolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
   
@@ -55,8 +62,15 @@ const CanvasPolygonLayer = ({
         polygons={segmentation.polygons}
         selectedPolygonId={selectedPolygonId}
         hoveredVertex={hoveredVertex}
-        vertexDragState={vertexDragState.current}
+        vertexDragState={vertexDragState}
         zoom={zoom}
+        onSelectPolygon={onSelectPolygon}
+        onDeletePolygon={onDeletePolygon}
+        onSlicePolygon={onSlicePolygon}
+        onEditPolygon={onEditPolygon}
+        onDuplicatePolygon={onDuplicatePolygon}
+        onDeleteVertex={onDeleteVertex}
+        onDuplicateVertex={onDuplicateVertex}
       />
 
       {/* Vizualizace režimů editace */}

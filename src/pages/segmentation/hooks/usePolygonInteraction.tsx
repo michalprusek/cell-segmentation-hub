@@ -8,6 +8,7 @@ import { SegmentationResult } from '@/lib/segmentation';
 import { usePointEditor } from './polygonInteraction/geometry/usePointEditor';
 import { useCallback } from 'react';
 import { toast } from 'sonner';
+import { v4 as uuidv4 } from 'uuid';
 
 /**
  * Hook pro práci s polygony v segmentačním editoru
@@ -108,6 +109,77 @@ export const usePolygonInteraction = (
     
     return success;
   }, [selectedPolygonId, pointEditor]);
+
+  /**
+   * Handler pro smazání vrcholu polygonu
+   */
+  const handleDeleteVertex = useCallback((polygonId: string, vertexIndex: number) => {
+    const success = pointEditor.removePoint(polygonId, vertexIndex);
+    if (success) {
+      toast.success("Bod byl úspěšně odstraněn");
+    } else {
+      toast.error("Odstranění bodu selhalo");
+    }
+  }, [pointEditor]);
+  
+  /**
+   * Handler pro duplikaci vrcholu polygonu
+   */
+  const handleDuplicateVertex = useCallback((polygonId: string, vertexIndex: number) => {
+    const success = pointEditor.duplicatePoint(polygonId, vertexIndex);
+    if (success) {
+      toast.success("Bod byl úspěšně duplikován");
+    } else {
+      toast.error("Duplikace bodu selhala");
+    }
+  }, [pointEditor]);
+  
+  /**
+   * Handler pro zahájení režimu krájení polygonu
+   */
+  const handleSlicePolygon = useCallback((polygonId: string) => {
+    setSelectedPolygonId(polygonId);
+    toggleSlicingMode();
+  }, [setSelectedPolygonId, toggleSlicingMode]);
+
+  /**
+   * Handler pro zahájení editace polygonu
+   */
+  const handleEditPolygon = useCallback((polygonId: string) => {
+    setSelectedPolygonId(polygonId);
+    togglePointAddingMode();
+  }, [setSelectedPolygonId, togglePointAddingMode]);
+
+  /**
+   * Handler pro duplikaci polygonu
+   */
+  const handleDuplicatePolygon = useCallback((polygonId: string) => {
+    if (!segmentation) return;
+    
+    const polygon = segmentation.polygons.find(p => p.id === polygonId);
+    if (!polygon) return;
+    
+    // Create a new polygon with slightly offset points
+    const offsetX = 20;
+    const offsetY = 20;
+    const newPolygon = {
+      ...polygon,
+      id: uuidv4(),
+      points: polygon.points.map(p => ({
+        x: p.x + offsetX,
+        y: p.y + offsetY
+      }))
+    };
+    
+    // Add the new polygon to the segmentation
+    setSegmentation({
+      ...segmentation,
+      polygons: [...segmentation.polygons, newPolygon]
+    });
+    
+    setSelectedPolygonId(newPolygon.id);
+    toast.success("Polygon byl úspěšně duplikován");
+  }, [segmentation, setSegmentation, setSelectedPolygonId]);
   
   return {
     selectedPolygonId,
@@ -127,6 +199,11 @@ export const usePolygonInteraction = (
     handleMouseMove,
     handleMouseUp,
     handleDeletePolygon,
+    handleDeleteVertex,
+    handleDuplicateVertex,
+    handleSlicePolygon,
+    handleEditPolygon,
+    handleDuplicatePolygon,
     isPointInPolygon,
     toggleEditMode,
     toggleSlicingMode,

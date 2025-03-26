@@ -1,11 +1,13 @@
 
-import React, { useEffect, useState, useRef } from 'react';
-import { SegmentationResult, Point } from '@/lib/segmentation';
-import { DragState, VertexDragState, TempPointsState } from '../types';
-import { useTheme } from '@/contexts/ThemeContext';
+import React from 'react';
+import { SegmentationResult } from '@/lib/segmentation';
 import CanvasContainer from './canvas/CanvasContainer';
 import CanvasContent from './canvas/CanvasContent';
+import CanvasImage from './canvas/CanvasImage';
+import CanvasPolygonLayer from './canvas/CanvasPolygonLayer';
 import CanvasUIElements from './canvas/CanvasUIElements';
+import CanvasLoadingOverlay from './canvas/CanvasLoadingOverlay';
+import { TempPointsState } from '../types';
 
 interface EditorCanvasProps {
   loading: boolean;
@@ -17,24 +19,44 @@ interface EditorCanvasProps {
   imageSrc: string;
   onMouseDown: (e: React.MouseEvent) => void;
   onMouseMove: (e: React.MouseEvent) => void;
-  onMouseUp: () => void;
-  dragState: React.MutableRefObject<DragState>;
-  vertexDragState: React.MutableRefObject<VertexDragState>;
-  containerRef: React.MutableRefObject<HTMLDivElement | null>;
+  onMouseUp: (e: React.MouseEvent) => void;
+  dragState: React.MutableRefObject<{
+    isDragging: boolean;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+  }>;
+  vertexDragState: React.MutableRefObject<{
+    isDragging: boolean;
+    polygonId: string | null;
+    vertexIndex: number | null;
+  }>;
+  containerRef: React.RefObject<HTMLDivElement>;
   editMode: boolean;
   slicingMode: boolean;
   pointAddingMode: boolean;
   tempPoints: TempPointsState;
-  cursorPosition: Point | null;
-  sliceStartPoint: Point | null;
+  cursorPosition: { x: number, y: number } | null;
+  sliceStartPoint: { x: number, y: number } | null;
   hoveredSegment: {
     polygonId: string | null,
     segmentIndex: number | null,
-    projectedPoint: Point | null
+    projectedPoint: { x: number, y: number } | null
   };
   isShiftPressed?: boolean;
+  onSelectPolygon?: (id: string) => void;
+  onDeletePolygon?: (id: string) => void;
+  onSlicePolygon?: (id: string) => void;
+  onEditPolygon?: (id: string) => void;
+  onDuplicatePolygon?: (id: string) => void;
+  onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
+  onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
 }
 
+/**
+ * Editor plátno - hlavní komponenta pro zobrazení a editaci segmentace
+ */
 const EditorCanvas = ({
   loading,
   segmentation,
@@ -56,69 +78,62 @@ const EditorCanvas = ({
   cursorPosition,
   sliceStartPoint,
   hoveredSegment,
-  isShiftPressed
+  isShiftPressed,
+  onSelectPolygon,
+  onDeletePolygon,
+  onSlicePolygon,
+  onEditPolygon,
+  onDuplicatePolygon,
+  onDeleteVertex,
+  onDuplicateVertex
 }: EditorCanvasProps) => {
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-  const { theme } = useTheme();
-  const transformRef = useRef<HTMLDivElement>(null);
-  
-  useEffect(() => {
-    if (!imageSrc) return;
-    
-    const img = new Image();
-    img.crossOrigin = "Anonymous";
-    img.onload = () => {
-      setImageSize({
-        width: img.width,
-        height: img.height
-      });
-      console.log(`Image loaded with dimensions: ${img.width}x${img.height}`);
-    };
-    
-    img.src = segmentation?.imageSrc || imageSrc;
-  }, [segmentation, imageSrc]);
-
   return (
     <CanvasContainer 
-      containerRef={containerRef}
-      activeMode={{ editMode, slicingMode, pointAddingMode }}
-      vertexDragState={vertexDragState.current}
-      dragState={dragState.current}
-      hoveredVertex={hoveredVertex}
-      theme={theme}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
+      ref={containerRef}
+      onMouseDown={onMouseDown} 
+      onMouseMove={onMouseMove} 
       onMouseUp={onMouseUp}
+      loading={loading}
     >
-      <CanvasContent 
-        loading={loading}
-        segmentation={segmentation}
-        imageSrc={imageSrc}
-        transformRef={transformRef}
-        zoom={zoom}
-        offset={offset}
-        imageSize={imageSize}
-        selectedPolygonId={selectedPolygonId}
-        hoveredVertex={hoveredVertex}
-        vertexDragState={vertexDragState}
-        editMode={editMode}
-        slicingMode={slicingMode}
-        pointAddingMode={pointAddingMode}
-        tempPoints={tempPoints}
-        cursorPosition={cursorPosition}
-        sliceStartPoint={sliceStartPoint}
-        hoveredSegment={hoveredSegment}
-        isShiftPressed={isShiftPressed}
-      />
+      <CanvasContent zoom={zoom} offset={offset}>
+        <CanvasImage 
+          src={imageSrc} 
+          isActive={!loading && !!segmentation} 
+        />
+        
+        {segmentation && (
+          <CanvasPolygonLayer 
+            segmentation={segmentation}
+            imageSize={{ width: 1000, height: 1000 }}
+            selectedPolygonId={selectedPolygonId}
+            hoveredVertex={hoveredVertex}
+            vertexDragState={vertexDragState}
+            zoom={zoom}
+            editMode={editMode}
+            slicingMode={slicingMode}
+            pointAddingMode={pointAddingMode}
+            tempPoints={tempPoints}
+            cursorPosition={cursorPosition}
+            sliceStartPoint={sliceStartPoint}
+            hoveredSegment={hoveredSegment}
+            isShiftPressed={isShiftPressed}
+            onSelectPolygon={onSelectPolygon}
+            onDeletePolygon={onDeletePolygon}
+            onSlicePolygon={onSlicePolygon}
+            onEditPolygon={onEditPolygon}
+            onDuplicatePolygon={onDuplicatePolygon}
+            onDeleteVertex={onDeleteVertex}
+            onDuplicateVertex={onDuplicateVertex}
+          />
+        )}
+        
+        <CanvasUIElements 
+          zoom={zoom} 
+          editMode={editMode || slicingMode || pointAddingMode}
+        />
+      </CanvasContent>
       
-      <CanvasUIElements 
-        zoom={zoom}
-        editMode={editMode}
-        slicingMode={slicingMode}
-        pointAddingMode={pointAddingMode}
-        isShiftPressed={isShiftPressed}
-        sliceStartPoint={sliceStartPoint}
-      />
+      <CanvasLoadingOverlay loading={loading} />
     </CanvasContainer>
   );
 };

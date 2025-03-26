@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { Point, SegmentationResult } from '@/lib/segmentation';
 import { useGeometryUtils } from '../editMode/useGeometryUtils';
@@ -299,6 +298,58 @@ export const usePointEditor = (
   }, [segmentation, setSegmentation, isPolygonSelfIntersecting]);
 
   /**
+   * Duplikace bodu polygonu - vytvoří nový bod vedle existujícího
+   */
+  const duplicatePoint = useCallback((
+    polygonId: string,
+    pointIndex: number
+  ): boolean => {
+    if (!segmentation) return false;
+    
+    const polygon = segmentation.polygons.find(p => p.id === polygonId);
+    if (!polygon) return false;
+    
+    // Get the current point and adjacent points
+    const point = polygon.points[pointIndex];
+    const nextPointIndex = (pointIndex + 1) % polygon.points.length;
+    const nextPoint = polygon.points[nextPointIndex];
+    
+    // Create a new point halfway between the current point and the next point
+    const duplicatedPoint: Point = {
+      x: (point.x + nextPoint.x) / 2,
+      y: (point.y + nextPoint.y) / 2
+    };
+    
+    // Insert the duplicated point after the current point
+    const newPoints = [...polygon.points];
+    newPoints.splice(pointIndex + 1, 0, duplicatedPoint);
+    
+    // Validace integrity: kontrola self-intersection
+    if (isPolygonSelfIntersecting(newPoints)) {
+      console.error('Duplikace bodu by způsobila self-intersection polygonu');
+      return false;
+    }
+    
+    // Aktualizujeme segmentaci
+    const updatedPolygons = segmentation.polygons.map(p => {
+      if (p.id === polygonId) {
+        return {
+          ...p,
+          points: newPoints
+        };
+      }
+      return p;
+    });
+    
+    setSegmentation({
+      ...segmentation,
+      polygons: updatedPolygons
+    });
+    
+    return true;
+  }, [segmentation, setSegmentation, isPolygonSelfIntersecting]);
+
+  /**
    * Optimalizace polygonu - zjednodušuje polygon odstraněním redundantních bodů
    */
   const simplifyPolygon = useCallback((
@@ -411,6 +462,7 @@ export const usePointEditor = (
     findClosestSegment,
     addPoint,
     removePoint,
+    duplicatePoint,
     simplifyPolygon
   };
 };

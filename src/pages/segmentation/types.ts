@@ -1,4 +1,3 @@
-
 import type { SegmentationResult, Point, Polygon } from "@/lib/segmentation";
 
 export interface ProjectImage {
@@ -90,4 +89,11 @@ export interface PolygonLayerProps {
     projectedPoint: Point | null
   };
   isShiftPressed?: boolean;
+  onSelectPolygon?: (id: string) => void;
+  onDeletePolygon?: (id: string) => void;
+  onSlicePolygon?: (id: string) => void;
+  onEditPolygon?: (id: string) => void;
+  onDuplicatePolygon?: (id: string) => void;
+  onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
+  onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
 }
