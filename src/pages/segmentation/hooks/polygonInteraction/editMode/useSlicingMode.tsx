@@ -42,7 +42,10 @@ export const useSlicingMode = (
    * Zpracování kliknutí v režimu rozdělování
    */
   const handleSlicingClick = useCallback((x: number, y: number): boolean => {
-    if (!slicingMode || !segmentation || !selectedPolygonId) return false;
+    if (!slicingMode || !segmentation || !selectedPolygonId) {
+      toast.error("Vyberte polygon a aktivujte režim rozdělování");
+      return false;
+    }
     
     const clickPoint = { x, y };
     
@@ -59,24 +62,13 @@ export const useSlicingMode = (
       endPoint: clickPoint
     };
     
-    // Vybrat typ operace (s nebo bez klávesy Shift)
-    let success: boolean;
-    if (window.event && (window.event as any).shiftKey) {
-      // S klávesou Shift rozdělíme na dva samostatné polygony
-      success = splitIntoTwoPolygons(sliceOperation);
-      if (success) {
-        toast.success("Polygon byl rozdělen na dva samostatné polygony");
-      } else {
-        toast.error("Rozdělení polygonu selhalo");
-      }
+    // Always split into two polygons (changed from the original behavior)
+    const success = splitIntoTwoPolygons(sliceOperation);
+    
+    if (success) {
+      toast.success("Polygon byl rozdělen na dva samostatné polygony");
     } else {
-      // Bez klávesy Shift odřízneme část polygonu
-      success = splitPolygon(sliceOperation);
-      if (success) {
-        toast.success("Část polygonu byla odříznuta");
-      } else {
-        toast.error("Oříznutí polygonu selhalo");
-      }
+      toast.error("Rozdělení polygonu selhalo");
     }
     
     // Reset stavu po dokončení operace
@@ -91,7 +83,6 @@ export const useSlicingMode = (
     segmentation,
     selectedPolygonId,
     sliceStartPoint,
-    splitPolygon,
     splitIntoTwoPolygons,
     resetSlicing
   ]);

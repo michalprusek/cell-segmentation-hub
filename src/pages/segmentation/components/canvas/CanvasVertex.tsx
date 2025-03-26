@@ -12,6 +12,7 @@ interface CanvasVertexProps {
   isDragging: boolean;
   zoom: number;
   type?: 'external' | 'internal';
+  isStartPoint?: boolean;
 }
 
 const CanvasVertex = ({
@@ -22,7 +23,8 @@ const CanvasVertex = ({
   isHovered,
   isDragging,
   zoom,
-  type = 'external'
+  type = 'external',
+  isStartPoint = false
 }: CanvasVertexProps) => {
   // Dynamicky měníme velikost bodů podle úrovně zoomu - OBRÁCENĚ
   const getAdjustedRadius = () => {
@@ -44,11 +46,18 @@ const CanvasVertex = ({
     }
   };
 
-  const radius = getAdjustedRadius();
+  let radius = getAdjustedRadius();
+  
+  // Increase size for start point to make it more noticeable
+  if (isStartPoint) {
+    radius *= 1.5;
+  }
 
   // Určení barvy vertexu podle typu polygonu
   const getVertexColor = () => {
-    if (type === 'internal') {
+    if (isStartPoint) {
+      return '#FFA500'; // Orange for start point
+    } else if (type === 'internal') {
       return isDragging ? '#0077cc' : isHovered ? '#3498db' : '#0EA5E9';
     } else {
       return isDragging ? '#c0392b' : isHovered ? '#e74c3c' : '#ea384c';
@@ -66,15 +75,16 @@ const CanvasVertex = ({
       cy={point.y}
       r={radius}
       fill={vertexColor}
-      stroke="#fff"
-      strokeWidth={strokeWidth}
+      stroke={isStartPoint ? "#FFFF00" : "#fff"}
+      strokeWidth={isStartPoint ? strokeWidth * 1.5 : strokeWidth}
       className={cn(
         "transition-colors duration-150",
         isDragging ? "cursor-grabbing" : "cursor-grab",
         isHovered ? "z-10" : "",
-        isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : ""
+        isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : "",
+        isStartPoint ? "animate-pulse" : ""
       )}
-      filter={isSelected || isHovered ? "url(#point-shadow)" : ""}
+      filter={isSelected || isHovered || isStartPoint ? "url(#point-shadow)" : ""}
       data-polygon-id={polygonId}
       data-vertex-index={vertexIndex}
       vectorEffect="non-scaling-stroke"

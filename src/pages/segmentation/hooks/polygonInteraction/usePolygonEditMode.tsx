@@ -80,6 +80,13 @@ export const usePolygonEditMode = (
     }
   }, [editModeCore, slicingMode, pointAddingMode]);
 
+  // Exit all edit modes
+  const exitAllEditModes = useCallback(() => {
+    if (editModeCore.editMode) editModeCore.toggleEditMode();
+    if (slicingMode.slicingMode) slicingMode.toggleSlicingMode();
+    if (pointAddingMode.pointAddingMode) pointAddingMode.togglePointAddingMode();
+  }, [editModeCore, slicingMode, pointAddingMode]);
+
   // Automatické přidávání bodů při držení Shift
   useEffect(() => {
     if (!editModeCore.editMode || !editModeCore.cursorPosition || !editModeCore.isShiftPressed || 
@@ -157,8 +164,12 @@ export const usePolygonEditMode = (
     hoveredSegment: pointAddingMode.hoveredSegment,
     togglePointAddingMode,
     
+    // Funkce pro ukončení všech editačních režimů
+    exitAllEditModes,
+    
     // Kombinované handlery
     handleEditModeClick,
     handleEditMouseMove
   };
 };
+

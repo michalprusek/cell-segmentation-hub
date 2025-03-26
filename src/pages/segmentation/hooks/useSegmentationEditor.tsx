@@ -70,7 +70,9 @@ export const useSegmentationEditor = (
   
   // Keyboard event handler
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Delete' || e.key === 'Backspace') {
+    if (e.key === 'Escape') {
+      polygonInteraction.exitAllEditModes();
+    } else if (e.key === 'Delete' || e.key === 'Backspace') {
       polygonInteraction.handleDeletePolygon();
     } else if (e.key === 'e' || e.key === 'E') {
       polygonInteraction.toggleEditMode();
@@ -88,6 +90,7 @@ export const useSegmentationEditor = (
     polygonInteraction.toggleEditMode,
     polygonInteraction.toggleSlicingMode,
     polygonInteraction.togglePointAddingMode,
+    polygonInteraction.exitAllEditModes,
     historyManagement.handleUndo,
     historyManagement.handleRedo
   ]);

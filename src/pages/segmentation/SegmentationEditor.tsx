@@ -61,12 +61,19 @@ const SegmentationEditor = () => {
     toggleEditMode,
     toggleSlicingMode,
     togglePointAddingMode,
+    exitAllEditModes,
     isShiftPressed
   } = useSegmentationEditor(projectId, imageId, user?.id);
 
   // Add keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Exit any edit mode with Escape key
+      if (e.key === 'Escape') {
+        exitAllEditModes();
+        return;
+      }
+      
       // Edit mode toggle with 'e' key
       if (e.key === 'e' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         toggleEditMode();
@@ -100,7 +107,7 @@ const SegmentationEditor = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [toggleEditMode, toggleSlicingMode, togglePointAddingMode, handleUndo, handleRedo]);
+  }, [toggleEditMode, toggleSlicingMode, togglePointAddingMode, handleUndo, handleRedo, exitAllEditModes]);
 
   // Calculate if we can undo/redo
   const canUndo = historyIndex > 0;

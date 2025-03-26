@@ -134,11 +134,11 @@ const EditorToolbar = ({
               className={`h-9 w-9 ${editMode ? 'bg-purple-600 text-white hover:bg-purple-700' : 'text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90'}`}
               onClick={onToggleEditMode}
             >
-              <Edit className="h-5 w-5" />
+              <PlusCircle className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
-            <span>{editMode ? "Exit Edit Mode" : "Enter Edit Mode"} (Shortcut: E)</span>
+            <span>{editMode ? "Exit Polygon Creation Mode" : "Create New Polygon"} (Shortcut: E)</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -156,7 +156,7 @@ const EditorToolbar = ({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
-            <span>{slicingMode ? "Exit Slicing Mode" : "Enter Slicing Mode"} (Shortcut: S)</span>
+            <span>{slicingMode ? "Exit Slicing Mode" : "Split Polygon in Two"} (Shortcut: S)</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -170,11 +170,11 @@ const EditorToolbar = ({
               className={`h-9 w-9 ${pointAddingMode ? 'bg-green-600 text-white hover:bg-green-700' : 'text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90'}`}
               onClick={onTogglePointAddingMode}
             >
-              <PlusCircle className="h-5 w-5" />
+              <Edit className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
-            <span>{pointAddingMode ? "Exit Point Adding Mode" : "Enter Point Adding Mode"} (Shortcut: A)</span>
+            <span>{pointAddingMode ? "Exit Edit Mode" : "Edit Polygon Points"} (Shortcut: A)</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

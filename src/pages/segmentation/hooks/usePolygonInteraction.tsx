@@ -48,6 +48,7 @@ export const usePolygonInteraction = (
     toggleEditMode,
     toggleSlicingMode,
     togglePointAddingMode,
+    exitAllEditModes,
     handleEditModeClick,
     handleEditMouseMove,
     tempPoints,
@@ -130,6 +131,7 @@ export const usePolygonInteraction = (
     toggleEditMode,
     toggleSlicingMode,
     togglePointAddingMode,
+    exitAllEditModes,
     simplifySelectedPolygon,
     // Exportujeme potřebné funkce z pointEditor
     addPointToPolygon: pointEditor.addPoint,
