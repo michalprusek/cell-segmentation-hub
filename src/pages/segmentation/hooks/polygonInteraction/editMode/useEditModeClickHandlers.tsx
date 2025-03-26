@@ -5,10 +5,12 @@ interface EditModeClickHandlersProps {
   slicingMode: {
     slicingMode: boolean;
     handleSlicingClick: (x: number, y: number) => boolean;
+    updateCursorPosition?: (x: number, y: number) => void;
   };
   pointAddingMode: {
     pointAddingMode: boolean;
     handlePointAddingClick: (x: number, y: number) => boolean;
+    detectVertexUnderCursor?: (x: number, y: number) => void;
   };
   editModeCore: {
     editMode: boolean;
@@ -42,10 +44,10 @@ export const useEditModeClickHandlers = ({
   
   // Kombinované handlery pro pohyb myši v různých režimech editace
   const handleEditMouseMove = useCallback((x: number, y: number) => {
-    if (slicingMode.slicingMode) {
-      slicingMode.updateCursorPosition?.(x, y);
-    } else if (pointAddingMode.pointAddingMode) {
-      pointAddingMode.detectVertexUnderCursor?.(x, y);
+    if (slicingMode.slicingMode && slicingMode.updateCursorPosition) {
+      slicingMode.updateCursorPosition(x, y);
+    } else if (pointAddingMode.pointAddingMode && pointAddingMode.detectVertexUnderCursor) {
+      pointAddingMode.detectVertexUnderCursor(x, y);
     }
     // Standardní editMode nepotřebuje speciální handler pro pohyb myši
   }, [slicingMode, pointAddingMode]);

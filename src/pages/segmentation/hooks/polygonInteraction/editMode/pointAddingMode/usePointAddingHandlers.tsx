@@ -119,7 +119,8 @@ export const usePointAddingHandlers = ({
       // Přidáme bod do naší dočasné sekvence
       console.log("Adding temp point:", x, y);
       const newPoint = { x, y };
-      setTempPoints((prev) => [...prev, newPoint]);
+      // Zde byla chyba - opravuji vytváření nového pole s pevným typem Point[]
+      setTempPoints([...tempPoints, newPoint]);
       return true;
     }
     

@@ -80,8 +80,14 @@ export const useEditModesManager = (
     handleEditModeClick,
     handleEditMouseMove
   } = useEditModeClickHandlers({
-    slicingMode,
-    pointAddingMode,
+    slicingMode: {
+      ...slicingMode,
+      updateCursorPosition: slicingMode.updateCursorPosition // Přidáno chybějící pole
+    },
+    pointAddingMode: {
+      ...pointAddingMode,
+      detectVertexUnderCursor: pointAddingMode.detectVertexUnderCursor // Přidáno chybějící pole
+    },
     editModeCore,
     resetLastAutoAddedPoint
   });
