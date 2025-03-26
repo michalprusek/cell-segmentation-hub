@@ -27,7 +27,7 @@ const CanvasVertex = ({
   // Dynamicky měníme velikost bodů podle úrovně zoomu - OBRÁCENĚ
   const getAdjustedRadius = () => {
     if (zoom > 4) {
-      // Při extrémním přiblížení ZVĚTŠÍME body
+      // Při extrémním přiblížení (zoom > 4) ZVĚTŠÍME body
       return 7/zoom;
     } else if (zoom > 3) {
       // Při velkém přiblížení (zoom > 3) zvětšíme body
@@ -44,9 +44,7 @@ const CanvasVertex = ({
     }
   };
 
-  // Aplikujeme zvětšení poloměru při najetí myší
-  const baseRadius = getAdjustedRadius();
-  const radius = isHovered ? baseRadius * 1.3 : baseRadius;
+  const radius = getAdjustedRadius();
 
   // Určení barvy vertexu podle typu polygonu
   const getVertexColor = () => {
@@ -71,22 +69,17 @@ const CanvasVertex = ({
       stroke="#fff"
       strokeWidth={strokeWidth}
       className={cn(
-        "transition-all duration-150",
+        "transition-colors duration-150",
         isDragging ? "cursor-grabbing" : "cursor-grab",
         isHovered ? "z-10" : "",
         isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : ""
       )}
-      filter={isHovered ? "url(#point-hover)" : (isSelected ? "url(#point-shadow)" : "")}
+      filter={isSelected || isHovered ? "url(#point-shadow)" : ""}
       data-polygon-id={polygonId}
       data-vertex-index={vertexIndex}
       vectorEffect="non-scaling-stroke"
       shapeRendering="geometricPrecision"
-      style={{ 
-        imageRendering: "crisp-edges", 
-        transform: isHovered ? "scale(1.1)" : "scale(1)",
-        transformOrigin: "center",
-        transformBox: "fill-box"
-      }}
+      style={{ imageRendering: "crisp-edges" }}
     />
   );
 };

@@ -35,17 +35,14 @@ export const useVertexHover = (
     
     let foundVertex = false;
     
-    // Procházíme všechny polygony a jejich body - prioritizujeme polygony od konce 
-    // (novější/vyšší vrstvě jsou vidět navrchu)
-    for (let p = segmentation.polygons.length - 1; p >= 0; p--) {
-      const polygon = segmentation.polygons[p];
-      
+    // Procházíme všechny polygony a jejich body
+    for (const polygon of segmentation.polygons) {
       for (let i = 0; i < polygon.points.length; i++) {
         const point = polygon.points[i];
         
-        // Použijeme větší detekční radius pro snazší výběr vertexu při hoveru
+        // Použijeme větší detekční radius pro snazší výběr vertexu
         // Předáváme přímo canvas souřadnice (ne image souřadnice)
-        if (isNearVertex(canvasX, canvasY, point, 18)) {
+        if (isNearVertex(canvasX, canvasY, point, 15)) {
           if (hoveredVertex.polygonId !== polygon.id || hoveredVertex.vertexIndex !== i) {
             setHoveredVertex({
               polygonId: polygon.id,
