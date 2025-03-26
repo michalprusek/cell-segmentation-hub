@@ -20,6 +20,8 @@ interface ProjectToolbarProps {
   sortDirection: 'asc' | 'desc';
   onSort: (field: 'name' | 'updatedAt' | 'segmentationStatus') => void;
   onToggleUploader: () => void;
+  viewMode: "grid" | "list";
+  setViewMode: (mode: "grid" | "list") => void;
 }
 
 const ProjectToolbar = ({ 
@@ -28,7 +30,9 @@ const ProjectToolbar = ({
   sortField, 
   sortDirection, 
   onSort,
-  onToggleUploader
+  onToggleUploader,
+  viewMode,
+  setViewMode
 }: ProjectToolbarProps) => {
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -52,7 +56,7 @@ const ProjectToolbar = ({
         />
       </div>
       
-      <div className="flex gap-2">
+      <div className="flex gap-2 items-center">
         <Button variant="outline" size="sm" className="flex items-center h-9" onClick={onToggleUploader}>
           <Upload className="mr-1 h-4 w-4" />
           {t('common.uploadImages')}
@@ -99,6 +103,37 @@ const ProjectToolbar = ({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        
+        {/* View mode buttons now included in the toolbar */}
+        <div className="flex items-center h-9 border rounded-md bg-background">
+          <Button 
+            variant={viewMode === "grid" ? "default" : "ghost"}
+            size="sm" 
+            className="h-9 px-2.5 rounded-r-none"
+            onClick={() => setViewMode("grid")}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-grid-2x2">
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <path d="M3 12h18" />
+              <path d="M12 3v18" />
+            </svg>
+          </Button>
+          <Button 
+            variant={viewMode === "list" ? "default" : "ghost"}
+            size="sm" 
+            className="h-9 px-2.5 rounded-l-none"
+            onClick={() => setViewMode("list")}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-list">
+              <line x1="8" x2="21" y1="6" y2="6" />
+              <line x1="8" x2="21" y1="12" y2="12" />
+              <line x1="8" x2="21" y1="18" y2="18" />
+              <line x1="3" x2="3.01" y1="6" y2="6" />
+              <line x1="3" x2="3.01" y1="12" y2="12" />
+              <line x1="3" x2="3.01" y1="18" y2="18" />
+            </svg>
+          </Button>
+        </div>
       </div>
     </div>
   );

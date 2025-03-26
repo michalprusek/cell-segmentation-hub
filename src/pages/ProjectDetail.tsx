@@ -13,7 +13,6 @@ import { useProjectData } from "@/hooks/useProjectData";
 import { useImageFilter } from "@/hooks/useImageFilter";
 import { useProjectImageActions } from "@/components/project/ProjectImageActions";
 import { motion } from "framer-motion";
-import ProjectViewOptions from "@/components/project/ProjectViewOptions";
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -91,51 +90,46 @@ const ProjectDetail = () => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3 }}
           >
-            <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-6 space-y-4 md:space-y-0">
-              <div className="flex-1">
-                <ProjectToolbar 
-                  searchTerm={searchTerm}
-                  onSearchChange={handleSearch}
-                  sortField={sortField}
-                  sortDirection={sortDirection}
-                  onSort={handleSort}
-                  onToggleUploader={toggleUploader}
-                />
-              </div>
-              <div className="flex md:ml-2">
-                <ProjectViewOptions viewMode={viewMode} setViewMode={setViewMode} />
-              </div>
-            </div>
-          </motion.div>
-        )}
-        
-        {loading ? (
-          <motion.div 
-            className="flex justify-center items-center h-64"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
-          </motion.div>
-        ) : filteredImages.length === 0 && !showUploader ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.3 }}
-          >
-            <EmptyState 
-              hasSearchTerm={!!searchTerm}
-              onUpload={toggleUploader}
+            <ProjectToolbar 
+              searchTerm={searchTerm}
+              onSearchChange={handleSearch}
+              sortField={sortField}
+              sortDirection={sortDirection}
+              onSort={handleSort}
+              onToggleUploader={toggleUploader}
+              viewMode={viewMode}
+              setViewMode={setViewMode}
             />
+            
+            {loading ? (
+              <motion.div 
+                className="flex justify-center items-center h-64"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Loader2 className="h-8 w-8 text-blue-500 animate-spin" />
+              </motion.div>
+            ) : filteredImages.length === 0 ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+              >
+                <EmptyState 
+                  hasSearchTerm={!!searchTerm}
+                  onUpload={toggleUploader}
+                />
+              </motion.div>
+            ) : (
+              <ProjectImages 
+                images={filteredImages}
+                onDelete={handleDeleteImage}
+                onOpen={handleOpenImage}
+                viewMode={viewMode}
+              />
+            )}
           </motion.div>
-        ) : !showUploader && (
-          <ProjectImages 
-            images={filteredImages}
-            onDelete={handleDeleteImage}
-            onOpen={handleOpenImage}
-            viewMode={viewMode}
-          />
         )}
       </div>
     </motion.div>

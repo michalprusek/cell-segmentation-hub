@@ -16,7 +16,7 @@ const ImageActions = ({ onDelete }: ImageActionsProps) => {
         className="h-7 w-7"
         onClick={(e) => {
           e.stopPropagation();
-          onDelete();
+          onDelete(); // Direct deletion without confirmation
         }}
       >
         <Trash2 className="h-4 w-4" />

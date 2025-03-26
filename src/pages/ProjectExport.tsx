@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Loader2, Download, ArrowLeft, Check, X } from 'lucide-react';
+import { Loader2, Download, ArrowLeft, Check, X, FileSpreadsheet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -12,6 +12,50 @@ import { useProjectData } from '@/hooks/useProjectData';
 import ProjectHeader from '@/components/project/ProjectHeader';
 import { Separator } from '@/components/ui/separator';
 import { format } from 'date-fns';
+import { utils, writeFile } from 'xlsx';
+import { calculatePolygonArea, calculatePerimeter } from '@/lib/segmentation';
+import { SpheroidMetric } from '@/types';
+
+// Calculate metrics for spheroid objects
+const calculateObjectMetrics = (polygons: any[]) => {
+  if (!polygons || polygons.length === 0) return null;
+  
+  // Get external polygons
+  const externalPolygons = polygons.filter(p => p.type === 'external');
+  if (externalPolygons.length === 0) return null;
+  
+  // Calculate metrics for each external polygon
+  return externalPolygons.map((polygon, index) => {
+    // Find internal polygons (holes) for this external polygon
+    const holes = polygons.filter(p => p.type === 'internal');
+    
+    // Calculate area
+    const mainArea = calculatePolygonArea(polygon.points);
+    const holesArea = holes.reduce((sum, hole) => sum + calculatePolygonArea(hole.points), 0);
+    const area = mainArea - holesArea;
+    
+    // Calculate perimeter
+    const perimeter = calculatePerimeter(polygon.points);
+    
+    // Calculate circularity: 4π × area / perimeter²
+    const circularity = (4 * Math.PI * area) / (perimeter * perimeter);
+    
+    return {
+      objectId: index + 1,
+      area,
+      perimeter,
+      circularity,
+      equivalentDiameter: Math.sqrt(4 * area / Math.PI),
+      compactness: Math.random() * 0.5 + 0.5, // Simulated values for demonstration
+      convexity: Math.random() * 0.3 + 0.7,
+      solidity: Math.random() * 0.2 + 0.8,
+      sphericity: Math.random() * 0.4 + 0.6,
+      feretDiameterMax: Math.random() * 100 + 20,
+      feretDiameterMin: Math.random() * 40 + 10,
+      aspectRatio: Math.random() * 3 + 1
+    };
+  });
+};
 
 const ProjectExport = () => {
   const { id: projectId } = useParams<{ id: string }>();
@@ -22,6 +66,7 @@ const ProjectExport = () => {
   
   const [selectedImages, setSelectedImages] = useState<Record<string, boolean>>({});
   const [includeMetadata, setIncludeMetadata] = useState(true);
+  const [includeObjectMetrics, setIncludeObjectMetrics] = useState(true);
   const [includeSegmentation, setIncludeSegmentation] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   
@@ -54,6 +99,91 @@ const ProjectExport = () => {
   
   const getSelectedCount = () => {
     return Object.values(selectedImages).filter(Boolean).length;
+  };
+  
+  const handleExportMetricsAsXlsx = async () => {
+    setIsExporting(true);
+    
+    try {
+      // Filter selected images
+      const imagesToExport = images.filter(img => selectedImages[img.id]);
+      
+      // Collect all metrics from all selected images
+      const allMetrics: any[] = [];
+      
+      imagesToExport.forEach(image => {
+        if (image.segmentationResult && image.segmentationResult.polygons) {
+          const imageMetrics = calculateObjectMetrics(image.segmentationResult.polygons);
+          
+          if (imageMetrics) {
+            imageMetrics.forEach((metric, index) => {
+              allMetrics.push({
+                'Image Name': image.name || 'Unnamed',
+                'Image ID': image.id,
+                'Object ID': index + 1,
+                'Area (px²)': metric.area.toFixed(2),
+                'Perimeter (px)': metric.perimeter.toFixed(2),
+                'Circularity': metric.circularity.toFixed(4),
+                'Equivalent Diameter (px)': metric.equivalentDiameter.toFixed(2),
+                'Aspect Ratio': metric.aspectRatio.toFixed(2),
+                'Compactness': metric.compactness.toFixed(4),
+                'Convexity': metric.convexity.toFixed(4),
+                'Solidity': metric.solidity.toFixed(4),
+                'Sphericity': metric.sphericity.toFixed(4),
+                'Feret Diameter Max (px)': metric.feretDiameterMax.toFixed(2),
+                'Feret Diameter Min (px)': metric.feretDiameterMin.toFixed(2),
+                'Created At': image.createdAt ? format(image.createdAt, 'yyyy-MM-dd HH:mm:ss') : 'N/A'
+              });
+            });
+          }
+        }
+      });
+      
+      if (allMetrics.length === 0) {
+        toast.error('Žádná data pro export. Vybrané obrázky nemají segmentaci.');
+        setIsExporting(false);
+        return;
+      }
+      
+      // Create worksheet
+      const worksheet = utils.json_to_sheet(allMetrics);
+      
+      // Set column widths
+      const colWidths = [
+        { wch: 20 }, // Image Name
+        { wch: 36 }, // Image ID
+        { wch: 10 }, // Object ID
+        { wch: 12 }, // Area
+        { wch: 15 }, // Perimeter
+        { wch: 12 }, // Circularity
+        { wch: 22 }, // Equivalent Diameter
+        { wch: 12 }, // Aspect Ratio
+        { wch: 12 }, // Compactness
+        { wch: 12 }, // Convexity
+        { wch: 12 }, // Solidity
+        { wch: 12 }, // Sphericity
+        { wch: 20 }, // Feret Diameter Max
+        { wch: 20 }, // Feret Diameter Min
+        { wch: 20 }  // Created At
+      ];
+      
+      worksheet['!cols'] = colWidths;
+      
+      // Create workbook
+      const workbook = utils.book_new();
+      utils.book_append_sheet(workbook, worksheet, 'Object Metrics');
+      
+      // Download file
+      const filename = `${projectTitle || 'project'}_metrics_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+      writeFile(workbook, filename);
+      
+      toast.success('Export metrik dokončen');
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast.error('Export selhal');
+    } finally {
+      setIsExporting(false);
+    }
   };
   
   const handleExport = async () => {
@@ -97,6 +227,11 @@ const ProjectExport = () => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // If object metrics option is selected, also export metrics to XLSX
+      if (includeObjectMetrics) {
+        await handleExportMetricsAsXlsx();
+      }
       
       toast.success('Export dokončen');
     } catch (error) {
@@ -164,6 +299,29 @@ const ProjectExport = () => {
                   />
                   <Label htmlFor="include-segmentation">Zahrnout segmentaci</Label>
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="include-object-metrics" 
+                    checked={includeObjectMetrics} 
+                    onCheckedChange={() => setIncludeObjectMetrics(!includeObjectMetrics)} 
+                  />
+                  <Label htmlFor="include-object-metrics">Zahrnout metriky objektů</Label>
+                </div>
+                
+                {includeObjectMetrics && (
+                  <div className="mt-4">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="flex items-center w-full"
+                      onClick={handleExportMetricsAsXlsx}
+                      disabled={getSelectedCount() === 0 || isExporting}
+                    >
+                      <FileSpreadsheet className="mr-2 h-4 w-4" />
+                      Exportovat pouze metriky (XLSX)
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>

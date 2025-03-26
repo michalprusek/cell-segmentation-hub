@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
@@ -20,35 +19,33 @@ export const useProjectImageActions = ({
   const navigate = useNavigate();
   const [processingImages, setProcessingImages] = useState<string[]>([]);
 
-  // Delete an image
+  // Delete an image - removed confirmation dialog
   const handleDeleteImage = async (imageId: string) => {
     if (!projectId) return;
     
-    if (confirm('Are you sure you want to delete this image?')) {
-      try {
-        const { error } = await supabase
-          .from("images")
-          .delete()
-          .eq("id", imageId);
+    try {
+      const { error } = await supabase
+        .from("images")
+        .delete()
+        .eq("id", imageId);
 
-        if (error) throw error;
-        
-        // Update the UI by filtering out the deleted image
-        const updatedImages = images.filter(img => img.id !== imageId);
-        onImagesChange(updatedImages);
-        
-        toast.success("Image deleted successfully");
-      } catch (error) {
-        console.error("Error deleting image:", error);
-        toast.error("Failed to delete image");
-      }
+      if (error) throw error;
+      
+      // Update the UI by filtering out the deleted image
+      const updatedImages = images.filter(img => img.id !== imageId);
+      onImagesChange(updatedImages);
+      
+      toast.success("Obrázek byl odstraněn");
+    } catch (error) {
+      console.error("Error deleting image:", error);
+      toast.error("Nepodařilo se odstranit obrázek");
     }
   };
   
   // Process an image segmentation
   const handleProcessImage = async (imageId: string) => {
     if (processingImages.includes(imageId)) {
-      toast.info("Image is already being processed");
+      toast.info("Obrázek je již zpracováván");
       return;
     }
     
@@ -87,7 +84,7 @@ export const useProjectImageActions = ({
       });
     } catch (error) {
       console.error("Error processing image:", error);
-      toast.error("Failed to process image");
+      toast.error("Nepodařilo se zpracovat obrázek");
     } finally {
       setProcessingImages(prev => prev.filter(id => id !== imageId));
     }
@@ -104,7 +101,7 @@ export const useProjectImageActions = ({
       // Auto-segment if not yet segmented
       handleProcessImage(imageId);
       
-      toast.success("Image segmentation started. You will be redirected when complete.");
+      toast.success("Zpracování obrázku začalo. Váš překlad bude přesměrován, jakmile bude dokončeno.");
       
       // After a small delay, redirect to segmentation editor
       // In a real app, you'd wait for the segmentation to finish
