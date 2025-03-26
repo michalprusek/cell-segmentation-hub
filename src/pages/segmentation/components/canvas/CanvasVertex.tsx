@@ -51,16 +51,16 @@ const CanvasVertex = ({
 
   let radius = getAdjustedRadius();
   
-  // Increase size for start point to make it more noticeable
+  // No more special size for start point
   if (isStartPoint) {
-    radius *= 1.5;
+    // Make it just slightly larger to be identifiable
+    radius *= 1.2;
   }
 
   // Určení barvy vertexu podle typu polygonu
   const getVertexColor = () => {
-    if (isStartPoint) {
-      return '#FFA500'; // Orange for start point
-    } else if (type === 'internal') {
+    // We don't use a different color for start point anymore
+    if (type === 'internal') {
       return isDragging ? '#0077cc' : isHovered ? '#3498db' : (isSelected ? '#0EA5E9' : 'rgba(14, 165, 233, 0.7)');
     } else {
       return isDragging ? '#c0392b' : isHovered ? '#e74c3c' : (isSelected ? '#ea384c' : 'rgba(234, 56, 76, 0.7)');
@@ -83,8 +83,8 @@ const CanvasVertex = ({
       cy={point.y}
       r={radius}
       fill={vertexColor}
-      stroke={isStartPoint ? "#FFFF00" : "#fff"}
-      strokeWidth={isStartPoint ? strokeWidth * 1.5 : strokeWidth}
+      stroke="#fff"
+      strokeWidth={strokeWidth}
       className={cn(
         "transition-colors duration-150",
         isDragging ? "cursor-grabbing" : "cursor-grab",

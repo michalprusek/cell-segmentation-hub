@@ -16,7 +16,7 @@ export const useSlicingMode = (
   const [sliceStartPoint, setSliceStartPoint] = useState<Point | null>(null);
   const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
   
-  const { splitPolygon } = usePolygonSplitter(segmentation, setSegmentation);
+  const { splitIntoTwoPolygons } = usePolygonSplitter(segmentation, setSegmentation);
   
   /**
    * Toggle slicing mode on/off
@@ -49,16 +49,15 @@ export const useSlicingMode = (
       return true;
     }
     
-    // Second click - complete slice
-    // Fix: Pass a single object instead of three params
-    const success = splitPolygon({
+    // Second click - complete slice and split into two polygons
+    const success = splitIntoTwoPolygons({
       polygonId: selectedPolygonId,
       startPoint: sliceStartPoint,
       endPoint: clickPoint
     });
     
     if (success) {
-      toast.success("Polygon byl úspěšně rozdělen");
+      toast.success("Polygon byl úspěšně rozdělen na dva");
       // Reset state and exit slicing mode automatically
       setSliceStartPoint(null);
       setSlicingMode(false);
@@ -68,7 +67,7 @@ export const useSlicingMode = (
     }
     
     return true;
-  }, [slicingMode, selectedPolygonId, sliceStartPoint, splitPolygon]);
+  }, [slicingMode, selectedPolygonId, sliceStartPoint, splitIntoTwoPolygons]);
 
   return {
     slicingMode,

@@ -56,9 +56,9 @@ const CanvasPolygon = ({
       return 2/zoom;
     } else if (zoom < 0.5) {
       // Make lines thinner at low zoom (specifically 40%)
-      return 2/zoom; 
+      return 0.8/zoom; 
     } else if (zoom < 0.7) {
-      return 2.2/zoom;
+      return 1.2/zoom;
     } else {
       return 2/zoom;
     }

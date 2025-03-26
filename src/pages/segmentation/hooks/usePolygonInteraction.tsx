@@ -1,4 +1,3 @@
-
 import { usePolygonDetection } from './polygonInteraction/usePolygonDetection';
 import { usePolygonState } from './polygonInteraction/usePolygonState';
 import { usePolygonModification } from './polygonInteraction/usePolygonModification';
@@ -210,7 +209,6 @@ export const usePolygonInteraction = (
     togglePointAddingMode,
     exitAllEditModes,
     simplifySelectedPolygon,
-    // Exportujeme potřebné funkce z pointEditor
     addPointToPolygon: pointEditor.addPoint,
     removePointFromPolygon: pointEditor.removePoint
   };
