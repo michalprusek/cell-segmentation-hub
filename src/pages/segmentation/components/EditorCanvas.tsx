@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import CanvasContainer from './canvas/CanvasContainer';
@@ -90,7 +89,8 @@ const EditorCanvas = ({
   onDuplicateVertex,
   pointAddingTempPoints,
   selectedVertexIndex,
-  selectedPolygonPoints
+  selectedPolygonPoints,
+  sourcePolygonId
 }: EditorCanvasProps) => {
   return (
     <CanvasContainer 
@@ -135,6 +135,7 @@ const EditorCanvas = ({
             pointAddingTempPoints={pointAddingTempPoints}
             selectedVertexIndex={selectedVertexIndex}
             selectedPolygonPoints={selectedPolygonPoints}
+            sourcePolygonId={sourcePolygonId}
           />
         )}
         
