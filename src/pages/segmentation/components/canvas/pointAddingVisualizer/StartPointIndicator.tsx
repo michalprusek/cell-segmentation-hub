@@ -22,15 +22,28 @@ const StartPointIndicator = ({ selectedVertexIndex, polygonPoints, zoom }: Start
   const colors = getColors();
 
   return (
-    <circle
-      cx={polygonPoints[selectedVertexIndex].x}
-      cy={polygonPoints[selectedVertexIndex].y}
-      r={pointRadius * 1.3}
-      fill={colors.startPoint.fill}
-      stroke={colors.startPoint.stroke}
-      strokeWidth={strokeWidth * 1.2}
-      style={{ pointerEvents: 'none' }}
-    />
+    <g>
+      {/* Větší kruh pro zvýraznění */}
+      <circle
+        cx={polygonPoints[selectedVertexIndex].x}
+        cy={polygonPoints[selectedVertexIndex].y}
+        r={pointRadius * 1.5}
+        fill={colors.startPoint.fill}
+        stroke={colors.startPoint.stroke}
+        strokeWidth={strokeWidth * 1.2}
+        style={{ pointerEvents: 'none' }}
+      />
+      
+      {/* Menší vnitřní kruh */}
+      <circle
+        cx={polygonPoints[selectedVertexIndex].x}
+        cy={polygonPoints[selectedVertexIndex].y}
+        r={pointRadius * 0.8}
+        fill={colors.startPoint.innerFill || "#FFFFFF"}
+        stroke="none"
+        style={{ pointerEvents: 'none' }}
+      />
+    </g>
   );
 };
 

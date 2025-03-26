@@ -12,6 +12,7 @@ interface CursorLineConnectorProps {
   };
   selectedVertexIndex: number | null;
   cursorPosition: Point | null;
+  polygonPoints: Point[] | null;
   zoom: number;
 }
 
@@ -23,16 +24,27 @@ const CursorLineConnector = ({
   hoveredSegment, 
   selectedVertexIndex, 
   cursorPosition, 
+  polygonPoints,
   zoom 
 }: CursorLineConnectorProps) => {
-  // Pokud nemáme dočasné body nebo pozici kurzoru, nezobrazujeme nic
-  if (tempPoints.length === 0 || !cursorPosition) {
+  // Kde začíná spojnice - buď poslední dočasný bod nebo počáteční bod
+  let startPoint: Point | null = null;
+  
+  if (tempPoints.length > 0) {
+    // Pokud máme dočasné body, začínáme od posledního
+    startPoint = tempPoints[tempPoints.length - 1];
+  } else if (selectedVertexIndex !== null && polygonPoints && polygonPoints[selectedVertexIndex]) {
+    // Jinak začínáme od vybraného vrcholu
+    startPoint = polygonPoints[selectedVertexIndex];
+  }
+  
+  // Pokud nemáme odkud začít nebo nemáme kurzor, nic nezobrazujeme
+  if (!startPoint || !cursorPosition) {
     return null;
   }
 
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
-  const lastPoint = tempPoints[tempPoints.length - 1];
   
   // Target point je buď zvýrazněný vrchol, nebo pozice kurzoru
   const targetPoint = 
@@ -50,8 +62,8 @@ const CursorLineConnector = ({
   // Vykreslíme spojnici
   return (
     <line
-      x1={lastPoint.x}
-      y1={lastPoint.y}
+      x1={startPoint.x}
+      y1={startPoint.y}
       x2={targetPoint.x}
       y2={targetPoint.y}
       stroke={isConnectingToVertex ? colors.cursorLine.endpoint : colors.cursorLine.normal}

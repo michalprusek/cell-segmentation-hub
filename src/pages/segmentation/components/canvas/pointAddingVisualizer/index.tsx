@@ -81,6 +81,7 @@ const PointAddingVisualizer = ({
         hoveredSegment={hoveredSegment} 
         selectedVertexIndex={selectedVertexIndex} 
         cursorPosition={cursorPosition} 
+        polygonPoints={polygonPoints}
         zoom={zoom} 
       />
     </g>

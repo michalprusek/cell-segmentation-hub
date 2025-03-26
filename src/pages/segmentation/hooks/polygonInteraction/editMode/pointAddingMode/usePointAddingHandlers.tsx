@@ -122,6 +122,11 @@ export const usePointAddingHandlers = ({
     } 
     // 3. Klikli jsme někam do plátna, přidáme nový bod do dočasné sekvence
     else {
+      // Pokud je kurzor nad vrcholem, neklikáme do volného prostoru
+      if (hoveredSegment.segmentIndex !== null && hoveredSegment.polygonId) {
+        return false;
+      }
+      
       // Přidáme bod do naší dočasné sekvence
       console.log("Adding temp point:", x, y);
       const newPoint = { x, y };

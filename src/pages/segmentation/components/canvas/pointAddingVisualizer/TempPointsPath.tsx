@@ -27,40 +27,24 @@ const TempPointsPath = ({
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
 
+  // Vytvoříme pole všech bodů pro vykreslení cesty (počáteční + dočasné)
+  const allPoints = [
+    polygonPoints[selectedVertexIndex],
+    ...tempPoints
+  ];
+
   return (
     <>
-      {/* Spojnice od výchozího bodu k prvnímu dočasnému bodu */}
-      {polygonPoints[selectedVertexIndex] && tempPoints[0] && (
-        <line
-          x1={polygonPoints[selectedVertexIndex].x}
-          y1={polygonPoints[selectedVertexIndex].y}
-          x2={tempPoints[0].x}
-          y2={tempPoints[0].y}
-          stroke={colors.tempLine.stroke}
-          strokeWidth={strokeWidth}
-          style={{ pointerEvents: 'none' }}
-        />
-      )}
+      {/* Vykreslení spojnic mezi body */}
+      <path
+        d={`M ${allPoints.map(p => `${p.x},${p.y}`).join(' L ')}`}
+        fill="none"
+        stroke={colors.tempLine.stroke}
+        strokeWidth={strokeWidth}
+        style={{ pointerEvents: 'none' }}
+      />
       
-      {/* Spojnice mezi dočasnými body */}
-      {tempPoints.map((point, i) => {
-        if (i === 0) return null;
-        
-        return (
-          <line
-            key={`temp-line-${i}`}
-            x1={tempPoints[i-1].x}
-            y1={tempPoints[i-1].y}
-            x2={point.x}
-            y2={point.y}
-            stroke={colors.tempLine.stroke}
-            strokeWidth={strokeWidth}
-            style={{ pointerEvents: 'none' }}
-          />
-        );
-      })}
-      
-      {/* Dočasné body */}
+      {/* Vykreslení dočasných bodů */}
       {tempPoints.map((point, i) => (
         <circle
           key={`temp-point-${i}`}
@@ -69,7 +53,7 @@ const TempPointsPath = ({
           r={pointRadius}
           fill={colors.tempPoint.fill}
           stroke={colors.tempPoint.stroke}
-          strokeWidth={strokeWidth}
+          strokeWidth={strokeWidth * 0.8}
           style={{ pointerEvents: 'none' }}
         />
       ))}

@@ -13,7 +13,7 @@ interface HoveredVertexIndicatorProps {
 }
 
 /**
- * Komponenta pro zvýraznění vrcholu pod kurzorem
+ * Komponenta pro zobrazení zvýrazněného vrcholu pod kurzorem
  */
 const HoveredVertexIndicator = ({ hoveredSegment, zoom }: HoveredVertexIndicatorProps) => {
   if (hoveredSegment.segmentIndex === null || !hoveredSegment.projectedPoint) {
@@ -25,16 +25,34 @@ const HoveredVertexIndicator = ({ hoveredSegment, zoom }: HoveredVertexIndicator
   const colors = getColors();
 
   return (
-    <circle
-      cx={hoveredSegment.projectedPoint.x}
-      cy={hoveredSegment.projectedPoint.y}
-      r={pointRadius * 1.3}
-      fill={colors.hoverPoint.fill}
-      stroke={colors.hoverPoint.stroke}
-      strokeWidth={strokeWidth}
-      className="animate-pulse"
-      style={{ pointerEvents: 'none' }}
-    />
+    <g>
+      {/* Vnější kruh s animací */}
+      <circle
+        cx={hoveredSegment.projectedPoint.x}
+        cy={hoveredSegment.projectedPoint.y}
+        r={pointRadius * 1.8}
+        fill="none"
+        stroke={colors.hoverPoint.stroke}
+        strokeWidth={strokeWidth * 0.8}
+        opacity={0.5}
+        className="animate-ping"
+        style={{ 
+          pointerEvents: 'none',
+          animationDuration: '1.5s'
+        }}
+      />
+      
+      {/* Hlavní kruh */}
+      <circle
+        cx={hoveredSegment.projectedPoint.x}
+        cy={hoveredSegment.projectedPoint.y}
+        r={pointRadius * 1.5}
+        fill={colors.hoverPoint.fill}
+        stroke={colors.hoverPoint.stroke}
+        strokeWidth={strokeWidth}
+        style={{ pointerEvents: 'none' }}
+      />
+    </g>
   );
 };
 

@@ -27,27 +27,28 @@ export const getPointRadius = (zoom: number): number => {
 export const getColors = () => {
   return {
     startPoint: {
-      fill: "#FFA500",
-      stroke: "#FFFFFF"
+      fill: "#FF5722",     // Oranžová - výraznější
+      stroke: "#FFFFFF",
+      innerFill: "#FFFFFF" // Bílá pro vnitřní kruh
     },
     hoverPoint: {
-      fill: "#FFC107",
-      stroke: "#FFA000"
+      fill: "#FFC107",     // Žlutá - při hoveru
+      stroke: "#FF9800"    // Tmavší oranžová
     },
     potentialEndpoint: {
-      fill: "#FFEB3B80",
-      stroke: "#FFC107"
+      fill: "rgba(255, 235, 59, 0.5)", // Poloprůhledná žlutá
+      stroke: "#FFC107"                // Žlutá
     },
     tempPoint: {
-      fill: "#3498db",
-      stroke: "#FFFFFF"
+      fill: "#2196F3",     // Modrá
+      stroke: "#FFFFFF"    // Bílá
     },
     tempLine: {
-      stroke: "#3498db"
+      stroke: "#2196F3"    // Modrá
     },
     cursorLine: {
-      normal: "#3498db",
-      endpoint: "#4CAF50"
+      normal: "#64B5F6",   // Světlejší modrá
+      endpoint: "#4CAF50"  // Zelená pro koncový bod
     }
   };
 };
