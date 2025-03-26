@@ -1,5 +1,5 @@
 
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { useMouseInteractions } from './useMouseInteractions';
 
@@ -140,7 +140,7 @@ export const usePolygonEventHandlers = (
   /**
    * Wrapper pro mouseUp, který zajistí zrušení debounce
    */
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
     // Zrušíme debounce při uvolnění tlačítka
     if (mouseMoveTimeoutRef.current !== null) {
       window.clearTimeout(mouseMoveTimeoutRef.current);
@@ -148,11 +148,28 @@ export const usePolygonEventHandlers = (
     }
     
     // Zavoláme původní handler
-    mouseInteractions.handleMouseUp();
+    mouseInteractions.handleMouseUp(e);
     
     // Reset poslední pozice
     lastMousePosition.current = null;
   }, [mouseInteractions]);
+
+  // Add a global event listener to handle releasing the mouse outside the element
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      // Only handle if we are currently dragging
+      if (dragState.current.isDragging || vertexDragState.current.isDragging) {
+        mouseInteractions.handleMouseUp();
+        lastMousePosition.current = null;
+      }
+    };
+
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [dragState, vertexDragState, mouseInteractions]);
   
   return {
     handleMouseDown,

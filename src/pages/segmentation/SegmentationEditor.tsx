@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from "framer-motion";
@@ -64,7 +65,6 @@ const SegmentationEditor = () => {
     isShiftPressed,
     handleSlicePolygon,
     handleEditPolygon,
-    handleDuplicatePolygon,
     handleDeleteVertex,
     handleDuplicateVertex
   } = useSegmentationEditor(projectId, imageId, user?.id);
@@ -203,7 +203,6 @@ const SegmentationEditor = () => {
               onDeletePolygon={handleDeletePolygon}
               onSlicePolygon={handleSlicePolygon}
               onEditPolygon={handleEditPolygon}
-              onDuplicatePolygon={handleDuplicatePolygon}
               onDeleteVertex={handleDeleteVertex}
               onDuplicateVertex={handleDuplicateVertex}
             />

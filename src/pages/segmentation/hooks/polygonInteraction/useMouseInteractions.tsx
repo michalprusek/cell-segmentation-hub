@@ -145,17 +145,23 @@ export const useMouseInteractions = (
 
   /**
    * Zpracování uvolnění tlačítka myši
+   * Opraveno, aby správně zpracovalo případy bez události
    */
-  const handleMouseUp = useCallback((e: React.MouseEvent) => {
-    // Ensure we reset the cursor
-    const containerElement = e.currentTarget as HTMLElement;
-    if (containerElement) {
-      containerElement.style.cursor = 'default';
-    }
-    
-    // Ukončení tažení
+  const handleMouseUp = useCallback((e?: React.MouseEvent) => {
+    // Reset drag states regardless of event
     dragState.current.isDragging = false;
     vertexDragState.current.isDragging = false;
+
+    // Only try to access currentTarget if event exists
+    if (e) {
+      const containerElement = e.currentTarget as HTMLElement;
+      if (containerElement) {
+        containerElement.style.cursor = 'default';
+      }
+    }
+    
+    // Reset any document cursor that might be set
+    document.body.style.cursor = '';
   }, [dragState, vertexDragState]);
 
   return {
