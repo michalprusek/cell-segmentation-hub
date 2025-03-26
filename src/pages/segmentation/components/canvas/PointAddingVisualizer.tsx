@@ -51,22 +51,22 @@ const PointAddingVisualizer = ({
 
   // Nastavení tloušťky čáry podle zoomu - OBRÁCENĚ
   const getStrokeWidth = () => {
-    if (zoom > 4) return 4/zoom;
-    if (zoom > 3) return 3/zoom;
-    if (zoom < 0.5) return 1.5/zoom;
-    if (zoom < 0.7) return 2/zoom;
-    return 2.5/zoom;
+    if (zoom > 4) return 3/zoom;
+    if (zoom > 3) return 2.5/zoom;
+    if (zoom < 0.5) return 1.2/zoom;
+    if (zoom < 0.7) return 1.5/zoom;
+    return 2/zoom;
   };
   
   const strokeWidth = getStrokeWidth();
   
   // Velikost bodů podle zoomu
   const getPointRadius = () => {
-    if (zoom > 4) return 8/zoom;
-    if (zoom > 3) return 7/zoom;
-    if (zoom < 0.5) return 5/zoom;
-    if (zoom < 0.7) return 5.5/zoom;
-    return 6/zoom;
+    if (zoom > 4) return 7/zoom;
+    if (zoom > 3) return 6/zoom;
+    if (zoom < 0.5) return 4/zoom;
+    if (zoom < 0.7) return 4.5/zoom;
+    return 5/zoom;
   };
   
   const pointRadius = getPointRadius();
@@ -82,8 +82,7 @@ const PointAddingVisualizer = ({
           r={pointRadius * 1.2}
           fill="#FFA500"
           stroke="#FFFFFF"
-          strokeWidth={strokeWidth * 1.5}
-          className="animate-pulse"
+          strokeWidth={strokeWidth * 1.2}
           style={{ pointerEvents: 'none' }}
         />
       )}
@@ -104,9 +103,9 @@ const PointAddingVisualizer = ({
                 cx={point.x}
                 cy={point.y}
                 r={pointRadius * (isHovered ? 1.3 : 1)}
-                fill={isHovered ? "#FEF7CD" : "#FEF7CD80"}
-                stroke={isHovered ? "#FFFF00" : "#FFFFFF"}
-                strokeWidth={strokeWidth * (isHovered ? 1.5 : 1)}
+                fill={isHovered ? "#FFC107" : "#FFEB3B80"}
+                stroke={isHovered ? "#FFA000" : "#FFC107"}
+                strokeWidth={strokeWidth * (isHovered ? 1.2 : 1)}
                 style={{ pointerEvents: 'none' }}
               />
             );
@@ -162,32 +161,20 @@ const PointAddingVisualizer = ({
             />
           ))}
           
-          {/* Spojnice od posledního dočasného bodu ke kurzoru */}
-          {cursorPosition && tempPoints.length > 0 && (
+          {/* Spojnice od posledního dočasného bodu ke kurzoru nebo zvýrazněnému bodu */}
+          {tempPoints.length > 0 && (
             <line
               x1={tempPoints[tempPoints.length - 1].x}
               y1={tempPoints[tempPoints.length - 1].y}
-              x2={cursorPosition.x}
-              y2={cursorPosition.y}
-              stroke="#3498db"
+              x2={hoveredSegment.segmentIndex !== null && hoveredSegment.segmentIndex !== selectedVertexIndex && hoveredSegment.projectedPoint 
+                ? hoveredSegment.projectedPoint.x 
+                : (cursorPosition ? cursorPosition.x : tempPoints[tempPoints.length - 1].x)}
+              y2={hoveredSegment.segmentIndex !== null && hoveredSegment.segmentIndex !== selectedVertexIndex && hoveredSegment.projectedPoint 
+                ? hoveredSegment.projectedPoint.y 
+                : (cursorPosition ? cursorPosition.y : tempPoints[tempPoints.length - 1].y)}
+              stroke={hoveredSegment.segmentIndex !== null && hoveredSegment.segmentIndex !== selectedVertexIndex ? "#4CAF50" : "#3498db"}
               strokeWidth={strokeWidth}
-              strokeDasharray={`${4/zoom},${4/zoom}`}
-              style={{ pointerEvents: 'none' }}
-            />
-          )}
-          
-          {/* Vizuální indikátor při přiblížení k potenciálnímu koncovému bodu */}
-          {hoveredSegment.segmentIndex !== null && 
-           hoveredSegment.segmentIndex !== selectedVertexIndex &&
-           hoveredSegment.projectedPoint &&
-           tempPoints.length > 0 && (
-            <line
-              x1={tempPoints[tempPoints.length - 1].x}
-              y1={tempPoints[tempPoints.length - 1].y}
-              x2={hoveredSegment.projectedPoint.x}
-              y2={hoveredSegment.projectedPoint.y}
-              stroke="#4CAF50"
-              strokeWidth={strokeWidth * 1.2}
+              strokeDasharray={hoveredSegment.segmentIndex === null ? `${4/zoom},${4/zoom}` : ""}
               style={{ pointerEvents: 'none' }}
             />
           )}

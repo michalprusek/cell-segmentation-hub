@@ -72,9 +72,9 @@ const EditorModeVisualizations = ({
         <PointAddingVisualizer
           hoveredSegment={hoveredSegment}
           zoom={zoom}
-          tempPoints={pointAddingTempPoints}
-          selectedVertexIndex={selectedVertexIndex}
-          sourcePolygonId={sourcePolygonId}
+          tempPoints={pointAddingTempPoints || []}
+          selectedVertexIndex={selectedVertexIndex || null}
+          sourcePolygonId={sourcePolygonId || null}
           polygonPoints={selectedPolygonPoints}
           cursorPosition={cursorPosition}
         />

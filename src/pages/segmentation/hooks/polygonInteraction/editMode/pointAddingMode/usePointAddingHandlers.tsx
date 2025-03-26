@@ -87,39 +87,24 @@ export const usePointAddingHandlers = ({
         console.log("Completing path from", startIndex, "to", endIndex, "with", tempPoints.length, "points");
         
         // Najdeme optimální cestu k nahrazení (s ohledem na co nejmenší obvod)
-        // POZOR: Důležité! Tato funkce může vracet start a end v opačném pořadí, 
-        // pokud je to kratší cesta kolem polygonu!
-        const { indices, start, end } = findOptimalPath(polygon, startIndex, endIndex);
+        const { start, end } = findOptimalPath(polygon, startIndex, endIndex);
         
         // Log pro dohledatelnost
-        console.log("Optimal path found:", { start, end, indices });
+        console.log("Optimal path found:", { start, end });
         
         // Správně seřadíme dočasné body podle směru od start k end
         let orderedTempPoints = [...tempPoints];
-        
-        // Pokud je to reverzní cesta (end je před start v původním polygonu), 
-        // musíme otočit pořadí dočasných bodů
-        if (end < start && !((start === polygon.points.length - 1) && end === 0)) {
-          console.log("Reversing temp points for proper insertion");
-          orderedTempPoints = [...tempPoints].reverse();
-        }
-        
-        // Vytvoříme pole bodů pro nahrazení
-        // Musíme vložit body MEZI počáteční a koncový bod (ne včetně)
-        const replacementPoints = [
-          polygon.points[start], // Počáteční bod
-          ...orderedTempPoints,  // Dočasné body
-          polygon.points[end]    // Koncový bod
-        ];
-        
-        console.log("Final replacement points:", replacementPoints);
         
         // Aplikujeme modifikaci s novou cestou
         const success = modifyPolygonPath(
           sourcePolygonId,
           start,
           end,
-          replacementPoints
+          [
+            polygon.points[start], // Počáteční bod
+            ...orderedTempPoints,  // Dočasné body
+            polygon.points[end]    // Koncový bod
+          ]
         );
         
         if (success) {
