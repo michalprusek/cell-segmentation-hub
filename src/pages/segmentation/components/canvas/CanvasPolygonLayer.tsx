@@ -7,32 +7,11 @@ import TemporaryEditPath from './TemporaryEditPath';
 import SlicingModeVisualizer from './SlicingModeVisualizer';
 import PointAddingVisualizer from './PointAddingVisualizer';
 import EditModeBorder from './EditModeBorder';
+import { PolygonLayerProps } from '@/pages/segmentation/types';
 
-interface CanvasPolygonLayerProps {
-  segmentation: SegmentationResult;
-  imageSize: { width: number, height: number };
-  selectedPolygonId: string | null;
-  hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
-  vertexDragState: React.MutableRefObject<{
-    isDragging: boolean;
-    polygonId: string | null;
-    vertexIndex: number | null;
-  }>;
-  zoom: number;
-  editMode: boolean;
-  slicingMode: boolean;
-  pointAddingMode: boolean;
-  tempPoints: { points: Array<{x: number, y: number}>, startIndex: number | null, endIndex: number | null, polygonId: string | null };
-  cursorPosition: Point | null;
-  sliceStartPoint: Point | null;
-  hoveredSegment: {
-    polygonId: string | null,
-    segmentIndex: number | null,
-    projectedPoint: Point | null
-  };
-  isShiftPressed?: boolean;
-}
-
+/**
+ * Komponenta zobrazující vrstvu s polygony na plátně
+ */
 const CanvasPolygonLayer = ({ 
   segmentation, 
   imageSize, 
@@ -48,19 +27,8 @@ const CanvasPolygonLayer = ({
   sliceStartPoint,
   hoveredSegment,
   isShiftPressed
-}: CanvasPolygonLayerProps) => {
+}: PolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
-  
-  // Dynamicky nastavíme šířku čar podle zoomu
-  const getStrokeWidth = () => {
-    if (zoom > 3) {
-      return 1.5/zoom;
-    } else if (zoom < 0.7) {
-      return 3/zoom;
-    } else {
-      return 2/zoom;
-    }
-  };
   
   return (
     <svg 
@@ -74,47 +42,29 @@ const CanvasPolygonLayer = ({
     >
       <CanvasSvgFilters />
       
-      {segmentation.polygons.map(polygon => (
-        <CanvasPolygon 
-          key={polygon.id}
-          id={polygon.id}
-          points={polygon.points}
-          isSelected={selectedPolygonId === polygon.id}
-          hoveredVertex={hoveredVertex}
-          vertexDragState={vertexDragState.current}
-          zoom={zoom}
-          type={polygon.type || 'external'}
-        />
-      ))}
+      {/* Vykreslení všech polygonů */}
+      <PolygonCollection 
+        polygons={segmentation.polygons}
+        selectedPolygonId={selectedPolygonId}
+        hoveredVertex={hoveredVertex}
+        vertexDragState={vertexDragState.current}
+        zoom={zoom}
+      />
 
-      {/* Edit mode visualizations */}
-      {editMode && (
-        <TemporaryEditPath 
-          tempPoints={tempPoints}
-          cursorPosition={cursorPosition}
-          zoom={zoom}
-          isShiftPressed={isShiftPressed}
-        />
-      )}
-      
-      {/* Slicing mode visualization */}
-      {slicingMode && (
-        <SlicingModeVisualizer
-          sliceStartPoint={sliceStartPoint}
-          cursorPosition={cursorPosition}
-          zoom={zoom}
-        />
-      )}
-      
-      {/* Point adding mode visualization */}
-      {pointAddingMode && (
-        <PointAddingVisualizer
-          hoveredSegment={hoveredSegment}
-          zoom={zoom}
-        />
-      )}
+      {/* Vizualizace režimů editace */}
+      <EditorModeVisualizations
+        editMode={editMode}
+        slicingMode={slicingMode}
+        pointAddingMode={pointAddingMode}
+        tempPoints={tempPoints}
+        cursorPosition={cursorPosition}
+        sliceStartPoint={sliceStartPoint}
+        hoveredSegment={hoveredSegment}
+        zoom={zoom}
+        isShiftPressed={isShiftPressed}
+      />
 
-      {/* Edit mode border indicator */}
+      {/* Indikátor okraje editačního režimu */}
       <EditModeBorder
         editMode={editMode}
         slicingMode={slicingMode}
@@ -122,8 +72,6 @@ const CanvasPolygonLayer = ({
         imageSize={imageSize}
         zoom={zoom}
       />
-      
-      {/* Cursor to last point connection line - zobrazuje se v TemporaryEditPath */}
     </svg>
   );
 };

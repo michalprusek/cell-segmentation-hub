@@ -63,3 +63,31 @@ export interface EditorActions {
   toggleEditMode: () => void;
   handleEditModeClick: (x: number, y: number) => void;
 }
+
+/**
+ * Props pro hlavní polygonovou vrstvu
+ */
+export interface PolygonLayerProps {
+  segmentation: SegmentationResult;
+  imageSize: { width: number, height: number };
+  selectedPolygonId: string | null;
+  hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
+  vertexDragState: React.MutableRefObject<{
+    isDragging: boolean;
+    polygonId: string | null;
+    vertexIndex: number | null;
+  }>;
+  zoom: number;
+  editMode: boolean;
+  slicingMode: boolean;
+  pointAddingMode: boolean;
+  tempPoints: TempPointsState;
+  cursorPosition: Point | null;
+  sliceStartPoint: Point | null;
+  hoveredSegment: {
+    polygonId: string | null,
+    segmentIndex: number | null,
+    projectedPoint: Point | null
+  };
+  isShiftPressed?: boolean;
+}

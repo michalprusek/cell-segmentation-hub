@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { SegmentationResult, Point } from '@/lib/segmentation';
@@ -65,7 +64,6 @@ const EditorCanvas = ({
   const { theme } = useTheme();
   const transformRef = useRef<HTMLDivElement>(null);
   
-  // Načtení obrázku a zjištění jeho velikosti
   useEffect(() => {
     if (!imageSrc) return;
     
@@ -82,7 +80,6 @@ const EditorCanvas = ({
     img.src = segmentation?.imageSrc || imageSrc;
   }, [segmentation, imageSrc]);
 
-  // Správné nastavení cursoru podle stavu
   const getCursorStyle = () => {
     if (editMode) return 'crosshair';
     if (slicingMode) return 'crosshair';
@@ -93,7 +90,6 @@ const EditorCanvas = ({
     return 'move';
   };
 
-  // Určení barvy okraje pro aktivní režim
   const getActiveModeBorderClass = () => {
     if (slicingMode) return 'border-2 border-red-500 shadow-lg shadow-red-500/20';
     if (pointAddingMode) return 'border-2 border-green-500 shadow-lg shadow-green-500/20';
@@ -101,7 +97,6 @@ const EditorCanvas = ({
     return '';
   };
 
-  // Vylepšené pozadí pro lepší kontrast
   const getBackgroundPattern = () => {
     return theme === 'dark' 
       ? 'bg-[#161616] bg-opacity-90 bg-[radial-gradient(#2a2f3c_1px,transparent_1px)]' 
@@ -120,7 +115,6 @@ const EditorCanvas = ({
       data-testid="canvas-container"
     >
       <AnimatePresence mode="wait">
-        {/* Zobrazení stavu načítání */}
         {loading && <CanvasLoadingOverlay loading={loading} />}
         
         {!loading && (
@@ -144,12 +138,10 @@ const EditorCanvas = ({
               className="absolute top-0 left-0"
               data-testid="canvas-transform-container"
             >
-              {/* Obrázek na pozadí */}
               {segmentation && (
                 <CanvasImage src={segmentation.imageSrc || imageSrc} alt="Source" />
               )}
               
-              {/* SVG vrstva s polygony */}
               {segmentation && imageSize.width > 0 && (
                 <CanvasPolygonLayer 
                   segmentation={segmentation}
@@ -173,31 +165,26 @@ const EditorCanvas = ({
         )}
       </AnimatePresence>
       
-      {/* Informace o zoomu */}
       <CanvasZoomInfo zoom={zoom} />
       
-      {/* Editační režim indikátor */}
       {editMode && (
         <div className="absolute bottom-4 left-4 bg-gradient-to-r from-orange-600 to-orange-500 text-white px-4 py-2 rounded-md text-sm font-semibold shadow-lg">
           Edit Mode - Vytváření nového polygonu {isShiftPressed && "(Auto-přidávání při držení Shift)"}
         </div>
       )}
       
-      {/* Slicing režim indikátor */}
       {slicingMode && (
         <div className="absolute bottom-4 left-4 bg-gradient-to-r from-red-600 to-red-500 text-white px-4 py-2 rounded-md text-sm font-semibold shadow-lg">
           Slicing Mode - Rozdělení polygonu {sliceStartPoint ? "(Klikněte pro dokončení)" : "(Klikněte pro začátek)"}
         </div>
       )}
       
-      {/* Point adding režim indikátor */}
       {pointAddingMode && (
         <div className="absolute bottom-4 left-4 bg-gradient-to-r from-green-600 to-green-500 text-white px-4 py-2 rounded-md text-sm font-semibold shadow-lg">
           Point Adding Mode - Přidávání bodů do polygonu
         </div>
       )}
 
-      {/* Help tips */}
       {(editMode || slicingMode || pointAddingMode) && (
         <EditorHelpTips 
           editMode={editMode} 
