@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import CanvasContainer from './canvas/CanvasContainer';
@@ -87,11 +88,13 @@ const EditorCanvas = ({
   onEditPolygon,
   onDeleteVertex,
   onDuplicateVertex,
-  pointAddingTempPoints,
+  pointAddingTempPoints = [],
   selectedVertexIndex,
   selectedPolygonPoints,
   sourcePolygonId
 }: EditorCanvasProps) => {
+  console.log("EditorCanvas: pointAddingMode =", pointAddingMode, "tempPoints =", pointAddingTempPoints?.length);
+  
   return (
     <CanvasContainer 
       ref={containerRef}

@@ -26,8 +26,8 @@ const PointAddingVisualizer = ({
   sourcePolygonId = null,
   polygonPoints = null
 }: PointAddingVisualizerProps) => {
-  // If no selected vertex and no temp points, nothing to visualize
-  if (selectedVertexIndex === null && tempPoints.length === 0) {
+  // If no source polygon selected, nothing to visualize
+  if (!sourcePolygonId) {
     return null;
   }
   
@@ -83,8 +83,16 @@ const PointAddingVisualizer = ({
     ? polygonPoints[selectedVertexIndex]
     : null;
 
+  console.log("PointAddingVisualizer props:", {
+    tempPoints,
+    selectedVertexIndex,
+    sourcePolygonId,
+    polygonPointsLength: polygonPoints?.length,
+    startVertex
+  });
+
   return (
-    <g>
+    <g className="point-adding-visualizer">
       {/* Highlight all other vertices of the same polygon in yellow */}
       {selectedVertexIndex !== null && sourcePolygonId && polygonPoints && polygonPoints.map((point, index) => {
         if (index === selectedVertexIndex) return null; // Skip the selected vertex
@@ -133,7 +141,7 @@ const PointAddingVisualizer = ({
       {/* Path connecting temporary points */}
       {tempPoints.length > 0 && startVertex && (
         <path
-          d={`M ${startVertex.x} ${startVertex.y} ${createPathData(tempPoints).substring(1)}`}
+          d={`M ${startVertex.x} ${startVertex.y} L ${tempPoints[0].x} ${tempPoints[0].y} ${createPathData(tempPoints).substring(1)}`}
           fill="none"
           stroke="#4ADE80"
           strokeWidth={strokeWidth}

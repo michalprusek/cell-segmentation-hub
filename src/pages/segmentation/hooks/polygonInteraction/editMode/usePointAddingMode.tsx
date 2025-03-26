@@ -1,10 +1,10 @@
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { TempPointsState } from '@/pages/segmentation/types';
 import { useGeometryUtils } from './useGeometryUtils';
 import { usePathModification } from './usePathModification';
-import { toast } from 'sonner';
+import { toast } from '@/hooks/use-toast';
 
 /**
  * Hook for adding points to existing polygons
@@ -32,6 +32,18 @@ export const usePointAddingMode = (
   
   const { distance, findClosestPointOnSegment, findShortestPath } = useGeometryUtils();
   const { modifyPolygonPath } = usePathModification(segmentation, setSegmentation);
+  
+  // Log changes for debugging
+  useEffect(() => {
+    if (pointAddingMode) {
+      console.log("PointAddingMode state:", { 
+        selectedVertexIndex, 
+        sourcePolygonId, 
+        tempPoints: tempPoints.length,
+        hoveredSegment
+      });
+    }
+  }, [pointAddingMode, selectedVertexIndex, sourcePolygonId, tempPoints, hoveredSegment]);
   
   /**
    * Toggle point adding mode on/off
@@ -114,20 +126,10 @@ export const usePointAddingMode = (
     
     // If not near any vertex, set projectedPoint to cursor position
     // This helps with drawing the temporary path line
-    if (selectedVertexIndex !== null && sourcePolygonId !== null) {
-      setHoveredSegment({
-        polygonId: null,
-        segmentIndex: null,
-        projectedPoint: cursorPoint
-      });
-      return;
-    }
-    
-    // Clear hover state if no vertex selected yet
     setHoveredSegment({
       polygonId: null,
       segmentIndex: null,
-      projectedPoint: null
+      projectedPoint: cursorPoint
     });
   }, [pointAddingMode, segmentation, selectedVertexIndex, sourcePolygonId, distance]);
   
@@ -174,7 +176,7 @@ export const usePointAddingMode = (
     // Return the path with indices to replace
     return path1Length <= path2Length ? 
       { indices: path1, start: startIdx, end: endIdx } : 
-      { indices: path2, start: endIdx, end: startIdx };
+      { indices: path2, start: startIdx, end: endIdx };
   }, []);
 
   /**
@@ -182,6 +184,8 @@ export const usePointAddingMode = (
    */
   const handlePointAddingClick = useCallback((x: number, y: number) => {
     if (!pointAddingMode || !segmentation) return false;
+    
+    console.log("Point adding click:", x, y, "hoveredSegment:", hoveredSegment);
     
     // If we have a hovered vertex
     if (hoveredSegment.polygonId && hoveredSegment.segmentIndex !== null) {
@@ -192,6 +196,7 @@ export const usePointAddingMode = (
         setSourcePolygonId(hoveredSegment.polygonId);
         // Clear temp points
         setTempPoints([]);
+        console.log("Selected start vertex:", hoveredSegment.segmentIndex, "polygonId:", hoveredSegment.polygonId);
         return true;
       } 
       // If we've already selected a start vertex and clicked on another vertex of the same polygon
@@ -202,6 +207,8 @@ export const usePointAddingMode = (
         if (polygon) {
           const startIndex = selectedVertexIndex;
           const endIndex = hoveredSegment.segmentIndex;
+          
+          console.log("Completing path from", startIndex, "to", endIndex, "with", tempPoints.length, "points");
           
           // Find the optimal path to replace
           const { indices, start, end } = findOptimalPath(polygon, startIndex, endIndex);
@@ -215,10 +222,21 @@ export const usePointAddingMode = (
           );
           
           if (success) {
-            toast.success("Body byly úspěšně přidány do polygonu");
+            toast({
+              title: "Úspěch",
+              description: "Body byly úspěšně přidány do polygonu",
+              variant: "default"
+            });
             resetPointAddingState();
+            
+            // Exit point adding mode automatically after successful addition
+            setPointAddingMode(false);
           } else {
-            toast.error("Přidání bodů selhalo");
+            toast({
+              title: "Chyba",
+              description: "Přidání bodů selhalo",
+              variant: "destructive"
+            });
             resetPointAddingState();
           }
         }
@@ -228,6 +246,7 @@ export const usePointAddingMode = (
     // If we've selected a start vertex but clicked elsewhere (not on an end vertex)
     else if (selectedVertexIndex !== null && sourcePolygonId !== null) {
       // Add a point to our temporary sequence
+      console.log("Adding temp point:", x, y);
       setTempPoints(prev => [...prev, { x, y }]);
       return true;
     }

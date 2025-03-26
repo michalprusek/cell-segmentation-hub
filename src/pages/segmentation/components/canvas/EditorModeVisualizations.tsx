@@ -44,6 +44,8 @@ const EditorModeVisualizations = ({
   selectedVertexIndex,
   sourcePolygonId
 }: EditorModeVisualizationsProps) => {
+  console.log("EditorModeVisualizations: pointAddingMode =", pointAddingMode, "tempPoints =", pointAddingTempPoints?.length);
+  
   return (
     <>
       {/* Vizualizace editačního režimu - dočasné body a spojnice */}
