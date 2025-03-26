@@ -42,6 +42,12 @@ const CanvasPolygonLayer = ({
 }: PolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
   
+  // Logging pro debugování
+  console.log("CanvasPolygonLayer render with pointAddingMode:", pointAddingMode, 
+    "sourcePolygonId:", sourcePolygonId,
+    "selectedVertexIndex:", selectedVertexIndex,
+    "selectedPolygonPoints:", selectedPolygonPoints ? selectedPolygonPoints.length : null);
+  
   return (
     <svg 
       width={imageSize.width}

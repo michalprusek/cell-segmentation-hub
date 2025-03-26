@@ -7,16 +7,16 @@ interface VertexDetectionProps {
   segmentation: SegmentationResult | null;
   selectedVertexIndex: number | null;
   sourcePolygonId: string | null;
-  setHoveredSegment: (state: { 
-    polygonId: string | null, 
-    segmentIndex: number | null, 
-    projectedPoint: Point | null 
+  setHoveredSegment: (segment: {
+    polygonId: string | null,
+    segmentIndex: number | null,
+    projectedPoint: Point | null
   }) => void;
   distance: (p1: Point, p2: Point) => number;
 }
 
 /**
- * Hook pro detekci vrcholů polygonů v režimu přidávání bodů
+ * Hook pro detekci vrcholů polygonu při pohybu myši
  */
 export const useVertexDetection = ({
   pointAddingMode,
@@ -26,100 +26,88 @@ export const useVertexDetection = ({
   setHoveredSegment,
   distance
 }: VertexDetectionProps) => {
-  
   /**
-   * Detekce vrcholu pod kurzorem
+   * Detekuje vrchol pod kurzorem
    */
   const detectVertexUnderCursor = useCallback((x: number, y: number) => {
     if (!pointAddingMode || !segmentation) {
-      setHoveredSegment({ polygonId: null, segmentIndex: null, projectedPoint: null });
+      setHoveredSegment({
+        polygonId: null,
+        segmentIndex: null,
+        projectedPoint: null
+      });
       return;
     }
     
-    const mousePoint = { x, y };
-    const DETECTION_THRESHOLD = 15; // vzdálenost detekce v pixelech
+    const cursorPoint = { x, y };
+    const DETECTION_THRESHOLD = 15; // Prahová hodnota v pixelech
     
-    // Pokud nemáme vybraný žádný počáteční bod, umožníme kliknout na libovolný bod
-    if (selectedVertexIndex === null || sourcePolygonId === null) {
-      // Procházíme všechny polygony a hledáme nejbližší bod
-      let closestDistance = Infinity;
-      let closestPolygonId = null;
-      let closestVertexIndex = null;
+    let closestVertex = {
+      polygonId: null as string | null,
+      vertexIndex: null as number | null,
+      distance: Infinity
+    };
+    
+    // Pokud máme vybraný polygonId, hledáme nejbližší vrchol pouze v tomto polygonu
+    if (sourcePolygonId) {
+      const polygon = segmentation.polygons.find(p => p.id === sourcePolygonId);
       
-      segmentation.polygons.forEach(polygon => {
+      if (polygon) {
         polygon.points.forEach((point, index) => {
-          const dist = distance(point, mousePoint);
-          if (dist < closestDistance && dist < DETECTION_THRESHOLD) {
-            closestDistance = dist;
-            closestPolygonId = polygon.id;
-            closestVertexIndex = index;
+          // Přeskočíme počáteční bod, pokud je již vybrán
+          if (selectedVertexIndex === index) return;
+          
+          const dist = distance(point, cursorPoint);
+          
+          if (dist < DETECTION_THRESHOLD && dist < closestVertex.distance) {
+            closestVertex = {
+              polygonId: polygon.id,
+              vertexIndex: index,
+              distance: dist
+            };
           }
-        });
-      });
-      
-      if (closestPolygonId && closestVertexIndex !== null) {
-        const polygon = segmentation.polygons.find(p => p.id === closestPolygonId);
-        setHoveredSegment({
-          polygonId: closestPolygonId,
-          segmentIndex: closestVertexIndex,
-          projectedPoint: polygon?.points[closestVertexIndex] || null
-        });
-      } else {
-        setHoveredSegment({
-          polygonId: null,
-          segmentIndex: null,
-          projectedPoint: mousePoint
         });
       }
     } 
-    // Máme vybraný počáteční bod, hledáme body pouze ve stejném polygonu
+    // Jinak prohledáváme všechny polygony
     else {
-      const polygon = segmentation.polygons.find(p => p.id === sourcePolygonId);
-      
-      if (!polygon) {
-        setHoveredSegment({ polygonId: null, segmentIndex: null, projectedPoint: mousePoint });
+      segmentation.polygons.forEach(polygon => {
+        polygon.points.forEach((point, index) => {
+          const dist = distance(point, cursorPoint);
+          
+          if (dist < DETECTION_THRESHOLD && dist < closestVertex.distance) {
+            closestVertex = {
+              polygonId: polygon.id,
+              vertexIndex: index,
+              distance: dist
+            };
+          }
+        });
+      });
+    }
+    
+    // Pokud jsme našli nějaký blízký vrchol, nastavíme ho jako zvýrazněný
+    if (closestVertex.polygonId !== null && closestVertex.vertexIndex !== null) {
+      const polygon = segmentation.polygons.find(p => p.id === closestVertex.polygonId);
+      if (polygon) {
+        const point = polygon.points[closestVertex.vertexIndex];
+        
+        setHoveredSegment({
+          polygonId: closestVertex.polygonId,
+          segmentIndex: closestVertex.vertexIndex,
+          projectedPoint: point
+        });
         return;
       }
-      
-      // Procházíme každý vrchol polygonu a hledáme nejbližší
-      let closestDistance = Infinity;
-      let closestVertexIndex = null;
-      
-      polygon.points.forEach((point, index) => {
-        // Přeskočíme aktuálně vybraný vrchol
-        if (index === selectedVertexIndex) return;
-        
-        const dist = distance(point, mousePoint);
-        if (dist < closestDistance && dist < DETECTION_THRESHOLD) {
-          closestDistance = dist;
-          closestVertexIndex = index;
-        }
-      });
-      
-      // Pokud jsme našli vrchol v rozsahu detekce
-      if (closestVertexIndex !== null) {
-        setHoveredSegment({
-          polygonId: sourcePolygonId,
-          segmentIndex: closestVertexIndex,
-          projectedPoint: polygon.points[closestVertexIndex]
-        });
-      } else {
-        // Žádný vrchol není v blízkosti kurzoru
-        setHoveredSegment({
-          polygonId: null,
-          segmentIndex: null,
-          projectedPoint: mousePoint  // Nastavíme aktuální pozici kurzoru
-        });
-      }
     }
-  }, [
-    pointAddingMode, 
-    segmentation, 
-    sourcePolygonId, 
-    selectedVertexIndex, 
-    setHoveredSegment, 
-    distance
-  ]);
+    
+    // Pokud jsme nenašli žádný vrchol, resetujeme zvýrazněný segment
+    setHoveredSegment({
+      polygonId: null,
+      segmentIndex: null,
+      projectedPoint: null
+    });
+  }, [pointAddingMode, segmentation, sourcePolygonId, selectedVertexIndex, setHoveredSegment, distance]);
 
   return { detectVertexUnderCursor };
 };

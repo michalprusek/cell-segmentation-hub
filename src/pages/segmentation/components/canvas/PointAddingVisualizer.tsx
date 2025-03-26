@@ -103,8 +103,8 @@ const PointAddingVisualizer = ({
                 cx={point.x}
                 cy={point.y}
                 r={pointRadius * (isHovered ? 1.3 : 1)}
-                fill={isHovered ? "#FFC107" : "#FFEB3B80"}
-                stroke={isHovered ? "#FFA000" : "#FFC107"}
+                fill={isHovered ? "#FFC107" : "#3498db80"}
+                stroke={isHovered ? "#FFA000" : "#3498db"}
                 strokeWidth={strokeWidth * (isHovered ? 1.2 : 1)}
                 style={{ pointerEvents: 'none' }}
               />
@@ -174,11 +174,29 @@ const PointAddingVisualizer = ({
                 : (cursorPosition ? cursorPosition.y : tempPoints[tempPoints.length - 1].y)}
               stroke={hoveredSegment.segmentIndex !== null && hoveredSegment.segmentIndex !== selectedVertexIndex ? "#4CAF50" : "#3498db"}
               strokeWidth={strokeWidth}
-              strokeDasharray={hoveredSegment.segmentIndex === null ? `${4/zoom},${4/zoom}` : ""}
+              strokeDasharray={hoveredSegment.segmentIndex === null || hoveredSegment.segmentIndex === selectedVertexIndex ? `${4/zoom},${4/zoom}` : ""}
               style={{ pointerEvents: 'none' }}
             />
           )}
         </>
+      )}
+      
+      {/* Spojnice od počátečního/posledního bodu ke kurzoru, pokud ještě nemáme dočasné body */}
+      {tempPoints.length === 0 && selectedVertexIndex !== null && polygonPoints && polygonPoints[selectedVertexIndex] && cursorPosition && (
+        <line
+          x1={polygonPoints[selectedVertexIndex].x}
+          y1={polygonPoints[selectedVertexIndex].y}
+          x2={hoveredSegment.segmentIndex !== null && hoveredSegment.segmentIndex !== selectedVertexIndex && hoveredSegment.projectedPoint 
+            ? hoveredSegment.projectedPoint.x 
+            : cursorPosition.x}
+          y2={hoveredSegment.segmentIndex !== null && hoveredSegment.segmentIndex !== selectedVertexIndex && hoveredSegment.projectedPoint 
+            ? hoveredSegment.projectedPoint.y 
+            : cursorPosition.y}
+          stroke={hoveredSegment.segmentIndex !== null && hoveredSegment.segmentIndex !== selectedVertexIndex ? "#4CAF50" : "#3498db"}
+          strokeWidth={strokeWidth}
+          strokeDasharray={hoveredSegment.segmentIndex === null || hoveredSegment.segmentIndex === selectedVertexIndex ? `${4/zoom},${4/zoom}` : ""}
+          style={{ pointerEvents: 'none' }}
+        />
       )}
     </g>
   );

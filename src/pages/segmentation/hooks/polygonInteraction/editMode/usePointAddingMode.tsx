@@ -94,38 +94,56 @@ export const usePointAddingMode = (
       const canvasY = (e.clientY - rect.top);
       
       // Získání aktuální hodnoty zoom a offset z atributů nebo transformace
-      const zoomMatch = containerElement.style.transform?.match(/scale\(([^)]+)\)/);
-      const zoom = zoomMatch ? parseFloat(zoomMatch[1]) : 1;
+      let zoom = 1;
+      let offsetX = 0;
+      let offsetY = 0;
       
-      const transformMatch = containerElement.style.transform?.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
-      const offsetX = transformMatch ? parseFloat(transformMatch[1]) : 0;
-      const offsetY = transformMatch ? parseFloat(transformMatch[2]) : 0;
+      // Pokusíme se získat zoom a offset z transformace
+      const transform = containerElement.style.transform || '';
+      
+      // Získání hodnoty zoomu
+      const zoomMatch = transform.match(/scale\(([^)]+)\)/);
+      if (zoomMatch && zoomMatch[1]) {
+        zoom = parseFloat(zoomMatch[1]);
+      }
+      
+      // Získání hodnoty offsetu
+      const translateMatch = transform.match(/translate\(([^,]+)px,\s*([^)]+)px\)/);
+      if (translateMatch && translateMatch[1] && translateMatch[2]) {
+        offsetX = parseFloat(translateMatch[1]);
+        offsetY = parseFloat(translateMatch[2]);
+      }
       
       // Přepočet na souřadnice obrazu
       const imageX = canvasX / zoom - offsetX / zoom;
       const imageY = canvasY / zoom - offsetY / zoom;
       
       setCursorPosition({ x: imageX, y: imageY });
+      
+      // Detekce vrcholu pod kurzorem
+      detectVertexUnderCursor(imageX, imageY);
     };
     
     document.addEventListener('mousemove', handleMouseMove);
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [pointAddingMode]);
+  }, [pointAddingMode, detectVertexUnderCursor]);
   
-  // Logování pro debugování
+  // Při aktivaci režimu přidávání bodů resetujeme stav
   useEffect(() => {
     if (pointAddingMode) {
-      console.log("PointAddingMode state:", { 
-        selectedVertexIndex, 
-        sourcePolygonId, 
-        tempPoints: tempPoints.length,
-        hoveredSegment,
-        cursorPosition
-      });
+      // Ujistíme se, že začínáme s čistým stavem
+      resetPointAddingState();
+      
+      // Pokud máme vybraný polygon, nastavíme ho jako zdrojový
+      if (selectedPolygonId) {
+        setSourcePolygonId(selectedPolygonId);
+      }
+      
+      console.log("Point adding mode activated with polygon:", selectedPolygonId);
     }
-  }, [pointAddingMode, selectedVertexIndex, sourcePolygonId, tempPoints, hoveredSegment, cursorPosition]);
+  }, [pointAddingMode, selectedPolygonId, resetPointAddingState, setSourcePolygonId]);
 
   return {
     pointAddingMode,

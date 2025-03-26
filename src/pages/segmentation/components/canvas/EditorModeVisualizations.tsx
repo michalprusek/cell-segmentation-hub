@@ -4,7 +4,7 @@ import { Point } from '@/lib/segmentation';
 import { TempPointsState } from '@/pages/segmentation/types';
 import TemporaryEditPath from './TemporaryEditPath';
 import SlicingModeVisualizer from './SlicingModeVisualizer';
-import PointAddingVisualizer from './pointAddingVisualizer';
+import PointAddingVisualizer from './PointAddingVisualizer';
 
 interface EditorModeVisualizationsProps {
   editMode: boolean;
@@ -44,8 +44,6 @@ const EditorModeVisualizations = ({
   selectedVertexIndex,
   sourcePolygonId
 }: EditorModeVisualizationsProps) => {
-  // Odstranil jsem console.log pro lepší výkon a čistotu kódu
-  
   return (
     <>
       {/* Vizualizace editačního režimu - dočasné body a spojnice */}
