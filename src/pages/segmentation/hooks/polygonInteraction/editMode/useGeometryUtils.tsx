@@ -114,9 +114,83 @@ export const useGeometryUtils = () => {
     }
   }, [distance]);
 
+  /**
+   * Calculate total length of the polygon path
+   */
+  const calculatePathLength = useCallback((points: Point[]): number => {
+    let totalLength = 0;
+    
+    for (let i = 0; i < points.length; i++) {
+      const nextIndex = (i + 1) % points.length;
+      totalLength += distance(points[i], points[nextIndex]);
+    }
+    
+    return totalLength;
+  }, [distance]);
+
+  /**
+   * Check if polygon is self-intersecting
+   */
+  const isPolygonSelfIntersecting = useCallback((points: Point[]): boolean => {
+    if (points.length < 3) return false;
+    
+    // Check all possible pairs of non-adjacent segments
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i];
+      const b = points[(i + 1) % points.length];
+      
+      for (let j = i + 2; j < points.length; j++) {
+        if ((i === 0) && (j === points.length - 1)) continue; // Skip check for first and last segments
+        
+        const c = points[j];
+        const d = points[(j + 1) % points.length];
+        
+        // Check if segments AB and CD intersect
+        if (doSegmentsIntersect(a, b, c, d)) {
+          return true;
+        }
+      }
+    }
+    
+    return false;
+  }, []);
+
+  /**
+   * Helper function to check if two segments intersect
+   */
+  const doSegmentsIntersect = useCallback((a: Point, b: Point, c: Point, d: Point): boolean => {
+    // Calculate direction values
+    const d1x = b.x - a.x;
+    const d1y = b.y - a.y;
+    const d2x = d.x - c.x;
+    const d2y = d.y - c.y;
+    
+    // Calculate determinant
+    const determinant = d1x * d2y - d1y * d2x;
+    
+    // If determinant is zero, lines are parallel
+    if (Math.abs(determinant) < 0.0001) return false;
+    
+    const s = (1/determinant) * ((a.x - c.x) * d2y - (a.y - c.y) * d2x);
+    const t = (1/determinant) * (-(a.x - c.x) * d1y + (a.y - c.y) * d1x);
+    
+    return (s >= 0 && s <= 1 && t >= 0 && t <= 1);
+  }, []);
+
+  /**
+   * Check if a line segment is intersecting itself
+   */
+  const isLineIntersectingItself = useCallback((line: [Point, Point]): boolean => {
+    // A simple line segment can't intersect itself
+    return false;
+  }, []);
+
   return {
     distance,
     findClosestPointOnSegment,
-    findShortestPath
+    findShortestPath,
+    calculatePathLength,
+    isPolygonSelfIntersecting,
+    isLineIntersectingItself
   };
 };

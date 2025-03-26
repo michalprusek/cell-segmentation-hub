@@ -1,4 +1,3 @@
-
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { useEditModeCore } from './editMode/useEditModeCore';
 import { useSlicingMode } from './editMode/useSlicingMode';
@@ -132,7 +131,7 @@ export const usePolygonEditMode = (
     if (slicingMode.slicingMode) {
       return slicingMode.handleSlicingClick(x, y);
     } else if (pointAddingMode.pointAddingMode) {
-      return pointAddingMode.handlePointAddingClick();
+      return pointAddingMode.handlePointAddingClick(x, y);
     } else if (editModeCore.editMode) {
       // Reset lastAutoAddedPoint při kliknutí (protože uživatel začíná nový segment)
       setLastAutoAddedPoint(null);
@@ -146,7 +145,7 @@ export const usePolygonEditMode = (
     if (slicingMode.slicingMode) {
       slicingMode.updateCursorPosition(x, y);
     } else if (pointAddingMode.pointAddingMode) {
-      pointAddingMode.detectSegmentUnderCursor(x, y);
+      pointAddingMode.detectVertexUnderCursor(x, y);
     }
     // Standardní editMode nepotřebuje speciální handler pro pohyb myši
   }, [slicingMode, pointAddingMode]);

@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef } from 'react';
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { TempPointsState } from '@/pages/segmentation/types';

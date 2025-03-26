@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { Point, SegmentationResult } from '@/lib/segmentation';
 import { useGeometryUtils } from '../editMode/useGeometryUtils';
@@ -86,7 +85,10 @@ export const usePointEditor = (
     b: Point,
     cursor: Point
   ): Point => {
-    return findClosestPointOnSegment(a, b, cursor);
+    // Get the object returned by findClosestPointOnSegment
+    const result = findClosestPointOnSegment(cursor, a, b);
+    // Return just the point
+    return result.point;
   }, [findClosestPointOnSegment]);
 
   /**

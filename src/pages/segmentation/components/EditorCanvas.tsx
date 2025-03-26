@@ -54,6 +54,7 @@ interface EditorCanvasProps {
   pointAddingTempPoints?: { x: number, y: number }[];
   selectedVertexIndex?: number | null;
   selectedPolygonPoints?: { x: number, y: number }[] | null;
+  sourcePolygonId?: string | null;
 }
 
 /**
