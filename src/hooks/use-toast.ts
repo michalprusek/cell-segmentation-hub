@@ -9,6 +9,7 @@ type ToastProps = {
 
 export function toast({ title, description, variant = "default" }: ToastProps) {
   const options: ToastT = {
+    id: Date.now(),
     className: variant === "destructive" ? "destructive" : "",
   };
 

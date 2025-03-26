@@ -118,7 +118,8 @@ export const usePointAddingHandlers = ({
     else if (selectedVertexIndex !== null && sourcePolygonId !== null) {
       // Přidáme bod do naší dočasné sekvence
       console.log("Adding temp point:", x, y);
-      setTempPoints(prev => [...prev, { x, y }]);
+      const newPoint = { x, y };
+      setTempPoints((prev) => [...prev, newPoint]);
       return true;
     }
     
