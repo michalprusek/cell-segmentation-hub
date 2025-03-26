@@ -97,4 +97,7 @@ export interface PolygonLayerProps {
   onDuplicatePolygon?: (id: string) => void;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
+  pointAddingTempPoints?: Point[];
+  selectedVertexIndex?: number | null;
+  selectedPolygonPoints?: Point[] | null;
 }

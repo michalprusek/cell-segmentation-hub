@@ -20,6 +20,9 @@ interface EditorModeVisualizationsProps {
   };
   zoom: number;
   isShiftPressed?: boolean;
+  selectedPolygonPoints?: Point[] | null;
+  pointAddingTempPoints?: Point[];
+  selectedVertexIndex?: number | null;
 }
 
 /**
@@ -34,7 +37,10 @@ const EditorModeVisualizations = ({
   sliceStartPoint,
   hoveredSegment,
   zoom,
-  isShiftPressed
+  isShiftPressed,
+  selectedPolygonPoints,
+  pointAddingTempPoints = [],
+  selectedVertexIndex
 }: EditorModeVisualizationsProps) => {
   return (
     <>
@@ -62,6 +68,9 @@ const EditorModeVisualizations = ({
         <PointAddingVisualizer
           hoveredSegment={hoveredSegment}
           zoom={zoom}
+          tempPoints={pointAddingTempPoints}
+          selectedVertexIndex={selectedVertexIndex}
+          polygonPoints={selectedPolygonPoints}
         />
       )}
     </>

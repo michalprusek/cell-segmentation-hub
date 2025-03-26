@@ -52,6 +52,9 @@ interface EditorCanvasProps {
   onDuplicatePolygon?: (id: string) => void;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
+  pointAddingTempPoints?: { x: number, y: number }[];
+  selectedVertexIndex?: number | null;
+  selectedPolygonPoints?: { x: number, y: number }[] | null;
 }
 
 /**
@@ -85,7 +88,10 @@ const EditorCanvas = ({
   onEditPolygon,
   onDuplicatePolygon,
   onDeleteVertex,
-  onDuplicateVertex
+  onDuplicateVertex,
+  pointAddingTempPoints,
+  selectedVertexIndex,
+  selectedPolygonPoints
 }: EditorCanvasProps) => {
   return (
     <CanvasContainer 
@@ -107,7 +113,7 @@ const EditorCanvas = ({
             imageSize={{ width: 1000, height: 1000 }}
             selectedPolygonId={selectedPolygonId}
             hoveredVertex={hoveredVertex}
-            vertexDragState={vertexDragState.current}
+            vertexDragState={vertexDragState}
             zoom={zoom}
             editMode={editMode}
             slicingMode={slicingMode}
@@ -124,6 +130,9 @@ const EditorCanvas = ({
             onDuplicatePolygon={onDuplicatePolygon}
             onDeleteVertex={onDeleteVertex}
             onDuplicateVertex={onDuplicateVertex}
+            pointAddingTempPoints={pointAddingTempPoints}
+            selectedVertexIndex={selectedVertexIndex}
+            selectedPolygonPoints={selectedPolygonPoints}
           />
         )}
         

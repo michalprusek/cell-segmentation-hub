@@ -35,7 +35,10 @@ const CanvasPolygonLayer = ({
   onEditPolygon,
   onDuplicatePolygon,
   onDeleteVertex,
-  onDuplicateVertex
+  onDuplicateVertex,
+  pointAddingTempPoints,
+  selectedVertexIndex,
+  selectedPolygonPoints
 }: PolygonLayerProps) => {
   if (!segmentation || imageSize.width <= 0) return null;
   
@@ -84,6 +87,9 @@ const CanvasPolygonLayer = ({
         hoveredSegment={hoveredSegment}
         zoom={zoom}
         isShiftPressed={isShiftPressed}
+        pointAddingTempPoints={pointAddingTempPoints}
+        selectedVertexIndex={selectedVertexIndex}
+        selectedPolygonPoints={selectedPolygonPoints}
       />
 
       {/* Indikátor okraje editačního režimu */}

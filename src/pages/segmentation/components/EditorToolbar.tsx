@@ -5,7 +5,7 @@ import {
   ZoomIn, 
   ZoomOut, 
   Maximize2,
-  Edit,
+  Pencil,
   Undo2,
   Redo2,
   Scissors,
@@ -170,11 +170,11 @@ const EditorToolbar = ({
               className={`h-9 w-9 ${pointAddingMode ? 'bg-green-600 text-white hover:bg-green-700' : 'text-slate-300 hover:bg-slate-700 hover:text-white bg-slate-800/90'}`}
               onClick={onTogglePointAddingMode}
             >
-              <Edit className="h-5 w-5" />
+              <Pencil className="h-5 w-5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right" className="bg-slate-900 border-slate-700">
-            <span>{pointAddingMode ? "Exit Edit Mode" : "Edit Polygon Points"} (Shortcut: A)</span>
+            <span>{pointAddingMode ? "Exit Point Adding Mode" : "Add Points to Polygon"} (Shortcut: A)</span>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

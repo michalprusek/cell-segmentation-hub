@@ -43,6 +43,11 @@ export const usePolygonEditMode = (
   const [lastAutoAddedPoint, setLastAutoAddedPoint] = useState<Point | null>(null);
   const MIN_DISTANCE_FOR_AUTO_POINT = 20; // Minimální vzdálenost pro automatické přidávání bodů
 
+  // Get selected polygon points for visualization
+  const selectedPolygonPoints = segmentation && selectedPolygonId
+    ? segmentation.polygons.find(p => p.id === selectedPolygonId)?.points || null
+    : null;
+
   // Zajištění, že je aktivní vždy jen jeden režim
   const toggleEditMode = useCallback(() => {
     if (editModeCore.editMode) {
@@ -123,11 +128,10 @@ export const usePolygonEditMode = (
   ]);
 
   // Kombinované handlery pro kliknutí v různých režimech editace
-  const handleEditModeClick = (x: number, y: number) => {
+  const handleEditModeClick = useCallback((x: number, y: number) => {
     if (slicingMode.slicingMode) {
       return slicingMode.handleSlicingClick(x, y);
     } else if (pointAddingMode.pointAddingMode) {
-      // Fix: Call handlePointAddingClick with no arguments as the function doesn't expect any
       return pointAddingMode.handlePointAddingClick();
     } else if (editModeCore.editMode) {
       // Reset lastAutoAddedPoint při kliknutí (protože uživatel začíná nový segment)
@@ -135,17 +139,17 @@ export const usePolygonEditMode = (
       return editModeCore.handleEditModeClick(x, y);
     }
     return false;
-  };
+  }, [slicingMode, pointAddingMode, editModeCore, setLastAutoAddedPoint]);
   
   // Kombinované handlery pro pohyb myši v různých režimech editace
-  const handleEditMouseMove = (x: number, y: number) => {
+  const handleEditMouseMove = useCallback((x: number, y: number) => {
     if (slicingMode.slicingMode) {
       slicingMode.updateCursorPosition(x, y);
     } else if (pointAddingMode.pointAddingMode) {
       pointAddingMode.detectSegmentUnderCursor(x, y);
     }
     // Standardní editMode nepotřebuje speciální handler pro pohyb myši
-  };
+  }, [slicingMode, pointAddingMode]);
 
   return {
     // Základní editační režim
@@ -163,7 +167,12 @@ export const usePolygonEditMode = (
     // Režim přidávání bodů
     pointAddingMode: pointAddingMode.pointAddingMode,
     hoveredSegment: pointAddingMode.hoveredSegment,
+    pointAddingTempPoints: pointAddingMode.tempPoints,
+    selectedVertexIndex: pointAddingMode.selectedVertexIndex,
     togglePointAddingMode,
+    
+    // Selected polygon data for visualization
+    selectedPolygonPoints,
     
     // Funkce pro ukončení všech editačních režimů
     exitAllEditModes,
