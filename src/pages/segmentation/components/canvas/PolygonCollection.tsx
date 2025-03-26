@@ -1,16 +1,13 @@
 import React from 'react';
 import { SegmentationResult, Polygon } from '@/lib/segmentation';
 import CanvasPolygon from './CanvasPolygon';
+import { VertexDragState } from '@/pages/segmentation/types';
 
 interface PolygonCollectionProps {
   polygons: Polygon[];
   selectedPolygonId: string | null;
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
-  vertexDragState: {
-    isDragging: boolean;
-    polygonId: string | null;
-    vertexIndex: number | null;
-  };
+  vertexDragState: VertexDragState;
   zoom: number;
   onSelectPolygon?: (id: string) => void;
   onDeletePolygon?: (id: string) => void;

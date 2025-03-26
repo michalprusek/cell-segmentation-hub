@@ -72,11 +72,7 @@ export interface PolygonLayerProps {
   imageSize: { width: number, height: number };
   selectedPolygonId: string | null;
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
-  vertexDragState: {
-    isDragging: boolean;
-    polygonId: string | null;
-    vertexIndex: number | null;
-  };
+  vertexDragState: VertexDragState;
   zoom: number;
   editMode: boolean;
   slicingMode: boolean;

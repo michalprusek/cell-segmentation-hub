@@ -113,7 +113,11 @@ const EditorCanvas = ({
             imageSize={{ width: 1000, height: 1000 }}
             selectedPolygonId={selectedPolygonId}
             hoveredVertex={hoveredVertex}
-            vertexDragState={vertexDragState}
+            vertexDragState={{
+              isDragging: vertexDragState.current.isDragging,
+              polygonId: vertexDragState.current.polygonId,
+              vertexIndex: vertexDragState.current.vertexIndex
+            }}
             zoom={zoom}
             editMode={editMode}
             slicingMode={slicingMode}

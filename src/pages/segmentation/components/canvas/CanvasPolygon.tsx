@@ -5,16 +5,13 @@ import { Polygon, Point } from '@/lib/segmentation';
 import CanvasVertex from './CanvasVertex';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import VertexContextMenu from '../context-menu/VertexContextMenu';
+import { VertexDragState } from '@/pages/segmentation/types';
 
 interface CanvasPolygonProps {
   polygon: Polygon;
   isSelected: boolean;
   hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
-  vertexDragState: {
-    isDragging: boolean;
-    polygonId: string | null;
-    vertexIndex: number | null;
-  };
+  vertexDragState: VertexDragState;
   zoom: number;
   onSelectPolygon?: (id: string) => void;
   onDeletePolygon?: (id: string) => void;
