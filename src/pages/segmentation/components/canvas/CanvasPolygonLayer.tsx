@@ -33,7 +33,6 @@ const CanvasPolygonLayer = ({
   onDeletePolygon,
   onSlicePolygon,
   onEditPolygon,
-  onDuplicatePolygon,
   onDeleteVertex,
   onDuplicateVertex,
   pointAddingTempPoints,
@@ -71,7 +70,6 @@ const CanvasPolygonLayer = ({
         onDeletePolygon={onDeletePolygon}
         onSlicePolygon={onSlicePolygon}
         onEditPolygon={onEditPolygon}
-        onDuplicatePolygon={onDuplicatePolygon}
         onDeleteVertex={onDeleteVertex}
         onDuplicateVertex={onDuplicateVertex}
       />

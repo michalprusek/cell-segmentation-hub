@@ -13,7 +13,6 @@ interface PolygonCollectionProps {
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
-  onDuplicatePolygon?: (id: string) => void;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
 }
@@ -28,7 +27,6 @@ const PolygonCollection = ({
   onDeletePolygon,
   onSlicePolygon,
   onEditPolygon,
-  onDuplicatePolygon,
   onDeleteVertex,
   onDuplicateVertex
 }: PolygonCollectionProps) => {
@@ -59,7 +57,6 @@ const PolygonCollection = ({
           onDeletePolygon={onDeletePolygon}
           onSlicePolygon={onSlicePolygon}
           onEditPolygon={onEditPolygon}
-          onDuplicatePolygon={onDuplicatePolygon}
           onDeleteVertex={onDeleteVertex}
           onDuplicateVertex={onDuplicateVertex}
         />

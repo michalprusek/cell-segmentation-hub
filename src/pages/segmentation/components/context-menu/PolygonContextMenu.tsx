@@ -7,7 +7,7 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator
 } from '@/components/ui/context-menu';
-import { Trash, Scissors, Edit, Copy } from 'lucide-react';
+import { Trash, Scissors, Edit } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 interface PolygonContextMenuProps {
@@ -15,7 +15,6 @@ interface PolygonContextMenuProps {
   onDelete: () => void;
   onSlice: () => void;
   onEdit: () => void;
-  onDuplicate?: () => void;
   polygonId: string;
 }
 
@@ -24,7 +23,6 @@ const PolygonContextMenu = ({
   onDelete,
   onSlice,
   onEdit,
-  onDuplicate,
   polygonId
 }: PolygonContextMenuProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
@@ -44,12 +42,6 @@ const PolygonContextMenu = ({
             <Scissors className="mr-2 h-4 w-4" />
             <span>Rozdělit polygon</span>
           </ContextMenuItem>
-          {onDuplicate && (
-            <ContextMenuItem onClick={onDuplicate} className="cursor-pointer">
-              <Copy className="mr-2 h-4 w-4" />
-              <span>Duplikovat polygon</span>
-            </ContextMenuItem>
-          )}
           <ContextMenuSeparator />
           <ContextMenuItem 
             onClick={() => setShowDeleteDialog(true)} 

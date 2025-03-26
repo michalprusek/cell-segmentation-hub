@@ -90,7 +90,6 @@ export interface PolygonLayerProps {
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
-  onDuplicatePolygon?: (id: string) => void;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
   pointAddingTempPoints?: Point[];

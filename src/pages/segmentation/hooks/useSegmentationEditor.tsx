@@ -106,7 +106,6 @@ export const useSegmentationEditor = (
     // Explicitně exportujeme funkce pro editaci polygonů
     handleSlicePolygon: polygonInteraction.handleSlicePolygon,
     handleEditPolygon: polygonInteraction.handleEditPolygon,
-    handleDuplicatePolygon: polygonInteraction.handleDuplicatePolygon,
     handleDeleteVertex: polygonInteraction.handleDeleteVertex,
     handleDuplicateVertex: polygonInteraction.handleDuplicateVertex
   };

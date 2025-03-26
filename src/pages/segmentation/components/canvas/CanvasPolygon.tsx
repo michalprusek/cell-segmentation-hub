@@ -17,7 +17,6 @@ interface CanvasPolygonProps {
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
-  onDuplicatePolygon?: (id: string) => void;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
 }
@@ -32,7 +31,6 @@ const CanvasPolygon = ({
   onDeletePolygon,
   onSlicePolygon,
   onEditPolygon,
-  onDuplicatePolygon,
   onDeleteVertex,
   onDuplicateVertex
 }: CanvasPolygonProps) => {
@@ -88,7 +86,6 @@ const CanvasPolygon = ({
       onDelete={() => onDeletePolygon?.(id)}
       onSlice={() => onSlicePolygon?.(id)}
       onEdit={() => onEditPolygon?.(id)}
-      onDuplicate={onDuplicatePolygon ? () => onDuplicatePolygon(id) : undefined}
     >
       <g>
         {/* Polygon path */}
@@ -115,8 +112,6 @@ const CanvasPolygon = ({
                             vertexDragState.polygonId === id && 
                             vertexDragState.vertexIndex === index;
           
-          // Removed special highlighting for start point
-          
           return (
             <VertexContextMenu
               key={`${id}-vertex-${index}`}
@@ -135,7 +130,7 @@ const CanvasPolygon = ({
                   isDragging={isDragging}
                   zoom={zoom}
                   type={type}
-                  isStartPoint={false} // Always false to remove yellow highlight
+                  isStartPoint={false}
                 />
               </g>
             </VertexContextMenu>

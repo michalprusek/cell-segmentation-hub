@@ -83,9 +83,7 @@ export const useMouseInteractions = (
     
     // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
     // Používáme requestAnimationFrame pro optimalizaci výkonu
-    requestAnimationFrame(() => {
-      detectVertexHover(e.clientX, e.clientY, containerElement);
-    });
+    detectVertexHover(e.clientX, e.clientY, containerElement);
   }, [
     segmentation, 
     handleVertexDrag, 
@@ -148,7 +146,13 @@ export const useMouseInteractions = (
   /**
    * Zpracování uvolnění tlačítka myši
    */
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+    // Ensure we reset the cursor
+    const containerElement = e.currentTarget as HTMLElement;
+    if (containerElement) {
+      containerElement.style.cursor = 'default';
+    }
+    
     // Ukončení tažení
     dragState.current.isDragging = false;
     vertexDragState.current.isDragging = false;
