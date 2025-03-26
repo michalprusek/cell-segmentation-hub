@@ -1,15 +1,11 @@
 
 import React, { useEffect, useState, useRef } from 'react';
-import { motion, AnimatePresence } from "framer-motion";
 import { SegmentationResult, Point } from '@/lib/segmentation';
 import { DragState, VertexDragState, TempPointsState } from '../types';
-import CanvasLoadingOverlay from './canvas/CanvasLoadingOverlay';
-import CanvasImage from './canvas/CanvasImage';
-import CanvasPolygonLayer from './canvas/CanvasPolygonLayer';
-import CanvasZoomInfo from './canvas/CanvasZoomInfo';
 import { useTheme } from '@/contexts/ThemeContext';
-import EditorHelpTips from './EditorHelpTips';
-import EditorModeFooter from './canvas/EditorModeFooter';
+import CanvasContainer from './canvas/CanvasContainer';
+import CanvasContent from './canvas/CanvasContent';
+import CanvasUIElements from './canvas/CanvasUIElements';
 
 interface EditorCanvasProps {
   loading: boolean;

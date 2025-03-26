@@ -8,6 +8,8 @@ import SlicingModeVisualizer from './SlicingModeVisualizer';
 import PointAddingVisualizer from './PointAddingVisualizer';
 import EditModeBorder from './EditModeBorder';
 import { PolygonLayerProps } from '@/pages/segmentation/types';
+import PolygonCollection from './PolygonCollection';
+import EditorModeVisualizations from './EditorModeVisualizations';
 
 /**
  * Komponenta zobrazující vrstvu s polygony na plátně
