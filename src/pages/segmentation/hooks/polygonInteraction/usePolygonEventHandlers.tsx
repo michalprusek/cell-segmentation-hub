@@ -140,14 +140,14 @@ export const usePolygonEventHandlers = (
   /**
    * Wrapper pro mouseUp, který zajistí zrušení debounce
    */
-  const handleMouseUp = useCallback((e: React.MouseEvent) => {
+  const handleMouseUp = useCallback((e?: React.MouseEvent) => {
     // Zrušíme debounce při uvolnění tlačítka
     if (mouseMoveTimeoutRef.current !== null) {
       window.clearTimeout(mouseMoveTimeoutRef.current);
       mouseMoveTimeoutRef.current = null;
     }
     
-    // Zavoláme původní handler
+    // Zavoláme původní handler (který nyní může přijmout volitelný event)
     mouseInteractions.handleMouseUp(e);
     
     // Reset poslední pozice

@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { motion } from "framer-motion";
@@ -69,37 +68,30 @@ const SegmentationEditor = () => {
     handleDuplicateVertex
   } = useSegmentationEditor(projectId, imageId, user?.id);
 
-  // Add keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Exit any edit mode with Escape key
       if (e.key === 'Escape') {
         exitAllEditModes();
         return;
       }
       
-      // Edit mode toggle with 'e' key
       if (e.key === 'e' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         toggleEditMode();
       }
       
-      // Slicing mode toggle with 's' key
       if (e.key === 's' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         toggleSlicingMode();
       }
       
-      // Point adding mode toggle with 'a' key
       if (e.key === 'a' && !e.ctrlKey && !e.metaKey && !e.altKey) {
         togglePointAddingMode();
       }
       
-      // Undo with Ctrl+Z
       if (e.key === 'z' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         handleUndo();
       }
       
-      // Redo with Ctrl+Y or Ctrl+Shift+Z
       if ((e.key === 'y' && (e.ctrlKey || e.metaKey)) ||
           (e.key === 'z' && (e.ctrlKey || e.metaKey) && e.shiftKey)) {
         e.preventDefault();
@@ -113,15 +105,12 @@ const SegmentationEditor = () => {
     };
   }, [toggleEditMode, toggleSlicingMode, togglePointAddingMode, handleUndo, handleRedo, exitAllEditModes]);
 
-  // Calculate if we can undo/redo
   const canUndo = historyIndex > 0;
   const canRedo = history.length > 0 && historyIndex < history.length - 1;
   
-  // Get current image index
   const currentImageIndex = projectImages.findIndex(img => img.id === imageId);
   const totalImages = projectImages.length;
   
-  // Determine which edit mode is active
   const isAnyEditModeActive = editMode || slicingMode || pointAddingMode;
 
   return (
@@ -133,7 +122,6 @@ const SegmentationEditor = () => {
         exit={{ opacity: 0 }}
         transition={{ duration: 0.3 }}
       >
-        {/* Header */}
         <EditorHeader 
           projectId={projectId || ''}
           projectTitle={projectTitle}
@@ -146,9 +134,7 @@ const SegmentationEditor = () => {
           onSave={handleSave}
         />
         
-        {/* Main content */}
         <div className="flex-1 flex flex-col relative overflow-hidden items-center justify-center p-4">
-          {/* Left Toolbar */}
           <EditorToolbar 
             zoom={zoom}
             onZoomIn={handleZoomIn}
@@ -167,7 +153,6 @@ const SegmentationEditor = () => {
             canRedo={canRedo}
           />
           
-          {/* Right sidebar */}
           <RegionPanel 
             loading={loading}
             segmentation={segmentation}
@@ -175,7 +160,6 @@ const SegmentationEditor = () => {
             onSelectPolygon={setSelectedPolygonId}
           />
           
-          {/* Canvas container */}
           <div className="w-full h-full flex items-center justify-center">
             <EditorCanvas 
               loading={loading}
@@ -208,14 +192,12 @@ const SegmentationEditor = () => {
             />
           </div>
           
-          {/* Status */}
           <StatusBar 
             segmentation={segmentation} 
             editMode={isAnyEditModeActive ? 
               (editMode ? "edit" : slicingMode ? "slice" : "add-point") : undefined}
           />
 
-          {/* Keyboard shortcuts help */}
           <KeyboardShortcutsHelp />
         </div>
       </motion.div>

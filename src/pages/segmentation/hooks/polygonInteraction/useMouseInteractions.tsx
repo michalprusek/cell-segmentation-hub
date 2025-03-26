@@ -1,4 +1,3 @@
-
 import { useCallback } from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { useCoordinateTransform } from './useCoordinateTransform';
