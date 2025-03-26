@@ -1,19 +1,17 @@
 
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 import DashboardHeader from "@/components/DashboardHeader";
-import DashboardActions from "@/components/DashboardActions";
 import StatsOverview from "@/components/StatsOverview";
 import ProjectsList, { Project } from "@/components/ProjectsList";
 import ImageUploader from "@/components/ImageUploader";
-import NewProject from "@/components/NewProject";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from '@/contexts/LanguageContext';
+import ProjectToolbar from "@/components/project/ProjectToolbar"; 
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -22,6 +20,7 @@ const Dashboard = () => {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<string>("updated_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [searchTerm, setSearchTerm] = useState("");
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -127,21 +126,30 @@ const Dashboard = () => {
   const handleOpenProject = (id: string) => {
     navigate(`/project/${id}`);
   };
-  
-  const handleProjectCreated = (projectId: string) => {
-    fetchProjects();
+
+  const handleSort = (field: 'name' | 'updatedAt' | 'segmentationStatus') => {
+    let dbField = sortField;
+    
+    // Map field names to database fields
+    if (field === 'name') dbField = 'title';
+    else if (field === 'updatedAt') dbField = 'updated_at';
+    
+    // Toggle direction if same field
+    const newDirection = 
+      dbField === sortField ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'desc';
+    
+    setSortField(dbField);
+    setSortDirection(newDirection);
   };
 
-  const handleSort = (field: string, direction: 'asc' | 'desc') => {
-    setSortField(field);
-    setSortDirection(direction);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
   };
 
-  const sortOptions = [
-    { field: "title", label: t('dashboard.name') },
-    { field: "updated_at", label: t('dashboard.lastChange') },
-    { field: "created_at", label: t('common.date') }
-  ];
+  const handleToggleUploader = () => {
+    // Switch to the upload tab
+    document.querySelector('[data-state="inactive"][value="upload"]')?.click();
+  };
 
   if (fetchError) {
     return (
@@ -150,7 +158,9 @@ const Dashboard = () => {
         <div className="container mx-auto px-4 py-8">
           <div className="bg-white p-6 rounded-lg border border-red-200 text-center">
             <p className="text-red-500 mb-4">{fetchError}</p>
-            <Button onClick={fetchProjects}>{t('common.tryAgain')}</Button>
+            <button onClick={fetchProjects} className="bg-blue-500 text-white px-4 py-2 rounded">
+              {t('common.tryAgain')}
+            </button>
           </div>
         </div>
       </div>
@@ -167,7 +177,6 @@ const Dashboard = () => {
             <h1 className="text-2xl font-bold mb-1">{t('common.dashboard')}</h1>
             <p className="text-gray-500">{t('dashboard.manageProjects')}</p>
           </div>
-          {/* Odstraněno tlačítko New Project - nyní je projekt karta s + */}
         </div>
         
         <div className="mb-8 animate-fade-in">
@@ -179,14 +188,17 @@ const Dashboard = () => {
             <TabsList className="mb-4 sm:mb-0">
               <TabsTrigger value="projects">{t('common.projects')}</TabsTrigger>
               <TabsTrigger value="upload">{t('common.uploadImages')}</TabsTrigger>
-              <TabsTrigger value="recent">{t('common.recentAnalyses')}</TabsTrigger>
             </TabsList>
             
-            <DashboardActions 
-              viewMode={viewMode} 
-              setViewMode={setViewMode} 
+            <ProjectToolbar
+              searchTerm="" 
+              onSearchChange={() => {}} 
+              sortField="name" 
+              sortDirection="asc" 
               onSort={handleSort}
-              sortOptions={sortOptions}
+              onToggleUploader={handleToggleUploader}
+              viewMode={viewMode}
+              setViewMode={setViewMode}
             />
           </div>
           
@@ -203,18 +215,6 @@ const Dashboard = () => {
           <TabsContent value="upload" className="mt-0">
             <div className="bg-white p-6 rounded-lg border border-gray-200">
               <ImageUploader />
-            </div>
-          </TabsContent>
-          
-          <TabsContent value="recent" className="mt-0">
-            <div className="bg-white p-6 rounded-lg border border-gray-200 text-center py-12">
-              <div className="max-w-md mx-auto">
-                <h3 className="text-lg font-medium mb-2">{t('dashboard.noProjectsDescription')}</h3>
-                <p className="text-gray-500 mb-6">
-                  {t('dashboard.noImagesDescription')}
-                </p>
-                <Button>{t('common.uploadImages')}</Button>
-              </div>
             </div>
           </TabsContent>
         </Tabs>

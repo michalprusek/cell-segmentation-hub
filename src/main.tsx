@@ -4,15 +4,11 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 import './styles/tailwind.css'
-import { toast, Toaster } from 'sonner'
+import { Toaster } from 'sonner'
 
 // Global error handler
 const handleError = (error: ErrorEvent) => {
   console.error('Global error:', error);
-  toast.error('Došlo k neočekávané chybě. Prosím, zkuste to znovu.', {
-    duration: 3000,
-    id: 'global-error', // Prevent duplicate toasts
-  });
   
   // Log detailed error information
   if (error.error && error.error.stack) {
@@ -24,10 +20,6 @@ const handleError = (error: ErrorEvent) => {
 window.addEventListener('error', handleError);
 window.addEventListener('unhandledrejection', (event) => {
   console.error('Unhandled promise rejection:', event.reason);
-  toast.error('Operace selhala. Prosím, zkuste to znovu.', {
-    duration: 3000,
-    id: 'promise-error', // Prevent duplicate toasts
-  });
 });
 
 // Add fallback for cursor reset in case mouse up events are missed

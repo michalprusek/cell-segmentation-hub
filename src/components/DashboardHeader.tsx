@@ -1,28 +1,20 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
 import Logo from "@/components/header/Logo";
-import NotificationsDropdown from "@/components/header/NotificationsDropdown";
 import UserProfileDropdown from "@/components/header/UserProfileDropdown";
 import MobileMenu from "@/components/header/MobileMenu";
 
 const DashboardHeader = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [hasNotifications, setHasNotifications] = useState(false);
   const { user } = useAuth();
   const location = useLocation();
 
   // Skrýt header v segmentačním editoru
   const isSegmentationEditor = location.pathname.includes('/segmentation/');
-
-  useEffect(() => {
-    // This would be where you'd check for actual notifications
-    // For now, we'll set it to false since there are no notifications
-    setHasNotifications(false);
-  }, []);
 
   if (isSegmentationEditor) {
     return null;
@@ -37,7 +29,6 @@ const DashboardHeader = () => {
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-4">
-          <NotificationsDropdown hasNotifications={hasNotifications} />
           <UserProfileDropdown username={user?.email?.split('@')[0] || 'User'} />
         </div>
 
@@ -54,7 +45,7 @@ const DashboardHeader = () => {
           <MobileMenu 
             isMenuOpen={isMenuOpen} 
             setIsMenuOpen={setIsMenuOpen} 
-            hasNotifications={hasNotifications} 
+            hasNotifications={false} 
           />
         </div>
       </div>

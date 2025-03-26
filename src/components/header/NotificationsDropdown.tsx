@@ -2,11 +2,6 @@
 import React from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Bell } from "lucide-react";
-import { 
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent 
-} from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 
 interface NotificationsDropdownProps {
@@ -17,7 +12,6 @@ const NotificationsDropdown = ({ hasNotifications }: NotificationsDropdownProps)
   const navigate = useNavigate();
   const location = useLocation();
 
-  // We're only using the button now, not showing the dropdown
   return (
     <Button 
       variant="ghost" 

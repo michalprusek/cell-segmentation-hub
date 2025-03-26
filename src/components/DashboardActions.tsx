@@ -32,43 +32,24 @@ const DashboardActions = ({
 
   return (
     <div className="flex items-center space-x-2">
-      {onSort && sortOptions.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="h-9 gap-1">
-              <ArrowUpDown className="h-4 w-4" />
-              <span className="hidden sm:inline">{t('common.sort')}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {sortOptions.map((option) => (
-              <DropdownMenuItem 
-                key={option.field}
-                onClick={() => onSort(option.field, 'asc')}
-                className="flex justify-between"
-              >
-                {option.label}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      
-      <ToggleGroup 
-        type="single" 
-        value={viewMode} 
-        onValueChange={(value) => {
-          if (value) setViewMode(value as "grid" | "list");
-        }} 
-        className="flex items-center h-9"
-      >
-        <ToggleGroupItem value="grid" aria-label="Grid view" className="h-9 px-2 flex items-center justify-center">
+      <div className="flex items-center h-9 border rounded-md bg-background">
+        <Button 
+          variant={viewMode === "grid" ? "default" : "ghost"}
+          size="sm" 
+          className="h-9 px-2.5 rounded-r-none"
+          onClick={() => setViewMode("grid")}
+        >
           <Grid2X2 className="h-4 w-4" />
-        </ToggleGroupItem>
-        <ToggleGroupItem value="list" aria-label="List view" className="h-9 px-2 flex items-center justify-center">
+        </Button>
+        <Button 
+          variant={viewMode === "list" ? "default" : "ghost"}
+          size="sm" 
+          className="h-9 px-2.5 rounded-l-none"
+          onClick={() => setViewMode("list")}
+        >
           <ListIcon className="h-4 w-4" />
-        </ToggleGroupItem>
-      </ToggleGroup>
+        </Button>
+      </div>
     </div>
   );
 };
