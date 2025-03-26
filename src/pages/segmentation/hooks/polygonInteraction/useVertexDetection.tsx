@@ -32,11 +32,17 @@ export const useVertexDetection = (
     
     // Dynamicky upravíme radius detekce podle zoomu
     let adjustedRadius;
-    if (zoom > 3) {
+    if (zoom > 4) {
+      // Při extrémním přiblížení snížíme radius výrazněji
+      adjustedRadius = (detectionRadius * 0.6) / zoom;
+    } else if (zoom > 3) {
       // Při velkém přiblížení snížíme radius
       adjustedRadius = (detectionRadius * 0.8) / zoom;
+    } else if (zoom < 0.5) {
+      // Při velkém oddálení zvětšíme radius výrazněji
+      adjustedRadius = (detectionRadius * 2) / zoom;
     } else if (zoom < 0.7) {
-      // Při velkém oddálení zvětšíme radius
+      // Při mírném oddálení zvětšíme radius
       adjustedRadius = (detectionRadius * 1.5) / zoom;
     } else {
       // Standardní radius v normálním zoomu

@@ -25,8 +25,20 @@ const CanvasPolygon = ({
 }: CanvasPolygonProps) => {
   const pointsString = points.map(p => `${p.x},${p.y}`).join(' ');
 
-  // Adjust stroke width based on zoom level for consistent visual appearance
-  const strokeWidth = isSelected ? 2.5/zoom : 2/zoom;
+  // Dynamicky upravujeme tloušťku čáry podle zoomu pro lepší viditelnost při různých úrovních přiblížení
+  const getStrokeWidth = () => {
+    if (zoom > 4) {
+      return isSelected ? 1.5/zoom : 1/zoom;
+    } else if (zoom > 3) {
+      return isSelected ? 2/zoom : 1.5/zoom;
+    } else if (zoom < 0.5) {
+      return isSelected ? 4/zoom : 3/zoom;
+    } else {
+      return isSelected ? 2.5/zoom : 2/zoom;
+    }
+  };
+
+  const strokeWidth = getStrokeWidth();
 
   // Colors based on polygon type: red for external, blue for internal (holes)
   const getPolygonColors = () => {

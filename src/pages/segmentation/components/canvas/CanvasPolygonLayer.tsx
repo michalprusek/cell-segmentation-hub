@@ -41,6 +41,8 @@ const CanvasPolygonLayer = ({
       shapeRendering="geometricPrecision"
       vectorEffect="non-scaling-stroke"
       xmlns="http://www.w3.org/2000/svg"
+      preserveAspectRatio="xMidYMid meet"
+      overflow="visible"
     >
       <CanvasSvgFilters />
       

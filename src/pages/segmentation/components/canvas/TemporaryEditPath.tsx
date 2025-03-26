@@ -20,8 +20,12 @@ const TemporaryEditPath = ({
 
   // Dynamicky nastavíme poloměr bodů podle úrovně zoomu
   const getPointRadius = () => {
-    if (zoom > 3) {
+    if (zoom > 4) {
+      return 2.5/zoom;
+    } else if (zoom > 3) {
       return 3/zoom;
+    } else if (zoom < 0.5) {
+      return 7/zoom;
     } else if (zoom < 0.7) {
       return 6/zoom;
     } else {
@@ -30,6 +34,24 @@ const TemporaryEditPath = ({
   };
 
   const pointRadius = getPointRadius();
+  
+  // Dynamicky nastavíme tloušťku čar podle úrovně zoomu
+  const getStrokeWidth = () => {
+    if (zoom > 4) {
+      return 1/zoom;
+    } else if (zoom > 3) {
+      return 1.5/zoom;
+    } else if (zoom < 0.5) {
+      return 3/zoom;
+    } else if (zoom < 0.7) {
+      return 2.5/zoom;
+    } else {
+      return 2/zoom;
+    }
+  };
+  
+  const strokeWidth = getStrokeWidth();
+  const lineStrokeWidth = strokeWidth * 0.75;
 
   return (
     <>
@@ -38,9 +60,10 @@ const TemporaryEditPath = ({
         points={tempPoints.points.map(p => `${p.x},${p.y}`).join(' ')}
         fill="none"
         stroke="#FF3B30"
-        strokeWidth={2/zoom}
+        strokeWidth={strokeWidth}
         strokeDasharray={`${4/zoom},${4/zoom}`}
         vectorEffect="non-scaling-stroke"
+        shapeRendering="geometricPrecision"
       />
       
       {/* Spojnice od posledního bodu ke kurzoru */}
@@ -51,9 +74,10 @@ const TemporaryEditPath = ({
           x2={cursorPosition.x}
           y2={cursorPosition.y}
           stroke="#FF3B30"
-          strokeWidth={1.5/zoom}
+          strokeWidth={lineStrokeWidth}
           strokeDasharray={isShiftPressed ? `${2/zoom},${2/zoom}` : `${4/zoom},${4/zoom}`}
           vectorEffect="non-scaling-stroke"
+          shapeRendering="geometricPrecision"
         />
       )}
       
@@ -66,8 +90,9 @@ const TemporaryEditPath = ({
           r={pointRadius}
           fill={index === 0 ? "#FF3B30" : "#FFFFFF"}
           stroke="#FF3B30"
-          strokeWidth={1.5/zoom}
+          strokeWidth={strokeWidth}
           vectorEffect="non-scaling-stroke"
+          shapeRendering="geometricPrecision"
         />
       ))}
       
@@ -81,10 +106,11 @@ const TemporaryEditPath = ({
           r={7/zoom}
           fill="rgba(255, 59, 48, 0.3)"
           stroke="#FF3B30"
-          strokeWidth={1.5/zoom}
+          strokeWidth={strokeWidth}
           strokeDasharray={`${2/zoom},${2/zoom}`}
           vectorEffect="non-scaling-stroke"
           className="animate-pulse"
+          shapeRendering="geometricPrecision"
         />
       )}
     </>

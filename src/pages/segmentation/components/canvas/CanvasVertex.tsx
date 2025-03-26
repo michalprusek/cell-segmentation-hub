@@ -24,15 +24,22 @@ const CanvasVertex = ({
   zoom,
   type = 'external'
 }: CanvasVertexProps) => {
-  // Dynamicky měníme poloměr bodu podle úrovně zoomu
-  // Při velkém přiblížení (zoom > 3) zmenšíme body
-  // Při velkém oddálení (zoom < 0.7) zvětšíme body
+  // Dynamicky měníme velikost bodů podle úrovně zoomu
   const getAdjustedRadius = () => {
-    if (zoom > 3) {
+    if (zoom > 4) {
+      // Při extrémním přiblížení (zoom > 4) zmenšíme body výrazněji
+      return 2.5/zoom;
+    } else if (zoom > 3) {
+      // Při velkém přiblížení (zoom > 3) zmenšíme body
       return 3/zoom;
+    } else if (zoom < 0.5) {
+      // Při velkém oddálení (zoom < 0.5) zvětšíme body výrazně
+      return 7/zoom;
     } else if (zoom < 0.7) {
+      // Při mírném oddálení (zoom < 0.7) zvětšíme body
       return 5/zoom;
     } else {
+      // Normální velikost pro běžný zoom
       return 4/zoom;
     }
   };
@@ -50,6 +57,9 @@ const CanvasVertex = ({
 
   const vertexColor = getVertexColor();
   
+  // Také upravujeme tloušťku okraje podle zoomu
+  const strokeWidth = 1.5/zoom;
+  
   return (
     <circle
       cx={point.x}
@@ -57,7 +67,7 @@ const CanvasVertex = ({
       r={radius}
       fill={vertexColor}
       stroke="#fff"
-      strokeWidth={1.5/zoom}
+      strokeWidth={strokeWidth}
       className={cn(
         "transition-colors duration-150",
         isDragging ? "cursor-grabbing" : "cursor-grab",
@@ -68,6 +78,7 @@ const CanvasVertex = ({
       data-polygon-id={polygonId}
       data-vertex-index={vertexIndex}
       vectorEffect="non-scaling-stroke"
+      shapeRendering="geometricPrecision"
     />
   );
 };

@@ -14,6 +14,39 @@ const SlicingModeVisualizer = ({
   zoom 
 }: SlicingModeVisualizerProps) => {
   if (!sliceStartPoint) return null;
+  
+  // Dynamicky nastavíme tloušťku čáry a poloměr bodu podle zoomu
+  const getStrokeWidth = () => {
+    if (zoom > 4) {
+      return 1.5/zoom;
+    } else if (zoom > 3) {
+      return 2/zoom;
+    } else if (zoom < 0.5) {
+      return 4/zoom;
+    } else if (zoom < 0.7) {
+      return 3/zoom;
+    } else {
+      return 2.5/zoom;
+    }
+  };
+  
+  const strokeWidth = getStrokeWidth();
+  
+  const getPointRadius = () => {
+    if (zoom > 4) {
+      return 5/zoom;
+    } else if (zoom > 3) {
+      return 5.5/zoom;
+    } else if (zoom < 0.5) {
+      return 8/zoom;
+    } else if (zoom < 0.7) {
+      return 7/zoom;
+    } else {
+      return 6/zoom;
+    }
+  };
+  
+  const pointRadius = getPointRadius();
 
   return (
     <>
@@ -25,10 +58,11 @@ const SlicingModeVisualizer = ({
           x2={cursorPosition.x}
           y2={cursorPosition.y}
           stroke="#FF3B30"
-          strokeWidth={2.5/zoom}
+          strokeWidth={strokeWidth}
           strokeDasharray={`${8/zoom},${4/zoom}`}
           vectorEffect="non-scaling-stroke"
           filter="url(#line-glow)"
+          shapeRendering="geometricPrecision"
         />
       )}
       
@@ -36,12 +70,13 @@ const SlicingModeVisualizer = ({
       <circle
         cx={sliceStartPoint.x}
         cy={sliceStartPoint.y}
-        r={6/zoom}
+        r={pointRadius}
         fill="#FF3B30"
         stroke="#FFFFFF"
-        strokeWidth={2/zoom}
+        strokeWidth={strokeWidth * 0.8}
         vectorEffect="non-scaling-stroke"
         filter="url(#point-glow)"
+        shapeRendering="geometricPrecision"
       />
     </>
   );
