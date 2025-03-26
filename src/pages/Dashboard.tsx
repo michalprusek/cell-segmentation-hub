@@ -12,6 +12,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from '@/contexts/LanguageContext';
 import ProjectToolbar from "@/components/project/ProjectToolbar"; 
+import DashboardTabs from "@/components/dashboard/DashboardTabs";
+import ProjectsTab from "@/components/dashboard/ProjectsTab";
+import UploadTab from "@/components/dashboard/UploadTab";
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -175,48 +178,28 @@ const Dashboard = () => {
         </div>
         
         <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="mb-6">
-              <TabsTrigger value="projects" className="flex items-center gap-2">
-                <Folder className="h-4 w-4" />
-                {t('common.projects')}
-              </TabsTrigger>
-              <TabsTrigger value="upload" className="flex items-center gap-2">
-                <Upload className="h-4 w-4" />
-                {t('common.uploadImages')}
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="projects" className="mt-0">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6">
-                <div className="flex-grow"></div> {/* Spacer */}
-                <ProjectToolbar
-                  sortField="name" 
-                  sortDirection="asc" 
-                  onSort={handleSort}
-                  viewMode={viewMode}
-                  setViewMode={setViewMode}
-                  showSearchBar={false}
-                  showUploadButton={false}
-                  showExportButton={false}
-                />
-              </div>
-              
-              <ProjectsList 
-                projects={projects} 
-                viewMode={viewMode} 
-                onOpenProject={handleOpenProject}
+          <DashboardTabs 
+            activeTab={activeTab} 
+            onTabChange={setActiveTab}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            onSort={handleSort}
+            sortField="name"
+            sortDirection="asc"
+          >
+            <TabsContent value="projects" className="mt-6">
+              <ProjectsTab 
+                projects={projects}
+                viewMode={viewMode}
                 loading={loading}
-                showCreateCard={true}
+                onOpenProject={handleOpenProject}
               />
             </TabsContent>
             
-            <TabsContent value="upload">
-              <div className="bg-white p-6 rounded-lg border border-gray-200 dark:bg-gray-800 dark:border-gray-700">
-                <ImageUploader />
-              </div>
+            <TabsContent value="upload" className="mt-6">
+              <UploadTab />
             </TabsContent>
-          </Tabs>
+          </DashboardTabs>
         </div>
       </div>
     </div>
