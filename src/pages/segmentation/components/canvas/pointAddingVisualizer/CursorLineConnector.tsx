@@ -17,7 +17,7 @@ interface CursorLineConnectorProps {
 }
 
 /**
- * Komponenta pro zobrazení spojnice od posledního bodu ke kurzoru nebo cílovému bodu
+ * Komponenta pro zobrazení spojnice od posledního bodu ke kurzoru nebo k potenciálnímu koncovému bodu
  */
 const CursorLineConnector = ({
   tempPoints,
@@ -27,56 +27,82 @@ const CursorLineConnector = ({
   polygonPoints,
   zoom
 }: CursorLineConnectorProps) => {
-  // Pokud nemáme polygonPoints nebo selectedVertexIndex, nemůžeme nic vykreslit
-  if (!polygonPoints || selectedVertexIndex === null) return null;
-  
-  const colors = getColors();
+  if (!cursorPosition || !polygonPoints || selectedVertexIndex === null) {
+    return null;
+  }
+
   const strokeWidth = getStrokeWidth(zoom);
+  const colors = getColors();
   
-  // Určíme výchozí bod pro spojnici
-  let fromPoint: Point;
-  if (tempPoints.length > 0) {
-    // Pokud máme temp body, spojnice začne od posledního z nich
-    fromPoint = tempPoints[tempPoints.length - 1];
-  } else {
-    // Jinak začne od vybraného bodu polygonu
-    fromPoint = polygonPoints[selectedVertexIndex];
+  // Máme-li zatím jen počáteční bod (žádné dočasné)
+  if (tempPoints.length === 0) {
+    const startPoint = polygonPoints[selectedVertexIndex];
+    
+    // Pokud je kurzor nad potenciálním koncovým bodem
+    if (hoveredSegment.segmentIndex !== null && 
+        hoveredSegment.segmentIndex !== selectedVertexIndex && 
+        hoveredSegment.projectedPoint) {
+      return (
+        <line
+          x1={startPoint.x}
+          y1={startPoint.y}
+          x2={hoveredSegment.projectedPoint.x}
+          y2={hoveredSegment.projectedPoint.y}
+          stroke={colors.cursorLine.endpoint}
+          strokeWidth={strokeWidth}
+          style={{ pointerEvents: 'none' }}
+        />
+      );
+    }
+    
+    // Jinak spojnice od počátečního bodu ke kurzoru
+    return (
+      <line
+        x1={startPoint.x}
+        y1={startPoint.y}
+        x2={cursorPosition.x}
+        y2={cursorPosition.y}
+        stroke={colors.cursorLine.normal}
+        strokeWidth={strokeWidth}
+        strokeDasharray={colors.cursorLine.dashArray}
+        style={{ pointerEvents: 'none' }}
+      />
+    );
   }
   
-  // Určíme cílový bod pro spojnici
-  let toPoint: Point | null = null;
-  let isEndpoint = false;
+  // Máme dočasné body, spojnice od posledního dočasného bodu
+  const lastPoint = tempPoints[tempPoints.length - 1];
   
+  // Pokud je kurzor nad potenciálním koncovým bodem
   if (hoveredSegment.segmentIndex !== null && 
       hoveredSegment.segmentIndex !== selectedVertexIndex && 
       hoveredSegment.projectedPoint) {
-    // Pokud jsme nad potenciálním koncovým bodem, spojnice bude končit v něm
-    toPoint = hoveredSegment.projectedPoint;
-    isEndpoint = true;
-  } else if (cursorPosition) {
-    // Jinak končí v pozici kurzoru
-    toPoint = cursorPosition;
+    return (
+      <line
+        x1={lastPoint.x}
+        y1={lastPoint.y}
+        x2={hoveredSegment.projectedPoint.x}
+        y2={hoveredSegment.projectedPoint.y}
+        stroke={colors.cursorLine.endpoint}
+        strokeWidth={strokeWidth}
+        style={{ pointerEvents: 'none' }}
+      />
+    );
   }
   
-  // Pokud nemáme cílový bod, nic nevykreslíme
-  if (!toPoint) return null;
-
+  // Jinak spojnice od posledního bodu ke kurzoru
   return (
     <line
-      x1={fromPoint.x}
-      y1={fromPoint.y}
-      x2={toPoint.x}
-      y2={toPoint.y}
-      stroke={isEndpoint ? colors.cursorLine.endpoint : colors.cursorLine.normal}
+      x1={lastPoint.x}
+      y1={lastPoint.y}
+      x2={cursorPosition.x}
+      y2={cursorPosition.y}
+      stroke={colors.cursorLine.normal}
       strokeWidth={strokeWidth}
-      strokeDasharray={!isEndpoint ? colors.cursorLine.dashArray : ""}
-      style={{ 
-        pointerEvents: 'none',
-        transition: 'stroke 0.2s ease'
-      }}
+      strokeDasharray={colors.cursorLine.dashArray}
+      style={{ pointerEvents: 'none' }}
     />
   );
 };
 
 export default CursorLineConnector;
-

@@ -43,21 +43,32 @@ const PotentialEndpointIndicator = ({
         // Použijeme různé styly podle toho, zda je bod pod kurzorem nebo ne
         const fillColor = isHovered ? colors.hoverPoint.fill : colors.potentialEndpoint.fill;
         const strokeColor = isHovered ? colors.hoverPoint.stroke : colors.potentialEndpoint.stroke;
-        const radius = pointRadius * (isHovered ? 1.5 : 1.2);
-        const strokeW = strokeWidth * (isHovered ? 1.5 : 0.8);
         
         return (
-          <circle
-            key={`potential-endpoint-${index}`}
-            cx={point.x}
-            cy={point.y}
-            r={radius}
-            fill={fillColor}
-            stroke={strokeColor}
-            strokeWidth={strokeW}
-            className={isHovered ? "animate-pulse" : ""}
-            style={{ pointerEvents: 'none' }}
-          />
+          <g key={`potential-endpoint-${index}`}>
+            {/* Pulzující efekt pro bod pod kurzorem */}
+            {isHovered && (
+              <circle
+                cx={point.x}
+                cy={point.y}
+                r={pointRadius * 1.8}
+                fill={colors.hoverPoint.glowColor}
+                className="animate-pulse"
+                style={{ pointerEvents: 'none' }}
+              />
+            )}
+            
+            {/* Samotný bod */}
+            <circle
+              cx={point.x}
+              cy={point.y}
+              r={pointRadius * (isHovered ? 1.4 : 1.1)}
+              fill={fillColor}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth * (isHovered ? 1.2 : 0.8)}
+              style={{ pointerEvents: 'none' }}
+            />
+          </g>
         );
       })}
     </>

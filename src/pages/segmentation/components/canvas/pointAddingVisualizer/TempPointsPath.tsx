@@ -63,7 +63,7 @@ const TempPointsPath = ({
         );
       })}
       
-      {/* Dočasné body s pulzujícím efektem */}
+      {/* Dočasné body */}
       {tempPoints.map((point, i) => (
         <g key={`temp-point-${i}`}>
           {/* Slabá záře kolem bodu */}
@@ -72,10 +72,7 @@ const TempPointsPath = ({
             cy={point.y}
             r={pointRadius * 1.5}
             fill={colors.tempPoint.glowColor}
-            style={{ 
-              pointerEvents: 'none',
-              animation: 'pulse 2s infinite'
-            }}
+            style={{ pointerEvents: 'none' }}
           />
           
           {/* Samotný bod */}
@@ -95,4 +92,3 @@ const TempPointsPath = ({
 };
 
 export default TempPointsPath;
-

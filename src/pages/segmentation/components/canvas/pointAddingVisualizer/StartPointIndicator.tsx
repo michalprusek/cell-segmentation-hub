@@ -20,13 +20,24 @@ const StartPointIndicator = ({ selectedVertexIndex, polygonPoints, zoom }: Start
   const pointRadius = getPointRadius(zoom);
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
+  const startPoint = polygonPoints[selectedVertexIndex];
 
   return (
     <g>
+      {/* Pulzující efekt kolem počátečního bodu */}
+      <circle
+        cx={startPoint.x}
+        cy={startPoint.y}
+        r={pointRadius * 2}
+        fill={colors.startPoint.glowColor}
+        className="animate-pulse"
+        style={{ pointerEvents: 'none' }}
+      />
+      
       {/* Větší kruh pro zvýraznění */}
       <circle
-        cx={polygonPoints[selectedVertexIndex].x}
-        cy={polygonPoints[selectedVertexIndex].y}
+        cx={startPoint.x}
+        cy={startPoint.y}
         r={pointRadius * 1.5}
         fill={colors.startPoint.fill}
         stroke={colors.startPoint.stroke}
@@ -36,10 +47,10 @@ const StartPointIndicator = ({ selectedVertexIndex, polygonPoints, zoom }: Start
       
       {/* Menší vnitřní kruh */}
       <circle
-        cx={polygonPoints[selectedVertexIndex].x}
-        cy={polygonPoints[selectedVertexIndex].y}
+        cx={startPoint.x}
+        cy={startPoint.y}
         r={pointRadius * 0.8}
-        fill={colors.startPoint.innerFill || "#FFFFFF"}
+        fill={colors.startPoint.innerFill}
         stroke="none"
         style={{ pointerEvents: 'none' }}
       />

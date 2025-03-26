@@ -75,7 +75,7 @@ const PointAddingVisualizer = ({
         zoom={zoom} 
       />
       
-      {/* Spojnice od posledního bodu ke kurzoru */}
+      {/* Spojnice od posledního bodu ke kurzoru nebo potenciálnímu koncovému bodu */}
       <CursorLineConnector 
         tempPoints={tempPoints} 
         hoveredSegment={hoveredSegment} 

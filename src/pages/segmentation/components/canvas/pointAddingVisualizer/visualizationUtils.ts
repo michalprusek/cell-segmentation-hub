@@ -32,6 +32,11 @@ export const getColors = () => {
       innerFill: "#FFFFFF", // Bílá pro vnitřní kruh
       glowColor: "rgba(255, 87, 34, 0.5)" // Oranžová záře
     },
+    endPoint: {
+      fill: "#4CAF50",     // Zelená pro koncový bod
+      stroke: "#FFFFFF",
+      glowColor: "rgba(76, 175, 80, 0.5)" // Zelená záře
+    },
     hoverPoint: {
       fill: "#FFC107",     // Žlutá - při hoveru
       stroke: "#FF9800",   // Tmavší oranžová
@@ -62,4 +67,3 @@ export const getColors = () => {
     }
   };
 };
-
