@@ -78,12 +78,12 @@ export const useMouseInteractions = (
     // Pokud jsme v editačním režimu, předáme pohyb myši
     if (editActive) {
       handleEditMouseMove(x, y);
-      return;
     }
     
-    // Nakonec kontrolujeme, jestli je kurzor nad nějakým vertexem
-    // Používáme requestAnimationFrame pro optimalizaci výkonu
+    // Vždy detekujeme vertex pod kurzorem, i v editačním režimu
+    // Důležité pro funkci přidávání bodů
     detectVertexHover(e.clientX, e.clientY, containerElement);
+    
   }, [
     segmentation, 
     handleVertexDrag, 

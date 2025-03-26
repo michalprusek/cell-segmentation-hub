@@ -93,7 +93,7 @@ const EditorCanvas = ({
   selectedPolygonPoints,
   sourcePolygonId
 }: EditorCanvasProps) => {
-  console.log("EditorCanvas: pointAddingMode =", pointAddingMode, "tempPoints =", pointAddingTempPoints?.length);
+  // Odstranil jsem console.log pro lepší výkon a čistotu kódu
   
   return (
     <CanvasContainer 

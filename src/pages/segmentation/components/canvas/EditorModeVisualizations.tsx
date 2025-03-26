@@ -44,7 +44,7 @@ const EditorModeVisualizations = ({
   selectedVertexIndex,
   sourcePolygonId
 }: EditorModeVisualizationsProps) => {
-  console.log("EditorModeVisualizations: pointAddingMode =", pointAddingMode, "tempPoints =", pointAddingTempPoints?.length);
+  // Odstranil jsem console.log pro lepší výkon a čistotu kódu
   
   return (
     <>

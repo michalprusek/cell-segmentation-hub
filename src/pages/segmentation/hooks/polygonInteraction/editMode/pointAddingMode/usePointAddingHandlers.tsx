@@ -126,7 +126,7 @@ export const usePointAddingHandlers = ({
     // 3. Klikli jsme někam do plátna, přidáme nový bod do dočasné sekvence
     else {
       // Pokud je kurzor nad vrcholem polygonu, neklikáme do volného prostoru
-      if (hoveredSegment.segmentIndex !== null && hoveredSegment.polygonId) {
+      if (hoveredSegment.segmentIndex !== null && hoveredSegment.polygonId === sourcePolygonId) {
         return false;
       }
       
@@ -166,4 +166,3 @@ export const usePointAddingHandlers = ({
 
   return { handlePointAddingClick };
 };
-
