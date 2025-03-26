@@ -1,26 +1,19 @@
+
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Folder, Upload } from "lucide-react";
 
 import DashboardHeader from "@/components/DashboardHeader";
 import StatsOverview from "@/components/StatsOverview";
-import ProjectsList, { Project } from "@/components/ProjectsList";
-import ImageUploader from "@/components/ImageUploader";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from '@/contexts/LanguageContext';
-import ProjectToolbar from "@/components/project/ProjectToolbar"; 
 import DashboardTabs from "@/components/dashboard/DashboardTabs";
 import ProjectsTab from "@/components/dashboard/ProjectsTab";
 import UploadTab from "@/components/dashboard/UploadTab";
+import { useDashboardProjects } from "@/hooks/useDashboardProjects";
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
   const [sortField, setSortField] = useState<string>("updated_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
   const [activeTab, setActiveTab] = useState("projects");
@@ -28,11 +21,18 @@ const Dashboard = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
   
+  const { 
+    projects, 
+    loading, 
+    fetchError, 
+    fetchProjects 
+  } = useDashboardProjects({
+    sortField,
+    sortDirection,
+    userId: user?.id
+  });
+  
   useEffect(() => {
-    if (user) {
-      fetchProjects();
-    }
-    
     // Poslouchej události pro aktualizaci seznamu projektů
     const handleProjectCreated = () => fetchProjects();
     const handleProjectDeleted = () => fetchProjects();
@@ -44,88 +44,8 @@ const Dashboard = () => {
       window.removeEventListener('project-created', handleProjectCreated);
       window.removeEventListener('project-deleted', handleProjectDeleted);
     };
-  }, [user, sortField, sortDirection]);
+  }, [fetchProjects]);
 
-  const fetchProjects = async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      setFetchError(null);
-      
-      const { data: projectsData, error: projectsError } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("user_id", user.id)
-        .order(sortField, { ascending: sortDirection === "asc" });
-
-      if (projectsError) {
-        throw projectsError;
-      }
-
-      const projectsWithDetails = await Promise.all(
-        (projectsData || []).map(async (project) => {
-          // Get image count
-          const { count, error: countError } = await supabase
-            .from("images")
-            .select("id", { count: "exact" })
-            .eq("project_id", project.id);
-
-          if (countError) {
-            console.error("Error fetching image count:", countError);
-          }
-
-          // Get the first image for thumbnail
-          const { data: imageData, error: imageError } = await supabase
-            .from("images")
-            .select("thumbnail_url")
-            .eq("project_id", project.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .single();
-
-          const thumbnail = imageData?.thumbnail_url || "/placeholder.svg";
-
-          return {
-            ...project,
-            thumbnail,
-            date: formatDate(project.updated_at),
-            imageCount: count || 0
-          };
-        })
-      );
-
-      setProjects(projectsWithDetails);
-    } catch (error) {
-      console.error("Error fetching projects:", error);
-      setFetchError("Failed to load projects. Please try again.");
-      toast.error("Failed to load projects");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-
-    if (diffDays === 0) {
-      return "Updated today";
-    } else if (diffDays === 1) {
-      return "Updated yesterday";
-    } else if (diffDays < 7) {
-      return `Updated ${diffDays} days ago`;
-    } else if (diffDays < 30) {
-      const diffWeeks = Math.floor(diffDays / 7);
-      return `Updated ${diffWeeks} ${diffWeeks === 1 ? "week" : "weeks"} ago`;
-    } else {
-      const diffMonths = Math.floor(diffDays / 30);
-      return `Updated ${diffMonths} ${diffMonths === 1 ? "month" : "months"} ago`;
-    }
-  };
-  
   const handleOpenProject = (id: string) => {
     navigate(`/project/${id}`);
   };
