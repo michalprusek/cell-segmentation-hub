@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Point } from '@/lib/segmentation';
-import { getPointRadius, getStrokeWidth, getColors } from './visualizationUtils';
+import { getPointRadius, getStrokeWidth, getColors, createPathFromPoints } from './visualizationUtils';
 
 interface TempPointsPathProps {
   selectedVertexIndex: number | null;
@@ -11,83 +11,64 @@ interface TempPointsPathProps {
 }
 
 /**
- * Komponenta pro zobrazení dočasných bodů a spojnic
+ * Komponenta pro zobrazení dočasných bodů a spojnic mezi nimi
  */
-const TempPointsPath = ({ 
-  selectedVertexIndex, 
-  polygonPoints, 
-  tempPoints, 
-  zoom 
-}: TempPointsPathProps) => {
-  if (tempPoints.length === 0 || selectedVertexIndex === null || !polygonPoints) {
+const TempPointsPath = ({ selectedVertexIndex, polygonPoints, tempPoints, zoom }: TempPointsPathProps) => {
+  if (
+    selectedVertexIndex === null || 
+    !polygonPoints || 
+    !polygonPoints[selectedVertexIndex] || 
+    tempPoints.length === 0
+  ) {
     return null;
   }
 
   const pointRadius = getPointRadius(zoom);
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
-
-  // Počáteční bod
   const startPoint = polygonPoints[selectedVertexIndex];
 
   return (
-    <>
-      {/* Spojnice od počátečního bodu k prvnímu dočasnému bodu */}
-      {tempPoints.length > 0 && (
+    <g>
+      {/* Spojnice od výchozího bodu k prvnímu dočasnému bodu */}
+      <line
+        x1={startPoint.x}
+        y1={startPoint.y}
+        x2={tempPoints[0].x}
+        y2={tempPoints[0].y}
+        stroke={colors.line.color}
+        strokeWidth={strokeWidth}
+        style={{ pointerEvents: 'none' }}
+      />
+      
+      {/* Spojnice mezi dočasnými body */}
+      {tempPoints.slice(1).map((point, i) => (
         <line
-          x1={startPoint.x}
-          y1={startPoint.y}
-          x2={tempPoints[0].x}
-          y2={tempPoints[0].y}
-          stroke={colors.tempLine.stroke}
+          key={`temp-line-${i}`}
+          x1={tempPoints[i].x}
+          y1={tempPoints[i].y}
+          x2={point.x}
+          y2={point.y}
+          stroke={colors.line.color}
           strokeWidth={strokeWidth}
           style={{ pointerEvents: 'none' }}
         />
-      )}
-      
-      {/* Spojnice mezi dočasnými body */}
-      {tempPoints.length > 1 && tempPoints.map((point, i) => {
-        if (i === 0) return null;
-        
-        return (
-          <line
-            key={`temp-line-${i}`}
-            x1={tempPoints[i-1].x}
-            y1={tempPoints[i-1].y}
-            x2={point.x}
-            y2={point.y}
-            stroke={colors.tempLine.stroke}
-            strokeWidth={strokeWidth}
-            style={{ pointerEvents: 'none' }}
-          />
-        );
-      })}
+      ))}
       
       {/* Dočasné body */}
       {tempPoints.map((point, i) => (
-        <g key={`temp-point-${i}`}>
-          {/* Slabá záře kolem bodu */}
-          <circle
-            cx={point.x}
-            cy={point.y}
-            r={pointRadius * 1.5}
-            fill={colors.tempPoint.glowColor}
-            style={{ pointerEvents: 'none' }}
-          />
-          
-          {/* Samotný bod */}
-          <circle
-            cx={point.x}
-            cy={point.y}
-            r={pointRadius}
-            fill={colors.tempPoint.fill}
-            stroke={colors.tempPoint.stroke}
-            strokeWidth={strokeWidth * 0.8}
-            style={{ pointerEvents: 'none' }}
-          />
-        </g>
+        <circle
+          key={`temp-point-${i}`}
+          cx={point.x}
+          cy={point.y}
+          r={pointRadius}
+          fill={colors.tempPoint.fill}
+          stroke={colors.tempPoint.stroke}
+          strokeWidth={strokeWidth * 0.8}
+          style={{ pointerEvents: 'none' }}
+        />
       ))}
-    </>
+    </g>
   );
 };
 

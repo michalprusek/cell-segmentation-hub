@@ -13,7 +13,7 @@ interface HoveredVertexIndicatorProps {
 }
 
 /**
- * Komponenta pro zobrazení zvýrazněného vrcholu pod kurzorem
+ * Komponenta pro zobrazení zvýrazněného vertexu pod kurzorem
  */
 const HoveredVertexIndicator = ({ hoveredSegment, zoom }: HoveredVertexIndicatorProps) => {
   if (hoveredSegment.segmentIndex === null || !hoveredSegment.projectedPoint) {
@@ -23,30 +23,25 @@ const HoveredVertexIndicator = ({ hoveredSegment, zoom }: HoveredVertexIndicator
   const pointRadius = getPointRadius(zoom);
   const strokeWidth = getStrokeWidth(zoom);
   const colors = getColors();
+  const point = hoveredSegment.projectedPoint;
 
   return (
     <g>
-      {/* Vnější kruh s animací */}
+      {/* Pulzující efekt kolem bodu */}
       <circle
-        cx={hoveredSegment.projectedPoint.x}
-        cy={hoveredSegment.projectedPoint.y}
-        r={pointRadius * 1.8}
-        fill="none"
-        stroke={colors.hoverPoint.stroke}
-        strokeWidth={strokeWidth * 0.8}
-        opacity={0.5}
-        className="animate-ping"
-        style={{ 
-          pointerEvents: 'none',
-          animationDuration: '1.5s'
-        }}
+        cx={point.x}
+        cy={point.y}
+        r={pointRadius * 2}
+        fill={colors.hoverPoint.glowColor}
+        className="animate-pulse"
+        style={{ pointerEvents: 'none' }}
       />
       
-      {/* Hlavní kruh */}
+      {/* Samotný bod */}
       <circle
-        cx={hoveredSegment.projectedPoint.x}
-        cy={hoveredSegment.projectedPoint.y}
-        r={pointRadius * 1.5}
+        cx={point.x}
+        cy={point.y}
+        r={pointRadius * 1.4}
         fill={colors.hoverPoint.fill}
         stroke={colors.hoverPoint.stroke}
         strokeWidth={strokeWidth}
