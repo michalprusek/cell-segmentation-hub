@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X, Microscope } from "lucide-react";
+import { Menu, X } from "lucide-react";
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -40,26 +40,12 @@ const Navbar = () => {
           to="/"
           className="flex items-center gap-2 transition-opacity hover:opacity-80"
         >
-          <div className="w-10 h-10 rounded-md bg-blue-500 flex items-center justify-center">
-            <Microscope className="text-white w-6 h-6" />
-          </div>
+          <img src="/logo.svg" alt="SpheroSeg Logo" className="w-10 h-10" />
           <span className="font-semibold text-lg">SpheroSeg</span>
         </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-8">
-          <Link 
-            to="/"
-            className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
-          >
-            Home
-          </Link>
-          <Link 
-            to="/#features"
-            className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
-          >
-            Features
-          </Link>
           <Link 
             to="/documentation"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
@@ -84,9 +70,6 @@ const Navbar = () => {
           >
             Login
           </Link>
-          <Button asChild size="sm" className="rounded-md">
-            <Link to="/request-access">Request Access</Link>
-          </Button>
         </nav>
 
         {/* Mobile Menu Button */}
@@ -107,20 +90,6 @@ const Navbar = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden absolute top-full left-0 right-0 bg-white/95 backdrop-blur-md shadow-lg animate-fade-in">
           <div className="container mx-auto px-4 py-6 flex flex-col space-y-4">
-            <Link 
-              to="/"
-              className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Home
-            </Link>
-            <Link 
-              to="/#features"
-              className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
-              onClick={() => setIsMobileMenuOpen(false)}
-            >
-              Features
-            </Link>
             <Link 
               to="/documentation"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
@@ -149,11 +118,6 @@ const Navbar = () => {
             >
               Login
             </Link>
-            <Button asChild className="w-full rounded-md">
-              <Link to="/request-access" onClick={() => setIsMobileMenuOpen(false)}>
-                Request Access
-              </Link>
-            </Button>
           </div>
         </div>
       )}

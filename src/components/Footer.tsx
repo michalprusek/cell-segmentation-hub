@@ -20,13 +20,13 @@ const Footer = () => {
             </p>
             <div className="space-y-2">
               <p className="text-gray-600">
-                <strong>Contact:</strong> <a href="mailto:prusemic@cvut.cz" className="text-blue-600 hover:underline">prusemic@cvut.cz</a>
+                <strong>Contact:</strong> <a href="mailto:spheroseg@utia.cas.cz" className="text-blue-600 hover:underline">spheroseg@utia.cas.cz</a>
               </p>
               <p className="text-gray-600">
-                <strong>Developer:</strong> Bc. Michal Průšek
+                <strong>Institution:</strong> ÚTIA AV ČR
               </p>
               <p className="text-gray-600">
-                <strong>Faculty:</strong> FJFI ČVUT v Praze
+                <strong>Address:</strong> Pod Vodárenskou věží 4, 182 08 Prague 8
               </p>
             </div>
           </div>
@@ -75,7 +75,7 @@ const Footer = () => {
                 </Link>
               </li>
               <li>
-                <a href="mailto:prusemic@cvut.cz" className="text-base text-gray-600 hover:text-blue-600 transition-colors">
+                <a href="mailto:spheroseg@utia.cas.cz" className="text-base text-gray-600 hover:text-blue-600 transition-colors">
                   Contact Us
                 </a>
               </li>
@@ -85,7 +85,7 @@ const Footer = () => {
         
         <div className="mt-12 pt-8 border-t border-gray-200">
           <p className="text-gray-500 text-center">
-            &copy; {new Date().getFullYear()} SpheroSeg. Developed at Faculty of Nuclear Sciences and Physical Engineering, CTU in Prague.
+            &copy; {new Date().getFullYear()} SpheroSeg. Developed at ÚTIA AV ČR (Institute of Information Theory and Automation, Czech Academy of Sciences).
           </p>
         </div>
       </div>

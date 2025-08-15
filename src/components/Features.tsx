@@ -37,13 +37,14 @@ const Features = () => {
       { threshold: 0.1 }
     );
 
-    if (featuresRef.current) {
-      observer.observe(featuresRef.current);
+    const currentRef = featuresRef.current;
+    if (currentRef) {
+      observer.observe(currentRef);
     }
 
     return () => {
-      if (featuresRef.current) {
-        observer.unobserve(featuresRef.current);
+      if (currentRef) {
+        observer.unobserve(currentRef);
       }
     };
   }, []);
