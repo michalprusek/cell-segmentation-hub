@@ -49,16 +49,17 @@ export default {
     manageAccount: 'Manage your account',
     changePassword: 'Change Password',
     deleteAccount: 'Delete Account',
-    requestAccess: 'Request Access',
     termsOfService: 'Terms of Service',
     privacyPolicy: 'Privacy Policy',
-    accessRequest: 'Access Request',
     createAccount: 'Create Account',
     signInToAccount: 'Sign in to your account',
-    sort: 'Sort'
+    sort: 'Sort',
+    no_preview: 'No preview'
   },
   dashboard: {
     manageProjects: 'Manage your research projects and analyses',
+    projectGallery: 'Project Gallery',
+    projectGalleryDescription: 'Browse and manage all your segmentation projects',
     statsOverview: 'Statistics Overview',
     totalProjects: 'Total Projects',
     activeProjects: 'Active Projects',
@@ -94,7 +95,23 @@ export default {
     viewProject: 'View Project',
     projectImages: 'Project Images',
     projectSelection: 'Project Selection',
-    selectProject: 'Select a project'
+    selectProject: 'Select a project',
+    imageDeleted: 'Image deleted successfully',
+    deleteImageError: 'Failed to delete image',
+    deleteImageFailed: 'Image deletion failed',
+    imagesQueuedForSegmentation: '{{count}} images added to segmentation queue',
+    allImagesAlreadySegmented: 'All images are already segmented or queued',
+    errorAddingToQueue: 'Error adding images to queue',
+    imageAlreadyProcessing: 'Image is already being processed',
+    processImageFailed: 'Failed to process image',
+    segmentationCompleted: 'Segmentation completed for image',
+    segmentationFailed: 'Segmentation failed',
+    segmentationStarted: 'Segmentation has started',
+    segmentationCompleteWithCount: 'Segmentation complete! Found {{count}} objects'
+  },
+  errors: {
+    noProjectOrUser: 'Error: No project or user selected',
+    unknown: 'Unknown error'
   },
   images: {
     uploadImages: 'Upload Images',
@@ -115,9 +132,17 @@ export default {
     viewResults: 'View Results',
     dropImagesHere: 'Drop the images here...',
     selectProjectFirst: 'Please select a project first',
-    projectRequired: 'You must select a project before you can upload images'
+    projectRequired: 'You must select a project before you can upload images',
+    pending: 'Pending',
+    uploading: 'Uploading',
+    processing: 'Processing',
+    complete: 'Complete',
+    error: 'Error'
   },
   settings: {
+    pageTitle: 'Settings',
+    profile: 'Profile',
+    account: 'Account',
     manageSettings: 'Manage your account preferences',
     appearance: 'Appearance',
     themeSettings: 'Theme Settings',
@@ -151,7 +176,25 @@ export default {
     deleteAccountWarning: 'Once you delete your account, there is no going back. All your data will be permanently deleted.',
     currentPassword: 'Current Password',
     newPassword: 'New Password',
-    confirmNewPassword: 'Confirm New Password'
+    confirmNewPassword: 'Confirm New Password',
+    models: 'Models',
+    modelSelection: 'Model Selection',
+    modelSelectionDescription: 'Choose the AI model to use for cell segmentation',
+    confidenceThreshold: 'Confidence Threshold',
+    confidenceThresholdDescription: 'Minimum confidence required for segmentation predictions',
+    currentThreshold: 'Current threshold',
+    modelSelected: 'Model selected successfully',
+    modelSettingsSaved: 'Model settings saved successfully',
+    modelSize: {
+      small: 'Small',
+      medium: 'Medium',
+      large: 'Large'
+    },
+    modelDescription: {
+      hrnet: 'Fast and efficient model for real-time segmentation',
+      resunet_small: 'Balanced speed and accuracy for most use cases',
+      resunet_advanced: 'Highest accuracy with attention mechanisms'
+    }
   },
   auth: {
     signIn: 'Sign In',
@@ -178,30 +221,13 @@ export default {
     loadingAccount: 'Loading your account...',
     processingRequest: 'Processing your request...'
   },
-  requestAccess: {
-    title: 'Request Access to Spheroid Segmentation Platform',
-    description: 'Fill out the form below to request access to our platform. We will review your request and get back to you soon.',
-    emailLabel: 'Your Email Address',
-    emailPlaceholder: 'Enter your email address',
-    nameLabel: 'Your Name',
-    namePlaceholder: 'Enter your full name',
-    institutionLabel: 'Institution/Company',
-    institutionPlaceholder: 'Enter your institution or company name',
-    reasonLabel: 'Reason for Access',
-    reasonPlaceholder: 'Describe why you need access to our platform',
-    submitRequest: 'Submit Request',
-    submittingRequest: 'Submitting...',
-    requestReceived: 'Request Received',
-    thankYou: 'Thank you for your interest',
-    weWillContact: 'We will review your request and contact you soon',
-    agreeToTerms: 'By submitting this request, you agree to our',
-    and: 'and'
-  },
   profile: {
     title: 'Profile',
     about: 'About',
     activity: 'Activity',
     projects: 'Projects',
+    papers: 'Papers',
+    analyses: 'Analyses',
     recentProjects: 'Recent Projects',
     recentAnalyses: 'Recent Analyses',
     accountDetails: 'Account Details',
@@ -210,6 +236,43 @@ export default {
     lastActive: 'Last Active',
     projectsCreated: 'Projects Created',
     imagesUploaded: 'Images Uploaded',
-    segmentationsCompleted: 'Segmentations Completed'
+    segmentationsCompleted: 'Segmentations Completed',
+    editProfile: 'Edit Profile',
+    joined: 'Joined',
+    copyApiKey: 'Copy API Key',
+    collaborators: 'Collaborators',
+    noCollaborators: 'No collaborators',
+    connectedAccounts: 'Connected Accounts',
+    connect: 'Connect',
+    recentActivity: 'Recent Activity',
+    noRecentActivity: 'No recent activity',
+    statistics: 'Statistics',
+    totalImagesProcessed: 'Total Images Processed',
+    averageProcessingTime: 'Average Processing Time',
+    fromLastMonth: 'from last month',
+    storageUsed: 'Storage Used',
+    of: 'of',
+    apiRequests: 'API Requests',
+    thisMonth: 'this month',
+    recentPublications: 'Recent Publications',
+    viewAll: 'View All',
+    noPublications: 'No publications yet',
+    today: 'today',
+    yesterday: 'yesterday',
+    daysAgo: 'days ago',
+    completionRate: 'completion rate',
+    createdProject: 'Created project',
+    completedSegmentation: 'Completed segmentation for',
+    uploadedImage: 'Uploaded image'
+  },
+  status: {
+    segmented: 'Segmented',
+    processing: 'Processing {{count}} images',
+    queued: 'Queued',
+    failed: 'Failed',
+    no_segmentation: 'No segmentation',
+    disconnected: 'Disconnected from server',
+    error: 'ML service error',
+    ready: 'Ready for segmentation'
   }
 };

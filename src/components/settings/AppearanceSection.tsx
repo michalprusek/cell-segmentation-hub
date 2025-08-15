@@ -25,12 +25,12 @@ const AppearanceSection = () => {
   ];
 
   const handleLanguageChange = (value: string) => {
-    setLanguage(value as any);
+    setLanguage(value);
     toast.success(t('settings.languageUpdated'));
   };
 
   const handleThemeChange = (value: string) => {
-    setTheme(value as any);
+    setTheme(value);
     toast.success(t('settings.themeUpdated'));
   };
 

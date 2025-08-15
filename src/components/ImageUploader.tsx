@@ -1,7 +1,6 @@
-
 import React, { useState, useCallback, useEffect } from "react";
 import { toast } from "sonner";
-import { uploadImage } from "@/lib/supabase";
+import apiClient from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useParams } from "react-router-dom";
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -9,11 +8,14 @@ import DropZone from "@/components/upload/DropZone";
 import FileList, { FileWithPreview } from "@/components/upload/FileList";
 import UploaderOptions from "@/components/upload/UploaderOptions";
 
-const ImageUploader = () => {
+interface ImageUploaderProps {
+  onUploadComplete?: () => void;
+}
+
+const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [projectId, setProjectId] = useState<string | null>(null);
-  const [autoSegment, setAutoSegment] = useState(true); // Default to true
   const [isUploading, setIsUploading] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const { user } = useAuth();
@@ -24,9 +26,111 @@ const ImageUploader = () => {
 
   useEffect(() => {
     if (currentProjectId) {
+      console.log('📍 ImageUploader: Setting project ID from URL:', currentProjectId);
       setProjectId(currentProjectId);
     }
   }, [currentProjectId]);
+
+  const handleUpload = useCallback(async (filesToUpload: FileWithPreview[], selectedProjectId: string) => {
+    if (!selectedProjectId || filesToUpload.length === 0) {
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress(0);
+    
+    try {
+      // Create a unique identifier for each file to track them
+      const fileIdentifiers = filesToUpload.map(f => `${f.name}_${f.size}`);
+      
+      // Mark all files as uploading
+      setFiles(prev => 
+        prev.map(f => {
+          const fileId = `${f.name}_${f.size}`;
+          if (fileIdentifiers.includes(fileId)) {
+            return { ...f, status: "uploading" as const, uploadProgress: 0 };
+          }
+          return f;
+        })
+      );
+      
+      // Upload with progress tracking
+      const uploadedImages = await apiClient.uploadImages(
+        selectedProjectId, 
+        filesToUpload,
+        (progressPercent) => {
+          // Update overall progress
+          setUploadProgress(progressPercent);
+          
+          // Update individual file progress
+          setFiles(prev => 
+            prev.map(f => {
+              const fileId = `${f.name}_${f.size}`;
+              if (fileIdentifiers.includes(fileId)) {
+                return { ...f, uploadProgress: progressPercent };
+              }
+              return f;
+            })
+          );
+        }
+      );
+      
+      console.log("Upload successful:", uploadedImages);
+      
+      // Mark all uploaded files as complete
+      setFiles(prev => 
+        prev.map(f => {
+          const fileId = `${f.name}_${f.size}`;
+          if (fileIdentifiers.includes(fileId)) {
+            return { 
+              ...f, 
+              status: "complete" as const,
+              uploadProgress: 100
+            };
+          }
+          return f;
+        })
+      );
+      
+      setUploadProgress(100);
+      
+      // Show success message
+      toast.success(`${t('images.imagesUploaded')}: ${uploadedImages.length}`);
+      
+      // If we have a callback, call it (used when embedded in ProjectDetail)
+      if (onUploadComplete) {
+        console.log('✅ Upload complete - calling onUploadComplete callback');
+        await onUploadComplete();
+        console.log('✅ onUploadComplete callback finished');
+      } else {
+        // Otherwise navigate (used when on standalone upload page)
+        console.log('⚠️ No onUploadComplete callback - navigating to project page');
+        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log(`Navigating to project: /project/${selectedProjectId}`);
+        navigate(`/project/${selectedProjectId}`, { replace: true });
+      }
+      
+    } catch (error) {
+      console.error("Upload error:", error);
+      
+      // Mark all files as error
+      const fileIdentifiers = filesToUpload.map(f => `${f.name}_${f.size}`);
+      setFiles(prev => 
+        prev.map(f => {
+          const fileId = `${f.name}_${f.size}`;
+          if (fileIdentifiers.includes(fileId)) {
+            return { ...f, status: "error" as const, uploadProgress: 0 };
+          }
+          return f;
+        })
+      );
+      
+      setUploadProgress(0);
+      toast.error(`${t('images.imagesFailed')}: ${filesToUpload.length}`);
+    } finally {
+      setIsUploading(false);
+    }
+  }, [navigate, t, onUploadComplete]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (!projectId) {
@@ -44,84 +148,10 @@ const ImageUploader = () => {
     
     setFiles(prev => [...prev, ...newFiles]);
     
-    if (projectId && user) {
-      handleUpload(newFiles, projectId, user.id);
+    if (projectId) {
+      handleUpload(newFiles, projectId);
     }
-  }, [projectId, user, t]);
-
-  const handleUpload = async (filesToUpload: FileWithPreview[], selectedProjectId: string, userId: string) => {
-    if (!selectedProjectId || !userId || filesToUpload.length === 0) {
-      return;
-    }
-
-    setIsUploading(true);
-    
-    let successCount = 0;
-    let errorCount = 0;
-    
-    const totalFiles = filesToUpload.length;
-    
-    for (let i = 0; i < filesToUpload.length; i++) {
-      const file = filesToUpload[i];
-      
-      try {
-        setFiles(prev => 
-          prev.map(f => 
-            f === file ? { ...f, status: "uploading" as const } : f
-          )
-        );
-        
-        const uploadedImage = await uploadImage(file, selectedProjectId, userId, undefined, autoSegment);
-        
-        console.log("Uploaded image data:", uploadedImage);
-        
-        setFiles(prev => 
-          prev.map(f => 
-            f === file ? { 
-              ...f, 
-              status: "complete" as const,
-              id: uploadedImage.id,
-              uploadProgress: 100
-            } : f
-          )
-        );
-        
-        successCount++;
-      } catch (error) {
-        console.error("Upload error:", error);
-        
-        setFiles(prev => 
-          prev.map(f => 
-            f === file ? { ...f, status: "error" as const } : f
-          )
-        );
-        
-        errorCount++;
-      }
-      
-      const newProgress = Math.round(((i + 1) / totalFiles) * 100);
-      setUploadProgress(newProgress);
-    }
-    
-    setIsUploading(false);
-    
-    if (successCount > 0) {
-      toast.success(`${t('images.imagesUploaded')}: ${successCount}`);
-      
-      if (errorCount === 0 && !currentProjectId) {
-        setTimeout(() => {
-          navigate(`/project/${selectedProjectId}`);
-        }, 1000);
-      } else if (currentProjectId) {
-        // Refresh current project page to show new images
-        window.location.reload();
-      }
-    }
-    
-    if (errorCount > 0) {
-      toast.error(`${t('images.imagesFailed')}: ${errorCount}`);
-    }
-  };
+  }, [handleUpload, projectId, t]);
 
   const removeFile = (file: FileWithPreview) => {
     URL.revokeObjectURL(file.preview || "");
@@ -147,9 +177,7 @@ const ImageUploader = () => {
       <UploaderOptions 
         showProjectSelector={!currentProjectId}
         projectId={projectId}
-        autoSegment={autoSegment}
         onProjectChange={handleProjectChange}
-        onAutoSegmentChange={setAutoSegment}
       />
       
       <DropZone 

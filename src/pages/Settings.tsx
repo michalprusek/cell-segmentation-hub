@@ -1,25 +1,36 @@
 
 import React, { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import AccountSection from '@/components/settings/AccountSection';
-import NotificationSection from '@/components/settings/NotificationSection';
 import AppearanceSection from '@/components/settings/AppearanceSection';
 import UserProfileSection from '@/components/settings/UserProfileSection';
+import ModelSettingsSection from '@/components/settings/ModelSettingsSection';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import apiClient from '@/lib/api';
+import { Profile } from '@/types';
+// Note: Settings functionality now uses AuthContext and API client
 import DashboardHeader from '@/components/DashboardHeader';
 
 const Settings = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useLanguage();
   const { user } = useAuth();
-  const [profile, setProfile] = useState(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Get tab from URL parameter, default to 'profile'
+  const activeTab = searchParams.get('tab') || 'profile';
+
+  // Handle tab change
+  const handleTabChange = (value: string) => {
+    setSearchParams({ tab: value });
+  };
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -27,19 +38,24 @@ const Settings = () => {
 
       try {
         setLoading(true);
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching profile:', error);
-        } else if (data) {
-          setProfile(data);
-        }
+        // Fetch actual profile data from API
+        const profileData = await apiClient.getUserProfile();
+        setProfile(profileData);
       } catch (error) {
-        console.error('Unexpected error:', error);
+        console.error('Error fetching profile:', error);
+        // If profile fetch fails, use basic user data
+        setProfile({
+          id: user.id,
+          email: user.email,
+          username: user.username || '',
+          organization: '',
+          bio: '',
+          public_profile: false,
+          consentToMLTraining: false,
+          consentToAlgorithmImprovement: false,
+          consentToFeatureDevelopment: false,
+          consentUpdatedAt: undefined
+        });
       } finally {
         setLoading(false);
       }
@@ -72,12 +88,12 @@ const Settings = () => {
         </div>
         
         {!loading && (
-          <Tabs defaultValue="profile" className="w-full">
+          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
             <TabsList className="mb-8 grid w-full grid-cols-4">
               <TabsTrigger value="profile">{t('settings.profile')}</TabsTrigger>
               <TabsTrigger value="account">{t('settings.account')}</TabsTrigger>
               <TabsTrigger value="appearance">{t('settings.appearance')}</TabsTrigger>
-              <TabsTrigger value="notifications">{t('settings.notifications')}</TabsTrigger>
+              <TabsTrigger value="models">{t('settings.models')}</TabsTrigger>
             </TabsList>
             
             <TabsContent value="profile">
@@ -94,8 +110,8 @@ const Settings = () => {
               <AppearanceSection />
             </TabsContent>
             
-            <TabsContent value="notifications">
-              <NotificationSection />
+            <TabsContent value="models">
+              <ModelSettingsSection />
             </TabsContent>
           </Tabs>
         )}

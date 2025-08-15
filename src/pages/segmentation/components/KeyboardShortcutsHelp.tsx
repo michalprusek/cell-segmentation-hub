@@ -4,14 +4,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Keyboard, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const KeyboardShortcutsHelp = () => {
+interface KeyboardShortcutsHelpProps {
+  className?: string;
+}
+
+const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({ className = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const shortcuts = [
-    { key: 'E', description: 'Přepnout režim editace' },
-    { key: 'S', description: 'Přepnout režim řezání' },
-    { key: 'A', description: 'Přepnout režim přidávání bodů' },
-    { key: 'Shift', description: 'Držet pro automatické přidávání bodů (v režimu editace)' },
+    { key: 'V', description: 'Režim prohlížení' },
+    { key: 'E', description: 'Režim editace vrcholů' },
+    { key: 'A', description: 'Režim přidávání bodů' },
+    { key: 'N', description: 'Vytvoření nového polygonu' },
+    { key: 'S', description: 'Režim řezání' },
+    { key: 'D', description: 'Režim mazání' },
+    { key: 'Shift', description: 'Držet pro automatické přidávání bodů' },
     { key: 'Ctrl+Z', description: 'Zpět' },
     { key: 'Ctrl+Y', description: 'Znovu' },
     { key: 'Delete', description: 'Smazat vybraný polygon' },
@@ -22,14 +29,14 @@ const KeyboardShortcutsHelp = () => {
   ];
 
   return (
-    <>
+    <div className={`${className}`}>
       <Button
-        className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-gray-800/80 hover:bg-gray-700/90 text-white rounded-full shadow-lg backdrop-blur-sm"
+        className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg"
         size="sm"
         onClick={() => setIsOpen(true)}
       >
         <Keyboard className="h-4 w-4" />
-        <span>Zkratky</span>
+        <span className="hidden sm:inline">Zkratky</span>
       </Button>
 
       <AnimatePresence>
@@ -86,7 +93,7 @@ const KeyboardShortcutsHelp = () => {
           </motion.div>
         )}
       </AnimatePresence>
-    </>
+    </div>
   );
 };
 

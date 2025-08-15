@@ -1,7 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { getErrorMessage } from '@/types';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -29,22 +30,20 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // Pokud jsme přihlášeni, zkusíme získat motiv z profilu
       if (user) {
         try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('preferred_theme')
-            .eq('id', user.id)
-            .single();
-            
-          if (!error && data && data.preferred_theme) {
-            const dbTheme = data.preferred_theme as Theme;
+          const profileData = await apiClient.getUserProfile();
+          
+          if (profileData && profileData.preferred_theme) {
+            const dbTheme = profileData.preferred_theme as Theme;
             setThemeState(dbTheme);
             localStorage.setItem('theme', dbTheme);
             applyTheme(dbTheme);
             setLoaded(true);
             return;
           }
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Error loading theme preference:', error);
+          const errorMessage = getErrorMessage(error) || "Failed to load theme";
+          console.error('Theme load error:', errorMessage);
         }
       }
       
@@ -71,16 +70,11 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Uložení do databáze, pokud jsme přihlášeni
     if (user) {
       try {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ preferred_theme: newTheme })
-          .eq('id', user.id);
-
-        if (error) {
-          console.error('Error saving theme preference:', error);
-        }
-      } catch (error) {
+        await apiClient.updateUserProfile({ preferred_theme: newTheme });
+      } catch (error: unknown) {
         console.error('Error updating profile:', error);
+        const errorMessage = getErrorMessage(error) || "Failed to save theme";
+        console.error('Theme save error:', errorMessage);
       }
     }
   };
@@ -150,6 +144,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useTheme = () => {
   const context = useContext(ThemeContext);
   if (context === undefined) {

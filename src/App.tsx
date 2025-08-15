@@ -1,5 +1,4 @@
 
-import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -7,6 +6,8 @@ import { BrowserRouter, Routes, Route, useRouteError, isRouteErrorResponse } fro
 import { AuthProvider } from "@/contexts/AuthContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { ModelProvider } from "@/contexts/ModelContext";
+import { WebSocketProvider } from "@/contexts/WebSocketContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
 import Index from "./pages/Index";
@@ -20,7 +21,6 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import TermsOfService from "./pages/TermsOfService";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
-import RequestAccess from "./pages/RequestAccess";
 import Documentation from "./pages/Documentation";
 import ProjectExport from "./pages/export/ProjectExport";
 import { toast } from "sonner";
@@ -92,10 +92,11 @@ const App = () => (
     <TooltipProvider>
       <BrowserRouter>
         <AuthProvider>
-          <ThemeProvider>
-            <LanguageProvider>
-              <Toaster />
-              <Sonner position="top-right" closeButton toastOptions={{ 
+          <WebSocketProvider>
+            <ThemeProvider>
+              <LanguageProvider>
+                <ModelProvider>
+              <Sonner position="bottom-right" closeButton toastOptions={{ 
                 className: "animate-slide-in-right" 
               }} />
               <div className="app-container animate-fade-in">
@@ -106,7 +107,6 @@ const App = () => (
                   <Route path="/documentation" element={<Documentation />} />
                   <Route path="/terms-of-service" element={<TermsOfService />} />
                   <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-                  <Route path="/request-access" element={<RequestAccess />} />
                   <Route path="/dashboard" element={
                     <ProtectedRoute>
                       <Dashboard />
@@ -137,12 +137,16 @@ const App = () => (
                       <Profile />
                     </ProtectedRoute>
                   } />
+                  
+                  
                   {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </div>
-            </LanguageProvider>
-          </ThemeProvider>
+                </ModelProvider>
+              </LanguageProvider>
+            </ThemeProvider>
+          </WebSocketProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

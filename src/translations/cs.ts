@@ -50,16 +50,17 @@ export default {
     manageAccount: 'Spravovat účet',
     changePassword: 'Změnit heslo',
     deleteAccount: 'Smazat účet',
-    requestAccess: 'Požádat o přístup',
     termsOfService: 'Podmínky služby',
     privacyPolicy: 'Zásady ochrany osobních údajů',
-    accessRequest: 'Žádost o přístup',
     createAccount: 'Vytvořit účet',
     signInToAccount: 'Přihlásit se k účtu',
-    sort: 'Řadit'
+    sort: 'Řadit',
+    no_preview: 'Žádný náhled'
   },
   dashboard: {
     manageProjects: 'Spravujte své výzkumné projekty a analýzy',
+    projectGallery: 'Galerie Projektů',
+    projectGalleryDescription: 'Procházejte a spravujte všechny své segmentační projekty',
     statsOverview: 'Přehled statistik',
     totalProjects: 'Celkem projektů',
     activeProjects: 'Aktivní projekty',
@@ -94,7 +95,23 @@ export default {
     projectDeleted: 'Projekt byl úspěšně smazán',
     viewProject: 'Zobrazit projekt',
     projectImages: 'Obrázky projektu',
-    noProjects: 'Žádné projekty nebyly nalezeny'
+    noProjects: 'Žádné projekty nebyly nalezeny',
+    imageDeleted: 'Obrázek byl odstraněn',
+    deleteImageError: 'Nepodařilo se odstranit obrázek',
+    deleteImageFailed: 'Odstranění obrázku selhalo',
+    imagesQueuedForSegmentation: '{{count}} obrázků přidáno do fronty pro segmentaci',
+    allImagesAlreadySegmented: 'Všechny obrázky jsou již segmentovány nebo ve frontě',
+    errorAddingToQueue: 'Chyba při přidávání obrázků do fronty',
+    imageAlreadyProcessing: 'Obrázek je již zpracováván',
+    processImageFailed: 'Nepodařilo se zpracovat obrázek',
+    segmentationCompleted: 'Segmentace dokončena pro obrázek',
+    segmentationFailed: 'Segmentace selhala',
+    segmentationStarted: 'Segmentace byla zahájena',
+    segmentationCompleteWithCount: 'Segmentace dokončena! Nalezeno {{count}} objektů'
+  },
+  errors: {
+    noProjectOrUser: 'Chyba: Není vybrán projekt nebo uživatel',
+    unknown: 'Neznámá chyba'
   },
   images: {
     uploadImages: 'Nahrát obrázky',
@@ -113,7 +130,14 @@ export default {
     noAnalysesYet: 'Zatím žádné analýzy',
     runAnalysis: 'Spustit analýzu',
     viewResults: 'Zobrazit výsledky',
-    dropImagesHere: 'Přetáhněte obrázky sem...'
+    dropImagesHere: 'Přetáhněte obrázky sem...',
+    selectProjectFirst: 'Nejprve vyberte projekt',
+    projectRequired: 'Před nahráním obrázků musíte vybrat projekt',
+    pending: 'Čekající',
+    uploading: 'Nahrávání',
+    processing: 'Zpracování',
+    complete: 'Dokončeno',
+    error: 'Chyba'
   },
   settings: {
     manageSettings: 'Spravujte své nastavení účtu',
@@ -137,6 +161,24 @@ export default {
       newFeatures: 'Nové funkce',
       marketingEmails: 'Marketingové e-maily',
       billing: 'Oznámení o fakturaci'
+    },
+    models: 'Modely',
+    modelSelection: 'Výběr Modelu',
+    modelSelectionDescription: 'Vyberte AI model pro segmentaci buněk',
+    confidenceThreshold: 'Práh Spolehlivosti',
+    confidenceThresholdDescription: 'Minimální spolehlivost požadovaná pro predikce segmentace',
+    currentThreshold: 'Současný práh',
+    modelSelected: 'Model úspěšně vybrán',
+    modelSettingsSaved: 'Nastavení modelu úspěšně uloženo',
+    modelSize: {
+      small: 'Malý',
+      medium: 'Střední',
+      large: 'Velký'
+    },
+    modelDescription: {
+      hrnet: 'Rychlý a efektivní model pro segmentaci v reálném čase',
+      resunet_small: 'Vyvážená rychlost a přesnost pro většinu případů použití',
+      resunet_advanced: 'Nejvyšší přesnost s mechanismy pozornosti'
     }
   },
   auth: {
@@ -164,23 +206,58 @@ export default {
     loadingAccount: 'Načítání vašeho účtu...',
     processingRequest: 'Zpracování vašeho požadavku...'
   },
-  requestAccess: {
-    title: 'Požádat o přístup k platformě pro segmentaci sféroidů',
-    description: 'Vyplňte následující formulář pro žádost o přístup k naší platformě. Posoudíme vaši žádost a brzy vás kontaktujeme.',
-    emailLabel: 'Vaše e-mailová adresa',
-    emailPlaceholder: 'Zadejte svou e-mailovou adresu',
-    nameLabel: 'Vaše jméno',
-    namePlaceholder: 'Zadejte své celé jméno',
-    institutionLabel: 'Instituce/Společnost',
-    institutionPlaceholder: 'Zadejte název vaší instituce nebo společnosti',
-    reasonLabel: 'Důvod přístupu',
-    reasonPlaceholder: 'Popište, proč potřebujete přístup k naší platformě',
-    submitRequest: 'Odeslat žádost',
-    submittingRequest: 'Odesílání...',
-    requestReceived: 'Žádost přijata',
-    thankYou: 'Děkujeme za váš zájem',
-    weWillContact: 'Posoudíme vaši žádost a brzy vás kontaktujeme',
-    agreeToTerms: 'Odesláním této žádosti souhlasíte s našimi',
-    and: 'a'
+  profile: {
+    title: 'Profil',
+    about: 'O mně',
+    activity: 'Aktivita',
+    projects: 'Projekty',
+    papers: 'Články',
+    analyses: 'Analýzy',
+    recentProjects: 'Nedávné projekty',
+    recentAnalyses: 'Nedávné analýzy',
+    accountDetails: 'Detaily účtu',
+    accountType: 'Typ účtu',
+    joinDate: 'Datum registrace',
+    lastActive: 'Naposledy aktivní',
+    projectsCreated: 'Vytvořené projekty',
+    imagesUploaded: 'Nahrané obrázky',
+    segmentationsCompleted: 'Dokončené segmentace',
+    editProfile: 'Upravit profil',
+    joined: 'Připojen',
+    copyApiKey: 'Kopírovat API klíč',
+    collaborators: 'Spolupracovníci',
+    noCollaborators: 'Žádní spolupracovníci',
+    connectedAccounts: 'Propojené účty',
+    connect: 'Propojit',
+    recentActivity: 'Nedávná aktivita',
+    noRecentActivity: 'Žádná nedávná aktivita',
+    statistics: 'Statistiky',
+    totalImagesProcessed: 'Celkem zpracovaných obrázků',
+    averageProcessingTime: 'Průměrná doba zpracování',
+    fromLastMonth: 'od minulého měsíce',
+    storageUsed: 'Využité úložiště',
+    of: 'z',
+    apiRequests: 'API požadavky',
+    thisMonth: 'tento měsíc',
+    recentPublications: 'Nedávné publikace',
+    viewAll: 'Zobrazit vše',
+    noPublications: 'Zatím žádné publikace',
+    today: 'dnes',
+    yesterday: 'včera',
+    daysAgo: 'dní nazpět',
+    completionRate: 'míra dokončení',
+    createdProject: 'Vytvořil projekt',
+    completedSegmentation: 'Dokončil segmentaci pro',
+    uploadedImage: 'Nahrál obrázek'
+  },
+  status: {
+    segmented: 'Segmentováno',
+    processing: 'Zpracovává se {{count}} obrázků',
+    queued: 'Ve frontě',
+    failed: 'Chyba',
+    no_segmentation: 'Bez segmentace',
+    disconnected: 'Odpojeno od serveru',
+    error: 'Chyba ML služby',
+    ready: 'Připraven k segmentaci'
   }
 };

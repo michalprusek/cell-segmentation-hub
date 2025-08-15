@@ -1,0 +1,119 @@
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { AlertTriangle } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
+
+interface DeleteAccountDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  userEmail: string;
+}
+
+const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
+  isOpen,
+  onClose,
+  userEmail,
+}) => {
+  const { t } = useLanguage();
+  const { deleteAccount } = useAuth();
+  const [confirmationText, setConfirmationText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const isConfirmationValid = confirmationText === userEmail;
+
+  const handleDelete = async () => {
+    if (!isConfirmationValid) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteAccount();
+      onClose();
+    } catch (error) {
+      console.error("Error deleting account:", error);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isDeleting) {
+      setConfirmationText("");
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <AlertTriangle className="h-5 w-5" />
+            {t('common.deleteAccount')}
+          </DialogTitle>
+          <DialogDescription className="text-base leading-relaxed pt-2">
+            This action <strong>cannot be undone</strong>. This will permanently delete your account 
+            and remove all of your data from our servers.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-4">
+          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+            <h4 className="font-semibold text-red-800 mb-2">What will be deleted:</h4>
+            <ul className="text-sm text-red-700 space-y-1">
+              <li>• Your user account and profile</li>
+              <li>• All your projects and images</li>
+              <li>• All segmentation data and results</li>
+              <li>• Account settings and preferences</li>
+            </ul>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="confirmation" className="text-sm font-medium">
+              Please type <span className="font-mono bg-gray-100 px-1 rounded">{userEmail}</span> to confirm:
+            </Label>
+            <Input
+              id="confirmation"
+              type="text"
+              placeholder={userEmail}
+              value={confirmationText}
+              onChange={(e) => setConfirmationText(e.target.value)}
+              className="font-mono"
+              disabled={isDeleting}
+            />
+          </div>
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleClose}
+            disabled={isDeleting}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={!isConfirmationValid || isDeleting}
+            className="min-w-[120px]"
+          >
+            {isDeleting ? "Deleting..." : "Delete Account"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default DeleteAccountDialog;

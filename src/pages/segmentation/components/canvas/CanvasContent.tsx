@@ -1,35 +1,50 @@
 
 import React from 'react';
 import { motion, AnimatePresence } from "framer-motion";
+import { TransformState } from '../../types';
 
 interface CanvasContentProps {
-  zoom: number;
-  offset: { x: number; y: number };
+  transform: TransformState;
   children: React.ReactNode;
+  isZooming?: boolean;
+  // Legacy props for backward compatibility - will be removed
+  zoom?: number;
+  offset?: { x: number; y: number };
 }
 
 /**
  * Kontejner pro obsah plátna s transformacemi
  */
 const CanvasContent = ({
+  transform,
+  children,
+  isZooming = false,
+  // Legacy props for backward compatibility
   zoom,
-  offset,
-  children
+  offset
 }: CanvasContentProps) => {
+  // Use new transform or fall back to legacy props
+  const actualTransform = transform || {
+    zoom: zoom || 1,
+    translateX: offset?.x || 0,
+    translateY: offset?.y || 0
+  };
+
   return (
-    <div 
-      style={{ 
-        transform: `translate(${offset.x * zoom}px, ${offset.y * zoom}px) scale(${zoom})`,
-        transformOrigin: '0 0',
-        willChange: 'transform',
-        position: 'absolute',
-        top: 0,
-        left: 0
-      }}
-      className="absolute top-0 left-0"
-      data-testid="canvas-transform-container"
-    >
-      {children}
+    <div className="absolute inset-0 flex items-center justify-center">
+      <div 
+        style={{ 
+          transform: `translate3d(${actualTransform.translateX}px, ${actualTransform.translateY}px, 0) scale(${actualTransform.zoom})`,
+          transformOrigin: 'center center',
+          willChange: isZooming ? 'transform' : 'auto',
+          position: 'relative',
+          backfaceVisibility: 'hidden',
+          perspective: 1000
+        }}
+        data-testid="canvas-transform-container"
+      >
+        {children}
+      </div>
     </div>
   );
 };

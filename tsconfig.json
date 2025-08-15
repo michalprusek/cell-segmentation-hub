@@ -9,11 +9,14 @@
     "paths": {
       "@/*": ["./src/*"]
     },
-    "noImplicitAny": false,
-    "noUnusedParameters": false,
+    "noImplicitAny": true, // Enable for better type safety
+    "noUnusedParameters": false, // Keep false to avoid breaking existing code
     "skipLibCheck": true,
     "allowJs": true,
-    "noUnusedLocals": false,
-    "strictNullChecks": false
+    "noUnusedLocals": false, // Keep false to avoid breaking existing code
+    "strictNullChecks": true, // Enable for better null safety
+    "noFallthroughCasesInSwitch": true, // Enable to prevent switch bugs
+    "noImplicitReturns": true, // Enable to ensure all code paths return
+    "noImplicitThis": true // Enable to catch 'this' context issues
   }
 }

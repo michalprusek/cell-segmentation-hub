@@ -6,11 +6,12 @@ interface EditorContentProps {
 }
 
 /**
- * Komponenta obsahující hlavní obsah editoru
+ * Modernizovaný grid layout pro hlavní obsah editoru
+ * Grid: [Toolbar | Canvas | Panel]
  */
 const EditorContent = ({ children }: EditorContentProps) => {
   return (
-    <div className="flex-1 flex flex-col relative overflow-hidden items-center justify-center p-4">
+    <div className="flex-1 grid grid-cols-[80px_1fr_320px] overflow-hidden">
       {children}
     </div>
   );

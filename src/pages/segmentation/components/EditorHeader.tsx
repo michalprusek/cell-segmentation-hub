@@ -1,128 +1,127 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from "framer-motion";
-import { Loader2, ChevronLeft, Save, Download } from 'lucide-react';
+import { 
+  ChevronLeft, 
+  ChevronRight, 
+  Home, 
+  FolderOpen,
+  Image as ImageIcon
+} from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import ProjectImageExport from './project/ProjectImageExport';
-import { useSegmentationContext } from '../contexts/SegmentationContext';
 
 interface EditorHeaderProps {
   projectId: string;
   projectTitle: string;
   imageName: string;
-  saving: boolean;
-  loading: boolean;
   currentImageIndex: number;
   totalImages: number;
   onNavigate: (direction: 'prev' | 'next') => void;
-  onSave: () => Promise<void>;
 }
 
 const EditorHeader = ({
   projectId,
   projectTitle,
   imageName,
-  saving,
-  loading,
   currentImageIndex,
   totalImages,
-  onNavigate,
-  onSave
+  onNavigate
 }: EditorHeaderProps) => {
   const navigate = useNavigate();
-  const { segmentation } = useSegmentationContext();
-  const [showExport, setShowExport] = useState(false);
 
   const handleBackClick = () => {
     navigate(`/project/${projectId}`);
   };
+
+  const handleHomeClick = () => {
+    navigate('/dashboard');
+  };
   
   return (
-    <>
-      <motion.header 
-        className="w-full h-16 px-4 bg-white dark:bg-gray-800 shadow-sm flex items-center justify-between z-10"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <div className="flex items-center space-x-2">
-          <Button 
-            variant="ghost" 
-            className="text-gray-600 dark:text-gray-300 flex items-center gap-1 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700"
-            onClick={handleBackClick}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">Zpět</span>
-          </Button>
-          
-          <div className="hidden md:block text-sm text-gray-500 dark:text-gray-400">|</div>
-          
-          <div className="flex flex-col md:flex-row md:items-center md:gap-2">
-            <h1 className="text-base font-medium truncate max-w-[140px] sm:max-w-[200px] md:max-w-xs">
-              {projectTitle}
-            </h1>
-            <span className="text-gray-500 dark:text-gray-400 text-xs md:text-sm">
-              {imageName}
-            </span>
-          </div>
-        </div>
+    <motion.header 
+      className="w-full h-12 px-6 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between z-20 shadow-sm"
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3 }}
+    >
+      {/* Left section - Breadcrumb Navigation */}
+      <div className="flex items-center space-x-3">
+        <Button 
+          variant="ghost" 
+          size="sm"
+          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60"
+          onClick={handleHomeClick}
+        >
+          <Home className="h-4 w-4" />
+        </Button>
+        
+        <ChevronRight className="h-4 w-4 text-slate-400" />
+        
+        <Button 
+          variant="ghost" 
+          size="sm"
+          className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 max-w-32 sm:max-w-48"
+          onClick={handleBackClick}
+        >
+          <FolderOpen className="h-4 w-4 mr-2" />
+          <span className="truncate text-sm font-medium">{projectTitle}</span>
+        </Button>
+        
+        <ChevronRight className="h-4 w-4 text-slate-400" />
         
         <div className="flex items-center space-x-2">
-          <div className="text-sm text-gray-600 dark:text-gray-300 hidden md:flex items-center">
-            <span>{currentImageIndex + 1}</span>
-            <span className="mx-1">/</span>
+          <ImageIcon className="h-4 w-4 text-blue-500" />
+          <span className="text-sm font-medium text-slate-900 dark:text-white truncate max-w-32 sm:max-w-48">
+            {imageName}
+          </span>
+        </div>
+      </div>
+      
+      {/* Right section - Navigation and Progress */}
+      <div className="flex items-center space-x-4">
+        {/* Progress indicator */}
+        <div className="hidden md:flex items-center space-x-3">
+          <div className="text-sm text-slate-600 dark:text-slate-300 flex items-center space-x-2">
+            <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{currentImageIndex + 1}</span>
+            <span className="text-slate-400">/</span>
             <span>{totalImages}</span>
           </div>
           
-          <div className="hidden sm:flex items-center space-x-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => onNavigate('prev')} 
-              disabled={currentImageIndex <= 0}
-              className="h-9"
-            >
-              Předchozí
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => onNavigate('next')} 
-              disabled={currentImageIndex >= totalImages - 1}
-              className="h-9"
-            >
-              Další
-            </Button>
+          {/* Progress bar */}
+          <div className="w-24 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
+              style={{ width: `${((currentImageIndex + 1) / totalImages) * 100}%` }}
+            />
           </div>
-          
+        </div>
+        
+        {/* Navigation buttons */}
+        <div className="flex items-center space-x-2">
           <Button 
             variant="outline" 
-            className="h-9 gap-1.5"
-            onClick={() => setShowExport(true)}
+            size="sm" 
+            onClick={() => onNavigate('prev')} 
+            disabled={currentImageIndex <= 0}
+            className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700"
           >
-            <Download className="h-4 w-4" />
-            <span>Export</span>
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">Previous</span>
           </Button>
-          
           <Button 
-            onClick={onSave} 
-            disabled={saving || loading}
-            className="h-9 gap-1.5"
+            variant="outline" 
+            size="sm" 
+            onClick={() => onNavigate('next')} 
+            disabled={currentImageIndex >= totalImages - 1}
+            className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            <span>Uložit</span>
+            <span className="hidden sm:inline">Next</span>
+            <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>
-      </motion.header>
-      
-      {showExport && (
-        <ProjectImageExport 
-          segmentation={segmentation} 
-          onClose={() => setShowExport(false)} 
-        />
-      )}
-    </>
+      </div>
+    </motion.header>
   );
 };
 

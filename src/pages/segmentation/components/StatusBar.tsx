@@ -2,13 +2,39 @@
 import React from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { EditMode } from '../types';
+import { 
+  Shapes, 
+  MapPin, 
+  CheckCircle, 
+  XCircle, 
+  Edit3, 
+  Scissors, 
+  Plus, 
+  Hash,
+  MousePointer,
+  PenTool,
+  Trash2,
+  Eye,
+  EyeOff,
+  Target
+} from 'lucide-react';
 
 interface StatusBarProps {
   segmentation: SegmentationResult | null;
-  editMode?: string;
+  editMode?: EditMode;
+  selectedPolygonId?: string | null;
+  visiblePolygonsCount?: number;
+  hiddenPolygonsCount?: number;
 }
 
-const StatusBar = ({ segmentation, editMode }: StatusBarProps) => {
+const StatusBar = ({ 
+  segmentation, 
+  editMode, 
+  selectedPolygonId, 
+  visiblePolygonsCount, 
+  hiddenPolygonsCount 
+}: StatusBarProps) => {
   const { t } = useLanguage();
   
   if (!segmentation) return null;
@@ -18,44 +44,139 @@ const StatusBar = ({ segmentation, editMode }: StatusBarProps) => {
     (sum, polygon) => sum + polygon.points.length, 
     0
   );
+
+  const getModeIcon = () => {
+    switch (editMode) {
+      case EditMode.View:
+        return <MousePointer className="h-3 w-3" />;
+      case EditMode.EditVertices:
+        return <Edit3 className="h-3 w-3" />;
+      case EditMode.AddPoints:
+        return <Plus className="h-3 w-3" />;
+      case EditMode.CreatePolygon:
+        return <PenTool className="h-3 w-3" />;
+      case EditMode.Slice:
+        return <Scissors className="h-3 w-3" />;
+      case EditMode.DeletePolygon:
+        return <Trash2 className="h-3 w-3" />;
+      default:
+        return null;
+    }
+  };
+
+  const getModeColor = () => {
+    switch (editMode) {
+      case EditMode.View:
+        return "text-gray-400 bg-gray-500/20";
+      case EditMode.EditVertices:
+        return "text-purple-400 bg-purple-500/20";
+      case EditMode.AddPoints:
+        return "text-emerald-400 bg-emerald-500/20";
+      case EditMode.CreatePolygon:
+        return "text-blue-400 bg-blue-500/20";
+      case EditMode.Slice:
+        return "text-yellow-400 bg-yellow-500/20";
+      case EditMode.DeletePolygon:
+        return "text-red-400 bg-red-500/20";
+      default:
+        return "text-slate-400";
+    }
+  };
+
+  const getModeLabel = () => {
+    switch (editMode) {
+      case EditMode.View:
+        return "Prohlížení";
+      case EditMode.EditVertices:
+        return "Editace vrcholů";
+      case EditMode.AddPoints:
+        return "Přidávání bodů";
+      case EditMode.CreatePolygon:
+        return "Vytváření";
+      case EditMode.Slice:
+        return "Řezání";
+      case EditMode.DeletePolygon:
+        return "Mazání";
+      default:
+        return "";
+    }
+  };
   
+  // Spočítáme viditelné a skryté polygony
+  const totalPolygons = segmentation.polygons.length;
+  const visibleCount = visiblePolygonsCount ?? totalPolygons;
+  const hiddenCount = hiddenPolygonsCount ?? 0;
+
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-8 bg-gray-800/90 dark:bg-black/80 text-white flex items-center justify-center space-x-8 text-xs">
-      <div className="flex items-center space-x-1">
-        <span className="text-gray-400">{t('segmentation.totalPolygons')}:</span>
-        <span>{segmentation.polygons.length}</span>
+    <div className="h-12 bg-gray-100 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 text-xs">
+      {/* Left side - Polygon Statistics */}
+      <div className="flex items-center space-x-6">
+        <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
+          <Shapes className="h-3 w-3 text-blue-500" />
+          <span className="font-medium">{totalPolygons}</span>
+          <span className="text-gray-600 dark:text-gray-400">polygonů</span>
+        </div>
+        
+        <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
+          <MapPin className="h-3 w-3 text-orange-500" />
+          <span className="font-medium">{totalVertices}</span>
+          <span className="text-gray-600 dark:text-gray-400">vrcholů</span>
+        </div>
+
+        {/* Visibility stats */}
+        {hiddenCount > 0 && (
+          <>
+            <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
+              <Eye className="h-3 w-3 text-green-500" />
+              <span className="font-medium">{visibleCount}</span>
+              <span className="text-gray-600 dark:text-gray-400">viditelných</span>
+            </div>
+            
+            <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
+              <EyeOff className="h-3 w-3 text-gray-500" />
+              <span className="font-medium">{hiddenCount}</span>
+              <span className="text-gray-600 dark:text-gray-400">skrytých</span>
+            </div>
+          </>
+        )}
+
+        {/* Selected polygon indicator */}
+        {selectedPolygonId && (
+          <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
+            <Target className="h-3 w-3 text-blue-500" />
+            <span className="text-gray-600 dark:text-gray-400">vybrán:</span>
+            <span className="font-mono text-xs">{selectedPolygonId.substring(0, 8)}</span>
+          </div>
+        )}
+        
+        <div className="flex items-center space-x-2">
+          {segmentation.id ? (
+            <CheckCircle className="h-3 w-3 text-green-500" />
+          ) : (
+            <XCircle className="h-3 w-3 text-gray-400" />
+          )}
+          <span className={`text-xs ${segmentation.id ? 'text-green-500' : 'text-gray-400'}`}>
+            {segmentation.id ? 'Uloženo' : 'Neuloženo'}
+          </span>
+        </div>
       </div>
-      
-      <div className="flex items-center space-x-1">
-        <span className="text-gray-400">{t('segmentation.totalVertices')}:</span>
-        <span>{totalVertices}</span>
-      </div>
-      
-      <div className="flex items-center space-x-1">
-        <span className="text-gray-400">{t('segmentation.completedSegmentation')}:</span>
-        <span className="text-green-500">{segmentation.id ? t('common.yes') : t('common.no')}</span>
-      </div>
-      
-      {segmentation.id && (
-        <div className="flex items-center space-x-1">
-          <span className="text-gray-400">{t('common.segmentation')} ID:</span>
-          <span className="text-blue-400">seg-{segmentation.id.substring(0, 4)}</span>
+
+      {/* Center - Mode indicator */}
+      {editMode && (
+        <div className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border ${getModeColor()}`}>
+          {getModeIcon()}
+          <span className="text-xs font-medium">
+            {getModeLabel()}
+          </span>
         </div>
       )}
-      
-      {editMode && (
-        <div className="flex items-center space-x-1">
-          <span className="text-gray-400">{t('segmentation.mode')}:</span>
-          <span className={`${
-            editMode === "edit" ? "text-purple-500" : 
-            editMode === "slice" ? "text-red-500" : 
-            "text-green-500"
-          }`}>
-            {editMode === "edit" 
-              ? t('segmentation.modes.editMode') 
-              : editMode === "slice" 
-                ? t('segmentation.modes.slicingMode') 
-                : t('segmentation.modes.pointAddingMode')}
+
+      {/* Right side - Segmentation ID */}
+      {segmentation.id && (
+        <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+          <Hash className="h-3 w-3" />
+          <span className="text-xs font-mono">
+            ID: {segmentation.id.substring(0, 8)}
           </span>
         </div>
       )}

@@ -67,87 +67,24 @@ export const applyThresholding = async (
   });
 };
 
-// Simple contour finding simulation
-// In a real app, this would use proper contour tracing algorithms
+// Contour finding - returns empty array as we fetch real segmentation from backend
 export const findContours = (imageData: ImageData): Polygon[] => {
-  // This is a simplified simulation
-  // In a real app, this would trace the contours from the binary mask
-  
-  const width = imageData.width;
-  const height = imageData.height;
-  const polygons: Polygon[] = [];
-  
-  // Generate some "fake" polygons based on the image size
-  // This is just for demonstration purposes
-  const polygonCount = 2 + Math.floor(Math.random() * 3);
-  
-  for (let i = 0; i < polygonCount; i++) {
-    const pointCount = 5 + Math.floor(Math.random() * 5);
-    const points: Point[] = [];
-    
-    // Center of the polygon
-    const centerX = width * (0.3 + Math.random() * 0.4);
-    const centerY = height * (0.3 + Math.random() * 0.4);
-    const radius = Math.min(width, height) * (0.1 + Math.random() * 0.2);
-    
-    // Generate points in a rough circle
-    for (let j = 0; j < pointCount; j++) {
-      const angle = (j / pointCount) * Math.PI * 2;
-      const variation = 0.8 + Math.random() * 0.4;
-      points.push({
-        x: centerX + Math.cos(angle) * radius * variation,
-        y: centerY + Math.sin(angle) * radius * variation
-      });
-    }
-    
-    // Main polygon is external
-    const isExternal = i === 0; 
-    
-    polygons.push({
-      id: `polygon-${i}`,
-      points,
-      type: isExternal ? 'external' : 'internal',
-      class: 'spheroid'
-    });
-  }
-  
-  return polygons;
+  // In production, segmentation is performed by the ML backend service
+  // This function returns an empty array since we don't generate fake polygons
+  return [];
 };
 
-// Segment an image and return polygons
+// Main segmentation function - returns empty result as segmentation is done by backend
 export const segmentImage = async (imageSrc: string): Promise<SegmentationResult> => {
-  try {
-    // Apply thresholding to get a binary mask
-    const binaryMask = await applyThresholding(imageSrc);
-    
-    // Find contours in the binary mask
-    const basicPolygons = findContours(binaryMask);
-    
-    // Convert to PolygonData with required fields
-    const polygons: PolygonData[] = basicPolygons.map(poly => ({
-      id: poly.id,
-      points: poly.points,
-      type: poly.type || 'external', 
-      class: poly.class || 'spheroid'
-    }));
-    
-    return {
-      id: `seg-${Date.now()}`,
-      imageSrc,
-      polygons,
-      status: 'completed',
-      timestamp: new Date()
-    };
-  } catch (error) {
-    console.error("Segmentation failed:", error);
-    return {
-      id: `seg-failed-${Date.now()}`,
-      imageSrc,
-      polygons: [],
-      status: 'failed',
-      timestamp: new Date()
-    };
-  }
+  // In production, segmentation is performed by the ML backend service
+  // This function returns an empty result
+  return {
+    imageSrc,
+    polygons: [],
+    imageWidth: 0,
+    imageHeight: 0,
+    timestamp: new Date()
+  };
 };
 
 // Calculate polygon area, with consideration for internal holes

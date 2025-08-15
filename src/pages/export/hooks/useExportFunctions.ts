@@ -1,9 +1,9 @@
 
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { utils, writeFile } from 'xlsx';
+import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
-import { ProjectImage, SpheroidMetric } from '@/types';
+import { ProjectImage, SpheroidMetric, PolygonData } from '@/types';
 import { calculateMetrics } from '@/pages/segmentation/utils/metricCalculations';
 
 export const useExportFunctions = (images: ProjectImage[], projectTitle: string) => {
@@ -44,7 +44,7 @@ export const useExportFunctions = (images: ProjectImage[], projectTitle: string)
     return Object.values(selectedImages).filter(Boolean).length;
   };
   
-  const calculateObjectMetrics = (polygons: any[]) => {
+  const calculateObjectMetrics = (polygons: PolygonData[]) => {
     if (!polygons || polygons.length === 0) return null;
     
     // Get external polygons
@@ -84,7 +84,7 @@ export const useExportFunctions = (images: ProjectImage[], projectTitle: string)
       const imagesToExport = images.filter(img => selectedImages[img.id]);
       
       // Collect all metrics from all selected images
-      const allMetrics: any[] = [];
+      const allMetrics: SpheroidMetric[] = [];
       
       imagesToExport.forEach(image => {
         if (image.segmentationResult && image.segmentationResult.polygons) {
@@ -93,22 +93,21 @@ export const useExportFunctions = (images: ProjectImage[], projectTitle: string)
           if (imageMetrics) {
             imageMetrics.forEach((metric, index) => {
               allMetrics.push({
-                'Image Name': image.name || 'Unnamed',
-                'Image ID': image.id,
-                'Object ID': index + 1,
-                'Area (px²)': metric.area.toFixed(2),
-                'Perimeter (px)': metric.perimeter.toFixed(2),
-                'Circularity': metric.circularity.toFixed(4),
-                'Equivalent Diameter (px)': metric.equivalentDiameter.toFixed(2),
-                'Aspect Ratio': metric.aspectRatio.toFixed(2),
-                'Compactness': metric.compactness.toFixed(4),
-                'Convexity': metric.convexity.toFixed(4),
-                'Solidity': metric.solidity.toFixed(4),
-                'Sphericity': metric.sphericity.toFixed(4),
-                'Feret Diameter Max (px)': metric.feretDiameterMax.toFixed(2),
-                'Feret Diameter Min (px)': metric.feretDiameterMin.toFixed(2),
-                'Created At': image.createdAt ? format(image.createdAt, 'yyyy-MM-dd HH:mm:ss') : 'N/A'
-              });
+                imageId: image.id,
+                imageName: image.name || 'Unnamed',
+                contourNumber: index + 1,
+                area: parseFloat(metric.area.toFixed(2)),
+                perimeter: parseFloat(metric.perimeter.toFixed(2)),
+                circularity: parseFloat(metric.circularity.toFixed(4)),
+                compactness: parseFloat(metric.compactness.toFixed(4)),
+                convexity: parseFloat(metric.convexity.toFixed(4)),
+                equivalentDiameter: parseFloat(metric.equivalentDiameter.toFixed(2)),
+                aspectRatio: parseFloat(metric.aspectRatio.toFixed(2)),
+                feretDiameterMax: parseFloat(metric.feretDiameterMax.toFixed(2)),
+                feretDiameterMin: parseFloat(metric.feretDiameterMin.toFixed(2)),
+                solidity: parseFloat(metric.solidity.toFixed(4)),
+                sphericity: parseFloat(metric.sphericity.toFixed(4))
+              } as SpheroidMetric);
             });
           }
         }
@@ -120,37 +119,54 @@ export const useExportFunctions = (images: ProjectImage[], projectTitle: string)
         return;
       }
       
-      // Create worksheet
-      const worksheet = utils.json_to_sheet(allMetrics);
+      // Create workbook and worksheet using SheetJS
+      const workbook = XLSX.utils.book_new();
       
-      // Set column widths
-      const colWidths = [
-        { wch: 20 }, // Image Name
-        { wch: 36 }, // Image ID
-        { wch: 10 }, // Object ID
-        { wch: 12 }, // Area
-        { wch: 15 }, // Perimeter
-        { wch: 12 }, // Circularity
-        { wch: 22 }, // Equivalent Diameter
-        { wch: 12 }, // Aspect Ratio
-        { wch: 12 }, // Compactness
-        { wch: 12 }, // Convexity
-        { wch: 12 }, // Solidity
-        { wch: 12 }, // Sphericity
-        { wch: 20 }, // Feret Diameter Max
-        { wch: 20 }, // Feret Diameter Min
-        { wch: 20 }  // Created At
+      // Prepare data with headers
+      const worksheetData = [
+        [
+          'Image Name',
+          'Image ID', 
+          'Object ID',
+          'Area (px²)',
+          'Perimeter (px)',
+          'Circularity',
+          'Equivalent Diameter (px)',
+          'Aspect Ratio',
+          'Compactness', 
+          'Convexity',
+          'Solidity',
+          'Sphericity',
+          'Feret Diameter Max (px)',
+          'Feret Diameter Min (px)'
+        ],
+        ...allMetrics.map(metric => [
+          metric.imageName,
+          metric.imageId,
+          metric.contourNumber,
+          metric.area,
+          metric.perimeter,
+          metric.circularity,
+          metric.equivalentDiameter,
+          metric.aspectRatio,
+          metric.compactness,
+          metric.convexity,
+          metric.solidity,
+          metric.sphericity,
+          metric.feretDiameterMax,
+          metric.feretDiameterMin
+        ])
       ];
       
-      worksheet['!cols'] = colWidths;
+      // Create worksheet
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
       
-      // Create workbook
-      const workbook = utils.book_new();
-      utils.book_append_sheet(workbook, worksheet, 'Object Metrics');
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Object Metrics');
       
       // Download file
       const filename = `${projectTitle || 'project'}_metrics_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
-      writeFile(workbook, filename);
+      XLSX.writeFile(workbook, filename);
       
       toast.success('Export metrik dokončen');
     } catch (error) {
@@ -170,7 +186,7 @@ export const useExportFunctions = (images: ProjectImage[], projectTitle: string)
       
       // Create export data based on selected options
       const exportData = imagesToExport.map(img => {
-        const data: any = {
+        const data: Record<string, unknown> = {
           id: img.id,
           name: img.name,
           url: img.url

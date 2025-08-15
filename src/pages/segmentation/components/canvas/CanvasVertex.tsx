@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React, { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Point } from '@/lib/segmentation';
 
@@ -15,7 +14,7 @@ interface CanvasVertexProps {
   isStartPoint?: boolean;
 }
 
-const CanvasVertex = ({
+const CanvasVertex = React.memo(({
   point,
   polygonId,
   vertexIndex,
@@ -26,56 +25,58 @@ const CanvasVertex = ({
   type = 'external',
   isStartPoint = false
 }: CanvasVertexProps) => {
-  // Dynamicky měníme velikost bodů podle úrovně zoomu - OBRÁCENĚ
-  const getAdjustedRadius = () => {
+  // Memoized radius calculation for performance
+  const radius = useMemo(() => {
     // Base radius is smaller for non-selected polygons
     const baseSize = isSelected ? 1.0 : 0.7;
     
+    let calculatedRadius;
+    
     if (zoom > 4) {
       // Při extrémním přiblížení (zoom > 4) ZVĚTŠÍME body
-      return 7 * baseSize / zoom;
+      calculatedRadius = 7 * baseSize / zoom;
     } else if (zoom > 3) {
       // Při velkém přiblížení (zoom > 3) zvětšíme body
-      return 6 * baseSize / zoom;
+      calculatedRadius = 6 * baseSize / zoom;
     } else if (zoom < 0.5) {
       // Při velkém oddálení (zoom < 0.5) ZMENŠÍME body výrazně
-      return 2.5 * baseSize / zoom;
+      calculatedRadius = 2.5 * baseSize / zoom;
     } else if (zoom < 0.7) {
       // Při mírném oddálení (zoom < 0.7) zmenšíme body
-      return 3 * baseSize / zoom;
+      calculatedRadius = 3 * baseSize / zoom;
     } else {
       // Normální velikost pro běžný zoom
-      return 4 * baseSize / zoom;
+      calculatedRadius = 4 * baseSize / zoom;
     }
-  };
+    
+    // Adjust for start point
+    return isStartPoint ? calculatedRadius * 1.2 : calculatedRadius;
+  }, [zoom, isSelected, isStartPoint]);
 
-  let radius = getAdjustedRadius();
-  
-  // No more special size for start point
-  if (isStartPoint) {
-    // Make it just slightly larger to be identifiable
-    radius *= 1.2;
-  }
-
-  // Určení barvy vertexu podle typu polygonu
-  const getVertexColor = () => {
-    // We don't use a different color for start point anymore
+  // Memoized vertex color calculation
+  const vertexColor = useMemo(() => {
     if (type === 'internal') {
       return isDragging ? '#0077cc' : isHovered ? '#3498db' : (isSelected ? '#0EA5E9' : 'rgba(14, 165, 233, 0.7)');
     } else {
       return isDragging ? '#c0392b' : isHovered ? '#e74c3c' : (isSelected ? '#ea384c' : 'rgba(234, 56, 76, 0.7)');
     }
-  };
-
-  const vertexColor = getVertexColor();
+  }, [type, isDragging, isHovered, isSelected]);
   
-  // Also adjust stroke width based on selection state and zoom
-  const getStrokeWidth = () => {
+  // Memoized stroke width calculation
+  const strokeWidth = useMemo(() => {
     const baseWidth = isSelected ? 1.5 : 1.0;
     return baseWidth / zoom;
-  };
+  }, [isSelected, zoom]);
   
-  const strokeWidth = getStrokeWidth();
+  // Memoized class names
+  const classNames = useMemo(() => {
+    return cn(
+      "polygon-vertex transition-colors duration-150",
+      isDragging ? "cursor-grabbing" : "cursor-grab",
+      isHovered && "z-10",
+      isSelected && (type === 'internal' ? "filter-glow-blue" : "filter-glow-red")
+    );
+  }, [isDragging, isHovered, isSelected, type]);
   
   return (
     <circle
@@ -85,20 +86,31 @@ const CanvasVertex = ({
       fill={vertexColor}
       stroke="#fff"
       strokeWidth={strokeWidth}
-      className={cn(
-        "transition-colors duration-150",
-        isDragging ? "cursor-grabbing" : "cursor-grab",
-        isHovered ? "z-10" : "",
-        isSelected ? (type === 'internal' ? "filter-glow-blue" : "filter-glow-red") : ""
-      )}
+      className={classNames}
       filter={isSelected || isHovered ? "url(#point-shadow)" : ""}
       data-polygon-id={polygonId}
       data-vertex-index={vertexIndex}
       vectorEffect="non-scaling-stroke"
-      shapeRendering="geometricPrecision"
-      style={{ imageRendering: "crisp-edges" }}
+      shapeRendering="optimizeSpeed"
+      pointerEvents="visible"
     />
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison for optimal performance
+  return (
+    prevProps.point.x === nextProps.point.x &&
+    prevProps.point.y === nextProps.point.y &&
+    prevProps.polygonId === nextProps.polygonId &&
+    prevProps.vertexIndex === nextProps.vertexIndex &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isHovered === nextProps.isHovered &&
+    prevProps.isDragging === nextProps.isDragging &&
+    prevProps.zoom === nextProps.zoom &&
+    prevProps.type === nextProps.type &&
+    prevProps.isStartPoint === nextProps.isStartPoint
+  );
+});
+
+CanvasVertex.displayName = 'CanvasVertex';
 
 export default CanvasVertex;

@@ -27,7 +27,7 @@ const CanvasUIElements = ({
 }: CanvasUIElementsProps) => {
   return (
     <>
-      <CanvasZoomInfo zoom={zoom} />
+      {/* <CanvasZoomInfo zoom={zoom} /> */}
       
       {editMode && (
         <EditorModeFooter 

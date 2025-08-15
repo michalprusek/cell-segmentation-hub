@@ -1,8 +1,14 @@
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
+import { rafThrottle, ProgressiveRenderer } from '@/lib/performanceUtils';
+
+interface ProgressiveRenderingCallbacks {
+  onZoomStart?: () => void;
+  onZoomEnd?: () => void;
+}
 
 /**
- * Hook pro obsluhu zoom pomocí kolečka myši
+ * Hook pro obsluhu zoom pomocí kolečka myši s requestAnimationFrame optimalizací
  */
 export const useWheelZoom = (
   zoom: number,
@@ -12,8 +18,66 @@ export const useWheelZoom = (
   setOffset: (offset: { x: number; y: number }) => void,
   constrainOffset: (newOffset: { x: number; y: number }, newZoom: number) => { x: number; y: number },
   MIN_ZOOM: number,
-  MAX_ZOOM: number
+  MAX_ZOOM: number,
+  progressiveCallbacks?: ProgressiveRenderingCallbacks
 ) => {
+  // Progressive renderer for smooth zoom experience
+  const progressiveRenderer = useRef<ProgressiveRenderer | null>(null);
+  
+  // Initialize ProgressiveRenderer in useEffect to avoid side-effects during render
+  useEffect(() => {
+    if (!progressiveRenderer.current) {
+      progressiveRenderer.current = new ProgressiveRenderer(
+        progressiveCallbacks?.onZoomStart,
+        progressiveCallbacks?.onZoomEnd,
+        150 // 150ms debounce for zoom end
+      );
+    }
+  }, [progressiveCallbacks?.onZoomStart, progressiveCallbacks?.onZoomEnd]);
+
+  const performZoom = useCallback((
+    mouseX: number,
+    mouseY: number,
+    zoomFactor: number
+  ) => {
+    const container = canvasContainerRef.current;
+    if (!container) return;
+    
+    // Pozice myši v souřadnicích obrázku
+    const mouseXInImage = mouseX / zoom - offset.x;
+    const mouseYInImage = mouseY / zoom - offset.y;
+    
+    // Výpočet nového zoomu
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * zoomFactor));
+    
+    // Zaokrouhlíme na 2 desetinná místa pro stabilnější hodnoty
+    const roundedZoom = Math.round(newZoom * 100) / 100;
+    
+    // Pokud se zoom skutečně změnil
+    if (roundedZoom !== zoom) {
+      // Start progressive rendering
+      progressiveRenderer.current?.startAnimation();
+      
+      // Výpočet nového offsetu, aby bod pod kurzorem zůstal na stejném místě
+      const newOffsetX = -mouseXInImage + (mouseX / roundedZoom);
+      const newOffsetY = -mouseYInImage + (mouseY / roundedZoom);
+      
+      // Aplikace omezení na offset
+      const constrainedOffset = constrainOffset({ x: newOffsetX, y: newOffsetY }, roundedZoom);
+      
+      setZoom(roundedZoom);
+      setOffset(constrainedOffset);
+    }
+  }, [zoom, offset, canvasContainerRef, constrainOffset, setZoom, setOffset, MIN_ZOOM, MAX_ZOOM]);
+
+  // RAF-throttled zoom handler for smooth 60fps updates - memoize to prevent throttle recreation
+  const throttledZoom = useRef<typeof performZoom | null>(null);
+  
+  // Update throttled function when performZoom changes
+  useEffect(() => {
+    throttledZoom.current = rafThrottle(performZoom, 16); // ~60fps
+  }, [performZoom]);
+
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     
@@ -26,31 +90,12 @@ export const useWheelZoom = (
     const mouseX = e.clientX - rect.left;
     const mouseY = e.clientY - rect.top;
     
-    // Pozice myši v souřadnicích obrázku
-    const mouseXInImage = mouseX / zoom - offset.x;
-    const mouseYInImage = mouseY / zoom - offset.y;
-    
-    // Výpočet nového zoomu s jemnějšími kroky
-    // Použijeme delta faktor s menším krokem pro plynulejší zoom
+    // Jemnější zoom kroky pro plynulejší změny
     const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
-    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * zoomFactor));
     
-    // Zaokrouhlíme na 2 desetinná místa pro stabilnější hodnoty
-    const roundedZoom = Math.round(newZoom * 100) / 100;
-    
-    // Pokud se zoom skutečně změnil
-    if (roundedZoom !== zoom) {
-      // Výpočet nového offsetu, aby bod pod kurzorem zůstal na stejném místě
-      const newOffsetX = -mouseXInImage + (mouseX / roundedZoom);
-      const newOffsetY = -mouseYInImage + (mouseY / roundedZoom);
-      
-      // Aplikace omezení na offset
-      const constrainedOffset = constrainOffset({ x: newOffsetX, y: newOffsetY }, roundedZoom);
-      
-      setZoom(roundedZoom);
-      setOffset(constrainedOffset);
-    }
-  }, [zoom, offset, canvasContainerRef, constrainOffset, setZoom, setOffset, MIN_ZOOM, MAX_ZOOM]);
+    // Use throttled zoom function
+    throttledZoom.current?.(mouseX, mouseY, zoomFactor);
+  }, [canvasContainerRef]);
   
   useEffect(() => {
     const currentContainer = canvasContainerRef.current;
@@ -63,5 +108,8 @@ export const useWheelZoom = (
     };
   }, [handleWheel, canvasContainerRef]);
 
-  return { handleWheel };
+  return { 
+    handleWheel,
+    isZooming: progressiveRenderer.current?.isInProgress ?? false
+  };
 };

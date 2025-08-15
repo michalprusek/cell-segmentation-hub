@@ -1,30 +1,31 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/lib/api";
 import en from '@/translations/en';
 import cs from '@/translations/cs';
-import de from '@/translations/de';
 import es from '@/translations/es';
 import fr from '@/translations/fr';
+import de from '@/translations/de';
 import zh from '@/translations/zh';
 import { useAuth } from "@/contexts/AuthContext";
+import { getErrorMessage } from "@/types";
 
-export type Language = 'en' | 'cs' | 'de' | 'es' | 'fr' | 'zh';
+export type Language = 'en' | 'cs' | 'es' | 'fr' | 'de' | 'zh';
 export type Translations = typeof en;
 
 interface LanguageContextType {
   language: Language;
-  setLanguage: (language: Language) => void;
-  t: (key: string, options?: Record<string, any>) => string;
+  setLanguage: (language: Language) => Promise<void>;
+  t: (key: string, options?: Record<string, unknown>) => string;
   translations: Translations;
 }
 
 const translations = {
   en,
   cs,
-  de,
   es,
   fr,
+  de,
   zh,
 };
 
@@ -49,14 +50,10 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       // Pokud jsme přihlášeni, zkusíme získat jazyk z profilu
       if (user) {
         try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('preferred_language')
-            .eq('id', user.id)
-            .single();
-            
-          if (!error && data && data.preferred_language) {
-            const dbLanguage = data.preferred_language as Language;
+          const profileData = await apiClient.getUserProfile();
+          
+          if (profileData && profileData.preferredLang) {
+            const dbLanguage = profileData.preferredLang as Language;
             setLanguageState(dbLanguage);
             localStorage.setItem('language', dbLanguage);
             setLoaded(true);
@@ -97,27 +94,21 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     // Pokud jsme přihlášeni, aktualizujeme uživatelský profil
     if (user) {
       try {
-        const { error } = await supabase
-          .from('profiles')
-          .update({ preferred_language: newLanguage })
-          .eq('id', user.id);
-        
-        if (error) {
-          console.error('Error saving language preference:', error);
-        }
-      } catch (error) {
-        console.error('Error updating profile:', error);
+        await apiClient.updateUserProfile({ preferredLang: newLanguage });
+      } catch (error: unknown) {
+        const errorMessage = getErrorMessage(error) || "Failed to save language";
+        console.error('Error updating profile language:', errorMessage, error);
       }
     }
   };
 
   // Funkce pro překlad
-  const t = (key: string, options?: Record<string, any>): string => {
+  const t = (key: string, options?: Record<string, unknown>): string => {
     // Rozdělení klíče podle teček pro přístup k vnořeným objektům
     const keys = key.split('.');
     
     // Získání překladu
-    let translation: any = translations[language];
+    let translation: Record<string, unknown> = translations[language];
     
     for (const k of keys) {
       if (translation && translation[k] !== undefined) {
@@ -155,6 +146,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   );
 };
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useLanguage = () => {
   const context = useContext(LanguageContext);
   if (context === undefined) {

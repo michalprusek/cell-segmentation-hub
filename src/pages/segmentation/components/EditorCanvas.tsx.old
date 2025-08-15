@@ -1,0 +1,257 @@
+
+import React, { useMemo } from 'react';
+import { SegmentationResult } from '@/lib/segmentation';
+import CanvasContainer from './canvas/CanvasContainer';
+import CanvasContent from './canvas/CanvasContent';
+import CanvasImage from './canvas/CanvasImage';
+import CanvasPolygonLayer from './canvas/CanvasPolygonLayer';
+import CanvasUIElements from './canvas/CanvasUIElements';
+import CanvasLoadingOverlay from './canvas/CanvasLoadingOverlay';
+import ModeLegend from './canvas/ModeLegend';
+import { TempPointsState } from '../types';
+
+interface EditorCanvasProps {
+  loading: boolean;
+  segmentation: SegmentationResult | null;
+  zoom: number;
+  offset: { x: number; y: number };
+  selectedPolygonId: string | null;
+  hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
+  imageSrc: string;
+  onMouseDown: (e: React.MouseEvent) => void;
+  onMouseMove: (e: React.MouseEvent) => void;
+  onMouseUp: (e: React.MouseEvent) => void;
+  dragState: React.MutableRefObject<{
+    isDragging: boolean;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+  }>;
+  vertexDragState: React.MutableRefObject<{
+    isDragging: boolean;
+    polygonId: string | null;
+    vertexIndex: number | null;
+  }>;
+  containerRef: React.RefObject<HTMLDivElement>;
+  editMode: boolean;
+  slicingMode: boolean;
+  pointAddingMode: boolean;
+  deleteMode?: boolean;
+  tempPoints: TempPointsState;
+  cursorPosition: { x: number, y: number } | null;
+  sliceStartPoint: { x: number, y: number } | null;
+  hoveredSegment: {
+    polygonId: string | null,
+    segmentIndex: number | null,
+    projectedPoint: { x: number, y: number } | null
+  };
+  isShiftPressed?: boolean;
+  onSelectPolygon?: (id: string) => void;
+  onDeletePolygon?: (id: string) => void;
+  onSlicePolygon?: (id: string) => void;
+  onEditPolygon?: (id: string) => void;
+  onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
+  onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
+  pointAddingTempPoints?: { x: number, y: number }[];
+  selectedVertexIndex?: number | null;
+  selectedPolygonPoints?: { x: number, y: number }[] | null;
+  sourcePolygonId?: string | null;
+  imageDimensions?: { width: number, height: number } | null;
+  onImageLoad?: (width: number, height: number) => void;
+  isZooming?: boolean;
+  hiddenPolygonIds?: Set<string>;
+}
+
+/**
+ * Editor Canvas - main component for displaying and editing segmentation
+ */
+const EditorCanvas = ({
+  loading,
+  segmentation,
+  zoom,
+  offset,
+  selectedPolygonId,
+  hoveredVertex,
+  imageSrc,
+  onMouseDown,
+  onMouseMove,
+  onMouseUp,
+  dragState,
+  vertexDragState,
+  containerRef,
+  editMode,
+  slicingMode,
+  pointAddingMode,
+  deleteMode = false,
+  tempPoints,
+  cursorPosition,
+  sliceStartPoint,
+  hoveredSegment,
+  isShiftPressed,
+  onSelectPolygon,
+  onDeletePolygon,
+  onSlicePolygon,
+  onEditPolygon,
+  onDeleteVertex,
+  onDuplicateVertex,
+  pointAddingTempPoints = [],
+  selectedVertexIndex,
+  selectedPolygonPoints,
+  sourcePolygonId,
+  imageDimensions,
+  onImageLoad,
+  isZooming = false,
+  hiddenPolygonIds = new Set()
+}: EditorCanvasProps) => {
+  // Calculate the actual image size for the SVG overlay with validation
+  const getImageSize = () => {
+    // Validate and use segmentation data if available
+    if (segmentation?.imageWidth && segmentation.imageHeight) {
+      const width = Number(segmentation.imageWidth);
+      const height = Number(segmentation.imageHeight);
+      
+      if (width > 0 && height > 0 && width <= 50000 && height <= 50000) {
+        return { width, height };
+      } else {
+        console.warn('Invalid segmentation dimensions:', { width, height });
+      }
+    }
+    
+    // Validate and use browser-detected dimensions
+    if (imageDimensions) {
+      const width = Number(imageDimensions.width);
+      const height = Number(imageDimensions.height);
+      
+      if (width > 0 && height > 0 && width <= 50000 && height <= 50000) {
+        return { width, height };
+      } else {
+        console.warn('Invalid image dimensions:', imageDimensions);
+      }
+    }
+    
+    // Fallback: safe default size (should be avoided in production)
+    console.warn('Using fallback image dimensions - no valid dimensions available');
+    return { width: 1000, height: 1000 };
+  };
+  
+  const imageSize = getImageSize();
+  
+  // Filter segmentation to exclude hidden polygons
+  const filteredSegmentation = useMemo(() => {
+    if (!segmentation || hiddenPolygonIds.size === 0) return segmentation;
+    
+    return {
+      ...segmentation,
+      polygons: segmentation.polygons.filter(polygon => !hiddenPolygonIds.has(polygon.id))
+    };
+  }, [segmentation, hiddenPolygonIds]);
+  
+  // Get container dimensions for viewport culling
+  const containerDimensions = useMemo(() => {
+    if (!containerRef.current) {
+      return { width: 800, height: 600 }; // Fallback dimensions
+    }
+    const rect = containerRef.current.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  }, [containerRef, zoom]); // Re-calculate on zoom change
+  
+  return (
+    <CanvasContainer 
+      ref={containerRef}
+      onMouseDown={onMouseDown} 
+      onMouseMove={onMouseMove} 
+      onMouseUp={onMouseUp}
+      loading={loading}
+      editMode={editMode}
+      slicingMode={slicingMode}
+      pointAddingMode={pointAddingMode}
+      deleteMode={deleteMode}
+    >
+      {/* Image layer - transformed */}
+      <CanvasContent zoom={zoom} offset={offset} isZooming={isZooming}>
+        <CanvasImage 
+          src={imageSrc} 
+          loading={!loading && !!segmentation} 
+          onLoad={onImageLoad}
+        />
+      </CanvasContent>
+      
+      {/* SVG polygon layer - independent transformation */}
+      {filteredSegmentation && (
+        <div 
+          style={{ 
+            transform: `translate3d(${offset.x * zoom}px, ${offset.y * zoom}px, 0) scale(${zoom})`,
+            transformOrigin: '0 0',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            pointerEvents: 'auto',
+            willChange: isZooming ? 'transform' : 'auto',
+            backfaceVisibility: 'hidden',
+            perspective: 1000
+          }}
+          className="absolute top-0 left-0"
+        >
+          <CanvasPolygonLayer 
+            segmentation={filteredSegmentation}
+            imageSize={imageSize}
+            selectedPolygonId={selectedPolygonId}
+            hoveredVertex={hoveredVertex}
+            vertexDragState={{
+              isDragging: vertexDragState.current.isDragging,
+              polygonId: vertexDragState.current.polygonId,
+              vertexIndex: vertexDragState.current.vertexIndex
+            }}
+            zoom={zoom}
+            offset={offset}
+            containerWidth={containerDimensions.width}
+            containerHeight={containerDimensions.height}
+            editMode={editMode}
+            slicingMode={slicingMode}
+            pointAddingMode={pointAddingMode}
+            tempPoints={tempPoints}
+            cursorPosition={cursorPosition}
+            sliceStartPoint={sliceStartPoint}
+            hoveredSegment={hoveredSegment}
+            isShiftPressed={isShiftPressed}
+            onSelectPolygon={onSelectPolygon}
+            onDeletePolygon={onDeletePolygon}
+            onSlicePolygon={onSlicePolygon}
+            onEditPolygon={onEditPolygon}
+            onDeleteVertex={onDeleteVertex}
+            onDuplicateVertex={onDuplicateVertex}
+            pointAddingTempPoints={pointAddingTempPoints}
+            selectedVertexIndex={selectedVertexIndex}
+            selectedPolygonPoints={selectedPolygonPoints}
+            sourcePolygonId={sourcePolygonId}
+            isZooming={isZooming}
+          />
+        </div>
+      )}
+      
+      {/* UI elements layer - transformed */}
+      <CanvasContent zoom={zoom} offset={offset} isZooming={isZooming}>
+        <CanvasUIElements 
+          zoom={zoom} 
+          editMode={editMode}
+          slicingMode={slicingMode}
+          pointAddingMode={pointAddingMode}
+          sliceStartPoint={sliceStartPoint}
+        />
+      </CanvasContent>
+      
+      <CanvasLoadingOverlay loading={loading} />
+      
+      {/* Mode Legend */}
+      <ModeLegend 
+        editMode={editMode}
+        slicingMode={slicingMode}
+        pointAddingMode={pointAddingMode}
+        deleteMode={deleteMode}
+      />
+    </CanvasContainer>
+  );
+};
+
+export default EditorCanvas;

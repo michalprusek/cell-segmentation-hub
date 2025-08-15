@@ -3,7 +3,7 @@ import React from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { utils, writeFile } from 'xlsx';
+import * as XLSX from 'xlsx';
 import { SpheroidMetric } from '@/types';
 import { calculateMetrics } from '../../../utils/metricCalculations';
 
@@ -15,7 +15,7 @@ interface ExcelExporterProps {
 const ExcelExporter: React.FC<ExcelExporterProps> = ({ segmentation, imageName }) => {
   if (!segmentation || !segmentation.polygons) return null;
   
-  const handleExportXlsx = () => {
+  const handleExportXlsx = async () => {
     if (!segmentation || !segmentation.polygons) return;
     
     // Get only external polygons
@@ -50,55 +50,58 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({ segmentation, imageName }
       };
     });
     
-    // Create worksheet
-    const worksheet = utils.json_to_sheet(metricsData.map(metric => ({
-      'Image Name': metric.imageName,
-      'Contour': metric.contourNumber,
-      'Area': metric.area,
-      'Circularity': metric.circularity,
-      'Compactness': metric.compactness,
-      'Convexity': metric.convexity,
-      'Equivalent Diameter': metric.equivalentDiameter,
-      'Aspect Ratio': metric.aspectRatio,
-      'Feret Diameter Max': metric.feretDiameterMax,
-      'Feret Diameter Max Orthogonal': metric.feretDiameterMaxOrthogonal,
-      'Feret Diameter Min': metric.feretDiameterMin,
-      'Length Major Diameter': metric.lengthMajorDiameter,
-      'Length Minor Diameter': metric.lengthMinorDiameter,
-      'Perimeter': metric.perimeter,
-      'Solidity': metric.solidity,
-      'Sphericity': metric.sphericity
-    })));
+    // Create workbook and worksheet using SheetJS
+    const workbook = XLSX.utils.book_new();
     
-    // Set column widths
-    const colWidths = [
-      { wch: 15 }, // Image Name
-      { wch: 8 },  // Contour
-      { wch: 10 }, // Area
-      { wch: 10 }, // Circularity
-      { wch: 10 }, // Compactness
-      { wch: 10 }, // Convexity
-      { wch: 18 }, // Equivalent Diameter
-      { wch: 10 }, // Aspect Ratio
-      { wch: 16 }, // Feret Diameter Max
-      { wch: 25 }, // Feret Diameter Max Orthogonal
-      { wch: 16 }, // Feret Diameter Min
-      { wch: 20 }, // Length Major Diameter
-      { wch: 20 }, // Length Minor Diameter
-      { wch: 10 }, // Perimeter
-      { wch: 10 }, // Solidity
-      { wch: 10 }  // Sphericity
+    // Prepare data with headers
+    const worksheetData = [
+      [
+        'Image Name',
+        'Contour',
+        'Area',
+        'Circularity',
+        'Compactness',
+        'Convexity',
+        'Equivalent Diameter',
+        'Aspect Ratio',
+        'Feret Diameter Max',
+        'Feret Diameter Max Orthogonal',
+        'Feret Diameter Min',
+        'Length Major Diameter',
+        'Length Minor Diameter',
+        'Perimeter',
+        'Solidity',
+        'Sphericity'
+      ],
+      ...metricsData.map(metric => [
+        metric.imageName,
+        metric.contourNumber,
+        metric.area,
+        metric.circularity,
+        metric.compactness,
+        metric.convexity,
+        metric.equivalentDiameter,
+        metric.aspectRatio,
+        metric.feretDiameterMax,
+        metric.feretDiameterMaxOrthogonal,
+        metric.feretDiameterMin,
+        metric.lengthMajorDiameter,
+        metric.lengthMinorDiameter,
+        metric.perimeter,
+        metric.solidity,
+        metric.sphericity
+      ])
     ];
     
-    worksheet['!cols'] = colWidths;
+    // Create worksheet
+    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
     
-    // Create workbook
-    const workbook = utils.book_new();
-    utils.book_append_sheet(workbook, worksheet, 'Spheroid Metrics');
+    // Add worksheet to workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Spheroid Metrics');
     
-    // Download
+    // Download file
     const filename = `${imageName || 'spheroid'}_metrics.xlsx`;
-    writeFile(workbook, filename);
+    XLSX.writeFile(workbook, filename);
   };
   
   return (

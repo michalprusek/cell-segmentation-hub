@@ -1,18 +1,23 @@
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Polygon, Point } from '@/lib/segmentation';
-import CanvasVertex from './CanvasVertex';
+import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
-import VertexContextMenu from '../context-menu/VertexContextMenu';
 import { VertexDragState } from '@/pages/segmentation/types';
+import { 
+  calculateBoundingBox 
+} from '@/lib/polygonOptimization';
 
 interface CanvasPolygonProps {
   polygon: Polygon;
   isSelected: boolean;
-  hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
-  vertexDragState: VertexDragState;
+  hoveredVertex?: { polygonId: string | null, vertexIndex: number | null };
+  vertexDragState?: VertexDragState;
   zoom: number;
+  viewportBounds?: { x: number; y: number; width: number; height: number };
+  hideVertices?: boolean;
+  isHovered?: boolean;
   onSelectPolygon?: (id: string) => void;
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
@@ -21,12 +26,15 @@ interface CanvasPolygonProps {
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
 }
 
-const CanvasPolygon = ({
+const CanvasPolygon = React.memo(({
   polygon,
   isSelected,
   hoveredVertex,
   vertexDragState,
   zoom,
+  viewportBounds,
+  hideVertices = false,
+  isHovered = false,
   onSelectPolygon,
   onDeletePolygon,
   onSlicePolygon,
@@ -36,11 +44,31 @@ const CanvasPolygon = ({
 }: CanvasPolygonProps) => {
   const { id, points, type = 'external' } = polygon;
   
-  // Simplified string path for the polygon
-  const pathString = useMemo(() => {
-    if (!points || points.length < 3) return '';
-    return `M${points.map(p => `${p.x},${p.y}`).join(' L')} Z`;
+  // Calculate bounding box for viewport culling (cached)
+  const boundingBox = useMemo(() => calculateBoundingBox(points), [points]);
+  
+  // Validate points without simplification to preserve full polygon detail
+  const validPoints = useMemo(() => {
+    if (!points) return [];
+    
+    // First filter out invalid points
+    const filtered = points.filter(p => 
+      p && typeof p.x === 'number' && typeof p.y === 'number' && 
+      !isNaN(p.x) && !isNaN(p.y)
+    );
+    
+    // Return filtered points only if we have enough for a valid polygon
+    return filtered.length >= 3 ? filtered : [];
   }, [points]);
+  
+  // Generate SVG path string from valid points (no simplification)
+  const pathString = useMemo(() => {
+    if (!validPoints || validPoints.length < 3) {
+      return '';
+    }
+    const path = `M${validPoints.map(p => `${p.x},${p.y}`).join(' L')} Z`;
+    return path;
+  }, [validPoints]);
   
   // For the path stroke width, we need to adjust based on zoom level
   // When zoomed in, the stroke appears thicker so we need to make it thinner
@@ -72,73 +100,91 @@ const CanvasPolygon = ({
   
   const pathColor = getPathColor();
   
-  // Handle polygon click
-  const handleClick = (e: React.MouseEvent) => {
+  // Memoized click handlers
+  const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     if (onSelectPolygon) {
       onSelectPolygon(id);
     }
-  };
+  }, [onSelectPolygon, id]);
+  
+  const handleDelete = useCallback(() => onDeletePolygon?.(id), [onDeletePolygon, id]);
+  const handleSlice = useCallback(() => onSlicePolygon?.(id), [onSlicePolygon, id]);
+  const handleEdit = useCallback(() => onEditPolygon?.(id), [onEditPolygon, id]);
 
   return (
     <PolygonContextMenu
       polygonId={id}
-      onDelete={() => onDeletePolygon?.(id)}
-      onSlice={() => onSlicePolygon?.(id)}
-      onEdit={() => onEditPolygon?.(id)}
+      onDelete={handleDelete}
+      onSlice={handleSlice}
+      onEdit={handleEdit}
     >
       <g>
         {/* Polygon path */}
         <path
           d={pathString}
-          fill={type === 'internal' ? "rgba(14, 165, 233, 0.15)" : "rgba(239, 68, 68, 0.15)"}
-          stroke={pathColor}
-          strokeWidth={strokeWidth}
           className={cn(
-            "cursor-pointer transition-colors",
-            isSelected ? "filter-glow" : ""
+            "polygon-path cursor-pointer transition-colors",
+            type === 'internal' ? "polygon-internal" : "polygon-external",
+            isSelected && "polygon-selected"
           )}
+          stroke={pathColor}
+          strokeWidth={Math.max(strokeWidth, 1)}
           onClick={handleClick}
           filter={isSelected ? `url(#${type === 'internal' ? 'blue' : 'red'}-glow)` : ""}
           vectorEffect="non-scaling-stroke"
-          shapeRendering="geometricPrecision"
-          style={{ imageRendering: "crisp-edges" }}
+          shapeRendering="optimizeSpeed"
+          pointerEvents="visible"
         />
         
-        {/* Render vertices for all polygons, not just selected ones */}
-        {points.map((point, index) => {
-          const isHovered = hoveredVertex.polygonId === id && hoveredVertex.vertexIndex === index;
-          const isDragging = vertexDragState.isDragging && 
-                            vertexDragState.polygonId === id && 
-                            vertexDragState.vertexIndex === index;
-          
-          return (
-            <VertexContextMenu
-              key={`${id}-vertex-${index}`}
-              polygonId={id}
-              vertexIndex={index}
-              onDelete={() => onDeleteVertex?.(id, index)}
-              onDuplicate={() => onDuplicateVertex?.(id, index)}
-            >
-              <g>
-                <CanvasVertex
-                  point={point}
-                  polygonId={id}
-                  vertexIndex={index}
-                  isSelected={isSelected}
-                  isHovered={isHovered}
-                  isDragging={isDragging}
-                  zoom={zoom}
-                  type={type}
-                  isStartPoint={false}
-                />
-              </g>
-            </VertexContextMenu>
-          );
-        })}
+        {/* Render vertices using separate component for performance */}
+        {!hideVertices && (
+          <PolygonVertices
+            polygonId={id}
+            points={points}
+            polygonType={type}
+            isSelected={isSelected}
+            isHovered={isHovered}
+            hoveredVertex={hoveredVertex}
+            vertexDragState={vertexDragState}
+            zoom={zoom}
+            viewportBounds={viewportBounds}
+            onDeleteVertex={onDeleteVertex}
+            onDuplicateVertex={onDuplicateVertex}
+          />
+        )}
       </g>
     </PolygonContextMenu>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo optimization
+  const sameViewport = prevProps.viewportBounds === nextProps.viewportBounds;
+
+  // Check if polygon points content has changed (not just length)
+  const samePoints = prevProps.polygon.points === nextProps.polygon.points ||
+    (prevProps.polygon.points.length === nextProps.polygon.points.length &&
+     prevProps.polygon.points.every((point, index) => {
+       const nextPoint = nextProps.polygon.points[index];
+       return point.x === nextPoint.x && point.y === nextPoint.y;
+     }));
+
+  return (
+    prevProps.polygon.id === nextProps.polygon.id &&
+    samePoints &&
+    prevProps.polygon.type === nextProps.polygon.type &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.isHovered === nextProps.isHovered &&
+    prevProps.zoom === nextProps.zoom &&
+    prevProps.hideVertices === nextProps.hideVertices &&
+    sameViewport &&
+    prevProps.hoveredVertex?.polygonId === nextProps.hoveredVertex?.polygonId &&
+    prevProps.hoveredVertex?.vertexIndex === nextProps.hoveredVertex?.vertexIndex &&
+    prevProps.vertexDragState?.isDragging === nextProps.vertexDragState?.isDragging &&
+    prevProps.vertexDragState?.polygonId === nextProps.vertexDragState?.polygonId &&
+    prevProps.vertexDragState?.vertexIndex === nextProps.vertexDragState?.vertexIndex
+  );
+});
+
+CanvasPolygon.displayName = 'CanvasPolygon';
 
 export default CanvasPolygon;
