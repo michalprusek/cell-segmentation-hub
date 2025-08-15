@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Link } from "react-router-dom";
 import { Clock, Edit, ExternalLink, FileText, Github, Mail, MapPin, User, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+// Note: Profile functionality now handled by AuthContext and Settings page
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ProfileData {
@@ -48,49 +48,27 @@ const Profile = () => {
       if (!user) return;
 
       try {
-        // Get project count
-        const { count: projectCount, error: projectError } = await supabase
-          .from("projects")
-          .select("*", { count: "exact" })
-          .eq("user_id", user.id);
+        // Get project count (TODO: Implement with API client)
+        const projectCount = 0;
+        const projectError = null;
 
-        if (projectError) throw projectError;
+        // Get image count (TODO: Implement with API client)
+        const imageCount = 0;
+        const imageError = null;
 
-        // Get image count
-        const { count: imageCount, error: imageError } = await supabase
-          .from("images")
-          .select("*", { count: "exact" })
-          .eq("user_id", user.id);
-
-        if (imageError) throw imageError;
-        
-        // Get completed image count
-        const { count: completedCount, error: completedError } = await supabase
-          .from("images")
-          .select("*", { count: "exact" })
-          .eq("user_id", user.id)
-          .eq("segmentation_status", "completed");
+        // Get completed image count (TODO: Implement with API client)
+        const completedCount = 0;
+        const completedError = null;
           
-        if (completedError) throw completedError;
-
-        // Get recent activity (last 10 images or projects created)
-        const { data: recentProjects, error: recentProjectsError } = await supabase
-          .from("projects")
-          .select("title, created_at")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(5);
+        // Get recent activity (TODO: Implement with API client)
+        const recentProjects = [];
+        const recentProjectsError = null;
           
-        if (recentProjectsError) throw recentProjectsError;
-        
-        const { data: recentImages, error: recentImagesError } = await supabase
-          .from("images")
-          .select("name, segmentation_status, created_at, project_id")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(5);
+        // Get recent images (TODO: Implement with API client)
+        const recentImages = [];
+        const recentImagesError = null;
           
-        if (recentImagesError) throw recentImagesError;
+        // No error handling needed for mock data
         
         // Combined recent activity
         const activity: ActivityItem[] = [];
@@ -162,7 +140,7 @@ const Profile = () => {
           projects: projectCount || 0,
           collaborators: 0,
           analyses: imageCount || 0,
-          avatar: profile?.avatar_url || "/placeholder.svg"
+          avatar: profile?.avatarUrl || "/placeholder.svg"
         });
       } catch (error) {
         console.error("Error fetching profile data:", error);

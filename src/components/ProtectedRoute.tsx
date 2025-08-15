@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import apiClient from "@/lib/api";
 import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
@@ -9,21 +10,48 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
+  const { user, loading, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [gracePeriod, setGracePeriod] = useState(true);
+  const [hasTokens, setHasTokens] = useState<boolean | null>(null);
+  
+  // Give authentication state a moment to stabilize after login
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setGracePeriod(false);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, []);
   
   useEffect(() => {
-    // Only redirect if not loading and no user
-    if (!loading && !user && !isRedirecting) {
+    // Check for tokens and store the result
+    try {
+      const tokenStatus = apiClient.isAuthenticated();
+      setHasTokens(tokenStatus);
+    } catch (error) {
+      console.error('Error checking authentication status:', error);
+      setHasTokens(false);
+    }
+  }, [user, isAuthenticated]);
+
+  useEffect(() => {
+    // Debug logs removed for production
+    
+    // Don't redirect during initial loading or grace period
+    if (loading || gracePeriod || isRedirecting || hasTokens === null) {
+      return;
+    }
+    
+    if (!hasTokens || !user) {
       setIsRedirecting(true);
       navigate(`/sign-in?returnTo=${encodeURIComponent(location.pathname)}`, { replace: true });
     }
-  }, [user, loading, navigate, location.pathname, isRedirecting]);
+  }, [hasTokens, user, loading, gracePeriod, navigate, location.pathname, isRedirecting]);
 
-  // If loading or we have a user but data is still being loaded
-  if (loading) {
+  // If loading, in grace period, or we have tokens and user, show loading
+  if (loading || gracePeriod) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -34,8 +62,20 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     );
   }
 
-  // If we have a user and not loading, render children
-  return user ? <>{children}</> : null;
+  // If we have tokens and user, render children
+  if (hasTokens && user) {
+    return <>{children}</>;
+  }
+
+  // Show loading while redirecting
+  return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
+        <p className="mt-4 text-gray-600">Redirecting to sign-in...</p>
+      </div>
+    </div>
+  );
 };
 
 export default ProtectedRoute;

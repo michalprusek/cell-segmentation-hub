@@ -1,16 +1,16 @@
-
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { updateUserProfile } from "@/lib/supabase";
+import apiClient from "@/lib/api";
 import { useLanguage } from '@/contexts/LanguageContext';
+import { Profile, getErrorMessage } from '@/types';
 
 interface UserProfileSectionProps {
   userId: string;
-  profile: any;
+  profile: Profile | null;
 }
 
 const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
@@ -20,7 +20,7 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
     fullName: profile?.username || "",
     organization: profile?.organization || "",
     bio: profile?.bio || "",
-    publicProfile: profile?.public_profile || false
+    publicProfile: profile?.publicProfile || false
   });
   const [loading, setLoading] = useState(false);
 
@@ -30,19 +30,18 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
 
     setLoading(true);
     try {
-      // Odstraněno pole 'department', které způsobovalo chybu
-      await updateUserProfile(userId, {
+      await apiClient.updateUserProfile({
         username: formData.fullName,
         organization: formData.organization,
         bio: formData.bio,
-        public_profile: formData.publicProfile,
-        updated_at: new Date()
+        publicProfile: formData.publicProfile
       });
       
       toast.success(t('settings.profileUpdated'));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("Error saving profile:", error);
-      toast.error(t('settings.profileUpdateFailed'));
+      const errorMessage = getErrorMessage(error) || "Failed to update profile";
+      toast.error(t('settings.profileUpdateFailed') + ": " + errorMessage);
     } finally {
       setLoading(false);
     }
