@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Microscope, Image, FileUp, FileClock } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { getErrorMessage } from "@/types";
 
 interface StatCardProps {
   title: string;
@@ -61,55 +61,65 @@ const StatsOverview = () => {
       
       try {
         // Get total projects count
-        const { count: projectsCount, error: projectsError } = await supabase
-          .from("projects")
-          .select("*", { count: "exact" })
-          .eq("user_id", user.id);
-          
-        if (projectsError) throw projectsError;
+        const projectsResponse = await apiClient.getProjects();
+        const projectsCount = projectsResponse.total || 0;
         
-        // Get total images count
-        const { count: imagesCount, error: imagesError } = await supabase
-          .from("images")
-          .select("*", { count: "exact" })
-          .eq("user_id", user.id);
-          
-        if (imagesError) throw imagesError;
+        // Get statistics for all projects
+        let totalImages = 0;
+        let completedImages = 0;
+        let todayImages = 0;
         
-        // Get completed images count
-        const { count: completedCount, error: completedError } = await supabase
-          .from("images")
-          .select("*", { count: "exact" })
-          .eq("user_id", user.id)
-          .eq("segmentation_status", "completed");
-          
-        if (completedError) throw completedError;
-        
-        // Get today's upload count
         const today = new Date();
         today.setHours(0, 0, 0, 0);
         
-        const { count: todayCount, error: todayError } = await supabase
-          .from("images")
-          .select("*", { count: "exact" })
-          .eq("user_id", user.id)
-          .gte("created_at", today.toISOString());
-          
-        if (todayError) throw todayError;
+        // Ensure projects array exists before mapping
+        const projects = projectsResponse.projects || [];
         
-        setProjectCount(projectsCount || 0);
-        setImageCount(imagesCount || 0);
-        setCompletedImageCount(completedCount || 0);
-        setTodayUploadCount(todayCount || 0);
+        // Fetch all project images in parallel
+        const imagePromises = projects.map(async (project) => {
+          try {
+            const imagesResponse = await apiClient.getProjectImages(project.id);
+            return {
+              projectId: project.id,
+              images: imagesResponse?.images || [],
+              success: true
+            };
+          } catch (error) {
+            console.error(`Error fetching images for project ${project.id}:`, error);
+            return {
+              projectId: project.id,
+              images: [],
+              success: false
+            };
+          }
+        });
         
-        // Calculate average processing time (simplified)
-        // In a real app, this could be calculated from actual processing times stored in the database
-        if (completedCount && completedCount > 0) {
-          setAvgProcessingTime((Math.random() * 2 + 1.5).toFixed(1) + "s");
-          setProcessedFaster((Math.random() * 0.5).toFixed(1) + "s");
+        const imageResults = await Promise.all(imagePromises);
+        
+        // Aggregate results
+        for (const result of imageResults) {
+          if (result.success && result.images && Array.isArray(result.images)) {
+            totalImages += result.images.length;
+            completedImages += result.images.filter(img => img.segmentation_status === 'completed').length;
+            todayImages += result.images.filter(img => new Date(img.created_at) >= today).length;
+          }
         }
-      } catch (error) {
+        
+        setProjectCount(projectsCount);
+        setImageCount(totalImages);
+        setCompletedImageCount(completedImages);
+        setTodayUploadCount(todayImages);
+        
+        // TODO: Replace with real metrics from API
+        // For now, show placeholder values clearly marked as demo data
+        if (completedImages > 0) {
+          setAvgProcessingTime("~12.5s (demo)");
+          setProcessedFaster("~0.3s (demo)");
+        }
+      } catch (error: unknown) {
         console.error("Error fetching stats:", error);
+        const errorMessage = getErrorMessage(error) || "Failed to fetch stats";
+        console.error("Stats error:", errorMessage);
       } finally {
         setLoading(false);
       }

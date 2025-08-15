@@ -7,16 +7,14 @@ import DashboardHeader from "@/components/DashboardHeader";
 import StatsOverview from "@/components/StatsOverview";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from '@/contexts/LanguageContext';
-import DashboardTabs from "@/components/dashboard/DashboardTabs";
+import ProjectToolbar from "@/components/project/ProjectToolbar";
 import ProjectsTab from "@/components/dashboard/ProjectsTab";
-import UploadTab from "@/components/dashboard/UploadTab";
 import { useDashboardProjects } from "@/hooks/useDashboardProjects";
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortField, setSortField] = useState<string>("updated_at");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-  const [activeTab, setActiveTab] = useState("projects");
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -51,17 +49,17 @@ const Dashboard = () => {
   };
 
   const handleSort = (field: 'name' | 'updatedAt' | 'segmentationStatus') => {
-    let dbField = sortField;
+    let frontendField = field;
     
-    // Map field names to database fields
-    if (field === 'name') dbField = 'title';
-    else if (field === 'updatedAt') dbField = 'updated_at';
+    // Map field names to frontend fields (API client already handles backend mapping)
+    if (field === 'name') frontendField = 'name'; // Now sort by 'name' directly
+    else if (field === 'updatedAt') frontendField = 'updated_at';
     
     // Toggle direction if same field
     const newDirection = 
-      dbField === sortField ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'desc';
+      frontendField === sortField ? (sortDirection === 'asc' ? 'desc' : 'asc') : 'desc';
     
-    setSortField(dbField);
+    setSortField(frontendField);
     setSortDirection(newDirection);
   };
 
@@ -98,28 +96,36 @@ const Dashboard = () => {
         </div>
         
         <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
-          <DashboardTabs 
-            activeTab={activeTab} 
-            onTabChange={setActiveTab}
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            onSort={handleSort}
-            sortField="name"
-            sortDirection="asc"
-          >
-            <TabsContent value="projects" className="mt-6">
-              <ProjectsTab 
-                projects={projects}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+                  {t('dashboard.projectGallery')}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('dashboard.projectGalleryDescription')}
+                </p>
+              </div>
+              
+              <ProjectToolbar
+                sortField={sortField as 'name' | 'updatedAt' | 'segmentationStatus'}
+                sortDirection={sortDirection}
+                onSort={handleSort}
                 viewMode={viewMode}
-                loading={loading}
-                onOpenProject={handleOpenProject}
+                setViewMode={setViewMode}
+                showSearchBar={false}
+                showUploadButton={false}
+                showExportButton={false}
               />
-            </TabsContent>
+            </div>
             
-            <TabsContent value="upload" className="mt-6">
-              <UploadTab />
-            </TabsContent>
-          </DashboardTabs>
+            <ProjectsTab 
+              projects={projects}
+              viewMode={viewMode}
+              loading={loading}
+              onOpenProject={handleOpenProject}
+            />
+          </div>
         </div>
       </div>
     </div>

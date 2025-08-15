@@ -1,8 +1,8 @@
-
 import { useState } from 'react';
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { getErrorMessage } from "@/types";
 
 interface UseProjectFormProps {
   onSuccess?: (projectId: string) => void;
@@ -31,20 +31,18 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
     setIsCreating(true);
     
     try {
-      const { data, error } = await supabase
-        .from("projects")
-        .insert([
-          {
-            title: projectName,
-            description: projectDescription || "No description provided",
-            user_id: user.id
-          }
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
+      const projectData = await apiClient.createProject({
+        name: projectName,
+        description: projectDescription || "No description provided"
+      });
+      
+      // Validate response
+      if (!projectData || !projectData.id) {
+        console.error("Invalid project creation response:", projectData);
+        toast.error("Failed to create project", {
+          description: "Server response was invalid"
+        });
+        return;
       }
       
       toast.success("Project created successfully", {
@@ -56,16 +54,17 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
       setProjectDescription("");
       
       // Trigger refresh or callback
-      if (onSuccess && data) {
-        onSuccess(data.id);
-      } else {
+      if (onSuccess && projectData.id) {
+        onSuccess(projectData.id);
+      } else if (projectData.id) {
         // Trigger refresh
-        const event = new CustomEvent('project-created', { detail: { projectId: data.id } });
+        const event = new CustomEvent('project-created', { detail: { projectId: projectData.id } });
         window.dispatchEvent(event);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error creating project:", error);
-      toast.error("Failed to create project: " + error.message);
+      const errorMessage = getErrorMessage(error) || "Failed to create project";
+      toast.error("Failed to create project: " + errorMessage);
     } finally {
       setIsCreating(false);
     }

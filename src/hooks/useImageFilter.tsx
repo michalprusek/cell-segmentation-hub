@@ -1,17 +1,70 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import type { ProjectImage } from '@/types';
 
 type SortField = 'name' | 'updatedAt' | 'segmentationStatus';
 type SortDirection = 'asc' | 'desc';
 
-export const useImageFilter = (images: ProjectImage[]) => {
-  const [filteredImages, setFilteredImages] = useState<ProjectImage[]>([]);
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [sortField, setSortField] = useState<SortField>('updatedAt');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+const STORAGE_KEY = 'image-filter-settings';
 
-  useEffect(() => {
+interface FilterSettings {
+  sortField: SortField;
+  sortDirection: SortDirection;
+}
+
+const getStoredSettings = (): FilterSettings => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.warn('Failed to load filter settings from localStorage:', error);
+  }
+  return { sortField: 'updatedAt', sortDirection: 'desc' };
+};
+
+const saveSettings = (settings: FilterSettings) => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  } catch (error) {
+    console.warn('Failed to save filter settings to localStorage:', error);
+  }
+};
+
+const getImageComparator = (settings?: FilterSettings) => {
+  const { sortField, sortDirection } = settings || getStoredSettings();
+  
+  return (a: ProjectImage, b: ProjectImage): number => {
+    let comparison = 0;
+    
+    switch (sortField) {
+      case 'name':
+        comparison = a.name.localeCompare(b.name);
+        break;
+      case 'updatedAt':
+        comparison = a.updatedAt.getTime() - b.updatedAt.getTime();
+        break;
+      case 'segmentationStatus': {
+        const statusOrder = { completed: 1, processing: 2, pending: 3, failed: 4 };
+        comparison = statusOrder[a.segmentationStatus] - statusOrder[b.segmentationStatus];
+        break;
+      }
+    }
+    
+    return sortDirection === 'asc' ? comparison : -comparison;
+  };
+};
+
+export const useImageFilter = (images: ProjectImage[]) => {
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  
+  const storedSettings = getStoredSettings();
+  const [sortField, setSortField] = useState<SortField>(storedSettings.sortField);
+  const [sortDirection, setSortDirection] = useState<SortDirection>(storedSettings.sortDirection);
+
+  // Use useMemo to prevent infinite loops and unnecessary recalculations
+  const filteredImages = useMemo(() => {
     let result = [...images];
     
     if (searchTerm) {
@@ -20,26 +73,9 @@ export const useImageFilter = (images: ProjectImage[]) => {
       );
     }
     
-    result.sort((a, b) => {
-      let comparison = 0;
-      
-      switch (sortField) {
-        case 'name':
-          comparison = a.name.localeCompare(b.name);
-          break;
-        case 'updatedAt':
-          comparison = a.updatedAt.getTime() - b.updatedAt.getTime();
-          break;
-        case 'segmentationStatus':
-          const statusOrder = { completed: 1, processing: 2, pending: 3, failed: 4 };
-          comparison = statusOrder[a.segmentationStatus] - statusOrder[b.segmentationStatus];
-          break;
-      }
-      
-      return sortDirection === 'asc' ? comparison : -comparison;
-    });
+    result.sort(getImageComparator({ sortField, sortDirection }));
     
-    setFilteredImages(result);
+    return result;
   }, [images, searchTerm, sortField, sortDirection]);
 
   const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -47,12 +83,20 @@ export const useImageFilter = (images: ProjectImage[]) => {
   };
 
   const handleSort = (field: SortField) => {
+    let newSortDirection: SortDirection;
+    let newSortField: SortField;
+    
     if (field === sortField) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      newSortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+      newSortField = field;
     } else {
-      setSortField(field);
-      setSortDirection('asc');
+      newSortField = field;
+      newSortDirection = 'asc';
     }
+    
+    setSortField(newSortField);
+    setSortDirection(newSortDirection);
+    saveSettings({ sortField: newSortField, sortDirection: newSortDirection });
   };
 
   return {
@@ -63,4 +107,11 @@ export const useImageFilter = (images: ProjectImage[]) => {
     handleSearch,
     handleSort
   };
+};
+
+export const getImageSortSettings = getStoredSettings;
+export { getImageComparator };
+
+export const sortImagesBySettings = (images: ProjectImage[], settings?: FilterSettings): ProjectImage[] => {
+  return [...images].sort(getImageComparator(settings));
 };

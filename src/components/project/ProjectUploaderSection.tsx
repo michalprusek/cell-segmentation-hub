@@ -6,9 +6,10 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProjectUploaderSectionProps {
   onCancel: () => void;
+  onUploadComplete?: () => void;
 }
 
-const ProjectUploaderSection = ({ onCancel }: ProjectUploaderSectionProps) => {
+const ProjectUploaderSection = ({ onCancel, onUploadComplete }: ProjectUploaderSectionProps) => {
   const { t } = useLanguage();
 
   return (
@@ -19,7 +20,7 @@ const ProjectUploaderSection = ({ onCancel }: ProjectUploaderSectionProps) => {
           {t('common.cancel')}
         </Button>
       </div>
-      <ImageUploader />
+      <ImageUploader onUploadComplete={onUploadComplete} />
     </div>
   );
 };

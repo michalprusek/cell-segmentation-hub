@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useState, useEffect } from "react";
 import { 
@@ -8,14 +7,10 @@ import {
   SelectTrigger,
   SelectValue, 
 } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
-
-export interface Project {
-  id: string;
-  title: string;
-}
+import { Project, getErrorMessage } from "@/types";
 
 interface ProjectSelectorProps {
   value: string | null;
@@ -32,19 +27,12 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
       if (!user) return;
 
       try {
-        const { data, error } = await supabase
-          .from("projects")
-          .select("id, title")
-          .order("created_at", { ascending: false });
-
-        if (error) {
-          throw error;
-        }
-
-        setProjects(data || []);
-      } catch (error: any) {
+        const response = await apiClient.getProjects();
+        setProjects(response.projects || []);
+      } catch (error: unknown) {
         console.error("Error fetching projects:", error);
-        toast.error("Failed to load projects");
+        const errorMessage = getErrorMessage(error) || "Failed to load projects";
+        toast.error("Failed to load projects: " + errorMessage);
       } finally {
         setLoading(false);
       }
@@ -67,7 +55,7 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
         <SelectContent>
           {projects.map((project) => (
             <SelectItem key={project.id} value={project.id.toString()}>
-              {project.title}
+              {project.name}
             </SelectItem>
           ))}
         </SelectContent>

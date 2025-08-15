@@ -1,25 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { Info } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import ProjectSelector from "@/components/ProjectSelector";
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface UploaderOptionsProps {
   showProjectSelector: boolean;
   projectId: string | null;
-  autoSegment: boolean; 
   onProjectChange: (value: string) => void;
-  onAutoSegmentChange: (checked: boolean) => void;
 }
 
 const UploaderOptions = ({ 
   showProjectSelector, 
   projectId, 
-  autoSegment, 
-  onProjectChange, 
-  onAutoSegmentChange 
+  onProjectChange 
 }: UploaderOptionsProps) => {
   const { t } = useLanguage();
   const [showInfoBar, setShowInfoBar] = useState(!projectId);
@@ -59,17 +53,6 @@ const UploaderOptions = ({
           </div>
         </>
       )}
-      
-      <div className="flex items-center space-x-2 bg-white dark:bg-gray-800 p-3 border border-gray-200 dark:border-gray-700 rounded-lg">
-        <Switch 
-          id="auto-segment" 
-          checked={autoSegment}
-          onCheckedChange={onAutoSegmentChange}
-        />
-        <Label htmlFor="auto-segment" className="cursor-pointer">
-          {t('images.autoSegment')}
-        </Label>
-      </div>
     </div>
   );
 };

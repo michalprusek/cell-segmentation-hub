@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/lib/api";
+import { getErrorMessage } from "@/types";
 
 interface ProjectThumbnailProps {
   projectId: string;
@@ -15,21 +16,22 @@ const ProjectThumbnail = ({ projectId, fallbackSrc, imageCount }: ProjectThumbna
     const fetchFirstImage = async () => {
       if (imageCount > 0) {
         try {
-          const { data, error } = await supabase
-            .from("images")
-            .select("image_url, thumbnail_url")
-            .eq("project_id", projectId)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .single();
-
-          if (error) throw error;
-          if (data) {
+          const response = await apiClient.getProjectImages(projectId, { limit: 1 });
+          
+          // Validate response structure
+          if (response && Array.isArray(response.images) && response.images.length > 0) {
+            const data = response.images[0];
             // Use thumbnail if available, otherwise use full image
             setImageUrl(data.thumbnail_url || data.image_url);
+          } else {
+            // Clear imageUrl when no images are returned
+            setImageUrl(null);
           }
-        } catch (error) {
-          console.error("Error fetching project thumbnail:", error);
+        } catch (error: unknown) {
+          const errorMessage = getErrorMessage(error) || "Failed to fetch thumbnail";
+          console.error("Error fetching project thumbnail:", errorMessage, error);
+          // Clear stale imageUrl on fetch error
+          setImageUrl(null);
         }
       }
     };

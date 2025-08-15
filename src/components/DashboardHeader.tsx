@@ -1,20 +1,85 @@
 
-import React, { useState } from "react";
-import { useLocation } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useModel } from "@/contexts/ModelContext";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Badge } from "@/components/ui/badge";
 import Logo from "@/components/header/Logo";
 import UserProfileDropdown from "@/components/header/UserProfileDropdown";
 import MobileMenu from "@/components/header/MobileMenu";
+import { useSegmentationQueue } from "@/hooks/useSegmentationQueue";
+import api from "@/lib/api";
+import { mlServiceUrl } from "@/lib/config";
+import { fetchWithRetry } from "@/lib/httpUtils";
 
 const DashboardHeader = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [mlServiceStatus, setMlServiceStatus] = useState<'idle' | 'processing' | 'error'>('idle');
   const { user } = useAuth();
+  const { selectedModel, getModelInfo } = useModel();
+  const { t } = useLanguage();
   const location = useLocation();
+  const navigate = useNavigate();
+  const { isConnected, queueStats } = useSegmentationQueue();
 
   // Skrýt header v segmentačním editoru
   const isSegmentationEditor = location.pathname.includes('/segmentation/');
+  
+  // Fetch ML service status periodically
+  useEffect(() => {
+    const checkMlServiceStatus = async () => {
+      try {
+        const response = await fetchWithRetry(`${mlServiceUrl}/api/v1/status`, {}, {
+          retries: 2,
+          delay: 500,
+          backoff: 2
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.status === 'processing') {
+            setMlServiceStatus('processing');
+          } else {
+            setMlServiceStatus('idle');
+          }
+        } else {
+          setMlServiceStatus('error');
+        }
+      } catch (error) {
+        console.warn('ML service status check failed:', error);
+        setMlServiceStatus('error');
+      }
+    };
+
+    // Check immediately and then every 5 seconds
+    checkMlServiceStatus();
+    const interval = setInterval(checkMlServiceStatus, 5000);
+
+    return () => clearInterval(interval);
+  }, []);
+  
+  // Determine status dot color
+  const getStatusColor = () => {
+    if (!isConnected || mlServiceStatus === 'error') {
+      return 'bg-red-500'; // Red - error or disconnected
+    }
+    if (mlServiceStatus === 'processing' || (queueStats && queueStats.processing > 0)) {
+      return 'bg-blue-500'; // Blue - processing
+    }
+    return 'bg-green-500'; // Green - idle and available
+  };
+  
+  const getStatusTooltip = () => {
+    if (!isConnected) return t('status.disconnected');
+    if (mlServiceStatus === 'error') return t('status.error');
+    if (mlServiceStatus === 'processing' || (queueStats && queueStats.processing > 0)) {
+      return t('status.processing', { count: queueStats?.processing || 0 });
+    }
+    return t('status.ready');
+  };
 
   if (isSegmentationEditor) {
     return null;
@@ -29,6 +94,16 @@ const DashboardHeader = () => {
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-4">
+          {/* Current Model Badge - Clickable */}
+          <Badge 
+            variant="secondary" 
+            className="flex items-center gap-2 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            onClick={() => navigate('/settings?tab=models')}
+            title={getStatusTooltip()}
+          >
+            <div className={`w-2 h-2 ${getStatusColor()} rounded-full animate-pulse`}></div>
+            {getModelInfo(selectedModel).displayName}
+          </Badge>
           <UserProfileDropdown username={user?.email?.split('@')[0] || 'User'} />
         </div>
 

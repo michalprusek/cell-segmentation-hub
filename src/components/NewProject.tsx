@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,8 +13,9 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { PlusCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { getErrorMessage } from "@/types";
 
 interface NewProjectProps {
   onProjectCreated?: (projectId: string) => void;
@@ -44,20 +44,18 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
     setIsCreating(true);
     
     try {
-      const { data, error } = await supabase
-        .from("projects")
-        .insert([
-          {
-            title: projectName,
-            description: projectDescription || "No description provided",
-            user_id: user.id
-          }
-        ])
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
+      const projectData = await apiClient.createProject({
+        name: projectName,
+        description: projectDescription || "No description provided"
+      });
+      
+      // Validate response
+      if (!projectData || !projectData.id) {
+        console.error("Invalid project creation response:", projectData);
+        toast.error("Failed to create project", {
+          description: "Server response was invalid"
+        });
+        return;
       }
       
       toast.success("Project created successfully", {
@@ -69,12 +67,17 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
       setProjectDescription("");
       
       // Notify parent component about creation but don't redirect
-      if (onProjectCreated && data) {
-        onProjectCreated(data.id);
+      if (onProjectCreated && projectData) {
+        onProjectCreated(projectData.id);
       }
-    } catch (error: any) {
+      
+      // Also dispatch global event for dashboard refresh
+      const event = new CustomEvent('project-created', { detail: { projectId: projectData.id } });
+      window.dispatchEvent(event);
+    } catch (error: unknown) {
       console.error("Error creating project:", error);
-      toast.error("Failed to create project: " + error.message);
+      const errorMessage = getErrorMessage(error) || "Failed to create project";
+      toast.error("Failed to create project: " + errorMessage);
     } finally {
       setIsCreating(false);
     }

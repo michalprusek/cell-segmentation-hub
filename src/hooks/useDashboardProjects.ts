@@ -1,7 +1,6 @@
-
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Project } from "@/components/ProjectsList";
-import { supabase } from "@/integrations/supabase/client";
+import apiClient from "@/lib/api";
 import { toast } from "sonner";
 
 export interface DashboardProjectsOptions {
@@ -15,62 +14,94 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (userId) {
-      fetchProjects();
-    }
-  }, [userId, sortField, sortDirection]);
-
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     if (!userId) return;
 
     try {
       setLoading(true);
       setFetchError(null);
       
-      const { data: projectsData, error: projectsError } = await supabase
-        .from("projects")
-        .select("*")
-        .eq("user_id", userId)
-        .order(sortField, { ascending: sortDirection === "asc" });
+      const response = await apiClient.getProjects();
+      const projectsData = response.projects;
 
-      if (projectsError) {
-        throw projectsError;
-      }
-
-      const projectsWithDetails = await Promise.all(
-        (projectsData || []).map(async (project) => {
-          // Get image count
-          const { count, error: countError } = await supabase
-            .from("images")
-            .select("id", { count: "exact" })
-            .eq("project_id", project.id);
-
-          if (countError) {
-            console.error("Error fetching image count:", countError);
+      // No need for additional API calls - backend now includes image data
+      const projectsWithDetails = (projectsData || []).map((project) => {
+        // Extract thumbnail from backend data (first image if available)
+        let thumbnail = "/placeholder.svg";
+        const imageCount = project.image_count || 0;
+        
+        // If project has associated image data from backend
+        if ((project as any).images && (project as any).images.length > 0) {
+          const firstImage = (project as any).images[0];
+          thumbnail = firstImage.thumbnailPath || firstImage.originalPath || "/placeholder.svg";
+          
+          // Ensure URL is absolute for Docker environment
+          if (thumbnail && !thumbnail.startsWith('http')) {
+            const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001';
+            thumbnail = `${baseUrl}${thumbnail.startsWith('/') ? '' : '/'}${thumbnail}`;
           }
+        }
 
-          // Get the first image for thumbnail
-          const { data: imageData, error: imageError } = await supabase
-            .from("images")
-            .select("thumbnail_url")
-            .eq("project_id", project.id)
-            .order("created_at", { ascending: false })
-            .limit(1)
-            .single();
+        return {
+          ...project,
+          thumbnail,
+          date: formatDate(project.updated_at),
+          imageCount
+        };
+      });
 
-          const thumbnail = imageData?.thumbnail_url || "/placeholder.svg";
+      // Sort projects based on sortField and sortDirection
+      const sortedProjects = projectsWithDetails.sort((a, b) => {
+        const aValue: unknown = a[sortField as keyof typeof a];
+        const bValue: unknown = b[sortField as keyof typeof b];
 
-          return {
-            ...project,
-            thumbnail,
-            date: formatDate(project.updated_at),
-            imageCount: count || 0
-          };
-        })
-      );
+        // Handle date fields
+        if (sortField === 'created_at' || sortField === 'updated_at') {
+          const aTime = new Date(aValue).getTime();
+          const bTime = new Date(bValue).getTime();
+          
+          // Handle invalid dates as lowest priority
+          const aNum = isNaN(aTime) ? -Infinity : aTime;
+          const bNum = isNaN(bTime) ? -Infinity : bTime;
+          
+          if (aNum === bNum) return 0;
+          return sortDirection === 'asc' ? 
+            (aNum > bNum ? 1 : -1) : 
+            (aNum < bNum ? 1 : -1);
+        }
 
-      setProjects(projectsWithDetails);
+        // Handle null/undefined values
+        if (aValue == null && bValue == null) return 0;
+        if (aValue == null) return sortDirection === 'asc' ? 1 : -1;
+        if (bValue == null) return sortDirection === 'asc' ? -1 : 1;
+
+        // Handle string comparison
+        if (typeof aValue === 'string' && typeof bValue === 'string') {
+          const result = aValue.localeCompare(bValue);
+          return sortDirection === 'asc' ? result : -result;
+        }
+
+        // Handle numeric comparison
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          // Handle NaN values
+          if (isNaN(aValue) && isNaN(bValue)) return 0;
+          if (isNaN(aValue)) return sortDirection === 'asc' ? 1 : -1;
+          if (isNaN(bValue)) return sortDirection === 'asc' ? -1 : 1;
+          
+          if (aValue === bValue) return 0;
+          return sortDirection === 'asc' ? 
+            (aValue > bValue ? 1 : -1) : 
+            (aValue < bValue ? 1 : -1);
+        }
+
+        // Fallback comparison
+        const aStr = String(aValue);
+        const bStr = String(bValue);
+        const result = aStr.localeCompare(bStr);
+        return sortDirection === 'asc' ? result : -result;
+      });
+
+      setProjects(sortedProjects);
     } catch (error) {
       console.error("Error fetching projects:", error);
       setFetchError("Failed to load projects. Please try again.");
@@ -78,7 +109,13 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId, sortField, sortDirection]);
+
+  useEffect(() => {
+    if (userId) {
+      fetchProjects();
+    }
+  }, [fetchProjects, userId, sortField, sortDirection]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

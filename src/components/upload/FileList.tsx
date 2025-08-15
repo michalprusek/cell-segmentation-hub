@@ -69,17 +69,30 @@ const FileList = ({ files, uploadProgress, onRemoveFile }: FileListProps) => {
                 
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate dark:text-white">{file.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {formatFileSize(file.size)}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formatFileSize(file.size)}
+                    </p>
+                    {file.status === "uploading" && file.uploadProgress !== undefined && (
+                      <p className="text-xs text-blue-500 font-medium">
+                        {file.uploadProgress}%
+                      </p>
+                    )}
+                  </div>
+                  {file.status === "uploading" && (
+                    <Progress 
+                      value={file.uploadProgress || 0} 
+                      className="h-1 mt-1" 
+                    />
+                  )}
                 </div>
                 
                 <div className="flex-shrink-0 flex items-center">
                   {file.status === "pending" && (
-                    <span className="text-sm text-yellow-500">{t('dashboard.pending')}</span>
+                    <span className="text-sm text-yellow-500">{t('images.pending')}</span>
                   )}
                   {file.status === "uploading" && (
-                    <span className="text-sm text-blue-500">{t('dashboard.processing')}</span>
+                    <span className="text-sm text-blue-500">{t('images.uploading')}</span>
                   )}
                   {file.status === "complete" && (
                     <CheckCircle className="h-5 w-5 text-green-500" />
