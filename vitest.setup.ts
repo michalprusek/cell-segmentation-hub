@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+import { vi, expect } from 'vitest';
 
 // Mock ImageData for Node.js test environment
 global.ImageData = class MockImageData {
@@ -36,4 +36,5 @@ if (!('memory' in performance)) {
 }
 
 // Setup global test utilities
-global.expect = expect;
+(globalThis as any).expect = expect;
+(globalThis as any).vi = vi;
