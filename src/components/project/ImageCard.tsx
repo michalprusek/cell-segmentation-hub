@@ -140,7 +140,11 @@ export const ImageCard = ({
         <div className="absolute inset-0">
           {!imageError && candidateUrls.length > 0 ? (
             <img
-              src={candidateUrls[Math.min(fallbackIndex, candidateUrls.length - 1)] || ''}
+              src={
+                candidateUrls[
+                  Math.min(fallbackIndex, candidateUrls.length - 1)
+                ] || ''
+              }
               alt={image.name || 'Image'}
               className="w-full h-full object-cover"
               loading="lazy"

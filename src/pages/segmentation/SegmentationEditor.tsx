@@ -323,7 +323,14 @@ const SegmentationEditor = () => {
           }
         : null,
     });
-  }, [editor.polygons, hiddenPolygonIds, imageDimensions, canvasHeight, canvasWidth, editor.transform]);
+  }, [
+    editor.polygons,
+    hiddenPolygonIds,
+    imageDimensions,
+    canvasHeight,
+    canvasWidth,
+    editor.transform,
+  ]);
 
   // Handle image load to get dimensions
   const handleImageLoad = (width: number, height: number) => {

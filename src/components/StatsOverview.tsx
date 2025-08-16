@@ -140,7 +140,7 @@ const StatsOverview = () => {
         // Fetch storage stats
         try {
           const storageStats = await apiClient.getUserStorageStats();
-          
+
           // Format storage used based on size
           let formattedStorage = '0 MB';
           if (storageStats.totalStorageGB >= 1) {
@@ -149,7 +149,7 @@ const StatsOverview = () => {
             formattedStorage = `${storageStats.totalStorageMB} MB`;
           }
           setStorageUsed(formattedStorage);
-          
+
           // Calculate growth (placeholder for now - could be enhanced with historical data)
           if (storageStats.totalImages > 0) {
             const avgSize = storageStats.averageImageSizeMB;
@@ -209,12 +209,13 @@ const StatsOverview = () => {
       value: loading ? '...' : storageUsed,
       description: 'Total space used',
       icon: <HardDrive size={16} />,
-      trend: storageGrowth !== '0 MB'
-        ? {
-            value: storageGrowth,
-            isPositive: false,
-          }
-        : undefined,
+      trend:
+        storageGrowth !== '0 MB'
+          ? {
+              value: storageGrowth,
+              isPositive: false,
+            }
+          : undefined,
     },
   ];
 

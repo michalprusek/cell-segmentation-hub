@@ -14,11 +14,13 @@ The API documentation system provides multiple formats and interfaces for explor
 ## Access Points
 
 ### Development Environment
+
 - **Swagger UI**: http://localhost:3001/api-docs
 - **OpenAPI JSON**: http://localhost:3001/api-docs/openapi.json
 - **Postman Collection**: http://localhost:3001/api-docs/postman.json
 
 ### Production Environment
+
 - **Swagger UI**: https://api.yourdomain.com/api-docs
 - **OpenAPI JSON**: https://api.yourdomain.com/api-docs/openapi.json
 - **Postman Collection**: https://api.yourdomain.com/api-docs/postman.json
@@ -55,6 +57,7 @@ export function setupSwagger(app: Express) {
 ```
 
 **Key Features**:
+
 - **JSDoc Integration**: Automatically generates documentation from code comments
 - **OpenAPI YAML Support**: Loads additional specifications from YAML files
 - **Custom Styling**: Branded UI with custom CSS
@@ -113,15 +116,18 @@ function convertToPostman(openApiSpec: any) {
     info: {
       name: openApiSpec.info?.title || 'API Collection',
       description: openApiSpec.info?.description || '',
-      schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+      schema:
+        'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
     auth: {
       type: 'bearer',
-      bearer: [{
-        key: 'token',
-        value: '{{accessToken}}',
-        type: 'string',
-      }],
+      bearer: [
+        {
+          key: 'token',
+          value: '{{accessToken}}',
+          type: 'string',
+        },
+      ],
     },
     variable: [
       {
@@ -137,7 +143,7 @@ function convertToPostman(openApiSpec: any) {
     ],
     item: [],
   };
-  
+
   // Auto-generates folders by API tags
   // Creates requests with proper authentication
   // Handles path parameters and request bodies
@@ -294,6 +300,7 @@ const swaggerUiOptions = {
 ```
 
 **Features**:
+
 - **Explorer Mode**: Easy navigation through endpoints
 - **Filter Function**: Search through endpoints and schemas
 - **Try It Out**: Interactive API testing directly from UI
@@ -316,6 +323,7 @@ components:
 ```
 
 **Usage in Swagger UI**:
+
 1. Click the "Authorize" button in the top-right corner
 2. Enter JWT access token (without "Bearer " prefix)
 3. All subsequent "Try it out" requests will include the Authorization header
@@ -347,6 +355,7 @@ The auto-generated Postman collection includes:
 ```
 
 **Setup in Postman**:
+
 1. Import the collection from `/api-docs/postman.json`
 2. Set the `accessToken` variable with your JWT token
 3. All authenticated requests will automatically include the token
@@ -355,54 +364,54 @@ The auto-generated Postman collection includes:
 
 ### 1. Health Endpoints (🌐 Public)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Server health check with database status |
-| `/api/endpoints` | GET | List all registered API endpoints |
-| `/api/health/endpoints` | GET | Health status of individual endpoints |
+| Endpoint                | Method | Description                              |
+| ----------------------- | ------ | ---------------------------------------- |
+| `/health`               | GET    | Server health check with database status |
+| `/api/endpoints`        | GET    | List all registered API endpoints        |
+| `/api/health/endpoints` | GET    | Health status of individual endpoints    |
 
 ### 2. Authentication Endpoints (🌐 Public)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/register` | POST | User registration |
-| `/api/auth/login` | POST | User authentication |
-| `/api/auth/refresh` | POST | JWT token refresh |
+| Endpoint             | Method | Description         |
+| -------------------- | ------ | ------------------- |
+| `/api/auth/register` | POST   | User registration   |
+| `/api/auth/login`    | POST   | User authentication |
+| `/api/auth/refresh`  | POST   | JWT token refresh   |
 
 ### 3. Protected Authentication Endpoints (🔒 Protected)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/logout` | POST | User logout |
-| `/api/auth/profile` | PUT | Update user profile |
+| Endpoint            | Method | Description         |
+| ------------------- | ------ | ------------------- |
+| `/api/auth/logout`  | POST   | User logout         |
+| `/api/auth/profile` | PUT    | Update user profile |
 | `/api/auth/profile` | DELETE | Delete user account |
 
 ### 4. Project Management (🔒 Protected)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/projects` | GET | List user projects |
-| `/api/projects` | POST | Create new project |
-| `/api/projects/:projectId` | GET | Get project details |
-| `/api/projects/:projectId` | PUT | Update project |
-| `/api/projects/:projectId` | DELETE | Delete project |
+| Endpoint                   | Method | Description         |
+| -------------------------- | ------ | ------------------- |
+| `/api/projects`            | GET    | List user projects  |
+| `/api/projects`            | POST   | Create new project  |
+| `/api/projects/:projectId` | GET    | Get project details |
+| `/api/projects/:projectId` | PUT    | Update project      |
+| `/api/projects/:projectId` | DELETE | Delete project      |
 
 ### 5. Image Management (🔒 Protected)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/projects/:projectId/images` | POST | Upload images to project |
-| `/api/projects/:projectId/images/:imageId` | GET | Get image details |
-| `/api/projects/:projectId/images/:imageId` | DELETE | Delete image |
-| `/api/projects/:projectId/images/:imageId/segment` | POST | Request image segmentation |
+| Endpoint                                           | Method | Description                |
+| -------------------------------------------------- | ------ | -------------------------- |
+| `/api/projects/:projectId/images`                  | POST   | Upload images to project   |
+| `/api/projects/:projectId/images/:imageId`         | GET    | Get image details          |
+| `/api/projects/:projectId/images/:imageId`         | DELETE | Delete image               |
+| `/api/projects/:projectId/images/:imageId/segment` | POST   | Request image segmentation |
 
 ### 6. Documentation Endpoints (🌐 Public)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api-docs` | GET | Swagger UI interface |
-| `/api-docs/openapi.json` | GET | OpenAPI JSON specification |
-| `/api-docs/postman.json` | GET | Postman collection |
+| Endpoint                 | Method | Description                |
+| ------------------------ | ------ | -------------------------- |
+| `/api-docs`              | GET    | Swagger UI interface       |
+| `/api-docs/openapi.json` | GET    | OpenAPI JSON specification |
+| `/api-docs/postman.json` | GET    | Postman collection         |
 
 ## Usage Examples
 
@@ -425,6 +434,7 @@ curl -o cell-segmentation-api.json http://localhost:3001/api-docs/postman.json
 ```
 
 **Postman Setup**:
+
 1. Import collection from URL or file
 2. Set `baseUrl` variable: `http://localhost:3001/api`
 3. Login via `/auth/login` request
@@ -442,7 +452,7 @@ npx @openapitools/openapi-generator-cli generate \
   -g typescript-axios \
   -o ./generated-client
 
-# Python SDK  
+# Python SDK
 npx @openapitools/openapi-generator-cli generate \
   -i http://localhost:3001/api-docs/openapi.json \
   -g python \
@@ -456,6 +466,7 @@ npx @openapitools/openapi-generator-cli generate \
 When adding new API endpoints:
 
 1. **Add JSDoc documentation** in the controller:
+
 ```typescript
 /**
  * @swagger
@@ -475,12 +486,13 @@ When adding new API endpoints:
 ```
 
 2. **Register the endpoint** in `src/api/routes/index.ts`:
+
 ```typescript
 registerRoute({
   path: '/api/new-endpoint',
   method: 'POST',
   description: 'Brief description',
-  authenticated: true
+  authenticated: true,
 });
 ```
 
@@ -489,6 +501,7 @@ registerRoute({
 ### 2. Updating Documentation
 
 The documentation is automatically updated when:
+
 - JSDoc comments are modified in controllers
 - OpenAPI YAML files are updated
 - New routes are registered in the endpoint registry
@@ -500,6 +513,7 @@ The documentation is automatically updated when:
 ### Endpoint Usage Tracking
 
 The system automatically tracks:
+
 - **Call count** per endpoint
 - **Average response time**
 - **Error rate**
@@ -510,6 +524,7 @@ Access via: http://localhost:3001/api/health/endpoints
 ### Health Monitoring
 
 Each endpoint's health is monitored:
+
 - **Response time** monitoring
 - **Success/failure rates**
 - **Availability status**
@@ -531,6 +546,7 @@ Each endpoint's health is monitored:
 ### 3. Production Deployment
 
 For production environments:
+
 - Consider **restricting Swagger UI access** to internal networks
 - Use **HTTPS** for all documentation endpoints
 - **Monitor access logs** for the documentation endpoints
@@ -540,6 +556,7 @@ For production environments:
 ### Common Issues
 
 #### 1. Swagger UI Not Loading
+
 ```bash
 # Check if the server is running
 curl http://localhost:3001/health
@@ -549,11 +566,13 @@ curl http://localhost:3001/api-docs/openapi.json
 ```
 
 #### 2. Try It Out Not Working
+
 - Verify **CORS configuration** in server settings
 - Check **JWT token format** (should not include "Bearer " prefix in Swagger UI)
 - Ensure **server is accessible** from browser
 
 #### 3. Postman Collection Import Issues
+
 ```bash
 # Verify collection format
 curl -s http://localhost:3001/api-docs/postman.json | jq '.info'
@@ -572,6 +591,7 @@ process.env.SWAGGER_DEBUG = 'true';
 ```
 
 This provides detailed logs about:
+
 - JSDoc parsing
 - OpenAPI schema generation
 - Endpoint registration

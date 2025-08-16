@@ -46,7 +46,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
           cx={point.x}
           cy={point.y}
           r={vertexRadius}
-          fill={isFirstPoint ? "#3b82f6" : "#4ade80"}
+          fill={isFirstPoint ? '#3b82f6' : '#4ade80'}
           stroke="#fff"
           strokeWidth={strokeWidth}
           style={{ opacity: 0.8 }}

@@ -4,22 +4,27 @@ const prisma = new PrismaClient();
 async function main() {
   const image = await prisma.image.findUnique({
     where: { id: 'c7c5f1b0-1722-4fc4-9f56-c21cf34831f6' },
-    include: { 
-      segmentation: true
-    }
+    include: {
+      segmentation: true,
+    },
   });
-  
+
   if (image && image.segmentation) {
     console.log('Image:', image.name);
     console.log('Segmentation ID:', image.segmentation.id);
     console.log('Model:', image.segmentation.model);
-    console.log('Image dimensions:', image.segmentation.imageWidth, 'x', image.segmentation.imageHeight);
-    
+    console.log(
+      'Image dimensions:',
+      image.segmentation.imageWidth,
+      'x',
+      image.segmentation.imageHeight
+    );
+
     // Parse and display polygons
     try {
       const polygons = JSON.parse(image.segmentation.polygons);
       console.log('\nPolygons found:', polygons.length);
-      
+
       polygons.forEach((poly, idx) => {
         console.log(`\nPolygon ${idx + 1}:`);
         console.log('  ID:', poly.id);

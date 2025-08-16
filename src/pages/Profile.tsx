@@ -112,7 +112,7 @@ const Profile = () => {
               page: currentPage,
             });
             const projects = allProjectsResponse.projects || [];
-            
+
             if (projects.length === 0) {
               hasMoreProjects = false;
               break;
@@ -129,7 +129,7 @@ const Profile = () => {
                 // Use total from pagination instead of fetching all images
                 const totalImages = imagesResponse.total || 0;
                 imageCount += totalImages;
-                
+
                 // For completed count, we need to fetch with a filter if API supports it
                 // Otherwise fetch a small batch to estimate
                 if (totalImages > 0) {
@@ -142,9 +142,10 @@ const Profile = () => {
                     img => img.segmentation_status === 'completed'
                   ).length;
                   // Estimate based on sample
-                  const completionRate = sampleImages.length > 0 
-                    ? completedInSample / sampleImages.length 
-                    : 0;
+                  const completionRate =
+                    sampleImages.length > 0
+                      ? completedInSample / sampleImages.length
+                      : 0;
                   completedCount += Math.round(totalImages * completionRate);
                 }
               } catch (error) {

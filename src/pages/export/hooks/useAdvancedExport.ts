@@ -55,7 +55,9 @@ export const useAdvancedExport = (projectId: string) => {
   const [isExporting, setIsExporting] = useState(false);
   const [completedJobId, setCompletedJobId] = useState<string | null>(null);
   const [createdBlobUrls, setCreatedBlobUrls] = useState<string[]>([]);
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(
+    null
+  );
   const [wsConnected, setWsConnected] = useState(false);
 
   const { socket } = useWebSocket();
@@ -102,7 +104,7 @@ export const useAdvancedExport = (projectId: string) => {
 
     const handleCompleted = (data: { jobId: string }) => {
       if (data.jobId === currentJob.id) {
-        setCurrentJob(prev => prev ? { ...prev, status: 'completed' } : null);
+        setCurrentJob(prev => (prev ? { ...prev, status: 'completed' } : null));
         setExportStatus('Export completed! Starting download...');
         setIsExporting(false);
         setCompletedJobId(data.jobId);
@@ -111,7 +113,9 @@ export const useAdvancedExport = (projectId: string) => {
 
     const handleFailed = (data: { jobId: string; error: string }) => {
       if (data.jobId === currentJob.id) {
-        setCurrentJob(prev => prev ? { ...prev, status: 'failed', message: data.error } : null);
+        setCurrentJob(prev =>
+          prev ? { ...prev, status: 'failed', message: data.error } : null
+        );
         setExportStatus(`Export failed: ${data.error}`);
         setIsExporting(false);
       }
@@ -145,17 +149,25 @@ export const useAdvancedExport = (projectId: string) => {
           if (status) {
             setExportProgress(status.progress);
             setExportStatus(`Processing... ${Math.round(status.progress)}%`);
-            
+
             if (status.status === 'completed') {
-              setCurrentJob(prev => prev ? { ...prev, status: 'completed' } : null);
+              setCurrentJob(prev =>
+                prev ? { ...prev, status: 'completed' } : null
+              );
               setExportStatus('Export completed! Starting download...');
               setIsExporting(false);
               setCompletedJobId(currentJob.id);
               clearInterval(interval);
               setPollingInterval(null);
             } else if (status.status === 'failed') {
-              setCurrentJob(prev => prev ? { ...prev, status: 'failed', message: status.message } : null);
-              setExportStatus(`Export failed: ${status.message || 'Unknown error'}`);
+              setCurrentJob(prev =>
+                prev
+                  ? { ...prev, status: 'failed', message: status.message }
+                  : null
+              );
+              setExportStatus(
+                `Export failed: ${status.message || 'Unknown error'}`
+              );
               setIsExporting(false);
               clearInterval(interval);
               setPollingInterval(null);
@@ -204,16 +216,19 @@ export const useAdvancedExport = (projectId: string) => {
 
           // Create download link
           const url = window.URL.createObjectURL(new Blob([response.data]));
-          
+
           // Track the URL for cleanup
           setCreatedBlobUrls(prev => [...prev, url]);
-          
+
           const link = document.createElement('a');
           link.href = url;
-          link.setAttribute('download', `export_${new Date().toISOString().slice(0, 10)}.zip`);
+          link.setAttribute(
+            'download',
+            `export_${new Date().toISOString().slice(0, 10)}.zip`
+          );
           document.body.appendChild(link);
           link.click();
-          
+
           // Cleanup immediately after download
           setTimeout(() => {
             link.remove();
@@ -224,11 +239,13 @@ export const useAdvancedExport = (projectId: string) => {
           // Clear the completed job after download
           setCompletedJobId(null);
           setExportStatus('Export downloaded successfully');
-          
+
           logger.info('Export auto-downloaded', { jobId: completedJobId });
         } catch (error) {
           logger.error('Failed to auto-download export', error);
-          setExportStatus('Export completed, but auto-download failed. Please try manual download.');
+          setExportStatus(
+            'Export completed, but auto-download failed. Please try manual download.'
+          );
         }
       };
 
@@ -279,16 +296,19 @@ export const useAdvancedExport = (projectId: string) => {
 
       // Create download link
       const url = window.URL.createObjectURL(new Blob([response.data]));
-      
+
       // Track the URL for cleanup
       setCreatedBlobUrls(prev => [...prev, url]);
-      
+
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `export_${new Date().toISOString().slice(0, 10)}.zip`);
+      link.setAttribute(
+        'download',
+        `export_${new Date().toISOString().slice(0, 10)}.zip`
+      );
       document.body.appendChild(link);
       link.click();
-      
+
       // Cleanup immediately after download
       setTimeout(() => {
         link.remove();
@@ -299,7 +319,7 @@ export const useAdvancedExport = (projectId: string) => {
       // Clear the completed job after download
       setCompletedJobId(null);
       setExportStatus('Export downloaded successfully');
-      
+
       logger.info('Export downloaded', { jobId: completedJobId });
     } catch (error) {
       logger.error('Failed to download export', error);
@@ -311,8 +331,10 @@ export const useAdvancedExport = (projectId: string) => {
     if (!currentJob) return;
 
     try {
-      await apiClient.post(`/projects/${projectId}/export/${currentJob.id}/cancel`);
-      setCurrentJob(prev => prev ? { ...prev, status: 'cancelled' } : null);
+      await apiClient.post(
+        `/projects/${projectId}/export/${currentJob.id}/cancel`
+      );
+      setCurrentJob(prev => (prev ? { ...prev, status: 'cancelled' } : null));
       setIsExporting(false);
       setExportStatus('Export cancelled');
       logger.info('Export cancelled', { jobId: currentJob.id });
@@ -321,17 +343,20 @@ export const useAdvancedExport = (projectId: string) => {
     }
   }, [projectId, currentJob]);
 
-  const getExportStatus = useCallback(async (jobId: string) => {
-    try {
-      const response = await apiClient.get(
-        `/projects/${projectId}/export/${jobId}/status`
-      );
-      return response.data;
-    } catch (error) {
-      logger.error('Failed to get export status', error);
-      return null;
-    }
-  }, [projectId]);
+  const getExportStatus = useCallback(
+    async (jobId: string) => {
+      try {
+        const response = await apiClient.get(
+          `/projects/${projectId}/export/${jobId}/status`
+        );
+        return response.data;
+      } catch (error) {
+        logger.error('Failed to get export status', error);
+        return null;
+      }
+    },
+    [projectId]
+  );
 
   const getExportHistory = useCallback(async () => {
     try {

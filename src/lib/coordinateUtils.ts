@@ -20,23 +20,25 @@ export const getCanvasCoordinates = (
   }
 
   const rect = canvasRef.current.getBoundingClientRect();
-  
+
   // Canvas coordinates (relative to canvas element)
   const canvasX = mouseX - rect.left;
   const canvasY = mouseY - rect.top;
-  
+
   // With transformOrigin at 0 0, the calculation is simpler
   // We need to account for the centering of the content
   const containerWidth = rect.width;
   const containerHeight = rect.height;
-  
+
   // The content is centered, so we need to adjust for that
   const centerOffsetX = containerWidth / 2;
   const centerOffsetY = containerHeight / 2;
-  
+
   // Adjust for centering and then apply inverse transform
-  const imageX = (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
-  const imageY = (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
+  const imageX =
+    (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
+  const imageY =
+    (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
 
   return { imageX, imageY, canvasX, canvasY };
 };
@@ -142,7 +144,7 @@ export const calculateFixedPointZoom = (
   // The canvas content is centered in the container, so we need to adjust
   const centerOffsetX = containerWidth ? containerWidth / 2 : 0;
   const centerOffsetY = containerHeight ? containerHeight / 2 : 0;
-  
+
   const centeredPoint = {
     x: fixedPoint.x - centerOffsetX,
     y: fixedPoint.y - centerOffsetY,
@@ -196,16 +198,22 @@ export const constrainTransform = (
   // Allow much more generous panning - only prevent complete loss of image
   const generousPanMargin = Math.max(canvasWidth, canvasHeight) * 1.5; // Very generous margin
   const minVisibleSize = 20; // Minimum pixels that must remain visible
-  
+
   // For X axis - allow generous panning in both directions
   const maxTranslateX = generousPanMargin - scaledWidth / 2;
   const minTranslateX = -scaledWidth / 2 - generousPanMargin + minVisibleSize;
-  translateX = Math.max(minTranslateX, Math.min(maxTranslateX, transform.translateX));
+  translateX = Math.max(
+    minTranslateX,
+    Math.min(maxTranslateX, transform.translateX)
+  );
 
-  // For Y axis - allow generous panning in both directions  
+  // For Y axis - allow generous panning in both directions
   const maxTranslateY = generousPanMargin - scaledHeight / 2;
   const minTranslateY = -scaledHeight / 2 - generousPanMargin + minVisibleSize;
-  translateY = Math.max(minTranslateY, Math.min(maxTranslateY, transform.translateY));
+  translateY = Math.max(
+    minTranslateY,
+    Math.min(maxTranslateY, transform.translateY)
+  );
 
   return {
     zoom,

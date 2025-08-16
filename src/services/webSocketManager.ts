@@ -214,7 +214,7 @@ class WebSocketManager {
       this.reconnectDelay = 1000;
       this.flushMessageQueue();
       this.emitToListeners('connect');
-      
+
       // Start ping interval to keep connection alive
       this.startPingInterval();
     });
@@ -222,7 +222,7 @@ class WebSocketManager {
     this.socket.on('disconnect', reason => {
       logger.info('WebSocket DISCONNECTED! Reason:', reason);
       this.emitToListeners('disconnect', reason);
-      
+
       // Stop ping interval when disconnected
       this.stopPingInterval();
 
@@ -242,7 +242,10 @@ class WebSocketManager {
       // Show toast only occasionally to avoid spam and not during auto-reconnect
       const now = Date.now();
       if (now - this.lastToastTime > this.toastCooldown) {
-        if (!error.message.includes('Authentication') && this.reconnectAttempts > 2) {
+        if (
+          !error.message.includes('Authentication') &&
+          this.reconnectAttempts > 2
+        ) {
           // Only show toast after a few failed attempts
           toast.error('Probíhá opětovné připojení k serveru...');
         }
@@ -431,7 +434,7 @@ class WebSocketManager {
    */
   private startPingInterval(): void {
     this.stopPingInterval(); // Clear any existing interval
-    
+
     // Send ping every 25 seconds (Socket.io default timeout is 60s)
     this.pingInterval = setInterval(() => {
       if (this.socket?.connected) {
@@ -456,7 +459,7 @@ class WebSocketManager {
    */
   disconnect(): void {
     logger.info('Disconnecting WebSocket manager');
-    
+
     this.stopPingInterval();
 
     if (this.socket) {

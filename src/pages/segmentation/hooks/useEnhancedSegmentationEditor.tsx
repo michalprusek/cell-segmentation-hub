@@ -53,7 +53,7 @@ export const useEnhancedSegmentationEditor = ({
     vertexIndex: number;
   } | null>(null);
   const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
-  
+
   // Vertex drag state for smooth dragging
   const [vertexDragState, setVertexDragState] = useState<{
     isDragging: boolean;
@@ -112,12 +112,13 @@ export const useEnhancedSegmentationEditor = ({
   // Only update polygons from initialPolygons on first mount or when image changes
   const initialPolygonsRef = useRef<Polygon[]>([]);
   const hasInitialized = useRef(false);
-  
+
   useEffect(() => {
     // Check if this is truly new data (different length or first load)
-    const isNewData = !hasInitialized.current || 
-                     initialPolygons.length !== initialPolygonsRef.current.length;
-    
+    const isNewData =
+      !hasInitialized.current ||
+      initialPolygons.length !== initialPolygonsRef.current.length;
+
     if (isNewData) {
       if (process.env.NODE_ENV === 'development') {
         logger.debug(
@@ -131,16 +132,12 @@ export const useEnhancedSegmentationEditor = ({
       setHistory([initialPolygons]);
       setHistoryIndex(0);
       setHasUnsavedChanges(false);
-      
+
       initialPolygonsRef.current = initialPolygons;
       hasInitialized.current = true;
-      
+
       if (process.env.NODE_ENV === 'development') {
-        logger.debug(
-          '✅ Loaded',
-          initialPolygons.length,
-          'polygons'
-        );
+        logger.debug('✅ Loaded', initialPolygons.length, 'polygons');
       }
     }
   }, [initialPolygons]);
@@ -461,18 +458,20 @@ export const useEnhancedSegmentationEditor = ({
         const rect = canvasRef.current.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
-        
+
         // Get the container dimensions
         const containerWidth = rect.width;
         const containerHeight = rect.height;
-        
+
         // The content is centered, so we need to adjust for that
         const centerOffsetX = containerWidth / 2;
         const centerOffsetY = containerHeight / 2;
 
         // Convert to image coordinates using the same calculation as getCanvasCoordinates
-        const imageX = (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
-        const imageY = (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
+        const imageX =
+          (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
+        const imageY =
+          (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
 
         // Use throttled version to prevent excessive re-renders
         throttledSetCursorPosition({ x: imageX, y: imageY });
@@ -497,7 +496,14 @@ export const useEnhancedSegmentationEditor = ({
       // Delegate to advanced interactions
       interactions.handleMouseMove(e);
     },
-    [interactionState, handlePan, interactions, transform, canvasRef, throttledSetCursorPosition]
+    [
+      interactionState,
+      handlePan,
+      interactions,
+      transform,
+      canvasRef,
+      throttledSetCursorPosition,
+    ]
   );
 
   // Computed values

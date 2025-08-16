@@ -80,10 +80,7 @@ const ModelSettingsSection = () => {
             {availableModels.map(model => (
               <div key={model.id} className="flex items-center space-x-4">
                 <RadioGroupItem value={model.id} id={model.id} />
-                <Label 
-                  htmlFor={model.id} 
-                  className="flex-1 cursor-pointer"
-                >
+                <Label htmlFor={model.id} className="flex-1 cursor-pointer">
                   <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
