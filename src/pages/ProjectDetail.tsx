@@ -104,7 +104,7 @@ const ProjectDetail = () => {
     useSegmentationQueue(id);
 
   // Memoized update function to prevent unnecessary re-renders
-  const memoizedUpdateImages = useCallback(updateImages, []);
+  const memoizedUpdateImages = useCallback(updateImages, [updateImages]);
 
   // Real-time image status updates with optimized dependencies
   useEffect(() => {
@@ -149,8 +149,9 @@ const ProjectDetail = () => {
   // Cleanup debounce timeouts on unmount
   useEffect(() => {
     return () => {
-      if (debounceTimeoutRef.current) {
-        for (const timeout of Object.values(debounceTimeoutRef.current)) {
+      const timeouts = debounceTimeoutRef.current;
+      if (timeouts) {
+        for (const timeout of Object.values(timeouts)) {
           clearTimeout(timeout);
         }
       }

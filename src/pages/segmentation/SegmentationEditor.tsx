@@ -107,7 +107,7 @@ const SegmentationEditor = () => {
       const defaultContainerHeight = 600;
       updateCanvasDimensions(defaultContainerWidth, defaultContainerHeight);
     }
-  }, [imageDimensions]);
+  }, [imageDimensions, updateCanvasDimensions]);
 
   const canvasWidth = canvasDimensions.width;
   const canvasHeight = canvasDimensions.height;

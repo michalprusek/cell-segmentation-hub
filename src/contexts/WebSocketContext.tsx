@@ -12,7 +12,7 @@ const WebSocketContext = createContext<WebSocketContextType | undefined>(
   undefined
 );
 
-export const useWebSocket = () => {
+const useWebSocket = () => {
   const context = useContext(WebSocketContext);
   if (!context) {
     throw new Error('useWebSocket must be used within a WebSocketProvider');
@@ -97,7 +97,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
       }
       isInitializedRef.current = false;
     };
-  }, [user?.id, token]);
+  }, [user, token]);
 
   const value = {
     manager: managerRef.current,
@@ -112,3 +112,4 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 };
 
 export default WebSocketProvider;
+export { useWebSocket };

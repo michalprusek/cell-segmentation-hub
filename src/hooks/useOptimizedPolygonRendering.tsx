@@ -198,8 +198,9 @@ export function useOptimizedPolygonRendering(
       }
 
       // Clear performance monitor
-      if (performanceMonitor.current) {
-        performanceMonitor.current.reset?.();
+      const monitor = performanceMonitor.current;
+      if (monitor) {
+        monitor.reset?.();
       }
     };
   }, [opts.enableWorkers, opts.targetFPS]);
@@ -372,7 +373,8 @@ export function useOptimizedPolygonRendering(
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      performanceMonitor.current.reset();
+      const monitor = performanceMonitor.current;
+      monitor.reset();
     };
   }, []);
 

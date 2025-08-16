@@ -1,11 +1,7 @@
-import React, { ReactElement } from 'react';
+import { ReactElement } from 'react';
 import { render, RenderOptions, RenderResult } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi } from 'vitest';
-import { AuthProvider } from '@/contexts/AuthContext';
-import { ThemeProvider } from '@/contexts/ThemeContext';
-import { LanguageProvider } from '@/contexts/LanguageContext';
+import { AllProviders } from './test-providers';
 
 // Mock user for tests
 export const mockUser = {
@@ -28,31 +24,7 @@ export const mockAuthContext = {
   isLoading: false,
 };
 
-// Create a custom render function that includes providers
-const AllProviders: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-        staleTime: Infinity,
-      },
-    },
-  });
-
-  return (
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ThemeProvider>
-            <LanguageProvider>{children}</LanguageProvider>
-          </ThemeProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
-  );
-};
+// Custom render function is now imported from test-providers.tsx
 
 const customRender = (
   ui: ReactElement,

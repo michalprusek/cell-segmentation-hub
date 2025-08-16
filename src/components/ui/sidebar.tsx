@@ -755,5 +755,7 @@ export {
   SidebarRail,
   SidebarSeparator,
   SidebarTrigger,
-  useSidebar,
 };
+
+// Export hook separately to avoid fast refresh warning
+export { useSidebar };
