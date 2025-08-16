@@ -48,6 +48,9 @@ export const useEnhancedSegmentationEditor = ({
     calculateCenteringTransform(imageWidth, imageHeight, canvasWidth, canvasHeight)
   );
 
+  // Update transformRef whenever transform changes
+  transformRef.current = transform;
+
   // Interaction state
   const [interactionState, setInteractionState] = useState<InteractionState>({
     isDraggingVertex: false,
@@ -69,16 +72,19 @@ export const useEnhancedSegmentationEditor = ({
 
   // Refs
   const canvasRef = useRef<HTMLDivElement>(null);
+  const transformRef = useRef<TransformState>(transform);
 
   // Update polygons when initialPolygons changes (e.g., when segmentation data loads)
   useEffect(() => {
-    console.log('🔄 Initial polygons changed:', initialPolygons.length, 'polygons');
-    if (initialPolygons.length > 0 || polygons.length > 0) {
-      setPolygons(initialPolygons);
-      // Reset history with new initial state
-      setHistory([initialPolygons]);
-      setHistoryIndex(0);
-      setHasUnsavedChanges(false);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 Initial polygons changed:', initialPolygons.length, 'polygons');
+    }
+    setPolygons(initialPolygons);
+    // Reset history with new initial state
+    setHistory([initialPolygons]);
+    setHistoryIndex(0);
+    setHasUnsavedChanges(false);
+    if (process.env.NODE_ENV === 'development') {
       console.log('✅ Updated editor with', initialPolygons.length, 'polygons');
     }
   }, [initialPolygons]);
@@ -150,7 +156,7 @@ export const useEnhancedSegmentationEditor = ({
     }
   }, [onSave, hasUnsavedChanges, polygons]);
 
-  // Transform operations
+  // Transform operations with improved constraints
   const handleZoomIn = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
@@ -160,13 +166,14 @@ export const useEnhancedSegmentationEditor = ({
       EDITING_CONSTANTS.MIN_ZOOM,
       EDITING_CONSTANTS.MAX_ZOOM
     );
-    setTransform(constrainTransform(
+    const constrainedTransform = constrainTransform(
       newTransform, 
       imageWidth, 
       imageHeight, 
       canvasWidth, 
       canvasHeight
-    ));
+    );
+    setTransform(constrainedTransform);
   }, [transform, canvasWidth, canvasHeight, imageWidth, imageHeight]);
 
   const handleZoomOut = useCallback(() => {
@@ -178,13 +185,14 @@ export const useEnhancedSegmentationEditor = ({
       EDITING_CONSTANTS.MIN_ZOOM,
       EDITING_CONSTANTS.MAX_ZOOM
     );
-    setTransform(constrainTransform(
+    const constrainedTransform = constrainTransform(
       newTransform, 
       imageWidth, 
       imageHeight, 
       canvasWidth, 
       canvasHeight
-    ));
+    );
+    setTransform(constrainedTransform);
   }, [transform, canvasWidth, canvasHeight, imageWidth, imageHeight]);
 
   const handleResetView = useCallback(() => {
@@ -291,8 +299,9 @@ export const useEnhancedSegmentationEditor = ({
 
       const zoomFactor = e.deltaY < 0 ? EDITING_CONSTANTS.ZOOM_FACTOR : 1 / EDITING_CONSTANTS.ZOOM_FACTOR;
       
+      // Use transformRef.current to get latest transform value
       const newTransform = calculateFixedPointZoom(
-        transform,
+        transformRef.current,
         mousePoint,
         zoomFactor,
         EDITING_CONSTANTS.MIN_ZOOM,
@@ -317,9 +326,9 @@ export const useEnhancedSegmentationEditor = ({
         element.removeEventListener('wheel', handleWheel);
       };
     }
-  }, [transform, imageWidth, imageHeight, canvasWidth, canvasHeight]);
+  }, [imageWidth, imageHeight, canvasWidth, canvasHeight]); // Removed transform from dependencies
 
-  // Enhanced pan handler
+  // Enhanced pan handler with proper constraints
   const handlePan = useCallback((deltaX: number, deltaY: number) => {
     const newTransform = {
       ...transform,
@@ -327,13 +336,16 @@ export const useEnhancedSegmentationEditor = ({
       translateY: transform.translateY + deltaY
     };
 
-    setTransform(constrainTransform(
+    // Apply constraints to prevent image from getting stuck at boundaries
+    const constrainedTransform = constrainTransform(
       newTransform,
       imageWidth,
       imageHeight,
       canvasWidth,
       canvasHeight
-    ));
+    );
+    
+    setTransform(constrainedTransform);
   }, [transform, imageWidth, imageHeight, canvasWidth, canvasHeight]);
 
   // Update interaction handlers to include pan handling

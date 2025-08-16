@@ -1,0 +1,435 @@
+{
+  "users": [
+    {
+      "id": "test-user-1",
+      "email": "alice@example.com",
+      "password": "hashedPassword123",
+      "firstName": "Alice",
+      "lastName": "Johnson",
+      "createdAt": "2023-01-15T10:00:00Z",
+      "updatedAt": "2023-01-15T10:00:00Z"
+    },
+    {
+      "id": "test-user-2",
+      "email": "bob@example.com",
+      "password": "hashedPassword456",
+      "firstName": "Bob",
+      "lastName": "Smith",
+      "createdAt": "2023-02-01T14:30:00Z",
+      "updatedAt": "2023-02-01T14:30:00Z"
+    },
+    {
+      "id": "test-user-3",
+      "email": "charlie@example.com",
+      "password": "hashedPassword789",
+      "firstName": "Charlie",
+      "lastName": "Brown",
+      "createdAt": "2023-03-10T09:15:00Z",
+      "updatedAt": "2023-03-10T09:15:00Z"
+    }
+  ],
+  "projects": [
+    {
+      "id": "project-1",
+      "name": "Cell Culture Analysis",
+      "description": "Analysis of HeLa cell cultures under different treatment conditions",
+      "userId": "test-user-1",
+      "createdAt": "2023-01-20T11:00:00Z",
+      "updatedAt": "2023-01-25T16:30:00Z",
+      "settings": {
+        "defaultModel": "hrnet",
+        "autoProcess": false,
+        "confidenceThreshold": 0.8
+      }
+    },
+    {
+      "id": "project-2",
+      "name": "Stem Cell Research",
+      "description": "iPSC differentiation tracking over time",
+      "userId": "test-user-1",
+      "createdAt": "2023-02-05T13:45:00Z",
+      "updatedAt": "2023-02-20T10:20:00Z",
+      "settings": {
+        "defaultModel": "resunet_advanced",
+        "autoProcess": true,
+        "confidenceThreshold": 0.9
+      }
+    },
+    {
+      "id": "project-3",
+      "name": "Cancer Cell Migration",
+      "description": "Study of cancer cell migration patterns",
+      "userId": "test-user-2",
+      "createdAt": "2023-03-01T08:00:00Z",
+      "updatedAt": "2023-03-15T17:45:00Z",
+      "settings": {
+        "defaultModel": "hrnet",
+        "autoProcess": true,
+        "confidenceThreshold": 0.75
+      }
+    }
+  ],
+  "projectImages": [
+    {
+      "id": "image-1",
+      "filename": "cell_culture_001.jpg",
+      "originalName": "Day1_Treatment_A.jpg",
+      "mimeType": "image/jpeg",
+      "size": 2048576,
+      "width": 2048,
+      "height": 2048,
+      "thumbnailPath": "/thumbnails/cell_culture_001_thumb.jpg",
+      "projectId": "project-1",
+      "processingStatus": "completed",
+      "uploadedAt": "2023-01-21T09:30:00Z",
+      "processedAt": "2023-01-21T09:32:15Z",
+      "metadata": {
+        "microscope": "Zeiss LSM 880",
+        "objective": "63x",
+        "pixelSize": "0.1µm",
+        "exposureTime": "100ms"
+      }
+    },
+    {
+      "id": "image-2",
+      "filename": "cell_culture_002.jpg",
+      "originalName": "Day1_Treatment_B.jpg",
+      "mimeType": "image/jpeg",
+      "size": 1965434,
+      "width": 2048,
+      "height": 2048,
+      "thumbnailPath": "/thumbnails/cell_culture_002_thumb.jpg",
+      "projectId": "project-1",
+      "processingStatus": "completed",
+      "uploadedAt": "2023-01-21T10:00:00Z",
+      "processedAt": "2023-01-21T10:01:45Z",
+      "metadata": {
+        "microscope": "Zeiss LSM 880",
+        "objective": "63x",
+        "pixelSize": "0.1µm",
+        "exposureTime": "100ms"
+      }
+    },
+    {
+      "id": "image-3",
+      "filename": "stem_cells_day3.jpg",
+      "originalName": "iPSC_Differentiation_Day3.jpg",
+      "mimeType": "image/jpeg",
+      "size": 3145728,
+      "width": 2560,
+      "height": 2560,
+      "thumbnailPath": "/thumbnails/stem_cells_day3_thumb.jpg",
+      "projectId": "project-2",
+      "processingStatus": "processing",
+      "uploadedAt": "2023-02-08T14:20:00Z",
+      "processedAt": null,
+      "metadata": {
+        "microscope": "Leica SP8",
+        "objective": "40x",
+        "pixelSize": "0.15µm",
+        "exposureTime": "150ms"
+      }
+    },
+    {
+      "id": "image-4",
+      "filename": "cancer_migration_t0.jpg",
+      "originalName": "Migration_Assay_T0.jpg",
+      "mimeType": "image/jpeg",
+      "size": 1741824,
+      "width": 1920,
+      "height": 1920,
+      "thumbnailPath": "/thumbnails/cancer_migration_t0_thumb.jpg",
+      "projectId": "project-3",
+      "processingStatus": "failed",
+      "uploadedAt": "2023-03-02T11:15:00Z",
+      "processedAt": null,
+      "errorMessage": "Image quality too low for accurate segmentation",
+      "metadata": {
+        "microscope": "Nikon Eclipse Ti2",
+        "objective": "20x",
+        "pixelSize": "0.3µm",
+        "exposureTime": "200ms"
+      }
+    }
+  ],
+  "segmentationResults": [
+    {
+      "id": "seg-result-1",
+      "projectImageId": "image-1",
+      "modelName": "hrnet",
+      "status": "completed",
+      "polygons": [
+        {
+          "points": [
+            [342, 156], [398, 167], [425, 203], [441, 245], [438, 289],
+            [425, 325], [398, 361], [365, 382], [325, 389], [285, 382],
+            [252, 361], [225, 325], [212, 289], [209, 245], [225, 203],
+            [252, 167], [285, 156], [325, 149]
+          ],
+          "confidence": 0.94,
+          "area": 12847,
+          "centroid": [325, 267],
+          "perimeter": 487.2
+        },
+        {
+          "points": [
+            [567, 234], [623, 245], [650, 281], [666, 323], [663, 367],
+            [650, 403], [623, 439], [590, 460], [550, 467], [510, 460],
+            [477, 439], [450, 403], [437, 367], [434, 323], [450, 281],
+            [477, 245], [510, 234], [550, 227]
+          ],
+          "confidence": 0.89,
+          "area": 15632,
+          "centroid": [550, 345],
+          "perimeter": 521.8
+        }
+      ],
+      "processingTime": 1543,
+      "confidence": 0.915,
+      "totalObjects": 2,
+      "createdAt": "2023-01-21T09:31:00Z",
+      "completedAt": "2023-01-21T09:32:15Z",
+      "modelVersion": "2.1.0",
+      "postprocessingParams": {
+        "minArea": 1000,
+        "confidenceThreshold": 0.8,
+        "removeEdgeObjects": true
+      }
+    },
+    {
+      "id": "seg-result-2",
+      "projectImageId": "image-2",
+      "modelName": "hrnet",
+      "status": "completed",
+      "polygons": [
+        {
+          "points": [
+            [145, 298], [201, 309], [228, 345], [244, 387], [241, 431],
+            [228, 467], [201, 503], [168, 524], [128, 531], [88, 524],
+            [55, 503], [28, 467], [15, 431], [12, 387], [28, 345],
+            [55, 309], [88, 298], [128, 291]
+          ],
+          "confidence": 0.92,
+          "area": 11234,
+          "centroid": [128, 409],
+          "perimeter": 463.7
+        },
+        {
+          "points": [
+            [789, 567], [845, 578], [872, 614], [888, 656], [885, 700],
+            [872, 736], [845, 772], [812, 793], [772, 800], [732, 793],
+            [699, 772], [672, 736], [659, 700], [656, 656], [672, 614],
+            [699, 578], [732, 567], [772, 560]
+          ],
+          "confidence": 0.87,
+          "area": 13891,
+          "centroid": [772, 678],
+          "perimeter": 498.3
+        },
+        {
+          "points": [
+            [1234, 123], [1290, 134], [1317, 170], [1333, 212], [1330, 256],
+            [1317, 292], [1290, 328], [1257, 349], [1217, 356], [1177, 349],
+            [1144, 328], [1117, 292], [1104, 256], [1101, 212], [1117, 170],
+            [1144, 134], [1177, 123], [1217, 116]
+          ],
+          "confidence": 0.91,
+          "area": 9876,
+          "centroid": [1217, 234],
+          "perimeter": 421.5
+        }
+      ],
+      "processingTime": 1689,
+      "confidence": 0.900,
+      "totalObjects": 3,
+      "createdAt": "2023-01-21T10:01:00Z",
+      "completedAt": "2023-01-21T10:01:45Z",
+      "modelVersion": "2.1.0",
+      "postprocessingParams": {
+        "minArea": 1000,
+        "confidenceThreshold": 0.8,
+        "removeEdgeObjects": true
+      }
+    }
+  ],
+  "testScenarios": {
+    "authentication": {
+      "validUser": {
+        "email": "alice@example.com",
+        "password": "password123"
+      },
+      "invalidUser": {
+        "email": "nonexistent@example.com",
+        "password": "wrongpassword"
+      },
+      "malformedEmail": {
+        "email": "not-an-email",
+        "password": "password123"
+      },
+      "shortPassword": {
+        "email": "test@example.com",
+        "password": "123"
+      }
+    },
+    "projects": {
+      "validProject": {
+        "name": "Test Project",
+        "description": "A project for testing purposes"
+      },
+      "longNameProject": {
+        "name": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "description": "Project with very long name"
+      },
+      "emptyNameProject": {
+        "name": "",
+        "description": "Project with empty name"
+      },
+      "specialCharsProject": {
+        "name": "Test<script>alert('xss')</script>Project",
+        "description": "Project with potential XSS"
+      }
+    },
+    "fileUploads": {
+      "validImage": {
+        "filename": "test-cell-image.jpg",
+        "mimeType": "image/jpeg",
+        "size": 1024000
+      },
+      "largeImage": {
+        "filename": "large-image.jpg",
+        "mimeType": "image/jpeg",
+        "size": 52428800
+      },
+      "invalidType": {
+        "filename": "document.pdf",
+        "mimeType": "application/pdf",
+        "size": 512000
+      },
+      "maliciousFile": {
+        "filename": "virus.exe",
+        "mimeType": "application/octet-stream",
+        "size": 102400
+      }
+    },
+    "segmentation": {
+      "validRequest": {
+        "modelName": "hrnet",
+        "confidenceThreshold": 0.8,
+        "minArea": 100
+      },
+      "invalidModel": {
+        "modelName": "nonexistent-model",
+        "confidenceThreshold": 0.8
+      },
+      "invalidThreshold": {
+        "modelName": "hrnet",
+        "confidenceThreshold": 1.5
+      },
+      "negativeArea": {
+        "modelName": "hrnet",
+        "minArea": -100
+      }
+    }
+  },
+  "mockResponses": {
+    "authSuccess": {
+      "success": true,
+      "data": {
+        "user": {
+          "id": "test-user-1",
+          "email": "alice@example.com",
+          "firstName": "Alice",
+          "lastName": "Johnson"
+        },
+        "accessToken": "mock-jwt-access-token",
+        "refreshToken": "mock-jwt-refresh-token"
+      },
+      "message": "Login successful"
+    },
+    "authFailure": {
+      "success": false,
+      "error": "Invalid credentials",
+      "message": "Email or password is incorrect"
+    },
+    "projectsList": {
+      "success": true,
+      "data": [
+        {
+          "id": "project-1",
+          "name": "Cell Culture Analysis",
+          "description": "Analysis of HeLa cell cultures",
+          "imageCount": 2,
+          "createdAt": "2023-01-20T11:00:00Z"
+        }
+      ],
+      "message": "Projects retrieved successfully"
+    },
+    "segmentationResult": {
+      "success": true,
+      "data": {
+        "id": "seg-result-1",
+        "status": "completed",
+        "polygons": [
+          {
+            "points": [[100, 100], [200, 100], [200, 200], [100, 200]],
+            "confidence": 0.95,
+            "area": 10000,
+            "centroid": [150, 150]
+          }
+        ],
+        "processingTime": 1500,
+        "totalObjects": 1
+      },
+      "message": "Segmentation completed successfully"
+    },
+    "mlServiceStatus": {
+      "status": "operational",
+      "models": [
+        {
+          "name": "hrnet",
+          "version": "2.1.0",
+          "available": true,
+          "inferenceTime": 1.5
+        },
+        {
+          "name": "resunet_small",
+          "version": "1.3.0",
+          "available": true,
+          "inferenceTime": 0.8
+        },
+        {
+          "name": "resunet_advanced",
+          "version": "1.2.0",
+          "available": true,
+          "inferenceTime": 3.2
+        }
+      ],
+      "system_info": {
+        "gpu_available": true,
+        "memory_usage": "2.1GB/16GB",
+        "cpu_usage": "15%"
+      }
+    }
+  },
+  "samplePolygons": {
+    "simple": [
+      [100, 100], [200, 100], [200, 200], [100, 200]
+    ],
+    "circular": [
+      [150, 50], [193, 64], [229, 93], [250, 135], [250, 185],
+      [229, 227], [193, 256], [150, 270], [107, 256], [71, 227],
+      [50, 185], [50, 135], [71, 93], [107, 64]
+    ],
+    "complex": [
+      [120, 80], [180, 85], [220, 110], [245, 150], [260, 200],
+      [250, 250], [220, 290], [180, 315], [130, 320], [80, 315],
+      [40, 290], [20, 250], [15, 200], [25, 150], [45, 110],
+      [80, 85]
+    ],
+    "irregular": [
+      [100, 150], [125, 120], [160, 115], [195, 130], [210, 165],
+      [200, 200], [185, 230], [155, 245], [120, 240], [95, 210],
+      [90, 180]
+    ]
+  }
+}

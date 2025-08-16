@@ -41,8 +41,10 @@ export const usePolygonSlicing = ({
   /**
    * Handle slice action when two points have been selected
    */
-  const handleSliceAction = useCallback(() => {
-    if (!selectedPolygonId || tempPoints.length !== 2) {
+  const handleSliceAction = useCallback((providedTempPoints?: Point[]) => {
+    const pointsToUse = providedTempPoints || tempPoints;
+    
+    if (!selectedPolygonId || pointsToUse.length !== 2) {
       return false;
     }
 
@@ -52,7 +54,7 @@ export const usePolygonSlicing = ({
       return false;
     }
 
-    const [sliceStart, sliceEnd] = tempPoints;
+    const [sliceStart, sliceEnd] = pointsToUse;
 
     // Validate slice line
     const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
@@ -170,10 +172,8 @@ export const usePolygonSlicing = ({
       const newTempPoints = [...tempPoints, point];
       setTempPoints(newTempPoints);
       
-      // Automatically trigger slice after a short delay
-      setTimeout(() => {
-        handleSliceAction();
-      }, 100);
+      // Pass the new temp points directly to avoid stale state issue
+      handleSliceAction(newTempPoints);
       
       return true;
     }

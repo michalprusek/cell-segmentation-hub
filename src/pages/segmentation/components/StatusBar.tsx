@@ -86,17 +86,17 @@ const StatusBar = ({
   const getModeLabel = () => {
     switch (editMode) {
       case EditMode.View:
-        return "Prohlížení";
+        return t('segmentation.mode.view');
       case EditMode.EditVertices:
-        return "Editace vrcholů";
+        return t('segmentation.mode.editVertices');
       case EditMode.AddPoints:
-        return "Přidávání bodů";
+        return t('segmentation.mode.addPoints');
       case EditMode.CreatePolygon:
-        return "Vytváření";
+        return t('segmentation.mode.createPolygon');
       case EditMode.Slice:
-        return "Řezání";
+        return t('segmentation.mode.slice');
       case EditMode.DeletePolygon:
-        return "Mazání";
+        return t('segmentation.mode.deletePolygon');
       default:
         return "";
     }
@@ -114,13 +114,13 @@ const StatusBar = ({
         <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
           <Shapes className="h-3 w-3 text-blue-500" />
           <span className="font-medium">{totalPolygons}</span>
-          <span className="text-gray-600 dark:text-gray-400">polygonů</span>
+          <span className="text-gray-600 dark:text-gray-400">{t('segmentation.status.polygons')}</span>
         </div>
         
         <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
           <MapPin className="h-3 w-3 text-orange-500" />
           <span className="font-medium">{totalVertices}</span>
-          <span className="text-gray-600 dark:text-gray-400">vrcholů</span>
+          <span className="text-gray-600 dark:text-gray-400">{t('segmentation.status.vertices')}</span>
         </div>
 
         {/* Visibility stats */}
@@ -129,13 +129,13 @@ const StatusBar = ({
             <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
               <Eye className="h-3 w-3 text-green-500" />
               <span className="font-medium">{visibleCount}</span>
-              <span className="text-gray-600 dark:text-gray-400">viditelných</span>
+              <span className="text-gray-600 dark:text-gray-400">{t('segmentation.status.visible')}</span>
             </div>
             
             <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
               <EyeOff className="h-3 w-3 text-gray-500" />
               <span className="font-medium">{hiddenCount}</span>
-              <span className="text-gray-600 dark:text-gray-400">skrytých</span>
+              <span className="text-gray-600 dark:text-gray-400">{t('segmentation.status.hidden')}</span>
             </div>
           </>
         )}
@@ -144,7 +144,7 @@ const StatusBar = ({
         {selectedPolygonId && (
           <div className="flex items-center space-x-2 text-gray-700 dark:text-gray-300">
             <Target className="h-3 w-3 text-blue-500" />
-            <span className="text-gray-600 dark:text-gray-400">vybrán:</span>
+            <span className="text-gray-600 dark:text-gray-400">{t('segmentation.status.selected')}:</span>
             <span className="font-mono text-xs">{selectedPolygonId.substring(0, 8)}</span>
           </div>
         )}
@@ -156,7 +156,7 @@ const StatusBar = ({
             <XCircle className="h-3 w-3 text-gray-400" />
           )}
           <span className={`text-xs ${segmentation.id ? 'text-green-500' : 'text-gray-400'}`}>
-            {segmentation.id ? 'Uloženo' : 'Neuloženo'}
+            {segmentation.id ? t('segmentation.status.saved') : t('segmentation.status.unsaved')}
           </span>
         </div>
       </div>

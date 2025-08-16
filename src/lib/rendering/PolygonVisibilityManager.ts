@@ -130,8 +130,8 @@ export class PolygonVisibilityManager {
     let culledCount = 0;
 
     if (polygons.length <= threshold && renderingLevel !== 'minimal') {
-      // Small number of polygons - render all
-      visiblePolygons = polygons;
+      // Small number of polygons - render all (create copy to avoid mutation)
+      visiblePolygons = polygons.slice();
     } else {
       // Large number of polygons - apply frustum culling
       const visibilityData = this.performFrustumCulling(polygons, viewport, context);
@@ -273,7 +273,8 @@ export class PolygonVisibilityManager {
    * Sort polygons for optimal rendering order
    */
   private sortForRendering(polygons: Polygon[], selectedId?: string | null): Polygon[] {
-    return polygons.sort((a, b) => {
+    // Create copy before sorting to avoid mutating input
+    return Array.from(polygons).sort((a, b) => {
       // Selected polygon always on top
       if (a.id === selectedId) return 1;
       if (b.id === selectedId) return -1;

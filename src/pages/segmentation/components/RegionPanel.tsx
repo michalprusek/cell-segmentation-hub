@@ -5,6 +5,7 @@ import { SegmentationResult } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import PolygonItem from './PolygonItem';
+import { isPointInPolygon, getPolygonCentroid } from '@/lib/polygonGeometry';
 
 interface RegionPanelProps {
   loading: boolean;
@@ -39,47 +40,13 @@ const RegionPanel = ({
     const externals = segmentation.polygons.filter(p => p.type === 'external');
     const internals = segmentation.polygons.filter(p => p.type === 'internal');
     
-    // Helper function to check if a point is inside a polygon using ray casting
-    const isPointInPolygon = (point: { x: number; y: number }, polygon: { points: { x: number; y: number }[] }) => {
-      if (!polygon.points || polygon.points.length < 3) return false;
-      
-      let inside = false;
-      const { x, y } = point;
-      
-      for (let i = 0, j = polygon.points.length - 1; i < polygon.points.length; j = i++) {
-        const xi = polygon.points[i].x;
-        const yi = polygon.points[i].y;
-        const xj = polygon.points[j].x;
-        const yj = polygon.points[j].y;
-        
-        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
-          inside = !inside;
-        }
-      }
-      return inside;
-    };
-    
-    // Calculate centroid of a polygon
-    const getPolygonCentroid = (polygon: { points: { x: number; y: number }[] }) => {
-      if (!polygon.points || polygon.points.length === 0) return { x: 0, y: 0 };
-      
-      const sum = polygon.points.reduce((acc, point) => ({
-        x: acc.x + point.x,
-        y: acc.y + point.y
-      }), { x: 0, y: 0 });
-      
-      return {
-        x: sum.x / polygon.points.length,
-        y: sum.y / polygon.points.length
-      };
-    };
     
     return externals.map(external => ({
       ...external,
       children: internals.filter(internal => {
         // Check if the internal polygon's centroid is contained within the external polygon
-        const centroid = getPolygonCentroid(internal);
-        return isPointInPolygon(centroid, external);
+        const centroid = getPolygonCentroid(internal.points);
+        return isPointInPolygon(centroid, external.points);
       })
     }));
   }, [segmentation]);

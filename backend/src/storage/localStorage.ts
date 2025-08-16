@@ -1,0 +1,316 @@
+import path from 'path';
+import fs from 'fs/promises';
+import { existsSync } from 'fs';
+import sharp from 'sharp';
+import { 
+  StorageProvider, 
+  UploadOptions, 
+  UploadResult, 
+  StorageError,
+  DEFAULT_THUMBNAIL_SIZE 
+} from './interface';
+import { config } from '../utils/config';
+import { logger } from '../utils/logger';
+
+/**
+ * Local file system storage provider
+ */
+export class LocalStorageProvider implements StorageProvider {
+  private readonly uploadDir: string;
+
+  constructor() {
+    this.uploadDir = path.resolve(config.UPLOAD_DIR);
+    this.ensureDirectoryExists(this.uploadDir);
+  }
+
+  /**
+   * Upload file to local storage
+   */
+  async upload(buffer: Buffer, key: string, options: UploadOptions = {}): Promise<UploadResult> {
+    try {
+      const filePath = path.join(this.uploadDir, key);
+      const directory = path.dirname(filePath);
+
+      // Ensure directory exists
+      await this.ensureDirectoryExists(directory);
+
+      // Get image metadata
+      let width: number | undefined;
+      let height: number | undefined;
+      let mimeType = options.mimeType || 'application/octet-stream';
+
+      try {
+        const imageMetadata = await sharp(buffer).metadata();
+        width = imageMetadata.width;
+        height = imageMetadata.height;
+        mimeType = `image/${imageMetadata.format}` || mimeType;
+      } catch (error) {
+        logger.warn('Failed to extract image metadata', 'LocalStorage', { key });
+      }
+
+      // Write original file
+      await fs.writeFile(filePath, buffer);
+      
+      const result: UploadResult = {
+        originalPath: key,
+        fileSize: buffer.length,
+        mimeType,
+        width,
+        height
+      };
+
+      // Generate thumbnail if requested and it's an image
+      if (options.generateThumbnail && this.isImageMimeType(mimeType)) {
+        try {
+          const thumbnailKey = this.getThumbnailKey(key);
+          const thumbnailPath = path.join(this.uploadDir, thumbnailKey);
+          const thumbnailDir = path.dirname(thumbnailPath);
+          
+          await this.ensureDirectoryExists(thumbnailDir);
+
+          const thumbnailSize = options.thumbnailSize || DEFAULT_THUMBNAIL_SIZE;
+          
+          // Sharp needs special handling for certain file formats
+          let sharpInstance = sharp(buffer);
+          
+          // For BMP and other formats that might have issues, ensure proper conversion
+          if (mimeType === 'image/bmp' || 
+              mimeType === 'image/x-ms-bmp' || 
+              mimeType === 'image/x-bmp' ||
+              mimeType === 'image/gif' ||
+              mimeType === 'image/tiff' ||
+              mimeType === 'image/tif') {
+            // Convert these formats to JPEG for consistent thumbnails
+            sharpInstance = sharpInstance.toFormat('jpeg');
+          }
+          
+          await sharpInstance
+            .resize(thumbnailSize.width, thumbnailSize.height, {
+              fit: 'inside',
+              withoutEnlargement: true
+            })
+            .jpeg({ quality: 85, mozjpeg: true })
+            .toFile(thumbnailPath);
+
+          result.thumbnailPath = thumbnailKey;
+        } catch (error) {
+          logger.warn('Failed to generate thumbnail', 'LocalStorage', { 
+            key, 
+            error: error instanceof Error ? error.message : 'Unknown error',
+            mimeType
+          });
+          // Don't fail the upload if thumbnail generation fails
+        }
+      }
+
+      logger.info('File uploaded successfully', 'LocalStorage', { key, size: buffer.length });
+      return result;
+
+    } catch (error) {
+      logger.error('Failed to upload file', error instanceof Error ? error : undefined, 'LocalStorage', { key });
+      throw new StorageError(
+        `Failed to upload file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'UPLOAD_FAILED',
+        500
+      );
+    }
+  }
+
+  /**
+   * Delete file from local storage
+   */
+  async delete(key: string): Promise<void> {
+    try {
+      const filePath = path.join(this.uploadDir, key);
+      
+      // Delete original file
+      if (existsSync(filePath)) {
+        await fs.unlink(filePath);
+      }
+
+      // Delete thumbnail if exists
+      const thumbnailKey = this.getThumbnailKey(key);
+      const thumbnailPath = path.join(this.uploadDir, thumbnailKey);
+      
+      if (existsSync(thumbnailPath)) {
+        await fs.unlink(thumbnailPath);
+      }
+
+      logger.info('File deleted successfully', 'LocalStorage', { key });
+
+    } catch (error) {
+      logger.error('Failed to delete file', error instanceof Error ? error : undefined, 'LocalStorage', { key });
+      throw new StorageError(
+        `Failed to delete file: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'DELETE_FAILED',
+        500
+      );
+    }
+  }
+
+  /**
+   * Get URL for accessing file
+   */
+  async getUrl(key: string, signed: boolean = false): Promise<string> {
+    // For local storage, we return an absolute URL with proper host/port
+    // The signed parameter is ignored for local storage
+    const host = process.env.HOST || '0.0.0.0';
+    const port = process.env.PORT || '3001';
+    
+    // In Docker, we need to use localhost for frontend access
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? '' // In production, use relative URLs
+      : `http://localhost:${port}`; // In development/Docker, use absolute URL
+    
+    return `${baseUrl}/uploads/${key}`;
+  }
+
+  /**
+   * Check if file exists
+   */
+  async exists(key: string): Promise<boolean> {
+    try {
+      const filePath = path.join(this.uploadDir, key);
+      return existsSync(filePath);
+    } catch (error) {
+      logger.error('Failed to check file existence', error instanceof Error ? error : undefined, 'LocalStorage', { key });
+      return false;
+    }
+  }
+
+  /**
+   * Get file metadata
+   */
+  async getMetadata(key: string): Promise<{
+    size: number;
+    mimeType: string;
+    lastModified: Date;
+  }> {
+    try {
+      const filePath = path.join(this.uploadDir, key);
+      const stats = await fs.stat(filePath);
+      
+      // Try to determine MIME type from file extension
+      const ext = path.extname(key).toLowerCase();
+      let mimeType = 'application/octet-stream';
+      
+      const mimeMap: Record<string, string> = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.bmp': 'image/bmp',
+        '.tiff': 'image/tiff',
+        '.tif': 'image/tiff'
+      };
+      
+      mimeType = mimeMap[ext] || mimeType;
+
+      return {
+        size: stats.size,
+        mimeType,
+        lastModified: stats.mtime
+      };
+
+    } catch (error) {
+      logger.error('Failed to get file metadata', error instanceof Error ? error : undefined, 'LocalStorage', { key });
+      throw new StorageError(
+        `Failed to get file metadata: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'METADATA_FAILED',
+        500
+      );
+    }
+  }
+
+  /**
+   * Get file buffer for processing
+   */
+  async getBuffer(key: string): Promise<Buffer> {
+    try {
+      const filePath = path.join(this.uploadDir, key);
+      
+      if (!existsSync(filePath)) {
+        throw new StorageError(
+          `File not found: ${key}`,
+          'FILE_NOT_FOUND',
+          404
+        );
+      }
+
+      return await fs.readFile(filePath);
+
+    } catch (error) {
+      logger.error('Failed to get file buffer', error instanceof Error ? error : undefined, 'LocalStorage', { key });
+      
+      if (error instanceof StorageError) {
+        throw error;
+      }
+      
+      throw new StorageError(
+        `Failed to get file buffer: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        'BUFFER_FAILED',
+        500
+      );
+    }
+  }
+
+  /**
+   * Generate storage key for file
+   */
+  public static generateKey(userId: string | undefined, projectId: string | undefined, filename: string, isOriginal: boolean = true): string {
+    // Sanitize user and project IDs to prevent path traversal
+    const sanitizedUserId = (userId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const sanitizedProjectId = (projectId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+    
+    const folder = isOriginal ? 'originals' : 'thumbnails';
+    const timestamp = Date.now();
+    const ext = path.extname(filename);
+    const nameWithoutExt = path.basename(filename, ext);
+    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9._-]/g, '_');
+    
+    return `${sanitizedUserId}/${sanitizedProjectId}/${folder}/${timestamp}_${sanitizedName}${ext}`;
+  }
+
+  /**
+   * Get thumbnail key from original key
+   */
+  private getThumbnailKey(originalKey: string): string {
+    const parts = originalKey.split('/');
+    
+    // Validate that we have enough path segments and a valid filename
+    if (parts.length < 4 || !parts[parts.length - 1] || parts[parts.length - 1]!.trim() === '') {
+      throw new StorageError(
+        `Invalid key format for thumbnail generation: ${originalKey}`,
+        'INVALID_KEY_FORMAT',
+        400
+      );
+    }
+    
+    // Replace 'originals' with 'thumbnails' and change extension to .jpg
+    parts[2] = 'thumbnails';
+    const filename = parts[parts.length - 1]!; // Safe after validation above
+    const nameWithoutExt = path.basename(filename, path.extname(filename));
+    parts[parts.length - 1] = `${nameWithoutExt}.jpg`;
+    
+    return parts.join('/');
+  }
+
+  /**
+   * Check if MIME type is an image
+   */
+  private isImageMimeType(mimeType: string): boolean {
+    return mimeType.startsWith('image/');
+  }
+
+  /**
+   * Ensure directory exists
+   */
+  private async ensureDirectoryExists(dirPath: string): Promise<void> {
+    try {
+      await fs.mkdir(dirPath, { recursive: true });
+    } catch (error) {
+      if ((error as any).code !== 'EEXIST') {
+        throw error;
+      }
+    }
+  }
+}

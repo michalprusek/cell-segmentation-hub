@@ -71,11 +71,24 @@ export const useWheelZoom = (
   }, [zoom, offset, canvasContainerRef, constrainOffset, setZoom, setOffset, MIN_ZOOM, MAX_ZOOM]);
 
   // RAF-throttled zoom handler for smooth 60fps updates - memoize to prevent throttle recreation
-  const throttledZoom = useRef<typeof performZoom | null>(null);
+  const throttledZoom = useRef<{ fn: typeof performZoom; cancel: () => void } | null>(null);
   
   // Update throttled function when performZoom changes
   useEffect(() => {
+    // Cancel previous throttled function if it exists
+    if (throttledZoom.current) {
+      throttledZoom.current.cancel();
+    }
+    
+    // Create new throttled function
     throttledZoom.current = rafThrottle(performZoom, 16); // ~60fps
+    
+    // Cleanup function to cancel on unmount or dependency change
+    return () => {
+      if (throttledZoom.current) {
+        throttledZoom.current.cancel();
+      }
+    };
   }, [performZoom]);
 
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -94,7 +107,7 @@ export const useWheelZoom = (
     const zoomFactor = e.deltaY > 0 ? 0.95 : 1.05;
     
     // Use throttled zoom function
-    throttledZoom.current?.(mouseX, mouseY, zoomFactor);
+    throttledZoom.current?.fn(mouseX, mouseY, zoomFactor);
   }, [canvasContainerRef]);
   
   useEffect(() => {

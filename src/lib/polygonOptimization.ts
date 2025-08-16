@@ -1,4 +1,5 @@
 import { Point } from '@/lib/segmentation';
+import { calculateBoundingBox, type BoundingBox } from './polygonGeometry';
 
 // Douglas-Peucker algorithm for polygon simplification optimized for performance
 export const simplifyPolygon = (points: Point[], tolerance: number = 1): Point[] => {
@@ -57,42 +58,6 @@ const perpendicularDistance = (point: Point, lineStart: Point, lineEnd: Point): 
 };
 
 // Calculate bounding box for a polygon
-export interface BoundingBox {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  width: number;
-  height: number;
-}
-
-export const calculateBoundingBox = (points: Point[]): BoundingBox => {
-  if (points.length === 0) {
-    return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
-  }
-  
-  let minX = points[0].x;
-  let minY = points[0].y;
-  let maxX = points[0].x;
-  let maxY = points[0].y;
-  
-  for (let i = 1; i < points.length; i++) {
-    const point = points[i];
-    if (point.x < minX) minX = point.x;
-    if (point.x > maxX) maxX = point.x;
-    if (point.y < minY) minY = point.y;
-    if (point.y > maxY) maxY = point.y;
-  }
-  
-  return {
-    minX,
-    minY,
-    maxX,
-    maxY,
-    width: maxX - minX,
-    height: maxY - minY
-  };
-};
 
 // Check if bounding box intersects with viewport
 export const isInViewport = (
@@ -210,8 +175,15 @@ export const getDecimatedVertices = (points: Point[], zoom: number): Point[] => 
   
   // Always include last vertex if it's not already included
   const lastIndex = points.length - 1;
-  if (lastIndex > 0 && (lastIndex % step !== 0)) {
-    decimatedPoints.push(points[lastIndex]);
+  if (lastIndex > 0) {
+    const lastPoint = points[lastIndex];
+    const lastIncludedPoint = decimatedPoints[decimatedPoints.length - 1];
+    // Check if the last point differs from the last included point
+    if (!lastIncludedPoint || 
+        lastPoint.x !== lastIncludedPoint.x || 
+        lastPoint.y !== lastIncludedPoint.y) {
+      decimatedPoints.push(lastPoint);
+    }
   }
   
   return decimatedPoints;

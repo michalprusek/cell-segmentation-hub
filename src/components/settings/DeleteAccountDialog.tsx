@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { AlertTriangle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 
 interface DeleteAccountDialogProps {
   isOpen: boolean;
@@ -37,10 +38,12 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
 
     setIsDeleting(true);
     try {
-      await deleteAccount();
+      await deleteAccount(confirmationText);
+      toast.success(t('settings.accountDeleted'));
       onClose();
     } catch (error) {
       console.error("Error deleting account:", error);
+      toast.error(t('settings.deleteAccountError'));
     } finally {
       setIsDeleting(false);
     }
@@ -100,7 +103,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
             onClick={handleClose}
             disabled={isDeleting}
           >
-            Cancel
+            {t('settings.cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -108,7 +111,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
             disabled={!isConfirmationValid || isDeleting}
             className="min-w-[120px]"
           >
-            {isDeleting ? "Deleting..." : "Delete Account"}
+            {isDeleting ? t('settings.deleting') : t('settings.deleteAccount')}
           </Button>
         </DialogFooter>
       </DialogContent>

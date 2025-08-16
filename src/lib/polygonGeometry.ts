@@ -5,6 +5,15 @@ import type { Point, Polygon } from './segmentation';
  * Inspired by SpheroSeg implementation
  */
 
+export interface BoundingBox {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+  width: number;
+  height: number;
+}
+
 /**
  * Calculate the distance from a point to a line segment
  */
@@ -242,14 +251,7 @@ export const findClosestSegment = (point: Point, polygonPoints: Point[], maxDist
 /**
  * Calculate bounding box of a polygon
  */
-export const calculateBoundingBox = (points: Point[]): {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
-  width: number;
-  height: number;
-} => {
+export const calculateBoundingBox = (points: Point[]): BoundingBox => {
   if (points.length === 0) {
     return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
   }
@@ -274,5 +276,22 @@ export const calculateBoundingBox = (points: Point[]): {
     maxY,
     width: maxX - minX,
     height: maxY - minY
+  };
+};
+
+/**
+ * Calculate the centroid (center point) of a polygon
+ */
+export const getPolygonCentroid = (points: Point[]): Point => {
+  if (!points || points.length === 0) return { x: 0, y: 0 };
+  
+  const sum = points.reduce((acc, point) => ({
+    x: acc.x + point.x,
+    y: acc.y + point.y
+  }), { x: 0, y: 0 });
+  
+  return {
+    x: sum.x / points.length,
+    y: sum.y / points.length
   };
 };

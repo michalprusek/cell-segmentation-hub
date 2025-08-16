@@ -4,7 +4,7 @@
  */
 
 import { Polygon, Point } from '@/lib/segmentation';
-import { BoundingBox } from '@/lib/polygonOptimization';
+import { BoundingBox } from '@/lib/polygonGeometry';
 import { rafSchedule, rafThrottle } from '@/lib/performanceUtils';
 
 export interface RenderBatch {
@@ -500,6 +500,11 @@ export class RenderBatchManager {
     // Simple calculation for immediate use
     // In production, this would use the BoundingBoxCache
     const points = polygon.points;
+    
+    if (!points || points.length === 0) {
+      return { minX: 0, minY: 0, maxX: 0, maxY: 0, width: 0, height: 0 };
+    }
+    
     let minX = points[0].x, minY = points[0].y;
     let maxX = points[0].x, maxY = points[0].y;
 
@@ -587,16 +592,18 @@ export class RenderBatchManager {
   }
 
   /**
-   * Clean up old cache entries
+   * Clean up old cache entries (LRU-style)
    */
   private cleanupCache(): void {
     const maxCacheSize = 50;
-    if (this.batchCache.size > maxCacheSize) {
-      const entries = Array.from(this.batchCache.entries());
-      const toDelete = entries.slice(0, entries.length - maxCacheSize);
-      
-      for (const [key] of toDelete) {
-        this.batchCache.delete(key);
+    
+    // Remove oldest entries one by one until we reach the max size
+    while (this.batchCache.size > maxCacheSize) {
+      const firstKey = this.batchCache.keys().next().value;
+      if (firstKey !== undefined) {
+        this.batchCache.delete(firstKey);
+      } else {
+        break; // Safety break if iterator is exhausted
       }
     }
   }

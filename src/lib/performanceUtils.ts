@@ -30,12 +30,12 @@ export function rafSchedule<T extends unknown[]>(
 export function rafThrottle<T extends unknown[]>(
   callback: (...args: T) => void,
   interval: number = 16 // ~60fps
-): (...args: T) => void {
+): { fn: (...args: T) => void; cancel: () => void } {
   let lastTime = 0;
   let rafId: number | null = null;
   let lastArgs: T | null = null;
 
-  return (...args: T) => {
+  const throttledFn = (...args: T) => {
     lastArgs = args;
     
     if (rafId !== null) {
@@ -51,25 +51,40 @@ export function rafThrottle<T extends unknown[]>(
       rafId = null;
     });
   };
+
+  const cancel = () => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    lastArgs = null;
+  };
+
+  return { fn: throttledFn, cancel };
 }
 
 // Debounce function for delayed updates after user stops interacting
 export function debounce<T extends unknown[]>(
   callback: (...args: T) => void,
   delay: number
-): (...args: T) => void {
+): { (...args: T): void; cancel: () => void } {
   let timeoutId: ReturnType<typeof setTimeout>;
   
-  return (...args: T) => {
+  const debouncedFunction = (...args: T) => {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => callback(...args), delay);
   };
+  
+  debouncedFunction.cancel = () => {
+    clearTimeout(timeoutId);
+  };
+  
+  return debouncedFunction;
 }
 
 // Progressive rendering state manager
 export class ProgressiveRenderer {
   private isAnimating = false;
-  private animationEndTimer: ReturnType<typeof setTimeout> | null = null;
   private onAnimationStart?: () => void;
   private onAnimationEnd?: () => void;
 
@@ -97,6 +112,17 @@ export class ProgressiveRenderer {
       this.onAnimationStart?.();
     }
     this.endAnimation();
+  }
+
+  dispose() {
+    // Cancel any pending debounced calls
+    if (this.endAnimation && typeof this.endAnimation.cancel === 'function') {
+      this.endAnimation.cancel();
+    }
+    
+    // Clear references to prevent memory leaks
+    this.onAnimationStart = undefined;
+    this.onAnimationEnd = undefined;
   }
 
   get isInProgress() {

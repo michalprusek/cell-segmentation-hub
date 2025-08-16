@@ -179,6 +179,69 @@ export default {
       hrnet: 'Rychlý a efektivní model pro segmentaci v reálném čase',
       resunet_small: 'Vyvážená rychlost a přesnost pro většinu případů použití',
       resunet_advanced: 'Nejvyšší přesnost s mechanismy pozornosti'
+    },
+    dataUsageTitle: 'Použití dat a soukromí',
+    dataUsageDescription: 'Kontrola použití vašich dat pro strojové učení a výzkum',
+    allowMLTraining: {
+      label: 'Povolit trénování ML modelů',
+      description: 'Povolit použití vašich dat pro trénování a zlepšování našich segmentačních modelů'
+    },
+    cancel: 'Zrušit',
+    deleting: 'Mazání...',
+    deleteAccount: 'Smazat účet',
+    accountDeleted: 'Účet byl úspěšně smazán',
+    deleteAccountError: 'Nepodařilo se smazat účet'
+  },
+  segmentation: {
+    mode: {
+      view: 'Zobrazit a navigovat',
+      edit: 'Upravit',
+      editVertices: 'Upravit vrcholy',
+      addPoints: 'Přidat body',
+      create: 'Vytvořit',
+      createPolygon: 'Vytvořit polygon',
+      slice: 'Rozřezat',
+      delete: 'Smazat',
+      deletePolygon: 'Smazat polygon',
+      unknown: 'Neznámý'
+    },
+    modeDescription: {
+      view: 'Procházet a vybírat polygony',
+      edit: 'Přesunout a upravit vrcholy',
+      addPoints: 'Přidat body mezi vrcholy',
+      create: 'Vytvořit nové polygony',
+      slice: 'Rozdělit polygony čarou',
+      delete: 'Odstranit polygony'
+    },
+    toolbar: {
+      mode: 'Režim',
+      keyboard: 'Klávesa: {key}',
+      requiresSelection: 'Vyžaduje výběr polygonu',
+      requiresPolygonSelection: 'Vyžaduje výběr polygonu',
+      select: 'Vybrat',
+      undoTooltip: 'Zpět (Ctrl+Z)',
+      undo: 'Zpět',
+      redoTooltip: 'Znovu (Ctrl+Y)',
+      redo: 'Znovu',
+      zoomInTooltip: 'Přiblížit (+)',
+      zoomIn: 'Přiblížit',
+      zoomOutTooltip: 'Oddálit (-)',
+      zoomOut: 'Oddálit',
+      resetViewTooltip: 'Resetovat pohled (R)',
+      resetView: 'Reset',
+      unsavedChanges: 'Neuložené změny',
+      saving: 'Ukládání...',
+      save: 'Uložit',
+      keyboardShortcuts: 'V: Zobrazit • E: Upravit • A: Přidat • N: Nový • S: Rozřezat • D: Smazat'
+    },
+    status: {
+      polygons: 'polygonů',
+      vertices: 'vrcholů',
+      visible: 'viditelných',
+      hidden: 'skrytých',
+      selected: 'vybrán',
+      saved: 'Uloženo',
+      unsaved: 'Neuloženo'
     }
   },
   auth: {
@@ -259,5 +322,18 @@ export default {
     disconnected: 'Odpojeno od serveru',
     error: 'Chyba ML služby',
     ready: 'Připraven k segmentaci'
+  },
+  queue: {
+    title: 'Segmentační fronta',
+    connected: 'Připojeno',
+    disconnected: 'Odpojeno',
+    waiting: 'čeká',
+    processing: 'zpracovává se',
+    segmentAll: 'Segmentovat vše',
+    totalProgress: 'Celkový postup',
+    images: 'obrázků',
+    connectingMessage: 'Připojuji se k serveru... Real-time aktualizace budou brzy dostupné.',
+    emptyMessage: 'Žádné obrázky ve frontě. Nahrajte obrázky a přidejte je do fronty pro segmentaci.',
+    addingToQueue: 'Přidáváno do fronty...'
   }
 };

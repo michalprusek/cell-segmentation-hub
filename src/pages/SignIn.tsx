@@ -16,7 +16,20 @@ const SignIn = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { signIn, user, isAuthenticated } = useAuth();
-  const returnTo = searchParams.get('returnTo') || '/dashboard';
+  // Validate and sanitize returnTo param to prevent open redirects
+  const validateReturnTo = (returnTo: string | null): string => {
+    if (!returnTo) return '/dashboard';
+    
+    // Only allow same-origin relative paths starting with single slash
+    if (returnTo.startsWith('/') && !returnTo.startsWith('//') && !returnTo.includes(':')) {
+      return returnTo;
+    }
+    
+    // Fallback to dashboard for any invalid values
+    return '/dashboard';
+  };
+  
+  const returnTo = validateReturnTo(searchParams.get('returnTo'));
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -51,7 +64,7 @@ const SignIn = () => {
   };
 
   // If already logged in, show loading or redirect
-  if (user) {
+  if (user && isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">

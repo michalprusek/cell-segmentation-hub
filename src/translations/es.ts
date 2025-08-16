@@ -168,6 +168,12 @@ export default {
       hrnet: 'Modelo rápido y eficiente para segmentación en tiempo real',
       resunet_small: 'Velocidad y precisión equilibradas para la mayoría de casos de uso',
       resunet_advanced: 'Mayor precisión con mecanismos de atención'
+    },
+    dataUsageTitle: 'Uso de datos y privacidad',
+    dataUsageDescription: 'Controla cómo se utilizan tus datos para el aprendizaje automático y la investigación',
+    allowMLTraining: {
+      label: 'Permitir entrenamiento de modelos ML',
+      description: 'Permitir que tus datos se utilicen para entrenar y mejorar nuestros modelos de segmentación'
     }
   },
   auth: {
@@ -238,6 +244,58 @@ export default {
     createdProject: 'Creó proyecto',
     completedSegmentation: 'Completó segmentación para',
     uploadedImage: 'Subió imagen'
+  },
+  segmentation: {
+    mode: {
+      view: 'Ver y navegar',
+      edit: 'Editar',
+      editVertices: 'Editar vértices',
+      addPoints: 'Añadir puntos',
+      create: 'Crear',
+      createPolygon: 'Crear polígono',
+      slice: 'Cortar',
+      delete: 'Eliminar',
+      deletePolygon: 'Eliminar polígono',
+      unknown: 'Desconocido'
+    },
+    modeDescription: {
+      view: 'Navegar y seleccionar polígonos',
+      edit: 'Mover y modificar vértices',
+      addPoints: 'Añadir puntos entre vértices',
+      create: 'Crear nuevos polígonos',
+      slice: 'Dividir polígonos con una línea',
+      delete: 'Eliminar polígonos'
+    },
+    toolbar: {
+      mode: 'Modo',
+      keyboard: 'Tecla: {key}',
+      requiresSelection: 'Requiere selección de polígono',
+      requiresPolygonSelection: 'Requiere selección de polígono',
+      select: 'Seleccionar',
+      undoTooltip: 'Deshacer (Ctrl+Z)',
+      undo: 'Deshacer',
+      redoTooltip: 'Rehacer (Ctrl+Y)',
+      redo: 'Rehacer',
+      zoomInTooltip: 'Acercar (+)',
+      zoomIn: 'Acercar',
+      zoomOutTooltip: 'Alejar (-)',
+      zoomOut: 'Alejar',
+      resetViewTooltip: 'Restablecer vista (R)',
+      resetView: 'Restablecer',
+      unsavedChanges: 'Cambios no guardados',
+      saving: 'Guardando...',
+      save: 'Guardar',
+      keyboardShortcuts: 'V: Ver • E: Editar • A: Añadir • N: Nuevo • S: Cortar • D: Eliminar'
+    },
+    status: {
+      polygons: 'polígonos',
+      vertices: 'vértices',
+      visible: 'visibles',
+      hidden: 'ocultos',
+      selected: 'seleccionado',
+      saved: 'Guardado',
+      unsaved: 'No guardado'
+    }
   },
   status: {
     segmented: 'Segmentado',

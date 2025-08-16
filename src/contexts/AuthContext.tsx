@@ -47,26 +47,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Validate profileData before constructing user object
           if (profileData && (profileData.user || (profileData.id && profileData.email))) {
             const userData = profileData.user || {
-              id: profileData.id || '',
-              email: profileData.email || '',
-              username: profileData.username || ''
+              id: profileData.id,
+              email: profileData.email,
+              username: profileData.username
             };
-            setUser(userData);
-            setProfile(profileData);
-            setIsAuthenticated(true);
+            
+            // Validate required fields exist and are not empty
+            if (userData.id && userData.email) {
+              setUser(userData);
+              setProfile(profileData);
+              setIsAuthenticated(true);
+            } else {
+              console.error('Missing required user fields:', { id: userData.id, email: userData.email });
+              // Clear state if required fields are missing
+              setUser(null);
+              setProfile(null);
+              setToken(null);
+              setIsAuthenticated(false);
+              try {
+                await apiClient.logout();
+              } catch (logoutError) {
+                console.error('Error during logout:', logoutError);
+              }
+            }
           } else {
             // Invalid profile data, clear state
             setUser(null);
             setProfile(null);
             setToken(null);
             setIsAuthenticated(false);
-            await apiClient.logout();
+            try {
+              await apiClient.logout();
+            } catch (logoutError) {
+              console.error('Error during logout:', logoutError);
+            }
           }
         }
       } catch (error) {
         console.error("Error initializing auth:", error);
         // If token is invalid, clear it
-        await apiClient.logout();
+        try {
+          await apiClient.logout();
+        } catch (logoutError) {
+          console.error('Error during logout:', logoutError);
+        }
         setUser(null);
         setProfile(null);
         setToken(null);
@@ -163,7 +187,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const deleteAccount = async () => {
+  const deleteAccount = async (confirmationText?: string) => {
+    // Validate confirmation text is provided and matches expected value
+    if (!confirmationText || confirmationText !== user?.email) {
+      throw new Error("Confirmation text is required and must match your email address");
+    }
+
     try {
       setLoading(true);
       await apiClient.deleteAccount();

@@ -382,9 +382,44 @@ export class WorkerPool {
     
     for (let i = 0; i < Math.min(workerCount, this.config.maxWorkers); i++) {
       promises.push(
-        new Promise<void>((resolve) => {
-          this.createWorker();
-          resolve();
+        new Promise<void>((resolve, reject) => {
+          try {
+            const pooledWorker = this.createWorker();
+            
+            // Wait for worker to be properly initialized
+            const worker = pooledWorker.worker;
+            
+            // Test worker with a simple ping operation
+            const testMessage = { type: 'ping', taskId: `warmup_${i}` };
+            
+            const onMessage = (event: MessageEvent) => {
+              if (event.data.taskId === testMessage.taskId) {
+                worker.removeEventListener('message', onMessage);
+                worker.removeEventListener('error', onError);
+                resolve();
+              }
+            };
+            
+            const onError = (error: ErrorEvent) => {
+              worker.removeEventListener('message', onMessage);
+              worker.removeEventListener('error', onError);
+              reject(new Error(`Worker initialization failed: ${error.message}`));
+            };
+            
+            worker.addEventListener('message', onMessage);
+            worker.addEventListener('error', onError);
+            worker.postMessage(testMessage);
+            
+            // Fallback timeout in case worker doesn't respond
+            setTimeout(() => {
+              worker.removeEventListener('message', onMessage);
+              worker.removeEventListener('error', onError);
+              resolve(); // Resolve anyway to avoid hanging
+            }, 5000);
+            
+          } catch (error) {
+            reject(error);
+          }
         })
       );
     }

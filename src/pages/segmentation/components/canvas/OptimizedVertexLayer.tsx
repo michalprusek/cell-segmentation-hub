@@ -155,7 +155,6 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
   onDuplicateVertex
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const offscreenCanvasRef = useRef<OffscreenCanvas | null>(null);
   const spatialIndexRef = useRef<SpatialIndex>(new SpatialIndex());
   const lodManager = VertexLODManager.getInstance();
   const [isInitialized, setIsInitialized] = useState(false);

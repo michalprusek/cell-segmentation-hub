@@ -15,17 +15,18 @@ export async function fetchWithRetry(
     backoff = 1.5
   } = retryOptions;
 
-  let lastError: Error;
+  let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const response = await fetch(url, options);
       
-      // Consider 2xx as success, but allow caller to handle specific status codes
-      if (response.ok || attempt === retries) {
+      // If response is ok, return it immediately
+      if (response.ok) {
         return response;
       }
       
+      // If not ok, create an error with response status/text
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
@@ -41,5 +42,5 @@ export async function fetchWithRetry(
     }
   }
   
-  throw lastError!;
+  throw lastError ?? new Error('Request failed but no error captured');
 }

@@ -9,6 +9,7 @@ import {
   ZoomOut,
   RotateCcw
 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface TopToolbarProps {
   // Current state
@@ -45,6 +46,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
   disabled = false,
   isSaving = false
 }) => {
+  const { t } = useLanguage();
 
   return (
     <div className="flex items-center justify-between gap-4 p-2 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
@@ -55,22 +57,22 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           size="sm"
           disabled={!canUndo || disabled}
           onClick={handleUndo}
-          title="Zpět (Ctrl+Z)"
+          title={t('segmentation.toolbar.undoTooltip')}
           className="flex items-center gap-2"
         >
           <Undo size={16} />
-          <span className="hidden sm:inline">Zpět</span>
+          <span className="hidden sm:inline">{t('segmentation.toolbar.undo')}</span>
         </Button>
         <Button
           variant="ghost"
           size="sm"
           disabled={!canRedo || disabled}
           onClick={handleRedo}
-          title="Znovu (Ctrl+Y)"
+          title={t('segmentation.toolbar.redoTooltip')}
           className="flex items-center gap-2"
         >
           <Redo size={16} />
-          <span className="hidden sm:inline">Znovu</span>
+          <span className="hidden sm:inline">{t('segmentation.toolbar.redo')}</span>
         </Button>
       </div>
 
@@ -81,33 +83,33 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           size="sm"
           disabled={disabled}
           onClick={handleZoomIn}
-          title="Přiblížit (+)"
+          title={t('segmentation.toolbar.zoomInTooltip')}
           className="flex items-center gap-2"
         >
           <ZoomIn size={16} />
-          <span className="hidden md:inline">Přiblížit</span>
+          <span className="hidden md:inline">{t('segmentation.toolbar.zoomIn')}</span>
         </Button>
         <Button
           variant="ghost"
           size="sm"
           disabled={disabled}
           onClick={handleZoomOut}
-          title="Oddálit (-)"
+          title={t('segmentation.toolbar.zoomOutTooltip')}
           className="flex items-center gap-2"
         >
           <ZoomOut size={16} />
-          <span className="hidden md:inline">Oddálit</span>
+          <span className="hidden md:inline">{t('segmentation.toolbar.zoomOut')}</span>
         </Button>
         <Button
           variant="ghost"
           size="sm"
           disabled={disabled}
           onClick={handleResetView}
-          title="Resetovat pohled (R)"
+          title={t('segmentation.toolbar.resetViewTooltip')}
           className="flex items-center gap-2"
         >
           <RotateCcw size={16} />
-          <span className="hidden md:inline">Reset</span>
+          <span className="hidden md:inline">{t('segmentation.toolbar.resetView')}</span>
         </Button>
       </div>
 
@@ -115,7 +117,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
       <div className="flex items-center gap-2">
         {hasUnsavedChanges && (
           <Badge variant="secondary" className="text-xs">
-            Neuložené změny
+            {t('segmentation.toolbar.unsavedChanges')}
           </Badge>
         )}
         <Button
@@ -126,7 +128,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           className="flex items-center gap-2"
         >
           <Save size={16} />
-          <span>{isSaving ? 'Ukládání...' : 'Uložit'}</span>
+          <span>{isSaving ? t('segmentation.toolbar.saving') : t('segmentation.toolbar.save')}</span>
         </Button>
       </div>
     </div>

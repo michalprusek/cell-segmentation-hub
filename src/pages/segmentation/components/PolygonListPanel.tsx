@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Polygon } from '@/lib/segmentation';
 import { SegmentationResult } from '@/lib/segmentation';
 import { motion } from 'framer-motion';
 
@@ -38,7 +39,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
 
-  const handleStartRename = (polygon: any) => {
+  const handleStartRename = (polygon: Polygon) => {
     setEditingPolygonId(polygon.id);
     setEditingName(polygon.name || `Polygon ${polygon.id.substring(0, 8)}`);
   };

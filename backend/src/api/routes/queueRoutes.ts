@@ -1,0 +1,179 @@
+import { Router } from 'express';
+import { queueController } from '../controllers/queueController';
+import { authenticate } from '../../middleware/auth';
+import { body, param } from 'express-validator';
+import { validationResult } from 'express-validator';
+import { ResponseHelper } from '../../utils/response';
+
+// Middleware to handle express-validator results
+const handleValidation = (req: any, res: any, next: any): void => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    const errorMap = errors.array().reduce((acc, error) => {
+      const field = (error as any).param || 'unknown';
+      if (!acc[field]) acc[field] = [];
+      acc[field].push((error as any).msg);
+      return acc;
+    }, {} as Record<string, string[]>);
+    ResponseHelper.validationError(res, errorMap);
+    return;
+  }
+  next();
+};
+
+const router = Router();
+
+// All routes require authentication
+router.use(authenticate);
+
+/**
+ * @route POST /api/queue/images/:imageId
+ * @description Add single image to segmentation queue
+ * @access Private
+ */
+router.post(
+  '/images/:imageId',
+  [
+    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID'),
+    body('model')
+      .optional()
+      .isIn(['hrnet', 'resunet_advanced', 'resunet_small'])
+      .withMessage('Model musí být hrnet, resunet_advanced nebo resunet_small'),
+    body('threshold')
+      .optional()
+      .isFloat({ min: 0.1, max: 0.9 })
+      .withMessage('Threshold musí být mezi 0.1 a 0.9'),
+    body('priority')
+      .optional()
+      .isInt({ min: 0, max: 10 })
+      .withMessage('Priorita musí být mezi 0 a 10')
+  ],
+  handleValidation,
+  queueController.addImageToQueue
+);
+
+/**
+ * @route POST /api/queue/batch
+ * @description Add multiple images to segmentation queue in batch
+ * @access Private
+ */
+router.post(
+  '/batch',
+  [
+    body('imageIds')
+      .isArray({ min: 1, max: 100 })
+      .withMessage('Musíte zadat 1-100 obrázků'),
+    body('imageIds.*')
+      .isUUID()
+      .withMessage('Všechna ID obrázků musí být platná UUID'),
+    body('projectId')
+      .isUUID()
+      .withMessage('ID projektu musí být platné UUID'),
+    body('model')
+      .optional()
+      .isIn(['hrnet', 'resunet_advanced', 'resunet_small'])
+      .withMessage('Model musí být hrnet, resunet_advanced nebo resunet_small'),
+    body('threshold')
+      .optional()
+      .isFloat({ min: 0.1, max: 0.9 })
+      .withMessage('Threshold musí být mezi 0.1 a 0.9'),
+    body('priority')
+      .optional()
+      .isInt({ min: 0, max: 10 })
+      .withMessage('Priorita musí být mezi 0 a 10')
+  ],
+  handleValidation,
+  queueController.addBatchToQueue
+);
+
+/**
+ * @route GET /api/queue/projects/:projectId/stats
+ * @description Get queue statistics for a project
+ * @access Private
+ */
+router.get(
+  '/projects/:projectId/stats',
+  [
+    param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')
+  ],
+  handleValidation,
+  queueController.getQueueStats
+);
+
+/**
+ * @route GET /api/queue/projects/:projectId/items
+ * @description Get queue items for a project
+ * @access Private
+ */
+router.get(
+  '/projects/:projectId/items',
+  [
+    param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')
+  ],
+  handleValidation,
+  queueController.getQueueItems
+);
+
+/**
+ * @route DELETE /api/queue/items/:queueId
+ * @description Remove item from segmentation queue
+ * @access Private
+ */
+router.delete(
+  '/items/:queueId',
+  [
+    param('queueId').isUUID().withMessage('ID fronty musí být platné UUID')
+  ],
+  handleValidation,
+  queueController.removeFromQueue
+);
+
+/**
+ * @route GET /api/queue/stats
+ * @description Get overall queue statistics
+ * @access Private
+ */
+router.get('/stats', queueController.getOverallQueueStats);
+
+/**
+ * @route GET /api/queue/health
+ * @description Get comprehensive health status of segmentation pipeline
+ * @access Private
+ */
+router.get('/health', queueController.getQueueHealth);
+
+/**
+ * @route POST /api/queue/reset-stuck
+ * @description Reset stuck queue items
+ * @access Private
+ */
+router.post(
+  '/reset-stuck',
+  [
+    body('maxProcessingMinutes')
+      .optional()
+      .isInt({ min: 1, max: 60 })
+      .withMessage('Maximální čas zpracování musí být mezi 1 a 60 minutami')
+  ],
+  handleValidation,
+  queueController.resetStuckItems
+);
+
+/**
+ * @route POST /api/queue/cleanup
+ * @description Cleanup old queue entries
+ * @access Private
+ */
+router.post(
+  '/cleanup',
+  [
+    body('daysOld')
+      .optional()
+      .isInt({ min: 1, max: 30 })
+      .withMessage('Počet dní musí být mezi 1 a 30')
+  ],
+  handleValidation,
+  queueController.cleanupQueue
+);
+
+export { router as queueRoutes };

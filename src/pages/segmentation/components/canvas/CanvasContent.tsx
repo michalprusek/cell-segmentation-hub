@@ -13,7 +13,7 @@ interface CanvasContentProps {
 }
 
 /**
- * Kontejner pro obsah plátna s transformacemi
+ * Container for canvas content with transforms
  */
 const CanvasContent = ({
   transform,

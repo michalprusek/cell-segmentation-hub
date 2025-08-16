@@ -26,15 +26,9 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   }, []);
   
   useEffect(() => {
-    // Check for tokens and store the result
-    try {
-      const tokenStatus = apiClient.isAuthenticated();
-      setHasTokens(tokenStatus);
-    } catch (error) {
-      console.error('Error checking authentication status:', error);
-      setHasTokens(false);
-    }
-  }, [user, isAuthenticated]);
+    // Derive hasTokens from isAuthenticated provided by useAuth
+    setHasTokens(isAuthenticated);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     // Debug logs removed for production

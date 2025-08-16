@@ -8,6 +8,7 @@ import {
   Scissors, 
   Trash2
 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { EditMode } from '../types';
 
 interface VerticalToolbarProps {
@@ -26,6 +27,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   setEditMode,
   disabled = false
 }) => {
+  const { t } = useLanguage();
 
   const getModeIcon = (mode: EditMode) => {
     switch (mode) {
@@ -87,17 +89,17 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   const getModeLabel = (mode: EditMode) => {
     switch (mode) {
       case EditMode.View:
-        return 'Zobrazit a navigovat';
+        return t('segmentation.mode.view');
       case EditMode.EditVertices:
-        return 'Upravit vrcholy';
+        return t('segmentation.mode.editVertices');
       case EditMode.AddPoints:
-        return 'Přidat body';
+        return t('segmentation.mode.addPoints');
       case EditMode.CreatePolygon:
-        return 'Vytvořit polygon';
+        return t('segmentation.mode.createPolygon');
       case EditMode.Slice:
-        return 'Rozřezat polygon';
+        return t('segmentation.mode.slice');
       case EditMode.DeletePolygon:
-        return 'Smazat polygon';
+        return t('segmentation.mode.deletePolygon');
       default:
         return '';
     }
@@ -161,11 +163,11 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
         <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
           <div className="font-medium">{getModeLabel(mode)}</div>
           <div className="text-xs text-gray-300 mt-1">
-            Klávesa: {getKeyboardShortcut(mode)}
+            {t('segmentation.toolbar.keyboard', { key: getKeyboardShortcut(mode) })}
           </div>
           {requiresSelection && !selectedPolygonId && (
             <div className="text-xs text-orange-300 mt-1">
-              Vyžaduje výběr polygonu
+              {t('segmentation.toolbar.requiresSelection')}
             </div>
           )}
           

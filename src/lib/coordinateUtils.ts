@@ -159,14 +159,36 @@ export const constrainTransform = (
   const scaledWidth = imageWidth * zoom;
   const scaledHeight = imageHeight * zoom;
   
-  // Allow some freedom of movement, but prevent image from going completely off-screen
-  const maxTranslateX = canvasWidth * 0.5; // Allow image to move half-screen to the right
-  const minTranslateX = -scaledWidth + canvasWidth * 0.5; // Allow image to move half-screen to the left
-  const maxTranslateY = canvasHeight * 0.5;
-  const minTranslateY = -scaledHeight + canvasHeight * 0.5;
+  // Prevent image from moving too far off-screen
+  // Allow only a small margin (10% of image size) to be hidden beyond canvas edges
+  const marginX = Math.min(scaledWidth * 0.1, 100); // Max 100px margin
+  const marginY = Math.min(scaledHeight * 0.1, 100); // Max 100px margin
   
-  const translateX = Math.max(minTranslateX, Math.min(maxTranslateX, transform.translateX));
-  const translateY = Math.max(minTranslateY, Math.min(maxTranslateY, transform.translateY));
+  // Calculate boundaries
+  const maxTranslateX = marginX;
+  const minTranslateX = canvasWidth - scaledWidth - marginX;
+  const maxTranslateY = marginY;
+  const minTranslateY = canvasHeight - scaledHeight - marginY;
+  
+  // For small images or high zoom levels, center the image if it fits within canvas
+  let translateX = transform.translateX;
+  let translateY = transform.translateY;
+  
+  if (scaledWidth <= canvasWidth) {
+    // Image fits horizontally - center it
+    translateX = (canvasWidth - scaledWidth) / 2;
+  } else {
+    // Apply constraints
+    translateX = Math.max(minTranslateX, Math.min(maxTranslateX, transform.translateX));
+  }
+  
+  if (scaledHeight <= canvasHeight) {
+    // Image fits vertically - center it
+    translateY = (canvasHeight - scaledHeight) / 2;
+  } else {
+    // Apply constraints
+    translateY = Math.max(minTranslateY, Math.min(maxTranslateY, transform.translateY));
+  }
   
   return {
     zoom,

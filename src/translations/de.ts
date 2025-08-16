@@ -262,6 +262,58 @@ export default {
     completedSegmentation: 'Segmentierung abgeschlossen für',
     uploadedImage: 'Bild hochgeladen'
   },
+  segmentation: {
+    mode: {
+      view: 'Anzeigen und navigieren',
+      edit: 'Bearbeiten',
+      editVertices: 'Eckpunkte bearbeiten',
+      addPoints: 'Punkte hinzufügen',
+      create: 'Erstellen',
+      createPolygon: 'Polygon erstellen',
+      slice: 'Schneiden',
+      delete: 'Löschen',
+      deletePolygon: 'Polygon löschen',
+      unknown: 'Unbekannt'
+    },
+    modeDescription: {
+      view: 'Navigieren und Polygone auswählen',
+      edit: 'Eckpunkte bewegen und modifizieren',
+      addPoints: 'Punkte zwischen Eckpunkten hinzufügen',
+      create: 'Neue Polygone erstellen',
+      slice: 'Polygone mit einer Linie teilen',
+      delete: 'Polygone entfernen'
+    },
+    toolbar: {
+      mode: 'Modus',
+      keyboard: 'Taste: {key}',
+      requiresSelection: 'Erfordert Polygon-Auswahl',
+      requiresPolygonSelection: 'Erfordert Polygon-Auswahl',
+      select: 'Auswählen',
+      undoTooltip: 'Rückgängig (Strg+Z)',
+      undo: 'Rückgängig',
+      redoTooltip: 'Wiederholen (Strg+Y)',
+      redo: 'Wiederholen',
+      zoomInTooltip: 'Vergrößern (+)',
+      zoomIn: 'Vergrößern',
+      zoomOutTooltip: 'Verkleinern (-)',
+      zoomOut: 'Verkleinern',
+      resetViewTooltip: 'Ansicht zurücksetzen (R)',
+      resetView: 'Zurücksetzen',
+      unsavedChanges: 'Nicht gespeicherte Änderungen',
+      saving: 'Speichern...',
+      save: 'Speichern',
+      keyboardShortcuts: 'V: Anzeigen • E: Bearbeiten • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen'
+    },
+    status: {
+      polygons: 'Polygone',
+      vertices: 'Eckpunkte',
+      visible: 'sichtbar',
+      hidden: 'versteckt',
+      selected: 'ausgewählt',
+      saved: 'Gespeichert',
+      unsaved: 'Nicht gespeichert'
+    }
+  },
   status: {
     segmented: 'Segmentiert',
     processing: 'Verarbeitung von {{count}} Bildern',

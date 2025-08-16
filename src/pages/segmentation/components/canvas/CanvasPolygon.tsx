@@ -5,9 +5,7 @@ import { Polygon, Point } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
 import { VertexDragState } from '@/pages/segmentation/types';
-import { 
-  calculateBoundingBox 
-} from '@/lib/polygonOptimization';
+import { calculateBoundingBox } from '@/lib/polygonGeometry';
 
 interface CanvasPolygonProps {
   polygon: Polygon;

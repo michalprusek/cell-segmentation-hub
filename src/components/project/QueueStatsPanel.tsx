@@ -7,6 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { QueueStats } from '@/hooks/useSegmentationQueue';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface QueueStatsPanelProps {
   stats: QueueStats | null;
@@ -27,11 +28,12 @@ export const QueueStatsPanel = ({
   batchSubmitted = false,
   imagesToSegmentCount = 0
 }: QueueStatsPanelProps) => {
+  const { t } = useLanguage();
   const hasQueuedItems = stats && stats.queued > 0;
   const isProcessing = stats && stats.processing > 0;
   const totalItems = stats ? stats.total : 0;
   
-  // Calculate progress percentage
+  // Calculate progress percentage (completed / total)
   const progressPercentage = stats && stats.total > 0 
     ? Math.round(((stats.total - stats.queued) / stats.total) * 100)
     : 0;
@@ -51,7 +53,7 @@ export const QueueStatsPanel = ({
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                  Segmentační fronta
+                  {t('queue.title')}
                 </h3>
               </div>
               
@@ -65,7 +67,7 @@ export const QueueStatsPanel = ({
                     : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
                 )}
               >
-                {isConnected ? "Připojeno" : "Odpojeno"}
+                {isConnected ? t('queue.connected') : t('queue.disconnected')}
               </Badge>
 
               {/* Queue stats */}
@@ -74,14 +76,14 @@ export const QueueStatsPanel = ({
                   <div className="flex items-center gap-1">
                     <Clock className="h-4 w-4 text-yellow-600" />
                     <span className="font-medium">{stats.queued}</span>
-                    <span className="text-gray-600 dark:text-gray-400">čeká</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('queue.waiting')}</span>
                   </div>
                   
                   {isProcessing && (
                     <div className="flex items-center gap-1">
                       <Play className="h-4 w-4 text-blue-600 animate-pulse" />
                       <span className="font-medium">{stats.processing}</span>
-                      <span className="text-gray-600 dark:text-gray-400">zpracovává se</span>
+                      <span className="text-gray-600 dark:text-gray-400">{t('queue.processing')}</span>
                     </div>
                   )}
                 </div>
@@ -102,7 +104,7 @@ export const QueueStatsPanel = ({
                   className="gap-2"
                 >
                   <Settings className="h-4 w-4" />
-                  Nastavení
+                  {t('common.settings')}
                 </Button>
               )}
               
@@ -116,7 +118,7 @@ export const QueueStatsPanel = ({
                 )}
               >
                 <Play className="h-4 w-4" />
-                {batchSubmitted ? 'Přidáváno do fronty...' : 'Segmentovat vše'}
+                {batchSubmitted ? t('queue.addingToQueue') : t('queue.segmentAll')}
                 {imagesToSegmentCount > 0 && !batchSubmitted && (
                   <Badge variant="secondary" className="ml-1 bg-white text-blue-600">
                     {imagesToSegmentCount}
@@ -130,7 +132,7 @@ export const QueueStatsPanel = ({
           {stats && stats.total > 0 && (
             <div className="mt-3">
               <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
-                <span>Celkový postup</span>
+                <span>{t('queue.totalProgress')}</span>
                 <span>{progressPercentage}%</span>
               </div>
               <Progress 
@@ -139,7 +141,7 @@ export const QueueStatsPanel = ({
               />
               <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
                 <span>0</span>
-                <span>{stats.total} obrázků</span>
+                <span>{stats.total} {t('queue.images')}</span>
               </div>
             </div>
           )}
@@ -147,13 +149,13 @@ export const QueueStatsPanel = ({
           {/* Status messages */}
           {!isConnected && (
             <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-950/50 border border-yellow-200 dark:border-yellow-800 rounded text-sm text-yellow-800 dark:text-yellow-200">
-              Připojuji se k serveru... Real-time aktualizace budou brzy dostupné.
+              {t('queue.connectingMessage')}
             </div>
           )}
 
           {stats && stats.total === 0 && isConnected && (
             <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded text-sm text-gray-600 dark:text-gray-400">
-              Žádné obrázky ve frontě. Nahrajte obrázky a přidejte je do fronty pro segmentaci.
+              {t('queue.emptyMessage')}
             </div>
           )}
         </CardContent>

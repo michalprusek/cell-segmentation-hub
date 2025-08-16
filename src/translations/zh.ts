@@ -262,6 +262,58 @@ export default {
     completedSegmentation: '完成了分割',
     uploadedImage: '上传了图像'
   },
+  segmentation: {
+    mode: {
+      view: '查看和导航',
+      edit: '编辑',
+      editVertices: '编辑顶点',
+      addPoints: '添加点',
+      create: '创建',
+      createPolygon: '创建多边形',
+      slice: '切割',
+      delete: '删除',
+      deletePolygon: '删除多边形',
+      unknown: '未知'
+    },
+    modeDescription: {
+      view: '导航和选择多边形',
+      edit: '移动和修改顶点',
+      addPoints: '在顶点之间添加点',
+      create: '创建新多边形',
+      slice: '用线分割多边形',
+      delete: '移除多边形'
+    },
+    toolbar: {
+      mode: '模式',
+      keyboard: '按键: {key}',
+      requiresSelection: '需要选择多边形',
+      requiresPolygonSelection: '需要选择多边形',
+      select: '选择',
+      undoTooltip: '撤销 (Ctrl+Z)',
+      undo: '撤销',
+      redoTooltip: '重做 (Ctrl+Y)',
+      redo: '重做',
+      zoomInTooltip: '放大 (+)',
+      zoomIn: '放大',
+      zoomOutTooltip: '缩小 (-)',
+      zoomOut: '缩小',
+      resetViewTooltip: '重置视图 (R)',
+      resetView: '重置',
+      unsavedChanges: '未保存的更改',
+      saving: '保存中...',
+      save: '保存',
+      keyboardShortcuts: 'V: 查看 • E: 编辑 • A: 添加 • N: 新建 • S: 切割 • D: 删除'
+    },
+    status: {
+      polygons: '多边形',
+      vertices: '顶点',
+      visible: '可见',
+      hidden: '隐藏',
+      selected: '已选择',
+      saved: '已保存',
+      unsaved: '未保存'
+    }
+  },
   status: {
     segmented: '已分割',
     processing: '正在处理 {{count}} 张图像',

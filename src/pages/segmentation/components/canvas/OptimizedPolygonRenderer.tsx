@@ -220,23 +220,34 @@ const ProgressiveBatchRenderer: React.FC<{
   const [renderedBatches, setRenderedBatches] = useState<RenderBatch[]>([]);
   const [renderIndex, setRenderIndex] = useState(0);
   const rafRef = useRef<number>();
+  const isMountedRef = useRef(true);
 
   // Sort batches by priority (higher priority first)
   const sortedBatches = useMemo(() => {
     return [...batches].sort((a, b) => b.priority - a.priority);
   }, [batches]);
 
+  // Set up unmount tracking
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Progressive rendering logic
   useEffect(() => {
     if (renderIndex < sortedBatches.length) {
       rafRef.current = requestAnimationFrame(() => {
-        const nextBatches = sortedBatches.slice(
-          renderIndex,
-          Math.min(renderIndex + maxBatchesPerFrame, sortedBatches.length)
-        );
-        
-        setRenderedBatches(prev => [...prev, ...nextBatches]);
-        setRenderIndex(prev => prev + nextBatches.length);
+        // Only update state if component is still mounted
+        if (isMountedRef.current) {
+          const nextBatches = sortedBatches.slice(
+            renderIndex,
+            Math.min(renderIndex + maxBatchesPerFrame, sortedBatches.length)
+          );
+          
+          setRenderedBatches(prev => [...prev, ...nextBatches]);
+          setRenderIndex(prev => prev + nextBatches.length);
+        }
       });
     }
 
@@ -249,8 +260,10 @@ const ProgressiveBatchRenderer: React.FC<{
 
   // Reset when batches change
   useEffect(() => {
-    setRenderedBatches([]);
-    setRenderIndex(0);
+    if (isMountedRef.current) {
+      setRenderedBatches([]);
+      setRenderIndex(0);
+    }
   }, [sortedBatches]);
 
   return (

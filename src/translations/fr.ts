@@ -191,6 +191,12 @@ export default {
       hrnet: 'Modèle rapide et efficace pour la segmentation en temps réel',
       resunet_small: 'Vitesse et précision équilibrées pour la plupart des cas d\'usage',
       resunet_advanced: 'Précision maximale avec mécanismes d\'attention'
+    },
+    dataUsageTitle: 'Utilisation des données et confidentialité',
+    dataUsageDescription: 'Contrôlez comment vos données sont utilisées pour l\'apprentissage automatique et la recherche',
+    allowMLTraining: {
+      label: 'Permettre l\'entraînement des modèles ML',
+      description: 'Permettre l\'utilisation de vos données pour entraîner et améliorer nos modèles de segmentation'
     }
   },
   auth: {
@@ -261,6 +267,58 @@ export default {
     createdProject: 'A créé le projet',
     completedSegmentation: 'A terminé la segmentation pour',
     uploadedImage: 'A téléchargé l\'image'
+  },
+  segmentation: {
+    mode: {
+      view: 'Voir et naviguer',
+      edit: 'Modifier',
+      editVertices: 'Modifier les sommets',
+      addPoints: 'Ajouter des points',
+      create: 'Créer',
+      createPolygon: 'Créer un polygone',
+      slice: 'Découper',
+      delete: 'Supprimer',
+      deletePolygon: 'Supprimer le polygone',
+      unknown: 'Inconnu'
+    },
+    modeDescription: {
+      view: 'Naviguer et sélectionner les polygones',
+      edit: 'Déplacer et modifier les sommets',
+      addPoints: 'Ajouter des points entre les sommets',
+      create: 'Créer de nouveaux polygones',
+      slice: 'Diviser les polygones avec une ligne',
+      delete: 'Supprimer les polygones'
+    },
+    toolbar: {
+      mode: 'Mode',
+      keyboard: 'Touche: {key}',
+      requiresSelection: 'Nécessite la sélection d\'un polygone',
+      requiresPolygonSelection: 'Nécessite la sélection d\'un polygone',
+      select: 'Sélectionner',
+      undoTooltip: 'Annuler (Ctrl+Z)',
+      undo: 'Annuler',
+      redoTooltip: 'Refaire (Ctrl+Y)',
+      redo: 'Refaire',
+      zoomInTooltip: 'Zoomer (+)',
+      zoomIn: 'Zoomer',
+      zoomOutTooltip: 'Dézoomer (-)',
+      zoomOut: 'Dézoomer',
+      resetViewTooltip: 'Réinitialiser la vue (R)',
+      resetView: 'Réinitialiser',
+      unsavedChanges: 'Modifications non sauvegardées',
+      saving: 'Sauvegarde...',
+      save: 'Sauvegarder',
+      keyboardShortcuts: 'V: Voir • E: Modifier • A: Ajouter • N: Nouveau • S: Découper • D: Supprimer'
+    },
+    status: {
+      polygons: 'polygones',
+      vertices: 'sommets',
+      visible: 'visibles',
+      hidden: 'cachés',
+      selected: 'sélectionné',
+      saved: 'Sauvegardé',
+      unsaved: 'Non sauvegardé'
+    }
   },
   status: {
     segmented: 'Segmenté',

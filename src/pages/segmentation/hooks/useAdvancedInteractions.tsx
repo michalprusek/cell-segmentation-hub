@@ -295,7 +295,7 @@ export const useAdvancedInteractions = ({
    */
   const handleSliceClick = useCallback((imagePoint: Point) => {
     // Implementation will be added in Phase 2.2
-    console.log('Slice mode click at:', imagePoint);
+    throw new Error('NotImplementedError: Slice mode functionality is not yet implemented');
   }, []);
 
   /**
@@ -341,7 +341,6 @@ export const useAdvancedInteractions = ({
 
       // This would be handled by the parent component
       // We'll emit an event or call a callback
-      console.log('Pan delta:', { dx, dy });
 
       setInteractionState({
         ...interactionState,

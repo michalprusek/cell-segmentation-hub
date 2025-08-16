@@ -14,6 +14,19 @@ export const updateImageProcessingStatus = async ({
   imageUrl, 
   onComplete 
 }: ProcessImageParams) => {
+  const abortController = new AbortController();
+  let timeoutId: NodeJS.Timeout | null = null;
+  let cancelled = false;
+
+  const cancel = () => {
+    cancelled = true;
+    abortController.abort();
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+      timeoutId = null;
+    }
+  };
+
   try {
     // Request segmentation through the API
     await apiClient.requestSegmentation(imageId);
@@ -22,13 +35,19 @@ export const updateImageProcessingStatus = async ({
     
     // Poll for completion (in a real app, you might use WebSockets or Server-Sent Events)
     const pollForCompletion = async () => {
+      if (cancelled) return;
+      
       try {
         const results = await apiClient.getSegmentationResults(imageId);
+        
+        if (cancelled) return;
         
         // Validate that results is an array before accessing
         if (!Array.isArray(results) || results.length === 0) {
           // No results yet, continue polling
-          setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
+          if (!cancelled) {
+            timeoutId = setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
+          }
           return;
         }
         
@@ -53,21 +72,33 @@ export const updateImageProcessingStatus = async ({
         }
         
         // If still processing, poll again after a delay
-        if (latestResult.status === 'processing' || latestResult.status === 'pending') {
-          setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
+        if (latestResult?.status === 'processing' || latestResult?.status === 'pending') {
+          if (!cancelled) {
+            timeoutId = setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
+          }
+        } else if (!latestResult) {
+          console.error("No segmentation result found");
+          toast.error("Failed to get segmentation result");
         }
       } catch (error) {
-        console.error("Error polling segmentation status:", error);
-        toast.error("Failed to check segmentation status");
+        if (!cancelled) {
+          console.error("Error polling segmentation status:", error);
+          toast.error("Failed to check segmentation status");
+        }
       }
     };
     
     // Start polling
-    setTimeout(pollForCompletion, 1000); // Initial delay of 1 second
+    if (!cancelled) {
+      timeoutId = setTimeout(pollForCompletion, 1000); // Initial delay of 1 second
+    }
+    
+    return { cancel };
     
   } catch (error: unknown) {
     console.error("Error requesting segmentation:", error);
     const errorMessage = getErrorMessage(error) || "Failed to process image";
     toast.error("Failed to process image: " + errorMessage);
+    return { cancel };
   }
 };

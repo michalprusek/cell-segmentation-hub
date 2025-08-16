@@ -90,6 +90,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>((
       onMouseMove={onMouseMove}
       onMouseUp={onMouseUp}
       onMouseLeave={onMouseUp}
+      onWheel={onWheel}
       data-testid="canvas-container"
       data-edit-mode={editMode}
     >

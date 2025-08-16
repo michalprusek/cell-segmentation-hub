@@ -310,13 +310,23 @@ let initializationPromise: Promise<PolygonProcessingService> | null = null;
  */
 export function getPolygonProcessingService(): PolygonProcessingService {
   if (!globalPolygonService) {
-    const workerPool = new WorkerPool('/workers/polygonWorker.js', {
-      maxWorkers: Math.min(4, navigator.hardwareConcurrency || 2),
-      idleTimeout: 30000,
-      maxTasksPerWorker: 100
-    });
+    let workerPool: WorkerPool;
     
-    globalPolygonService = new PolygonProcessingService(workerPool);
+    try {
+      workerPool = new WorkerPool('/workers/polygonWorker.js', {
+        maxWorkers: Math.min(4, navigator.hardwareConcurrency || 2),
+        idleTimeout: 30000,
+        maxTasksPerWorker: 100
+      });
+      
+      globalPolygonService = new PolygonProcessingService(workerPool);
+    } catch (error) {
+      // Clean up any partially constructed worker pool
+      if (workerPool && typeof workerPool.terminate === 'function') {
+        workerPool.terminate();
+      }
+      throw error;
+    }
   }
   
   return globalPolygonService;

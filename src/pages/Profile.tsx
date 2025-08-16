@@ -10,6 +10,7 @@ import { Clock, Edit, ExternalLink, FileText, Github, Mail, MapPin, User, Loader
 import { useAuth } from "@/contexts/AuthContext";
 // Note: Profile functionality now handled by AuthContext and Settings page
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiClient, Project, ProjectImage } from "@/lib/api";
 
 interface ProfileData {
   name: string;
@@ -42,33 +43,89 @@ const Profile = () => {
   const [completedImageCount, setCompletedImageCount] = useState(0);
   const [storageUsed, setStorageUsed] = useState(0);
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
+  const [projectCountError, setProjectCountError] = useState<string | null>(null);
+  const [imageCountError, setImageCountError] = useState<string | null>(null);
+  const [completedCountError, setCompletedCountError] = useState<string | null>(null);
+  const [recentActivityError, setRecentActivityError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       if (!user) return;
 
       try {
-        // Get project count (TODO: Implement with API client)
-        const projectCount = 0;
-        const projectError = null;
+        // Get project count
+        let projectCount = 0;
+        let projectError = null;
+        try {
+          const projectsResponse = await apiClient.getProjects({ limit: 1 });
+          projectCount = projectsResponse.total || 0;
+        } catch (error) {
+          console.error('Error fetching project count:', error);
+          projectError = 'Failed to load project count';
+          setProjectCountError(projectError);
+        }
 
-        // Get image count (TODO: Implement with API client)
-        const imageCount = 0;
-        const imageError = null;
+        // Get recent projects for activity
+        let recentProjects: Project[] = [];
+        let recentProjectsError = null;
+        try {
+          const recentProjectsResponse = await apiClient.getProjects({ limit: 5 });
+          recentProjects = recentProjectsResponse.projects || [];
+        } catch (error) {
+          console.error('Error fetching recent projects:', error);
+          recentProjectsError = 'Failed to load recent projects';
+          setRecentActivityError(recentProjectsError);
+        }
 
-        // Get completed image count (TODO: Implement with API client)
-        const completedCount = 0;
-        const completedError = null;
+        // Get image counts by aggregating from all projects
+        let imageCount = 0;
+        let completedCount = 0;
+        let imageError = null;
+        let completedError = null;
+        try {
+          // Fetch all project IDs to get total image counts
+          const allProjectsResponse = await apiClient.getProjects({ limit: 100 }); // Reasonable limit
+          const projects = allProjectsResponse.projects || [];
           
-        // Get recent activity (TODO: Implement with API client)
-        const recentProjects = [];
-        const recentProjectsError = null;
-          
-        // Get recent images (TODO: Implement with API client)
-        const recentImages = [];
-        const recentImagesError = null;
-          
-        // No error handling needed for mock data
+          // Aggregate image counts from all projects
+          for (const project of projects) {
+            try {
+              const imagesResponse = await apiClient.getProjectImages(project.id, { limit: 1000 });
+              const projectImages = imagesResponse.images || [];
+              imageCount += projectImages.length;
+              completedCount += projectImages.filter(img => img.segmentation_status === 'completed').length;
+            } catch (error) {
+              console.warn(`Error fetching images for project ${project.id}:`, error);
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching image counts:', error);
+          imageError = 'Failed to load image count';
+          completedError = 'Failed to load completed count';
+          setImageCountError(imageError);
+          setCompletedCountError(completedError);
+        }
+
+        // Get recent images for activity (from recent projects)
+        let recentImages: ProjectImage[] = [];
+        let recentImagesError = null;
+        try {
+          for (const project of recentProjects.slice(0, 3)) { // Limit to recent 3 projects
+            try {
+              const imagesResponse = await apiClient.getProjectImages(project.id, { limit: 5 });
+              recentImages.push(...(imagesResponse.images || []));
+            } catch (error) {
+              console.warn(`Error fetching recent images for project ${project.id}:`, error);
+            }
+          }
+          // Sort by creation date and take most recent
+          recentImages.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          recentImages = recentImages.slice(0, 10); // Keep only 10 most recent
+        } catch (error) {
+          console.error('Error fetching recent images:', error);
+          recentImagesError = 'Failed to load recent images';
+          setRecentActivityError(recentImagesError);
+        }
         
         // Combined recent activity
         const activity: ActivityItem[] = [];
@@ -123,10 +180,11 @@ const Profile = () => {
         const month = joinedDate.toLocaleString('default', { month: 'long' });
         const year = joinedDate.getFullYear();
 
-        setProjectCount(projectCount || 0);
-        setImageCount(imageCount || 0);
-        setCompletedImageCount(completedCount || 0);
-        setStorageUsed(Math.round((imageCount || 0) * 2.5 * 10) / 10); // Estimate storage based on number of images
+        // Update state with fetched data
+        setProjectCount(projectCount);
+        setImageCount(imageCount);
+        setCompletedImageCount(completedCount);
+        setStorageUsed(Math.round(imageCount * 2.5 * 10) / 10); // Estimate storage based on number of images
 
         setProfileData({
           name: profile?.username || user.email?.split('@')[0] || 'User',
@@ -137,9 +195,9 @@ const Profile = () => {
           location: profile?.location || "Not specified",
           joined: `${month} ${year}`,
           publications: 0,
-          projects: projectCount || 0,
+          projects: projectCount,
           collaborators: 0,
-          analyses: imageCount || 0,
+          analyses: imageCount,
           avatar: profile?.avatarUrl || "/placeholder.svg"
         });
       } catch (error) {
@@ -203,16 +261,26 @@ const Profile = () => {
                     
                     <div className="mt-4 w-full grid grid-cols-3 gap-2 text-center">
                       <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
-                        <p className="text-lg font-semibold dark:text-white">{profileData.projects}</p>
+                        <p className="text-lg font-semibold dark:text-white">
+                          {projectCountError ? '—' : profileData.projects}
+                        </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{t('profile.projects')}</p>
+                        {projectCountError && (
+                          <p className="text-xs text-red-500 mt-1" title={projectCountError}>Error</p>
+                        )}
                       </div>
                       <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
                         <p className="text-lg font-semibold dark:text-white">{profileData.publications}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{t('profile.papers')}</p>
                       </div>
                       <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
-                        <p className="text-lg font-semibold dark:text-white">{profileData.analyses}</p>
+                        <p className="text-lg font-semibold dark:text-white">
+                          {imageCountError ? '—' : profileData.analyses}
+                        </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">{t('profile.analyses')}</p>
+                        {imageCountError && (
+                          <p className="text-xs text-red-500 mt-1" title={imageCountError}>Error</p>
+                        )}
                       </div>
                     </div>
                     
@@ -300,7 +368,11 @@ const Profile = () => {
                   
                   <h2 className="text-lg font-semibold mb-4 dark:text-white">{t('profile.recentActivity')}</h2>
                   <div className="space-y-4">
-                    {recentActivity.length === 0 ? (
+                    {recentActivityError ? (
+                      <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                        <p className="text-red-600 dark:text-red-400 text-sm">{recentActivityError}</p>
+                      </div>
+                    ) : recentActivity.length === 0 ? (
                       <p className="text-gray-500 dark:text-gray-400">{t('profile.noRecentActivity')}</p>
                     ) : (
                       recentActivity.map((activity, i) => (
@@ -332,11 +404,16 @@ const Profile = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t('profile.totalImagesProcessed')}</h3>
-                      <div className="text-3xl font-bold dark:text-white">{completedImageCount}</div>
-                      {completedImageCount > 0 && (
+                      <div className="text-3xl font-bold dark:text-white">
+                        {completedCountError ? '—' : completedImageCount}
+                      </div>
+                      {!completedCountError && completedImageCount > 0 && (
                         <p className="text-xs text-green-600 mt-1">
                           {Math.round((completedImageCount / Math.max(imageCount, 1)) * 100)}% {t('profile.completionRate')}
                         </p>
+                      )}
+                      {completedCountError && (
+                        <p className="text-xs text-red-500 mt-1" title={completedCountError}>Error loading data</p>
                       )}
                     </div>
                     <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
@@ -346,13 +423,25 @@ const Profile = () => {
                     </div>
                     <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t('profile.storageUsed')}</h3>
-                      <div className="text-3xl font-bold dark:text-white">{storageUsed} MB</div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('profile.of')} 1 GB ({Math.round(storageUsed / 10)}%)</p>
+                      <div className="text-3xl font-bold dark:text-white">
+                        {imageCountError ? '—' : `${storageUsed} MB`}
+                      </div>
+                      {!imageCountError && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('profile.of')} 1 GB ({Math.round(storageUsed / 10)}%)</p>
+                      )}
+                      {imageCountError && (
+                        <p className="text-xs text-red-500 mt-1" title={imageCountError}>Error loading data</p>
+                      )}
                     </div>
                     <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
                       <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t('profile.apiRequests')}</h3>
-                      <div className="text-3xl font-bold dark:text-white">{(imageCount + projectCount) * 4}</div>
+                      <div className="text-3xl font-bold dark:text-white">
+                        {(imageCountError || projectCountError) ? '—' : (imageCount + projectCount) * 4}
+                      </div>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('profile.thisMonth')}</p>
+                      {(imageCountError || projectCountError) && (
+                        <p className="text-xs text-red-500 mt-1">Error loading data</p>
+                      )}
                     </div>
                   </div>
                 </CardContent>

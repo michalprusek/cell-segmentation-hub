@@ -341,14 +341,14 @@ const SegmentationEditor = () => {
                   {selectedImage && (
                     <CanvasImage
                       src={selectedImage.url}
-                      width={canvasWidth}
-                      height={canvasHeight}
+                      width={imageDimensions?.width || canvasWidth}
+                      height={imageDimensions?.height || canvasHeight}
                       alt="Segmentation target"
                       onLoad={handleImageLoad}
                     />
                   )}
 
-                  {/* SVG Overlay for polygon rendering */}
+                  {/* SVG Overlay for polygon rendering - uses same dimensions as image */}
                   <svg
                     width={imageDimensions?.width || canvasWidth}
                     height={imageDimensions?.height || canvasHeight}
@@ -375,7 +375,7 @@ const SegmentationEditor = () => {
                           zoom={editor.transform.zoom}
                           onSelectPolygon={() => editor.setSelectedPolygonId(polygon.id)}
                         />
-                      ))}}
+                      ))}
 
                     {/* Render vertices for selected polygon */}
                     {editor.selectedPolygon && (
@@ -424,7 +424,7 @@ const SegmentationEditor = () => {
                   interactionState={editor.interactionState}
                   selectedPolygonId={editor.selectedPolygonId}
                   tempPoints={editor.tempPoints}
-                  isShiftPressed={editor.keyboardState.isShiftPressed}
+                  isShiftPressed={editor.keyboardState.isShiftPressed()}
                 />
               </CanvasContainer>
             </div>

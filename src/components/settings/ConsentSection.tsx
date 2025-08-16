@@ -79,9 +79,9 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
   return (
     <Card className="border-0 shadow-none">
       <CardHeader className="px-0 pt-0">
-        <CardTitle className="text-xl">Data Usage & Privacy</CardTitle>
+        <CardTitle className="text-xl">{t('settings.dataUsageTitle')}</CardTitle>
         <CardDescription>
-          Control how your data is used for machine learning and research
+          {t('settings.dataUsageDescription')}
         </CardDescription>
       </CardHeader>
       <CardContent className="px-0 space-y-6">
@@ -104,10 +104,10 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
           <div className="flex items-start justify-between">
             <div className="space-y-1">
               <Label htmlFor="ml-training" className="text-base font-medium">
-                Allow ML Model Training
+                {t('settings.allowMLTraining.label')}
               </Label>
               <p className="text-sm text-muted-foreground">
-                Allow your data to be used for training and improving our segmentation models
+                {t('settings.allowMLTraining.description')}
               </p>
             </div>
             <Switch

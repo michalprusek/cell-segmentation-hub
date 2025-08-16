@@ -1,0 +1,730 @@
+openapi: 3.0.0
+info:
+  title: Cell Segmentation Hub API
+  description: API pro platformu segmentace buněčných struktur
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://github.com/michalprusek/cell-segmentation-hub
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3001/api
+    description: Development server
+  - url: https://spherosegapp.utia.cas.cz/api
+    description: Production server
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Kontrola zdraví serveru
+      description: Vrací stav serveru a databáze
+      operationId: getHealth
+      responses:
+        '200':
+          description: Server je v pořádku
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Registrace nového uživatele
+      description: Vytvoří nový uživatelský účet
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Uživatel úspěšně registrován
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Nevalidní vstupní data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Uživatel s tímto emailem již existuje
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Přihlášení uživatele
+      description: Autentizuje uživatele a vrací JWT tokeny
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Úspěšné přihlášení
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Nevalidní vstupní data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Neplatné přihlašovací údaje
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Obnovení access tokenu
+      description: Obnoví access token pomocí refresh tokenu
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Token úspěšně obnoven
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+        '401':
+          description: Neplatný refresh token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /projects:
+    get:
+      tags:
+        - Projects
+      summary: Seznam projektů
+      description: Vrací seznam projektů aktuálního uživatele
+      operationId: getProjects
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Číslo stránky
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          description: Počet položek na stránku
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: Seznam projektů
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectsResponse'
+        '401':
+          description: Neautorizovaný přístup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      tags:
+        - Projects
+      summary: Vytvoření nového projektu
+      description: Vytvoří nový projekt pro aktuálního uživatele
+      operationId: createProject
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectRequest'
+      responses:
+        '201':
+          description: Projekt úspěšně vytvořen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Nevalidní vstupní data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Neautorizovaný přístup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /projects/{projectId}:
+    get:
+      tags:
+        - Projects
+      summary: Detail projektu
+      description: Vrací detail konkrétního projektu
+      operationId: getProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: ID projektu
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detail projektu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectDetailResponse'
+        '401':
+          description: Neautorizovaný přístup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Projekt nenalezen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    put:
+      tags:
+        - Projects
+      summary: Aktualizace projektu
+      description: Aktualizuje existující projekt
+      operationId: updateProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: ID projektu
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectRequest'
+      responses:
+        '200':
+          description: Projekt úspěšně aktualizován
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponse'
+        '400':
+          description: Nevalidní vstupní data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Neautorizovaný přístup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Projekt nenalezen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      tags:
+        - Projects
+      summary: Smazání projektu
+      description: Smaže existující projekt a všechna související data
+      operationId: deleteProject
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: ID projektu
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Projekt úspěšně smazán
+        '401':
+          description: Neautorizovaný přístup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Projekt nenalezen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /projects/{projectId}/images:
+    post:
+      tags:
+        - Images
+      summary: Upload obrázku
+      description: Nahraje nový obrázek do projektu
+      operationId: uploadImage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          description: ID projektu
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: Soubor obrázku
+                autoSegment:
+                  type: boolean
+                  description: Automatická segmentace po uploadu
+                  default: false
+                modelName:
+                  type: string
+                  description: Název ML modelu pro segmentaci
+                  enum: [hrnet, resunet_small, resunet_advanced]
+                  default: hrnet
+              required:
+                - image
+      responses:
+        '201':
+          description: Obrázek úspěšně nahrán
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageResponse'
+        '400':
+          description: Nevalidní vstupní data
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Neautorizovaný přístup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Projekt nenalezen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            status:
+              type: string
+              example: healthy
+            timestamp:
+              type: string
+              format: date-time
+            version:
+              type: string
+              example: "1.0.0"
+            environment:
+              type: string
+              example: development
+            database:
+              type: object
+              properties:
+                healthy:
+                  type: boolean
+                  example: true
+                message:
+                  type: string
+                  example: "Database connection successful"
+        message:
+          type: string
+          example: "Server is healthy"
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "jan.novak@example.com"
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          pattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{12,128}$"
+          description: "Password must be 12-128 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
+          example: "SecurePass123!"
+        username:
+          type: string
+          minLength: 2
+          maxLength: 50
+          example: "jan_novak"
+        consentToMLTraining:
+          type: boolean
+          example: true
+        consentToAlgorithmImprovement:
+          type: boolean
+          example: true
+        consentToFeatureDevelopment:
+          type: boolean
+          example: true
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "jan.novak@example.com"
+        password:
+          type: string
+          example: "securePassword123"
+
+    RefreshRequest:
+      type: object
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            user:
+              $ref: '#/components/schemas/User'
+            accessToken:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+            refreshToken:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        message:
+          type: string
+          example: "Uživatel úspěšně přihlášen"
+
+    RefreshResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            accessToken:
+              type: string
+              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        message:
+          type: string
+          example: "Token úspěšně obnoven"
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        email:
+          type: string
+          format: email
+          example: "jan.novak@example.com"
+        emailVerified:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateProjectRequest:
+      type: object
+      required:
+        - title
+        - description
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: "Segmentace buněk v tkáních"
+        description:
+          type: string
+          maxLength: 500
+          example: "Projekt pro segmentaci buněčných struktur v histologických preparátech"
+
+    UpdateProjectRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          minLength: 3
+          maxLength: 100
+          example: "Aktualizovaný název projektu"
+        description:
+          type: string
+          maxLength: 500
+          example: "Aktualizovaný popis projektu"
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        title:
+          type: string
+          example: "Segmentace buněk v tkáních"
+        description:
+          type: string
+          example: "Projekt pro segmentaci buněčných struktur v histologických preparátech"
+        userId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        imageCount:
+          type: integer
+          example: 15
+
+    ProjectResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Project'
+        message:
+          type: string
+          example: "Projekt úspěšně vytvořen"
+
+    ProjectsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            projects:
+              type: array
+              items:
+                $ref: '#/components/schemas/Project'
+            pagination:
+              type: object
+              properties:
+                page:
+                  type: integer
+                  example: 1
+                limit:
+                  type: integer
+                  example: 10
+                total:
+                  type: integer
+                  example: 25
+                pages:
+                  type: integer
+                  example: 3
+        message:
+          type: string
+          example: "Projekty úspěšně načteny"
+
+    ProjectDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            project:
+              $ref: '#/components/schemas/Project'
+            images:
+              type: array
+              items:
+                $ref: '#/components/schemas/Image'
+        message:
+          type: string
+          example: "Detail projektu úspěšně načten"
+
+    Image:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        name:
+          type: string
+          example: "cell_sample_001.jpg"
+        mimeType:
+          type: string
+          example: "image/jpeg"
+        fileSize:
+          type: integer
+          example: 2048576
+        width:
+          type: integer
+          example: 1024
+        height:
+          type: integer
+          example: 768
+        thumbnailPath:
+          type: string
+          example: "/uploads/thumbnails/thumb_cell_sample_001.jpg"
+        segmentationStatus:
+          type: string
+          enum: [no_segmentation, processing, completed, failed, queued]
+          example: "no_segmentation"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ImageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/Image'
+        message:
+          type: string
+          example: "Obrázek úspěšně nahrán"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: "Chybová zpráva"
+        details:
+          type: object
+          description: "Dodatečné informace o chybě"
+        timestamp:
+          type: string
+          format: date-time
+
+tags:
+  - name: Health
+    description: Zdravotní kontroly serveru
+  - name: Authentication
+    description: Autentizace a autorizace uživatelů
+  - name: Projects
+    description: Správa projektů
+  - name: Images
+    description: Správa obrázků v projektech

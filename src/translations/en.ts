@@ -194,6 +194,69 @@ export default {
       hrnet: 'Fast and efficient model for real-time segmentation',
       resunet_small: 'Balanced speed and accuracy for most use cases',
       resunet_advanced: 'Highest accuracy with attention mechanisms'
+    },
+    dataUsageTitle: 'Data Usage & Privacy',
+    dataUsageDescription: 'Control how your data is used for machine learning and research',
+    allowMLTraining: {
+      label: 'Allow ML Model Training',
+      description: 'Allow your data to be used for training and improving our segmentation models'
+    },
+    cancel: 'Cancel',
+    deleting: 'Deleting...',
+    deleteAccount: 'Delete Account',
+    accountDeleted: 'Account deleted successfully',
+    deleteAccountError: 'Failed to delete account'
+  },
+  segmentation: {
+    mode: {
+      view: 'View and navigate',
+      edit: 'Edit',
+      editVertices: 'Edit vertices',
+      addPoints: 'Add points',
+      create: 'Create',
+      createPolygon: 'Create polygon',
+      slice: 'Slice',
+      delete: 'Delete',
+      deletePolygon: 'Delete polygon',
+      unknown: 'Unknown'
+    },
+    modeDescription: {
+      view: 'Navigate and select polygons',
+      edit: 'Move and modify vertices',
+      addPoints: 'Add points between vertices',
+      create: 'Create new polygons',
+      slice: 'Split polygons with a line',
+      delete: 'Remove polygons'
+    },
+    toolbar: {
+      mode: 'Mode',
+      keyboard: 'Key: {key}',
+      requiresSelection: 'Requires polygon selection',
+      requiresPolygonSelection: 'Requires polygon selection',
+      select: 'Select',
+      undoTooltip: 'Undo (Ctrl+Z)',
+      undo: 'Undo',
+      redoTooltip: 'Redo (Ctrl+Y)',
+      redo: 'Redo',
+      zoomInTooltip: 'Zoom In (+)',
+      zoomIn: 'Zoom In',
+      zoomOutTooltip: 'Zoom Out (-)',
+      zoomOut: 'Zoom Out',
+      resetViewTooltip: 'Reset View (R)',
+      resetView: 'Reset',
+      unsavedChanges: 'Unsaved changes',
+      saving: 'Saving...',
+      save: 'Save',
+      keyboardShortcuts: 'V: View • E: Edit • A: Add • N: New • S: Slice • D: Delete'
+    },
+    status: {
+      polygons: 'polygons',
+      vertices: 'vertices',
+      visible: 'visible',
+      hidden: 'hidden',
+      selected: 'selected',
+      saved: 'Saved',
+      unsaved: 'Unsaved'
     }
   },
   auth: {
@@ -274,5 +337,18 @@ export default {
     disconnected: 'Disconnected from server',
     error: 'ML service error',
     ready: 'Ready for segmentation'
+  },
+  queue: {
+    title: 'Segmentation Queue',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    waiting: 'waiting',
+    processing: 'processing',
+    segmentAll: 'Segment All',
+    totalProgress: 'Total Progress',
+    images: 'images',
+    connectingMessage: 'Connecting to server... Real-time updates will be available soon.',
+    emptyMessage: 'No images in queue. Upload images and add them to the queue for segmentation.',
+    addingToQueue: 'Adding to queue...'
   }
 };

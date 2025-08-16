@@ -236,9 +236,9 @@ export const useKeyboardShortcuts = ({
   }, [handleKeyDown, handleKeyUp]);
 
   return {
-    isShiftPressed: isShiftPressed.current,
-    isCtrlPressed: isCtrlPressed.current,
-    isAltPressed: isAltPressed.current
+    isShiftPressed: () => isShiftPressed.current,
+    isCtrlPressed: () => isCtrlPressed.current,
+    isAltPressed: () => isAltPressed.current
   };
 };
 
@@ -278,25 +278,28 @@ function cycleEditMode(
  * Show keyboard shortcuts help
  */
 function showKeyboardHelp() {
-  // This could show a modal or tooltip with all shortcuts
-  console.log('Keyboard Shortcuts:', {
-    'V': 'View mode',
-    'E': 'Edit vertices (requires selection)',
-    'A': 'Add points (requires selection)',
-    'N': 'Create new polygon',
-    'S': 'Slice mode (requires selection)',
-    'D': 'Delete polygon mode',
-    'Ctrl+S': 'Save',
-    'Ctrl+Z': 'Undo',
-    'Ctrl+Y': 'Redo',
-    '+/-': 'Zoom in/out',
-    'R': 'Reset view',
-    'Delete': 'Delete selected polygon',
-    'Escape': 'Cancel/View mode',
-    'Tab': 'Cycle modes',
-    'Shift+Tab': 'Cycle modes (reverse)',
-    'H/?': 'Show this help'
-  });
+  // TODO: This should trigger a proper UI modal/overlay component
+  // For now, only log in development
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Keyboard Shortcuts:', {
+      'V': 'View mode',
+      'E': 'Edit vertices (requires selection)',
+      'A': 'Add points (requires selection)',
+      'N': 'Create new polygon',
+      'S': 'Slice mode (requires selection)',
+      'D': 'Delete polygon mode',
+      'Ctrl+S': 'Save',
+      'Ctrl+Z': 'Undo',
+      'Ctrl+Y': 'Redo',
+      '+/-': 'Zoom in/out',
+      'R': 'Reset view',
+      'Delete': 'Delete selected polygon',
+      'Escape': 'Cancel/View mode',
+      'Tab': 'Cycle modes',
+      'Shift+Tab': 'Cycle modes (reverse)',
+      'H/?': 'Show this help'
+    });
+  }
 }
 
 /**

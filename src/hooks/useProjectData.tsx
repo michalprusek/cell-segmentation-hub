@@ -162,7 +162,7 @@ export const useProjectData = (projectId: string | undefined, userId: string | u
     fetchData();
   }, [projectId, navigate, userId]);
 
-  const updateImages = (newImages: ProjectImage[] | ((prev: ProjectImage[]) => ProjectImage[])) => {
+  const updateImages = (newImages: ProjectImage[] | ((prev: ProjectImage[]) => ProjectImage[])): void => {
     setImages(newImages);
   };
 

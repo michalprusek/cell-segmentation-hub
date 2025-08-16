@@ -33,19 +33,19 @@ const CanvasVertex = React.memo(({
     let calculatedRadius;
     
     if (zoom > 4) {
-      // Při extrémním přiblížení (zoom > 4) ZVĚTŠÍME body
+      // At extreme zoom (zoom > 4) enlarge points
       calculatedRadius = 7 * baseSize / zoom;
     } else if (zoom > 3) {
-      // Při velkém přiblížení (zoom > 3) zvětšíme body
+      // At high zoom (zoom > 3) enlarge points
       calculatedRadius = 6 * baseSize / zoom;
     } else if (zoom < 0.5) {
-      // Při velkém oddálení (zoom < 0.5) ZMENŠÍME body výrazně
+      // When zoomed out a lot (zoom < 0.5) significantly reduce vertex size
       calculatedRadius = 2.5 * baseSize / zoom;
     } else if (zoom < 0.7) {
-      // Při mírném oddálení (zoom < 0.7) zmenšíme body
+      // When slightly zoomed out (zoom < 0.7) reduce vertex size
       calculatedRadius = 3 * baseSize / zoom;
     } else {
-      // Normální velikost pro běžný zoom
+      // Default size for normal zoom
       calculatedRadius = 4 * baseSize / zoom;
     }
     

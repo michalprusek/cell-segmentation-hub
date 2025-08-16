@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useEnhancedSegmentationEditor } from '../hooks/useEnhancedSegmentationEditor';
 import { Polygon } from '@/lib/segmentation';
 import EnhancedEditorToolbar from './EnhancedEditorToolbar';
@@ -33,20 +33,68 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
   onPolygonsChange,
   className = ''
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [canvasDimensions, setCanvasDimensions] = useState({
+    width: 800,
+    height: 600
+  });
+
+  // Measure container dimensions and calculate canvas size
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        const containerRect = containerRef.current.getBoundingClientRect();
+        const availableWidth = containerRect.width - 60; // Account for toolbar
+        const availableHeight = containerRect.height - 100; // Account for toolbar and padding
+        
+        // Calculate dimensions preserving aspect ratio
+        const aspectRatio = imageWidth / imageHeight;
+        let canvasWidth = availableWidth;
+        let canvasHeight = availableWidth / aspectRatio;
+        
+        if (canvasHeight > availableHeight) {
+          canvasHeight = availableHeight;
+          canvasWidth = availableHeight * aspectRatio;
+        }
+        
+        setCanvasDimensions({
+          width: Math.max(400, Math.floor(canvasWidth)), // Minimum width
+          height: Math.max(300, Math.floor(canvasHeight)) // Minimum height
+        });
+      }
+    };
+
+    // Initial measurement
+    updateDimensions();
+
+    // ResizeObserver for responsive updates
+    const resizeObserver = new ResizeObserver(updateDimensions);
+    if (containerRef.current) {
+      resizeObserver.observe(containerRef.current);
+    }
+
+    // Window resize fallback
+    window.addEventListener('resize', updateDimensions);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateDimensions);
+    };
+  }, [imageWidth, imageHeight]);
 
   // Initialize the enhanced editor
   const editor = useEnhancedSegmentationEditor({
     initialPolygons,
     imageWidth,
     imageHeight,
-    canvasWidth: 800, // This should be dynamically calculated
-    canvasHeight: 600, // This should be dynamically calculated
+    canvasWidth: canvasDimensions.width,
+    canvasHeight: canvasDimensions.height,
     onSave,
     onPolygonsChange
   });
 
   return (
-    <div className={`flex flex-col h-full bg-white dark:bg-gray-900 ${className}`}>
+    <div ref={containerRef} className={`flex flex-col h-full bg-white dark:bg-gray-900 ${className}`}>
       {/* Enhanced Toolbar */}
       <EnhancedEditorToolbar
         editMode={editor.editMode}
@@ -114,14 +162,14 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
                       key={`vertex-${index}`}
                       point={point}
                       index={index}
-                      polygonId={editor.selectedPolygon!.id}
+                      polygonId={editor.selectedPolygon?.id || ''}
                       isHovered={
-                        editor.hoveredVertex?.polygonId === editor.selectedPolygon!.id &&
+                        editor.hoveredVertex?.polygonId === editor.selectedPolygon?.id &&
                         editor.hoveredVertex?.vertexIndex === index
                       }
                       isDragging={
                         editor.interactionState.isDraggingVertex &&
-                        editor.interactionState.draggedVertexInfo?.polygonId === editor.selectedPolygon!.id &&
+                        editor.interactionState.draggedVertexInfo?.polygonId === editor.selectedPolygon?.id &&
                         editor.interactionState.draggedVertexInfo?.vertexIndex === index
                       }
                       editMode={editor.editMode}
@@ -150,7 +198,7 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
             interactionState={editor.interactionState}
             selectedPolygonId={editor.selectedPolygonId}
             tempPoints={editor.tempPoints}
-            isShiftPressed={editor.keyboardState.isShiftPressed}
+            isShiftPressed={editor.keyboardState.isShiftPressed()}
           />
         </CanvasContainer>
       </div>

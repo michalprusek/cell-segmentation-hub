@@ -368,16 +368,27 @@ class ApiClient {
 
   // Helper method to map segmentation status values
   private mapSegmentationStatus(status: unknown): 'pending' | 'processing' | 'completed' | 'failed' {
-    const statusStr = status as string;
-    // Map backend statuses to frontend expectations
+    // Safely coerce to string
+    const statusStr = typeof status === 'string' ? status : String(status || '');
+    
+    // Map known backend statuses to frontend expectations
     switch (statusStr) {
       case 'no_segmentation':
       case 'queued':
         return 'pending';
       case 'segmented':
         return 'completed';
+      case 'pending':
+      case 'processing':
+      case 'completed':
+      case 'failed':
+        return statusStr;
       default:
-        return statusStr as 'pending' | 'processing' | 'completed' | 'failed';
+        // Log unexpected values and return safe default
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Unexpected segmentation status from backend:', status);
+        }
+        return 'failed';
     }
   }
 

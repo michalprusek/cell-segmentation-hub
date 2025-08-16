@@ -16,6 +16,7 @@ import {
   RotateCcw
 } from 'lucide-react';
 import { EditMode } from '../types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface EnhancedEditorToolbarProps {
   // Current state
@@ -60,6 +61,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
   disabled = false,
   isSaving = false
 }) => {
+  const { t } = useLanguage();
 
   const getModeIcon = (mode: EditMode) => {
     switch (mode) {
@@ -102,43 +104,43 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
   const getModeLabel = (mode: EditMode) => {
     switch (mode) {
       case EditMode.View:
-        return 'View';
+        return t('segmentation.mode.view');
       case EditMode.EditVertices:
-        return 'Edit';
+        return t('segmentation.mode.edit');
       case EditMode.AddPoints:
-        return 'Add Points';
+        return t('segmentation.mode.addPoints');
       case EditMode.CreatePolygon:
-        return 'Create';
+        return t('segmentation.mode.create');
       case EditMode.Slice:
-        return 'Slice';
+        return t('segmentation.mode.slice');
       case EditMode.DeletePolygon:
-        return 'Delete';
+        return t('segmentation.mode.delete');
       default:
-        return 'Unknown';
+        return t('segmentation.mode.unknown');
     }
   };
 
   const getModeDescription = (mode: EditMode) => {
     switch (mode) {
       case EditMode.View:
-        return 'Navigate and select polygons';
+        return t('segmentation.modeDescription.view');
       case EditMode.EditVertices:
-        return 'Move and modify vertices';
+        return t('segmentation.modeDescription.edit');
       case EditMode.AddPoints:
-        return 'Add points between vertices';
+        return t('segmentation.modeDescription.addPoints');
       case EditMode.CreatePolygon:
-        return 'Create new polygons';
+        return t('segmentation.modeDescription.create');
       case EditMode.Slice:
-        return 'Split polygons with a line';
+        return t('segmentation.modeDescription.slice');
       case EditMode.DeletePolygon:
-        return 'Remove polygons';
+        return t('segmentation.modeDescription.delete');
       default:
         return '';
     }
   };
 
   const isRequiredSelectionMode = (mode: EditMode) => {
-    return mode === EditMode.EditVertices || mode === EditMode.AddPoints;
+    return mode === EditMode.EditVertices || mode === EditMode.AddPoints || mode === EditMode.Slice;
   };
 
   const canActivateMode = (mode: EditMode) => {
@@ -169,7 +171,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           <span className="hidden sm:inline">{getModeLabel(mode)}</span>
           {requiresSelection && !selectedPolygonId && (
             <Badge variant="secondary" className="text-xs ml-1">
-              Select
+              {t('segmentation.toolbar.select')}
             </Badge>
           )}
         </Button>
@@ -178,7 +180,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
           {getModeDescription(mode)}
           {requiresSelection && !selectedPolygonId && (
-            <div className="text-gray-300">Requires polygon selection</div>
+            <div className="text-gray-300">{t('segmentation.toolbar.requiresPolygonSelection')}</div>
           )}
         </div>
       </div>
@@ -190,7 +192,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
       {/* Mode Selection */}
       <div className="flex items-center gap-1 mr-4">
         <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
-          Mode:
+          {t('segmentation.toolbar.mode')}:
         </span>
         <div className="flex items-center gap-1">
           <ModeButton mode={EditMode.View} />
@@ -212,7 +214,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           size="sm"
           disabled={!canUndo || disabled}
           onClick={handleUndo}
-          title="Undo (Ctrl+Z)"
+          title={t('segmentation.toolbar.undoTooltip')}
         >
           <Undo size={16} />
         </Button>
@@ -221,7 +223,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           size="sm"
           disabled={!canRedo || disabled}
           onClick={handleRedo}
-          title="Redo (Ctrl+Y)"
+          title={t('segmentation.toolbar.redoTooltip')}
         >
           <Redo size={16} />
         </Button>
@@ -237,7 +239,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           size="sm"
           disabled={disabled}
           onClick={handleZoomIn}
-          title="Zoom In (+)"
+          title={t('segmentation.toolbar.zoomInTooltip')}
         >
           <ZoomIn size={16} />
         </Button>
@@ -246,7 +248,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           size="sm"
           disabled={disabled}
           onClick={handleZoomOut}
-          title="Zoom Out (-)"
+          title={t('segmentation.toolbar.zoomOutTooltip')}
         >
           <ZoomOut size={16} />
         </Button>
@@ -255,7 +257,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           size="sm"
           disabled={disabled}
           onClick={handleResetView}
-          title="Reset View (R)"
+          title={t('segmentation.toolbar.resetViewTooltip')}
         >
           <RotateCcw size={16} />
         </Button>
@@ -268,7 +270,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
       <div className="flex items-center gap-2">
         {hasUnsavedChanges && (
           <Badge variant="secondary" className="text-xs">
-            Unsaved changes
+            {t('segmentation.toolbar.unsavedChanges')}
           </Badge>
         )}
         <Button
@@ -279,13 +281,13 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           className="flex items-center gap-2"
         >
           <Save size={16} />
-          <span>{isSaving ? 'Saving...' : 'Save'}</span>
+          <span>{isSaving ? t('segmentation.toolbar.saving') : t('segmentation.toolbar.save')}</span>
         </Button>
       </div>
 
       {/* Keyboard Shortcuts Hint */}
       <div className="hidden lg:block text-xs text-gray-500 dark:text-gray-400 ml-2">
-        <div>V: View • E: Edit • A: Add • N: New • S: Slice • D: Delete</div>
+        <div>{t('segmentation.toolbar.keyboardShortcuts')}</div>
       </div>
     </div>
   );

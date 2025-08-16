@@ -5,7 +5,8 @@
  */
 
 import { Point, Polygon } from '@/lib/segmentation';
-import { BoundingBox, calculateBoundingBox } from '@/lib/polygonOptimization';
+import { BoundingBox } from '@/lib/polygonGeometry';
+import { calculateBoundingBox, simplifyPolygon } from '@/lib/polygonOptimization';
 import { WorkerPool, WorkerOperation } from '@/lib/workerPool';
 
 export interface LODLevel {
@@ -126,9 +127,9 @@ class SimplifyOperation extends WorkerOperation<
   readonly type = 'simplify';
   
   async execute(input: { points: Point[]; tolerance: number }): Promise<Point[]> {
-    // This method is implemented by the worker pool infrastructure
-    // Worker implementations will handle the actual simplification logic
-    return input.points; // Fallback to original points if worker execution fails
+    // Use the real simplification routine as fallback
+    // Let errors bubble up naturally instead of masking them
+    return simplifyPolygon(input.points, input.tolerance);
   }
 }
 
@@ -165,13 +166,19 @@ class AdaptiveLODController {
     
     if (avgFrameTime > targetFrameTime * 2) { // < 30 FPS
       if (this.currentQualityLevel !== 'low') {
+        const previousLevel = this.currentQualityLevel;
         this.currentQualityLevel = 'low';
-        console.log('LOD: Reduced quality to low due to poor performance');
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`LOD: Reduced quality from ${previousLevel} to low due to poor performance`);
+        }
       }
     } else if (avgFrameTime > targetFrameTime * 1.5) { // < 40 FPS
       if (this.currentQualityLevel === 'ultra' || this.currentQualityLevel === 'high') {
+        const previousLevel = this.currentQualityLevel;
         this.currentQualityLevel = 'medium';
-        console.log('LOD: Reduced quality to medium due to performance');
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`LOD: Reduced quality from ${previousLevel} to medium due to performance`);
+        }
       }
     } else if (avgFrameTime < targetFrameTime * 0.8) { // > 75 FPS
       if (this.currentQualityLevel === 'low') {
@@ -414,12 +421,24 @@ export class LODManager {
    * Generate cache key for LOD polygon
    */
   private generateCacheKey(polygon: Polygon, level: LODLevel): string {
-    // Create a hash of the polygon points for change detection
-    const pointsHash = polygon.points
-      .map(p => `${Math.round(p.x * 10)},${Math.round(p.y * 10)}`)
+    // Create stable metadata for the key
+    const pointCount = polygon.points.length;
+    const bbox = calculateBoundingBox(polygon.points);
+    
+    // Create a more robust hash with better precision and full coverage
+    const pointsData = polygon.points
+      .map(p => `${p.x.toFixed(3)},${p.y.toFixed(3)}`)
       .join('|');
     
-    return `${polygon.id}_${level.name}_${pointsHash.slice(0, 50)}`;
+    // Generate a shorter deterministic hash (simple hash function)
+    let hash = 0;
+    for (let i = 0; i < pointsData.length; i++) {
+      const char = pointsData.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    
+    return `${polygon.id}_${level.name}_${pointCount}_${hash.toString(36)}_${bbox.width.toFixed(1)}x${bbox.height.toFixed(1)}`;
   }
 
   /**

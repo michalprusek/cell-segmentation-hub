@@ -97,21 +97,25 @@ export const convertToNewInteractionState = (legacy: LegacyState): InteractionSt
  * Convert SegmentationResult to Polygon array for new system
  */
 export const convertSegmentationToPolygons = (segmentation: SegmentationResult | null, imageWidth?: number, imageHeight?: number) => {
-  console.log('🔄 convertSegmentationToPolygons called:', {
-    hasSegmentation: !!segmentation,
-    hasPolygons: !!segmentation?.polygons,
-    polygonCount: segmentation?.polygons?.length || 0,
-    firstPolygon: segmentation?.polygons?.[0] ? {
-      id: segmentation.polygons[0].id,
-      pointsCount: segmentation.polygons[0].points?.length || 0,
-      type: segmentation.polygons[0].type,
-      firstPoint: segmentation.polygons[0].points?.[0],
-      firstPointType: typeof segmentation.polygons[0].points?.[0]
-    } : null
-  });
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔄 convertSegmentationToPolygons called:', {
+      hasSegmentation: !!segmentation,
+      hasPolygons: !!segmentation?.polygons,
+      polygonCount: segmentation?.polygons?.length || 0,
+      firstPolygon: segmentation?.polygons?.[0] ? {
+        id: segmentation.polygons[0].id,
+        pointsCount: segmentation.polygons[0].points?.length || 0,
+        type: segmentation.polygons[0].type,
+        firstPoint: segmentation.polygons[0].points?.[0],
+        firstPointType: typeof segmentation.polygons[0].points?.[0]
+      } : null
+    });
+  }
   
   if (!segmentation?.polygons) {
-    console.log('⚠️ No segmentation polygons found');
+    if (process.env.NODE_ENV === 'development') {
+      console.log('⚠️ No segmentation polygons found');
+    }
     return [];
   }
   
@@ -119,49 +123,43 @@ export const convertSegmentationToPolygons = (segmentation: SegmentationResult |
   const segmentationWidth = segmentation.imageWidth || segmentation.width;
   const segmentationHeight = segmentation.imageHeight || segmentation.height;
   
-  // If segmentation dimensions are missing or 0, assume coordinates are already in image space
-  const scaleX = (imageWidth && segmentationWidth && segmentationWidth > 0) ? imageWidth / segmentationWidth : 1;
-  const scaleY = (imageHeight && segmentationHeight && segmentationHeight > 0) ? imageHeight / segmentationHeight : 1;
+  // Calculate scaling factors
+  let scaleX = 1;
+  let scaleY = 1;
   
-  console.log('🔧 Coordinate scaling:', {
-    segmentationSize: { width: segmentationWidth, height: segmentationHeight },
-    imageSize: { width: imageWidth, height: imageHeight },
-    scale: { x: scaleX, y: scaleY },
-    needsScaling: scaleX !== 1 || scaleY !== 1,
-    originalFirstPoint: segmentation.polygons?.[0]?.points?.[0],
-    rawSegmentationData: {
-      imageWidth: segmentation.imageWidth,
-      imageHeight: segmentation.imageHeight,
-      width: segmentation.width,
-      height: segmentation.height
+  // Only scale if we have valid segmentation dimensions and they differ from image dimensions
+  if (imageWidth && imageHeight && segmentationWidth > 0 && segmentationHeight > 0) {
+    if (segmentationWidth !== imageWidth || segmentationHeight !== imageHeight) {
+      scaleX = imageWidth / segmentationWidth;
+      scaleY = imageHeight / segmentationHeight;
     }
-  });
+  }
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔧 Coordinate scaling:', {
+      segmentationSize: { width: segmentationWidth, height: segmentationHeight },
+      imageSize: { width: imageWidth, height: imageHeight },
+      scale: { x: scaleX, y: scaleY },
+      needsScaling: scaleX !== 1 || scaleY !== 1,
+      originalFirstPoint: segmentation.polygons?.[0]?.points?.[0]
+    });
+  }
 
   // Convert array coordinates to {x, y} objects if necessary
   const convertedPolygons = segmentation.polygons.map(polygon => {
     if (!polygon.points || polygon.points.length === 0) {
-      console.log('⚠️ Polygon has no points:', polygon.id);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('⚠️ Polygon has no points:', polygon.id);
+      }
       return polygon;
     }
     
     // Check if points are arrays [x, y] and convert to {x, y}
     const firstPoint = polygon.points[0];
     if (Array.isArray(firstPoint)) {
-      console.log('🔧 Converting array coordinates to objects for polygon:', polygon.id);
-      // EXPERIMENTAL: Try different coordinate transformations
-      // Current polygon seems to be offset, let's try to center it
-      const centerX = imageWidth ? imageWidth / 2 : 500;
-      const centerY = imageHeight ? imageHeight / 2 : 500;
-      
-      // Calculate current polygon center
-      const avgX = polygon.points.reduce((sum: number, p: any) => sum + p[0], 0) / polygon.points.length;
-      const avgY = polygon.points.reduce((sum: number, p: any) => sum + p[1], 0) / polygon.points.length;
-      
-      console.log('🎯 Polygon center analysis:', {
-        polygonCenter: { x: avgX, y: avgY },
-        imageCenter: { x: centerX, y: centerY },
-        offset: { x: centerX - avgX, y: centerY - avgY }
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔧 Converting array coordinates to objects for polygon:', polygon.id);
+      }
       
       return {
         ...polygon,
@@ -183,17 +181,19 @@ export const convertSegmentationToPolygons = (segmentation: SegmentationResult |
   });
   
   // Debug the final converted coordinates
-  if (convertedPolygons.length > 0) {
-    const firstPolygon = convertedPolygons[0];
-    const samplePoints = firstPolygon.points.slice(0, 5); // First 5 points
-    console.log('📍 Sample converted coordinates:', {
-      polygonId: firstPolygon.id,
-      samplePoints,
-      minX: Math.min(...firstPolygon.points.map(p => p.x)),
-      maxX: Math.max(...firstPolygon.points.map(p => p.x)),
-      minY: Math.min(...firstPolygon.points.map(p => p.y)),
-      maxY: Math.max(...firstPolygon.points.map(p => p.y))
-    });
+  if (process.env.NODE_ENV === 'development') {
+    if (convertedPolygons.length > 0) {
+      const firstPolygon = convertedPolygons[0];
+      const samplePoints = firstPolygon.points.slice(0, 5); // First 5 points
+      console.log('📍 Sample converted coordinates:', {
+        polygonId: firstPolygon.id,
+        samplePoints,
+        minX: Math.min(...firstPolygon.points.map(p => p.x)),
+        maxX: Math.max(...firstPolygon.points.map(p => p.x)),
+        minY: Math.min(...firstPolygon.points.map(p => p.y)),
+        maxY: Math.max(...firstPolygon.points.map(p => p.y))
+      });
+    }
   }
   
   console.log('✅ Returning', convertedPolygons.length, 'converted polygons');
@@ -276,8 +276,18 @@ export const useLegacyAdapter = (legacyState: any) => {
   );
 
   const polygons = useMemo(() => 
-    convertSegmentationToPolygons(legacyState.segmentation),
-    [legacyState.segmentation?.polygons, legacyState.segmentation?.imageId]
+    convertSegmentationToPolygons(
+      legacyState.segmentation,
+      legacyState.segmentation?.imageWidth,
+      legacyState.segmentation?.imageHeight
+    ),
+    [
+      legacyState.segmentation?.polygons, 
+      legacyState.segmentation?.imageId,
+      legacyState.segmentation?.imageWidth,
+      legacyState.segmentation?.imageHeight,
+      convertSegmentationToPolygons
+    ]
   );
 
   return {

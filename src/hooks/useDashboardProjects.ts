@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { Project } from "@/components/ProjectsList";
+import { ProjectImage } from "@/types";
 import apiClient from "@/lib/api";
 import { toast } from "sonner";
 
@@ -7,6 +8,11 @@ export interface DashboardProjectsOptions {
   sortField: string;
   sortDirection: "asc" | "desc";
   userId: string | undefined;
+}
+
+// Interface for project data from API including optional images
+interface ApiProject extends Project {
+  images?: ProjectImage[];
 }
 
 export const useDashboardProjects = ({ sortField, sortDirection, userId }: DashboardProjectsOptions) => {
@@ -25,14 +31,14 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
       const projectsData = response.projects;
 
       // No need for additional API calls - backend now includes image data
-      const projectsWithDetails = (projectsData || []).map((project) => {
+      const projectsWithDetails = (projectsData || []).map((project: ApiProject) => {
         // Extract thumbnail from backend data (first image if available)
         let thumbnail = "/placeholder.svg";
         const imageCount = project.image_count || 0;
         
         // If project has associated image data from backend
-        if ((project as any).images && (project as any).images.length > 0) {
-          const firstImage = (project as any).images[0];
+        if (project.images && project.images.length > 0) {
+          const firstImage = project.images[0];
           thumbnail = firstImage.thumbnailPath || firstImage.originalPath || "/placeholder.svg";
           
           // Ensure URL is absolute for Docker environment
@@ -115,7 +121,7 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
     if (userId) {
       fetchProjects();
     }
-  }, [fetchProjects, userId, sortField, sortDirection]);
+  }, [fetchProjects, userId]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);

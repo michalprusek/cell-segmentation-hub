@@ -7,10 +7,7 @@ interface WebSocketContextType {
   isConnected: boolean;
 }
 
-const WebSocketContext = createContext<WebSocketContextType>({
-  manager: null,
-  isConnected: false
-});
+const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
 
 export const useWebSocket = () => {
   const context = useContext(WebSocketContext);
@@ -93,7 +90,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
       }
       isInitializedRef.current = false;
     };
-  }, [user?.id, token, user]);
+  }, [user?.id, token]);
 
   const value = {
     manager: managerRef.current,
