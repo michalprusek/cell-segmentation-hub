@@ -117,9 +117,20 @@ class ModelLoader:
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
             
-            # Load weights securely - only load weights, not arbitrary code
+            # Load weights with fallback strategies for compatibility
             logger.info(f"Loading {model_name} weights from: {weights_full_path}")
-            checkpoint = torch.load(weights_full_path, map_location=self.device, weights_only=True)
+            try:
+                # Try weights_only=True first (safer for PyTorch 2.x)
+                checkpoint = torch.load(weights_full_path, map_location=self.device, weights_only=True)
+            except Exception as e1:
+                logger.warning(f"Failed to load with weights_only=True: {e1}")
+                try:
+                    # Fallback to weights_only=False for older model files
+                    checkpoint = torch.load(weights_full_path, map_location=self.device, weights_only=False)
+                    logger.info(f"Successfully loaded {model_name} with weights_only=False")
+                except Exception as e2:
+                    logger.error(f"Failed to load checkpoint completely: {e2}")
+                    raise e2
             
             # Handle different checkpoint formats
             if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
