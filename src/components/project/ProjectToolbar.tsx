@@ -1,5 +1,5 @@
-import React from 'react';
-import { SlidersHorizontal } from 'lucide-react';
+import React, { useState } from 'react';
+import { SlidersHorizontal, Package } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { AdvancedExportDialog } from '@/pages/export/AdvancedExportDialog';
 
 interface ProjectToolbarProps {
   searchTerm?: string;
@@ -23,6 +24,9 @@ interface ProjectToolbarProps {
   showSearchBar?: boolean;
   showUploadButton?: boolean;
   showExportButton?: boolean;
+  projectName?: string;
+  images?: unknown[];
+  selectedImageIds?: string[];
 }
 
 const ProjectToolbar = ({
@@ -37,15 +41,17 @@ const ProjectToolbar = ({
   showSearchBar = true,
   showUploadButton = true,
   showExportButton = true,
+  projectName = 'Project',
+  images = [],
+  selectedImageIds,
 }: ProjectToolbarProps) => {
   const { t } = useLanguage();
   const navigate = useNavigate();
   const { id: projectId } = useParams<{ id: string }>();
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   const handleExport = () => {
-    if (projectId) {
-      navigate(`/project/${projectId}/export`);
-    }
+    setShowExportDialog(true);
   };
 
   return (
@@ -115,23 +121,8 @@ const ProjectToolbar = ({
             className="flex items-center h-9"
             onClick={handleExport}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="mr-1 h-4 w-4"
-            >
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" x2="12" y1="15" y2="3" />
-            </svg>
-            Export
+            <Package className="mr-1 h-4 w-4" />
+            Advanced Export
           </Button>
         )}
 
@@ -236,6 +227,18 @@ const ProjectToolbar = ({
           </Button>
         </div>
       </div>
+
+      {/* Export Dialog */}
+      {projectId && (
+        <AdvancedExportDialog
+          open={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          projectId={projectId}
+          projectName={projectName}
+          images={images}
+          selectedImageIds={selectedImageIds}
+        />
+      )}
     </div>
   );
 };

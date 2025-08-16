@@ -71,22 +71,46 @@ export function slicePolygon(
   const polygon1Points: Point[] = [];
   const polygon2Points: Point[] = [];
 
-  // Add first intersection point to both polygons
-  polygon1Points.push(intersections[0].point);
-  polygon2Points.push(intersections[0].point);
+  // Sort intersections by their position along the slice line to ensure consistent ordering
+  const sliceLineLength = Math.sqrt(
+    Math.pow(sliceEnd.x - sliceStart.x, 2) +
+      Math.pow(sliceEnd.y - sliceStart.y, 2)
+  );
 
-  // Traverse from first intersection to second, adding points to polygon1
-  let currentIndex = intersections[0].edgeIndex + 1;
+  // Calculate position along slice line for each intersection
+  const intersectionsWithPosition = intersections.map(intersection => {
+    const distFromStart = Math.sqrt(
+      Math.pow(intersection.point.x - sliceStart.x, 2) +
+        Math.pow(intersection.point.y - sliceStart.y, 2)
+    );
+    return {
+      ...intersection,
+      positionOnSlice: distFromStart / sliceLineLength,
+    };
+  });
+
+  // Sort by position along the slice line
+  intersectionsWithPosition.sort(
+    (a, b) => a.positionOnSlice - b.positionOnSlice
+  );
+
+  const firstIntersection = intersectionsWithPosition[0];
+  const secondIntersection = intersectionsWithPosition[1];
+
+  // First polygon: from first intersection to second intersection (clockwise)
+  polygon1Points.push(firstIntersection.point);
+
+  let currentIndex = (firstIntersection.edgeIndex + 1) % points.length;
   let safetyCounter = 0;
   const maxIterations = points.length;
 
+  // Add all vertices between first and second intersection
   while (
-    currentIndex % points.length !==
-      (intersections[1].edgeIndex + 1) % points.length &&
+    currentIndex !== (secondIntersection.edgeIndex + 1) % points.length &&
     safetyCounter < maxIterations
   ) {
-    polygon1Points.push(points[currentIndex % points.length]);
-    currentIndex++;
+    polygon1Points.push(points[currentIndex]);
+    currentIndex = (currentIndex + 1) % points.length;
     safetyCounter++;
   }
 
@@ -97,20 +121,21 @@ export function slicePolygon(
     return null;
   }
 
-  // Add second intersection point to polygon1
-  polygon1Points.push(intersections[1].point);
+  polygon1Points.push(secondIntersection.point);
 
-  // Traverse from second intersection back to first, adding points to polygon2
-  currentIndex = intersections[1].edgeIndex + 1;
+  // Second polygon: from second intersection to first intersection (clockwise)
+  polygon2Points.push(secondIntersection.point);
+
+  currentIndex = (secondIntersection.edgeIndex + 1) % points.length;
   safetyCounter = 0;
 
+  // Add all vertices between second and first intersection
   while (
-    currentIndex % points.length !==
-      (intersections[0].edgeIndex + 1) % points.length &&
+    currentIndex !== (firstIntersection.edgeIndex + 1) % points.length &&
     safetyCounter < maxIterations
   ) {
-    polygon2Points.push(points[currentIndex % points.length]);
-    currentIndex++;
+    polygon2Points.push(points[currentIndex]);
+    currentIndex = (currentIndex + 1) % points.length;
     safetyCounter++;
   }
 
@@ -121,8 +146,7 @@ export function slicePolygon(
     return null;
   }
 
-  // Add second intersection point to polygon2 (in reverse order)
-  polygon2Points.unshift(intersections[1].point);
+  polygon2Points.push(firstIntersection.point);
 
   // Ensure both polygons have at least 3 points
   if (polygon1Points.length < 3 || polygon2Points.length < 3) {

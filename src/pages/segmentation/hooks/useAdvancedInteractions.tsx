@@ -31,6 +31,7 @@ interface UseAdvancedInteractionsProps {
   selectedPolygonId: string | null;
   tempPoints: Point[];
   cursorPosition: Point | null;
+  isShiftPressed?: () => boolean;
 
   // State setters
   setSelectedPolygonId: (id: string | null) => void;
@@ -40,10 +41,20 @@ interface UseAdvancedInteractionsProps {
   setHoveredVertex: (
     vertex: { polygonId: string; vertexIndex: number } | null
   ) => void;
+  setVertexDragState?: (state: {
+    isDragging: boolean;
+    polygonId: string | null;
+    vertexIndex: number | null;
+    dragOffset?: { x: number; y: number };
+    originalPosition?: { x: number; y: number };
+  }) => void;
 
   // Data operations
   updatePolygons: (polygons: Polygon[]) => void;
   getPolygons: () => Polygon[];
+
+  // Transform operations
+  handlePan?: (deltaX: number, deltaY: number) => void;
 }
 
 export const useAdvancedInteractions = ({
@@ -54,16 +65,18 @@ export const useAdvancedInteractions = ({
   selectedPolygonId,
   tempPoints,
   cursorPosition,
+  isShiftPressed: isShiftPressedCallback,
   setSelectedPolygonId,
   setEditMode,
   setInteractionState,
   setTempPoints,
   setHoveredVertex,
+  setVertexDragState,
   updatePolygons,
   getPolygons,
+  handlePan,
 }: UseAdvancedInteractionsProps) => {
-  // Refs for tracking modifier keys
-  const isShiftPressed = useRef(false);
+  // Refs for tracking state
   const lastAutoAddedPoint = useRef<Point | null>(null);
 
   /**
@@ -91,6 +104,82 @@ export const useAdvancedInteractions = ({
         );
         const imagePoint = { x: coordinates.imageX, y: coordinates.imageY };
 
+        // Check if Alt key is pressed for forced panning in any mode
+        if (e.altKey) {
+          // Start panning regardless of current mode
+          setInteractionState({
+            ...interactionState,
+            isPanning: true,
+            panStart: { x: e.clientX, y: e.clientY },
+          });
+          return;
+        }
+
+        // Check if we clicked on a vertex element directly
+        const target = e.target as SVGElement;
+        if (target && target.dataset) {
+          const polygonId = target.dataset.polygonId;
+          const vertexIndex = target.dataset.vertexIndex;
+
+          if (
+            polygonId &&
+            vertexIndex !== undefined &&
+            editMode === EditMode.EditVertices
+          ) {
+            // We clicked directly on a vertex
+            const index = parseInt(vertexIndex, 10);
+            const polygons = getPolygons();
+            const polygon = polygons.find(p => p.id === polygonId);
+            if (polygon && polygon.points[index]) {
+              const originalPosition = polygon.points[index];
+
+              // Check if Shift is pressed - start add points mode
+              if (e.shiftKey) {
+                // Only set selected polygon if it's not already selected
+                if (selectedPolygonId !== polygonId) {
+                  setSelectedPolygonId(polygonId);
+                }
+                setEditMode(EditMode.AddPoints);
+                setInteractionState({
+                  ...interactionState,
+                  isAddingPoints: true,
+                  addPointStartVertex: {
+                    polygonId,
+                    vertexIndex: index,
+                  },
+                });
+                setTempPoints([]);
+                return;
+              }
+
+              // Start dragging this vertex
+              setInteractionState({
+                ...interactionState,
+                isDraggingVertex: true,
+                draggedVertexInfo: {
+                  polygonId,
+                  vertexIndex: index,
+                },
+                originalVertexPosition: {
+                  ...originalPosition,
+                },
+              });
+
+              // Initialize vertex drag state with original position
+              if (setVertexDragState) {
+                setVertexDragState({
+                  isDragging: true,
+                  polygonId,
+                  vertexIndex: index,
+                  originalPosition: { ...originalPosition },
+                  dragOffset: { x: 0, y: 0 },
+                });
+              }
+              return;
+            }
+          }
+        }
+
         switch (editMode) {
           case EditMode.View:
             handleViewModeClick(imagePoint, e);
@@ -113,7 +202,25 @@ export const useAdvancedInteractions = ({
         }
       }
     },
-    [editMode, interactionState, transform, selectedPolygonId, tempPoints]
+    [
+      editMode,
+      interactionState,
+      transform,
+      selectedPolygonId,
+      getPolygons,
+      setInteractionState,
+      setVertexDragState,
+      setEditMode,
+      setTempPoints,
+      canvasRef,
+      handleAddPointsClick,
+      handleCreatePolygonClick,
+      handleDeletePolygonClick,
+      handleEditVerticesClick,
+      handleSliceClick,
+      handleViewModeClick,
+      setSelectedPolygonId,
+    ]
   );
 
   /**
@@ -128,19 +235,6 @@ export const useAdvancedInteractions = ({
         isPointInPolygon(imagePoint, polygon.points)
       );
 
-      // Check if Alt key is pressed for forced panning
-      const isAltPressed = e.altKey;
-
-      if (isAltPressed) {
-        // Start panning regardless of polygon selection
-        setInteractionState({
-          ...interactionState,
-          isPanning: true,
-          panStart: { x: e.clientX, y: e.clientY },
-        });
-        return;
-      }
-
       if (containingPolygons.length > 0) {
         // If multiple polygons, prioritize the smallest one (likely a hole)
         if (containingPolygons.length > 1) {
@@ -153,9 +247,10 @@ export const useAdvancedInteractions = ({
 
         setSelectedPolygonId(containingPolygons[0].id);
         setEditMode(EditMode.EditVertices);
+        return; // Don't start panning if we selected a polygon
       }
 
-      // Start panning
+      // No polygon clicked - start panning for free navigation
       setInteractionState({
         ...interactionState,
         isPanning: true,
@@ -231,6 +326,8 @@ export const useAdvancedInteractions = ({
 
       if (closestVertex) {
         // Start dragging this vertex
+        const originalPosition = selectedPolygon.points[closestVertex.index];
+
         setInteractionState({
           ...interactionState,
           isDraggingVertex: true,
@@ -239,9 +336,20 @@ export const useAdvancedInteractions = ({
             vertexIndex: closestVertex.index,
           },
           originalVertexPosition: {
-            ...selectedPolygon.points[closestVertex.index],
+            ...originalPosition,
           },
         });
+
+        // Initialize vertex drag state with original position
+        if (setVertexDragState) {
+          setVertexDragState({
+            isDragging: true,
+            polygonId: selectedPolygonId,
+            vertexIndex: closestVertex.index,
+            originalPosition: { ...originalPosition },
+            dragOffset: { x: 0, y: 0 },
+          });
+        }
       }
     },
     [
@@ -250,6 +358,7 @@ export const useAdvancedInteractions = ({
       transform.zoom,
       getPolygons,
       setInteractionState,
+      setVertexDragState,
     ]
   );
 
@@ -264,22 +373,33 @@ export const useAdvancedInteractions = ({
       const selectedPolygon = polygons.find(p => p.id === selectedPolygonId);
       if (!selectedPolygon) return;
 
-      if (interactionState.isAddingPoints) {
-        // We're in the middle of adding points
-        if (interactionState.addPointStartVertex) {
-          // Check if we're clicking on another vertex to complete the sequence
-          const hitRadius =
-            EDITING_CONSTANTS.VERTEX_HIT_RADIUS / transform.zoom;
-          const closestVertex = findClosestVertex(
-            imagePoint,
-            selectedPolygon.points,
-            hitRadius
-          );
+      const hitRadius = EDITING_CONSTANTS.VERTEX_HIT_RADIUS / transform.zoom;
+      const closestVertex = findClosestVertex(
+        imagePoint,
+        selectedPolygon.points,
+        hitRadius
+      );
 
+      if (!interactionState.isAddingPoints) {
+        // Start adding points - must click on a vertex
+        if (closestVertex) {
+          setInteractionState({
+            ...interactionState,
+            isAddingPoints: true,
+            addPointStartVertex: {
+              polygonId: selectedPolygonId,
+              vertexIndex: closestVertex.index,
+            },
+          });
+          setTempPoints([]);
+        }
+      } else {
+        // We're in adding points mode
+        if (closestVertex && interactionState.addPointStartVertex) {
+          // Check if clicking on different vertex to complete the sequence
           if (
-            closestVertex &&
             closestVertex.index !==
-              interactionState.addPointStartVertex.vertexIndex
+            interactionState.addPointStartVertex.vertexIndex
           ) {
             // Complete the sequence - implement CVAT-like point insertion
             const newPoints = insertPointsBetweenVertices(
@@ -299,7 +419,7 @@ export const useAdvancedInteractions = ({
               updatePolygons(updatedPolygons);
             }
 
-            // Reset state
+            // Reset state and switch back to edit vertices mode when done adding points
             setTempPoints([]);
             setInteractionState({
               ...interactionState,
@@ -307,33 +427,13 @@ export const useAdvancedInteractions = ({
               addPointStartVertex: null,
               addPointEndVertex: null,
             });
+            // Switch back to edit vertices mode when add points is completed
             setEditMode(EditMode.EditVertices);
             return;
           }
-
-          // Add point to sequence
+        } else {
+          // Add intermediate point to sequence (not on a vertex)
           setTempPoints([...tempPoints, imagePoint]);
-        }
-      } else {
-        // Start adding points - check if we clicked on a vertex
-        const hitRadius = EDITING_CONSTANTS.VERTEX_HIT_RADIUS / transform.zoom;
-        const closestVertex = findClosestVertex(
-          imagePoint,
-          selectedPolygon.points,
-          hitRadius
-        );
-
-        if (closestVertex) {
-          // Start adding points from this vertex
-          setInteractionState({
-            ...interactionState,
-            isAddingPoints: true,
-            addPointStartVertex: {
-              polygonId: selectedPolygonId,
-              vertexIndex: closestVertex.index,
-            },
-          });
-          setTempPoints([]);
         }
       }
     },
@@ -353,12 +453,66 @@ export const useAdvancedInteractions = ({
   /**
    * Handle Slice mode clicks
    */
-  const handleSliceClick = useCallback((imagePoint: Point) => {
-    // Implementation will be added in Phase 2.2
-    throw new Error(
-      'NotImplementedError: Slice mode functionality is not yet implemented'
-    );
-  }, []);
+  const handleSliceClick = useCallback(
+    (imagePoint: Point) => {
+      const polygons = getPolygons();
+
+      // Step 1: If no polygon is selected, try to find one at the click point
+      if (!selectedPolygonId) {
+        const containingPolygons = polygons.filter(polygon =>
+          isPointInPolygon(imagePoint, polygon.points)
+        );
+
+        if (containingPolygons.length > 0) {
+          // If multiple polygons, prioritize the smallest one (likely a hole)
+          if (containingPolygons.length > 1) {
+            containingPolygons.sort((a, b) => {
+              const areaA = calculatePolygonArea(a.points);
+              const areaB = calculatePolygonArea(b.points);
+              return areaA - areaB;
+            });
+          }
+
+          // Select the polygon but don't start slicing yet - wait for next click
+          const polygonToSlice = containingPolygons[0];
+          setSelectedPolygonId(polygonToSlice.id);
+          return;
+        } else {
+          // No polygon found at click point
+          return;
+        }
+      }
+
+      // We have a selected polygon, continue with slice logic
+      const selectedPolygon = polygons.find(p => p.id === selectedPolygonId);
+      if (!selectedPolygon) return;
+
+      if (tempPoints.length === 0) {
+        // Step 2: First slice point - set slice start
+        setTempPoints([imagePoint]);
+        setInteractionState({
+          ...interactionState,
+          sliceStartPoint: imagePoint,
+        });
+      } else if (tempPoints.length === 1) {
+        // Step 3: Second slice point - set slice end and attempt slice
+        const newTempPoints = [...tempPoints, imagePoint];
+        setTempPoints(newTempPoints);
+
+        // The slice will be handled by the slicing hook
+        // which is connected to the parent component
+      }
+    },
+    [
+      selectedPolygonId,
+      tempPoints,
+      interactionState,
+      getPolygons,
+      setTempPoints,
+      setInteractionState,
+      setSelectedPolygonId,
+    ]
+  );
 
   /**
    * Handle Delete Polygon mode clicks
@@ -407,45 +561,62 @@ export const useAdvancedInteractions = ({
       );
       const imagePoint = { x: coordinates.imageX, y: coordinates.imageY };
 
-      // Handle panning
-      if (interactionState.isPanning && interactionState.panStart) {
+      // Handle panning - use smooth incremental movement
+      if (
+        interactionState.isPanning &&
+        interactionState.panStart &&
+        handlePan
+      ) {
         const dx = e.clientX - interactionState.panStart.x;
         const dy = e.clientY - interactionState.panStart.y;
 
-        // This would be handled by the parent component
-        // We'll emit an event or call a callback
+        // Only apply movement if there's actual delta to prevent unnecessary updates
+        if (Math.abs(dx) > 0 || Math.abs(dy) > 0) {
+          // Call the pan handler from parent component with the delta
+          handlePan(dx, dy);
 
-        setInteractionState({
-          ...interactionState,
-          panStart: { x: e.clientX, y: e.clientY },
-        });
+          // Update pan start position for next delta calculation
+          setInteractionState({
+            ...interactionState,
+            panStart: { x: e.clientX, y: e.clientY },
+          });
+        }
         return;
       }
 
-      // Handle vertex dragging
+      // Handle vertex dragging - calculate offset instead of updating points
       if (
         interactionState.isDraggingVertex &&
         interactionState.draggedVertexInfo
       ) {
         const { polygonId, vertexIndex } = interactionState.draggedVertexInfo;
-        const polygons = getPolygons();
 
-        const updatedPolygons = polygons.map(polygon => {
-          if (polygon.id === polygonId) {
-            const updatedPoints = [...polygon.points];
-            updatedPoints[vertexIndex] = imagePoint;
-            return { ...polygon, points: updatedPoints };
-          }
-          return polygon;
-        });
+        // Calculate drag offset from original position
+        if (interactionState.originalVertexPosition && setVertexDragState) {
+          const offsetX =
+            imagePoint.x - interactionState.originalVertexPosition.x;
+          const offsetY =
+            imagePoint.y - interactionState.originalVertexPosition.y;
 
-        updatePolygons(updatedPolygons);
+          // Update only the drag offset, not the actual points
+          setVertexDragState({
+            isDragging: true,
+            polygonId,
+            vertexIndex,
+            originalPosition: interactionState.originalVertexPosition,
+            dragOffset: { x: offsetX, y: offsetY },
+          });
+        }
         return;
       }
 
       // Handle equidistant point placement with Shift key
+      const isShiftCurrentlyPressed = isShiftPressedCallback
+        ? isShiftPressedCallback()
+        : false;
+
       if (
-        isShiftPressed.current &&
+        isShiftCurrentlyPressed &&
         (editMode === EditMode.CreatePolygon ||
           (editMode === EditMode.AddPoints && interactionState.isAddingPoints))
       ) {
@@ -474,7 +645,11 @@ export const useAdvancedInteractions = ({
           referencePoint = tempPoints[tempPoints.length - 1];
         }
 
-        if (referencePoint && lastAutoAddedPoint.current) {
+        if (referencePoint) {
+          if (!lastAutoAddedPoint.current) {
+            lastAutoAddedPoint.current = referencePoint;
+          }
+
           const dx = imagePoint.x - lastAutoAddedPoint.current.x;
           const dy = imagePoint.y - lastAutoAddedPoint.current.y;
           const distance = Math.sqrt(dx * dx + dy * dy);
@@ -487,9 +662,10 @@ export const useAdvancedInteractions = ({
             lastAutoAddedPoint.current = imagePoint;
           }
         }
-
-        if (!lastAutoAddedPoint.current && referencePoint) {
-          lastAutoAddedPoint.current = referencePoint;
+      } else {
+        // Reset when shift is released
+        if (!isShiftCurrentlyPressed) {
+          lastAutoAddedPoint.current = null;
         }
       }
 
@@ -529,10 +705,13 @@ export const useAdvancedInteractions = ({
       selectedPolygonId,
       tempPoints,
       getPolygons,
-      updatePolygons,
       setInteractionState,
       setTempPoints,
       setHoveredVertex,
+      setVertexDragState,
+      canvasRef,
+      handlePan,
+      isShiftPressedCallback,
     ]
   );
 
@@ -550,8 +729,47 @@ export const useAdvancedInteractions = ({
         });
       }
 
-      // End vertex dragging
-      if (interactionState.isDraggingVertex) {
+      // End vertex dragging - apply final position
+      if (
+        interactionState.isDraggingVertex &&
+        interactionState.draggedVertexInfo
+      ) {
+        const { polygonId, vertexIndex } = interactionState.draggedVertexInfo;
+
+        // Apply the final position if we have a drag offset
+        if (setVertexDragState) {
+          // Get the current drag state to apply the final position
+          const coordinates = getCanvasCoordinates(
+            e.clientX,
+            e.clientY,
+            transform,
+            canvasRef
+          );
+          const finalPoint = { x: coordinates.imageX, y: coordinates.imageY };
+
+          // Update the actual polygon points with the final position
+          const polygons = getPolygons();
+          const updatedPolygons = polygons.map(polygon => {
+            if (polygon.id === polygonId) {
+              const updatedPoints = [...polygon.points];
+              updatedPoints[vertexIndex] = finalPoint;
+              return { ...polygon, points: updatedPoints };
+            }
+            return polygon;
+          });
+
+          updatePolygons(updatedPolygons);
+
+          // Clear the drag state
+          setVertexDragState({
+            isDragging: false,
+            polygonId: null,
+            vertexIndex: null,
+            dragOffset: undefined,
+            originalPosition: undefined,
+          });
+        }
+
         setInteractionState({
           ...interactionState,
           isDraggingVertex: false,
@@ -560,7 +778,15 @@ export const useAdvancedInteractions = ({
         });
       }
     },
-    [interactionState, setInteractionState]
+    [
+      interactionState,
+      setInteractionState,
+      setVertexDragState,
+      getPolygons,
+      updatePolygons,
+      transform,
+      canvasRef,
+    ]
   );
 
   return {

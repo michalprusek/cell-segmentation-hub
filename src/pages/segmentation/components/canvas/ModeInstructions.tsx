@@ -45,24 +45,24 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         if (!selectedPolygonId) {
           return {
             title: 'Slice Mode',
-            color: '#ffcc00',
+            color: '#ef4444', // red-500 to match border
             instructions: ['1. Click on a polygon to select it for slicing'],
           };
         } else if (tempPoints.length === 0) {
           return {
             title: 'Slice Mode',
-            color: '#ffcc00',
+            color: '#ef4444', // red-500 to match border
             instructions: [
-              '2. Click to set the start point of the slice',
+              '2. Click to place the first slice point',
               'Press ESC to cancel',
             ],
           };
         } else {
           return {
             title: 'Slice Mode',
-            color: '#ffcc00',
+            color: '#ef4444', // red-500 to match border
             instructions: [
-              '3. Click to set the end point and complete the slice',
+              '3. Click to place the second slice point and perform slice',
               'Press ESC to cancel',
             ],
           };
@@ -72,7 +72,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         if (tempPoints.length === 0) {
           return {
             title: 'Create Polygon Mode',
-            color: '#4ade80',
+            color: '#3b82f6', // blue-500 to match border
             instructions: [
               '1. Click to start creating a polygon',
               'Hold SHIFT to automatically add points',
@@ -81,7 +81,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         } else if (tempPoints.length < 3) {
           return {
             title: 'Create Polygon Mode',
-            color: '#4ade80',
+            color: '#3b82f6', // blue-500 to match border
             instructions: [
               '2. Continue clicking to add more points (at least 3 needed)',
               'Hold SHIFT to automatically add points • Press ESC to cancel',
@@ -90,7 +90,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         } else {
           return {
             title: 'Create Polygon Mode',
-            color: '#4ade80',
+            color: '#3b82f6', // blue-500 to match border
             instructions: [
               '3. Continue adding points or click near the first point to close the polygon',
               'Hold SHIFT to automatically add points • Press ESC to cancel',
@@ -102,7 +102,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         if (!interactionState.isAddingPoints) {
           return {
             title: 'Add Points Mode',
-            color: '#60a5fa',
+            color: '#10b981', // emerald-500 to match border
             instructions: [
               'Click on any vertex to start adding points',
               'Press ESC to cancel',
@@ -111,7 +111,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         } else {
           return {
             title: 'Add Points Mode',
-            color: '#60a5fa',
+            color: '#10b981', // emerald-500 to match border
             instructions: [
               'Click to add points, then click on another vertex to complete',
               'Hold SHIFT to automatically add points • Press ESC to cancel',
@@ -123,7 +123,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         if (selectedPolygonId) {
           return {
             title: 'Edit Vertices Mode',
-            color: '#f97316',
+            color: '#a855f7', // purple-500 to match border
             instructions: [
               'Click and drag vertices to move them',
               'Hold SHIFT and click a vertex to add points • Double-click a vertex to delete it',
@@ -132,7 +132,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         } else {
           return {
             title: 'Edit Vertices Mode',
-            color: '#f97316',
+            color: '#a855f7', // purple-500 to match border
             instructions: ['Click on a polygon to select it for editing'],
           };
         }
@@ -140,7 +140,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
       case EditMode.DeletePolygon:
         return {
           title: 'Delete Polygon Mode',
-          color: '#ef4444',
+          color: '#f97316', // orange-500 to match border
           instructions: ['Click on a polygon to delete it'],
         };
 
@@ -148,7 +148,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
       default:
         return {
           title: 'View Mode',
-          color: '#a3a3a3',
+          color: '#9ca3af', // gray-400 to match border
           instructions: [
             'Click on a polygon to select it',
             'Drag to pan • Scroll to zoom',
@@ -235,7 +235,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
               padding: '2px 6px',
               background: 'rgba(255,255,255,0.2)',
               borderRadius: '3px',
-              color: '#4ade80',
+              color: '#3b82f6', // blue-500 to match border
             }}
           >
             ⚡ SHIFT: Auto-adding points

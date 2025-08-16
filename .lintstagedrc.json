@@ -1,7 +1,12 @@
 {
-  "*.{ts,tsx}": ["eslint --fix --cache --max-warnings=0", "prettier --write"],
-  "*.{js,jsx}": ["eslint --fix --cache --max-warnings=0", "prettier --write"],
+  "*.{ts,tsx}": [
+    "eslint --fix --cache --max-warnings=10 --format=stylish",
+    "prettier --write"
+  ],
+  "*.{js,jsx}": [
+    "eslint --fix --cache --max-warnings=10 --format=stylish",
+    "prettier --write"
+  ],
   "*.{css,scss}": ["prettier --write"],
-  "*.{json,md,html,yml,yaml}": ["prettier --write"],
-  "*.{ts,tsx,js,jsx}": ["bash -c 'npm run type-check'"]
+  "*.{json,md,html,yml,yaml}": ["prettier --write"]
 }

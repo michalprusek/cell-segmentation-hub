@@ -5,7 +5,7 @@ import { useProjectData } from '@/hooks/useProjectData';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
 import { EditMode } from './types';
 import { Polygon } from '@/lib/segmentation';
-import apiClient from '@/lib/api';
+import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 
@@ -20,7 +20,7 @@ import CanvasContainer from './components/canvas/CanvasContainer';
 import CanvasContent from './components/canvas/CanvasContent';
 import CanvasImage from './components/canvas/CanvasImage';
 import CanvasPolygon from './components/canvas/CanvasPolygon';
-import CanvasVertex from './components/canvas/CanvasVertex';
+import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
 import CanvasTemporaryGeometryLayer from './components/canvas/CanvasTemporaryGeometryLayer';
 
@@ -53,8 +53,10 @@ const SegmentationEditor = () => {
   const selectedImage = projectImages.find(img => img.id === imageId);
   const project = { name: projectTitle || 'Unknown Project' };
 
-  // State for segmentation polygons
-  const [segmentationPolygons, setSegmentationPolygons] = useState<Polygon[] | null>(null);
+  // State for segmentation polygons from API
+  const [segmentationPolygons, setSegmentationPolygons] = useState<
+    SegmentationPolygon[] | null
+  >(null);
   const [imageDimensions, setImageDimensions] = useState<{
     width: number;
     height: number;
@@ -111,12 +113,82 @@ const SegmentationEditor = () => {
 
   // Get initial polygons from segmentation data
   const initialPolygons = useMemo(() => {
-    const polygons = segmentationPolygons || [];
-    logger.debug('🔄 Using segmentation polygons:', {
-      hasSegmentationData: !!segmentationPolygons,
-      polygonCount: polygons.length,
+    // Return empty array if no segmentation data exists
+    if (!segmentationPolygons || segmentationPolygons.length === 0) {
+      return [];
+    }
+
+    // Transform SegmentationPolygon[] to Polygon[] and filter out invalid polygons
+    const polygons: Polygon[] = segmentationPolygons
+      .filter(segPoly => segPoly.points && segPoly.points.length >= 3)
+      .map(segPoly => {
+        const validPoints = segPoly.points
+          .map(point => {
+            // Convert from array format [x, y] to object format {x, y}
+            if (Array.isArray(point)) {
+              return { x: point[0], y: point[1] };
+            }
+            // Validate object points have numeric x and y
+            if (typeof point === 'object' && point !== null) {
+              if (typeof point.x === 'number' && typeof point.y === 'number') {
+                return point;
+              }
+              // Skip invalid object points
+              console.warn(
+                'Skipping invalid point with non-numeric coordinates:',
+                point
+              );
+              return null;
+            }
+            // Skip other invalid formats
+            console.warn('Skipping invalid point format:', point);
+            return null;
+          })
+          .filter((point): point is { x: number; y: number } => point !== null);
+
+        // Only include polygon if it still has at least 3 valid points
+        if (validPoints.length >= 3) {
+          return {
+            id: segPoly.id,
+            points: validPoints,
+            type: segPoly.type,
+            class: segPoly.class,
+            confidence: segPoly.confidence,
+            area: segPoly.area,
+          };
+        }
+
+        console.warn(
+          'Dropping polygon due to insufficient valid points:',
+          segPoly.id
+        );
+        return null;
+      })
+      .filter((polygon): polygon is Polygon => polygon !== null);
+
+    const invalidCount = segmentationPolygons.length - polygons.length;
+    if (invalidCount > 0) {
+      logger.warn(
+        `⚠️ Filtered out ${invalidCount} invalid polygons (missing or insufficient points)`
+      );
+    }
+
+    logger.debug('🔄 Transformed segmentation polygons for editor:', {
+      hasSegmentationData: true,
+      inputCount: segmentationPolygons.length,
+      validCount: polygons.length,
+      filteredOut: invalidCount,
       imageDimensions,
+      firstPolygon: polygons[0]
+        ? {
+            id: polygons[0].id,
+            type: polygons[0].type,
+            pointsCount: polygons[0].points?.length || 0,
+            firstPoints: polygons[0].points?.slice(0, 3),
+          }
+        : null,
     });
+
     return polygons;
   }, [segmentationPolygons, imageDimensions]);
 
@@ -131,16 +203,21 @@ const SegmentationEditor = () => {
       if (!projectId || !imageId) return;
 
       try {
-        const polygonData = polygons.map(polygon => ({
+        // Transform Polygon[] to SegmentationPolygon[] for API
+        const polygonData: SegmentationPolygon[] = polygons.map(polygon => ({
           id: polygon.id,
           points: polygon.points,
           type: polygon.type || 'external',
           class: polygon.class || 'spheroid',
+          parentIds: [], // Add empty array for API compatibility
           confidence: polygon.confidence,
           area: polygon.area,
         }));
 
-        const updatedPolygons = await apiClient.updateSegmentationResults(imageId, polygonData);
+        const updatedPolygons = await apiClient.updateSegmentationResults(
+          imageId,
+          polygonData
+        );
         setSegmentationPolygons(updatedPolygons);
         toast.success('Segmentation saved successfully');
       } catch (error) {
@@ -148,11 +225,27 @@ const SegmentationEditor = () => {
         toast.error('Failed to save segmentation data');
       }
     },
-    onPolygonsChange: polygons => {
-      // Update local polygon state when polygons change
-      setSegmentationPolygons(polygons);
-    },
+    // Removed onPolygonsChange to prevent circular updates
   });
+
+  // Wrapper for handling polygon selection that automatically switches to View mode
+  // when deselecting a polygon in Edit Vertices mode
+  const handlePolygonSelection = useCallback(
+    (polygonId: string | null) => {
+      // Don't allow polygon selection changes when in Slice mode
+      // The slice mode handles its own polygon selection logic
+      if (editor.editMode === EditMode.Slice) {
+        return;
+      }
+
+      // If deselecting (setting to null) and we're in Edit Vertices mode, switch to View mode
+      if (polygonId === null && editor.editMode === EditMode.EditVertices) {
+        editor.setEditMode(EditMode.View);
+      }
+      editor.setSelectedPolygonId(polygonId);
+    },
+    [editor]
+  );
 
   // Load segmentation data
   useEffect(() => {
@@ -167,6 +260,18 @@ const SegmentationEditor = () => {
           setSegmentationPolygons(null);
           return;
         }
+        logger.debug('📥 Loaded segmentation polygons from API:', {
+          imageId,
+          polygonCount: polygons.length,
+          firstPolygon: polygons[0]
+            ? {
+                id: polygons[0].id,
+                type: polygons[0].type,
+                pointsCount: polygons[0].points?.length || 0,
+                samplePoints: polygons[0].points?.slice(0, 3),
+              }
+            : null,
+        });
         setSegmentationPolygons(polygons);
       } catch (error) {
         logger.error('Failed to load segmentation:', error);
@@ -199,10 +304,13 @@ const SegmentationEditor = () => {
       visiblePolygons: filteredPolygons.length,
       hiddenCount: hiddenPolygonIds.size,
       imageDimensions,
+      transform: editor.transform,
+      svgViewBox: `0 0 ${imageDimensions?.width || canvasWidth} ${imageDimensions?.height || canvasHeight}`,
       firstPolygon: filteredPolygons[0]
         ? {
             id: filteredPolygons[0].id,
             pointsCount: filteredPolygons[0].points?.length || 0,
+            samplePoints: filteredPolygons[0].points?.slice(0, 5),
             bounds:
               filteredPolygons[0].points?.length > 0
                 ? {
@@ -329,6 +437,9 @@ const SegmentationEditor = () => {
           selectedPolygonId={editor.selectedPolygonId}
           setEditMode={editor.setEditMode}
           disabled={projectLoading}
+          onZoomIn={editor.handleZoomIn}
+          onZoomOut={editor.handleZoomOut}
+          onResetView={editor.handleResetView}
         />
 
         {/* Center: Canvas and Top Toolbar */}
@@ -341,9 +452,6 @@ const SegmentationEditor = () => {
             handleUndo={editor.handleUndo}
             handleRedo={editor.handleRedo}
             handleSave={editor.handleSave}
-            handleZoomIn={editor.handleZoomIn}
-            handleZoomOut={editor.handleZoomOut}
-            handleResetView={editor.handleResetView}
             disabled={projectLoading}
             isSaving={editor.isSaving}
           />
@@ -380,71 +488,66 @@ const SegmentationEditor = () => {
                     width={imageDimensions?.width || canvasWidth}
                     height={imageDimensions?.height || canvasHeight}
                     viewBox={`0 0 ${imageDimensions?.width || canvasWidth} ${imageDimensions?.height || canvasHeight}`}
-                    className="absolute top-0 left-0 pointer-events-none"
+                    className="absolute top-0 left-0"
                     style={{
+                      width: imageDimensions?.width || canvasWidth,
+                      height: imageDimensions?.height || canvasHeight,
                       maxWidth: 'none',
                       shapeRendering: 'geometricPrecision',
+                      pointerEvents: 'auto',
+                      zIndex: 10,
+                    }}
+                    onClick={e => {
+                      // Unselect polygon when clicking on empty canvas area
+                      if (e.target === e.currentTarget) {
+                        handlePolygonSelection(null);
+                      }
                     }}
                     data-transform={JSON.stringify(editor.transform)}
                     data-image-dims={JSON.stringify(imageDimensions)}
                     data-polygon-count={editor.polygons.length}
                   >
-                    {/* Render all polygons */}
-                    {editor.polygons
-                      .filter(polygon => !hiddenPolygonIds.has(polygon.id))
-                      .map(polygon => (
-                        <CanvasPolygon
-                          key={polygon.id}
-                          polygon={polygon}
-                          isSelected={polygon.id === editor.selectedPolygonId}
-                          hoveredVertex={
-                            editor.hoveredVertex || {
-                              polygonId: null,
-                              vertexIndex: null,
-                            }
-                          }
-                          vertexDragState={{
-                            isDragging: false,
-                            polygonId: null,
-                            vertexIndex: null,
-                          }}
-                          zoom={editor.transform.zoom}
-                          onSelectPolygon={() =>
-                            editor.setSelectedPolygonId(polygon.id)
-                          }
-                        />
-                      ))}
+                    {/* SVG Filters for glow effects */}
+                    <CanvasSvgFilters />
 
-                    {/* Render vertices for selected polygon */}
-                    {editor.selectedPolygon && (
-                      <g>
-                        {(() => {
-                          const selectedPolygon = editor.selectedPolygon;
-                          return selectedPolygon.points.map((point, index) => (
-                            <CanvasVertex
-                              key={`vertex-${index}`}
-                              point={point}
-                              index={index}
-                              polygonId={selectedPolygon.id}
-                              isHovered={
-                                editor.hoveredVertex?.polygonId ===
-                                  selectedPolygon.id &&
-                                editor.hoveredVertex?.vertexIndex === index
+                    {/* Render all polygons */}
+                    {(() => {
+                      const visiblePolygons = editor.polygons
+                        .filter(polygon => !hiddenPolygonIds.has(polygon.id))
+                        .filter(
+                          polygon =>
+                            polygon.points && polygon.points.length >= 3
+                        );
+
+                      // Render polygons
+                      return (
+                        <>
+                          {/* Actual polygons */}
+                          {visiblePolygons.map(polygon => (
+                            <CanvasPolygon
+                              key={polygon.id}
+                              polygon={polygon}
+                              isSelected={
+                                polygon.id === editor.selectedPolygonId
                               }
-                              isDragging={
-                                editor.interactionState.isDraggingVertex &&
-                                editor.interactionState.draggedVertexInfo
-                                  ?.polygonId === selectedPolygon.id &&
-                                editor.interactionState.draggedVertexInfo
-                                  ?.vertexIndex === index
+                              hoveredVertex={
+                                editor.hoveredVertex || {
+                                  polygonId: null,
+                                  vertexIndex: null,
+                                }
                               }
-                              editMode={editor.editMode}
-                              transform={editor.transform}
+                              vertexDragState={editor.vertexDragState}
+                              zoom={editor.transform.zoom}
+                              onSelectPolygon={() =>
+                                handlePolygonSelection(polygon.id)
+                              }
                             />
-                          ));
-                        })()}
-                      </g>
-                    )}
+                          ))}
+                        </>
+                      );
+                    })()}
+
+                    {/* Vertices are now rendered inside CanvasPolygon component */}
 
                     {/* Temporary geometry (preview lines, temp points, etc.) */}
                     <CanvasTemporaryGeometryLayer
@@ -475,7 +578,7 @@ const SegmentationEditor = () => {
               loading={projectLoading}
               polygons={editor.polygons}
               selectedPolygonId={editor.selectedPolygonId}
-              onSelectPolygon={editor.setSelectedPolygonId}
+              onSelectPolygon={handlePolygonSelection}
               hiddenPolygonIds={hiddenPolygonIds}
               onTogglePolygonVisibility={handleTogglePolygonVisibility}
               onRenamePolygon={handleRenamePolygon}

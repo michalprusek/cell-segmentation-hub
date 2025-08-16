@@ -272,7 +272,32 @@ class ApiClient {
       password,
     });
 
-    logger.debug('🔍 Raw backend response:', response.data);
+    // Sanitize response before logging
+    const sanitizedLoginResponse = {
+      success: response.data?.success,
+      status: response.status,
+      data: response.data?.data
+        ? {
+            user: response.data.data.user,
+            // Mask any token fields
+            accessToken: response.data.data.accessToken
+              ? '[REDACTED]'
+              : undefined,
+            refreshToken: response.data.data.refreshToken
+              ? '[REDACTED]'
+              : undefined,
+            access_token: response.data.data.access_token
+              ? '[REDACTED]'
+              : undefined,
+            refresh_token: response.data.data.refresh_token
+              ? '[REDACTED]'
+              : undefined,
+            id_token: response.data.data.id_token ? '[REDACTED]' : undefined,
+            token: response.data.data.token ? '[REDACTED]' : undefined,
+          }
+        : undefined,
+    };
+    logger.debug('🔍 Backend response:', sanitizedLoginResponse);
 
     // Handle backend response structure: { success: true, data: { user, accessToken, refreshToken } }
     const backendData = response.data.data || response.data;
@@ -316,7 +341,25 @@ class ApiClient {
       ...consentOptions,
     });
 
-    logger.debug('🔍 Raw backend register response:', response.data);
+    // Sanitize response before logging
+    const sanitizedResponse = {
+      ...response.data,
+      data: response.data?.data
+        ? {
+            ...response.data.data,
+            accessToken: response.data.data.accessToken
+              ? '[REDACTED]'
+              : undefined,
+            refreshToken: response.data.data.refreshToken
+              ? '[REDACTED]'
+              : undefined,
+            token: response.data.data.token ? '[REDACTED]' : undefined,
+            apiKey: response.data.data.apiKey ? '[REDACTED]' : undefined,
+            user: response.data.data.user,
+          }
+        : undefined,
+    };
+    logger.debug('🔍 Backend register response:', sanitizedResponse);
 
     // Handle backend response structure: { success: true, data: { user, accessToken, refreshToken } }
     const backendData = response.data.data || response.data;
@@ -682,7 +725,9 @@ class ApiClient {
     return this.extractData(response);
   }
 
-  async getSegmentationResults(imageId: string): Promise<SegmentationPolygon[] | null> {
+  async getSegmentationResults(
+    imageId: string
+  ): Promise<SegmentationPolygon[] | null> {
     try {
       const response = await this.instance.get(
         `/segmentation/images/${imageId}/results`
@@ -698,7 +743,9 @@ class ApiClient {
       }
       return null;
     } catch (error) {
-      if ((error as { response?: { status?: number } })?.response?.status === 404) {
+      if (
+        (error as { response?: { status?: number } })?.response?.status === 404
+      ) {
         return null; // No segmentation exists yet
       }
       throw error;
@@ -825,7 +872,7 @@ class ApiClient {
           : [], // Remove null entries
         model: segData.model || 'unknown',
         threshold:
-          typeof segData.threshold === 'number' ? segData.threshold : undefined,
+          typeof segData.threshold === 'number' ? segData.threshold : 0.5,
         confidence:
           typeof segData.confidence === 'number'
             ? segData.confidence
@@ -929,6 +976,37 @@ class ApiClient {
 
   async removeFromQueue(queueId: string): Promise<void> {
     await this.instance.delete(`/queue/items/${queueId}`);
+  }
+
+  // Generic HTTP methods for custom endpoints
+  async post<T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: AxiosRequestConfig
+  ): Promise<AxiosResponse<T>> {
+    return this.instance.post(url, data, config);
+  }
+
+  async get<T = unknown>(
+    url: string,
+    config?: AxiosRequestConfig
+  ): Promise<AxiosResponse<T>> {
+    return this.instance.get(url, config);
+  }
+
+  async put<T = unknown>(
+    url: string,
+    data?: unknown,
+    config?: AxiosRequestConfig
+  ): Promise<AxiosResponse<T>> {
+    return this.instance.put(url, data, config);
+  }
+
+  async delete<T = unknown>(
+    url: string,
+    config?: AxiosRequestConfig
+  ): Promise<AxiosResponse<T>> {
+    return this.instance.delete(url, config);
   }
 
   // Utility methods
