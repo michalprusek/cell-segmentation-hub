@@ -206,7 +206,6 @@ describe('API Integration Tests', () => {
   describe('File Upload Flow', () => {
     it('should upload image to project', async () => {
       // Create a simple test image buffer
-      const Buffer = require('buffer').Buffer
       const testImageBuffer = Buffer.from('fake-image-data')
 
       const response = await request(app)
@@ -221,7 +220,6 @@ describe('API Integration Tests', () => {
     })
 
     it('should not upload without authentication', async () => {
-      const Buffer = require('buffer').Buffer
       const testImageBuffer = Buffer.from('fake-image-data')
 
       await request(app)
@@ -231,7 +229,6 @@ describe('API Integration Tests', () => {
     })
 
     it('should not upload non-image file', async () => {
-      const Buffer = require('buffer').Buffer
       const testTextBuffer = Buffer.from('This is not an image')
 
       await request(app)

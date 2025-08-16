@@ -22,4 +22,9 @@ export default defineConfig({
       include: [/xlsx/, /node_modules/],
     },
   },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./vitest.setup.ts'],
+  },
 });
