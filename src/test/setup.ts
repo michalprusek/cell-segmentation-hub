@@ -1,19 +1,19 @@
-import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import '@testing-library/jest-dom';
+import { vi } from 'vitest';
 
 // Mock IntersectionObserver
 global.IntersectionObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
-  disconnect: vi.fn()
-}))
+  disconnect: vi.fn(),
+}));
 
 // Mock ResizeObserver
 global.ResizeObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
-  disconnect: vi.fn()
-}))
+  disconnect: vi.fn(),
+}));
 
 // Mock WebSocket
 global.WebSocket = vi.fn().mockImplementation(() => ({
@@ -21,8 +21,8 @@ global.WebSocket = vi.fn().mockImplementation(() => ({
   removeEventListener: vi.fn(),
   send: vi.fn(),
   close: vi.fn(),
-  readyState: 1
-}))
+  readyState: 1,
+}));
 
 // Mock Canvas API
 HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
@@ -50,7 +50,7 @@ HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
   transform: vi.fn(),
   rect: vi.fn(),
   clip: vi.fn(),
-})
+});
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -65,7 +65,7 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: vi.fn(),
     dispatchEvent: vi.fn(),
   })),
-})
+});
 
 // Mock localStorage
 const localStorageMock = {
@@ -73,8 +73,8 @@ const localStorageMock = {
   setItem: vi.fn(),
   removeItem: vi.fn(),
   clear: vi.fn(),
-}
-global.localStorage = localStorageMock
+};
+global.localStorage = localStorageMock;
 
 // Mock sessionStorage
 const sessionStorageMock = {
@@ -82,8 +82,8 @@ const sessionStorageMock = {
   setItem: vi.fn(),
   removeItem: vi.fn(),
   clear: vi.fn(),
-}
-global.sessionStorage = sessionStorageMock
+};
+global.sessionStorage = sessionStorageMock;
 
 // Mock window.location
 Object.defineProperty(window, 'location', {
@@ -94,7 +94,7 @@ Object.defineProperty(window, 'location', {
     replace: vi.fn(),
   },
   writable: true,
-})
+});
 
 // Mock crypto for UUID generation
 Object.defineProperty(global, 'crypto', {
@@ -102,14 +102,14 @@ Object.defineProperty(global, 'crypto', {
     randomUUID: vi.fn(() => 'test-uuid-1234'),
     getRandomValues: vi.fn().mockReturnValue(new Uint8Array(16)),
   },
-})
+});
 
 // Silence console errors during tests unless explicitly testing them
-const originalError = console.error
+const originalError = console.error;
 beforeAll(() => {
-  console.error = vi.fn()
-})
+  console.error = vi.fn();
+});
 
 afterAll(() => {
-  console.error = originalError
-})
+  console.error = originalError;
+});

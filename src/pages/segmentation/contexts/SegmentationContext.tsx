@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext } from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 
@@ -7,7 +6,7 @@ interface SegmentationContextType {
 }
 
 const SegmentationContext = createContext<SegmentationContextType>({
-  segmentation: null
+  segmentation: null,
 });
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -18,9 +17,9 @@ interface SegmentationProviderProps {
   segmentation: SegmentationResult | null;
 }
 
-export const SegmentationProvider: React.FC<SegmentationProviderProps> = ({ 
-  children, 
-  segmentation 
+export const SegmentationProvider: React.FC<SegmentationProviderProps> = ({
+  children,
+  segmentation,
 }) => {
   return (
     <SegmentationContext.Provider value={{ segmentation }}>

@@ -1,6 +1,5 @@
-
-import React from "react";
-import ImageUploader from "@/components/ImageUploader";
+import React from 'react';
+import ImageUploader from '@/components/ImageUploader';
 
 const UploadTab = () => {
   return (

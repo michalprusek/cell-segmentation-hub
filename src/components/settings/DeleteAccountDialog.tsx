@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -6,14 +6,15 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { AlertTriangle } from "lucide-react";
-import { useLanguage } from "@/contexts/LanguageContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { AlertTriangle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/lib/logger';
+import { toast } from 'sonner';
 
 interface DeleteAccountDialogProps {
   isOpen: boolean;
@@ -28,7 +29,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
 }) => {
   const { t } = useLanguage();
   const { deleteAccount } = useAuth();
-  const [confirmationText, setConfirmationText] = useState("");
+  const [confirmationText, setConfirmationText] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
 
   const isConfirmationValid = confirmationText === userEmail;
@@ -42,7 +43,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
       toast.success(t('settings.accountDeleted'));
       onClose();
     } catch (error) {
-      console.error("Error deleting account:", error);
+      logger.error('Error deleting account:', error);
       toast.error(t('settings.deleteAccountError'));
     } finally {
       setIsDeleting(false);
@@ -51,7 +52,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
 
   const handleClose = () => {
     if (!isDeleting) {
-      setConfirmationText("");
+      setConfirmationText('');
       onClose();
     }
   };
@@ -65,14 +66,16 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
             {t('common.deleteAccount')}
           </DialogTitle>
           <DialogDescription className="text-base leading-relaxed pt-2">
-            This action <strong>cannot be undone</strong>. This will permanently delete your account 
-            and remove all of your data from our servers.
+            This action <strong>cannot be undone</strong>. This will permanently
+            delete your account and remove all of your data from our servers.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
-            <h4 className="font-semibold text-red-800 mb-2">What will be deleted:</h4>
+            <h4 className="font-semibold text-red-800 mb-2">
+              What will be deleted:
+            </h4>
             <ul className="text-sm text-red-700 space-y-1">
               <li>• Your user account and profile</li>
               <li>• All your projects and images</li>
@@ -83,14 +86,18 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
 
           <div className="space-y-2">
             <Label htmlFor="confirmation" className="text-sm font-medium">
-              Please type <span className="font-mono bg-gray-100 px-1 rounded">{userEmail}</span> to confirm:
+              Please type{' '}
+              <span className="font-mono bg-gray-100 px-1 rounded">
+                {userEmail}
+              </span>{' '}
+              to confirm:
             </Label>
             <Input
               id="confirmation"
               type="text"
               placeholder={userEmail}
               value={confirmationText}
-              onChange={(e) => setConfirmationText(e.target.value)}
+              onChange={e => setConfirmationText(e.target.value)}
               className="font-mono"
               disabled={isDeleting}
             />
@@ -98,11 +105,7 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
         </div>
 
         <DialogFooter className="gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleClose}
-            disabled={isDeleting}
-          >
+          <Button variant="outline" onClick={handleClose} disabled={isDeleting}>
             {t('settings.cancel')}
           </Button>
           <Button

@@ -54,19 +54,21 @@ export default {
     createAccount: 'Créer un compte',
     signInToAccount: 'Connectez-vous à votre compte',
     sort: 'Trier',
-    no_preview: 'Aucun aperçu'
+    no_preview: 'Aucun aperçu',
   },
   dashboard: {
     manageProjects: 'Gérez vos projets de recherche et analyses',
     projectGallery: 'Galerie de projets',
-    projectGalleryDescription: 'Parcourez et gérez tous vos projets de segmentation',
+    projectGalleryDescription:
+      'Parcourez et gérez tous vos projets de segmentation',
     statsOverview: 'Aperçu des statistiques',
     totalProjects: 'Total des projets',
     activeProjects: 'Projets actifs',
     totalImages: 'Total des images',
     totalAnalyses: 'Total des analyses',
     lastUpdated: 'Dernière mise à jour',
-    noProjectsDescription: "Vous n'avez pas encore créé de projets. Créez votre premier projet pour commencer.",
+    noProjectsDescription:
+      "Vous n'avez pas encore créé de projets. Créez votre premier projet pour commencer.",
     noImagesDescription: 'Téléchargez des images pour commencer',
     searchProjectsPlaceholder: 'Rechercher des projets...',
     searchImagesPlaceholder: 'Rechercher des images par nom...',
@@ -77,13 +79,15 @@ export default {
     completed: 'Terminé',
     processing: 'Traitement en cours',
     pending: 'En attente',
-    failed: 'Échoué'
+    failed: 'Échoué',
   },
   projects: {
     createProject: 'Créer un nouveau projet',
-    createProjectDesc: 'Ajoutez un nouveau projet pour organiser vos images de sphéroïdes et analyses.',
+    createProjectDesc:
+      'Ajoutez un nouveau projet pour organiser vos images de sphéroïdes et analyses.',
     projectNamePlaceholder: 'ex. : Sphéroïdes de cellules HeLa',
-    projectDescPlaceholder: 'ex. : Analyse des sphéroïdes tumoraux pour les études de résistance aux médicaments',
+    projectDescPlaceholder:
+      'ex. : Analyse des sphéroïdes tumoraux pour les études de résistance aux médicaments',
     creatingProject: 'Création...',
     duplicateProject: 'Dupliquer',
     shareProject: 'Partager',
@@ -97,21 +101,24 @@ export default {
     projectSelection: 'Sélection de projet',
     selectProject: 'Sélectionner un projet',
     imageDeleted: 'Image supprimée avec succès',
-    deleteImageError: 'Échec de la suppression de l\'image',
-    deleteImageFailed: 'Suppression de l\'image échouée',
-    imagesQueuedForSegmentation: '{{count}} images ajoutées à la file de segmentation',
-    allImagesAlreadySegmented: 'Toutes les images sont déjà segmentées ou en file',
-    errorAddingToQueue: 'Erreur lors de l\'ajout à la file',
-    imageAlreadyProcessing: 'L\'image est déjà en cours de traitement',
-    processImageFailed: 'Échec du traitement de l\'image',
-    segmentationCompleted: 'Segmentation terminée pour l\'image',
+    deleteImageError: "Échec de la suppression de l'image",
+    deleteImageFailed: "Suppression de l'image échouée",
+    imagesQueuedForSegmentation:
+      '{{count}} images ajoutées à la file de segmentation',
+    allImagesAlreadySegmented:
+      'Toutes les images sont déjà segmentées ou en file',
+    errorAddingToQueue: "Erreur lors de l'ajout à la file",
+    imageAlreadyProcessing: "L'image est déjà en cours de traitement",
+    processImageFailed: "Échec du traitement de l'image",
+    segmentationCompleted: "Segmentation terminée pour l'image",
     segmentationFailed: 'Échec de la segmentation',
     segmentationStarted: 'La segmentation a commencé',
-    segmentationCompleteWithCount: 'Segmentation terminée ! {{count}} objets trouvés'
+    segmentationCompleteWithCount:
+      'Segmentation terminée ! {{count}} objets trouvés',
   },
   errors: {
     noProjectOrUser: 'Erreur : Aucun projet ou utilisateur sélectionné',
-    unknown: 'Erreur inconnue'
+    unknown: 'Erreur inconnue',
   },
   images: {
     uploadImages: 'Télécharger des images',
@@ -119,7 +126,7 @@ export default {
     clickToSelect: 'ou cliquez pour sélectionner des fichiers',
     acceptedFormats: 'Formats acceptés : JPEG, PNG, TIFF, BMP (max 10MB)',
     uploadProgress: 'Progression du téléchargement',
-    uploadingTo: 'Sélectionnez d\'abord un projet',
+    uploadingTo: "Sélectionnez d'abord un projet",
     currentProject: 'projet actuel',
     autoSegment: 'Segmenter automatiquement les images après téléchargement',
     uploadCompleted: 'Téléchargement terminé',
@@ -127,17 +134,18 @@ export default {
     imagesUploaded: 'Images téléchargées avec succès',
     imagesFailed: 'Échec du téléchargement des images',
     viewAnalyses: 'Voir les analyses',
-    noAnalysesYet: 'Pas encore d\'analyses',
-    runAnalysis: 'Exécuter l\'analyse',
+    noAnalysesYet: "Pas encore d'analyses",
+    runAnalysis: "Exécuter l'analyse",
     viewResults: 'Voir les résultats',
     dropImagesHere: 'Déposez les images ici...',
-    selectProjectFirst: 'Veuillez d\'abord sélectionner un projet',
-    projectRequired: 'Vous devez sélectionner un projet avant de pouvoir télécharger des images',
+    selectProjectFirst: "Veuillez d'abord sélectionner un projet",
+    projectRequired:
+      'Vous devez sélectionner un projet avant de pouvoir télécharger des images',
     pending: 'En attente',
     uploading: 'Téléchargement',
     processing: 'Traitement',
     complete: 'Terminé',
-    error: 'Erreur'
+    error: 'Erreur',
   },
   settings: {
     manageSettings: 'Gérer vos préférences de compte',
@@ -160,7 +168,7 @@ export default {
       analysisCompleted: 'Analyse terminée',
       newFeatures: 'Nouvelles fonctionnalités',
       marketingEmails: 'Emails marketing',
-      billing: 'Notifications de facturation'
+      billing: 'Notifications de facturation',
     },
     personal: 'Informations personnelles',
     fullName: 'Nom complet',
@@ -170,48 +178,54 @@ export default {
     bio: 'Biographie',
     makeProfileVisible: 'Rendre mon profil visible aux autres chercheurs',
     dangerZone: 'Zone de danger',
-    deleteAccountWarning: 'Une fois que vous supprimez votre compte, il n\'y a pas de retour en arrière. Toutes vos données seront définitivement supprimées.',
+    deleteAccountWarning:
+      "Une fois que vous supprimez votre compte, il n'y a pas de retour en arrière. Toutes vos données seront définitivement supprimées.",
     currentPassword: 'Mot de passe actuel',
     newPassword: 'Nouveau mot de passe',
     confirmNewPassword: 'Confirmer le nouveau mot de passe',
     models: 'Modèles',
     modelSelection: 'Sélection de modèle',
-    modelSelectionDescription: 'Choisissez le modèle IA à utiliser pour la segmentation cellulaire',
+    modelSelectionDescription:
+      'Choisissez le modèle IA à utiliser pour la segmentation cellulaire',
     confidenceThreshold: 'Seuil de confiance',
-    confidenceThresholdDescription: 'Confiance minimale requise pour les prédictions de segmentation',
+    confidenceThresholdDescription:
+      'Confiance minimale requise pour les prédictions de segmentation',
     currentThreshold: 'Seuil actuel',
     modelSelected: 'Modèle sélectionné avec succès',
     modelSettingsSaved: 'Paramètres du modèle enregistrés avec succès',
     modelSize: {
       small: 'Petit',
       medium: 'Moyen',
-      large: 'Grand'
+      large: 'Grand',
     },
     modelDescription: {
       hrnet: 'Modèle rapide et efficace pour la segmentation en temps réel',
-      resunet_small: 'Vitesse et précision équilibrées pour la plupart des cas d\'usage',
-      resunet_advanced: 'Précision maximale avec mécanismes d\'attention'
+      resunet_small:
+        "Vitesse et précision équilibrées pour la plupart des cas d'usage",
+      resunet_advanced: "Précision maximale avec mécanismes d'attention",
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
-    dataUsageDescription: 'Contrôlez comment vos données sont utilisées pour l\'apprentissage automatique et la recherche',
+    dataUsageDescription:
+      "Contrôlez comment vos données sont utilisées pour l'apprentissage automatique et la recherche",
     allowMLTraining: {
-      label: 'Permettre l\'entraînement des modèles ML',
-      description: 'Permettre l\'utilisation de vos données pour entraîner et améliorer nos modèles de segmentation'
-    }
+      label: "Permettre l'entraînement des modèles ML",
+      description:
+        "Permettre l'utilisation de vos données pour entraîner et améliorer nos modèles de segmentation",
+    },
   },
   auth: {
     signIn: 'Se connecter',
-    signUp: 'S\'inscrire',
+    signUp: "S'inscrire",
     signOut: 'Se déconnecter',
     forgotPassword: 'Mot de passe oublié ?',
     resetPassword: 'Réinitialiser le mot de passe',
-    dontHaveAccount: 'Vous n\'avez pas de compte ?',
+    dontHaveAccount: "Vous n'avez pas de compte ?",
     alreadyHaveAccount: 'Vous avez déjà un compte ?',
     signInWith: 'Se connecter avec',
-    signUpWith: 'S\'inscrire avec',
+    signUpWith: "S'inscrire avec",
     orContinueWith: 'ou continuer avec',
     rememberMe: 'Se souvenir de moi',
-    emailRequired: 'L\'email est requis',
+    emailRequired: "L'email est requis",
     passwordRequired: 'Le mot de passe est requis',
     invalidEmail: 'Adresse email invalide',
     passwordTooShort: 'Le mot de passe doit contenir au moins 6 caractères',
@@ -220,9 +234,9 @@ export default {
     successfulSignUp: 'Inscription réussie',
     verifyEmail: 'Veuillez vérifier votre email pour confirmer votre compte',
     successfulSignOut: 'Déconnexion réussie',
-    checkingAuthentication: 'Vérification de l\'authentification...',
+    checkingAuthentication: "Vérification de l'authentification...",
     loadingAccount: 'Chargement de votre compte...',
-    processingRequest: 'Traitement de votre demande...'
+    processingRequest: 'Traitement de votre demande...',
   },
   profile: {
     title: 'Profil',
@@ -235,7 +249,7 @@ export default {
     recentAnalyses: 'Analyses récentes',
     accountDetails: 'Détails du compte',
     accountType: 'Type de compte',
-    joinDate: 'Date d\'inscription',
+    joinDate: "Date d'inscription",
     lastActive: 'Dernière activité',
     projectsCreated: 'Projets créés',
     imagesUploaded: 'Images téléchargées',
@@ -250,7 +264,7 @@ export default {
     recentActivity: 'Activité récente',
     noRecentActivity: 'Aucune activité récente',
     statistics: 'Statistiques',
-    totalImagesProcessed: 'Total d\'images traitées',
+    totalImagesProcessed: "Total d'images traitées",
     averageProcessingTime: 'Temps de traitement moyen',
     fromLastMonth: 'du mois dernier',
     storageUsed: 'Stockage utilisé',
@@ -260,13 +274,13 @@ export default {
     recentPublications: 'Publications récentes',
     viewAll: 'Voir tout',
     noPublications: 'Aucune publication pour le moment',
-    today: 'aujourd\'hui',
+    today: "aujourd'hui",
     yesterday: 'hier',
     daysAgo: 'jours passés',
     completionRate: 'taux de completion',
     createdProject: 'A créé le projet',
     completedSegmentation: 'A terminé la segmentation pour',
-    uploadedImage: 'A téléchargé l\'image'
+    uploadedImage: "A téléchargé l'image",
   },
   segmentation: {
     mode: {
@@ -279,7 +293,7 @@ export default {
       slice: 'Découper',
       delete: 'Supprimer',
       deletePolygon: 'Supprimer le polygone',
-      unknown: 'Inconnu'
+      unknown: 'Inconnu',
     },
     modeDescription: {
       view: 'Naviguer et sélectionner les polygones',
@@ -287,13 +301,13 @@ export default {
       addPoints: 'Ajouter des points entre les sommets',
       create: 'Créer de nouveaux polygones',
       slice: 'Diviser les polygones avec une ligne',
-      delete: 'Supprimer les polygones'
+      delete: 'Supprimer les polygones',
     },
     toolbar: {
       mode: 'Mode',
       keyboard: 'Touche: {key}',
-      requiresSelection: 'Nécessite la sélection d\'un polygone',
-      requiresPolygonSelection: 'Nécessite la sélection d\'un polygone',
+      requiresSelection: "Nécessite la sélection d'un polygone",
+      requiresPolygonSelection: "Nécessite la sélection d'un polygone",
       select: 'Sélectionner',
       undoTooltip: 'Annuler (Ctrl+Z)',
       undo: 'Annuler',
@@ -308,7 +322,8 @@ export default {
       unsavedChanges: 'Modifications non sauvegardées',
       saving: 'Sauvegarde...',
       save: 'Sauvegarder',
-      keyboardShortcuts: 'V: Voir • E: Modifier • A: Ajouter • N: Nouveau • S: Découper • D: Supprimer'
+      keyboardShortcuts:
+        'V: Voir • E: Modifier • A: Ajouter • N: Nouveau • S: Découper • D: Supprimer',
     },
     status: {
       polygons: 'polygones',
@@ -317,8 +332,8 @@ export default {
       hidden: 'cachés',
       selected: 'sélectionné',
       saved: 'Sauvegardé',
-      unsaved: 'Non sauvegardé'
-    }
+      unsaved: 'Non sauvegardé',
+    },
   },
   status: {
     segmented: 'Segmenté',
@@ -328,6 +343,6 @@ export default {
     no_segmentation: 'Pas de segmentation',
     disconnected: 'Déconnecté du serveur',
     error: 'Erreur du service ML',
-    ready: 'Prêt pour la segmentation'
-  }
+    ready: 'Prêt pour la segmentation',
+  },
 };

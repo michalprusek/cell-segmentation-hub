@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { motion } from "framer-motion";
+import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -10,11 +9,11 @@ interface CanvasLoadingOverlayProps {
 
 const CanvasLoadingOverlay = ({ loading }: CanvasLoadingOverlayProps) => {
   const { t } = useLanguage();
-  
+
   if (!loading) return null;
-  
+
   return (
-    <motion.div 
+    <motion.div
       className="absolute inset-0 flex items-center justify-center z-30"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

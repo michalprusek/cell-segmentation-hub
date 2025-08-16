@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import apiClient, { AuthResponse } from "@/lib/api";
-import { User, Profile, getErrorMessage } from "@/types";
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+import apiClient, { AuthResponse } from '@/lib/api';
+import { User, Profile, getErrorMessage } from '@/types';
+import { logger } from '@/lib/logger';
 
 interface ConsentOptions {
   consentToMLTraining?: boolean;
@@ -16,8 +17,17 @@ interface AuthContextType {
   token: string | null;
   loading: boolean;
   isAuthenticated: boolean;
-  signIn: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
-  signUp: (email: string, password: string, consentOptions?: ConsentOptions, username?: string) => Promise<void>;
+  signIn: (
+    email: string,
+    password: string,
+    rememberMe?: boolean
+  ) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    consentOptions?: ConsentOptions,
+    username?: string
+  ) => Promise<void>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
 }
@@ -32,7 +42,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
 
-
   useEffect(() => {
     const initializeAuth = async () => {
       try {
@@ -41,24 +50,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // Get the current access token
           const accessToken = apiClient.getAccessToken();
           setToken(accessToken);
-          
+
           // Try to fetch user profile to verify token is still valid
           const profileData = await apiClient.getUserProfile();
           // Validate profileData before constructing user object
-          if (profileData && (profileData.user || (profileData.id && profileData.email))) {
+          if (
+            profileData &&
+            (profileData.user || (profileData.id && profileData.email))
+          ) {
             const userData = profileData.user || {
               id: profileData.id,
               email: profileData.email,
-              username: profileData.username
+              username: profileData.username,
             };
-            
+
             // Validate required fields exist and are not empty
             if (userData.id && userData.email) {
               setUser(userData);
               setProfile(profileData);
               setIsAuthenticated(true);
             } else {
-              console.error('Missing required user fields:', { id: userData.id, email: userData.email });
+              logger.error('Missing required user fields:', {
+                id: userData.id,
+                email: userData.email,
+              });
               // Clear state if required fields are missing
               setUser(null);
               setProfile(null);
@@ -67,7 +82,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               try {
                 await apiClient.logout();
               } catch (logoutError) {
-                console.error('Error during logout:', logoutError);
+                logger.error('Error during logout:', logoutError);
               }
             }
           } else {
@@ -79,17 +94,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             try {
               await apiClient.logout();
             } catch (logoutError) {
-              console.error('Error during logout:', logoutError);
+              logger.error('Error during logout:', logoutError);
             }
           }
         }
       } catch (error) {
-        console.error("Error initializing auth:", error);
+        logger.error('Error initializing auth:', error);
         // If token is invalid, clear it
         try {
           await apiClient.logout();
         } catch (logoutError) {
-          console.error('Error during logout:', logoutError);
+          logger.error('Error during logout:', logoutError);
         }
         setUser(null);
         setProfile(null);
@@ -103,27 +118,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth();
   }, []);
 
-  const signIn = async (email: string, password: string, rememberMe: boolean = true) => {
+  const signIn = async (
+    email: string,
+    password: string,
+    rememberMe: boolean = true
+  ) => {
     try {
       setLoading(true);
-      
-      const authResponse: AuthResponse = await apiClient.login(email, password, rememberMe);
-      
+
+      const authResponse: AuthResponse = await apiClient.login(
+        email,
+        password,
+        rememberMe
+      );
+
       // Set user state immediately
       setUser(authResponse.user);
       setIsAuthenticated(true);
-      
+
       // Get and set the access token
       const accessToken = apiClient.getAccessToken();
       setToken(accessToken);
-      
-      toast.success("Successfully signed in", {
-        description: "Welcome to the Spheroid Segmentation Platform",
+
+      toast.success('Successfully signed in', {
+        description: 'Welcome to the Spheroid Segmentation Platform',
       });
-      
+
       // Don't fetch profile immediately - let it happen naturally later
     } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error) || "Sign in failed";
+      const errorMessage = getErrorMessage(error) || 'Sign in failed';
       toast.error(errorMessage);
       throw error;
     } finally {
@@ -131,27 +154,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signUp = async (email: string, password: string, consentOptions?: ConsentOptions, username?: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    consentOptions?: ConsentOptions,
+    username?: string
+  ) => {
     try {
       setLoading(true);
-      const authResponse: AuthResponse = await apiClient.register(email, password, username, consentOptions);
-      
+      const authResponse: AuthResponse = await apiClient.register(
+        email,
+        password,
+        username,
+        consentOptions
+      );
+
       setUser(authResponse.user);
       setIsAuthenticated(true);
-      
+
       // Get and set the access token
       const accessToken = apiClient.getAccessToken();
       setToken(accessToken);
-      
-      toast.success("Registration successful", {
-        description: "Welcome to the Spheroid Segmentation Platform",
+
+      toast.success('Registration successful', {
+        description: 'Welcome to the Spheroid Segmentation Platform',
       });
-      
-      navigate("/dashboard");
-      
+
+      navigate('/dashboard');
+
       // Don't fetch profile immediately - let it happen naturally later
     } catch (error: unknown) {
-      const errorMessage = getErrorMessage(error) || "Registration failed";
+      const errorMessage = getErrorMessage(error) || 'Registration failed';
       toast.error(errorMessage);
       throw error;
     } finally {
@@ -163,25 +196,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
       await apiClient.logout();
-      
+
       setUser(null);
       setProfile(null);
       setToken(null);
       setIsAuthenticated(false);
-      
-      toast.success("Signed out successfully");
-      navigate("/sign-in");
+
+      toast.success('Signed out successfully');
+      navigate('/sign-in');
     } catch (error: unknown) {
-      console.error("Error signing out:", error);
+      logger.error('Error signing out:', error);
       // Even if logout fails on server, clear local state
       setUser(null);
       setProfile(null);
       setToken(null);
       setIsAuthenticated(false);
-      
-      const errorMessage = getErrorMessage(error) || "Sign out failed";
+
+      const errorMessage = getErrorMessage(error) || 'Sign out failed';
       toast.error(errorMessage);
-      navigate("/sign-in");
+      navigate('/sign-in');
     } finally {
       setLoading(false);
     }
@@ -190,23 +223,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const deleteAccount = async (confirmationText?: string) => {
     // Validate confirmation text is provided and matches expected value
     if (!confirmationText || confirmationText !== user?.email) {
-      throw new Error("Confirmation text is required and must match your email address");
+      throw new Error(
+        'Confirmation text is required and must match your email address'
+      );
     }
 
     try {
       setLoading(true);
       await apiClient.deleteAccount();
-      
+
       setUser(null);
       setProfile(null);
       setToken(null);
       setIsAuthenticated(false);
-      
-      toast.success("Account deleted successfully");
-      navigate("/");
+
+      toast.success('Account deleted successfully');
+      navigate('/');
     } catch (error: unknown) {
-      console.error("Error deleting account:", error);
-      const errorMessage = getErrorMessage(error) || "Failed to delete account";
+      logger.error('Error deleting account:', error);
+      const errorMessage = getErrorMessage(error) || 'Failed to delete account';
       toast.error(errorMessage);
       throw error;
     } finally {
@@ -247,7 +282,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 }

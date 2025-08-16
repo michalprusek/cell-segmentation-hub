@@ -10,13 +10,13 @@ interface UsePolygonSlicingProps {
   selectedPolygonId: string | null;
   tempPoints: Point[];
   interactionState: InteractionState;
-  
+
   // State setters
   setSelectedPolygonId: (id: string | null) => void;
   setTempPoints: (points: Point[]) => void;
   setInteractionState: (state: InteractionState) => void;
   setEditMode: (mode: EditMode) => void;
-  
+
   // Data operations
   updatePolygons: (polygons: Polygon[]) => void;
 }
@@ -34,105 +34,115 @@ export const usePolygonSlicing = ({
   setTempPoints,
   setInteractionState,
   setEditMode,
-  updatePolygons
+  updatePolygons,
 }: UsePolygonSlicingProps) => {
   const { t } = useLanguage();
 
   /**
    * Handle slice action when two points have been selected
    */
-  const handleSliceAction = useCallback((providedTempPoints?: Point[]) => {
-    const pointsToUse = providedTempPoints || tempPoints;
-    
-    if (!selectedPolygonId || pointsToUse.length !== 2) {
-      return false;
-    }
+  const handleSliceAction = useCallback(
+    (providedTempPoints?: Point[]) => {
+      const pointsToUse = providedTempPoints || tempPoints;
 
-    const polygon = polygons.find(p => p.id === selectedPolygonId);
-    if (!polygon) {
-      toast.error(t('segmentation.polygonNotFound') || 'Polygon not found');
-      return false;
-    }
+      if (!selectedPolygonId || pointsToUse.length !== 2) {
+        return false;
+      }
 
-    const [sliceStart, sliceEnd] = pointsToUse;
+      const polygon = polygons.find(p => p.id === selectedPolygonId);
+      if (!polygon) {
+        toast.error(t('segmentation.polygonNotFound') || 'Polygon not found');
+        return false;
+      }
 
-    // Validate slice line
-    const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
-    if (!validation.isValid) {
-      toast.error(
-        t('segmentation.invalidSlice') || 
-        `Invalid slice: ${validation.reason}`
-      );
-      return false;
-    }
+      const [sliceStart, sliceEnd] = pointsToUse;
 
-    // Perform the slice
-    const result = slicePolygon(polygon, sliceStart, sliceEnd);
+      // Validate slice line
+      const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
+      if (!validation.isValid) {
+        toast.error(
+          t('segmentation.invalidSlice') ||
+            `Invalid slice: ${validation.reason}`
+        );
+        return false;
+      }
 
-    if (result) {
-      const [newPolygon1, newPolygon2] = result;
+      // Perform the slice
+      const result = slicePolygon(polygon, sliceStart, sliceEnd);
 
-      // Replace the original polygon with the two new ones
-      const updatedPolygons = polygons.filter(p => p.id !== selectedPolygonId);
-      updatedPolygons.push(newPolygon1, newPolygon2);
+      if (result) {
+        const [newPolygon1, newPolygon2] = result;
 
-      updatePolygons(updatedPolygons);
+        // Replace the original polygon with the two new ones
+        const updatedPolygons = polygons.filter(
+          p => p.id !== selectedPolygonId
+        );
+        updatedPolygons.push(newPolygon1, newPolygon2);
 
-      // Clear selection and reset state
-      setSelectedPolygonId(null);
-      setTempPoints([]);
-      setInteractionState({
-        ...interactionState,
-        sliceStartPoint: null
-      });
-      setEditMode(EditMode.View);
+        updatePolygons(updatedPolygons);
 
-      toast.success(
-        t('segmentation.sliceSuccess') || 
-        'Polygon sliced successfully'
-      );
+        // Clear selection and reset state
+        setSelectedPolygonId(null);
+        setTempPoints([]);
+        setInteractionState({
+          ...interactionState,
+          sliceStartPoint: null,
+        });
+        setEditMode(EditMode.View);
 
-      return true;
-    } else {
-      toast.error(
-        t('segmentation.sliceFailed') || 
-        'Failed to slice polygon'
-      );
+        toast.success(
+          t('segmentation.sliceSuccess') || 'Polygon sliced successfully'
+        );
 
-      // Reset state on failure
-      setTempPoints([]);
-      setInteractionState({
-        ...interactionState,
-        sliceStartPoint: null
-      });
+        return true;
+      } else {
+        toast.error(t('segmentation.sliceFailed') || 'Failed to slice polygon');
 
-      return false;
-    }
-  }, [
-    selectedPolygonId,
-    tempPoints,
-    polygons,
-    interactionState,
-    updatePolygons,
-    setSelectedPolygonId,
-    setTempPoints,
-    setInteractionState,
-    setEditMode,
-    t
-  ]);
+        // Reset state on failure
+        setTempPoints([]);
+        setInteractionState({
+          ...interactionState,
+          sliceStartPoint: null,
+        });
+
+        return false;
+      }
+    },
+    [
+      selectedPolygonId,
+      tempPoints,
+      polygons,
+      interactionState,
+      updatePolygons,
+      setSelectedPolygonId,
+      setTempPoints,
+      setInteractionState,
+      setEditMode,
+      t,
+    ]
+  );
 
   /**
    * Start slicing mode for a specific polygon
    */
-  const startSlicing = useCallback((polygonId: string) => {
-    setSelectedPolygonId(polygonId);
-    setEditMode(EditMode.Slice);
-    setTempPoints([]);
-    setInteractionState({
-      ...interactionState,
-      sliceStartPoint: null
-    });
-  }, [setSelectedPolygonId, setEditMode, setTempPoints, setInteractionState, interactionState]);
+  const startSlicing = useCallback(
+    (polygonId: string) => {
+      setSelectedPolygonId(polygonId);
+      setEditMode(EditMode.Slice);
+      setTempPoints([]);
+      setInteractionState({
+        ...interactionState,
+        sliceStartPoint: null,
+      });
+    },
+    [
+      setSelectedPolygonId,
+      setEditMode,
+      setTempPoints,
+      setInteractionState,
+      interactionState,
+    ]
+  );
 
   /**
    * Cancel slicing operation
@@ -141,7 +151,7 @@ export const usePolygonSlicing = ({
     setTempPoints([]);
     setInteractionState({
       ...interactionState,
-      sliceStartPoint: null
+      sliceStartPoint: null,
     });
     setEditMode(EditMode.View);
   }, [setTempPoints, setInteractionState, setEditMode, interactionState]);
@@ -149,37 +159,48 @@ export const usePolygonSlicing = ({
   /**
    * Handle slice point placement
    */
-  const handleSlicePointClick = useCallback((point: Point) => {
-    if (!selectedPolygonId) {
+  const handleSlicePointClick = useCallback(
+    (point: Point) => {
+      if (!selectedPolygonId) {
+        return false;
+      }
+
+      const polygon = polygons.find(p => p.id === selectedPolygonId);
+      if (!polygon) {
+        return false;
+      }
+
+      if (tempPoints.length === 0) {
+        // First point - set slice start
+        setTempPoints([point]);
+        setInteractionState({
+          ...interactionState,
+          sliceStartPoint: point,
+        });
+        return true;
+      } else if (tempPoints.length === 1) {
+        // Second point - set slice end and attempt slice
+        const newTempPoints = [...tempPoints, point];
+        setTempPoints(newTempPoints);
+
+        // Pass the new temp points directly to avoid stale state issue
+        handleSliceAction(newTempPoints);
+
+        return true;
+      }
+
       return false;
-    }
-
-    const polygon = polygons.find(p => p.id === selectedPolygonId);
-    if (!polygon) {
-      return false;
-    }
-
-    if (tempPoints.length === 0) {
-      // First point - set slice start
-      setTempPoints([point]);
-      setInteractionState({
-        ...interactionState,
-        sliceStartPoint: point
-      });
-      return true;
-    } else if (tempPoints.length === 1) {
-      // Second point - set slice end and attempt slice
-      const newTempPoints = [...tempPoints, point];
-      setTempPoints(newTempPoints);
-      
-      // Pass the new temp points directly to avoid stale state issue
-      handleSliceAction(newTempPoints);
-      
-      return true;
-    }
-
-    return false;
-  }, [selectedPolygonId, polygons, tempPoints, interactionState, setTempPoints, setInteractionState, handleSliceAction]);
+    },
+    [
+      selectedPolygonId,
+      polygons,
+      tempPoints,
+      interactionState,
+      setTempPoints,
+      setInteractionState,
+      handleSliceAction,
+    ]
+  );
 
   /**
    * Check if a polygon can be sliced with the current points
@@ -196,7 +217,7 @@ export const usePolygonSlicing = ({
 
     const [sliceStart, sliceEnd] = tempPoints;
     const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
-    
+
     return validation.isValid;
   }, [selectedPolygonId, tempPoints, polygons]);
 
@@ -227,14 +248,14 @@ export const usePolygonSlicing = ({
     startSlicing,
     cancelSlicing,
     handleSlicePointClick,
-    
+
     // State queries
     canSlice,
     getSlicePreview,
-    
+
     // Current state
     isSlicing: tempPoints.length > 0,
     slicePointsCount: tempPoints.length,
-    currentSlicePoints: tempPoints
+    currentSlicePoints: tempPoints,
   };
 };

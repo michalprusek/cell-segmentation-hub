@@ -1,13 +1,20 @@
-import React, { useState, useEffect } from "react";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner";
-import apiClient from "@/lib/api";
+import React, { useState, useEffect } from 'react';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { toast } from 'sonner';
+import apiClient from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Profile, getErrorMessage } from '@/types';
-import { Info } from "lucide-react";
+import { Info } from 'lucide-react';
+import { logger } from '@/lib/logger';
 
 interface ConsentSectionProps {
   userId: string;
@@ -16,11 +23,12 @@ interface ConsentSectionProps {
 
 const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
   const { t } = useLanguage();
-  
+
   const [consents, setConsents] = useState({
     consentToMLTraining: profile?.consentToMLTraining || false,
-    consentToAlgorithmImprovement: profile?.consentToAlgorithmImprovement || false,
-    consentToFeatureDevelopment: profile?.consentToFeatureDevelopment || false
+    consentToAlgorithmImprovement:
+      profile?.consentToAlgorithmImprovement || false,
+    consentToFeatureDevelopment: profile?.consentToFeatureDevelopment || false,
   });
   const [loading, setLoading] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -29,27 +37,36 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
     if (profile) {
       setConsents({
         consentToMLTraining: profile.consentToMLTraining || false,
-        consentToAlgorithmImprovement: profile.consentToAlgorithmImprovement || false,
-        consentToFeatureDevelopment: profile.consentToFeatureDevelopment || false
+        consentToAlgorithmImprovement:
+          profile.consentToAlgorithmImprovement || false,
+        consentToFeatureDevelopment:
+          profile.consentToFeatureDevelopment || false,
       });
     }
   }, [profile]);
 
-  const handleConsentChange = (field: keyof typeof consents, value: boolean) => {
+  const handleConsentChange = (
+    field: keyof typeof consents,
+    value: boolean
+  ) => {
     setConsents(prev => {
       const newConsents = { ...prev, [field]: value };
-      
+
       // If disabling ML training, disable sub-options
       if (field === 'consentToMLTraining' && !value) {
         newConsents.consentToAlgorithmImprovement = false;
         newConsents.consentToFeatureDevelopment = false;
       }
-      
+
       // If enabling sub-options, ensure main consent is enabled
-      if ((field === 'consentToAlgorithmImprovement' || field === 'consentToFeatureDevelopment') && value) {
+      if (
+        (field === 'consentToAlgorithmImprovement' ||
+          field === 'consentToFeatureDevelopment') &&
+        value
+      ) {
         newConsents.consentToMLTraining = true;
       }
-      
+
       return newConsents;
     });
     setHasChanges(true);
@@ -62,14 +79,15 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
     try {
       await apiClient.updateUserProfile({
         ...consents,
-        consentUpdatedAt: new Date().toISOString()
+        consentUpdatedAt: new Date().toISOString(),
       });
-      
+
       toast.success('Consent preferences updated successfully');
       setHasChanges(false);
     } catch (error: unknown) {
-      console.error("Error saving consent preferences:", error);
-      const errorMessage = getErrorMessage(error) || "Failed to update consent preferences";
+      logger.error('Error saving consent preferences:', error);
+      const errorMessage =
+        getErrorMessage(error) || 'Failed to update consent preferences';
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -79,10 +97,10 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
   return (
     <Card className="border-0 shadow-none">
       <CardHeader className="px-0 pt-0">
-        <CardTitle className="text-xl">{t('settings.dataUsageTitle')}</CardTitle>
-        <CardDescription>
-          {t('settings.dataUsageDescription')}
-        </CardDescription>
+        <CardTitle className="text-xl">
+          {t('settings.dataUsageTitle')}
+        </CardTitle>
+        <CardDescription>{t('settings.dataUsageDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="px-0 space-y-6">
         <div className="rounded-lg border p-4 bg-blue-50 dark:bg-blue-950/20">
@@ -90,11 +108,14 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
             <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="text-sm text-blue-900 dark:text-blue-200">
-                Your data privacy is important to us. These settings control how your uploaded images and segmentation data 
-                may be used to improve our ML models. You can change these preferences at any time.
+                Your data privacy is important to us. These settings control how
+                your uploaded images and segmentation data may be used to
+                improve our ML models. You can change these preferences at any
+                time.
               </p>
               <p className="text-sm text-blue-800 dark:text-blue-300">
-                Data from users who opt out will not be included in any training pipelines.
+                Data from users who opt out will not be included in any training
+                pipelines.
               </p>
             </div>
           </div>
@@ -113,7 +134,9 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
             <Switch
               id="ml-training"
               checked={consents.consentToMLTraining}
-              onCheckedChange={(checked) => handleConsentChange('consentToMLTraining', checked)}
+              onCheckedChange={checked =>
+                handleConsentChange('consentToMLTraining', checked)
+              }
             />
           </div>
 
@@ -131,7 +154,12 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
                 <Switch
                   id="algorithm-improvement"
                   checked={consents.consentToAlgorithmImprovement}
-                  onCheckedChange={(checked) => handleConsentChange('consentToAlgorithmImprovement', checked)}
+                  onCheckedChange={checked =>
+                    handleConsentChange(
+                      'consentToAlgorithmImprovement',
+                      checked
+                    )
+                  }
                 />
               </div>
 
@@ -147,7 +175,9 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
                 <Switch
                   id="feature-development"
                   checked={consents.consentToFeatureDevelopment}
-                  onCheckedChange={(checked) => handleConsentChange('consentToFeatureDevelopment', checked)}
+                  onCheckedChange={checked =>
+                    handleConsentChange('consentToFeatureDevelopment', checked)
+                  }
                 />
               </div>
             </div>
@@ -156,17 +186,18 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
 
         {profile?.consentUpdatedAt && (
           <p className="text-xs text-muted-foreground">
-            Last updated: {new Date(profile.consentUpdatedAt).toLocaleDateString()}
+            Last updated:{' '}
+            {new Date(profile.consentUpdatedAt).toLocaleDateString()}
           </p>
         )}
 
         {hasChanges && (
-          <Button 
-            onClick={handleSaveConsents} 
+          <Button
+            onClick={handleSaveConsents}
             disabled={loading}
             className="w-full sm:w-auto"
           >
-            {loading ? "Saving..." : "Save Consent Preferences"}
+            {loading ? 'Saving...' : 'Save Consent Preferences'}
           </Button>
         )}
       </CardContent>

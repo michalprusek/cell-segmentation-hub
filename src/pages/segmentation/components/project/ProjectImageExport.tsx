@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -15,15 +14,15 @@ interface ProjectImageExportProps {
   onClose: () => void;
 }
 
-const ProjectImageExport: React.FC<ProjectImageExportProps> = ({ 
-  segmentation, 
-  imageName, 
-  onClose 
+const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
+  segmentation,
+  imageName,
+  onClose,
 }) => {
   const [activeTab, setActiveTab] = useState('metrics');
 
   if (!segmentation) return null;
-  
+
   return (
     <motion.div
       className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
@@ -44,7 +43,11 @@ const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
           </Button>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="flex-1 flex flex-col"
+        >
           <div className="px-4 border-b dark:border-gray-700">
             <TabsList className="mt-2">
               <TabsTrigger value="metrics">Metriky sféroidů</TabsTrigger>
@@ -54,12 +57,18 @@ const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
 
           <TabsContent value="metrics" className="flex-1 overflow-auto p-4">
             <div className="mb-4 flex justify-end">
-              <ExcelExporter segmentation={segmentation} imageName={imageName} />
+              <ExcelExporter
+                segmentation={segmentation}
+                imageName={imageName}
+              />
             </div>
             <MetricsDisplay segmentation={segmentation} />
           </TabsContent>
 
-          <TabsContent value="coco" className="flex-1 overflow-auto flex flex-col">
+          <TabsContent
+            value="coco"
+            className="flex-1 overflow-auto flex flex-col"
+          >
             <CocoTab segmentation={segmentation} />
           </TabsContent>
         </Tabs>

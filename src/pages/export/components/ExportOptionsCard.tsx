@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
@@ -27,7 +26,7 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
   setIncludeObjectMetrics,
   handleExportMetricsAsXlsx,
   getSelectedCount,
-  isExporting
+  isExporting,
 }) => {
   return (
     <Card>
@@ -37,30 +36,36 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
       <CardContent>
         <div className="space-y-4">
           <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="include-metadata" 
-              checked={includeMetadata} 
-              onCheckedChange={() => setIncludeMetadata(!includeMetadata)} 
+            <Checkbox
+              id="include-metadata"
+              checked={includeMetadata}
+              onCheckedChange={() => setIncludeMetadata(!includeMetadata)}
             />
             <Label htmlFor="include-metadata">Zahrnout metadata</Label>
           </div>
           <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="include-segmentation" 
-              checked={includeSegmentation} 
-              onCheckedChange={() => setIncludeSegmentation(!includeSegmentation)} 
+            <Checkbox
+              id="include-segmentation"
+              checked={includeSegmentation}
+              onCheckedChange={() =>
+                setIncludeSegmentation(!includeSegmentation)
+              }
             />
             <Label htmlFor="include-segmentation">Zahrnout segmentaci</Label>
           </div>
           <div className="flex items-center space-x-2">
-            <Checkbox 
-              id="include-object-metrics" 
-              checked={includeObjectMetrics} 
-              onCheckedChange={() => setIncludeObjectMetrics(!includeObjectMetrics)} 
+            <Checkbox
+              id="include-object-metrics"
+              checked={includeObjectMetrics}
+              onCheckedChange={() =>
+                setIncludeObjectMetrics(!includeObjectMetrics)
+              }
             />
-            <Label htmlFor="include-object-metrics">Zahrnout metriky objektů</Label>
+            <Label htmlFor="include-object-metrics">
+              Zahrnout metriky objektů
+            </Label>
           </div>
-          
+
           {includeObjectMetrics && (
             <div className="mt-4">
               <Button

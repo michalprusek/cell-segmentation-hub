@@ -1,15 +1,14 @@
-
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion } from "framer-motion";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Home, 
+import { motion } from 'framer-motion';
+import {
+  ChevronLeft,
+  ChevronRight,
+  Home,
   FolderOpen,
-  Image as ImageIcon
+  Image as ImageIcon,
 } from 'lucide-react';
-import { Button } from "@/components/ui/button";
+import { Button } from '@/components/ui/button';
 
 interface EditorHeaderProps {
   projectId: string;
@@ -26,7 +25,7 @@ const EditorHeader = ({
   imageName,
   currentImageIndex,
   totalImages,
-  onNavigate
+  onNavigate,
 }: EditorHeaderProps) => {
   const navigate = useNavigate();
 
@@ -37,9 +36,9 @@ const EditorHeader = ({
   const handleHomeClick = () => {
     navigate('/dashboard');
   };
-  
+
   return (
-    <motion.header 
+    <motion.header
       className="w-full h-12 px-6 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between z-20 shadow-sm"
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -47,19 +46,19 @@ const EditorHeader = ({
     >
       {/* Left section - Breadcrumb Navigation */}
       <div className="flex items-center space-x-3">
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           size="sm"
           className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60"
           onClick={handleHomeClick}
         >
           <Home className="h-4 w-4" />
         </Button>
-        
+
         <ChevronRight className="h-4 w-4 text-slate-400" />
-        
-        <Button 
-          variant="ghost" 
+
+        <Button
+          variant="ghost"
           size="sm"
           className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-800/60 max-w-32 sm:max-w-48"
           onClick={handleBackClick}
@@ -67,9 +66,9 @@ const EditorHeader = ({
           <FolderOpen className="h-4 w-4 mr-2" />
           <span className="truncate text-sm font-medium">{projectTitle}</span>
         </Button>
-        
+
         <ChevronRight className="h-4 w-4 text-slate-400" />
-        
+
         <div className="flex items-center space-x-2">
           <ImageIcon className="h-4 w-4 text-blue-500" />
           <span className="text-sm font-medium text-slate-900 dark:text-white truncate max-w-32 sm:max-w-48">
@@ -77,42 +76,46 @@ const EditorHeader = ({
           </span>
         </div>
       </div>
-      
+
       {/* Right section - Navigation and Progress */}
       <div className="flex items-center space-x-4">
         {/* Progress indicator */}
         <div className="hidden md:flex items-center space-x-3">
           <div className="text-sm text-slate-600 dark:text-slate-300 flex items-center space-x-2">
-            <span className="text-lg font-bold text-blue-600 dark:text-blue-400">{currentImageIndex + 1}</span>
+            <span className="text-lg font-bold text-blue-600 dark:text-blue-400">
+              {currentImageIndex + 1}
+            </span>
             <span className="text-slate-400">/</span>
             <span>{totalImages}</span>
           </div>
-          
+
           {/* Progress bar */}
           <div className="w-24 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-            <div 
+            <div
               className="h-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-300"
-              style={{ width: `${((currentImageIndex + 1) / totalImages) * 100}%` }}
+              style={{
+                width: `${((currentImageIndex + 1) / totalImages) * 100}%`,
+              }}
             />
           </div>
         </div>
-        
+
         {/* Navigation buttons */}
         <div className="flex items-center space-x-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => onNavigate('prev')} 
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigate('prev')}
             disabled={currentImageIndex <= 0}
             className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
             <span className="hidden sm:inline">Previous</span>
           </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => onNavigate('next')} 
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigate('next')}
             disabled={currentImageIndex >= totalImages - 1}
             className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700"
           >

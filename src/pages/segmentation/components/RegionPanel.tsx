@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Circle } from 'lucide-react';
 import { SegmentationResult } from '@/lib/segmentation';
@@ -18,43 +17,44 @@ interface RegionPanelProps {
   onDeletePolygon?: (id: string) => void;
 }
 
-const RegionPanel = ({ 
+const RegionPanel = ({
   loading,
-  segmentation, 
-  selectedPolygonId, 
+  segmentation,
+  selectedPolygonId,
   onSelectPolygon: setSelectedPolygonId,
   hiddenPolygonIds = new Set(),
   onTogglePolygonVisibility,
   onRenamePolygon,
-  onDeletePolygon
+  onDeletePolygon,
 }: RegionPanelProps) => {
   const { t } = useLanguage();
-  const [expandedPolygons, setExpandedPolygons] = useState<Set<string>>(new Set());
+  const [expandedPolygons, setExpandedPolygons] = useState<Set<string>>(
+    new Set()
+  );
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
-  
+
   // Organize polygons by hierarchy (external with internal polygons under them)
   const organizedPolygons = useMemo(() => {
     if (!segmentation) return [];
-    
+
     const externals = segmentation.polygons.filter(p => p.type === 'external');
     const internals = segmentation.polygons.filter(p => p.type === 'internal');
-    
-    
+
     return externals.map(external => ({
       ...external,
       children: internals.filter(internal => {
         // Check if the internal polygon's centroid is contained within the external polygon
         const centroid = getPolygonCentroid(internal.points);
         return isPointInPolygon(centroid, external.points);
-      })
+      }),
     }));
   }, [segmentation]);
-  
+
   const handlePolygonSelect = (id: string) => {
     setSelectedPolygonId(id === selectedPolygonId ? null : id);
   };
-  
+
   const toggleExpanded = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const newExpanded = new Set(expandedPolygons);
@@ -65,13 +65,17 @@ const RegionPanel = ({
     }
     setExpandedPolygons(newExpanded);
   };
-  
+
   const toggleVisibility = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     onTogglePolygonVisibility?.(id);
   };
 
-  const handleStartRename = (id: string, currentName: string, e: React.MouseEvent) => {
+  const handleStartRename = (
+    id: string,
+    currentName: string,
+    e: React.MouseEvent
+  ) => {
     e.stopPropagation();
     setEditingPolygonId(id);
     setEditingName(currentName);
@@ -94,9 +98,9 @@ const RegionPanel = ({
     e.stopPropagation();
     onDeletePolygon?.(id);
   };
-  
+
   if (!segmentation) return null;
-  
+
   return (
     <motion.div
       className="h-full bg-white dark:bg-gray-900 border-l border-gray-200 dark:border-gray-700 flex flex-col shadow-lg"
@@ -106,12 +110,14 @@ const RegionPanel = ({
     >
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Polygons</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          Polygons
+        </h3>
         <div className="text-sm text-gray-600 dark:text-gray-400">
           {segmentation.polygons.length} total polygons
         </div>
       </div>
-      
+
       {/* Content */}
       <div className="flex-1 overflow-y-auto py-4">
         {loading ? (
@@ -131,9 +137,9 @@ const RegionPanel = ({
         ) : (
           <div className="space-y-2">
             {organizedPolygons.map((polygon, index) => (
-              <PolygonItem 
-                key={polygon.id} 
-                polygon={polygon} 
+              <PolygonItem
+                key={polygon.id}
+                polygon={polygon}
                 index={index}
                 selectedPolygonId={selectedPolygonId}
                 expandedPolygons={expandedPolygons}

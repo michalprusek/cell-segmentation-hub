@@ -1,13 +1,24 @@
-
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Moon, Sun, MonitorSmartphone, Languages } from 'lucide-react';
 
 const AppearanceSection = () => {
@@ -38,9 +49,7 @@ const AppearanceSection = () => {
     <Card>
       <CardHeader>
         <CardTitle>{t('settings.appearance')}</CardTitle>
-        <CardDescription>
-          {t('settings.appearanceDescription')}
-        </CardDescription>
+        <CardDescription>{t('settings.appearanceDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-2">
@@ -60,7 +69,7 @@ const AppearanceSection = () => {
                   </div>
                 </SelectTrigger>
                 <SelectContent>
-                  {languageOptions.map((option) => (
+                  {languageOptions.map(option => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.name}
                     </SelectItem>

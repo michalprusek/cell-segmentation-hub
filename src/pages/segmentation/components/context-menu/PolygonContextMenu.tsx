@@ -1,14 +1,22 @@
-
 import React from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  ContextMenuSeparator
+  ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import { Trash, Scissors, Edit } from 'lucide-react';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface PolygonContextMenuProps {
   children: React.ReactNode;
@@ -23,16 +31,14 @@ const PolygonContextMenu = ({
   onDelete,
   onSlice,
   onEdit,
-  polygonId
+  polygonId,
 }: PolygonContextMenuProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
 
   return (
     <>
       <ContextMenu>
-        <ContextMenuTrigger asChild>
-          {children}
-        </ContextMenuTrigger>
+        <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
         <ContextMenuContent className="w-64">
           <ContextMenuItem onClick={onEdit} className="cursor-pointer">
             <Edit className="mr-2 h-4 w-4" />
@@ -43,8 +49,8 @@ const PolygonContextMenu = ({
             <span>Rozdělit polygon</span>
           </ContextMenuItem>
           <ContextMenuSeparator />
-          <ContextMenuItem 
-            onClick={() => setShowDeleteDialog(true)} 
+          <ContextMenuItem
+            onClick={() => setShowDeleteDialog(true)}
             className="cursor-pointer text-red-600"
           >
             <Trash className="mr-2 h-4 w-4" />
@@ -58,12 +64,13 @@ const PolygonContextMenu = ({
           <AlertDialogHeader>
             <AlertDialogTitle>Opravdu chcete smazat polygon?</AlertDialogTitle>
             <AlertDialogDescription>
-              Tato akce je nevratná. Polygon bude trvale odstraněn ze segmentace.
+              Tato akce je nevratná. Polygon bude trvale odstraněn ze
+              segmentace.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Zrušit</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={() => {
                 onDelete();
                 setShowDeleteDialog(false);

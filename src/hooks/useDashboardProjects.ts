@@ -1,12 +1,13 @@
-import { useState, useEffect, useCallback } from "react";
-import { Project } from "@/components/ProjectsList";
-import { ProjectImage } from "@/types";
-import apiClient from "@/lib/api";
-import { toast } from "sonner";
+import { useState, useEffect, useCallback } from 'react';
+import { Project } from '@/components/ProjectsList';
+import { ProjectImage } from '@/types';
+import apiClient from '@/lib/api';
+import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 export interface DashboardProjectsOptions {
   sortField: string;
-  sortDirection: "asc" | "desc";
+  sortDirection: 'asc' | 'desc';
   userId: string | undefined;
 }
 
@@ -15,7 +16,11 @@ interface ApiProject extends Project {
   images?: ProjectImage[];
 }
 
-export const useDashboardProjects = ({ sortField, sortDirection, userId }: DashboardProjectsOptions) => {
+export const useDashboardProjects = ({
+  sortField,
+  sortDirection,
+  userId,
+}: DashboardProjectsOptions) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -26,35 +31,42 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
     try {
       setLoading(true);
       setFetchError(null);
-      
+
       const response = await apiClient.getProjects();
       const projectsData = response.projects;
 
       // No need for additional API calls - backend now includes image data
-      const projectsWithDetails = (projectsData || []).map((project: ApiProject) => {
-        // Extract thumbnail from backend data (first image if available)
-        let thumbnail = "/placeholder.svg";
-        const imageCount = project.image_count || 0;
-        
-        // If project has associated image data from backend
-        if (project.images && project.images.length > 0) {
-          const firstImage = project.images[0];
-          thumbnail = firstImage.thumbnailPath || firstImage.originalPath || "/placeholder.svg";
-          
-          // Ensure URL is absolute for Docker environment
-          if (thumbnail && !thumbnail.startsWith('http')) {
-            const baseUrl = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001';
-            thumbnail = `${baseUrl}${thumbnail.startsWith('/') ? '' : '/'}${thumbnail}`;
-          }
-        }
+      const projectsWithDetails = (projectsData || []).map(
+        (project: ApiProject) => {
+          // Extract thumbnail from backend data (first image if available)
+          let thumbnail = '/placeholder.svg';
+          const imageCount = project.image_count || 0;
 
-        return {
-          ...project,
-          thumbnail,
-          date: formatDate(project.updated_at),
-          imageCount
-        };
-      });
+          // If project has associated image data from backend
+          if (project.images && project.images.length > 0) {
+            const firstImage = project.images[0];
+            thumbnail =
+              firstImage.thumbnailPath ||
+              firstImage.originalPath ||
+              '/placeholder.svg';
+
+            // Ensure URL is absolute for Docker environment
+            if (thumbnail && !thumbnail.startsWith('http')) {
+              const baseUrl =
+                import.meta.env.VITE_API_BASE_URL?.replace('/api', '') ||
+                'http://localhost:3001';
+              thumbnail = `${baseUrl}${thumbnail.startsWith('/') ? '' : '/'}${thumbnail}`;
+            }
+          }
+
+          return {
+            ...project,
+            thumbnail,
+            date: formatDate(project.updated_at),
+            imageCount,
+          };
+        }
+      );
 
       // Sort projects based on sortField and sortDirection
       const sortedProjects = projectsWithDetails.sort((a, b) => {
@@ -65,15 +77,19 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
         if (sortField === 'created_at' || sortField === 'updated_at') {
           const aTime = new Date(aValue).getTime();
           const bTime = new Date(bValue).getTime();
-          
+
           // Handle invalid dates as lowest priority
           const aNum = isNaN(aTime) ? -Infinity : aTime;
           const bNum = isNaN(bTime) ? -Infinity : bTime;
-          
+
           if (aNum === bNum) return 0;
-          return sortDirection === 'asc' ? 
-            (aNum > bNum ? 1 : -1) : 
-            (aNum < bNum ? 1 : -1);
+          return sortDirection === 'asc'
+            ? aNum > bNum
+              ? 1
+              : -1
+            : aNum < bNum
+              ? 1
+              : -1;
         }
 
         // Handle null/undefined values
@@ -93,11 +109,15 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
           if (isNaN(aValue) && isNaN(bValue)) return 0;
           if (isNaN(aValue)) return sortDirection === 'asc' ? 1 : -1;
           if (isNaN(bValue)) return sortDirection === 'asc' ? -1 : 1;
-          
+
           if (aValue === bValue) return 0;
-          return sortDirection === 'asc' ? 
-            (aValue > bValue ? 1 : -1) : 
-            (aValue < bValue ? 1 : -1);
+          return sortDirection === 'asc'
+            ? aValue > bValue
+              ? 1
+              : -1
+            : aValue < bValue
+              ? 1
+              : -1;
         }
 
         // Fallback comparison
@@ -109,9 +129,9 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
 
       setProjects(sortedProjects);
     } catch (error) {
-      console.error("Error fetching projects:", error);
-      setFetchError("Failed to load projects. Please try again.");
-      toast.error("Failed to load projects");
+      logger.error('Error fetching projects:', error);
+      setFetchError('Failed to load projects. Please try again.');
+      toast.error('Failed to load projects');
     } finally {
       setLoading(false);
     }
@@ -130,17 +150,17 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      return "Updated today";
+      return 'Updated today';
     } else if (diffDays === 1) {
-      return "Updated yesterday";
+      return 'Updated yesterday';
     } else if (diffDays < 7) {
       return `Updated ${diffDays} days ago`;
     } else if (diffDays < 30) {
       const diffWeeks = Math.floor(diffDays / 7);
-      return `Updated ${diffWeeks} ${diffWeeks === 1 ? "week" : "weeks"} ago`;
+      return `Updated ${diffWeeks} ${diffWeeks === 1 ? 'week' : 'weeks'} ago`;
     } else {
       const diffMonths = Math.floor(diffDays / 30);
-      return `Updated ${diffMonths} ${diffMonths === 1 ? "month" : "months"} ago`;
+      return `Updated ${diffMonths} ${diffMonths === 1 ? 'month' : 'months'} ago`;
     }
   };
 
@@ -148,6 +168,6 @@ export const useDashboardProjects = ({ sortField, sortDirection, userId }: Dashb
     projects,
     loading,
     fetchError,
-    fetchProjects
+    fetchProjects,
   };
 };

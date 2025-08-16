@@ -1,15 +1,14 @@
-
 import React from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogDescription
-} from "@/components/ui/dialog";
-import { useProjectForm } from "@/hooks/useProjectForm";
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { useProjectForm } from '@/hooks/useProjectForm';
 
 interface ProjectDialogFormProps {
   onSuccess?: (projectId: string) => void;
@@ -23,7 +22,7 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
     projectDescription,
     setProjectDescription,
     isCreating,
-    handleCreateProject
+    handleCreateProject,
   } = useProjectForm({ onSuccess, onClose });
 
   return (
@@ -44,7 +43,7 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
               id="projectName"
               placeholder="e.g., HeLa Cell Spheroids"
               value={projectName}
-              onChange={(e) => setProjectName(e.target.value)}
+              onChange={e => setProjectName(e.target.value)}
               required
             />
           </div>
@@ -56,13 +55,13 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
               id="projectDescription"
               placeholder="e.g., Analysis of tumor spheroids for drug resistance studies"
               value={projectDescription}
-              onChange={(e) => setProjectDescription(e.target.value)}
+              onChange={e => setProjectDescription(e.target.value)}
             />
           </div>
         </div>
         <DialogFooter>
           <Button type="submit" disabled={isCreating}>
-            {isCreating ? "Creating..." : "Create Project"}
+            {isCreating ? 'Creating...' : 'Create Project'}
           </Button>
         </DialogFooter>
       </form>

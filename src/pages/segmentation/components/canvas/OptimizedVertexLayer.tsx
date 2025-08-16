@@ -3,7 +3,13 @@
  * Implements advanced optimizations for smooth vertex interaction
  */
 
-import React, { useRef, useEffect, useCallback, useMemo, useState } from 'react';
+import React, {
+  useRef,
+  useEffect,
+  useCallback,
+  useMemo,
+  useState,
+} from 'react';
 import { Point, Polygon } from '@/lib/segmentation';
 import { VertexDragState } from '@/pages/segmentation/types';
 import { SpatialIndex, rafThrottle } from '@/lib/performanceUtils';
@@ -21,7 +27,11 @@ interface OptimizedVertexLayerProps {
   isZooming?: boolean;
   renderQuality: 'low' | 'medium' | 'high' | 'ultra';
   targetFPS: number;
-  onVertexClick?: (polygonId: string, vertexIndex: number, event: MouseEvent) => void;
+  onVertexClick?: (
+    polygonId: string,
+    vertexIndex: number,
+    event: MouseEvent
+  ) => void;
   onVertexMouseEnter?: (polygonId: string, vertexIndex: number) => void;
   onVertexMouseLeave?: () => void;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
@@ -48,7 +58,7 @@ interface VertexRenderData {
  */
 class VertexLODManager {
   private static instance: VertexLODManager;
-  
+
   static getInstance(): VertexLODManager {
     if (!VertexLODManager.instance) {
       VertexLODManager.instance = new VertexLODManager();
@@ -65,34 +75,41 @@ class VertexLODManager {
   ): boolean {
     // Always render vertices for selected or hovered polygons
     if (isSelected || isHovered) return true;
-    
+
     // Never render vertices during extreme zoom out
     if (zoom < 0.2) return false;
-    
+
     // More permissive quality-based thresholds
     const qualityThresholds = {
       low: { minZoom: 0.8, maxPolygons: 100 },
       medium: { minZoom: 0.5, maxPolygons: 300 },
       high: { minZoom: 0.3, maxPolygons: 500 },
-      ultra: { minZoom: 0.2, maxPolygons: 1000 }
+      ultra: { minZoom: 0.2, maxPolygons: 1000 },
     };
-    
-    const threshold = qualityThresholds[renderQuality as keyof typeof qualityThresholds] || qualityThresholds.high;
-    
+
+    const threshold =
+      qualityThresholds[renderQuality as keyof typeof qualityThresholds] ||
+      qualityThresholds.high;
+
     // Render based on polygon count and zoom
     return zoom >= threshold.minZoom && polygonCount <= threshold.maxPolygons;
   }
 
-  getVertexDecimationStep(zoom: number, pointCount: number, renderQuality: string): number {
+  getVertexDecimationStep(
+    zoom: number,
+    pointCount: number,
+    renderQuality: string
+  ): number {
     if (pointCount <= 10) return 1; // No decimation for simple polygons
-    
-    const qualityMultiplier = {
-      low: 3,
-      medium: 2,
-      high: 1.5,
-      ultra: 1
-    }[renderQuality as keyof typeof qualityMultiplier] || 1.5;
-    
+
+    const qualityMultiplier =
+      {
+        low: 3,
+        medium: 2,
+        high: 1.5,
+        ultra: 1,
+      }[renderQuality as keyof typeof qualityMultiplier] || 1.5;
+
     if (zoom < 0.5) {
       return Math.ceil(20 * qualityMultiplier);
     } else if (zoom < 1.0) {
@@ -115,19 +132,19 @@ class VertexLODManager {
     const baseSize = isSelected ? 1.2 : 1.0;
     const hoverMultiplier = isHovered ? 1.3 : 1.0;
     const dragMultiplier = isDragging ? 1.5 : 1.0;
-    
+
     let radius: number;
-    
+
     if (zoom > 4) {
-      radius = 6 * baseSize / zoom;
+      radius = (6 * baseSize) / zoom;
     } else if (zoom > 2) {
-      radius = 5 * baseSize / zoom;
+      radius = (5 * baseSize) / zoom;
     } else if (zoom < 0.5) {
-      radius = 3 * baseSize / zoom;
+      radius = (3 * baseSize) / zoom;
     } else {
-      radius = 4 * baseSize / zoom;
+      radius = (4 * baseSize) / zoom;
     }
-    
+
     return Math.max(2, radius * hoverMultiplier * dragMultiplier);
   }
 }
@@ -152,13 +169,13 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
   onVertexMouseEnter,
   onVertexMouseLeave,
   onDeleteVertex,
-  onDuplicateVertex
+  onDuplicateVertex,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const spatialIndexRef = useRef<SpatialIndex>(new SpatialIndex());
   const lodManager = VertexLODManager.getInstance();
   const [isInitialized, setIsInitialized] = useState(false);
-  
+
   // Performance tracking
   const frameTimeRef = useRef<number[]>([]);
   const lastRenderTime = useRef(0);
@@ -178,59 +195,76 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
     return {
       x: -offset.x - buffer,
       y: -offset.y - buffer,
-      width: (containerWidth / zoom) + 2 * buffer,
-      height: (containerHeight / zoom) + 2 * buffer
+      width: containerWidth / zoom + 2 * buffer,
+      height: containerHeight / zoom + 2 * buffer,
     };
   }, [zoom, offset, containerWidth, containerHeight]);
 
   // Collect all vertices with metadata and apply LOD
   const vertexRenderData = useMemo(() => {
     const vertices: VertexRenderData[] = [];
-    
+
     for (const polygon of polygons) {
       const isSelected = polygon.id === selectedPolygonId;
       const isPolygonHovered = hoveredVertex.polygonId === polygon.id;
-      
+
       // Check if vertices should be rendered for this polygon
-      if (!lodManager.shouldRenderVertices(
-        zoom, 
-        polygons.length, 
-        isSelected, 
-        isPolygonHovered, 
-        renderQuality
-      ) || isZooming) {
+      if (
+        !lodManager.shouldRenderVertices(
+          zoom,
+          polygons.length,
+          isSelected,
+          isPolygonHovered,
+          renderQuality
+        ) ||
+        isZooming
+      ) {
         continue;
       }
 
       // Apply decimation based on zoom and quality
       const decimationStep = lodManager.getVertexDecimationStep(
-        zoom, 
-        polygon.points.length, 
+        zoom,
+        polygon.points.length,
         renderQuality
       );
 
       // Generate vertices with decimation
       for (let i = 0; i < polygon.points.length; i += decimationStep) {
         const point = polygon.points[i];
-        
+
         // Viewport culling
-        if (point.x < viewportBounds.x || 
-            point.x > viewportBounds.x + viewportBounds.width ||
-            point.y < viewportBounds.y || 
-            point.y > viewportBounds.y + viewportBounds.height) {
+        if (
+          point.x < viewportBounds.x ||
+          point.x > viewportBounds.x + viewportBounds.width ||
+          point.y < viewportBounds.y ||
+          point.y > viewportBounds.y + viewportBounds.height
+        ) {
           continue;
         }
 
-        const isVertexHovered = hoveredVertex.polygonId === polygon.id && 
-                               hoveredVertex.vertexIndex === i;
-        const isDragging = vertexDragState.isDragging && 
-                          vertexDragState.polygonId === polygon.id && 
-                          vertexDragState.vertexIndex === i;
+        const isVertexHovered =
+          hoveredVertex.polygonId === polygon.id &&
+          hoveredVertex.vertexIndex === i;
+        const isDragging =
+          vertexDragState.isDragging &&
+          vertexDragState.polygonId === polygon.id &&
+          vertexDragState.vertexIndex === i;
 
-        const radius = lodManager.calculateVertexRadius(zoom, isSelected, isVertexHovered, isDragging);
-        
+        const radius = lodManager.calculateVertexRadius(
+          zoom,
+          isSelected,
+          isVertexHovered,
+          isDragging
+        );
+
         // Calculate colors
-        const colors = getVertexColors(polygon.type, isSelected, isVertexHovered, isDragging);
+        const colors = getVertexColors(
+          polygon.type,
+          isSelected,
+          isVertexHovered,
+          isDragging
+        );
 
         vertices.push({
           polygonId: polygon.id,
@@ -244,21 +278,21 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
           fillColor: colors.fill,
           strokeColor: colors.stroke,
           strokeWidth: colors.strokeWidth,
-          opacity: colors.opacity
+          opacity: colors.opacity,
         });
       }
     }
 
     return vertices;
   }, [
-    polygons, 
-    selectedPolygonId, 
-    hoveredVertex, 
-    vertexDragState, 
-    zoom, 
-    renderQuality, 
-    isZooming, 
-    viewportBounds
+    polygons,
+    selectedPolygonId,
+    hoveredVertex,
+    vertexDragState,
+    zoom,
+    renderQuality,
+    isZooming,
+    viewportBounds,
   ]);
 
   // Update spatial index
@@ -283,7 +317,7 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
     canvas.height = imageSize.height * devicePixelRatio;
     canvas.style.width = `${imageSize.width}px`;
     canvas.style.height = `${imageSize.height}px`;
-    
+
     ctx.scale(devicePixelRatio, devicePixelRatio);
     ctx.clearRect(0, 0, imageSize.width, imageSize.height);
 
@@ -297,7 +331,7 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
 
     // Batch rendering by grouping similar vertices
     const vertexGroups = new Map<string, VertexRenderData[]>();
-    
+
     for (const vertex of vertexRenderData) {
       const groupKey = `${vertex.fillColor}_${vertex.strokeColor}_${vertex.radius.toFixed(1)}`;
       if (!vertexGroups.has(groupKey)) {
@@ -309,9 +343,9 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
     // Render each group with minimal state changes
     for (const [groupKey, groupVertices] of vertexGroups.entries()) {
       if (groupVertices.length === 0) continue;
-      
+
       const representative = groupVertices[0];
-      
+
       // Set fill style once for the group
       ctx.fillStyle = representative.fillColor;
       ctx.strokeStyle = representative.strokeColor;
@@ -323,7 +357,7 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
         ctx.beginPath();
         ctx.arc(vertex.point.x, vertex.point.y, vertex.radius, 0, 2 * Math.PI);
         ctx.fill();
-        
+
         if (vertex.strokeWidth > 0) {
           ctx.stroke();
         }
@@ -336,7 +370,7 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
     if (frameTimeRef.current.length > 30) {
       frameTimeRef.current.shift();
     }
-    
+
     lastRenderTime.current = renderTime;
   }, [vertexRenderData, imageSize, renderQuality, isInitialized]);
 
@@ -352,56 +386,79 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
   }, [throttledDraw]);
 
   // Mouse event handling with spatial indexing
-  const handleMouseEvent = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const handleMouseEvent = useCallback(
+    (event: React.MouseEvent<HTMLCanvasElement>) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) * (imageSize.width / rect.width);
-    const y = (event.clientY - rect.top) * (imageSize.height / rect.height);
+      const rect = canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) * (imageSize.width / rect.width);
+      const y = (event.clientY - rect.top) * (imageSize.height / rect.height);
 
-    // Use spatial index for efficient vertex lookup
-    const visibleIndices = spatialIndexRef.current.getVisibleIndices(
-      x - 20, y - 20, 40, 40, 0 // Small area around mouse
-    );
-
-    let foundVertex: VertexRenderData | null = null;
-    let minDistance = Infinity;
-
-    // Find closest vertex within click radius
-    for (const index of visibleIndices) {
-      const vertex = vertexRenderData[index];
-      if (!vertex) continue;
-
-      const distance = Math.sqrt(
-        Math.pow(x - vertex.point.x, 2) + Math.pow(y - vertex.point.y, 2)
+      // Use spatial index for efficient vertex lookup
+      const visibleIndices = spatialIndexRef.current.getVisibleIndices(
+        x - 20,
+        y - 20,
+        40,
+        40,
+        0 // Small area around mouse
       );
-      
-      const clickRadius = vertex.radius + 3; // Small buffer for easier clicking
-      
-      if (distance <= clickRadius && distance < minDistance) {
-        minDistance = distance;
-        foundVertex = vertex;
-      }
-    }
 
-    if (foundVertex) {
-      if (event.type === 'click') {
-        onVertexClick?.(foundVertex.polygonId, foundVertex.originalIndex, event.nativeEvent);
-      } else if (event.type === 'mouseenter' || event.type === 'mousemove') {
-        onVertexMouseEnter?.(foundVertex.polygonId, foundVertex.originalIndex);
+      let foundVertex: VertexRenderData | null = null;
+      let minDistance = Infinity;
+
+      // Find closest vertex within click radius
+      for (const index of visibleIndices) {
+        const vertex = vertexRenderData[index];
+        if (!vertex) continue;
+
+        const distance = Math.sqrt(
+          Math.pow(x - vertex.point.x, 2) + Math.pow(y - vertex.point.y, 2)
+        );
+
+        const clickRadius = vertex.radius + 3; // Small buffer for easier clicking
+
+        if (distance <= clickRadius && distance < minDistance) {
+          minDistance = distance;
+          foundVertex = vertex;
+        }
       }
-    } else {
-      if (event.type === 'mouseleave' || event.type === 'mousemove') {
-        onVertexMouseLeave?.();
+
+      if (foundVertex) {
+        if (event.type === 'click') {
+          onVertexClick?.(
+            foundVertex.polygonId,
+            foundVertex.originalIndex,
+            event.nativeEvent
+          );
+        } else if (event.type === 'mouseenter' || event.type === 'mousemove') {
+          onVertexMouseEnter?.(
+            foundVertex.polygonId,
+            foundVertex.originalIndex
+          );
+        }
+      } else {
+        if (event.type === 'mouseleave' || event.type === 'mousemove') {
+          onVertexMouseLeave?.();
+        }
       }
-    }
-  }, [vertexRenderData, imageSize, onVertexClick, onVertexMouseEnter, onVertexMouseLeave]);
+    },
+    [
+      vertexRenderData,
+      imageSize,
+      onVertexClick,
+      onVertexMouseEnter,
+      onVertexMouseLeave,
+    ]
+  );
 
   // Performance monitoring for development
   const averageRenderTime = useMemo(() => {
     if (frameTimeRef.current.length === 0) return 0;
-    return frameTimeRef.current.reduce((sum, time) => sum + time, 0) / frameTimeRef.current.length;
+    return (
+      frameTimeRef.current.reduce((sum, time) => sum + time, 0) /
+      frameTimeRef.current.length
+    );
   }, [vertexRenderData]);
 
   return (
@@ -414,13 +471,13 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
           left: 0,
           pointerEvents: isZooming ? 'none' : 'auto',
           zIndex: 10,
-          transformOrigin: '0 0'
+          transformOrigin: '0 0',
         }}
         onClick={handleMouseEvent}
         onMouseMove={handleMouseEvent}
         onMouseLeave={handleMouseEvent}
       />
-      
+
       {/* Development performance overlay */}
       {process.env.NODE_ENV === 'development' && (
         <div
@@ -435,7 +492,7 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
             fontSize: '10px',
             fontFamily: 'monospace',
             pointerEvents: 'none',
-            zIndex: 1001
+            zIndex: 1001,
           }}
         >
           <div>Vertices: {vertexRenderData.length}</div>
@@ -462,21 +519,29 @@ function getVertexColors(
 ) {
   if (polygonType === 'internal') {
     return {
-      fill: isDragging ? '#0077cc' : 
-            isHovered ? '#3498db' : 
-            (isSelected ? '#0EA5E9' : 'rgba(14, 165, 233, 0.8)'),
+      fill: isDragging
+        ? '#0077cc'
+        : isHovered
+          ? '#3498db'
+          : isSelected
+            ? '#0EA5E9'
+            : 'rgba(14, 165, 233, 0.8)',
       stroke: '#fff',
       strokeWidth: isSelected ? 1.5 : 1.0,
-      opacity: isDragging ? 1.0 : (isHovered ? 0.9 : 0.8)
+      opacity: isDragging ? 1.0 : isHovered ? 0.9 : 0.8,
     };
   } else {
     return {
-      fill: isDragging ? '#c0392b' : 
-            isHovered ? '#e74c3c' : 
-            (isSelected ? '#ea384c' : 'rgba(234, 56, 76, 0.8)'),
+      fill: isDragging
+        ? '#c0392b'
+        : isHovered
+          ? '#e74c3c'
+          : isSelected
+            ? '#ea384c'
+            : 'rgba(234, 56, 76, 0.8)',
       stroke: '#fff',
       strokeWidth: isSelected ? 1.5 : 1.0,
-      opacity: isDragging ? 1.0 : (isHovered ? 0.9 : 0.8)
+      opacity: isDragging ? 1.0 : isHovered ? 0.9 : 0.8,
     };
   }
 }

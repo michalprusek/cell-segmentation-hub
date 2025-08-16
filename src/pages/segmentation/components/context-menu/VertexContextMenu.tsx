@@ -1,11 +1,10 @@
-
 import React from 'react';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  ContextMenuSeparator
+  ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import { Trash, Copy } from 'lucide-react';
 
@@ -22,21 +21,19 @@ const VertexContextMenu = ({
   onDelete,
   onDuplicate,
   vertexIndex,
-  polygonId
+  polygonId,
 }: VertexContextMenuProps) => {
   return (
     <ContextMenu>
-      <ContextMenuTrigger asChild>
-        {children}
-      </ContextMenuTrigger>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-64">
         <ContextMenuItem onClick={onDuplicate} className="cursor-pointer">
           <Copy className="mr-2 h-4 w-4" />
           <span>Duplikovat bod</span>
         </ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem 
-          onClick={onDelete} 
+        <ContextMenuItem
+          onClick={onDelete}
           className="cursor-pointer text-red-600"
         >
           <Trash className="mr-2 h-4 w-4" />

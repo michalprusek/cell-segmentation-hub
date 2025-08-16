@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 
 import React from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
@@ -12,48 +13,58 @@ interface ExcelExporterProps {
   imageName?: string;
 }
 
-const ExcelExporter: React.FC<ExcelExporterProps> = ({ segmentation, imageName }) => {
+const ExcelExporter: React.FC<ExcelExporterProps> = ({
+  segmentation,
+  imageName,
+}) => {
   if (!segmentation || !segmentation.polygons) return null;
-  
+
   const handleExportXlsx = async () => {
     if (!segmentation || !segmentation.polygons) return;
-    
+
     try {
       // Get only external polygons
-      const externalPolygons = segmentation.polygons.filter(polygon => polygon.type === 'external');
-      
+      const externalPolygons = segmentation.polygons.filter(
+        polygon => polygon.type === 'external'
+      );
+
       // Calculate metrics for each external polygon
-      const metricsData: SpheroidMetric[] = externalPolygons.map((polygon, index) => {
-        // Find internal polygons (holes) related to this external polygon
-        const holes = segmentation.polygons.filter(p => p.type === 'internal');
-        
-        // Calculate metrics with holes considered
-        const metrics = calculateMetrics(polygon, holes);
-        
-        return {
-          imageId: segmentation.id || '',
-          imageName: imageName || 'unnamed',
-          contourNumber: index + 1,
-          area: metrics.Area,
-          perimeter: metrics.Perimeter,
-          circularity: metrics.Circularity,
-          compactness: metrics.Compactness,
-          convexity: metrics.Convexity,
-          equivalentDiameter: metrics.EquivalentDiameter,
-          aspectRatio: metrics.FeretAspectRatio,
-          feretDiameterMax: metrics.FeretDiameterMax,
-          feretDiameterMaxOrthogonal: metrics.FeretDiameterMaxOrthogonalDistance,
-          feretDiameterMin: metrics.FeretDiameterMin,
-          lengthMajorDiameter: metrics.LengthMajorDiameterThroughCentroid,
-          lengthMinorDiameter: metrics.LengthMinorDiameterThroughCentroid,
-          solidity: metrics.Solidity,
-          sphericity: metrics.Sphericity
-        };
-      });
-      
+      const metricsData: SpheroidMetric[] = externalPolygons.map(
+        (polygon, index) => {
+          // Find internal polygons (holes) related to this external polygon
+          const holes = segmentation.polygons.filter(
+            p => p.type === 'internal'
+          );
+
+          // Calculate metrics with holes considered
+          const metrics = calculateMetrics(polygon, holes);
+
+          return {
+            imageId: segmentation.id || '',
+            imageName: imageName || 'unnamed',
+            contourNumber: index + 1,
+            area: metrics.Area,
+            perimeter: metrics.Perimeter,
+            circularity: metrics.Circularity,
+            compactness: metrics.Compactness,
+            convexity: metrics.Convexity,
+            equivalentDiameter: metrics.EquivalentDiameter,
+            aspectRatio: metrics.FeretAspectRatio,
+            feretDiameterMax: metrics.FeretDiameterMax,
+            feretDiameterMaxOrthogonal:
+              metrics.FeretDiameterMaxOrthogonalDistance,
+            feretDiameterMin: metrics.FeretDiameterMin,
+            lengthMajorDiameter: metrics.LengthMajorDiameterThroughCentroid,
+            lengthMinorDiameter: metrics.LengthMinorDiameterThroughCentroid,
+            solidity: metrics.Solidity,
+            sphericity: metrics.Sphericity,
+          };
+        }
+      );
+
       // Create workbook and worksheet using SheetJS
       const workbook = XLSX.utils.book_new();
-      
+
       // Prepare data with headers
       const worksheetData = [
         [
@@ -72,7 +83,7 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({ segmentation, imageName }
           'Length Minor Diameter',
           'Perimeter',
           'Solidity',
-          'Sphericity'
+          'Sphericity',
         ],
         ...metricsData.map(metric => [
           metric.imageName,
@@ -90,33 +101,32 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({ segmentation, imageName }
           metric.lengthMinorDiameter,
           metric.perimeter,
           metric.solidity,
-          metric.sphericity
-        ])
+          metric.sphericity,
+        ]),
       ];
-      
+
       // Create worksheet
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
-      
+
       // Add worksheet to workbook
       XLSX.utils.book_append_sheet(workbook, worksheet, 'Spheroid Metrics');
-      
+
       // Download file
       const filename = `${imageName || 'spheroid'}_metrics.xlsx`;
       XLSX.writeFile(workbook, filename);
-      
     } catch (error) {
-      console.error('Failed to export Excel file:', error);
+      logger.error('Failed to export Excel file:', error);
       // You could add a toast notification here if available in the project
       // toast.error('Failed to export Excel file. Please try again.');
       alert('Failed to export Excel file. Please try again.');
       throw error; // Re-throw for any caller handling
     }
   };
-  
+
   return (
-    <Button 
-      variant="default" 
-      size="sm" 
+    <Button
+      variant="default"
+      size="sm"
       onClick={handleExportXlsx}
       className="text-xs"
     >

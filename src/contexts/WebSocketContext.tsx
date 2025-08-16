@@ -1,13 +1,16 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import WebSocketManager from '@/services/webSocketManager';
+import { logger } from '@/lib/logger';
 
 interface WebSocketContextType {
   manager: WebSocketManager | null;
   isConnected: boolean;
 }
 
-const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined);
+const WebSocketContext = createContext<WebSocketContextType | undefined>(
+  undefined
+);
 
 export const useWebSocket = () => {
   const context = useContext(WebSocketContext);
@@ -21,7 +24,9 @@ interface WebSocketProviderProps {
   children: React.ReactNode;
 }
 
-export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }) => {
+export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
+  children,
+}) => {
   const { user, token } = useAuth();
   const [isConnected, setIsConnected] = React.useState(false);
   const managerRef = useRef<WebSocketManager | null>(null);
@@ -70,11 +75,13 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
         // Connect to WebSocket
         await manager.connect({ id: user.id, token });
-        
-        console.log('WebSocketProvider - WebSocket manager initialized');
-        
+
+        logger.debug('WebSocketProvider - WebSocket manager initialized');
       } catch (error) {
-        console.error('WebSocketProvider - Failed to initialize WebSocket manager:', error);
+        logger.error(
+          'WebSocketProvider - Failed to initialize WebSocket manager:',
+          error
+        );
         // Reset flag on error to allow retry
         isInitializedRef.current = false;
       }
@@ -94,7 +101,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({ children }
 
   const value = {
     manager: managerRef.current,
-    isConnected
+    isConnected,
   };
 
   return (

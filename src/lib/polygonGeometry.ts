@@ -17,26 +17,35 @@ export interface BoundingBox {
 /**
  * Calculate the distance from a point to a line segment
  */
-export const distanceToSegment = (point: Point, segmentStart: Point, segmentEnd: Point): number => {
+export const distanceToSegment = (
+  point: Point,
+  segmentStart: Point,
+  segmentEnd: Point
+): number => {
   const dx = segmentEnd.x - segmentStart.x;
   const dy = segmentEnd.y - segmentStart.y;
-  
+
   if (dx === 0 && dy === 0) {
     // Segment is a point, return distance to that point
     const pdx = point.x - segmentStart.x;
     const pdy = point.y - segmentStart.y;
     return Math.sqrt(pdx * pdx + pdy * pdy);
   }
-  
+
   // Calculate the parameter t where the closest point on the segment is
-  const t = Math.max(0, Math.min(1, 
-    ((point.x - segmentStart.x) * dx + (point.y - segmentStart.y) * dy) / (dx * dx + dy * dy)
-  ));
-  
+  const t = Math.max(
+    0,
+    Math.min(
+      1,
+      ((point.x - segmentStart.x) * dx + (point.y - segmentStart.y) * dy) /
+        (dx * dx + dy * dy)
+    )
+  );
+
   // Calculate the closest point on the segment
   const closestX = segmentStart.x + t * dx;
   const closestY = segmentStart.y + t * dy;
-  
+
   // Return distance from point to closest point on segment
   const distX = point.x - closestX;
   const distY = point.y - closestY;
@@ -95,18 +104,25 @@ export const isPolygonClockwise = (points: Point[]): boolean => {
 /**
  * Check if a point is inside a polygon using ray casting algorithm
  */
-export const isPointInPolygon = (point: Point, polygonPoints: Point[]): boolean => {
+export const isPointInPolygon = (
+  point: Point,
+  polygonPoints: Point[]
+): boolean => {
   const x = point.x;
   const y = point.y;
   let inside = false;
 
-  for (let i = 0, j = polygonPoints.length - 1; i < polygonPoints.length; j = i++) {
+  for (
+    let i = 0, j = polygonPoints.length - 1;
+    i < polygonPoints.length;
+    j = i++
+  ) {
     const xi = polygonPoints[i].x;
     const yi = polygonPoints[i].y;
     const xj = polygonPoints[j].x;
     const yj = polygonPoints[j].y;
 
-    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
   }
@@ -122,7 +138,7 @@ export const createPolygon = (points: Point[], color?: string): Polygon => {
     id: `polygon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     points: [...points], // Create a copy
     confidence: 1.0,
-    color: color || '#ff0000'
+    color: color || '#ff0000',
   };
 };
 
@@ -130,16 +146,22 @@ export const createPolygon = (points: Point[], color?: string): Polygon => {
  * Calculate line intersection between two line segments
  */
 export const lineIntersection = (
-  p1: Point, p2: Point, // First line segment
-  p3: Point, p4: Point  // Second line segment
+  p1: Point,
+  p2: Point, // First line segment
+  p3: Point,
+  p4: Point // Second line segment
 ): Point | null => {
-  const x1 = p1.x, y1 = p1.y;
-  const x2 = p2.x, y2 = p2.y;
-  const x3 = p3.x, y3 = p3.y;
-  const x4 = p4.x, y4 = p4.y;
+  const x1 = p1.x,
+    y1 = p1.y;
+  const x2 = p2.x,
+    y2 = p2.y;
+  const x3 = p3.x,
+    y3 = p3.y;
+  const x4 = p4.x,
+    y4 = p4.y;
 
   const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-  
+
   // Lines are parallel
   if (Math.abs(denom) < 1e-10) return null;
 
@@ -150,7 +172,7 @@ export const lineIntersection = (
   if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
     return {
       x: x1 + t * (x2 - x1),
-      y: y1 + t * (y2 - y1)
+      y: y1 + t * (y2 - y1),
     };
   }
 
@@ -161,15 +183,25 @@ export const lineIntersection = (
  * Check which side of a line a point is on
  * Returns positive if point is on the left, negative if on the right, 0 if on the line
  */
-export const pointSideOfLine = (point: Point, lineStart: Point, lineEnd: Point): number => {
-  return (lineEnd.x - lineStart.x) * (point.y - lineStart.y) - 
-         (lineEnd.y - lineStart.y) * (point.x - lineStart.x);
+export const pointSideOfLine = (
+  point: Point,
+  lineStart: Point,
+  lineEnd: Point
+): number => {
+  return (
+    (lineEnd.x - lineStart.x) * (point.y - lineStart.y) -
+    (lineEnd.y - lineStart.y) * (point.x - lineStart.x)
+  );
 };
 
 /**
  * Find the closest vertex in a polygon to a given point
  */
-export const findClosestVertex = (point: Point, polygonPoints: Point[], maxDistance?: number): {
+export const findClosestVertex = (
+  point: Point,
+  polygonPoints: Point[],
+  maxDistance?: number
+): {
   index: number;
   distance: number;
 } | null => {
@@ -188,20 +220,27 @@ export const findClosestVertex = (point: Point, polygonPoints: Point[], maxDista
     }
   }
 
-  if (closestIndex === -1 || (maxDistance !== undefined && minDistance > maxDistance)) {
+  if (
+    closestIndex === -1 ||
+    (maxDistance !== undefined && minDistance > maxDistance)
+  ) {
     return null;
   }
 
   return {
     index: closestIndex,
-    distance: minDistance
+    distance: minDistance,
   };
 };
 
 /**
  * Find the closest segment in a polygon to a given point
  */
-export const findClosestSegment = (point: Point, polygonPoints: Point[], maxDistance?: number): {
+export const findClosestSegment = (
+  point: Point,
+  polygonPoints: Point[],
+  maxDistance?: number
+): {
   startIndex: number;
   endIndex: number;
   distance: number;
@@ -225,18 +264,25 @@ export const findClosestSegment = (point: Point, polygonPoints: Point[], maxDist
       // Calculate projected point on segment
       const dx = p2.x - p1.x;
       const dy = p2.y - p1.y;
-      const t = Math.max(0, Math.min(1, 
-        ((point.x - p1.x) * dx + (point.y - p1.y) * dy) / (dx * dx + dy * dy)
-      ));
-      
+      const t = Math.max(
+        0,
+        Math.min(
+          1,
+          ((point.x - p1.x) * dx + (point.y - p1.y) * dy) / (dx * dx + dy * dy)
+        )
+      );
+
       projectedPoint = {
         x: p1.x + t * dx,
-        y: p1.y + t * dy
+        y: p1.y + t * dy,
       };
     }
   }
 
-  if (closestStartIndex === -1 || (maxDistance !== undefined && minDistance > maxDistance)) {
+  if (
+    closestStartIndex === -1 ||
+    (maxDistance !== undefined && minDistance > maxDistance)
+  ) {
     return null;
   }
 
@@ -244,7 +290,7 @@ export const findClosestSegment = (point: Point, polygonPoints: Point[], maxDist
     startIndex: closestStartIndex,
     endIndex: (closestStartIndex + 1) % polygonPoints.length,
     distance: minDistance,
-    projectedPoint
+    projectedPoint,
   };
 };
 
@@ -275,7 +321,7 @@ export const calculateBoundingBox = (points: Point[]): BoundingBox => {
     minY,
     maxY,
     width: maxX - minX,
-    height: maxY - minY
+    height: maxY - minY,
   };
 };
 
@@ -284,14 +330,17 @@ export const calculateBoundingBox = (points: Point[]): BoundingBox => {
  */
 export const getPolygonCentroid = (points: Point[]): Point => {
   if (!points || points.length === 0) return { x: 0, y: 0 };
-  
-  const sum = points.reduce((acc, point) => ({
-    x: acc.x + point.x,
-    y: acc.y + point.y
-  }), { x: 0, y: 0 });
-  
+
+  const sum = points.reduce(
+    (acc, point) => ({
+      x: acc.x + point.x,
+      y: acc.y + point.y,
+    }),
+    { x: 0, y: 0 }
+  );
+
   return {
     x: sum.x / points.length,
-    y: sum.y / points.length
+    y: sum.y / points.length,
   };
 };

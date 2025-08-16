@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -15,6 +14,7 @@ import apiClient from '@/lib/api';
 import { Profile } from '@/types';
 // Note: Settings functionality now uses AuthContext and API client
 import DashboardHeader from '@/components/DashboardHeader';
+import { logger } from '@/lib/logger';
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -23,7 +23,7 @@ const Settings = () => {
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  
+
   // Get tab from URL parameter, default to 'profile'
   const activeTab = searchParams.get('tab') || 'profile';
 
@@ -42,7 +42,7 @@ const Settings = () => {
         const profileData = await apiClient.getUserProfile();
         setProfile(profileData);
       } catch (error) {
-        console.error('Error fetching profile:', error);
+        logger.error('Error fetching profile:', error);
         // If profile fetch fails, use basic user data
         setProfile({
           id: user.id,
@@ -54,7 +54,7 @@ const Settings = () => {
           consentToMLTraining: false,
           consentToAlgorithmImprovement: false,
           consentToFeatureDevelopment: false,
-          consentUpdatedAt: undefined
+          consentUpdatedAt: undefined,
         });
       } finally {
         setLoading(false);
@@ -65,7 +65,7 @@ const Settings = () => {
   }, [user]);
 
   return (
-    <motion.div 
+    <motion.div
       className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -84,38 +84,46 @@ const Settings = () => {
             <ArrowLeft className="mr-2 h-4 w-4" />
             {t('common.back')}
           </Button>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{t('settings.pageTitle')}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            {t('settings.pageTitle')}
+          </h1>
         </div>
-        
+
         {!loading && (
-          <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={handleTabChange}
+            className="w-full"
+          >
             <TabsList className="mb-8 grid w-full grid-cols-4">
               <TabsTrigger value="profile">{t('settings.profile')}</TabsTrigger>
               <TabsTrigger value="account">{t('settings.account')}</TabsTrigger>
-              <TabsTrigger value="appearance">{t('settings.appearance')}</TabsTrigger>
+              <TabsTrigger value="appearance">
+                {t('settings.appearance')}
+              </TabsTrigger>
               <TabsTrigger value="models">{t('settings.models')}</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="profile">
               {user && profile && (
                 <UserProfileSection userId={user.id} profile={profile} />
               )}
             </TabsContent>
-            
+
             <TabsContent value="account">
               <AccountSection />
             </TabsContent>
-            
+
             <TabsContent value="appearance">
               <AppearanceSection />
             </TabsContent>
-            
+
             <TabsContent value="models">
               <ModelSettingsSection />
             </TabsContent>
           </Tabs>
         )}
-        
+
         {loading && (
           <div className="flex justify-center items-center h-64">
             <span className="text-gray-500">{t('common.loading')}</span>

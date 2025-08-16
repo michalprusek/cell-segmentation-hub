@@ -1,14 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Undo,
-  Redo,
-  Save,
-  ZoomIn,
-  ZoomOut,
-  RotateCcw
-} from 'lucide-react';
+import { Undo, Redo, Save, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface TopToolbarProps {
@@ -16,7 +9,7 @@ interface TopToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   hasUnsavedChanges: boolean;
-  
+
   // Actions
   handleUndo: () => void;
   handleRedo: () => void;
@@ -24,7 +17,7 @@ interface TopToolbarProps {
   handleZoomIn: () => void;
   handleZoomOut: () => void;
   handleResetView: () => void;
-  
+
   // Optional props
   disabled?: boolean;
   isSaving?: boolean;
@@ -44,7 +37,7 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
   handleZoomOut,
   handleResetView,
   disabled = false,
-  isSaving = false
+  isSaving = false,
 }) => {
   const { t } = useLanguage();
 
@@ -61,7 +54,9 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           className="flex items-center gap-2"
         >
           <Undo size={16} />
-          <span className="hidden sm:inline">{t('segmentation.toolbar.undo')}</span>
+          <span className="hidden sm:inline">
+            {t('segmentation.toolbar.undo')}
+          </span>
         </Button>
         <Button
           variant="ghost"
@@ -72,7 +67,9 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           className="flex items-center gap-2"
         >
           <Redo size={16} />
-          <span className="hidden sm:inline">{t('segmentation.toolbar.redo')}</span>
+          <span className="hidden sm:inline">
+            {t('segmentation.toolbar.redo')}
+          </span>
         </Button>
       </div>
 
@@ -87,7 +84,9 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           className="flex items-center gap-2"
         >
           <ZoomIn size={16} />
-          <span className="hidden md:inline">{t('segmentation.toolbar.zoomIn')}</span>
+          <span className="hidden md:inline">
+            {t('segmentation.toolbar.zoomIn')}
+          </span>
         </Button>
         <Button
           variant="ghost"
@@ -98,7 +97,9 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           className="flex items-center gap-2"
         >
           <ZoomOut size={16} />
-          <span className="hidden md:inline">{t('segmentation.toolbar.zoomOut')}</span>
+          <span className="hidden md:inline">
+            {t('segmentation.toolbar.zoomOut')}
+          </span>
         </Button>
         <Button
           variant="ghost"
@@ -109,7 +110,9 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           className="flex items-center gap-2"
         >
           <RotateCcw size={16} />
-          <span className="hidden md:inline">{t('segmentation.toolbar.resetView')}</span>
+          <span className="hidden md:inline">
+            {t('segmentation.toolbar.resetView')}
+          </span>
         </Button>
       </div>
 
@@ -121,14 +124,18 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
           </Badge>
         )}
         <Button
-          variant={hasUnsavedChanges ? "default" : "ghost"}
+          variant={hasUnsavedChanges ? 'default' : 'ghost'}
           size="sm"
           disabled={disabled || isSaving}
           onClick={handleSave}
           className="flex items-center gap-2"
         >
           <Save size={16} />
-          <span>{isSaving ? t('segmentation.toolbar.saving') : t('segmentation.toolbar.save')}</span>
+          <span>
+            {isSaving
+              ? t('segmentation.toolbar.saving')
+              : t('segmentation.toolbar.save')}
+          </span>
         </Button>
       </div>
     </div>

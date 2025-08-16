@@ -8,14 +8,14 @@ import { Point } from '@/lib/segmentation';
 export interface WorkerMessage {
   id: string;
   type: string;
-  payload: any;
+  payload: unknown;
   transferables?: Transferable[];
 }
 
 export interface WorkerResponse {
   id: string;
   success: boolean;
-  result?: any;
+  result?: unknown;
   error?: string;
   executionTime?: number;
 }
@@ -38,15 +38,19 @@ export interface WorkerPoolConfig {
  */
 export abstract class WorkerOperation<TInput, TOutput> {
   abstract readonly type: string;
-  
+
   abstract execute(input: TInput): Promise<TOutput>;
-  
-  protected createMessage(id: string, payload: TInput, transferables?: Transferable[]): WorkerMessage {
+
+  protected createMessage(
+    id: string,
+    payload: TInput,
+    transferables?: Transferable[]
+  ): WorkerMessage {
     return {
       id,
       type: this.type,
       payload,
-      transferables
+      transferables,
     };
   }
 }
@@ -56,17 +60,20 @@ export abstract class WorkerOperation<TInput, TOutput> {
  */
 export class WorkerPool {
   private workers = new Map<string, PooledWorker>();
-  private pendingTasks = new Map<string, {
-    resolve: (value: any) => void;
-    reject: (error: Error) => void;
-    startTime: number;
-  }>();
+  private pendingTasks = new Map<
+    string,
+    {
+      resolve: (value: unknown) => void;
+      reject: (error: Error) => void;
+      startTime: number;
+    }
+  >();
   private taskQueue: Array<{
     message: WorkerMessage;
-    resolve: (value: any) => void;
+    resolve: (value: unknown) => void;
     reject: (error: Error) => void;
   }> = [];
-  
+
   private config: WorkerPoolConfig;
   private nextWorkerId = 0;
   private nextTaskId = 0;
@@ -82,7 +89,7 @@ export class WorkerPool {
       maxWorkers: navigator.hardwareConcurrency || 4,
       idleTimeout: 30000, // 30 seconds
       maxTasksPerWorker: 100,
-      ...config
+      ...config,
     };
 
     // Start cleanup interval
@@ -104,7 +111,7 @@ export class WorkerPool {
 
     return new Promise<TOutput>((resolve, reject) => {
       const availableWorker = this.getAvailableWorker();
-      
+
       if (availableWorker) {
         this.executeOnWorker(availableWorker, message, resolve, reject);
       } else {
@@ -139,13 +146,13 @@ export class WorkerPool {
     batchSize: number = this.config.maxWorkers
   ): Promise<TOutput[]> {
     const results: TOutput[] = [];
-    
+
     for (let i = 0; i < inputs.length; i += batchSize) {
       const batch = inputs.slice(i, i + batchSize);
       const batchResults = await this.executeParallel(operation, batch);
       results.push(...batchResults);
     }
-    
+
     return results;
   }
 
@@ -174,20 +181,20 @@ export class WorkerPool {
   private createWorker(): PooledWorker {
     const workerId = `worker_${this.nextWorkerId++}`;
     const worker = new Worker(this.workerScriptUrl);
-    
+
     const pooledWorker: PooledWorker = {
       worker,
       busy: false,
       taskCount: 0,
-      lastUsed: Date.now()
+      lastUsed: Date.now(),
     };
 
     // Set up message handling
-    worker.onmessage = (event) => {
+    worker.onmessage = event => {
       this.handleWorkerMessage(workerId, event.data);
     };
 
-    worker.onerror = (error) => {
+    worker.onerror = error => {
       this.handleWorkerError(workerId, error);
     };
 
@@ -201,7 +208,7 @@ export class WorkerPool {
   private executeOnWorker(
     pooledWorker: PooledWorker,
     message: WorkerMessage,
-    resolve: (value: any) => void,
+    resolve: (value: unknown) => void,
     reject: (error: Error) => void
   ): void {
     pooledWorker.busy = true;
@@ -212,7 +219,7 @@ export class WorkerPool {
     this.pendingTasks.set(message.id, {
       resolve,
       reject,
-      startTime: performance.now()
+      startTime: performance.now(),
     });
 
     // Send the message with transferables if provided
@@ -226,7 +233,10 @@ export class WorkerPool {
   /**
    * Handle messages from workers
    */
-  private handleWorkerMessage(workerId: string, response: WorkerResponse): void {
+  private handleWorkerMessage(
+    workerId: string,
+    response: WorkerResponse
+  ): void {
     const pooledWorker = this.workers.get(workerId);
     if (!pooledWorker) return;
 
@@ -240,7 +250,7 @@ export class WorkerPool {
     // Calculate execution time and track for statistics
     const executionTime = performance.now() - task.startTime;
     this.executionTimes.push(executionTime);
-    
+
     // Keep only recent execution times for moving average
     if (this.executionTimes.length > this.maxExecutionTimeHistory) {
       this.executionTimes.shift();
@@ -276,7 +286,7 @@ export class WorkerPool {
         tasksToReject.push(taskId);
       }
     }
-    
+
     // Reject only tasks from the failed worker
     for (const taskId of tasksToReject) {
       const task = this.pendingTasks.get(taskId);
@@ -323,7 +333,10 @@ export class WorkerPool {
     pooledWorker.worker.terminate();
 
     // Create a replacement worker if needed
-    if (this.workers.size < this.config.maxWorkers && this.taskQueue.length > 0) {
+    if (
+      this.workers.size < this.config.maxWorkers &&
+      this.taskQueue.length > 0
+    ) {
       this.createWorker();
     }
   }
@@ -358,7 +371,7 @@ export class WorkerPool {
    */
   getStats() {
     const workers = Array.from(this.workers.values());
-    
+
     return {
       totalWorkers: this.workers.size,
       busyWorkers: workers.filter(w => w.busy).length,
@@ -366,11 +379,12 @@ export class WorkerPool {
       queuedTasks: this.taskQueue.length,
       pendingTasks: this.pendingTasks.size,
       maxWorkers: this.config.maxWorkers,
-      averageTaskCount: workers.length > 0 
-        ? workers.reduce((sum, w) => sum + w.taskCount, 0) / workers.length 
-        : 0,
+      averageTaskCount:
+        workers.length > 0
+          ? workers.reduce((sum, w) => sum + w.taskCount, 0) / workers.length
+          : 0,
       averageExecutionTime: this.getAverageExecutionTime(),
-      executionTimeHistory: this.executionTimes.length
+      executionTimeHistory: this.executionTimes.length,
     };
   }
 
@@ -379,51 +393,52 @@ export class WorkerPool {
    */
   async warmUp(workerCount: number = this.config.maxWorkers): void {
     const promises: Promise<void>[] = [];
-    
+
     for (let i = 0; i < Math.min(workerCount, this.config.maxWorkers); i++) {
       promises.push(
         new Promise<void>((resolve, reject) => {
           try {
             const pooledWorker = this.createWorker();
-            
+
             // Wait for worker to be properly initialized
             const worker = pooledWorker.worker;
-            
+
             // Test worker with a simple ping operation
             const testMessage = { type: 'ping', taskId: `warmup_${i}` };
-            
-            const onMessage = (event: MessageEvent) => {
+
+            const onMessage = (event: MessageEvent<WorkerResponse>) => {
               if (event.data.taskId === testMessage.taskId) {
                 worker.removeEventListener('message', onMessage);
                 worker.removeEventListener('error', onError);
                 resolve();
               }
             };
-            
+
             const onError = (error: ErrorEvent) => {
               worker.removeEventListener('message', onMessage);
               worker.removeEventListener('error', onError);
-              reject(new Error(`Worker initialization failed: ${error.message}`));
+              reject(
+                new Error(`Worker initialization failed: ${error.message}`)
+              );
             };
-            
+
             worker.addEventListener('message', onMessage);
             worker.addEventListener('error', onError);
             worker.postMessage(testMessage);
-            
+
             // Fallback timeout in case worker doesn't respond
             setTimeout(() => {
               worker.removeEventListener('message', onMessage);
               worker.removeEventListener('error', onError);
               resolve(); // Resolve anyway to avoid hanging
             }, 5000);
-            
           } catch (error) {
             reject(error);
           }
         })
       );
     }
-    
+
     await Promise.all(promises);
   }
 
@@ -468,16 +483,16 @@ export class WorkerPool {
    */
   getEstimatedCompletionTime(): number {
     const totalTasks = this.pendingTasks.size + this.taskQueue.length;
-    
+
     if (totalTasks === 0) return 0;
-    
+
     // Calculate real average task time based on execution history
     const averageTaskTime = this.getAverageExecutionTime();
     const availableWorkers = Math.max(1, this.workers.size);
-    
+
     return (totalTasks / availableWorkers) * averageTaskTime;
   }
-  
+
   /**
    * Get actual measured average execution time
    */
@@ -485,7 +500,7 @@ export class WorkerPool {
     if (this.executionTimes.length === 0) {
       return 50; // Fallback default for initial estimation
     }
-    
+
     const sum = this.executionTimes.reduce((acc, time) => acc + time, 0);
     return sum / this.executionTimes.length;
   }

@@ -54,19 +54,21 @@ export default {
     createAccount: 'Create Account',
     signInToAccount: 'Sign in to your account',
     sort: 'Sort',
-    no_preview: 'No preview'
+    no_preview: 'No preview',
   },
   dashboard: {
     manageProjects: 'Manage your research projects and analyses',
     projectGallery: 'Project Gallery',
-    projectGalleryDescription: 'Browse and manage all your segmentation projects',
+    projectGalleryDescription:
+      'Browse and manage all your segmentation projects',
     statsOverview: 'Statistics Overview',
     totalProjects: 'Total Projects',
     activeProjects: 'Active Projects',
     totalImages: 'Total Images',
     totalAnalyses: 'Total Analyses',
     lastUpdated: 'Last Updated',
-    noProjectsDescription: 'You haven\'t created any projects yet. Create your first project to get started.',
+    noProjectsDescription:
+      "You haven't created any projects yet. Create your first project to get started.",
     noImagesDescription: 'Upload some images to get started',
     searchProjectsPlaceholder: 'Search projects...',
     searchImagesPlaceholder: 'Search images by name...',
@@ -77,13 +79,15 @@ export default {
     completed: 'Completed',
     processing: 'Processing',
     pending: 'Pending',
-    failed: 'Failed'
+    failed: 'Failed',
   },
   projects: {
     createProject: 'Create New Project',
-    createProjectDesc: 'Add a new project to organize your spheroid images and analyses.',
+    createProjectDesc:
+      'Add a new project to organize your spheroid images and analyses.',
     projectNamePlaceholder: 'e.g., HeLa Cell Spheroids',
-    projectDescPlaceholder: 'e.g., Analysis of tumor spheroids for drug resistance studies',
+    projectDescPlaceholder:
+      'e.g., Analysis of tumor spheroids for drug resistance studies',
     creatingProject: 'Creating...',
     duplicateProject: 'Duplicate',
     shareProject: 'Share',
@@ -107,11 +111,12 @@ export default {
     segmentationCompleted: 'Segmentation completed for image',
     segmentationFailed: 'Segmentation failed',
     segmentationStarted: 'Segmentation has started',
-    segmentationCompleteWithCount: 'Segmentation complete! Found {{count}} objects'
+    segmentationCompleteWithCount:
+      'Segmentation complete! Found {{count}} objects',
   },
   errors: {
     noProjectOrUser: 'Error: No project or user selected',
-    unknown: 'Unknown error'
+    unknown: 'Unknown error',
   },
   images: {
     uploadImages: 'Upload Images',
@@ -137,7 +142,7 @@ export default {
     uploading: 'Uploading',
     processing: 'Processing',
     complete: 'Complete',
-    error: 'Error'
+    error: 'Error',
   },
   settings: {
     pageTitle: 'Settings',
@@ -163,7 +168,7 @@ export default {
       analysisCompleted: 'Analysis Completed',
       newFeatures: 'New Features',
       marketingEmails: 'Marketing Emails',
-      billing: 'Billing Notifications'
+      billing: 'Billing Notifications',
     },
     personal: 'Personal Information',
     fullName: 'Full Name',
@@ -173,39 +178,44 @@ export default {
     bio: 'Bio',
     makeProfileVisible: 'Make my profile visible to other researchers',
     dangerZone: 'Danger Zone',
-    deleteAccountWarning: 'Once you delete your account, there is no going back. All your data will be permanently deleted.',
+    deleteAccountWarning:
+      'Once you delete your account, there is no going back. All your data will be permanently deleted.',
     currentPassword: 'Current Password',
     newPassword: 'New Password',
     confirmNewPassword: 'Confirm New Password',
     models: 'Models',
     modelSelection: 'Model Selection',
-    modelSelectionDescription: 'Choose the AI model to use for cell segmentation',
+    modelSelectionDescription:
+      'Choose the AI model to use for cell segmentation',
     confidenceThreshold: 'Confidence Threshold',
-    confidenceThresholdDescription: 'Minimum confidence required for segmentation predictions',
+    confidenceThresholdDescription:
+      'Minimum confidence required for segmentation predictions',
     currentThreshold: 'Current threshold',
     modelSelected: 'Model selected successfully',
     modelSettingsSaved: 'Model settings saved successfully',
     modelSize: {
       small: 'Small',
       medium: 'Medium',
-      large: 'Large'
+      large: 'Large',
     },
     modelDescription: {
       hrnet: 'Fast and efficient model for real-time segmentation',
       resunet_small: 'Balanced speed and accuracy for most use cases',
-      resunet_advanced: 'Highest accuracy with attention mechanisms'
+      resunet_advanced: 'Highest accuracy with attention mechanisms',
     },
     dataUsageTitle: 'Data Usage & Privacy',
-    dataUsageDescription: 'Control how your data is used for machine learning and research',
+    dataUsageDescription:
+      'Control how your data is used for machine learning and research',
     allowMLTraining: {
       label: 'Allow ML Model Training',
-      description: 'Allow your data to be used for training and improving our segmentation models'
+      description:
+        'Allow your data to be used for training and improving our segmentation models',
     },
     cancel: 'Cancel',
     deleting: 'Deleting...',
     deleteAccount: 'Delete Account',
     accountDeleted: 'Account deleted successfully',
-    deleteAccountError: 'Failed to delete account'
+    deleteAccountError: 'Failed to delete account',
   },
   segmentation: {
     mode: {
@@ -218,7 +228,7 @@ export default {
       slice: 'Slice',
       delete: 'Delete',
       deletePolygon: 'Delete polygon',
-      unknown: 'Unknown'
+      unknown: 'Unknown',
     },
     modeDescription: {
       view: 'Navigate and select polygons',
@@ -226,7 +236,7 @@ export default {
       addPoints: 'Add points between vertices',
       create: 'Create new polygons',
       slice: 'Split polygons with a line',
-      delete: 'Remove polygons'
+      delete: 'Remove polygons',
     },
     toolbar: {
       mode: 'Mode',
@@ -247,7 +257,8 @@ export default {
       unsavedChanges: 'Unsaved changes',
       saving: 'Saving...',
       save: 'Save',
-      keyboardShortcuts: 'V: View • E: Edit • A: Add • N: New • S: Slice • D: Delete'
+      keyboardShortcuts:
+        'V: View • E: Edit • A: Add • N: New • S: Slice • D: Delete',
     },
     status: {
       polygons: 'polygons',
@@ -256,8 +267,8 @@ export default {
       hidden: 'hidden',
       selected: 'selected',
       saved: 'Saved',
-      unsaved: 'Unsaved'
-    }
+      unsaved: 'Unsaved',
+    },
   },
   auth: {
     signIn: 'Sign In',
@@ -265,7 +276,7 @@ export default {
     signOut: 'Sign Out',
     forgotPassword: 'Forgot Password?',
     resetPassword: 'Reset Password',
-    dontHaveAccount: 'Don\'t have an account?',
+    dontHaveAccount: "Don't have an account?",
     alreadyHaveAccount: 'Already have an account?',
     signInWith: 'Sign in with',
     signUpWith: 'Sign up with',
@@ -275,14 +286,14 @@ export default {
     passwordRequired: 'Password is required',
     invalidEmail: 'Invalid email address',
     passwordTooShort: 'Password must be at least 6 characters',
-    passwordsDontMatch: 'Passwords don\'t match',
+    passwordsDontMatch: "Passwords don't match",
     successfulSignIn: 'Successfully signed in',
     successfulSignUp: 'Registration successful',
     verifyEmail: 'Please check your email to confirm your account',
     successfulSignOut: 'Signed out successfully',
     checkingAuthentication: 'Checking authentication...',
     loadingAccount: 'Loading your account...',
-    processingRequest: 'Processing your request...'
+    processingRequest: 'Processing your request...',
   },
   profile: {
     title: 'Profile',
@@ -326,7 +337,7 @@ export default {
     completionRate: 'completion rate',
     createdProject: 'Created project',
     completedSegmentation: 'Completed segmentation for',
-    uploadedImage: 'Uploaded image'
+    uploadedImage: 'Uploaded image',
   },
   status: {
     segmented: 'Segmented',
@@ -336,7 +347,7 @@ export default {
     no_segmentation: 'No segmentation',
     disconnected: 'Disconnected from server',
     error: 'ML service error',
-    ready: 'Ready for segmentation'
+    ready: 'Ready for segmentation',
   },
   queue: {
     title: 'Segmentation Queue',
@@ -347,8 +358,10 @@ export default {
     segmentAll: 'Segment All',
     totalProgress: 'Total Progress',
     images: 'images',
-    connectingMessage: 'Connecting to server... Real-time updates will be available soon.',
-    emptyMessage: 'No images in queue. Upload images and add them to the queue for segmentation.',
-    addingToQueue: 'Adding to queue...'
-  }
+    connectingMessage:
+      'Connecting to server... Real-time updates will be available soon.',
+    emptyMessage:
+      'No images in queue. Upload images and add them to the queue for segmentation.',
+    addingToQueue: 'Adding to queue...',
+  },
 };

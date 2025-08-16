@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { format } from 'date-fns';
 import { Loader2, Check, X } from 'lucide-react';
@@ -20,14 +19,16 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
   loading,
   selectedImages,
   handleSelectAll,
-  handleSelectImage
+  handleSelectImage,
 }) => {
   return (
     <Card className="md:col-span-2">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Vyberte obrázky k exportu</CardTitle>
         <Button variant="outline" size="sm" onClick={handleSelectAll}>
-          {images.every(img => selectedImages[img.id]) ? 'Odznačit vše' : 'Vybrat vše'}
+          {images.every(img => selectedImages[img.id])
+            ? 'Odznačit vše'
+            : 'Vybrat vše'}
         </Button>
       </CardHeader>
       <CardContent>
@@ -42,23 +43,23 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
         ) : (
           <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
             {images.map(image => (
-              <div 
-                key={image.id} 
+              <div
+                key={image.id}
                 className="flex items-center border p-3 rounded-md space-x-4 hover:bg-gray-50 dark:hover:bg-gray-800"
                 onClick={() => handleSelectImage(image.id)}
               >
                 <div className="flex items-center h-5">
-                  <Checkbox 
-                    checked={!!selectedImages[image.id]} 
+                  <Checkbox
+                    checked={!!selectedImages[image.id]}
                     onCheckedChange={() => handleSelectImage(image.id)}
                     id={`check-${image.id}`}
                   />
                 </div>
-                
+
                 <div className="h-10 w-10 bg-gray-200 rounded overflow-hidden flex-shrink-0">
                   {image.thumbnail_url ? (
-                    <img 
-                      src={image.thumbnail_url} 
+                    <img
+                      src={image.thumbnail_url}
                       alt={image.name}
                       className="h-full w-full object-cover"
                     />
@@ -68,14 +69,16 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
                     </div>
                   )}
                 </div>
-                
+
                 <div className="flex-1 truncate">
-                  <div className="font-medium text-sm">{image.name || 'Untitled'}</div>
+                  <div className="font-medium text-sm">
+                    {image.name || 'Untitled'}
+                  </div>
                   <div className="text-xs text-gray-500">
                     {image.createdAt && format(image.createdAt, 'PPP')}
                   </div>
                 </div>
-                
+
                 <div className="flex-shrink-0">
                   {image.segmentationStatus === 'completed' ? (
                     <Check className="h-5 w-5 text-green-500" />

@@ -5,6 +5,7 @@ A comprehensive polygon editing system inspired by SpheroSeg, providing professi
 ## Features
 
 ### Advanced Edit Modes
+
 - **View Mode** (`V`): Navigate and select polygons
 - **Edit Vertices** (`E`): Move and modify polygon vertices
 - **Add Points** (`A`): CVAT-style point insertion between vertices
@@ -13,6 +14,7 @@ A comprehensive polygon editing system inspired by SpheroSeg, providing professi
 - **Delete Polygon** (`D`): Remove polygons by clicking
 
 ### Professional Keyboard Shortcuts
+
 - `V` - View mode
 - `E` - Edit vertices (requires selection)
 - `A` - Add points (requires selection)
@@ -31,6 +33,7 @@ A comprehensive polygon editing system inspired by SpheroSeg, providing professi
 - `H/?` - Show keyboard shortcuts help
 
 ### Advanced Interaction Features
+
 - **CVAT-style Add Points**: Click vertex to start, add sequence, click end vertex
 - **Intelligent Path Replacement**: Automatically chooses optimal path (larger perimeter)
 - **Shift+Auto-Add**: Hold Shift for equidistant point placement
@@ -45,8 +48,8 @@ import { EnhancedSegmentationEditor } from '@/pages/segmentation/components';
 
 function MyComponent() {
   const [polygons, setPolygons] = useState([]);
-  
-  const handleSave = async (polygons) => {
+
+  const handleSave = async polygons => {
     // Save polygons to backend
     await api.saveSegmentation(polygons);
   };
@@ -67,6 +70,7 @@ function MyComponent() {
 ## Architecture
 
 ### Core Hook: `useEnhancedSegmentationEditor`
+
 Central hook that orchestrates all functionality:
 
 ```tsx
@@ -77,17 +81,19 @@ const editor = useEnhancedSegmentationEditor({
   canvasWidth,
   canvasHeight,
   onSave,
-  onPolygonsChange
+  onPolygonsChange,
 });
 ```
 
 ### Component Layer System
+
 - **CanvasContainer**: Mode-aware container with cursor styling
 - **CanvasContent**: Transform-aware content wrapper
 - **Canvas Layers**: Image, polygons, vertices, temporary geometry
 - **UI Overlays**: Instructions, toolbar, status bar
 
 ### Utility Libraries
+
 - **polygonGeometry.ts**: Advanced polygon operations
 - **coordinateUtils.ts**: Canvas coordinate transformations
 - **polygonSlicing.ts**: Line intersection algorithms
@@ -97,6 +103,7 @@ const editor = useEnhancedSegmentationEditor({
 ### From Existing Editor
 
 1. **Replace the main editor component**:
+
 ```tsx
 // Old
 import SegmentationEditor from './SegmentationEditor';
@@ -106,6 +113,7 @@ import EnhancedSegmentationEditor from './components/EnhancedSegmentationEditor'
 ```
 
 2. **Update props interface**:
+
 ```tsx
 // Old props
 interface OldProps {
@@ -123,6 +131,7 @@ interface NewProps {
 ```
 
 3. **Migrate state management**:
+
 ```tsx
 // Old: Multiple boolean states
 const [editMode, setEditMode] = useState(false);
@@ -142,6 +151,7 @@ const [editMode, setEditMode] = useState(EditMode.View);
 ## Advanced Usage
 
 ### Custom Keyboard Shortcuts
+
 ```tsx
 const editor = useEnhancedSegmentationEditor({
   // ... props
@@ -157,35 +167,38 @@ const handleCustomKey = (key, event) => {
 
 useKeyboardShortcuts({
   // ... existing props
-  onKeyDown: handleCustomKey
+  onKeyDown: handleCustomKey,
 });
 ```
 
 ### Custom Slicing Validation
+
 ```tsx
 const slicing = usePolygonSlicing({
   // ... props
   customValidator: (polygon, start, end) => {
     // Custom validation logic
     return { isValid: true };
-  }
+  },
 });
 ```
 
 ### Performance Optimization
+
 ```tsx
 // For large datasets
 const editor = useEnhancedSegmentationEditor({
   // ... props
   enableVirtualization: true,
   maxVisiblePolygons: 100,
-  lodEnabled: true
+  lodEnabled: true,
 });
 ```
 
 ## API Reference
 
 ### EditMode Enum
+
 ```typescript
 enum EditMode {
   View = 'view',
@@ -193,11 +206,12 @@ enum EditMode {
   AddPoints = 'add-points',
   CreatePolygon = 'create-polygon',
   Slice = 'slice',
-  DeletePolygon = 'delete-polygon'
+  DeletePolygon = 'delete-polygon',
 }
 ```
 
 ### InteractionState Interface
+
 ```typescript
 interface InteractionState {
   isDraggingVertex: boolean;
@@ -213,6 +227,7 @@ interface InteractionState {
 ```
 
 ### TransformState Interface
+
 ```typescript
 interface TransformState {
   zoom: number;
@@ -236,12 +251,10 @@ import { render, fireEvent } from '@testing-library/react';
 import { EnhancedSegmentationEditor } from './components';
 
 test('should switch to edit mode on E key', () => {
-  const { container } = render(
-    <EnhancedSegmentationEditor {...props} />
-  );
-  
+  const { container } = render(<EnhancedSegmentationEditor {...props} />);
+
   fireEvent.keyDown(container, { key: 'e' });
-  
+
   expect(container).toHaveAttribute('data-edit-mode', 'edit-vertices');
 });
 ```

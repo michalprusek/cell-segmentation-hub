@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import NewProjectCardUI from '@/components/project/NewProjectCardUI';
 import ProjectDialogForm from '@/components/project/ProjectDialogForm';
 
@@ -11,10 +10,10 @@ interface NewProjectCardProps {
 
 const NewProjectCard = ({ isOpen, onOpenChange }: NewProjectCardProps) => {
   const [open, setOpen] = useState(false);
-  
+
   // Determine if the dialog is open using internal or external state
   const isDialogOpen = isOpen !== undefined ? isOpen : open;
-  
+
   // Function to set the dialog state that respects external and internal state
   const setDialogOpen = (newOpen: boolean) => {
     if (onOpenChange) {

@@ -20,25 +20,28 @@ export interface PolygonMetrics {
 
 // Simulate metrics calculation (would be calculated using OpenCV in reality)
 export const calculateMetrics = (
-  polygon: { points: Array<{x: number, y: number}> }, 
-  holes: Array<{ points: Array<{x: number, y: number}> }> = []
+  polygon: { points: Array<{ x: number; y: number }> },
+  holes: Array<{ points: Array<{ x: number; y: number }> }> = []
 ): PolygonMetrics => {
   // Calculate actual area (subtract hole areas)
   const mainArea = calculatePolygonArea(polygon.points);
-  const holesArea = holes.reduce((sum, hole) => sum + calculatePolygonArea(hole.points), 0);
+  const holesArea = holes.reduce(
+    (sum, hole) => sum + calculatePolygonArea(hole.points),
+    0
+  );
   const area = mainArea - holesArea;
-  
+
   // Calculate perimeter
   const perimeter = calculatePerimeter(polygon.points);
-  
+
   // Calculate circularity: 4π × area / perimeter²
   const circularity = (4 * Math.PI * area) / (perimeter * perimeter);
-  
+
   // Other metrics based on area and perimeter
   return {
     Area: area,
     Perimeter: perimeter,
-    EquivalentDiameter: Math.sqrt(4 * area / Math.PI),
+    EquivalentDiameter: Math.sqrt((4 * area) / Math.PI),
     Circularity: circularity,
     FeretDiameterMax: Math.random() * 100 + 20,
     FeretDiameterMaxOrthogonalDistance: Math.random() * 50 + 10,
@@ -49,7 +52,7 @@ export const calculateMetrics = (
     Compactness: Math.random() * 0.5 + 0.5,
     Convexity: Math.random() * 0.3 + 0.7,
     Solidity: Math.random() * 0.2 + 0.8,
-    Sphericity: Math.random() * 0.4 + 0.6
+    Sphericity: Math.random() * 0.4 + 0.6,
   };
 };
 

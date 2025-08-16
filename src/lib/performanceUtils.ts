@@ -11,7 +11,7 @@ export function rafSchedule<T extends unknown[]>(
 
   return (...args: T) => {
     lastArgs = args;
-    
+
     if (rafId !== null) {
       return; // Already scheduled
     }
@@ -37,12 +37,12 @@ export function rafThrottle<T extends unknown[]>(
 
   const throttledFn = (...args: T) => {
     lastArgs = args;
-    
+
     if (rafId !== null) {
       return; // Already scheduled
     }
 
-    rafId = requestAnimationFrame((currentTime) => {
+    rafId = requestAnimationFrame(currentTime => {
       if (currentTime - lastTime >= interval && lastArgs) {
         callback(...lastArgs);
         lastTime = currentTime;
@@ -69,16 +69,16 @@ export function debounce<T extends unknown[]>(
   delay: number
 ): { (...args: T): void; cancel: () => void } {
   let timeoutId: ReturnType<typeof setTimeout>;
-  
+
   const debouncedFunction = (...args: T) => {
     clearTimeout(timeoutId);
     timeoutId = setTimeout(() => callback(...args), delay);
   };
-  
+
   debouncedFunction.cancel = () => {
     clearTimeout(timeoutId);
   };
-  
+
   return debouncedFunction;
 }
 
@@ -97,7 +97,7 @@ export class ProgressiveRenderer {
   ) {
     this.onAnimationStart = onAnimationStart;
     this.onAnimationEnd = onAnimationEnd;
-    
+
     this.endAnimation = debounce(() => {
       if (this.isAnimating) {
         this.isAnimating = false;
@@ -119,7 +119,7 @@ export class ProgressiveRenderer {
     if (this.endAnimation && typeof this.endAnimation.cancel === 'function') {
       this.endAnimation.cancel();
     }
-    
+
     // Clear references to prevent memory leaks
     this.onAnimationStart = undefined;
     this.onAnimationEnd = undefined;

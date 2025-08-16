@@ -1,24 +1,23 @@
-
-import React from "react";
-import ProjectsList, { Project } from "@/components/ProjectsList";
+import React from 'react';
+import ProjectsList, { Project } from '@/components/ProjectsList';
 
 interface ProjectsTabProps {
   projects: Project[];
-  viewMode: "grid" | "list";
+  viewMode: 'grid' | 'list';
   loading: boolean;
   onOpenProject: (id: string) => void;
 }
 
-const ProjectsTab = ({ 
-  projects, 
-  viewMode, 
-  loading, 
-  onOpenProject 
+const ProjectsTab = ({
+  projects,
+  viewMode,
+  loading,
+  onOpenProject,
 }: ProjectsTabProps) => {
   return (
-    <ProjectsList 
-      projects={projects} 
-      viewMode={viewMode} 
+    <ProjectsList
+      projects={projects}
+      viewMode={viewMode}
       onOpenProject={onOpenProject}
       loading={loading}
       showCreateCard={true}

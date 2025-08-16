@@ -1,14 +1,20 @@
+import { logger } from '@/lib/logger';
 import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Point, Polygon } from '@/lib/segmentation';
-import { EditMode, InteractionState, TransformState, EDITING_CONSTANTS } from '../types';
+import {
+  EditMode,
+  InteractionState,
+  TransformState,
+  EDITING_CONSTANTS,
+} from '../types';
 import { useAdvancedInteractions } from './useAdvancedInteractions';
 import { usePolygonSlicing } from './usePolygonSlicing';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
-import { 
-  calculateCenteringTransform, 
+import {
+  calculateCenteringTransform,
   calculateFixedPointZoom,
-  constrainTransform 
+  constrainTransform,
 } from '@/lib/coordinateUtils';
 
 interface UseEnhancedSegmentationEditorProps {
@@ -32,20 +38,29 @@ export const useEnhancedSegmentationEditor = ({
   canvasWidth,
   canvasHeight,
   onSave,
-  onPolygonsChange
+  onPolygonsChange,
 }: UseEnhancedSegmentationEditorProps) => {
-
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
-  const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(null);
+  const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(
+    null
+  );
   const [editMode, setEditMode] = useState<EditMode>(EditMode.View);
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
-  const [hoveredVertex, setHoveredVertex] = useState<{ polygonId: string; vertexIndex: number } | null>(null);
+  const [hoveredVertex, setHoveredVertex] = useState<{
+    polygonId: string;
+    vertexIndex: number;
+  } | null>(null);
   const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
 
   // Transform state
-  const [transform, setTransform] = useState<TransformState>(() => 
-    calculateCenteringTransform(imageWidth, imageHeight, canvasWidth, canvasHeight)
+  const [transform, setTransform] = useState<TransformState>(() =>
+    calculateCenteringTransform(
+      imageWidth,
+      imageHeight,
+      canvasWidth,
+      canvasHeight
+    )
   );
 
   // Update transformRef whenever transform changes
@@ -61,7 +76,7 @@ export const useEnhancedSegmentationEditor = ({
     sliceStartPoint: null,
     addPointStartVertex: null,
     addPointEndVertex: null,
-    isAddingPoints: false
+    isAddingPoints: false,
   });
 
   // History management
@@ -77,7 +92,11 @@ export const useEnhancedSegmentationEditor = ({
   // Update polygons when initialPolygons changes (e.g., when segmentation data loads)
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 Initial polygons changed:', initialPolygons.length, 'polygons');
+      logger.debug(
+        '🔄 Initial polygons changed:',
+        initialPolygons.length,
+        'polygons'
+      );
     }
     setPolygons(initialPolygons);
     // Reset history with new initial state
@@ -85,26 +104,33 @@ export const useEnhancedSegmentationEditor = ({
     setHistoryIndex(0);
     setHasUnsavedChanges(false);
     if (process.env.NODE_ENV === 'development') {
-      console.log('✅ Updated editor with', initialPolygons.length, 'polygons');
+      logger.debug(
+        '✅ Updated editor with',
+        initialPolygons.length,
+        'polygons'
+      );
     }
   }, [initialPolygons]);
 
   // Update polygons with history tracking
-  const updatePolygons = useCallback((newPolygons: Polygon[], addToHistory = true) => {
-    setPolygons(newPolygons);
-    setHasUnsavedChanges(true);
-    
-    if (addToHistory) {
-      const newHistory = history.slice(0, historyIndex + 1);
-      newHistory.push(newPolygons);
-      setHistory(newHistory);
-      setHistoryIndex(newHistory.length - 1);
-    }
+  const updatePolygons = useCallback(
+    (newPolygons: Polygon[], addToHistory = true) => {
+      setPolygons(newPolygons);
+      setHasUnsavedChanges(true);
 
-    if (onPolygonsChange) {
-      onPolygonsChange(newPolygons);
-    }
-  }, [history, historyIndex, onPolygonsChange]);
+      if (addToHistory) {
+        const newHistory = history.slice(0, historyIndex + 1);
+        newHistory.push(newPolygons);
+        setHistory(newHistory);
+        setHistoryIndex(newHistory.length - 1);
+      }
+
+      if (onPolygonsChange) {
+        onPolygonsChange(newPolygons);
+      }
+    },
+    [history, historyIndex, onPolygonsChange]
+  );
 
   // Get current polygons
   const getPolygons = useCallback(() => polygons, [polygons]);
@@ -119,7 +145,7 @@ export const useEnhancedSegmentationEditor = ({
       setHistoryIndex(newIndex);
       setPolygons(history[newIndex]);
       setHasUnsavedChanges(newIndex !== 0);
-      
+
       if (onPolygonsChange) {
         onPolygonsChange(history[newIndex]);
       }
@@ -132,7 +158,7 @@ export const useEnhancedSegmentationEditor = ({
       setHistoryIndex(newIndex);
       setPolygons(history[newIndex]);
       setHasUnsavedChanges(true);
-      
+
       if (onPolygonsChange) {
         onPolygonsChange(history[newIndex]);
       }
@@ -150,7 +176,7 @@ export const useEnhancedSegmentationEditor = ({
       toast.success('Segmentation saved successfully');
     } catch (error) {
       toast.error('Failed to save segmentation');
-      console.error('Save error:', error);
+      logger.error('Save error:', error);
     } finally {
       setIsSaving(false);
     }
@@ -160,17 +186,17 @@ export const useEnhancedSegmentationEditor = ({
   const handleZoomIn = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
-      transform, 
-      center, 
+      transform,
+      center,
       EDITING_CONSTANTS.ZOOM_FACTOR,
       EDITING_CONSTANTS.MIN_ZOOM,
       EDITING_CONSTANTS.MAX_ZOOM
     );
     const constrainedTransform = constrainTransform(
-      newTransform, 
-      imageWidth, 
-      imageHeight, 
-      canvasWidth, 
+      newTransform,
+      imageWidth,
+      imageHeight,
+      canvasWidth,
       canvasHeight
     );
     setTransform(constrainedTransform);
@@ -179,17 +205,17 @@ export const useEnhancedSegmentationEditor = ({
   const handleZoomOut = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
-      transform, 
-      center, 
+      transform,
+      center,
       1 / EDITING_CONSTANTS.ZOOM_FACTOR,
       EDITING_CONSTANTS.MIN_ZOOM,
       EDITING_CONSTANTS.MAX_ZOOM
     );
     const constrainedTransform = constrainTransform(
-      newTransform, 
-      imageWidth, 
-      imageHeight, 
-      canvasWidth, 
+      newTransform,
+      imageWidth,
+      imageHeight,
+      canvasWidth,
       canvasHeight
     );
     setTransform(constrainedTransform);
@@ -197,28 +223,31 @@ export const useEnhancedSegmentationEditor = ({
 
   const handleResetView = useCallback(() => {
     const newTransform = calculateCenteringTransform(
-      imageWidth, 
-      imageHeight, 
-      canvasWidth, 
+      imageWidth,
+      imageHeight,
+      canvasWidth,
       canvasHeight
     );
     setTransform(newTransform);
   }, [imageWidth, imageHeight, canvasWidth, canvasHeight]);
 
   // Polygon operations
-  const handleDeletePolygon = useCallback((polygonId?: string) => {
-    const idToDelete = polygonId || selectedPolygonId;
-    if (!idToDelete) return;
+  const handleDeletePolygon = useCallback(
+    (polygonId?: string) => {
+      const idToDelete = polygonId || selectedPolygonId;
+      if (!idToDelete) return;
 
-    const updatedPolygons = polygons.filter(p => p.id !== idToDelete);
-    updatePolygons(updatedPolygons);
-    
-    if (selectedPolygonId === idToDelete) {
-      setSelectedPolygonId(null);
-    }
-    
-    toast.success('Polygon deleted');
-  }, [polygons, selectedPolygonId, updatePolygons]);
+      const updatedPolygons = polygons.filter(p => p.id !== idToDelete);
+      updatePolygons(updatedPolygons);
+
+      if (selectedPolygonId === idToDelete) {
+        setSelectedPolygonId(null);
+      }
+
+      toast.success('Polygon deleted');
+    },
+    [polygons, selectedPolygonId, updatePolygons]
+  );
 
   // Escape handler
   const handleEscape = useCallback(() => {
@@ -233,7 +262,7 @@ export const useEnhancedSegmentationEditor = ({
       sliceStartPoint: null,
       addPointStartVertex: null,
       addPointEndVertex: null,
-      isAddingPoints: false
+      isAddingPoints: false,
     });
     setEditMode(EditMode.View);
   }, []);
@@ -253,7 +282,7 @@ export const useEnhancedSegmentationEditor = ({
     setTempPoints,
     setHoveredVertex,
     updatePolygons,
-    getPolygons
+    getPolygons,
   });
 
   const slicing = usePolygonSlicing({
@@ -265,7 +294,7 @@ export const useEnhancedSegmentationEditor = ({
     setTempPoints,
     setInteractionState,
     setEditMode,
-    updatePolygons
+    updatePolygons,
   });
 
   const keyboardShortcuts = useKeyboardShortcuts({
@@ -281,24 +310,27 @@ export const useEnhancedSegmentationEditor = ({
     handleZoomOut,
     handleResetView,
     handleDeletePolygon,
-    onEscape: handleEscape
+    onEscape: handleEscape,
   });
 
   // Enhanced wheel handler with non-passive event listener
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      
+
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
 
       const mousePoint = {
         x: e.clientX - rect.left,
-        y: e.clientY - rect.top
+        y: e.clientY - rect.top,
       };
 
-      const zoomFactor = e.deltaY < 0 ? EDITING_CONSTANTS.ZOOM_FACTOR : 1 / EDITING_CONSTANTS.ZOOM_FACTOR;
-      
+      const zoomFactor =
+        e.deltaY < 0
+          ? EDITING_CONSTANTS.ZOOM_FACTOR
+          : 1 / EDITING_CONSTANTS.ZOOM_FACTOR;
+
       // Use transformRef.current to get latest transform value
       const newTransform = calculateFixedPointZoom(
         transformRef.current,
@@ -308,20 +340,22 @@ export const useEnhancedSegmentationEditor = ({
         EDITING_CONSTANTS.MAX_ZOOM
       );
 
-      setTransform(constrainTransform(
-        newTransform,
-        imageWidth,
-        imageHeight,
-        canvasWidth,
-        canvasHeight
-      ));
+      setTransform(
+        constrainTransform(
+          newTransform,
+          imageWidth,
+          imageHeight,
+          canvasWidth,
+          canvasHeight
+        )
+      );
     };
 
     const element = canvasRef.current;
     if (element) {
       // Add non-passive wheel event listener to allow preventDefault
       element.addEventListener('wheel', handleWheel, { passive: false });
-      
+
       return () => {
         element.removeEventListener('wheel', handleWheel);
       };
@@ -329,101 +363,111 @@ export const useEnhancedSegmentationEditor = ({
   }, [imageWidth, imageHeight, canvasWidth, canvasHeight]); // Removed transform from dependencies
 
   // Enhanced pan handler with proper constraints
-  const handlePan = useCallback((deltaX: number, deltaY: number) => {
-    const newTransform = {
-      ...transform,
-      translateX: transform.translateX + deltaX,
-      translateY: transform.translateY + deltaY
-    };
+  const handlePan = useCallback(
+    (deltaX: number, deltaY: number) => {
+      const newTransform = {
+        ...transform,
+        translateX: transform.translateX + deltaX,
+        translateY: transform.translateY + deltaY,
+      };
 
-    // Apply constraints to prevent image from getting stuck at boundaries
-    const constrainedTransform = constrainTransform(
-      newTransform,
-      imageWidth,
-      imageHeight,
-      canvasWidth,
-      canvasHeight
-    );
-    
-    setTransform(constrainedTransform);
-  }, [transform, imageWidth, imageHeight, canvasWidth, canvasHeight]);
+      // Apply constraints to prevent image from getting stuck at boundaries
+      const constrainedTransform = constrainTransform(
+        newTransform,
+        imageWidth,
+        imageHeight,
+        canvasWidth,
+        canvasHeight
+      );
+
+      setTransform(constrainedTransform);
+    },
+    [transform, imageWidth, imageHeight, canvasWidth, canvasHeight]
+  );
 
   // Update interaction handlers to include pan handling
-  const enhancedHandleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    // Track cursor position in image coordinates for visual feedback
-    if (canvasRef.current) {
-      const rect = canvasRef.current.getBoundingClientRect();
-      const canvasX = e.clientX - rect.left;
-      const canvasY = e.clientY - rect.top;
-      
-      // Convert to image coordinates
-      const imageX = (canvasX - transform.translateX) / transform.zoom;
-      const imageY = (canvasY - transform.translateY) / transform.zoom;
-      
-      setCursorPosition({ x: imageX, y: imageY });
-    }
+  const enhancedHandleMouseMove = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      // Track cursor position in image coordinates for visual feedback
+      if (canvasRef.current) {
+        const rect = canvasRef.current.getBoundingClientRect();
+        const canvasX = e.clientX - rect.left;
+        const canvasY = e.clientY - rect.top;
 
-    // Handle panning if active
-    if (interactionState.isPanning && interactionState.panStart) {
-      const deltaX = e.clientX - interactionState.panStart.x;
-      const deltaY = e.clientY - interactionState.panStart.y;
-      
-      handlePan(deltaX, deltaY);
-      
-      setInteractionState({
-        ...interactionState,
-        panStart: { x: e.clientX, y: e.clientY }
-      });
-      return;
-    }
+        // Convert to image coordinates
+        const imageX = (canvasX - transform.translateX) / transform.zoom;
+        const imageY = (canvasY - transform.translateY) / transform.zoom;
 
-    // Delegate to advanced interactions
-    interactions.handleMouseMove(e);
-  }, [interactionState, handlePan, interactions, transform, canvasRef]);
+        setCursorPosition({ x: imageX, y: imageY });
+      }
+
+      // Handle panning if active
+      if (interactionState.isPanning && interactionState.panStart) {
+        const deltaX = e.clientX - interactionState.panStart.x;
+        const deltaY = e.clientY - interactionState.panStart.y;
+
+        handlePan(deltaX, deltaY);
+
+        setInteractionState({
+          ...interactionState,
+          panStart: { x: e.clientX, y: e.clientY },
+        });
+        return;
+      }
+
+      // Delegate to advanced interactions
+      interactions.handleMouseMove(e);
+    },
+    [interactionState, handlePan, interactions, transform, canvasRef]
+  );
 
   // Computed values
-  const selectedPolygon = useMemo(() => 
-    selectedPolygonId ? polygons.find(p => p.id === selectedPolygonId) : null,
+  const selectedPolygon = useMemo(
+    () =>
+      selectedPolygonId ? polygons.find(p => p.id === selectedPolygonId) : null,
     [polygons, selectedPolygonId]
   );
 
-  const editorState = useMemo(() => ({
-    editMode,
-    selectedPolygonId,
-    selectedPolygon,
-    polygons,
-    transform,
-    interactionState,
-    tempPoints,
-    hoveredVertex,
-    cursorPosition,
-    hasUnsavedChanges,
-    canUndo,
-    canRedo,
-    isSaving
-  }), [
-    editMode,
-    selectedPolygonId,
-    selectedPolygon,
-    polygons,
-    transform,
-    interactionState,
-    tempPoints,
-    hoveredVertex,
-    cursorPosition,
-    hasUnsavedChanges,
-    canUndo,
-    canRedo,
-    isSaving
-  ]);
+  const editorState = useMemo(
+    () => ({
+      editMode,
+      selectedPolygonId,
+      selectedPolygon,
+      polygons,
+      transform,
+      interactionState,
+      tempPoints,
+      hoveredVertex,
+      cursorPosition,
+      hasUnsavedChanges,
+      canUndo,
+      canRedo,
+      isSaving,
+    }),
+    [
+      editMode,
+      selectedPolygonId,
+      selectedPolygon,
+      polygons,
+      transform,
+      interactionState,
+      tempPoints,
+      hoveredVertex,
+      cursorPosition,
+      hasUnsavedChanges,
+      canUndo,
+      canRedo,
+      isSaving,
+    ]
+  );
 
   return {
     // State
     ...editorState,
-    
+
     // Refs
     canvasRef,
-    
+
     // State setters
     setEditMode,
     setSelectedPolygonId,
@@ -431,43 +475,43 @@ export const useEnhancedSegmentationEditor = ({
     setInteractionState,
     setHoveredVertex,
     setTransform,
-    
+
     // Core operations
     updatePolygons,
     getPolygons,
-    
+
     // History operations
     handleUndo,
     handleRedo,
-    
+
     // Save operation
     handleSave,
-    
+
     // Transform operations
     handleZoomIn,
     handleZoomOut,
     handleResetView,
     handlePan,
-    
+
     // Polygon operations
     handleDeletePolygon,
-    
+
     // Event handlers
     handleMouseDown: interactions.handleMouseDown,
     handleMouseMove: enhancedHandleMouseMove,
     handleMouseUp: interactions.handleMouseUp,
-    
+
     // Mode-specific handlers
     slicing,
-    
+
     // Keyboard state
     keyboardState: {
       isShiftPressed: keyboardShortcuts.isShiftPressed,
       isCtrlPressed: keyboardShortcuts.isCtrlPressed,
-      isAltPressed: keyboardShortcuts.isAltPressed
+      isAltPressed: keyboardShortcuts.isAltPressed,
     },
-    
+
     // Utilities
-    handleEscape
+    handleEscape,
   };
 };

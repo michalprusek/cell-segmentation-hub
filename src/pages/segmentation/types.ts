@@ -1,5 +1,4 @@
-
-import type { SegmentationResult, Point, Polygon } from "@/lib/segmentation";
+import type { SegmentationResult, Point, Polygon } from '@/lib/segmentation';
 
 // Enhanced EditMode enum inspired by SpheroSeg
 export enum EditMode {
@@ -8,7 +7,7 @@ export enum EditMode {
   AddPoints = 'add-points',
   CreatePolygon = 'create-polygon',
   Slice = 'slice',
-  DeletePolygon = 'delete-polygon'
+  DeletePolygon = 'delete-polygon',
 }
 
 // Enhanced InteractionState for comprehensive polygon editing
@@ -68,7 +67,7 @@ export interface VertexDragState {
 }
 
 export interface TempPointsState {
-  points: Array<{x: number, y: number}>;
+  points: Array<{ x: number; y: number }>;
   startIndex: number | null;
   endIndex: number | null;
   polygonId: string | null;
@@ -80,7 +79,7 @@ export interface EditorState {
   transform: TransformState;
   history: SegmentationResult[];
   historyIndex: number;
-  hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
+  hoveredVertex: { polygonId: string | null; vertexIndex: number | null };
   editMode: EditMode;
   interactionState: InteractionState;
   tempPoints: Point[];
@@ -98,44 +97,58 @@ export interface EditorState {
 export interface EditorActions {
   setSegmentation: (seg: SegmentationResult | null) => void;
   setSelectedPolygonId: (id: string | null) => void;
-  
+
   // Transform controls
   setTransform: (transform: TransformState) => void;
   handleZoomIn: () => void;
   handleZoomOut: () => void;
   handleResetView: () => void;
-  
+
   // History controls
   handleUndo: () => void;
   handleRedo: () => void;
-  
+
   // Edit mode controls
   setEditMode: (mode: EditMode) => void;
   setInteractionState: (state: InteractionState) => void;
   setTempPoints: (points: Point[]) => void;
-  setHoveredVertex: (vertex: { polygonId: string; vertexIndex: number } | null) => void;
-  
+  setHoveredVertex: (
+    vertex: { polygonId: string; vertexIndex: number } | null
+  ) => void;
+
   // Polygon operations
   handleDeletePolygon: (polygonId?: string) => void;
   handleSave: () => Promise<void>;
-  
+
   // Advanced editing
-  moveVertex: (polygonId: string, vertexIndex: number, newPosition: Point) => void;
-  addVertexToPolygon: (polygonId: string, position: Point, afterIndex: number) => void;
+  moveVertex: (
+    polygonId: string,
+    vertexIndex: number,
+    newPosition: Point
+  ) => void;
+  addVertexToPolygon: (
+    polygonId: string,
+    position: Point,
+    afterIndex: number
+  ) => void;
   removeVertexFromPolygon: (polygonId: string, vertexIndex: number) => void;
-  slicePolygon: (polygonId: string, startPoint: Point, endPoint: Point) => boolean;
+  slicePolygon: (
+    polygonId: string,
+    startPoint: Point,
+    endPoint: Point
+  ) => boolean;
   createPolygon: (points: Point[]) => void;
-  
+
   // Utilities
   isPointInPolygon: (x: number, y: number, points: Point[]) => boolean;
   getCanvasCoordinates: (clientX: number, clientY: number) => Point;
-  
+
   // Event handlers
   handleMouseDown: (e: React.MouseEvent<HTMLDivElement>) => void;
   handleMouseMove: (e: React.MouseEvent<HTMLDivElement>) => void;
   handleMouseUp: (e: React.MouseEvent<HTMLDivElement>) => void;
   handleWheel: (e: React.WheelEvent<HTMLDivElement>) => void;
-  
+
   // Legacy support
   /** @deprecated since v2.0.0 - Use setEditMode instead. Will be removed in v3.0.0 */
   toggleEditMode: () => void;
@@ -148,9 +161,9 @@ export interface EditorActions {
  */
 export interface PolygonLayerProps {
   segmentation: SegmentationResult;
-  imageSize: { width: number, height: number };
+  imageSize: { width: number; height: number };
   selectedPolygonId: string | null;
-  hoveredVertex: { polygonId: string | null, vertexIndex: number | null };
+  hoveredVertex: { polygonId: string | null; vertexIndex: number | null };
   vertexDragState: VertexDragState;
   zoom: number;
   offset: { x: number; y: number };
@@ -163,9 +176,9 @@ export interface PolygonLayerProps {
   cursorPosition: Point | null;
   sliceStartPoint: Point | null;
   hoveredSegment: {
-    polygonId: string | null,
-    segmentIndex: number | null,
-    projectedPoint: Point | null
+    polygonId: string | null;
+    segmentIndex: number | null;
+    projectedPoint: Point | null;
   };
   isShiftPressed?: boolean;
   onSelectPolygon?: (id: string) => void;

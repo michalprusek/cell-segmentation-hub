@@ -19,7 +19,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
   interactionState,
   selectedPolygonId,
   tempPoints,
-  isShiftPressed = false
+  isShiftPressed = false,
 }) => {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -46,7 +46,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
           return {
             title: 'Slice Mode',
             color: '#ffcc00',
-            instructions: ['1. Click on a polygon to select it for slicing']
+            instructions: ['1. Click on a polygon to select it for slicing'],
           };
         } else if (tempPoints.length === 0) {
           return {
@@ -54,8 +54,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#ffcc00',
             instructions: [
               '2. Click to set the start point of the slice',
-              'Press ESC to cancel'
-            ]
+              'Press ESC to cancel',
+            ],
           };
         } else {
           return {
@@ -63,8 +63,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#ffcc00',
             instructions: [
               '3. Click to set the end point and complete the slice',
-              'Press ESC to cancel'
-            ]
+              'Press ESC to cancel',
+            ],
           };
         }
 
@@ -75,8 +75,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#4ade80',
             instructions: [
               '1. Click to start creating a polygon',
-              'Hold SHIFT to automatically add points'
-            ]
+              'Hold SHIFT to automatically add points',
+            ],
           };
         } else if (tempPoints.length < 3) {
           return {
@@ -84,8 +84,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#4ade80',
             instructions: [
               '2. Continue clicking to add more points (at least 3 needed)',
-              'Hold SHIFT to automatically add points • Press ESC to cancel'
-            ]
+              'Hold SHIFT to automatically add points • Press ESC to cancel',
+            ],
           };
         } else {
           return {
@@ -93,8 +93,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#4ade80',
             instructions: [
               '3. Continue adding points or click near the first point to close the polygon',
-              'Hold SHIFT to automatically add points • Press ESC to cancel'
-            ]
+              'Hold SHIFT to automatically add points • Press ESC to cancel',
+            ],
           };
         }
 
@@ -105,8 +105,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#60a5fa',
             instructions: [
               'Click on any vertex to start adding points',
-              'Press ESC to cancel'
-            ]
+              'Press ESC to cancel',
+            ],
           };
         } else {
           return {
@@ -114,8 +114,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#60a5fa',
             instructions: [
               'Click to add points, then click on another vertex to complete',
-              'Hold SHIFT to automatically add points • Press ESC to cancel'
-            ]
+              'Hold SHIFT to automatically add points • Press ESC to cancel',
+            ],
           };
         }
 
@@ -126,16 +126,14 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#f97316',
             instructions: [
               'Click and drag vertices to move them',
-              'Hold SHIFT and click a vertex to add points • Double-click a vertex to delete it'
-            ]
+              'Hold SHIFT and click a vertex to add points • Double-click a vertex to delete it',
+            ],
           };
         } else {
           return {
             title: 'Edit Vertices Mode',
             color: '#f97316',
-            instructions: [
-              'Click on a polygon to select it for editing'
-            ]
+            instructions: ['Click on a polygon to select it for editing'],
           };
         }
 
@@ -143,9 +141,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         return {
           title: 'Delete Polygon Mode',
           color: '#ef4444',
-          instructions: [
-            'Click on a polygon to delete it'
-          ]
+          instructions: ['Click on a polygon to delete it'],
         };
 
       case EditMode.View:
@@ -155,8 +151,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
           color: '#a3a3a3',
           instructions: [
             'Click on a polygon to select it',
-            'Drag to pan • Scroll to zoom'
-          ]
+            'Drag to pan • Scroll to zoom',
+          ],
         };
     }
   };
@@ -169,7 +165,8 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         position: 'absolute',
         top: '10px',
         left: '10px',
-        background: editMode === EditMode.View ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.8)',
+        background:
+          editMode === EditMode.View ? 'rgba(0,0,0,0.6)' : 'rgba(0,0,0,0.8)',
         color: 'white',
         padding: '8px 12px',
         borderRadius: '6px',
@@ -180,10 +177,18 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         zIndex: 1000,
         boxShadow: '0 2px 10px rgba(0,0,0,0.3)',
         opacity: editMode === EditMode.View ? 0.85 : 1,
-        transition: 'opacity 0.3s ease'
+        transition: 'opacity 0.3s ease',
       }}
     >
-      <div style={{ color, marginBottom: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div
+        style={{
+          color,
+          marginBottom: '4px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
         <span>{title}</span>
         {editMode === EditMode.View && (
           <button
@@ -196,44 +201,46 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
               cursor: 'pointer',
               padding: '0',
               marginLeft: '8px',
-              opacity: 0.7
+              opacity: 0.7,
             }}
-            onMouseEnter={(e) => e.target.style.opacity = '1'}
-            onMouseLeave={(e) => e.target.style.opacity = '0.7'}
+            onMouseEnter={e => (e.target.style.opacity = '1')}
+            onMouseLeave={e => (e.target.style.opacity = '0.7')}
           >
             ×
           </button>
         )}
       </div>
       {instructions.map((instruction, index) => (
-        <div 
+        <div
           key={index}
-          style={{ 
+          style={{
             fontSize: index === 0 ? '14px' : '12px',
             marginTop: index === 0 ? '0' : '4px',
-            opacity: index === 0 ? 1 : 0.8
+            opacity: index === 0 ? 1 : 0.8,
           }}
         >
           {instruction}
         </div>
       ))}
-      
+
       {/* Show shift key indicator */}
-      {isShiftPressed && (editMode === EditMode.CreatePolygon || 
-                         (editMode === EditMode.AddPoints && interactionState.isAddingPoints)) && (
-        <div 
-          style={{ 
-            fontSize: '11px',
-            marginTop: '6px',
-            padding: '2px 6px',
-            background: 'rgba(255,255,255,0.2)',
-            borderRadius: '3px',
-            color: '#4ade80'
-          }}
-        >
-          ⚡ SHIFT: Auto-adding points
-        </div>
-      )}
+      {isShiftPressed &&
+        (editMode === EditMode.CreatePolygon ||
+          (editMode === EditMode.AddPoints &&
+            interactionState.isAddingPoints)) && (
+          <div
+            style={{
+              fontSize: '11px',
+              marginTop: '6px',
+              padding: '2px 6px',
+              background: 'rgba(255,255,255,0.2)',
+              borderRadius: '3px',
+              color: '#4ade80',
+            }}
+          >
+            ⚡ SHIFT: Auto-adding points
+          </div>
+        )}
     </div>
   );
 };

@@ -7,13 +7,25 @@
  * - Progressive rendering for smooth interactions
  */
 
-import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import React, {
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+  useState,
+} from 'react';
 import { SegmentationResult, Point, Polygon } from '@/lib/segmentation';
 import { PolygonLayerProps } from '@/pages/segmentation/types';
 
 // Import new optimization systems
-import { polygonVisibilityManager, VisibilityContext } from '@/lib/rendering/PolygonVisibilityManager';
-import { renderBatchManager, RenderContext } from '@/lib/rendering/RenderBatchManager';
+import {
+  polygonVisibilityManager,
+  VisibilityContext,
+} from '@/lib/rendering/PolygonVisibilityManager';
+import {
+  renderBatchManager,
+  RenderContext,
+} from '@/lib/rendering/RenderBatchManager';
 import { lodManager, LODContext } from '@/lib/rendering/LODManager';
 import { WorkerPool } from '@/lib/workerPool';
 import { rafSchedule, ProgressiveRenderer } from '@/lib/performanceUtils';
@@ -68,13 +80,13 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
   targetFPS = 60,
   enableWorkers = true,
   enableLOD = true,
-  renderQuality = 'high'
+  renderQuality = 'high',
 }) => {
   // Performance monitoring
   const frameTimeRef = useRef<number[]>([]);
   const lastFrameTime = useRef(performance.now());
   const [currentFPS, setCurrentFPS] = useState(60);
-  
+
   // Worker pool for heavy computations
   const workerPoolRef = useRef<WorkerPool | null>(null);
   const progressiveRenderer = useRef(new ProgressiveRenderer());
@@ -84,7 +96,7 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
     if (enableWorkers && !workerPoolRef.current) {
       workerPoolRef.current = new WorkerPool('/workers/polygonWorker.js', {
         maxWorkers: Math.min(4, navigator.hardwareConcurrency || 2),
-        idleTimeout: 30000
+        idleTimeout: 30000,
       });
     }
 
@@ -108,7 +120,9 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
     }
 
     if (frameTimeRef.current.length >= 5) {
-      const avgFrameTime = frameTimeRef.current.reduce((sum, time) => sum + time, 0) / frameTimeRef.current.length;
+      const avgFrameTime =
+        frameTimeRef.current.reduce((sum, time) => sum + time, 0) /
+        frameTimeRef.current.length;
       const fps = Math.round(1000 / avgFrameTime);
       setCurrentFPS(fps);
     }
@@ -125,56 +139,81 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
   }, [zoom, offset.x, offset.y, selectedPolygonId, throttledPerformanceUpdate]);
 
   // Create visibility context
-  const visibilityContext = useMemo((): VisibilityContext => ({
-    zoom,
-    offset,
-    containerWidth,
-    containerHeight,
-    selectedPolygonId,
-    forceRenderSelected: true
-  }), [zoom, offset, containerWidth, containerHeight, selectedPolygonId]);
+  const visibilityContext = useMemo(
+    (): VisibilityContext => ({
+      zoom,
+      offset,
+      containerWidth,
+      containerHeight,
+      selectedPolygonId,
+      forceRenderSelected: true,
+    }),
+    [zoom, offset, containerWidth, containerHeight, selectedPolygonId]
+  );
 
   // Create render context
-  const renderContext = useMemo((): RenderContext => ({
-    zoom,
-    viewport: {
-      x: -offset.x,
-      y: -offset.y,
-      width: containerWidth / zoom,
-      height: containerHeight / zoom
-    },
-    selectedPolygonId,
-    isAnimating: isZooming,
-    targetFPS
-  }), [zoom, offset, containerWidth, containerHeight, selectedPolygonId, isZooming, targetFPS]);
+  const renderContext = useMemo(
+    (): RenderContext => ({
+      zoom,
+      viewport: {
+        x: -offset.x,
+        y: -offset.y,
+        width: containerWidth / zoom,
+        height: containerHeight / zoom,
+      },
+      selectedPolygonId,
+      isAnimating: isZooming,
+      targetFPS,
+    }),
+    [
+      zoom,
+      offset,
+      containerWidth,
+      containerHeight,
+      selectedPolygonId,
+      isZooming,
+      targetFPS,
+    ]
+  );
 
   // Create LOD context
-  const lodContext = useMemo((): LODContext => ({
-    zoom,
-    viewport: renderContext.viewport,
-    targetFPS,
-    currentFPS,
-    polygonCount: segmentation?.polygons.length || 0,
-    isAnimating: isZooming,
-    renderQuality
-  }), [zoom, renderContext.viewport, targetFPS, currentFPS, segmentation?.polygons.length, isZooming, renderQuality]);
+  const lodContext = useMemo(
+    (): LODContext => ({
+      zoom,
+      viewport: renderContext.viewport,
+      targetFPS,
+      currentFPS,
+      polygonCount: segmentation?.polygons.length || 0,
+      isAnimating: isZooming,
+      renderQuality,
+    }),
+    [
+      zoom,
+      renderContext.viewport,
+      targetFPS,
+      currentFPS,
+      segmentation?.polygons.length,
+      isZooming,
+      renderQuality,
+    ]
+  );
 
   // Get visible polygons using optimized visibility manager
   const visiblePolygons = useMemo(() => {
     if (!segmentation?.polygons) return [];
-    
+
     const result = polygonVisibilityManager.getVisiblePolygons(
       segmentation.polygons,
       visibilityContext
     );
-    
+
     return result.visiblePolygons;
   }, [segmentation?.polygons, visibilityContext]);
 
   // Generate render batches
   const renderBatches = useMemo(() => {
     if (visiblePolygons.length === 0) return [];
-    
+
     return renderBatchManager.createBatches(visiblePolygons, renderContext);
   }, [visiblePolygons, renderContext]);
 
@@ -218,7 +257,7 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
     onSelectPolygon,
     onDeletePolygon,
     onSlicePolygon,
-    onEditPolygon
+    onEditPolygon,
   ]);
 
   // Early return for invalid state
@@ -232,10 +271,11 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
         height={imageSize.height}
         className="absolute top-0 left-0"
         style={{
-          maxWidth: "none",
-          shapeRendering: renderQuality === 'ultra' ? "geometricPrecision" : "optimizeSpeed",
-          textRendering: "optimizeSpeed",
-          willChange: isZooming ? 'transform' : 'auto'
+          maxWidth: 'none',
+          shapeRendering:
+            renderQuality === 'ultra' ? 'geometricPrecision' : 'optimizeSpeed',
+          textRendering: 'optimizeSpeed',
+          willChange: isZooming ? 'transform' : 'auto',
         }}
         vectorEffect="non-scaling-stroke"
         xmlns="http://www.w3.org/2000/svg"
@@ -244,7 +284,7 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
       >
         {/* SVG filters for advanced rendering effects */}
         <CanvasSvgFilters />
-        
+
         {/* Optimized polygon rendering */}
         {renderOptimizedPolygons()}
 
@@ -252,36 +292,51 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
         {visiblePolygons.map(polygon => {
           const isSelected = polygon.id === selectedPolygonId;
           const isPolygonHovered = hoveredVertex?.polygonId === polygon.id;
-          
+
           // Show SVG vertices as fallback for selected polygons or in development
-          if (isSelected || (process.env.NODE_ENV === 'development' && isPolygonHovered)) {
+          if (
+            isSelected ||
+            (process.env.NODE_ENV === 'development' && isPolygonHovered)
+          ) {
             return (
               <g key={`svg-vertices-${polygon.id}`}>
                 {polygon.points.map((point, index) => {
-                  const isVertexHovered = hoveredVertex?.polygonId === polygon.id && hoveredVertex?.vertexIndex === index;
-                  const isDragging = vertexDragState?.isDragging && 
-                                   vertexDragState?.polygonId === polygon.id && 
-                                   vertexDragState?.vertexIndex === index;
-                  
+                  const isVertexHovered =
+                    hoveredVertex?.polygonId === polygon.id &&
+                    hoveredVertex?.vertexIndex === index;
+                  const isDragging =
+                    vertexDragState?.isDragging &&
+                    vertexDragState?.polygonId === polygon.id &&
+                    vertexDragState?.vertexIndex === index;
+
                   const radius = Math.max(2, 4 / zoom);
                   const strokeWidth = Math.max(0.5, 1 / zoom);
-                  
+
                   return (
                     <circle
                       key={`vertex-${index}`}
                       cx={point.x}
                       cy={point.y}
                       r={radius}
-                      fill={polygon.type === 'internal' ? 
-                        (isDragging ? '#0077cc' : isVertexHovered ? '#3498db' : '#0EA5E9') :
-                        (isDragging ? '#c0392b' : isVertexHovered ? '#e74c3c' : '#ea384c')
+                      fill={
+                        polygon.type === 'internal'
+                          ? isDragging
+                            ? '#0077cc'
+                            : isVertexHovered
+                              ? '#3498db'
+                              : '#0EA5E9'
+                          : isDragging
+                            ? '#c0392b'
+                            : isVertexHovered
+                              ? '#e74c3c'
+                              : '#ea384c'
                       }
                       stroke="#fff"
                       strokeWidth={strokeWidth}
-                      style={{ 
+                      style={{
                         cursor: 'pointer',
                         vectorEffect: 'non-scaling-stroke',
-                        opacity: isDragging ? 1.0 : (isVertexHovered ? 0.9 : 0.8)
+                        opacity: isDragging ? 1.0 : isVertexHovered ? 0.9 : 0.8,
                       }}
                     />
                   );
@@ -320,8 +375,8 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
       </svg>
 
       {/* Optimized vertex layer with Canvas-based rendering - positioned with same transform as SVG */}
-      <div 
-        style={{ 
+      <div
+        style={{
           transform: `translate3d(${offset.x * zoom}px, ${offset.y * zoom}px, 0) scale(${zoom})`,
           transformOrigin: '0 0',
           position: 'absolute',
@@ -330,7 +385,7 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
           pointerEvents: 'auto',
           willChange: isZooming ? 'transform' : 'auto',
           backfaceVisibility: 'hidden',
-          perspective: 1000
+          perspective: 1000,
         }}
         className="absolute top-0 left-0"
       >
@@ -361,31 +416,40 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
           onDuplicateVertex={onDuplicateVertex}
         />
       </div>
-
     </div>
   );
 };
 
 // Memoize component for optimal performance
-export default React.memo(CanvasPolygonLayer, (prevProps: OptimizedCanvasPolygonLayerProps, nextProps: OptimizedCanvasPolygonLayerProps) => {
-  // Custom comparison for optimal re-rendering
-  return (
-    prevProps.segmentation?.polygons.length === nextProps.segmentation?.polygons.length &&
-    prevProps.selectedPolygonId === nextProps.selectedPolygonId &&
-    prevProps.zoom === nextProps.zoom &&
-    prevProps.offset.x === nextProps.offset.x &&
-    prevProps.offset.y === nextProps.offset.y &&
-    prevProps.containerWidth === nextProps.containerWidth &&
-    prevProps.containerHeight === nextProps.containerHeight &&
-    prevProps.isZooming === nextProps.isZooming &&
-    prevProps.editMode === nextProps.editMode &&
-    prevProps.slicingMode === nextProps.slicingMode &&
-    prevProps.pointAddingMode === nextProps.pointAddingMode &&
-    prevProps.hoveredVertex?.polygonId === nextProps.hoveredVertex?.polygonId &&
-    prevProps.hoveredVertex?.vertexIndex === nextProps.hoveredVertex?.vertexIndex &&
-    prevProps.vertexDragState?.isDragging === nextProps.vertexDragState?.isDragging &&
-    prevProps.renderQuality === nextProps.renderQuality &&
-    prevProps.enableLOD === nextProps.enableLOD &&
-    prevProps.enableWorkers === nextProps.enableWorkers
-  );
-});
+export default React.memo(
+  CanvasPolygonLayer,
+  (
+    prevProps: OptimizedCanvasPolygonLayerProps,
+    nextProps: OptimizedCanvasPolygonLayerProps
+  ) => {
+    // Custom comparison for optimal re-rendering
+    return (
+      prevProps.segmentation?.polygons.length ===
+        nextProps.segmentation?.polygons.length &&
+      prevProps.selectedPolygonId === nextProps.selectedPolygonId &&
+      prevProps.zoom === nextProps.zoom &&
+      prevProps.offset.x === nextProps.offset.x &&
+      prevProps.offset.y === nextProps.offset.y &&
+      prevProps.containerWidth === nextProps.containerWidth &&
+      prevProps.containerHeight === nextProps.containerHeight &&
+      prevProps.isZooming === nextProps.isZooming &&
+      prevProps.editMode === nextProps.editMode &&
+      prevProps.slicingMode === nextProps.slicingMode &&
+      prevProps.pointAddingMode === nextProps.pointAddingMode &&
+      prevProps.hoveredVertex?.polygonId ===
+        nextProps.hoveredVertex?.polygonId &&
+      prevProps.hoveredVertex?.vertexIndex ===
+        nextProps.hoveredVertex?.vertexIndex &&
+      prevProps.vertexDragState?.isDragging ===
+        nextProps.vertexDragState?.isDragging &&
+      prevProps.renderQuality === nextProps.renderQuality &&
+      prevProps.enableLOD === nextProps.enableLOD &&
+      prevProps.enableWorkers === nextProps.enableWorkers
+    );
+  }
+);

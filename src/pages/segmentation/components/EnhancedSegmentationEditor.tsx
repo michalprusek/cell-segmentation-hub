@@ -31,12 +31,12 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
   initialPolygons = [],
   onSave,
   onPolygonsChange,
-  className = ''
+  className = '',
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
-    height: 600
+    height: 600,
   });
 
   // Measure container dimensions and calculate canvas size
@@ -46,20 +46,20 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
         const containerRect = containerRef.current.getBoundingClientRect();
         const availableWidth = containerRect.width - 60; // Account for toolbar
         const availableHeight = containerRect.height - 100; // Account for toolbar and padding
-        
+
         // Calculate dimensions preserving aspect ratio
         const aspectRatio = imageWidth / imageHeight;
         let canvasWidth = availableWidth;
         let canvasHeight = availableWidth / aspectRatio;
-        
+
         if (canvasHeight > availableHeight) {
           canvasHeight = availableHeight;
           canvasWidth = availableHeight * aspectRatio;
         }
-        
+
         setCanvasDimensions({
           width: Math.max(400, Math.floor(canvasWidth)), // Minimum width
-          height: Math.max(300, Math.floor(canvasHeight)) // Minimum height
+          height: Math.max(300, Math.floor(canvasHeight)), // Minimum height
         });
       }
     };
@@ -90,11 +90,14 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
     canvasWidth: canvasDimensions.width,
     canvasHeight: canvasDimensions.height,
     onSave,
-    onPolygonsChange
+    onPolygonsChange,
   });
 
   return (
-    <div ref={containerRef} className={`flex flex-col h-full bg-white dark:bg-gray-900 ${className}`}>
+    <div
+      ref={containerRef}
+      className={`flex flex-col h-full bg-white dark:bg-gray-900 ${className}`}
+    >
       {/* Enhanced Toolbar */}
       <EnhancedEditorToolbar
         editMode={editor.editMode}
@@ -136,21 +139,32 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
               width={imageWidth}
               height={imageHeight}
               className="absolute top-0 left-0 pointer-events-none"
-              style={{ 
-                maxWidth: "none",
-                shapeRendering: "geometricPrecision"
+              style={{
+                maxWidth: 'none',
+                shapeRendering: 'geometricPrecision',
               }}
             >
               {/* Render all polygons */}
-              {editor.polygons.map((polygon) => (
+              {editor.polygons.map(polygon => (
                 <CanvasPolygon
                   key={polygon.id}
                   polygon={polygon}
                   isSelected={polygon.id === editor.selectedPolygonId}
-                  hoveredVertex={editor.hoveredVertex || { polygonId: null, vertexIndex: null }}
-                  vertexDragState={{ isDragging: false, polygonId: null, vertexIndex: null }}
+                  hoveredVertex={
+                    editor.hoveredVertex || {
+                      polygonId: null,
+                      vertexIndex: null,
+                    }
+                  }
+                  vertexDragState={{
+                    isDragging: false,
+                    polygonId: null,
+                    vertexIndex: null,
+                  }}
                   zoom={editor.transform.zoom}
-                  onSelectPolygon={() => editor.setSelectedPolygonId(polygon.id)}
+                  onSelectPolygon={() =>
+                    editor.setSelectedPolygonId(polygon.id)
+                  }
                 />
               ))}
 
@@ -164,13 +178,16 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
                       index={index}
                       polygonId={editor.selectedPolygon?.id || ''}
                       isHovered={
-                        editor.hoveredVertex?.polygonId === editor.selectedPolygon?.id &&
+                        editor.hoveredVertex?.polygonId ===
+                          editor.selectedPolygon?.id &&
                         editor.hoveredVertex?.vertexIndex === index
                       }
                       isDragging={
                         editor.interactionState.isDraggingVertex &&
-                        editor.interactionState.draggedVertexInfo?.polygonId === editor.selectedPolygon?.id &&
-                        editor.interactionState.draggedVertexInfo?.vertexIndex === index
+                        editor.interactionState.draggedVertexInfo?.polygonId ===
+                          editor.selectedPolygon?.id &&
+                        editor.interactionState.draggedVertexInfo
+                          ?.vertexIndex === index
                       }
                       editMode={editor.editMode}
                       transform={editor.transform}
@@ -206,28 +223,22 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
       {/* Status Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
         <div className="flex items-center gap-4">
-          <span>
-            Polygons: {editor.polygons.length}
-          </span>
+          <span>Polygons: {editor.polygons.length}</span>
           {editor.selectedPolygon && (
             <span>
               Selected: {editor.selectedPolygon.points.length} vertices
             </span>
           )}
-          <span>
-            Zoom: {Math.round(editor.transform.zoom * 100)}%
-          </span>
+          <span>Zoom: {Math.round(editor.transform.zoom * 100)}%</span>
         </div>
-        
+
         <div className="flex items-center gap-4">
           {editor.hasUnsavedChanges && (
             <span className="text-amber-600 dark:text-amber-400">
               Unsaved changes
             </span>
           )}
-          <span>
-            Mode: {editor.editMode}
-          </span>
+          <span>Mode: {editor.editMode}</span>
         </div>
       </div>
     </div>

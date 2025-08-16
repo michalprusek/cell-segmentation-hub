@@ -1,4 +1,3 @@
-
 export default {
   common: {
     appName: 'Segmentace Sféroidů',
@@ -55,19 +54,21 @@ export default {
     createAccount: 'Vytvořit účet',
     signInToAccount: 'Přihlásit se k účtu',
     sort: 'Řadit',
-    no_preview: 'Žádný náhled'
+    no_preview: 'Žádný náhled',
   },
   dashboard: {
     manageProjects: 'Spravujte své výzkumné projekty a analýzy',
     projectGallery: 'Galerie Projektů',
-    projectGalleryDescription: 'Procházejte a spravujte všechny své segmentační projekty',
+    projectGalleryDescription:
+      'Procházejte a spravujte všechny své segmentační projekty',
     statsOverview: 'Přehled statistik',
     totalProjects: 'Celkem projektů',
     activeProjects: 'Aktivní projekty',
     totalImages: 'Celkem obrázků',
     totalAnalyses: 'Celkem analýz',
     lastUpdated: 'Naposledy aktualizováno',
-    noProjectsDescription: 'Zatím jste nevytvořili žádný projekt. Vytvořte svůj první projekt pro začátek.',
+    noProjectsDescription:
+      'Zatím jste nevytvořili žádný projekt. Vytvořte svůj první projekt pro začátek.',
     noImagesDescription: 'Nahrajte několik obrázků pro začátek',
     searchProjectsPlaceholder: 'Hledat projekty...',
     searchImagesPlaceholder: 'Hledat obrázky podle názvu...',
@@ -78,13 +79,15 @@ export default {
     completed: 'Dokončeno',
     processing: 'Zpracování',
     pending: 'Čekající',
-    failed: 'Selhalo'
+    failed: 'Selhalo',
   },
   projects: {
     createProject: 'Vytvořit nový projekt',
-    createProjectDesc: 'Přidat nový projekt pro organizaci vašich sféroidních snímků a analýz.',
+    createProjectDesc:
+      'Přidat nový projekt pro organizaci vašich sféroidních snímků a analýz.',
     projectNamePlaceholder: 'např. HeLa buněčné sferoidy',
-    projectDescPlaceholder: 'např. Analýza nádorových sféroidů pro studie rezistence na léky',
+    projectDescPlaceholder:
+      'např. Analýza nádorových sféroidů pro studie rezistence na léky',
     creatingProject: 'Vytváření...',
     duplicateProject: 'Duplikovat',
     shareProject: 'Sdílet',
@@ -99,19 +102,22 @@ export default {
     imageDeleted: 'Obrázek byl odstraněn',
     deleteImageError: 'Nepodařilo se odstranit obrázek',
     deleteImageFailed: 'Odstranění obrázku selhalo',
-    imagesQueuedForSegmentation: '{{count}} obrázků přidáno do fronty pro segmentaci',
-    allImagesAlreadySegmented: 'Všechny obrázky jsou již segmentovány nebo ve frontě',
+    imagesQueuedForSegmentation:
+      '{{count}} obrázků přidáno do fronty pro segmentaci',
+    allImagesAlreadySegmented:
+      'Všechny obrázky jsou již segmentovány nebo ve frontě',
     errorAddingToQueue: 'Chyba při přidávání obrázků do fronty',
     imageAlreadyProcessing: 'Obrázek je již zpracováván',
     processImageFailed: 'Nepodařilo se zpracovat obrázek',
     segmentationCompleted: 'Segmentace dokončena pro obrázek',
     segmentationFailed: 'Segmentace selhala',
     segmentationStarted: 'Segmentace byla zahájena',
-    segmentationCompleteWithCount: 'Segmentace dokončena! Nalezeno {{count}} objektů'
+    segmentationCompleteWithCount:
+      'Segmentace dokončena! Nalezeno {{count}} objektů',
   },
   errors: {
     noProjectOrUser: 'Chyba: Není vybrán projekt nebo uživatel',
-    unknown: 'Neznámá chyba'
+    unknown: 'Neznámá chyba',
   },
   images: {
     uploadImages: 'Nahrát obrázky',
@@ -137,7 +143,7 @@ export default {
     uploading: 'Nahrávání',
     processing: 'Zpracování',
     complete: 'Dokončeno',
-    error: 'Chyba'
+    error: 'Chyba',
   },
   settings: {
     manageSettings: 'Spravujte své nastavení účtu',
@@ -160,37 +166,40 @@ export default {
       analysisCompleted: 'Analýza dokončena',
       newFeatures: 'Nové funkce',
       marketingEmails: 'Marketingové e-maily',
-      billing: 'Oznámení o fakturaci'
+      billing: 'Oznámení o fakturaci',
     },
     models: 'Modely',
     modelSelection: 'Výběr Modelu',
     modelSelectionDescription: 'Vyberte AI model pro segmentaci buněk',
     confidenceThreshold: 'Práh Spolehlivosti',
-    confidenceThresholdDescription: 'Minimální spolehlivost požadovaná pro predikce segmentace',
+    confidenceThresholdDescription:
+      'Minimální spolehlivost požadovaná pro predikce segmentace',
     currentThreshold: 'Současný práh',
     modelSelected: 'Model úspěšně vybrán',
     modelSettingsSaved: 'Nastavení modelu úspěšně uloženo',
     modelSize: {
       small: 'Malý',
       medium: 'Střední',
-      large: 'Velký'
+      large: 'Velký',
     },
     modelDescription: {
       hrnet: 'Rychlý a efektivní model pro segmentaci v reálném čase',
       resunet_small: 'Vyvážená rychlost a přesnost pro většinu případů použití',
-      resunet_advanced: 'Nejvyšší přesnost s mechanismy pozornosti'
+      resunet_advanced: 'Nejvyšší přesnost s mechanismy pozornosti',
     },
     dataUsageTitle: 'Použití dat a soukromí',
-    dataUsageDescription: 'Kontrola použití vašich dat pro strojové učení a výzkum',
+    dataUsageDescription:
+      'Kontrola použití vašich dat pro strojové učení a výzkum',
     allowMLTraining: {
       label: 'Povolit trénování ML modelů',
-      description: 'Povolit použití vašich dat pro trénování a zlepšování našich segmentačních modelů'
+      description:
+        'Povolit použití vašich dat pro trénování a zlepšování našich segmentačních modelů',
     },
     cancel: 'Zrušit',
     deleting: 'Mazání...',
     deleteAccount: 'Smazat účet',
     accountDeleted: 'Účet byl úspěšně smazán',
-    deleteAccountError: 'Nepodařilo se smazat účet'
+    deleteAccountError: 'Nepodařilo se smazat účet',
   },
   segmentation: {
     mode: {
@@ -203,7 +212,7 @@ export default {
       slice: 'Rozřezat',
       delete: 'Smazat',
       deletePolygon: 'Smazat polygon',
-      unknown: 'Neznámý'
+      unknown: 'Neznámý',
     },
     modeDescription: {
       view: 'Procházet a vybírat polygony',
@@ -211,7 +220,7 @@ export default {
       addPoints: 'Přidat body mezi vrcholy',
       create: 'Vytvořit nové polygony',
       slice: 'Rozdělit polygony čarou',
-      delete: 'Odstranit polygony'
+      delete: 'Odstranit polygony',
     },
     toolbar: {
       mode: 'Režim',
@@ -232,7 +241,8 @@ export default {
       unsavedChanges: 'Neuložené změny',
       saving: 'Ukládání...',
       save: 'Uložit',
-      keyboardShortcuts: 'V: Zobrazit • E: Upravit • A: Přidat • N: Nový • S: Rozřezat • D: Smazat'
+      keyboardShortcuts:
+        'V: Zobrazit • E: Upravit • A: Přidat • N: Nový • S: Rozřezat • D: Smazat',
     },
     status: {
       polygons: 'polygonů',
@@ -241,8 +251,8 @@ export default {
       hidden: 'skrytých',
       selected: 'vybrán',
       saved: 'Uloženo',
-      unsaved: 'Neuloženo'
-    }
+      unsaved: 'Neuloženo',
+    },
   },
   auth: {
     signIn: 'Přihlásit se',
@@ -267,7 +277,7 @@ export default {
     successfulSignOut: 'Úspěšné odhlášení',
     checkingAuthentication: 'Kontrola ověření...',
     loadingAccount: 'Načítání vašeho účtu...',
-    processingRequest: 'Zpracování vašeho požadavku...'
+    processingRequest: 'Zpracování vašeho požadavku...',
   },
   profile: {
     title: 'Profil',
@@ -311,7 +321,7 @@ export default {
     completionRate: 'míra dokončení',
     createdProject: 'Vytvořil projekt',
     completedSegmentation: 'Dokončil segmentaci pro',
-    uploadedImage: 'Nahrál obrázek'
+    uploadedImage: 'Nahrál obrázek',
   },
   status: {
     segmented: 'Segmentováno',
@@ -321,7 +331,7 @@ export default {
     no_segmentation: 'Bez segmentace',
     disconnected: 'Odpojeno od serveru',
     error: 'Chyba ML služby',
-    ready: 'Připraven k segmentaci'
+    ready: 'Připraven k segmentaci',
   },
   queue: {
     title: 'Segmentační fronta',
@@ -332,8 +342,10 @@ export default {
     segmentAll: 'Segmentovat vše',
     totalProgress: 'Celkový postup',
     images: 'obrázků',
-    connectingMessage: 'Připojuji se k serveru... Real-time aktualizace budou brzy dostupné.',
-    emptyMessage: 'Žádné obrázky ve frontě. Nahrajte obrázky a přidejte je do fronty pro segmentaci.',
-    addingToQueue: 'Přidáváno do fronty...'
-  }
+    connectingMessage:
+      'Připojuji se k serveru... Real-time aktualizace budou brzy dostupné.',
+    emptyMessage:
+      'Žádné obrázky ve frontě. Nahrajte obrázky a přidejte je do fronty pro segmentaci.',
+    addingToQueue: 'Přidáváno do fronty...',
+  },
 };

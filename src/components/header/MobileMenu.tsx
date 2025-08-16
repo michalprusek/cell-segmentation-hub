@@ -1,16 +1,16 @@
-
-import React from "react";
-import { useNavigate } from "react-router-dom";
-import { 
-  Bell, 
-  Settings as SettingsIcon, 
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Bell,
+  Settings as SettingsIcon,
   User as UserIcon,
   LogOut,
-  X
-} from "lucide-react";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
+  X,
+} from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { logger } from '@/lib/logger';
 
 interface MobileMenuProps {
   isMenuOpen: boolean;
@@ -18,7 +18,11 @@ interface MobileMenuProps {
   hasNotifications: boolean;
 }
 
-const MobileMenu = ({ isMenuOpen, setIsMenuOpen, hasNotifications }: MobileMenuProps) => {
+const MobileMenu = ({
+  isMenuOpen,
+  setIsMenuOpen,
+  hasNotifications,
+}: MobileMenuProps) => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
 
@@ -26,7 +30,7 @@ const MobileMenu = ({ isMenuOpen, setIsMenuOpen, hasNotifications }: MobileMenuP
     try {
       await signOut();
     } catch (error) {
-      console.error("Error signing out:", error);
+      logger.error('Error signing out:', error);
     }
   };
 
@@ -44,39 +48,46 @@ const MobileMenu = ({ isMenuOpen, setIsMenuOpen, hasNotifications }: MobileMenuP
               <div className="w-8 h-8 rounded-md bg-blue-500 flex items-center justify-center">
                 <span className="text-white font-bold">S</span>
               </div>
-              <span className="ml-2 font-semibold dark:text-white">SpheroSeg</span>
+              <span className="ml-2 font-semibold dark:text-white">
+                SpheroSeg
+              </span>
             </div>
-            <Button variant="ghost" size="icon" onClick={() => setIsMenuOpen(false)} className="dark:text-gray-300">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMenuOpen(false)}
+              className="dark:text-gray-300"
+            >
               <X className="h-5 w-5" />
             </Button>
           </div>
         </div>
         <div className="py-2">
-          <button 
+          <button
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
             onClick={() => {
               setIsMenuOpen(false);
-              navigate("/profile");
+              navigate('/profile');
             }}
           >
             <UserIcon className="h-5 w-5 mr-3 text-gray-500" />
             <span>Profile</span>
           </button>
-          <button 
+          <button
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
             onClick={() => {
               setIsMenuOpen(false);
-              navigate("/settings");
+              navigate('/settings');
             }}
           >
             <SettingsIcon className="h-5 w-5 mr-3 text-gray-500" />
             <span>Settings</span>
           </button>
-          <button 
+          <button
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
             onClick={() => {
               setIsMenuOpen(false);
-              navigate("/settings?tab=notifications");
+              navigate('/settings?tab=notifications');
             }}
           >
             <Bell className="h-5 w-5 mr-3 text-gray-500" />
@@ -86,7 +97,7 @@ const MobileMenu = ({ isMenuOpen, setIsMenuOpen, hasNotifications }: MobileMenuP
             )}
           </button>
           <div className="border-t my-2 dark:border-gray-700"></div>
-          <button 
+          <button
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:hover:bg-gray-700 text-red-500"
             onClick={handleSignOut}
           >

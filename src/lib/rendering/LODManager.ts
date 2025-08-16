@@ -6,8 +6,12 @@
 
 import { Point, Polygon } from '@/lib/segmentation';
 import { BoundingBox } from '@/lib/polygonGeometry';
-import { calculateBoundingBox, simplifyPolygon } from '@/lib/polygonOptimization';
+import {
+  calculateBoundingBox,
+  simplifyPolygon,
+} from '@/lib/polygonOptimization';
 import { WorkerPool, WorkerOperation } from '@/lib/workerPool';
+import { logger } from '@/lib/logger';
 
 export interface LODLevel {
   name: string;
@@ -69,7 +73,7 @@ const DEFAULT_LOD_LEVELS: LODLevel[] = [
     renderVertices: false,
     renderStrokes: true,
     renderFills: true,
-    decimationStep: 10
+    decimationStep: 10,
   },
   {
     name: 'low',
@@ -80,7 +84,7 @@ const DEFAULT_LOD_LEVELS: LODLevel[] = [
     renderVertices: false,
     renderStrokes: true,
     renderFills: true,
-    decimationStep: 5
+    decimationStep: 5,
   },
   {
     name: 'medium',
@@ -91,7 +95,7 @@ const DEFAULT_LOD_LEVELS: LODLevel[] = [
     renderVertices: false,
     renderStrokes: true,
     renderFills: true,
-    decimationStep: 3
+    decimationStep: 3,
   },
   {
     name: 'high',
@@ -102,7 +106,7 @@ const DEFAULT_LOD_LEVELS: LODLevel[] = [
     renderVertices: true,
     renderStrokes: true,
     renderFills: true,
-    decimationStep: 2
+    decimationStep: 2,
   },
   {
     name: 'ultra',
@@ -113,8 +117,8 @@ const DEFAULT_LOD_LEVELS: LODLevel[] = [
     renderVertices: true,
     renderStrokes: true,
     renderFills: true,
-    decimationStep: 1
-  }
+    decimationStep: 1,
+  },
 ];
 
 /**
@@ -125,8 +129,11 @@ class SimplifyOperation extends WorkerOperation<
   Point[]
 > {
   readonly type = 'simplify';
-  
-  async execute(input: { points: Point[]; tolerance: number }): Promise<Point[]> {
+
+  async execute(input: {
+    points: Point[];
+    tolerance: number;
+  }): Promise<Point[]> {
     // Use the real simplification routine as fallback
     // Let errors bubble up naturally instead of masking them
     return simplifyPolygon(input.points, input.tolerance);
@@ -141,15 +148,15 @@ class AdaptiveLODController {
   private currentQualityLevel: 'low' | 'medium' | 'high' | 'ultra' = 'high';
   private lastAdjustmentTime = 0;
   private adjustmentCooldown = 1000; // 1 second
-  
+
   updateFrameTime(frameTime: number): void {
     this.frameTimeHistory.push(frameTime);
-    
+
     // Keep only last 30 frames for rolling average
     if (this.frameTimeHistory.length > 30) {
       this.frameTimeHistory.shift();
     }
-    
+
     // Adjust quality based on performance every few seconds
     const now = Date.now();
     if (now - this.lastAdjustmentTime > this.adjustmentCooldown) {
@@ -157,44 +164,58 @@ class AdaptiveLODController {
       this.lastAdjustmentTime = now;
     }
   }
-  
+
   private adjustQualityLevel(): void {
     if (this.frameTimeHistory.length < 10) return;
-    
-    const avgFrameTime = this.frameTimeHistory.reduce((sum, time) => sum + time, 0) / this.frameTimeHistory.length;
+
+    const avgFrameTime =
+      this.frameTimeHistory.reduce((sum, time) => sum + time, 0) /
+      this.frameTimeHistory.length;
     const targetFrameTime = 16.67; // 60 FPS
-    
-    if (avgFrameTime > targetFrameTime * 2) { // < 30 FPS
+
+    if (avgFrameTime > targetFrameTime * 2) {
+      // < 30 FPS
       if (this.currentQualityLevel !== 'low') {
         const previousLevel = this.currentQualityLevel;
         this.currentQualityLevel = 'low';
         if (process.env.NODE_ENV === 'development') {
-          console.log(`LOD: Reduced quality from ${previousLevel} to low due to poor performance`);
+          logger.debug(
+            `LOD: Reduced quality from ${previousLevel} to low due to poor performance`
+          );
         }
       }
-    } else if (avgFrameTime > targetFrameTime * 1.5) { // < 40 FPS
-      if (this.currentQualityLevel === 'ultra' || this.currentQualityLevel === 'high') {
+    } else if (avgFrameTime > targetFrameTime * 1.5) {
+      // < 40 FPS
+      if (
+        this.currentQualityLevel === 'ultra' ||
+        this.currentQualityLevel === 'high'
+      ) {
         const previousLevel = this.currentQualityLevel;
         this.currentQualityLevel = 'medium';
         if (process.env.NODE_ENV === 'development') {
-          console.log(`LOD: Reduced quality from ${previousLevel} to medium due to performance`);
+          logger.debug(
+            `LOD: Reduced quality from ${previousLevel} to medium due to performance`
+          );
         }
       }
-    } else if (avgFrameTime < targetFrameTime * 0.8) { // > 75 FPS
+    } else if (avgFrameTime < targetFrameTime * 0.8) {
+      // > 75 FPS
       if (this.currentQualityLevel === 'low') {
         this.currentQualityLevel = 'medium';
-        console.log('LOD: Increased quality to medium due to good performance');
+        logger.debug(
+          'LOD: Increased quality to medium due to good performance'
+        );
       } else if (this.currentQualityLevel === 'medium') {
         this.currentQualityLevel = 'high';
-        console.log('LOD: Increased quality to high due to good performance');
+        logger.debug('LOD: Increased quality to high due to good performance');
       }
     }
   }
-  
+
   getCurrentQuality(): 'low' | 'medium' | 'high' | 'ultra' {
     return this.currentQualityLevel;
   }
-  
+
   setQuality(quality: 'low' | 'medium' | 'high' | 'ultra'): void {
     this.currentQualityLevel = quality;
   }
@@ -213,16 +234,13 @@ export class LODManager {
     totalSimplifications: 0,
     cacheHits: 0,
     cacheMisses: 0,
-    averageSimplificationTime: 0
+    averageSimplificationTime: 0,
   };
 
-  constructor(
-    customLODLevels?: LODLevel[],
-    workerPool?: WorkerPool
-  ) {
+  constructor(customLODLevels?: LODLevel[], workerPool?: WorkerPool) {
     this.lodLevels = customLODLevels || DEFAULT_LOD_LEVELS;
     this.workerPool = workerPool || null;
-    
+
     // Sort LOD levels by zoom range
     this.lodLevels.sort((a, b) => a.minZoom - b.minZoom);
   }
@@ -237,41 +255,41 @@ export class LODManager {
     const startTime = performance.now();
     const currentLevel = this.determineLODLevel(context);
     const lodPolygons: LODPolygon[] = [];
-    
+
     // Update adaptive quality based on performance
     this.adaptiveController.updateFrameTime(1000 / (context.currentFPS || 60));
     context.renderQuality = this.adaptiveController.getCurrentQuality();
-    
+
     for (const polygon of polygons) {
       const cacheKey = this.generateCacheKey(polygon, currentLevel);
       const cached = this.lodCache.get(cacheKey);
-      
+
       if (cached && cached.length > 0) {
         lodPolygons.push(...cached);
         this.stats.cacheHits++;
         continue;
       }
-      
+
       this.stats.cacheMisses++;
-      
+
       const lodPolygon = await this.createLODPolygon(
         polygon,
         currentLevel,
         context
       );
-      
+
       if (lodPolygon) {
         lodPolygons.push(lodPolygon);
-        
+
         // Cache the result
         this.lodCache.set(cacheKey, [lodPolygon]);
         this.cleanupCache();
       }
     }
-    
+
     const processingTime = performance.now() - startTime;
     this.updatePerformanceStats(processingTime);
-    
+
     return lodPolygons;
   }
 
@@ -284,37 +302,48 @@ export class LODManager {
     context: LODContext
   ): Promise<LODPolygon | null> {
     let processedPoints = [...polygon.points];
-    
+
     // Apply simplification if needed
-    if (level.simplificationTolerance > 0 && processedPoints.length > level.maxVertices) {
+    if (
+      level.simplificationTolerance > 0 &&
+      processedPoints.length > level.maxVertices
+    ) {
       if (this.workerPool) {
         try {
           processedPoints = await this.workerPool.execute(
             this.simplifyOperation,
             {
               points: processedPoints,
-              tolerance: level.simplificationTolerance
+              tolerance: level.simplificationTolerance,
             }
           );
           this.stats.totalSimplifications++;
         } catch (error) {
-          console.warn('LOD: Worker simplification failed, using original points:', error);
+          logger.warn(
+            'LOD: Worker simplification failed, using original points:',
+            error
+          );
         }
       } else {
         // Fallback to simple decimation if no worker available
-        processedPoints = this.decimatePoints(processedPoints, level.decimationStep);
+        processedPoints = this.decimatePoints(
+          processedPoints,
+          level.decimationStep
+        );
       }
     }
-    
+
     // Apply vertex limit
     if (processedPoints.length > level.maxVertices) {
-      processedPoints = this.decimatePoints(processedPoints, 
-        Math.ceil(processedPoints.length / level.maxVertices));
+      processedPoints = this.decimatePoints(
+        processedPoints,
+        Math.ceil(processedPoints.length / level.maxVertices)
+      );
     }
-    
+
     const boundingBox = calculateBoundingBox(processedPoints);
     const renderHints = this.generateRenderHints(level, context, polygon);
-    
+
     return {
       originalId: polygon.id,
       level: this.lodLevels.indexOf(level),
@@ -322,7 +351,7 @@ export class LODManager {
       originalPointCount: polygon.points.length,
       simplificationRatio: processedPoints.length / polygon.points.length,
       boundingBox,
-      renderHints
+      renderHints,
     };
   }
 
@@ -330,38 +359,51 @@ export class LODManager {
    * Determine appropriate LOD level based on context
    */
   private determineLODLevel(context: LODContext): LODLevel {
-    let baseLevel = this.lodLevels.find(level => 
-      context.zoom >= level.minZoom && context.zoom < level.maxZoom
-    ) || this.lodLevels[this.lodLevels.length - 1];
-    
+    const baseLevel =
+      this.lodLevels.find(
+        level => context.zoom >= level.minZoom && context.zoom < level.maxZoom
+      ) || this.lodLevels[this.lodLevels.length - 1];
+
     // Adjust based on adaptive quality
     const qualityAdjustment = this.getQualityAdjustment(context.renderQuality);
-    const adjustedLevelIndex = Math.max(0, 
-      Math.min(this.lodLevels.length - 1, 
+    const adjustedLevelIndex = Math.max(
+      0,
+      Math.min(
+        this.lodLevels.length - 1,
         this.lodLevels.indexOf(baseLevel) + qualityAdjustment
       )
     );
-    
+
     // Further adjust based on polygon count and animation state
     if (context.isAnimating || context.polygonCount > 1000) {
       const performanceAdjustment = context.isAnimating ? -1 : 0;
-      const finalIndex = Math.max(0, adjustedLevelIndex + performanceAdjustment);
+      const finalIndex = Math.max(
+        0,
+        adjustedLevelIndex + performanceAdjustment
+      );
       return this.lodLevels[finalIndex];
     }
-    
+
     return this.lodLevels[adjustedLevelIndex];
   }
 
   /**
    * Get quality adjustment offset
    */
-  private getQualityAdjustment(quality: 'low' | 'medium' | 'high' | 'ultra'): number {
+  private getQualityAdjustment(
+    quality: 'low' | 'medium' | 'high' | 'ultra'
+  ): number {
     switch (quality) {
-      case 'low': return -2;
-      case 'medium': return -1;
-      case 'high': return 0;
-      case 'ultra': return 1;
-      default: return 0;
+      case 'low':
+        return -2;
+      case 'medium':
+        return -1;
+      case 'high':
+        return 0;
+      case 'ultra':
+        return 1;
+      default:
+        return 0;
     }
   }
 
@@ -375,10 +417,10 @@ export class LODManager {
   ): LODRenderHints {
     const isSelected = false; // This would be passed from context in real implementation
     const baseOpacity = isSelected ? 1.0 : 0.8;
-    
+
     // Adjust opacity based on zoom
     const zoomOpacity = Math.min(1.0, context.zoom * 0.5 + 0.5);
-    
+
     return {
       strokeWidth: Math.max(0.5, level.minZoom * 2),
       opacity: baseOpacity * zoomOpacity,
@@ -386,7 +428,8 @@ export class LODManager {
       strokeEnabled: level.renderStrokes,
       verticesEnabled: level.renderVertices && context.zoom > 1.0,
       shadowEnabled: context.zoom > 1.5 && context.renderQuality !== 'low',
-      antiAliasing: context.renderQuality === 'high' || context.renderQuality === 'ultra'
+      antiAliasing:
+        context.renderQuality === 'high' || context.renderQuality === 'ultra',
     };
   }
 
@@ -395,23 +438,23 @@ export class LODManager {
    */
   private decimatePoints(points: Point[], step: number): Point[] {
     if (step <= 1 || points.length <= 3) return points;
-    
+
     const decimated: Point[] = [];
-    
+
     // Always include first point
     decimated.push(points[0]);
-    
+
     // Include every nth point
     for (let i = step; i < points.length; i += step) {
       decimated.push(points[i]);
     }
-    
+
     // Always include last point if it's not already included
     const lastIndex = points.length - 1;
-    if (lastIndex > 0 && (lastIndex % step !== 0)) {
+    if (lastIndex > 0 && lastIndex % step !== 0) {
       decimated.push(points[lastIndex]);
     }
-    
+
     return decimated;
   }
 
@@ -424,20 +467,20 @@ export class LODManager {
     // Create stable metadata for the key
     const pointCount = polygon.points.length;
     const bbox = calculateBoundingBox(polygon.points);
-    
+
     // Create a more robust hash with better precision and full coverage
     const pointsData = polygon.points
       .map(p => `${p.x.toFixed(3)},${p.y.toFixed(3)}`)
       .join('|');
-    
+
     // Generate a shorter deterministic hash (simple hash function)
     let hash = 0;
     for (let i = 0; i < pointsData.length; i++) {
       const char = pointsData.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
-    
+
     return `${polygon.id}_${level.name}_${pointCount}_${hash.toString(36)}_${bbox.width.toFixed(1)}x${bbox.height.toFixed(1)}`;
   }
 
@@ -449,7 +492,7 @@ export class LODManager {
     if (this.lodCache.size > maxCacheSize) {
       const entries = Array.from(this.lodCache.entries());
       const toDelete = entries.slice(0, entries.length - maxCacheSize);
-      
+
       for (const [key] of toDelete) {
         this.lodCache.delete(key);
       }
@@ -461,8 +504,9 @@ export class LODManager {
    */
   private updatePerformanceStats(processingTime: number): void {
     const alpha = 0.1; // Exponential moving average
-    this.stats.averageSimplificationTime = 
-      this.stats.averageSimplificationTime * (1 - alpha) + processingTime * alpha;
+    this.stats.averageSimplificationTime =
+      this.stats.averageSimplificationTime * (1 - alpha) +
+      processingTime * alpha;
   }
 
   /**
@@ -502,7 +546,7 @@ export class LODManager {
       ...this.stats,
       cacheSize: this.lodCache.size,
       currentQuality: this.adaptiveController.getCurrentQuality(),
-      availableLevels: this.lodLevels.map(l => l.name)
+      availableLevels: this.lodLevels.map(l => l.name),
     };
   }
 
@@ -515,7 +559,7 @@ export class LODManager {
       totalSimplifications: 0,
       cacheHits: 0,
       cacheMisses: 0,
-      averageSimplificationTime: 0
+      averageSimplificationTime: 0,
     };
   }
 
@@ -529,40 +573,51 @@ export class LODManager {
     maxMemoryMB: number = 50
   ): Promise<void> {
     const startCacheSize = this.lodCache.size;
-    const maxCacheEntries = Math.max(100, Math.floor(maxMemoryMB * 1024 * 1024 / 2000)); // ~2KB per entry estimate
-    
+    const maxCacheEntries = Math.max(
+      100,
+      Math.floor((maxMemoryMB * 1024 * 1024) / 2000)
+    ); // ~2KB per entry estimate
+
     // Prevent preloading if we're already at memory limit
     if (this.lodCache.size >= maxCacheEntries) {
-      console.warn('LOD: Skipping preload due to memory limit');
+      logger.warn('LOD: Skipping preload due to memory limit');
       return;
     }
-    
+
     // Limit the number of polygons to preload based on available memory
     const availableSlots = maxCacheEntries - this.lodCache.size;
-    const polygonsToPreload = polygons.slice(0, Math.min(polygons.length, availableSlots));
-    
+    const polygonsToPreload = polygons.slice(
+      0,
+      Math.min(polygons.length, availableSlots)
+    );
+
     // Generate LOD polygons in background for smooth transitions
-    const lodPolygons = await this.generateLODPolygons(polygonsToPreload, futureContext);
-    
+    const lodPolygons = await this.generateLODPolygons(
+      polygonsToPreload,
+      futureContext
+    );
+
     // Cache results for faster access later
     for (const lodPolygon of lodPolygons) {
-      const originalPolygon = polygonsToPreload.find(p => p.id === lodPolygon.originalId);
+      const originalPolygon = polygonsToPreload.find(
+        p => p.id === lodPolygon.originalId
+      );
       if (originalPolygon) {
         const level = this.lodLevels[lodPolygon.level];
         const cacheKey = this.generateCacheKey(originalPolygon, level);
         this.lodCache.set(cacheKey, [lodPolygon]);
       }
-      
+
       // Safety check to prevent unbounded growth during preload
       if (this.lodCache.size >= maxCacheEntries) {
-        console.warn('LOD: Stopping preload due to memory limit reached');
+        logger.warn('LOD: Stopping preload due to memory limit reached');
         break;
       }
     }
-    
+
     const entriesAdded = this.lodCache.size - startCacheSize;
     if (entriesAdded > 0) {
-      console.log(`LOD: Preloaded ${entriesAdded} cache entries`);
+      logger.debug(`LOD: Preloaded ${entriesAdded} cache entries`);
     }
   }
 }

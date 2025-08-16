@@ -1,16 +1,26 @@
-
-import React, { useEffect, useState } from "react";
-import DashboardHeader from "@/components/DashboardHeader";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { toast } from "sonner";
-import { Link } from "react-router-dom";
-import { Clock, Edit, ExternalLink, FileText, Github, Mail, MapPin, User, Loader2 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import React, { useEffect, useState } from 'react';
+import DashboardHeader from '@/components/DashboardHeader';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
+import {
+  Clock,
+  Edit,
+  ExternalLink,
+  FileText,
+  Github,
+  Mail,
+  MapPin,
+  User,
+  Loader2,
+} from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 // Note: Profile functionality now handled by AuthContext and Settings page
-import { useLanguage } from "@/contexts/LanguageContext";
-import { apiClient, Project, ProjectImage } from "@/lib/api";
+import { useLanguage } from '@/contexts/LanguageContext';
+import { apiClient, Project, ProjectImage } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 interface ProfileData {
   name: string;
@@ -43,10 +53,16 @@ const Profile = () => {
   const [completedImageCount, setCompletedImageCount] = useState(0);
   const [storageUsed, setStorageUsed] = useState(0);
   const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
-  const [projectCountError, setProjectCountError] = useState<string | null>(null);
+  const [projectCountError, setProjectCountError] = useState<string | null>(
+    null
+  );
   const [imageCountError, setImageCountError] = useState<string | null>(null);
-  const [completedCountError, setCompletedCountError] = useState<string | null>(null);
-  const [recentActivityError, setRecentActivityError] = useState<string | null>(null);
+  const [completedCountError, setCompletedCountError] = useState<string | null>(
+    null
+  );
+  const [recentActivityError, setRecentActivityError] = useState<string | null>(
+    null
+  );
 
   useEffect(() => {
     const fetchData = async () => {
@@ -60,7 +76,7 @@ const Profile = () => {
           const projectsResponse = await apiClient.getProjects({ limit: 1 });
           projectCount = projectsResponse.total || 0;
         } catch (error) {
-          console.error('Error fetching project count:', error);
+          logger.error('Error fetching project count:', error);
           projectError = 'Failed to load project count';
           setProjectCountError(projectError);
         }
@@ -69,10 +85,12 @@ const Profile = () => {
         let recentProjects: Project[] = [];
         let recentProjectsError = null;
         try {
-          const recentProjectsResponse = await apiClient.getProjects({ limit: 5 });
+          const recentProjectsResponse = await apiClient.getProjects({
+            limit: 5,
+          });
           recentProjects = recentProjectsResponse.projects || [];
         } catch (error) {
-          console.error('Error fetching recent projects:', error);
+          logger.error('Error fetching recent projects:', error);
           recentProjectsError = 'Failed to load recent projects';
           setRecentActivityError(recentProjectsError);
         }
@@ -84,22 +102,32 @@ const Profile = () => {
         let completedError = null;
         try {
           // Fetch all project IDs to get total image counts
-          const allProjectsResponse = await apiClient.getProjects({ limit: 100 }); // Reasonable limit
+          const allProjectsResponse = await apiClient.getProjects({
+            limit: 100,
+          }); // Reasonable limit
           const projects = allProjectsResponse.projects || [];
-          
+
           // Aggregate image counts from all projects
           for (const project of projects) {
             try {
-              const imagesResponse = await apiClient.getProjectImages(project.id, { limit: 1000 });
+              const imagesResponse = await apiClient.getProjectImages(
+                project.id,
+                { limit: 1000 }
+              );
               const projectImages = imagesResponse.images || [];
               imageCount += projectImages.length;
-              completedCount += projectImages.filter(img => img.segmentation_status === 'completed').length;
+              completedCount += projectImages.filter(
+                img => img.segmentation_status === 'completed'
+              ).length;
             } catch (error) {
-              console.warn(`Error fetching images for project ${project.id}:`, error);
+              logger.warn(
+                `Error fetching images for project ${project.id}:`,
+                error
+              );
             }
           }
         } catch (error) {
-          console.error('Error fetching image counts:', error);
+          logger.error('Error fetching image counts:', error);
           imageError = 'Failed to load image count';
           completedError = 'Failed to load completed count';
           setImageCountError(imageError);
@@ -110,73 +138,90 @@ const Profile = () => {
         let recentImages: ProjectImage[] = [];
         let recentImagesError = null;
         try {
-          for (const project of recentProjects.slice(0, 3)) { // Limit to recent 3 projects
+          for (const project of recentProjects.slice(0, 3)) {
+            // Limit to recent 3 projects
             try {
-              const imagesResponse = await apiClient.getProjectImages(project.id, { limit: 5 });
+              const imagesResponse = await apiClient.getProjectImages(
+                project.id,
+                { limit: 5 }
+              );
               recentImages.push(...(imagesResponse.images || []));
             } catch (error) {
-              console.warn(`Error fetching recent images for project ${project.id}:`, error);
+              logger.warn(
+                `Error fetching recent images for project ${project.id}:`,
+                error
+              );
             }
           }
           // Sort by creation date and take most recent
-          recentImages.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          recentImages.sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime()
+          );
           recentImages = recentImages.slice(0, 10); // Keep only 10 most recent
         } catch (error) {
-          console.error('Error fetching recent images:', error);
+          logger.error('Error fetching recent images:', error);
           recentImagesError = 'Failed to load recent images';
           setRecentActivityError(recentImagesError);
         }
-        
+
         // Combined recent activity
         const activity: ActivityItem[] = [];
-        
+
         if (recentProjects) {
           recentProjects.forEach(project => {
             const createdDate = new Date(project.created_at);
             const now = new Date();
-            const diffDays = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 3600 * 24));
-            
+            const diffDays = Math.floor(
+              (now.getTime() - createdDate.getTime()) / (1000 * 3600 * 24)
+            );
+
             activity.push({
               action: `${t('profile.createdProject')} '${project.title}'`,
               date: createdDate.toISOString(),
-              daysAgo: diffDays
+              daysAgo: diffDays,
             });
           });
         }
-        
+
         if (recentImages) {
           recentImages.forEach(image => {
             const createdDate = new Date(image.created_at);
             const now = new Date();
-            const diffDays = Math.floor((now.getTime() - createdDate.getTime()) / (1000 * 3600 * 24));
-            
+            const diffDays = Math.floor(
+              (now.getTime() - createdDate.getTime()) / (1000 * 3600 * 24)
+            );
+
             if (image.segmentation_status === 'completed') {
               activity.push({
                 action: `${t('profile.completedSegmentation')} '${image.name}'`,
                 date: createdDate.toISOString(),
-                daysAgo: diffDays
+                daysAgo: diffDays,
               });
             } else {
               activity.push({
                 action: `${t('profile.uploadedImage')} '${image.name}'`,
                 date: createdDate.toISOString(),
-                daysAgo: diffDays
+                daysAgo: diffDays,
               });
             }
           });
         }
-        
+
         // Sort activity by date
-        activity.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        
+        activity.sort(
+          (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+
         // Limit to 4 most recent activities
         setRecentActivity(activity.slice(0, 4));
 
         // Format joined date
-        const joinedDate = user.created_at 
+        const joinedDate = user.created_at
           ? new Date(user.created_at)
           : new Date();
-        
+
         const month = joinedDate.toLocaleString('default', { month: 'long' });
         const year = joinedDate.getFullYear();
 
@@ -188,21 +233,21 @@ const Profile = () => {
 
         setProfileData({
           name: profile?.username || user.email?.split('@')[0] || 'User',
-          title: profile?.title || "Researcher",
-          organization: profile?.organization || "Research Institute",
-          bio: profile?.bio || "No bio provided",
-          email: user.email || "",
-          location: profile?.location || "Not specified",
+          title: profile?.title || 'Researcher',
+          organization: profile?.organization || 'Research Institute',
+          bio: profile?.bio || 'No bio provided',
+          email: user.email || '',
+          location: profile?.location || 'Not specified',
           joined: `${month} ${year}`,
           publications: 0,
           projects: projectCount,
           collaborators: 0,
           analyses: imageCount,
-          avatar: profile?.avatarUrl || "/placeholder.svg"
+          avatar: profile?.avatarUrl || '/placeholder.svg',
         });
       } catch (error) {
-        console.error("Error fetching profile data:", error);
-        toast.error("Failed to load profile data");
+        logger.error('Error fetching profile data:', error);
+        toast.error('Failed to load profile data');
       } finally {
         setLoading(false);
       }
@@ -223,16 +268,23 @@ const Profile = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <DashboardHeader />
-      
+
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-between items-start mb-8">
-          <h1 className="text-2xl font-bold dark:text-white">{t('profile.title')}</h1>
+          <h1 className="text-2xl font-bold dark:text-white">
+            {t('profile.title')}
+          </h1>
           <div className="flex space-x-2">
-            <Button asChild variant="outline" size="sm" className="dark:border-gray-700 dark:text-gray-300">
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="dark:border-gray-700 dark:text-gray-300"
+            >
               <Link to="/settings">
                 <Edit className="h-4 w-4 mr-2" />
                 {t('profile.editProfile')}
@@ -240,7 +292,7 @@ const Profile = () => {
             </Button>
           </div>
         </div>
-        
+
         {profileData && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Profile Sidebar */}
@@ -249,43 +301,67 @@ const Profile = () => {
                 <CardContent className="pt-6">
                   <div className="flex flex-col items-center text-center">
                     <div className="w-24 h-24 rounded-full overflow-hidden mb-4 border-2 border-blue-100 dark:border-blue-900">
-                      <img 
-                        src={profileData.avatar} 
-                        alt={profileData.name} 
+                      <img
+                        src={profileData.avatar}
+                        alt={profileData.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <h2 className="text-xl font-semibold dark:text-white">{profileData.name}</h2>
-                    <p className="text-gray-500 dark:text-gray-400">{profileData.title}</p>
-                    <p className="text-sm text-gray-400 mt-1">{profileData.organization}</p>
-                    
+                    <h2 className="text-xl font-semibold dark:text-white">
+                      {profileData.name}
+                    </h2>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      {profileData.title}
+                    </p>
+                    <p className="text-sm text-gray-400 mt-1">
+                      {profileData.organization}
+                    </p>
+
                     <div className="mt-4 w-full grid grid-cols-3 gap-2 text-center">
                       <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
                         <p className="text-lg font-semibold dark:text-white">
                           {projectCountError ? '—' : profileData.projects}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('profile.projects')}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {t('profile.projects')}
+                        </p>
                         {projectCountError && (
-                          <p className="text-xs text-red-500 mt-1" title={projectCountError}>Error</p>
+                          <p
+                            className="text-xs text-red-500 mt-1"
+                            title={projectCountError}
+                          >
+                            Error
+                          </p>
                         )}
                       </div>
                       <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
-                        <p className="text-lg font-semibold dark:text-white">{profileData.publications}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('profile.papers')}</p>
+                        <p className="text-lg font-semibold dark:text-white">
+                          {profileData.publications}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {t('profile.papers')}
+                        </p>
                       </div>
                       <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
                         <p className="text-lg font-semibold dark:text-white">
                           {imageCountError ? '—' : profileData.analyses}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{t('profile.analyses')}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          {t('profile.analyses')}
+                        </p>
                         {imageCountError && (
-                          <p className="text-xs text-red-500 mt-1" title={imageCountError}>Error</p>
+                          <p
+                            className="text-xs text-red-500 mt-1"
+                            title={imageCountError}
+                          >
+                            Error
+                          </p>
                         )}
                       </div>
                     </div>
-                    
+
                     <Separator className="my-4 dark:bg-gray-700" />
-                    
+
                     <div className="w-full space-y-3">
                       <div className="flex items-center text-sm dark:text-gray-300">
                         <Mail className="h-4 w-4 mr-2 text-gray-400" />
@@ -297,16 +373,20 @@ const Profile = () => {
                       </div>
                       <div className="flex items-center text-sm dark:text-gray-300">
                         <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                        <span>{t('profile.joined')} {profileData.joined}</span>
+                        <span>
+                          {t('profile.joined')} {profileData.joined}
+                        </span>
                       </div>
                     </div>
-                    
+
                     <Separator className="my-4 dark:bg-gray-700" />
-                    
-                    <Button 
-                      variant="outline" 
+
+                    <Button
+                      variant="outline"
                       className="w-full dark:border-gray-700 dark:text-gray-300"
-                      onClick={() => toast.success("API key copied to clipboard!")}
+                      onClick={() =>
+                        toast.success('API key copied to clipboard!')
+                      }
                     >
                       <FileText className="h-4 w-4 mr-2" />
                       {t('profile.copyApiKey')}
@@ -314,66 +394,103 @@ const Profile = () => {
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card className="dark:bg-gray-800 dark:border-gray-700">
                 <CardContent className="pt-6">
-                  <h3 className="font-medium mb-3 dark:text-white">{t('profile.collaborators')} (0)</h3>
+                  <h3 className="font-medium mb-3 dark:text-white">
+                    {t('profile.collaborators')} (0)
+                  </h3>
                   <div className="flex flex-wrap gap-2">
                     {profileData.collaborators === 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">{t('profile.noCollaborators')}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {t('profile.noCollaborators')}
+                      </p>
                     )}
-                    {[...Array(Math.min(6, profileData.collaborators))].map((_, i) => (
-                      <div key={i} className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                        <User className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                      </div>
-                    ))}
+                    {[...Array(Math.min(6, profileData.collaborators))].map(
+                      (_, i) => (
+                        <div
+                          key={i}
+                          className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
+                        >
+                          <User className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                        </div>
+                      )
+                    )}
                     {profileData.collaborators > 6 && (
                       <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400">
                         +{profileData.collaborators - 6}
                       </div>
                     )}
                   </div>
-                  
+
                   <Separator className="my-4 dark:bg-gray-700" />
-                  
-                  <h3 className="font-medium mb-3 dark:text-white">{t('profile.connectedAccounts')}</h3>
+
+                  <h3 className="font-medium mb-3 dark:text-white">
+                    {t('profile.connectedAccounts')}
+                  </h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <Github className="h-5 w-5 mr-2 dark:text-gray-300" />
-                        <span className="text-sm dark:text-gray-300">GitHub</span>
+                        <span className="text-sm dark:text-gray-300">
+                          GitHub
+                        </span>
                       </div>
-                      <Button variant="ghost" size="sm" className="dark:text-gray-300">{t('profile.connect')}</Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="dark:text-gray-300"
+                      >
+                        {t('profile.connect')}
+                      </Button>
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
                         <ExternalLink className="h-5 w-5 mr-2 dark:text-gray-300" />
-                        <span className="text-sm dark:text-gray-300">ORCID</span>
+                        <span className="text-sm dark:text-gray-300">
+                          ORCID
+                        </span>
                       </div>
-                      <Button variant="ghost" size="sm" className="dark:text-gray-300">{t('profile.connect')}</Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="dark:text-gray-300"
+                      >
+                        {t('profile.connect')}
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
               </Card>
             </div>
-            
+
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
               <Card className="dark:bg-gray-800 dark:border-gray-700">
                 <CardContent className="pt-6">
-                  <h2 className="text-lg font-semibold mb-4 dark:text-white">{t('profile.about')}</h2>
-                  <p className="text-gray-700 dark:text-gray-300">{profileData.bio}</p>
-                  
+                  <h2 className="text-lg font-semibold mb-4 dark:text-white">
+                    {t('profile.about')}
+                  </h2>
+                  <p className="text-gray-700 dark:text-gray-300">
+                    {profileData.bio}
+                  </p>
+
                   <Separator className="my-6 dark:bg-gray-700" />
-                  
-                  <h2 className="text-lg font-semibold mb-4 dark:text-white">{t('profile.recentActivity')}</h2>
+
+                  <h2 className="text-lg font-semibold mb-4 dark:text-white">
+                    {t('profile.recentActivity')}
+                  </h2>
                   <div className="space-y-4">
                     {recentActivityError ? (
                       <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
-                        <p className="text-red-600 dark:text-red-400 text-sm">{recentActivityError}</p>
+                        <p className="text-red-600 dark:text-red-400 text-sm">
+                          {recentActivityError}
+                        </p>
                       </div>
                     ) : recentActivity.length === 0 ? (
-                      <p className="text-gray-500 dark:text-gray-400">{t('profile.noRecentActivity')}</p>
+                      <p className="text-gray-500 dark:text-gray-400">
+                        {t('profile.noRecentActivity')}
+                      </p>
                     ) : (
                       recentActivity.map((activity, i) => (
                         <div key={i} className="flex">
@@ -382,12 +499,14 @@ const Profile = () => {
                             <div className="w-0.5 h-full bg-gray-200 dark:bg-gray-700 mt-1"></div>
                           </div>
                           <div className="flex-1 -mt-0.5">
-                            <p className="text-gray-700 dark:text-gray-300">{activity.action}</p>
+                            <p className="text-gray-700 dark:text-gray-300">
+                              {activity.action}
+                            </p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                              {activity.daysAgo === 0 
-                                ? t('profile.today') 
-                                : activity.daysAgo === 1 
-                                  ? t('profile.yesterday') 
+                              {activity.daysAgo === 0
+                                ? t('profile.today')
+                                : activity.daysAgo === 1
+                                  ? t('profile.yesterday')
                                   : `${activity.daysAgo} ${t('profile.daysAgo')}`}
                             </p>
                           </div>
@@ -397,74 +516,128 @@ const Profile = () => {
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card className="dark:bg-gray-800 dark:border-gray-700">
                 <CardContent className="pt-6">
-                  <h2 className="text-lg font-semibold mb-4 dark:text-white">{t('profile.statistics')}</h2>
+                  <h2 className="text-lg font-semibold mb-4 dark:text-white">
+                    {t('profile.statistics')}
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t('profile.totalImagesProcessed')}</h3>
+                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                        {t('profile.totalImagesProcessed')}
+                      </h3>
                       <div className="text-3xl font-bold dark:text-white">
                         {completedCountError ? '—' : completedImageCount}
                       </div>
                       {!completedCountError && completedImageCount > 0 && (
                         <p className="text-xs text-green-600 mt-1">
-                          {Math.round((completedImageCount / Math.max(imageCount, 1)) * 100)}% {t('profile.completionRate')}
+                          {Math.round(
+                            (completedImageCount / Math.max(imageCount, 1)) *
+                              100
+                          )}
+                          % {t('profile.completionRate')}
                         </p>
                       )}
                       {completedCountError && (
-                        <p className="text-xs text-red-500 mt-1" title={completedCountError}>Error loading data</p>
+                        <p
+                          className="text-xs text-red-500 mt-1"
+                          title={completedCountError}
+                        >
+                          Error loading data
+                        </p>
                       )}
                     </div>
                     <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t('profile.averageProcessingTime')}</h3>
-                      <div className="text-3xl font-bold dark:text-white">3.2s</div>
-                      <p className="text-xs text-green-600 mt-1">-8% {t('profile.fromLastMonth')}</p>
+                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                        {t('profile.averageProcessingTime')}
+                      </h3>
+                      <div className="text-3xl font-bold dark:text-white">
+                        3.2s
+                      </div>
+                      <p className="text-xs text-green-600 mt-1">
+                        -8% {t('profile.fromLastMonth')}
+                      </p>
                     </div>
                     <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t('profile.storageUsed')}</h3>
+                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                        {t('profile.storageUsed')}
+                      </h3>
                       <div className="text-3xl font-bold dark:text-white">
                         {imageCountError ? '—' : `${storageUsed} MB`}
                       </div>
                       {!imageCountError && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('profile.of')} 1 GB ({Math.round(storageUsed / 10)}%)</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {t('profile.of')} 1 GB ({Math.round(storageUsed / 10)}
+                          %)
+                        </p>
                       )}
                       {imageCountError && (
-                        <p className="text-xs text-red-500 mt-1" title={imageCountError}>Error loading data</p>
+                        <p
+                          className="text-xs text-red-500 mt-1"
+                          title={imageCountError}
+                        >
+                          Error loading data
+                        </p>
                       )}
                     </div>
                     <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-md">
-                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">{t('profile.apiRequests')}</h3>
+                      <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+                        {t('profile.apiRequests')}
+                      </h3>
                       <div className="text-3xl font-bold dark:text-white">
-                        {(imageCountError || projectCountError) ? '—' : (imageCount + projectCount) * 4}
+                        {imageCountError || projectCountError
+                          ? '—'
+                          : (imageCount + projectCount) * 4}
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('profile.thisMonth')}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {t('profile.thisMonth')}
+                      </p>
                       {(imageCountError || projectCountError) && (
-                        <p className="text-xs text-red-500 mt-1">Error loading data</p>
+                        <p className="text-xs text-red-500 mt-1">
+                          Error loading data
+                        </p>
                       )}
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              
+
               <Card className="dark:bg-gray-800 dark:border-gray-700">
                 <CardContent className="pt-6">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold dark:text-white">{t('profile.recentPublications')}</h2>
-                    <Button variant="ghost" size="sm" className="dark:text-gray-300">{t('profile.viewAll')}</Button>
+                    <h2 className="text-lg font-semibold dark:text-white">
+                      {t('profile.recentPublications')}
+                    </h2>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="dark:text-gray-300"
+                    >
+                      {t('profile.viewAll')}
+                    </Button>
                   </div>
                   {profileData.publications === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400">{t('profile.noPublications')}</p>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      {t('profile.noPublications')}
+                    </p>
                   ) : (
                     <div className="space-y-4">
                       {[
-                        "3D tumor spheroid models for in vitro therapeutic screening: a systematic approach to enhance the biological relevance of data obtained",
-                        "Advanced imaging and visualization of spheroids: a review of methods and applications",
-                        "Machine learning approaches for automated segmentation of cell spheroids in 3D culture"
+                        '3D tumor spheroid models for in vitro therapeutic screening: a systematic approach to enhance the biological relevance of data obtained',
+                        'Advanced imaging and visualization of spheroids: a review of methods and applications',
+                        'Machine learning approaches for automated segmentation of cell spheroids in 3D culture',
                       ].map((title, i) => (
-                        <div key={i} className="p-3 border border-gray-100 dark:border-gray-700 rounded-md hover:border-gray-300 dark:hover:border-gray-600 transition duration-200">
-                          <h3 className="font-medium text-blue-600 dark:text-blue-400">{title}</h3>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Journal of Cell Biology • {2023 - i}</p>
+                        <div
+                          key={i}
+                          className="p-3 border border-gray-100 dark:border-gray-700 rounded-md hover:border-gray-300 dark:hover:border-gray-600 transition duration-200"
+                        >
+                          <h3 className="font-medium text-blue-600 dark:text-blue-400">
+                            {title}
+                          </h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            Journal of Cell Biology • {2023 - i}
+                          </p>
                         </div>
                       ))}
                     </div>

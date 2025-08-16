@@ -1,9 +1,8 @@
-
-import React, { useState } from "react";
-import ProjectCard from "@/components/ProjectCard";
-import ProjectListItem from "@/components/ProjectListItem";
-import NewProjectCard from "@/components/NewProjectCard";
-import NewProjectListItem from "@/components/NewProjectListItem";
+import React, { useState } from 'react';
+import ProjectCard from '@/components/ProjectCard';
+import ProjectListItem from '@/components/ProjectListItem';
+import NewProjectCard from '@/components/NewProjectCard';
+import NewProjectListItem from '@/components/NewProjectListItem';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export interface Project {
@@ -17,28 +16,28 @@ export interface Project {
 
 export interface ProjectsListProps {
   projects: Project[];
-  viewMode: "grid" | "list";
+  viewMode: 'grid' | 'list';
   onOpenProject: (id: string) => void;
   loading: boolean;
   showCreateCard?: boolean;
 }
 
-const ProjectsList = ({ 
-  projects, 
-  viewMode, 
-  onOpenProject, 
-  loading, 
-  showCreateCard = false 
+const ProjectsList = ({
+  projects,
+  viewMode,
+  onOpenProject,
+  loading,
+  showCreateCard = false,
 }: ProjectsListProps) => {
   const { t } = useLanguage();
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
-  
+
   if (loading) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {Array.from({ length: 6 }).map((_, index) => (
-          <div 
-            key={index} 
+          <div
+            key={index}
             className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm h-64 animate-pulse"
           />
         ))}
@@ -56,8 +55,8 @@ const ProjectsList = ({
     );
   }
 
-  if (viewMode === "list") {
-    const projectItems = projects.map((project) => (
+  if (viewMode === 'list') {
+    const projectItems = projects.map(project => (
       <ProjectListItem
         key={project.id}
         id={project.id}
@@ -70,17 +69,23 @@ const ProjectsList = ({
       />
     ));
 
-    const allItems = showCreateCard 
-      ? [...projectItems, <NewProjectListItem key="new-project" onClick={() => setNewProjectDialogOpen(true)} />]
+    const allItems = showCreateCard
+      ? [
+          ...projectItems,
+          <NewProjectListItem
+            key="new-project"
+            onClick={() => setNewProjectDialogOpen(true)}
+          />,
+        ]
       : projectItems;
 
     return (
       <div className="flex flex-col space-y-3 w-full">
         {allItems}
         {showCreateCard && (
-          <NewProjectCard 
-            isOpen={newProjectDialogOpen} 
-            onOpenChange={setNewProjectDialogOpen} 
+          <NewProjectCard
+            isOpen={newProjectDialogOpen}
+            onOpenChange={setNewProjectDialogOpen}
           />
         )}
       </div>
@@ -88,7 +93,7 @@ const ProjectsList = ({
   }
 
   // Grid mode
-  const projectItems = projects.map((project) => (
+  const projectItems = projects.map(project => (
     <ProjectCard
       key={project.id}
       id={project.id}
@@ -101,8 +106,8 @@ const ProjectsList = ({
     />
   ));
 
-  const allItems = showCreateCard 
-    ? [...projectItems, <NewProjectCard key="new-project" />] 
+  const allItems = showCreateCard
+    ? [...projectItems, <NewProjectCard key="new-project" />]
     : projectItems;
 
   return (

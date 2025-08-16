@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,7 @@ const ImageActions = ({ onDelete }: ImageActionsProps) => {
         variant="destructive"
         size="icon"
         className="h-7 w-7"
-        onClick={(e) => {
+        onClick={e => {
           e.stopPropagation();
           onDelete(); // Direct deletion without confirmation
         }}

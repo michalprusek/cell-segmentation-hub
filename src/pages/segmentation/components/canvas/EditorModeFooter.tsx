@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface EditorModeFooterProps {
@@ -11,7 +10,7 @@ interface EditorModeFooterProps {
  */
 const EditorModeFooter = ({ mode, text }: EditorModeFooterProps) => {
   const getGradientClass = () => {
-    switch(mode) {
+    switch (mode) {
       case 'edit':
         return 'bg-gradient-to-r from-orange-600 to-orange-500';
       case 'slice':
@@ -24,7 +23,9 @@ const EditorModeFooter = ({ mode, text }: EditorModeFooterProps) => {
   };
 
   return (
-    <div className={`absolute bottom-4 left-4 ${getGradientClass()} text-white px-4 py-2 rounded-md text-sm font-semibold shadow-lg`}>
+    <div
+      className={`absolute bottom-4 left-4 ${getGradientClass()} text-white px-4 py-2 rounded-md text-sm font-semibold shadow-lg`}
+    >
       {text}
     </div>
   );

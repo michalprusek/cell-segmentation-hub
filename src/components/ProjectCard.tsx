@@ -1,10 +1,9 @@
-
-import React from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { useNavigate } from "react-router-dom";
-import ProjectThumbnail from "@/components/project/ProjectThumbnail";
-import ProjectActions from "@/components/project/ProjectActions";
-import ProjectMetadata from "@/components/project/ProjectMetadata";
+import React from 'react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { useNavigate } from 'react-router-dom';
+import ProjectThumbnail from '@/components/project/ProjectThumbnail';
+import ProjectActions from '@/components/project/ProjectActions';
+import ProjectMetadata from '@/components/project/ProjectMetadata';
 
 interface ProjectCardProps {
   id: string;
@@ -23,7 +22,7 @@ const ProjectCard = ({
   thumbnail,
   date,
   imageCount,
-  onClick
+  onClick,
 }: ProjectCardProps) => {
   const handleCardClick = () => {
     if (onClick) {
@@ -32,7 +31,7 @@ const ProjectCard = ({
   };
 
   return (
-    <Card 
+    <Card
       className="overflow-hidden transition-all duration-300 hover:shadow-md cursor-pointer"
       onClick={handleCardClick}
     >

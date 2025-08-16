@@ -1,11 +1,11 @@
-import React, { ReactElement } from 'react'
-import { render, RenderOptions, RenderResult } from '@testing-library/react'
-import { BrowserRouter } from 'react-router-dom'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { vi } from 'vitest'
-import { AuthProvider } from '@/contexts/AuthContext'
-import { ThemeProvider } from '@/contexts/ThemeContext'
-import { LanguageProvider } from '@/contexts/LanguageContext'
+import React, { ReactElement } from 'react';
+import { render, RenderOptions, RenderResult } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { vi } from 'vitest';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { LanguageProvider } from '@/contexts/LanguageContext';
 
 // Mock user for tests
 export const mockUser = {
@@ -15,7 +15,7 @@ export const mockUser = {
   lastName: 'User',
   createdAt: new Date('2023-01-01'),
   updatedAt: new Date('2023-01-01'),
-}
+};
 
 // Mock auth context value
 export const mockAuthContext = {
@@ -26,10 +26,12 @@ export const mockAuthContext = {
   register: vi.fn(),
   refreshToken: vi.fn(),
   isLoading: false,
-}
+};
 
 // Create a custom render function that includes providers
-const AllProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const AllProviders: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
@@ -37,46 +39,44 @@ const AllProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => 
         staleTime: Infinity,
       },
     },
-  })
+  });
 
   return (
     <BrowserRouter>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <ThemeProvider>
-            <LanguageProvider>
-              {children}
-            </LanguageProvider>
+            <LanguageProvider>{children}</LanguageProvider>
           </ThemeProvider>
         </AuthProvider>
       </QueryClientProvider>
     </BrowserRouter>
-  )
-}
+  );
+};
 
 const customRender = (
   ui: ReactElement,
   options?: Omit<RenderOptions, 'wrapper'>
-): RenderResult => render(ui, { wrapper: AllProviders, ...options })
+): RenderResult => render(ui, { wrapper: AllProviders, ...options });
 
 // Re-export everything
-export * from '@testing-library/react'
+export * from '@testing-library/react';
 
 // Override render method
-export { customRender as render }
+export { customRender as render };
 
 // Mock API responses
 export const mockApiResponse = <T,>(data: T) => ({
   success: true,
   data,
   message: 'Success',
-})
+});
 
 export const mockApiError = (message: string = 'Error occurred') => ({
   success: false,
   error: message,
   message,
-})
+});
 
 // Mock project data
 export const mockProject = {
@@ -87,7 +87,7 @@ export const mockProject = {
   createdAt: new Date('2023-01-01'),
   updatedAt: new Date('2023-01-01'),
   images: [],
-}
+};
 
 // Mock image data
 export const mockProjectImage = {
@@ -104,7 +104,7 @@ export const mockProjectImage = {
   uploadedAt: new Date('2023-01-01'),
   processedAt: new Date('2023-01-01'),
   segmentationResults: [],
-}
+};
 
 // Mock segmentation result
 export const mockSegmentationResult = {
@@ -114,7 +114,12 @@ export const mockSegmentationResult = {
   status: 'completed' as const,
   polygons: [
     {
-      points: [[100, 100], [200, 100], [200, 200], [100, 200]],
+      points: [
+        [100, 100],
+        [200, 100],
+        [200, 200],
+        [100, 200],
+      ],
       confidence: 0.95,
       area: 10000,
       centroid: [150, 150],
@@ -123,17 +128,21 @@ export const mockSegmentationResult = {
   processingTime: 1500,
   createdAt: new Date('2023-01-01'),
   completedAt: new Date('2023-01-01'),
-}
+};
 
 // Helper function to wait for async operations
-export const waitForAsync = () => new Promise(resolve => setTimeout(resolve, 0))
+export const waitForAsync = () =>
+  new Promise(resolve => setTimeout(resolve, 0));
 
 // Mock file for testing file uploads
-export const createMockFile = (name: string = 'test.jpg', type: string = 'image/jpeg') => {
-  const file = new File(['test content'], name, { type })
-  Object.defineProperty(file, 'size', { value: 1024000 })
-  return file
-}
+export const createMockFile = (
+  name: string = 'test.jpg',
+  type: string = 'image/jpeg'
+) => {
+  const file = new File(['test content'], name, { type });
+  Object.defineProperty(file, 'size', { value: 1024000 });
+  return file;
+};
 
 // Mock drag and drop events
 export const createMockDragEvent = (files: File[]) => {
@@ -149,27 +158,27 @@ export const createMockDragEvent = (files: File[]) => {
       })),
       types: ['Files'],
     },
-  }
-}
+  };
+};
 
 // Mock intersection observer
 export const mockIntersectionObserver = () => {
-  const mockIntersectionObserver = vi.fn()
+  const mockIntersectionObserver = vi.fn();
   mockIntersectionObserver.mockReturnValue({
     observe: () => null,
     unobserve: () => null,
     disconnect: () => null,
-  })
-  window.IntersectionObserver = mockIntersectionObserver
-}
+  });
+  window.IntersectionObserver = mockIntersectionObserver;
+};
 
 // Mock resize observer
 export const mockResizeObserver = () => {
-  const mockResizeObserver = vi.fn()
+  const mockResizeObserver = vi.fn();
   mockResizeObserver.mockReturnValue({
     observe: () => null,
     unobserve: () => null,
     disconnect: () => null,
-  })
-  window.ResizeObserver = mockResizeObserver
-}
+  });
+  window.ResizeObserver = mockResizeObserver;
+};

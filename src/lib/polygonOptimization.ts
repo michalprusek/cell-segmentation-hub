@@ -2,21 +2,28 @@ import { Point } from '@/lib/segmentation';
 import { calculateBoundingBox, type BoundingBox } from './polygonGeometry';
 
 // Douglas-Peucker algorithm for polygon simplification optimized for performance
-export const simplifyPolygon = (points: Point[], tolerance: number = 1): Point[] => {
+export const simplifyPolygon = (
+  points: Point[],
+  tolerance: number = 1
+): Point[] => {
   if (points.length <= 3) return points;
-  
+
   const simplifyRecursive = (start: number, end: number): Point[] => {
     let maxDistance = 0;
     let maxIndex = 0;
-    
+
     for (let i = start + 1; i < end; i++) {
-      const distance = perpendicularDistance(points[i], points[start], points[end]);
+      const distance = perpendicularDistance(
+        points[i],
+        points[start],
+        points[end]
+      );
       if (distance > maxDistance) {
         maxDistance = distance;
         maxIndex = i;
       }
     }
-    
+
     if (maxDistance > tolerance) {
       const leftPart = simplifyRecursive(start, maxIndex);
       const rightPart = simplifyRecursive(maxIndex, end);
@@ -25,36 +32,46 @@ export const simplifyPolygon = (points: Point[], tolerance: number = 1): Point[]
       return [points[start], points[end]];
     }
   };
-  
+
   const result = simplifyRecursive(0, points.length - 1);
-  
+
   // Prevent duplicate polygon closing points
   if (result.length > 2) {
     const firstPoint = result[0];
     const lastPoint = result[result.length - 1];
-    
+
     // Only add closing point if the polygon isn't already closed
     if (firstPoint.x !== lastPoint.x || firstPoint.y !== lastPoint.y) {
       result.push(firstPoint);
     }
   }
-  
+
   return result;
 };
 
 // Calculate perpendicular distance from a point to a line (optimized)
-const perpendicularDistance = (point: Point, lineStart: Point, lineEnd: Point): number => {
+const perpendicularDistance = (
+  point: Point,
+  lineStart: Point,
+  lineEnd: Point
+): number => {
   const dx = lineEnd.x - lineStart.x;
   const dy = lineEnd.y - lineStart.y;
-  
+
   if (dx === 0 && dy === 0) {
     const ddx = point.x - lineStart.x;
     const ddy = point.y - lineStart.y;
     return Math.sqrt(ddx * ddx + ddy * ddy);
   }
-  
+
   const normalLength = Math.sqrt(dx * dx + dy * dy);
-  return Math.abs((dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x) / normalLength);
+  return Math.abs(
+    (dy * point.x -
+      dx * point.y +
+      lineEnd.x * lineStart.y -
+      lineEnd.y * lineStart.x) /
+      normalLength
+  );
 };
 
 // Calculate bounding box for a polygon
@@ -70,12 +87,12 @@ export const isInViewport = (
 ): boolean => {
   const bufferX = viewportWidth * buffer;
   const bufferY = viewportHeight * buffer;
-  
+
   const expandedMinX = viewportX - bufferX;
   const expandedMinY = viewportY - bufferY;
   const expandedMaxX = viewportX + viewportWidth + bufferX;
   const expandedMaxY = viewportY + viewportHeight + bufferY;
-  
+
   return !(
     bbox.maxX < expandedMinX ||
     bbox.minX > expandedMaxX ||
@@ -91,9 +108,12 @@ export const getSimplificationTolerance = (
   originalPointCount: number
 ): number => {
   // Base tolerance relative to polygon size
-  const baseSize = Math.min(polygonBoundingBox.width, polygonBoundingBox.height);
+  const baseSize = Math.min(
+    polygonBoundingBox.width,
+    polygonBoundingBox.height
+  );
   const baseTolerance = baseSize * 0.01; // 1% of polygon size
-  
+
   // Adjust tolerance based on zoom level
   if (zoom < 0.5) {
     // Aggressive simplification for far zoom out
@@ -132,10 +152,13 @@ export const shouldRenderVertices = (
 };
 
 // Level of Detail (LOD) system for vertex decimation
-export const getVertexDecimationStep = (zoom: number, pointCount: number): number => {
+export const getVertexDecimationStep = (
+  zoom: number,
+  pointCount: number
+): number => {
   // No decimation for simple polygons
   if (pointCount <= 20) return 1;
-  
+
   if (zoom < 0.5) {
     // Very low zoom: show every 20th vertex or none if too many points
     return pointCount > 500 ? 0 : 20; // 0 means don't render vertices
@@ -155,37 +178,42 @@ export const getVertexDecimationStep = (zoom: number, pointCount: number): numbe
 };
 
 // Get decimated vertices based on LOD
-export const getDecimatedVertices = (points: Point[], zoom: number): Point[] => {
+export const getDecimatedVertices = (
+  points: Point[],
+  zoom: number
+): Point[] => {
   const step = getVertexDecimationStep(zoom, points.length);
-  
+
   if (step <= 0) return []; // Don't render vertices
   if (step === 1) return points; // Show all vertices
-  
+
   const decimatedPoints: Point[] = [];
-  
+
   // Always include first vertex
   if (points.length > 0) {
     decimatedPoints.push(points[0]);
   }
-  
+
   // Add every nth vertex
   for (let i = step; i < points.length; i += step) {
     decimatedPoints.push(points[i]);
   }
-  
+
   // Always include last vertex if it's not already included
   const lastIndex = points.length - 1;
   if (lastIndex > 0) {
     const lastPoint = points[lastIndex];
     const lastIncludedPoint = decimatedPoints[decimatedPoints.length - 1];
     // Check if the last point differs from the last included point
-    if (!lastIncludedPoint || 
-        lastPoint.x !== lastIncludedPoint.x || 
-        lastPoint.y !== lastIncludedPoint.y) {
+    if (
+      !lastIncludedPoint ||
+      lastPoint.x !== lastIncludedPoint.x ||
+      lastPoint.y !== lastIncludedPoint.y
+    ) {
       decimatedPoints.push(lastPoint);
     }
   }
-  
+
   return decimatedPoints;
 };
 
@@ -201,12 +229,12 @@ export const getViewportBounds = (
   const viewportHeight = containerHeight / zoom;
   const viewportX = -offset.x;
   const viewportY = -offset.y;
-  
+
   return {
     x: viewportX,
     y: viewportY,
     width: viewportWidth,
-    height: viewportHeight
+    height: viewportHeight,
   };
 };
 
@@ -227,13 +255,14 @@ export const measureRenderPerformance = <T>(
   const startTime = performance.now();
   const result = operation();
   const endTime = performance.now();
-  
+
   const metrics: PerformanceMetrics = {
     renderTime: endTime - startTime,
     polygonCount,
     vertexCount: simplifiedVertexCount,
-    simplificationRatio: originalVertexCount > 0 ? simplifiedVertexCount / originalVertexCount : 1
+    simplificationRatio:
+      originalVertexCount > 0 ? simplifiedVertexCount / originalVertexCount : 1,
   };
-  
+
   return { result, metrics };
 };

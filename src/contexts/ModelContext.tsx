@@ -1,4 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  ReactNode,
+} from 'react';
 
 export type ModelType = 'hrnet' | 'resunet_small' | 'resunet_advanced';
 
@@ -27,7 +33,7 @@ const AVAILABLE_MODELS: ModelInfo[] = [
     displayName: 'HRNet (small)',
     description: 'Fast and efficient model for real-time segmentation',
     size: 'small',
-    defaultThreshold: 0.5
+    defaultThreshold: 0.5,
   },
   {
     id: 'resunet_small',
@@ -35,7 +41,7 @@ const AVAILABLE_MODELS: ModelInfo[] = [
     displayName: 'ResUNet Small (medium)',
     description: 'Balanced speed and accuracy',
     size: 'medium',
-    defaultThreshold: 0.5
+    defaultThreshold: 0.5,
   },
   {
     id: 'resunet_advanced',
@@ -43,8 +49,8 @@ const AVAILABLE_MODELS: ModelInfo[] = [
     displayName: 'ResUNet Advanced (large)',
     description: 'Highest accuracy with attention mechanisms',
     size: 'large',
-    defaultThreshold: 0.5
-  }
+    defaultThreshold: 0.5,
+  },
 ];
 
 const ModelContext = createContext<ModelContextType>({
@@ -53,7 +59,7 @@ const ModelContext = createContext<ModelContextType>({
   setSelectedModel: () => {},
   setConfidenceThreshold: () => {},
   getModelInfo: () => AVAILABLE_MODELS[0],
-  availableModels: AVAILABLE_MODELS
+  availableModels: AVAILABLE_MODELS,
 });
 
 interface ModelProviderProps {
@@ -62,7 +68,8 @@ interface ModelProviderProps {
 
 export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
   const [selectedModel, setSelectedModelState] = useState<ModelType>('hrnet');
-  const [confidenceThreshold, setConfidenceThresholdState] = useState<number>(0.5);
+  const [confidenceThreshold, setConfidenceThresholdState] =
+    useState<number>(0.5);
 
   // Load settings from localStorage on mount
   useEffect(() => {
@@ -94,18 +101,21 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
   };
 
   const getModelInfo = (modelId: ModelType): ModelInfo => {
-    return AVAILABLE_MODELS.find(model => model.id === modelId) || AVAILABLE_MODELS[0];
+    return (
+      AVAILABLE_MODELS.find(model => model.id === modelId) ||
+      AVAILABLE_MODELS[0]
+    );
   };
 
   return (
-    <ModelContext.Provider 
+    <ModelContext.Provider
       value={{
         selectedModel,
         confidenceThreshold,
         setSelectedModel,
         setConfidenceThreshold,
         getModelInfo,
-        availableModels: AVAILABLE_MODELS
+        availableModels: AVAILABLE_MODELS,
       }}
     >
       {children}

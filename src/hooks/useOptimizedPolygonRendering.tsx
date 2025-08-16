@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 /**
  * React hook for optimized polygon rendering
  * Provides a unified interface for all rendering optimizations
@@ -7,11 +8,20 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Polygon } from '@/lib/segmentation';
 
 // Import optimization systems
-import { polygonVisibilityManager, VisibilityResult } from '@/lib/rendering/PolygonVisibilityManager';
-import { renderBatchManager, RenderBatch } from '@/lib/rendering/RenderBatchManager';
+import {
+  polygonVisibilityManager,
+  VisibilityResult,
+} from '@/lib/rendering/PolygonVisibilityManager';
+import {
+  renderBatchManager,
+  RenderBatch,
+} from '@/lib/rendering/RenderBatchManager';
 import { lodManager, LODPolygon } from '@/lib/rendering/LODManager';
 import { boundingBoxCache } from '@/lib/rendering/BoundingBoxCache';
-import { getPolygonProcessingService, PolygonProcessingService } from '@/lib/rendering/WorkerOperations';
+import {
+  getPolygonProcessingService,
+  PolygonProcessingService,
+} from '@/lib/rendering/WorkerOperations';
 
 export interface OptimizedRenderingOptions {
   enableFrustumCulling?: boolean;
@@ -76,7 +86,10 @@ class PerformanceMonitor {
 
   getAverageFrameTime(): number {
     if (this.frameHistory.length === 0) return 16.67; // 60fps default
-    return this.frameHistory.reduce((sum, time) => sum + time, 0) / this.frameHistory.length;
+    return (
+      this.frameHistory.reduce((sum, time) => sum + time, 0) /
+      this.frameHistory.length
+    );
   }
 
   getCurrentFPS(): number {
@@ -99,17 +112,20 @@ export function useOptimizedPolygonRendering(
   options: OptimizedRenderingOptions = {}
 ): OptimizedRenderingResult {
   // Default options
-  const opts = useMemo(() => ({
-    enableFrustumCulling: true,
-    enableLOD: true,
-    enableWorkers: true,
-    enableBatching: true,
-    targetFPS: 60,
-    renderQuality: 'high' as const,
-    maxBatchSize: 50,
-    lodThreshold: 100,
-    ...options
-  }), [options]);
+  const opts = useMemo(
+    () => ({
+      enableFrustumCulling: true,
+      enableLOD: true,
+      enableWorkers: true,
+      enableBatching: true,
+      targetFPS: 60,
+      renderQuality: 'high' as const,
+      maxBatchSize: 50,
+      lodThreshold: 100,
+      ...options,
+    }),
+    [options]
+  );
 
   // State
   const [isLoading, setIsLoading] = useState(false);
@@ -119,7 +135,7 @@ export function useOptimizedPolygonRendering(
     totalPolygons: 0,
     visibleCount: 0,
     culledCount: 0,
-    renderingLevel: 'normal'
+    renderingLevel: 'normal',
   });
   const [renderBatches, setRenderBatches] = useState<RenderBatch[]>([]);
   const [lodPolygons, setLodPolygons] = useState<LODPolygon[]>([]);
@@ -133,10 +149,10 @@ export function useOptimizedPolygonRendering(
   useEffect(() => {
     const abortController = new AbortController();
     let isMounted = true;
-    
+
     const initializeServices = async () => {
       if (isInitialized.current) return;
-      
+
       try {
         setIsLoading(true);
         setError(null);
@@ -144,19 +160,21 @@ export function useOptimizedPolygonRendering(
         if (opts.enableWorkers && !abortController.signal.aborted) {
           polygonServiceRef.current = getPolygonProcessingService();
           await polygonServiceRef.current.warmUp();
-          
+
           // Check if component is still mounted after async operation
           if (!isMounted) return;
         }
 
         // Initialize managers with custom settings
         renderBatchManager.setTargetFPS(opts.targetFPS);
-        
+
         isInitialized.current = true;
       } catch (err) {
         if (!abortController.signal.aborted) {
-          console.error('Failed to initialize polygon rendering services:', err);
-          setError(err instanceof Error ? err.message : 'Initialization failed');
+          logger.error('Failed to initialize polygon rendering services:', err);
+          setError(
+            err instanceof Error ? err.message : 'Initialization failed'
+          );
         }
       } finally {
         if (isMounted) {
@@ -171,14 +189,14 @@ export function useOptimizedPolygonRendering(
       isMounted = false;
       abortController.abort();
       isInitialized.current = false;
-      
+
       // Cancel any pending operations and cleanup
       if (polygonServiceRef.current) {
         polygonServiceRef.current.cancelPendingOperations?.();
         polygonServiceRef.current.terminate();
         polygonServiceRef.current = null;
       }
-      
+
       // Clear performance monitor
       if (performanceMonitor.current) {
         performanceMonitor.current.reset?.();
@@ -187,39 +205,54 @@ export function useOptimizedPolygonRendering(
   }, [opts.enableWorkers, opts.targetFPS]);
 
   // Create visibility context
-  const visibilityContext = useMemo(() => ({
-    zoom: context.zoom,
-    offset: context.offset,
-    containerWidth: context.containerWidth,
-    containerHeight: context.containerHeight,
-    selectedPolygonId: context.selectedPolygonId,
-    forceRenderSelected: true
-  }), [context]);
+  const visibilityContext = useMemo(
+    () => ({
+      zoom: context.zoom,
+      offset: context.offset,
+      containerWidth: context.containerWidth,
+      containerHeight: context.containerHeight,
+      selectedPolygonId: context.selectedPolygonId,
+      forceRenderSelected: true,
+    }),
+    [context]
+  );
 
   // Create render context
-  const renderContext = useMemo(() => ({
-    zoom: context.zoom,
-    viewport: {
-      x: -context.offset.x,
-      y: -context.offset.y,
-      width: context.containerWidth / context.zoom,
-      height: context.containerHeight / context.zoom
-    },
-    selectedPolygonId: context.selectedPolygonId,
-    isAnimating: context.isAnimating || false,
-    targetFPS: opts.targetFPS
-  }), [context, opts.targetFPS]);
+  const renderContext = useMemo(
+    () => ({
+      zoom: context.zoom,
+      viewport: {
+        x: -context.offset.x,
+        y: -context.offset.y,
+        width: context.containerWidth / context.zoom,
+        height: context.containerHeight / context.zoom,
+      },
+      selectedPolygonId: context.selectedPolygonId,
+      isAnimating: context.isAnimating || false,
+      targetFPS: opts.targetFPS,
+    }),
+    [context, opts.targetFPS]
+  );
 
   // Create LOD context
-  const lodContext = useMemo(() => ({
-    zoom: context.zoom,
-    viewport: renderContext.viewport,
-    targetFPS: opts.targetFPS,
-    currentFPS: performanceMonitor.current.getCurrentFPS(),
-    polygonCount: polygons.length,
-    isAnimating: context.isAnimating || false,
-    renderQuality: opts.renderQuality
-  }), [context, renderContext.viewport, opts.targetFPS, opts.renderQuality, polygons.length]);
+  const lodContext = useMemo(
+    () => ({
+      zoom: context.zoom,
+      viewport: renderContext.viewport,
+      targetFPS: opts.targetFPS,
+      currentFPS: performanceMonitor.current.getCurrentFPS(),
+      polygonCount: polygons.length,
+      isAnimating: context.isAnimating || false,
+      renderQuality: opts.renderQuality,
+    }),
+    [
+      context,
+      renderContext.viewport,
+      opts.targetFPS,
+      opts.renderQuality,
+      polygons.length,
+    ]
+  );
 
   // Main processing pipeline
   const processPolygons = useCallback(async () => {
@@ -229,7 +262,7 @@ export function useOptimizedPolygonRendering(
         totalPolygons: 0,
         visibleCount: 0,
         culledCount: 0,
-        renderingLevel: 'normal'
+        renderingLevel: 'normal',
       });
       setRenderBatches([]);
       setLodPolygons([]);
@@ -255,14 +288,17 @@ export function useOptimizedPolygonRendering(
           totalPolygons: polygons.length,
           visibleCount: polygons.length,
           culledCount: 0,
-          renderingLevel: 'normal'
+          renderingLevel: 'normal',
         };
         setVisibilityResult(currentVisibilityResult);
       }
 
       // Step 2: Generate render batches
       let currentBatches: RenderBatch[] = [];
-      if (opts.enableBatching && currentVisibilityResult.visiblePolygons.length > 0) {
+      if (
+        opts.enableBatching &&
+        currentVisibilityResult.visiblePolygons.length > 0
+      ) {
         currentBatches = renderBatchManager.createBatches(
           currentVisibilityResult.visiblePolygons,
           renderContext
@@ -271,7 +307,10 @@ export function useOptimizedPolygonRendering(
       }
 
       // Step 3: Generate LOD polygons
-      if (opts.enableLOD && currentVisibilityResult.visiblePolygons.length > opts.lodThreshold) {
+      if (
+        opts.enableLOD &&
+        currentVisibilityResult.visiblePolygons.length > opts.lodThreshold
+      ) {
         try {
           const lodResult = await lodManager.generateLODPolygons(
             currentVisibilityResult.visiblePolygons,
@@ -279,15 +318,14 @@ export function useOptimizedPolygonRendering(
           );
           setLodPolygons(lodResult);
         } catch (lodError) {
-          console.warn('LOD generation failed:', lodError);
+          logger.warn('LOD generation failed:', lodError);
           setLodPolygons([]);
         }
       } else {
         setLodPolygons([]);
       }
-
     } catch (err) {
-      console.error('Error processing polygons:', err);
+      logger.error('Error processing polygons:', err);
       setError(err instanceof Error ? err.message : 'Processing failed');
     } finally {
       setIsLoading(false);
@@ -300,7 +338,7 @@ export function useOptimizedPolygonRendering(
     opts.enableFrustumCulling,
     opts.enableBatching,
     opts.enableLOD,
-    opts.lodThreshold
+    opts.lodThreshold,
     // visibilityResult removed - it's updated inside the function, causing render loops
   ]);
 
@@ -324,9 +362,10 @@ export function useOptimizedPolygonRendering(
       renderBatches: renderBatches.length,
       averageFrameTime: performanceMonitor.current.getAverageFrameTime(),
       cacheHitRate: boundingBoxStats.hitRate,
-      workerUtilization: workerStats ? 
-        (workerStats.busyWorkers / workerStats.totalWorkers) * 100 : 0,
-      memoryUsage: boundingBoxStats.memoryUsage + (lodStats.cacheSize * 500) // Rough estimate
+      workerUtilization: workerStats
+        ? (workerStats.busyWorkers / workerStats.totalWorkers) * 100
+        : 0,
+      memoryUsage: boundingBoxStats.memoryUsage + lodStats.cacheSize * 500, // Rough estimate
     };
   }, [polygons.length, visibilityResult, renderBatches.length]);
 
@@ -344,7 +383,7 @@ export function useOptimizedPolygonRendering(
     visibilityResult,
     stats,
     isLoading,
-    error
+    error,
   };
 }
 
@@ -353,7 +392,9 @@ export function useOptimizedPolygonRendering(
  */
 export function usePolygonProcessing() {
   const serviceRef = useRef<PolygonProcessingService | null>(null);
-  const servicePromiseRef = useRef<Promise<PolygonProcessingService> | null>(null);
+  const servicePromiseRef = useRef<Promise<PolygonProcessingService> | null>(
+    null
+  );
   const [isReady, setIsReady] = useState(false);
   const isInitializing = useRef(false);
 
@@ -361,25 +402,27 @@ export function usePolygonProcessing() {
     const initializeService = async () => {
       if (isInitializing.current) return;
       isInitializing.current = true;
-      
+
       try {
         if (!servicePromiseRef.current) {
-          servicePromiseRef.current = Promise.resolve(getPolygonProcessingService());
+          servicePromiseRef.current = Promise.resolve(
+            getPolygonProcessingService()
+          );
         }
-        
+
         const service = await servicePromiseRef.current;
         serviceRef.current = service;
         setIsReady(true);
       } catch (error) {
-        console.error('Failed to initialize polygon processing service:', error);
+        logger.error('Failed to initialize polygon processing service:', error);
         setIsReady(false);
       } finally {
         isInitializing.current = false;
       }
     };
-    
+
     initializeService();
-    
+
     return () => {
       // Cleanup: reset promise but don't terminate global service
       servicePromiseRef.current = null;
@@ -387,48 +430,55 @@ export function usePolygonProcessing() {
     };
   }, []);
 
-  const getService = useCallback(async (): Promise<PolygonProcessingService> => {
-    if (serviceRef.current) return serviceRef.current;
-    
-    if (!servicePromiseRef.current) {
-      servicePromiseRef.current = Promise.resolve(getPolygonProcessingService());
-    }
-    
-    const service = await servicePromiseRef.current;
-    serviceRef.current = service;
-    return service;
-  }, []);
+  const getService =
+    useCallback(async (): Promise<PolygonProcessingService> => {
+      if (serviceRef.current) return serviceRef.current;
 
-  const simplifyPolygon = useCallback(async (
-    points: import('@/lib/segmentation').Point[], 
-    tolerance: number
-  ) => {
-    const service = await getService();
-    return service.simplifyPolygon(points, tolerance);
-  }, [getService]);
+      if (!servicePromiseRef.current) {
+        servicePromiseRef.current = Promise.resolve(
+          getPolygonProcessingService()
+        );
+      }
 
-  const calculateArea = useCallback(async (
-    points: import('@/lib/segmentation').Point[]
-  ) => {
-    const service = await getService();
-    return service.calculateArea(points);
-  }, [getService]);
+      const service = await servicePromiseRef.current;
+      serviceRef.current = service;
+      return service;
+    }, []);
 
-  const slicePolygon = useCallback(async (
-    polygon: import('@/lib/segmentation').Point[],
-    lineStart: import('@/lib/segmentation').Point,
-    lineEnd: import('@/lib/segmentation').Point
-  ) => {
-    const service = await getService();
-    return service.slicePolygon(polygon, lineStart, lineEnd);
-  }, [getService]);
+  const simplifyPolygon = useCallback(
+    async (points: import('@/lib/segmentation').Point[], tolerance: number) => {
+      const service = await getService();
+      return service.simplifyPolygon(points, tolerance);
+    },
+    [getService]
+  );
+
+  const calculateArea = useCallback(
+    async (points: import('@/lib/segmentation').Point[]) => {
+      const service = await getService();
+      return service.calculateArea(points);
+    },
+    [getService]
+  );
+
+  const slicePolygon = useCallback(
+    async (
+      polygon: import('@/lib/segmentation').Point[],
+      lineStart: import('@/lib/segmentation').Point,
+      lineEnd: import('@/lib/segmentation').Point
+    ) => {
+      const service = await getService();
+      return service.slicePolygon(polygon, lineStart, lineEnd);
+    },
+    [getService]
+  );
 
   return {
     simplifyPolygon,
     calculateArea,
     slicePolygon,
     service: serviceRef.current,
-    isReady
+    isReady,
   };
 }
 
@@ -457,6 +507,6 @@ export function useRenderingPerformance() {
   return {
     fps,
     frameTime,
-    reset
+    reset,
   };
 }

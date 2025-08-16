@@ -42,7 +42,7 @@ class AdaptiveThresholds {
   updatePerformance(frameTime: number): void {
     this.lastFrameTime = frameTime;
     this.performanceHistory.push(frameTime);
-    
+
     // Keep only last 30 frames for rolling average
     if (this.performanceHistory.length > 30) {
       this.performanceHistory.shift();
@@ -51,7 +51,10 @@ class AdaptiveThresholds {
 
   getAverageFrameTime(): number {
     if (this.performanceHistory.length === 0) return 16; // Default to 60fps
-    return this.performanceHistory.reduce((sum, time) => sum + time, 0) / this.performanceHistory.length;
+    return (
+      this.performanceHistory.reduce((sum, time) => sum + time, 0) /
+      this.performanceHistory.length
+    );
   }
 
   /**
@@ -60,10 +63,12 @@ class AdaptiveThresholds {
    */
   getCullingThreshold(): number {
     const avgFrameTime = this.getAverageFrameTime();
-    
-    if (avgFrameTime > 33) { // < 30fps
+
+    if (avgFrameTime > 33) {
+      // < 30fps
       return 20; // Aggressive culling
-    } else if (avgFrameTime > 20) { // < 50fps
+    } else if (avgFrameTime > 20) {
+      // < 50fps
       return 50; // Moderate culling
     } else {
       return 100; // Conservative culling
@@ -76,19 +81,19 @@ class AdaptiveThresholds {
   getViewportBuffer(zoom: number): number {
     const baseBuffer = 100; // Base buffer in pixels
     const avgFrameTime = this.getAverageFrameTime();
-    
+
     let multiplier = 1.0;
-    
+
     // Reduce buffer during poor performance
     if (avgFrameTime > 25) {
       multiplier = 0.5;
     } else if (avgFrameTime > 20) {
       multiplier = 0.75;
     }
-    
+
     // Adjust buffer based on zoom level
     const zoomMultiplier = Math.max(0.3, Math.min(2.0, 1 / zoom));
-    
+
     return baseBuffer * multiplier * zoomMultiplier;
   }
 
@@ -114,18 +119,21 @@ export class PolygonVisibilityManager {
     context: VisibilityContext
   ): VisibilityResult {
     const startTime = performance.now();
-    
+
     // Calculate current viewport
     const viewport = this.calculateViewport(context);
-    
+
     // Check if we can use cached result for small viewport changes
     if (this.canUseCachedResult(viewport, polygons.length)) {
       return this.lastVisibilityResult!;
     }
 
     const threshold = this.thresholds.getCullingThreshold();
-    const renderingLevel = this.determineRenderingLevel(polygons.length, context.zoom);
-    
+    const renderingLevel = this.determineRenderingLevel(
+      polygons.length,
+      context.zoom
+    );
+
     let visiblePolygons: Polygon[];
     let culledCount = 0;
 
@@ -134,31 +142,42 @@ export class PolygonVisibilityManager {
       visiblePolygons = polygons.slice();
     } else {
       // Large number of polygons - apply frustum culling
-      const visibilityData = this.performFrustumCulling(polygons, viewport, context);
+      const visibilityData = this.performFrustumCulling(
+        polygons,
+        viewport,
+        context
+      );
       visiblePolygons = visibilityData.visible;
       culledCount = visibilityData.culled;
     }
 
     // Ensure selected polygon is always visible
     if (context.selectedPolygonId && context.forceRenderSelected) {
-      this.ensureSelectedVisible(visiblePolygons, polygons, context.selectedPolygonId);
+      this.ensureSelectedVisible(
+        visiblePolygons,
+        polygons,
+        context.selectedPolygonId
+      );
     }
 
     // Sort polygons for optimal rendering order
-    visiblePolygons = this.sortForRendering(visiblePolygons, context.selectedPolygonId);
+    visiblePolygons = this.sortForRendering(
+      visiblePolygons,
+      context.selectedPolygonId
+    );
 
     const result: VisibilityResult = {
       visiblePolygons,
       totalPolygons: polygons.length,
       visibleCount: visiblePolygons.length,
       culledCount,
-      renderingLevel
+      renderingLevel,
     };
 
     // Update performance tracking
     const frameTime = performance.now() - startTime;
     this.thresholds.updatePerformance(frameTime);
-    
+
     // Cache result for potential reuse
     this.lastViewport = viewport;
     this.lastVisibilityResult = result;
@@ -172,12 +191,12 @@ export class PolygonVisibilityManager {
    */
   private calculateViewport(context: VisibilityContext): ViewportBounds {
     const { zoom, offset, containerWidth, containerHeight } = context;
-    
+
     return {
       x: -offset.x,
       y: -offset.y,
       width: containerWidth / zoom,
-      height: containerHeight / zoom
+      height: containerHeight / zoom,
     };
   }
 
@@ -185,11 +204,11 @@ export class PolygonVisibilityManager {
    * Determine rendering level based on polygon count and zoom
    */
   private determineRenderingLevel(
-    polygonCount: number, 
+    polygonCount: number,
     zoom: number
   ): 'minimal' | 'reduced' | 'normal' | 'full' {
     const shouldReduce = this.thresholds.shouldUseReducedRendering();
-    
+
     if (polygonCount > 1000 || shouldReduce) {
       if (zoom < 0.25) return 'minimal';
       if (zoom < 0.5) return 'reduced';
@@ -215,7 +234,7 @@ export class PolygonVisibilityManager {
       x: viewport.x - buffer,
       y: viewport.y - buffer,
       width: viewport.width + 2 * buffer,
-      height: viewport.height + 2 * buffer
+      height: viewport.height + 2 * buffer,
     };
 
     // Get all bounding boxes in one batch for efficiency
@@ -243,7 +262,10 @@ export class PolygonVisibilityManager {
   /**
    * Fast bounding box vs viewport intersection test
    */
-  private isBoxInViewport(bbox: BoundingBox, viewport: ViewportBounds): boolean {
+  private isBoxInViewport(
+    bbox: BoundingBox,
+    viewport: ViewportBounds
+  ): boolean {
     return !(
       bbox.maxX < viewport.x ||
       bbox.minX > viewport.x + viewport.width ||
@@ -272,17 +294,20 @@ export class PolygonVisibilityManager {
   /**
    * Sort polygons for optimal rendering order
    */
-  private sortForRendering(polygons: Polygon[], selectedId?: string | null): Polygon[] {
+  private sortForRendering(
+    polygons: Polygon[],
+    selectedId?: string | null
+  ): Polygon[] {
     // Create copy before sorting to avoid mutating input
     return Array.from(polygons).sort((a, b) => {
       // Selected polygon always on top
       if (a.id === selectedId) return 1;
       if (b.id === selectedId) return -1;
-      
+
       // Internal polygons on top of external
       if (a.type === 'internal' && b.type !== 'internal') return 1;
       if (a.type !== 'internal' && b.type === 'internal') return -1;
-      
+
       // Sort by polygon complexity (more complex = lower priority)
       return a.points.length - b.points.length;
     });
@@ -291,14 +316,17 @@ export class PolygonVisibilityManager {
   /**
    * Check if we can reuse cached visibility result
    */
-  private canUseCachedResult(viewport: ViewportBounds, polygonCount: number): boolean {
+  private canUseCachedResult(
+    viewport: ViewportBounds,
+    polygonCount: number
+  ): boolean {
     if (!this.lastViewport || !this.lastVisibilityResult) return false;
-    
+
     // Don't cache for very dynamic scenes
     if (polygonCount > 500) return false;
-    
+
     const threshold = Math.min(viewport.width, viewport.height) * 0.05; // 5% viewport size
-    
+
     return (
       Math.abs(this.lastViewport.x - viewport.x) < threshold &&
       Math.abs(this.lastViewport.y - viewport.y) < threshold &&
@@ -316,7 +344,7 @@ export class PolygonVisibilityManager {
       averageFrameTime: this.thresholds.getAverageFrameTime(),
       cullingThreshold: this.thresholds.getCullingThreshold(),
       isUsingReducedRendering: this.thresholds.shouldUseReducedRendering(),
-      cacheStats: boundingBoxCache.getStats()
+      cacheStats: boundingBoxCache.getStats(),
     };
   }
 
@@ -342,7 +370,7 @@ export class PolygonVisibilityManager {
     const futureContext: VisibilityContext = {
       ...currentContext,
       offset: futureOffset,
-      zoom: futureZoom ?? currentContext.zoom
+      zoom: futureZoom ?? currentContext.zoom,
     };
 
     const result = this.getVisiblePolygons(polygons, futureContext);

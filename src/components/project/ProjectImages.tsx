@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ImageCard } from './ImageCard';
@@ -27,7 +26,7 @@ const ProjectImages = ({
         exit={{ opacity: 0 }}
         transition={{ duration: 0.3 }}
       >
-        {images.map((image) => (
+        {images.map(image => (
           <ImageCard
             key={image.id}
             image={image}
@@ -47,7 +46,7 @@ const ProjectImages = ({
       exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
-      {images.map((image) => (
+      {images.map(image => (
         <ImageListItem
           key={image.id}
           image={image}

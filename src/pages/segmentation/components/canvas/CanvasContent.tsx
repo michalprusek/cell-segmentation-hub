@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } from 'framer-motion';
 import { TransformState } from '../../types';
 
 interface CanvasContentProps {
@@ -21,25 +20,25 @@ const CanvasContent = ({
   isZooming = false,
   // Legacy props for backward compatibility
   zoom,
-  offset
+  offset,
 }: CanvasContentProps) => {
   // Use new transform or fall back to legacy props
   const actualTransform = transform || {
     zoom: zoom || 1,
     translateX: offset?.x || 0,
-    translateY: offset?.y || 0
+    translateY: offset?.y || 0,
   };
 
   return (
     <div className="absolute inset-0 flex items-center justify-center">
-      <div 
-        style={{ 
+      <div
+        style={{
           transform: `translate3d(${actualTransform.translateX}px, ${actualTransform.translateY}px, 0) scale(${actualTransform.zoom})`,
           transformOrigin: 'center center',
           willChange: isZooming ? 'transform' : 'auto',
           position: 'relative',
           backfaceVisibility: 'hidden',
-          perspective: 1000
+          perspective: 1000,
         }}
         data-testid="canvas-transform-container"
       >

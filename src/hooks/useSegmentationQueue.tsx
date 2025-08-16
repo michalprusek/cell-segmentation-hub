@@ -1,10 +1,14 @@
+import { logger } from '@/lib/logger';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 import WebSocketManager from '@/services/webSocketManager';
-import type { QueueStats, SegmentationUpdate } from '@/services/webSocketManager';
+import type {
+  QueueStats,
+  SegmentationUpdate,
+} from '@/services/webSocketManager';
 
 interface Notification {
   type: string;
@@ -24,7 +28,8 @@ export type { QueueStats, SegmentationUpdate };
 
 export const useSegmentationQueue = (projectId?: string) => {
   const { user, token } = useAuth();
-  const { manager: contextManager, isConnected: contextIsConnected } = useWebSocket();
+  const { manager: contextManager, isConnected: contextIsConnected } =
+    useWebSocket();
   const { t } = useLanguage();
   const wsManagerRef = useRef<WebSocketManager | null>(null);
   const currentProjectRef = useRef<string | undefined>(projectId);
@@ -34,33 +39,46 @@ export const useSegmentationQueue = (projectId?: string) => {
   const [lastUpdate, setLastUpdate] = useState<SegmentationUpdate | null>(null);
 
   // Create stable callback that has access to current t function
-  const handleSegmentationUpdate = useCallback((update: SegmentationUpdate) => {
-    setLastUpdate(update);
-    
-    // Show toast notifications for status changes
-    if (update.status === 'segmented') {
-      toast.success(t('segmentationCompleted'));
-    } else if (update.status === 'failed') {
-      toast.error(`${t('segmentationFailed')}: ${update.error || t('errors.unknown')}`);
-    } else if (update.status === 'processing') {
-      toast.info(t('segmentationStarted'));
-    }
-  }, [t]); // Include t dependency
+  const handleSegmentationUpdate = useCallback(
+    (update: SegmentationUpdate) => {
+      setLastUpdate(update);
+
+      // Show toast notifications for status changes
+      if (update.status === 'segmented') {
+        toast.success(t('segmentationCompleted'));
+      } else if (update.status === 'failed') {
+        toast.error(
+          `${t('segmentationFailed')}: ${update.error || t('errors.unknown')}`
+        );
+      } else if (update.status === 'processing') {
+        toast.info(t('segmentationStarted'));
+      }
+    },
+    [t]
+  ); // Include t dependency
 
   const handleQueueStatsUpdate = useCallback((stats: QueueStats) => {
-    if (!currentProjectRef.current || stats.projectId === currentProjectRef.current) {
+    if (
+      !currentProjectRef.current ||
+      stats.projectId === currentProjectRef.current
+    ) {
       setQueueStats(stats);
     }
   }, []);
 
-  const handleNotification = useCallback((notification: Notification) => {
-    if (notification.type === 'segmentation-complete') {
-      toast.success(
-        t('segmentationCompleteWithCount', { count: notification.polygonCount }),
-        { duration: 5000 }
-      );
-    }
-  }, [t]); // Include t dependency
+  const handleNotification = useCallback(
+    (notification: Notification) => {
+      if (notification.type === 'segmentation-complete') {
+        toast.success(
+          t('segmentationCompleteWithCount', {
+            count: notification.polygonCount,
+          }),
+          { duration: 5000 }
+        );
+      }
+    },
+    [t]
+  ); // Include t dependency
 
   const handleSystemMessage = useCallback((message: SystemMessage) => {
     if (message.type === 'warning') {
@@ -85,12 +103,14 @@ export const useSegmentationQueue = (projectId?: string) => {
   // Initialize event listeners - use context manager if available, fallback to singleton
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
-      console.log('useSegmentationQueue - setting up event listeners');
+      logger.debug('useSegmentationQueue - setting up event listeners');
     }
-    
+
     if (!user || !token) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('useSegmentationQueue - no auth, cleaning up event listeners');
+        logger.debug(
+          'useSegmentationQueue - no auth, cleaning up event listeners'
+        );
       }
       if (wsManagerRef.current) {
         const manager = wsManagerRef.current;
@@ -114,15 +134,15 @@ export const useSegmentationQueue = (projectId?: string) => {
     manager.on('system-message', handleSystemMessage);
 
     if (process.env.NODE_ENV === 'development') {
-      console.log('useSegmentationQueue - event listeners registered');
+      logger.debug('useSegmentationQueue - event listeners registered');
     }
 
     // Cleanup function - only unregister listeners
     return () => {
       if (process.env.NODE_ENV === 'development') {
-        console.log('useSegmentationQueue - cleaning up event listeners');
+        logger.debug('useSegmentationQueue - cleaning up event listeners');
       }
-      
+
       if (manager) {
         manager.off('segmentation-update', handleSegmentationUpdate);
         manager.off('queue-stats-update', handleQueueStatsUpdate);
@@ -130,13 +150,22 @@ export const useSegmentationQueue = (projectId?: string) => {
         manager.off('system-message', handleSystemMessage);
       }
     };
-  }, [user?.id, token, contextManager, handleSegmentationUpdate, handleQueueStatsUpdate, handleNotification, handleSystemMessage, user]); // Include all dependencies
+  }, [
+    user?.id,
+    token,
+    contextManager,
+    handleSegmentationUpdate,
+    handleQueueStatsUpdate,
+    handleNotification,
+    handleSystemMessage,
+    user,
+  ]); // Include all dependencies
 
   // Join project room when projectId changes and connection is ready
   useEffect(() => {
     if (wsManagerRef.current && isConnected && projectId) {
       if (process.env.NODE_ENV === 'development') {
-        console.log('Joining project room:', projectId);
+        logger.debug('Joining project room:', projectId);
       }
       wsManagerRef.current.joinProject(projectId);
       wsManagerRef.current.requestQueueStats(projectId);
@@ -150,21 +179,24 @@ export const useSegmentationQueue = (projectId?: string) => {
     }
   }, [isConnected, projectId]);
 
-  const joinProject = useCallback((newProjectId: string) => {
-    if (wsManagerRef.current && isConnected) {
-      // Leave current project if any
-      if (currentProjectRef.current) {
-        wsManagerRef.current.leaveProject(currentProjectRef.current);
+  const joinProject = useCallback(
+    (newProjectId: string) => {
+      if (wsManagerRef.current && isConnected) {
+        // Leave current project if any
+        if (currentProjectRef.current) {
+          wsManagerRef.current.leaveProject(currentProjectRef.current);
+        }
+
+        // Update ref first to prevent race condition
+        currentProjectRef.current = newProjectId;
+
+        // Then join new project and request stats
+        wsManagerRef.current.joinProject(newProjectId);
+        wsManagerRef.current.requestQueueStats(newProjectId);
       }
-      
-      // Update ref first to prevent race condition
-      currentProjectRef.current = newProjectId;
-      
-      // Then join new project and request stats
-      wsManagerRef.current.joinProject(newProjectId);
-      wsManagerRef.current.requestQueueStats(newProjectId);
-    }
-  }, [isConnected]);
+    },
+    [isConnected]
+  );
 
   const leaveProject = useCallback(() => {
     if (wsManagerRef.current && isConnected && currentProjectRef.current) {
@@ -180,6 +212,6 @@ export const useSegmentationQueue = (projectId?: string) => {
     lastUpdate,
     requestQueueStats,
     joinProject,
-    leaveProject
+    leaveProject,
   };
 };

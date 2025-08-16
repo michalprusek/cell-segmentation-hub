@@ -1,16 +1,17 @@
-import React from "react";
-import { useState, useEffect } from "react";
-import { 
+import React from 'react';
+import { useState, useEffect } from 'react';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue, 
-} from "@/components/ui/select";
-import apiClient from "@/lib/api";
-import { toast } from "sonner";
-import { useAuth } from "@/contexts/AuthContext";
-import { Project, getErrorMessage } from "@/types";
+  SelectValue,
+} from '@/components/ui/select';
+import apiClient from '@/lib/api';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import { Project, getErrorMessage } from '@/types';
+import { logger } from '@/lib/logger';
 
 interface ProjectSelectorProps {
   value: string | null;
@@ -30,9 +31,10 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
         const response = await apiClient.getProjects();
         setProjects(response.projects || []);
       } catch (error: unknown) {
-        console.error("Error fetching projects:", error);
-        const errorMessage = getErrorMessage(error) || "Failed to load projects";
-        toast.error("Failed to load projects: " + errorMessage);
+        logger.error('Error fetching projects:', error);
+        const errorMessage =
+          getErrorMessage(error) || 'Failed to load projects';
+        toast.error('Failed to load projects: ' + errorMessage);
       } finally {
         setLoading(false);
       }
@@ -44,8 +46,8 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
   return (
     <div className="space-y-2">
       <label className="text-sm font-medium">Select Project</label>
-      <Select 
-        value={value?.toString() || ""} 
+      <Select
+        value={value?.toString() || ''}
         onValueChange={onChange}
         disabled={loading}
       >
@@ -53,7 +55,7 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
           <SelectValue placeholder="Select a project" />
         </SelectTrigger>
         <SelectContent>
-          {projects.map((project) => (
+          {projects.map(project => (
             <SelectItem key={project.id} value={project.id.toString()}>
               {project.name}
             </SelectItem>

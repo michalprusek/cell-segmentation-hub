@@ -59,16 +59,20 @@ export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
   }
-  
+
   if (typeof error === 'object' && error !== null) {
     const apiError = error as ApiError;
-    return apiError.response?.data?.message || apiError.message || 'An error occurred';
+    return (
+      apiError.response?.data?.message ||
+      apiError.message ||
+      'An error occurred'
+    );
   }
-  
+
   if (typeof error === 'string') {
     return error;
   }
-  
+
   return 'An unknown error occurred';
 }
 
@@ -115,7 +119,6 @@ export interface NewImage {
   thumbnail_url?: string;
 }
 
-
 export interface UpdateProfile {
   username?: string;
   organization?: string;
@@ -152,7 +155,7 @@ export interface NewAccessRequest {
 // Segmentation types (can be extended as needed)
 export interface PolygonData {
   id: string;
-  points: Array<{x: number, y: number}>;
+  points: Array<{ x: number; y: number }>;
   type: 'external' | 'internal';
   class: string;
 }
@@ -237,4 +240,3 @@ export function isApiError(error: unknown): error is ApiError {
     typeof (error as { message?: unknown }).message === 'string'
   );
 }
-

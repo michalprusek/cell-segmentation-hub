@@ -1,19 +1,19 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
-  MousePointer, 
-  Edit3, 
-  Plus, 
-  PenTool, 
-  Scissors, 
+import {
+  MousePointer,
+  Edit3,
+  Plus,
+  PenTool,
+  Scissors,
   Trash2,
   Undo,
   Redo,
   Save,
   ZoomIn,
   ZoomOut,
-  RotateCcw
+  RotateCcw,
 } from 'lucide-react';
 import { EditMode } from '../types';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -25,10 +25,10 @@ interface EnhancedEditorToolbarProps {
   canUndo: boolean;
   canRedo: boolean;
   hasUnsavedChanges: boolean;
-  
+
   // Mode setters
   setEditMode: (mode: EditMode) => void;
-  
+
   // Actions
   handleUndo: () => void;
   handleRedo: () => void;
@@ -36,7 +36,7 @@ interface EnhancedEditorToolbarProps {
   handleZoomIn: () => void;
   handleZoomOut: () => void;
   handleResetView: () => void;
-  
+
   // Optional props
   disabled?: boolean;
   isSaving?: boolean;
@@ -59,7 +59,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
   handleZoomOut,
   handleResetView,
   disabled = false,
-  isSaving = false
+  isSaving = false,
 }) => {
   const { t } = useLanguage();
 
@@ -140,7 +140,11 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
   };
 
   const isRequiredSelectionMode = (mode: EditMode) => {
-    return mode === EditMode.EditVertices || mode === EditMode.AddPoints || mode === EditMode.Slice;
+    return (
+      mode === EditMode.EditVertices ||
+      mode === EditMode.AddPoints ||
+      mode === EditMode.Slice
+    );
   };
 
   const canActivateMode = (mode: EditMode) => {
@@ -158,7 +162,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
     return (
       <div className="relative group">
         <Button
-          variant={isActive ? "default" : "outline"}
+          variant={isActive ? 'default' : 'outline'}
           size="sm"
           disabled={!canActivate}
           onClick={() => canActivate && setEditMode(mode)}
@@ -175,12 +179,14 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
             </Badge>
           )}
         </Button>
-        
+
         {/* Tooltip */}
         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-black text-white text-xs rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
           {getModeDescription(mode)}
           {requiresSelection && !selectedPolygonId && (
-            <div className="text-gray-300">{t('segmentation.toolbar.requiresPolygonSelection')}</div>
+            <div className="text-gray-300">
+              {t('segmentation.toolbar.requiresPolygonSelection')}
+            </div>
           )}
         </div>
       </div>
@@ -274,14 +280,18 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           </Badge>
         )}
         <Button
-          variant={hasUnsavedChanges ? "default" : "ghost"}
+          variant={hasUnsavedChanges ? 'default' : 'ghost'}
           size="sm"
           disabled={disabled || isSaving}
           onClick={handleSave}
           className="flex items-center gap-2"
         >
           <Save size={16} />
-          <span>{isSaving ? t('segmentation.toolbar.saving') : t('segmentation.toolbar.save')}</span>
+          <span>
+            {isSaving
+              ? t('segmentation.toolbar.saving')
+              : t('segmentation.toolbar.save')}
+          </span>
         </Button>
       </div>
 

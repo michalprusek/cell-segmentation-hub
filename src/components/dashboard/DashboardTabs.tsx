@@ -1,30 +1,29 @@
-
-import React from "react";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Folder, Upload } from "lucide-react";
+import React from 'react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Folder, Upload } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
-import ProjectToolbar from "@/components/project/ProjectToolbar";
+import ProjectToolbar from '@/components/project/ProjectToolbar';
 
 interface DashboardTabsProps {
   activeTab: string;
   onTabChange: (value: string) => void;
-  viewMode: "grid" | "list";
-  setViewMode: (mode: "grid" | "list") => void;
+  viewMode: 'grid' | 'list';
+  setViewMode: (mode: 'grid' | 'list') => void;
   onSort: (field: 'name' | 'updatedAt' | 'segmentationStatus') => void;
   sortField: 'name' | 'updatedAt' | 'segmentationStatus';
   sortDirection: 'asc' | 'desc';
   children: React.ReactNode;
 }
 
-const DashboardTabs = ({ 
-  activeTab, 
-  onTabChange, 
-  viewMode, 
-  setViewMode, 
-  onSort, 
-  sortField, 
-  sortDirection, 
-  children 
+const DashboardTabs = ({
+  activeTab,
+  onTabChange,
+  viewMode,
+  setViewMode,
+  onSort,
+  sortField,
+  sortDirection,
+  children,
 }: DashboardTabsProps) => {
   const { t } = useLanguage();
 
@@ -41,7 +40,7 @@ const DashboardTabs = ({
             {t('common.uploadImages')}
           </TabsTrigger>
         </TabsList>
-        
+
         {activeTab === 'projects' && (
           <ProjectToolbar
             sortField={sortField}
@@ -55,7 +54,7 @@ const DashboardTabs = ({
           />
         )}
       </div>
-      
+
       {children}
     </Tabs>
   );

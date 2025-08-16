@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Keyboard, X } from 'lucide-react';
@@ -8,7 +7,9 @@ interface KeyboardShortcutsHelpProps {
   className?: string;
 }
 
-const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({ className = "" }) => {
+const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
+  className = '',
+}) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const shortcuts = [
@@ -53,7 +54,7 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({ className
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              onClick={(e) => e.stopPropagation()}
+              onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-medium">Klávesové zkratky</h3>
@@ -87,7 +88,8 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({ className
               </div>
 
               <div className="mt-5 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-3">
-                Tyto zkratky fungují v rámci segmentačního editoru pro rychlejší a pohodlnější práci.
+                Tyto zkratky fungují v rámci segmentačního editoru pro rychlejší
+                a pohodlnější práci.
               </div>
             </motion.div>
           </motion.div>

@@ -54,7 +54,7 @@ export default {
     createAccount: '创建账户',
     signInToAccount: '登录到您的账户',
     sort: '排序',
-    no_preview: '无预览'
+    no_preview: '无预览',
   },
   dashboard: {
     manageProjects: '管理您的研究项目和分析',
@@ -77,7 +77,7 @@ export default {
     completed: '已完成',
     processing: '处理中',
     pending: '等待中',
-    failed: '失败'
+    failed: '失败',
   },
   projects: {
     createProject: '创建新项目',
@@ -107,11 +107,11 @@ export default {
     segmentationCompleted: '图像分割已完成',
     segmentationFailed: '分割失败',
     segmentationStarted: '分割已开始',
-    segmentationCompleteWithCount: '分割完成！找到 {{count}} 个对象'
+    segmentationCompleteWithCount: '分割完成！找到 {{count}} 个对象',
   },
   errors: {
     noProjectOrUser: '错误：未选择项目或用户',
-    unknown: '未知错误'
+    unknown: '未知错误',
   },
   images: {
     uploadImages: '上传图像',
@@ -137,7 +137,7 @@ export default {
     uploading: '上传中',
     processing: '处理中',
     complete: '完成',
-    error: '错误'
+    error: '错误',
   },
   settings: {
     manageSettings: '管理您的账户偏好',
@@ -160,7 +160,7 @@ export default {
       analysisCompleted: '分析完成',
       newFeatures: '新功能',
       marketingEmails: '营销邮件',
-      billing: '账单通知'
+      billing: '账单通知',
     },
     personal: '个人信息',
     fullName: '全名',
@@ -170,7 +170,8 @@ export default {
     bio: '个人简介',
     makeProfileVisible: '让其他研究人员可以看到我的资料',
     dangerZone: '危险区域',
-    deleteAccountWarning: '一旦删除账户，就无法恢复。您的所有数据将被永久删除。',
+    deleteAccountWarning:
+      '一旦删除账户，就无法恢复。您的所有数据将被永久删除。',
     currentPassword: '当前密码',
     newPassword: '新密码',
     confirmNewPassword: '确认新密码',
@@ -185,13 +186,13 @@ export default {
     modelSize: {
       small: '小',
       medium: '中',
-      large: '大'
+      large: '大',
     },
     modelDescription: {
       hrnet: '快速高效的实时分割模型',
       resunet_small: '大多数用例的平衡速度和准确性',
-      resunet_advanced: '具有注意力机制的最高准确性'
-    }
+      resunet_advanced: '具有注意力机制的最高准确性',
+    },
   },
   auth: {
     signIn: '登录',
@@ -216,7 +217,7 @@ export default {
     successfulSignOut: '退出登录成功',
     checkingAuthentication: '验证身份中...',
     loadingAccount: '加载您的账户...',
-    processingRequest: '处理您的请求...'
+    processingRequest: '处理您的请求...',
   },
   profile: {
     title: '个人资料',
@@ -260,7 +261,7 @@ export default {
     completionRate: '完成率',
     createdProject: '创建了项目',
     completedSegmentation: '完成了分割',
-    uploadedImage: '上传了图像'
+    uploadedImage: '上传了图像',
   },
   segmentation: {
     mode: {
@@ -273,7 +274,7 @@ export default {
       slice: '切割',
       delete: '删除',
       deletePolygon: '删除多边形',
-      unknown: '未知'
+      unknown: '未知',
     },
     modeDescription: {
       view: '导航和选择多边形',
@@ -281,7 +282,7 @@ export default {
       addPoints: '在顶点之间添加点',
       create: '创建新多边形',
       slice: '用线分割多边形',
-      delete: '移除多边形'
+      delete: '移除多边形',
     },
     toolbar: {
       mode: '模式',
@@ -302,7 +303,8 @@ export default {
       unsavedChanges: '未保存的更改',
       saving: '保存中...',
       save: '保存',
-      keyboardShortcuts: 'V: 查看 • E: 编辑 • A: 添加 • N: 新建 • S: 切割 • D: 删除'
+      keyboardShortcuts:
+        'V: 查看 • E: 编辑 • A: 添加 • N: 新建 • S: 切割 • D: 删除',
     },
     status: {
       polygons: '多边形',
@@ -311,8 +313,8 @@ export default {
       hidden: '隐藏',
       selected: '已选择',
       saved: '已保存',
-      unsaved: '未保存'
-    }
+      unsaved: '未保存',
+    },
   },
   status: {
     segmented: '已分割',
@@ -322,6 +324,6 @@ export default {
     no_segmentation: '未分割',
     disconnected: '与服务器断开连接',
     error: 'ML服务错误',
-    ready: '准备分割'
-  }
+    ready: '准备分割',
+  },
 };

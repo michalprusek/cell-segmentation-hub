@@ -26,24 +26,25 @@ export const QueueStatsPanel = ({
   onOpenSettings,
   className,
   batchSubmitted = false,
-  imagesToSegmentCount = 0
+  imagesToSegmentCount = 0,
 }: QueueStatsPanelProps) => {
   const { t } = useLanguage();
   const hasQueuedItems = stats && stats.queued > 0;
   const isProcessing = stats && stats.processing > 0;
   const totalItems = stats ? stats.total : 0;
-  
+
   // Calculate progress percentage (completed / total)
-  const progressPercentage = stats && stats.total > 0 
-    ? Math.round(((stats.total - stats.queued) / stats.total) * 100)
-    : 0;
+  const progressPercentage =
+    stats && stats.total > 0
+      ? Math.round(((stats.total - stats.queued) / stats.total) * 100)
+      : 0;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
-      className={cn("mb-6", className)}
+      className={cn('mb-6', className)}
     >
       <Card className="border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50">
         <CardContent className="p-4">
@@ -56,15 +57,15 @@ export const QueueStatsPanel = ({
                   {t('queue.title')}
                 </h3>
               </div>
-              
+
               {/* Connection status */}
               <Badge
-                variant={isConnected ? "default" : "destructive"}
+                variant={isConnected ? 'default' : 'destructive'}
                 className={cn(
-                  "text-xs",
-                  isConnected 
-                    ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100" 
-                    : "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                  'text-xs',
+                  isConnected
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
+                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100'
                 )}
               >
                 {isConnected ? t('queue.connected') : t('queue.disconnected')}
@@ -76,14 +77,18 @@ export const QueueStatsPanel = ({
                   <div className="flex items-center gap-1">
                     <Clock className="h-4 w-4 text-yellow-600" />
                     <span className="font-medium">{stats.queued}</span>
-                    <span className="text-gray-600 dark:text-gray-400">{t('queue.waiting')}</span>
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {t('queue.waiting')}
+                    </span>
                   </div>
-                  
+
                   {isProcessing && (
                     <div className="flex items-center gap-1">
                       <Play className="h-4 w-4 text-blue-600 animate-pulse" />
                       <span className="font-medium">{stats.processing}</span>
-                      <span className="text-gray-600 dark:text-gray-400">{t('queue.processing')}</span>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {t('queue.processing')}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -107,20 +112,29 @@ export const QueueStatsPanel = ({
                   {t('common.settings')}
                 </Button>
               )}
-              
+
               <Button
                 onClick={onSegmentAll}
-                disabled={!isConnected || imagesToSegmentCount === 0 || batchSubmitted}
+                disabled={
+                  !isConnected || imagesToSegmentCount === 0 || batchSubmitted
+                }
                 className={cn(
-                  "gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white",
-                  (!isConnected || imagesToSegmentCount === 0 || batchSubmitted) && 
-                  "bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed"
+                  'gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white',
+                  (!isConnected ||
+                    imagesToSegmentCount === 0 ||
+                    batchSubmitted) &&
+                    'bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed'
                 )}
               >
                 <Play className="h-4 w-4" />
-                {batchSubmitted ? t('queue.addingToQueue') : t('queue.segmentAll')}
+                {batchSubmitted
+                  ? t('queue.addingToQueue')
+                  : t('queue.segmentAll')}
                 {imagesToSegmentCount > 0 && !batchSubmitted && (
-                  <Badge variant="secondary" className="ml-1 bg-white text-blue-600">
+                  <Badge
+                    variant="secondary"
+                    className="ml-1 bg-white text-blue-600"
+                  >
                     {imagesToSegmentCount}
                   </Badge>
                 )}
@@ -135,13 +149,12 @@ export const QueueStatsPanel = ({
                 <span>{t('queue.totalProgress')}</span>
                 <span>{progressPercentage}%</span>
               </div>
-              <Progress 
-                value={progressPercentage} 
-                className="h-2"
-              />
+              <Progress value={progressPercentage} className="h-2" />
               <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
                 <span>0</span>
-                <span>{stats.total} {t('queue.images')}</span>
+                <span>
+                  {stats.total} {t('queue.images')}
+                </span>
               </div>
             </div>
           )}

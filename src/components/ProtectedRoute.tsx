@@ -1,9 +1,8 @@
-
-import { useEffect, useState } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
-import apiClient from "@/lib/api";
-import { Loader2 } from "lucide-react";
+import { useEffect, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import apiClient from '@/lib/api';
+import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -16,7 +15,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [gracePeriod, setGracePeriod] = useState(true);
   const [hasTokens, setHasTokens] = useState<boolean | null>(null);
-  
+
   // Give authentication state a moment to stabilize after login
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -24,7 +23,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     }, 200);
     return () => clearTimeout(timer);
   }, []);
-  
+
   useEffect(() => {
     // Derive hasTokens from isAuthenticated provided by useAuth
     setHasTokens(isAuthenticated);
@@ -32,17 +31,27 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   useEffect(() => {
     // Debug logs removed for production
-    
+
     // Don't redirect during initial loading or grace period
     if (loading || gracePeriod || isRedirecting || hasTokens === null) {
       return;
     }
-    
+
     if (!hasTokens || !user) {
       setIsRedirecting(true);
-      navigate(`/sign-in?returnTo=${encodeURIComponent(location.pathname)}`, { replace: true });
+      navigate(`/sign-in?returnTo=${encodeURIComponent(location.pathname)}`, {
+        replace: true,
+      });
     }
-  }, [hasTokens, user, loading, gracePeriod, navigate, location.pathname, isRedirecting]);
+  }, [
+    hasTokens,
+    user,
+    loading,
+    gracePeriod,
+    navigate,
+    location.pathname,
+    isRedirecting,
+  ]);
 
   // If loading, in grace period, or we have tokens and user, show loading
   if (loading || gracePeriod) {

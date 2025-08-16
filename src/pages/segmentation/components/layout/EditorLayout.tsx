@@ -1,6 +1,5 @@
-
 import React, { ReactNode } from 'react';
-import { motion } from "framer-motion";
+import { motion } from 'framer-motion';
 
 interface EditorLayoutProps {
   children: ReactNode;
@@ -13,9 +12,9 @@ interface EditorLayoutProps {
  * - Grid pro toolbar (vlevo) + canvas (střed) + panel polygonů (vpravo)
  * - StatusBar dole
  */
-const EditorLayout = ({ children, className = "" }: EditorLayoutProps) => {
+const EditorLayout = ({ children, className = '' }: EditorLayoutProps) => {
   return (
-    <motion.div 
+    <motion.div
       className={`h-screen w-screen flex flex-col overflow-hidden bg-white dark:bg-gray-900 text-foreground ${className}`}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}

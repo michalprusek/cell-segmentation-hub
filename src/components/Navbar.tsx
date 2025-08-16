@@ -1,8 +1,7 @@
-
-import React, { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Menu, X } from 'lucide-react';
 
 const Navbar = () => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -17,9 +16,9 @@ const Navbar = () => {
       }
     };
 
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener('scroll', handleScroll);
     return () => {
-      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener('scroll', handleScroll);
     };
   }, []);
 
@@ -31,12 +30,12 @@ const Navbar = () => {
     <header
       className={`fixed top-0 left-0 right-0 w-full z-50 transition-all duration-300 ${
         isScrolled
-          ? "py-3 bg-white/80 backdrop-blur-md shadow-sm"
-          : "py-5 bg-transparent"
+          ? 'py-3 bg-white/80 backdrop-blur-md shadow-sm'
+          : 'py-5 bg-transparent'
       }`}
     >
       <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
-        <Link 
+        <Link
           to="/"
           className="flex items-center gap-2 transition-opacity hover:opacity-80"
         >
@@ -46,25 +45,25 @@ const Navbar = () => {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-8">
-          <Link 
+          <Link
             to="/documentation"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
             Documentation
           </Link>
-          <Link 
+          <Link
             to="/terms-of-service"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
             Terms
           </Link>
-          <Link 
+          <Link
             to="/privacy-policy"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
             Privacy
           </Link>
-          <Link 
+          <Link
             to="/sign-in"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
@@ -73,7 +72,7 @@ const Navbar = () => {
         </nav>
 
         {/* Mobile Menu Button */}
-        <button 
+        <button
           className="md:hidden text-gray-700"
           onClick={toggleMobileMenu}
           aria-label="Toggle menu"
@@ -90,28 +89,28 @@ const Navbar = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden absolute top-full left-0 right-0 bg-white/95 backdrop-blur-md shadow-lg animate-fade-in">
           <div className="container mx-auto px-4 py-6 flex flex-col space-y-4">
-            <Link 
+            <Link
               to="/documentation"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Documentation
             </Link>
-            <Link 
+            <Link
               to="/terms-of-service"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Terms of Service
             </Link>
-            <Link 
+            <Link
               to="/privacy-policy"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
               Privacy Policy
             </Link>
-            <Link 
+            <Link
               to="/sign-in"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}

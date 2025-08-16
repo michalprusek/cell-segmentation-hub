@@ -16,14 +16,16 @@ interface CanvasTemporaryGeometryLayerProps {
  * Renders temporary geometry like preview lines, temp polygons, slice lines
  * Inspired by SpheroSeg's temporary geometry system
  */
-const CanvasTemporaryGeometryLayer: React.FC<CanvasTemporaryGeometryLayerProps> = ({
+const CanvasTemporaryGeometryLayer: React.FC<
+  CanvasTemporaryGeometryLayerProps
+> = ({
   transform,
   editMode,
   tempPoints,
   cursorPosition,
   interactionState,
   selectedPolygonId,
-  polygons
+  polygons,
 }) => {
   const strokeWidth = Math.max(1, 2 / transform.zoom);
   const vertexRadius = Math.max(3, 5 / transform.zoom);
@@ -230,10 +232,21 @@ const CanvasTemporaryGeometryLayer: React.FC<CanvasTemporaryGeometryLayerProps> 
     }
 
     // Render line from start vertex to first temp point
-    if (tempPoints.length > 0 && selectedPolygonId && interactionState.addPointStartVertex) {
+    if (
+      tempPoints.length > 0 &&
+      selectedPolygonId &&
+      interactionState.addPointStartVertex
+    ) {
       const selectedPolygon = polygons.find(p => p.id === selectedPolygonId);
-      if (selectedPolygon && interactionState.addPointStartVertex.vertexIndex < selectedPolygon.points.length) {
-        const startVertex = selectedPolygon.points[interactionState.addPointStartVertex.vertexIndex];
+      if (
+        selectedPolygon &&
+        interactionState.addPointStartVertex.vertexIndex <
+          selectedPolygon.points.length
+      ) {
+        const startVertex =
+          selectedPolygon.points[
+            interactionState.addPointStartVertex.vertexIndex
+          ];
         elements.push(
           <line
             key="start-vertex-line"
@@ -266,11 +279,23 @@ const CanvasTemporaryGeometryLayer: React.FC<CanvasTemporaryGeometryLayerProps> 
           style={{ opacity: 0.4 }}
         />
       );
-    } else if (cursorPosition && tempPoints.length === 0 && selectedPolygonId && interactionState.addPointStartVertex) {
+    } else if (
+      cursorPosition &&
+      tempPoints.length === 0 &&
+      selectedPolygonId &&
+      interactionState.addPointStartVertex
+    ) {
       // Line from start vertex to cursor when no temp points yet
       const selectedPolygon = polygons.find(p => p.id === selectedPolygonId);
-      if (selectedPolygon && interactionState.addPointStartVertex.vertexIndex < selectedPolygon.points.length) {
-        const startVertex = selectedPolygon.points[interactionState.addPointStartVertex.vertexIndex];
+      if (
+        selectedPolygon &&
+        interactionState.addPointStartVertex.vertexIndex <
+          selectedPolygon.points.length
+      ) {
+        const startVertex =
+          selectedPolygon.points[
+            interactionState.addPointStartVertex.vertexIndex
+          ];
         elements.push(
           <line
             key="start-cursor-line"
@@ -291,7 +316,10 @@ const CanvasTemporaryGeometryLayer: React.FC<CanvasTemporaryGeometryLayerProps> 
   };
 
   const renderDragPreview = () => {
-    if (!interactionState.isDraggingVertex || !interactionState.draggedVertexInfo) {
+    if (
+      !interactionState.isDraggingVertex ||
+      !interactionState.draggedVertexInfo
+    ) {
       return null;
     }
 

@@ -1,5 +1,10 @@
+import { logger } from '@/lib/logger';
 import type { Point, Polygon } from './segmentation';
-import { lineIntersection, createPolygon, calculatePolygonArea } from './polygonGeometry';
+import {
+  lineIntersection,
+  createPolygon,
+  calculatePolygonArea,
+} from './polygonGeometry';
 
 /**
  * Polygon slicing functionality inspired by SpheroSeg
@@ -13,34 +18,40 @@ import { lineIntersection, createPolygon, calculatePolygonArea } from './polygon
  * @returns An array of two new polygons if slicing was successful, or null if slicing failed
  */
 export function slicePolygon(
-  polygon: Polygon, 
-  sliceStart: Point, 
+  polygon: Polygon,
+  sliceStart: Point,
   sliceEnd: Point
 ): [Polygon, Polygon] | null {
   if (!polygon.points || polygon.points.length < 3) {
     return null;
   }
 
-  const intersections: Array<{ point: Point; edgeIndex: number; t: number }> = [];
+  const intersections: Array<{ point: Point; edgeIndex: number; t: number }> =
+    [];
   const points = polygon.points;
 
   // Find all intersections between the slice line and polygon edges
   for (let i = 0; i < points.length; i++) {
     const j = (i + 1) % points.length;
-    const intersection = lineIntersection(sliceStart, sliceEnd, points[i], points[j]);
-    
+    const intersection = lineIntersection(
+      sliceStart,
+      sliceEnd,
+      points[i],
+      points[j]
+    );
+
     if (intersection) {
       // Calculate parameter t along the edge for sorting intersections
       const edgeLength = Math.sqrt(
-        Math.pow(points[j].x - points[i].x, 2) + 
-        Math.pow(points[j].y - points[i].y, 2)
+        Math.pow(points[j].x - points[i].x, 2) +
+          Math.pow(points[j].y - points[i].y, 2)
       );
       const intersectionDist = Math.sqrt(
-        Math.pow(intersection.x - points[i].x, 2) + 
-        Math.pow(intersection.y - points[i].y, 2)
+        Math.pow(intersection.x - points[i].x, 2) +
+          Math.pow(intersection.y - points[i].y, 2)
       );
       const t = edgeLength > 0 ? intersectionDist / edgeLength : 0;
-      
+
       intersections.push({ point: intersection, edgeIndex: i, t });
     }
   }
@@ -68,15 +79,21 @@ export function slicePolygon(
   let currentIndex = intersections[0].edgeIndex + 1;
   let safetyCounter = 0;
   const maxIterations = points.length;
-  
-  while (currentIndex % points.length !== (intersections[1].edgeIndex + 1) % points.length && safetyCounter < maxIterations) {
+
+  while (
+    currentIndex % points.length !==
+      (intersections[1].edgeIndex + 1) % points.length &&
+    safetyCounter < maxIterations
+  ) {
     polygon1Points.push(points[currentIndex % points.length]);
     currentIndex++;
     safetyCounter++;
   }
-  
+
   if (safetyCounter >= maxIterations) {
-    console.warn('Infinite loop prevention triggered in polygon slicing (first traversal)');
+    logger.warn(
+      'Infinite loop prevention triggered in polygon slicing (first traversal)'
+    );
     return null;
   }
 
@@ -86,15 +103,21 @@ export function slicePolygon(
   // Traverse from second intersection back to first, adding points to polygon2
   currentIndex = intersections[1].edgeIndex + 1;
   safetyCounter = 0;
-  
-  while (currentIndex % points.length !== (intersections[0].edgeIndex + 1) % points.length && safetyCounter < maxIterations) {
+
+  while (
+    currentIndex % points.length !==
+      (intersections[0].edgeIndex + 1) % points.length &&
+    safetyCounter < maxIterations
+  ) {
     polygon2Points.push(points[currentIndex % points.length]);
     currentIndex++;
     safetyCounter++;
   }
-  
+
   if (safetyCounter >= maxIterations) {
-    console.warn('Infinite loop prevention triggered in polygon slicing (second traversal)');
+    logger.warn(
+      'Infinite loop prevention triggered in polygon slicing (second traversal)'
+    );
     return null;
   }
 
@@ -139,7 +162,7 @@ export function validateSliceLine(
   const dx = sliceEnd.x - sliceStart.x;
   const dy = sliceEnd.y - sliceStart.y;
   const lineLength = Math.sqrt(dx * dx + dy * dy);
-  
+
   if (lineLength < 1) {
     return { isValid: false, reason: 'Slice line is too short' };
   }
@@ -150,18 +173,23 @@ export function validateSliceLine(
 
   for (let i = 0; i < points.length; i++) {
     const j = (i + 1) % points.length;
-    const intersection = lineIntersection(sliceStart, sliceEnd, points[i], points[j]);
-    
+    const intersection = lineIntersection(
+      sliceStart,
+      sliceEnd,
+      points[i],
+      points[j]
+    );
+
     if (intersection) {
       intersectionCount++;
     }
   }
 
   if (intersectionCount !== 2) {
-    return { 
-      isValid: false, 
+    return {
+      isValid: false,
       reason: `Expected 2 intersections, found ${intersectionCount}`,
-      intersectionCount 
+      intersectionCount,
     };
   }
 
@@ -172,12 +200,9 @@ export function validateSliceLine(
  * Find suggested slice points that would create a valid slice
  * This can be used for UI hints or automatic slice suggestions
  */
-export function findSliceHints(
-  polygon: Polygon,
-  startPoint?: Point
-): Point[] {
+export function findSliceHints(polygon: Polygon, startPoint?: Point): Point[] {
   const hints: Point[] = [];
-  
+
   if (!polygon.points || polygon.points.length < 4) {
     return hints; // Need at least 4 points to slice meaningfully
   }
@@ -185,17 +210,17 @@ export function findSliceHints(
   if (startPoint) {
     // Find points that would create valid slices from the start point
     const points = polygon.points;
-    
+
     for (let i = 0; i < points.length; i++) {
       const candidate = points[i];
-      
+
       // Skip if too close to start point
       const dx = candidate.x - startPoint.x;
       const dy = candidate.y - startPoint.y;
       const distance = Math.sqrt(dx * dx + dy * dy);
-      
+
       if (distance < 10) continue; // Minimum distance threshold
-      
+
       const validation = validateSliceLine(polygon, startPoint, candidate);
       if (validation.isValid) {
         hints.push(candidate);
@@ -217,7 +242,8 @@ export function findBalancedSlice(
     return null;
   }
 
-  let bestSlice: { start: Point; end: Point; areaDifference: number } | null = null;
+  let bestSlice: { start: Point; end: Point; areaDifference: number } | null =
+    null;
 
   // Sample points along polygon perimeter
   const points = polygon.points;
@@ -225,18 +251,18 @@ export function findBalancedSlice(
 
   for (let i = 0; i < points.length; i++) {
     samplePoints.push(points[i]);
-    
+
     // Add intermediate points along edges for better precision
     const nextIndex = (i + 1) % points.length;
     const edge = {
       start: points[i],
-      end: points[nextIndex]
+      end: points[nextIndex],
     };
-    
+
     for (let t = 0.2; t < 1; t += 0.2) {
       samplePoints.push({
         x: edge.start.x + t * (edge.end.x - edge.start.x),
-        y: edge.start.y + t * (edge.end.y - edge.start.y)
+        y: edge.start.y + t * (edge.end.y - edge.start.y),
       });
     }
   }
@@ -246,14 +272,14 @@ export function findBalancedSlice(
     for (let j = i + precision; j < samplePoints.length; j++) {
       const start = samplePoints[i];
       const end = samplePoints[j];
-      
+
       const result = slicePolygon(polygon, start, end);
       if (result) {
         const [poly1, poly2] = result;
         const area1 = calculatePolygonArea(poly1.points);
         const area2 = calculatePolygonArea(poly2.points);
         const areaDifference = Math.abs(area1 - area2);
-        
+
         if (!bestSlice || areaDifference < bestSlice.areaDifference) {
           bestSlice = { start, end, areaDifference };
         }

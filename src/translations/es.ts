@@ -1,4 +1,3 @@
-
 export default {
   common: {
     appName: 'Segmentación de Esferoides',
@@ -55,19 +54,21 @@ export default {
     createAccount: 'Crear cuenta',
     signInToAccount: 'Iniciar sesión en tu cuenta',
     sort: 'Ordenar',
-    no_preview: 'Sin vista previa'
+    no_preview: 'Sin vista previa',
   },
   dashboard: {
     manageProjects: 'Administra tus proyectos de investigación y análisis',
     projectGallery: 'Galería de Proyectos',
-    projectGalleryDescription: 'Explora y administra todos tus proyectos de segmentación',
+    projectGalleryDescription:
+      'Explora y administra todos tus proyectos de segmentación',
     statsOverview: 'Resumen de estadísticas',
     totalProjects: 'Total de proyectos',
     activeProjects: 'Proyectos activos',
     totalImages: 'Total de imágenes',
     totalAnalyses: 'Total de análisis',
     lastUpdated: 'Última actualización',
-    noProjectsDescription: 'Aún no has creado ningún proyecto. Crea tu primer proyecto para comenzar.',
+    noProjectsDescription:
+      'Aún no has creado ningún proyecto. Crea tu primer proyecto para comenzar.',
     noImagesDescription: 'Sube algunas imágenes para comenzar',
     searchProjectsPlaceholder: 'Buscar proyectos...',
     searchImagesPlaceholder: 'Buscar imágenes por nombre...',
@@ -78,13 +79,15 @@ export default {
     completed: 'Completado',
     processing: 'Procesando',
     pending: 'Pendiente',
-    failed: 'Fallido'
+    failed: 'Fallido',
   },
   projects: {
     createProject: 'Crear nuevo proyecto',
-    createProjectDesc: 'Añade un nuevo proyecto para organizar tus imágenes y análisis de esferoides.',
+    createProjectDesc:
+      'Añade un nuevo proyecto para organizar tus imágenes y análisis de esferoides.',
     projectNamePlaceholder: 'ej. Esferoides de células HeLa',
-    projectDescPlaceholder: 'ej. Análisis de esferoides tumorales para estudios de resistencia a fármacos',
+    projectDescPlaceholder:
+      'ej. Análisis de esferoides tumorales para estudios de resistencia a fármacos',
     creatingProject: 'Creando...',
     duplicateProject: 'Duplicar',
     shareProject: 'Compartir',
@@ -99,15 +102,18 @@ export default {
     imageDeleted: 'Imagen eliminada con éxito',
     deleteImageError: 'Error al eliminar imagen',
     deleteImageFailed: 'Falló la eliminación de imagen',
-    imagesQueuedForSegmentation: '{{count}} imágenes añadidas a la cola de segmentación',
-    allImagesAlreadySegmented: 'Todas las imágenes ya están segmentadas o en cola',
+    imagesQueuedForSegmentation:
+      '{{count}} imágenes añadidas a la cola de segmentación',
+    allImagesAlreadySegmented:
+      'Todas las imágenes ya están segmentadas o en cola',
     errorAddingToQueue: 'Error al añadir imágenes a la cola',
     imageAlreadyProcessing: 'La imagen ya está siendo procesada',
     processImageFailed: 'Error al procesar la imagen',
     segmentationCompleted: 'Segmentación completada para la imagen',
     segmentationFailed: 'La segmentación ha fallado',
     segmentationStarted: 'La segmentación ha comenzado',
-    segmentationCompleteWithCount: 'Segmentación completa! Se encontraron {{count}} objetos'
+    segmentationCompleteWithCount:
+      'Segmentación completa! Se encontraron {{count}} objetos',
   },
   images: {
     uploadImages: 'Subir imágenes',
@@ -126,7 +132,7 @@ export default {
     noAnalysesYet: 'Aún no hay análisis',
     runAnalysis: 'Ejecutar análisis',
     viewResults: 'Ver resultados',
-    dropImagesHere: 'Suelta las imágenes aquí...'
+    dropImagesHere: 'Suelta las imágenes aquí...',
   },
   settings: {
     manageSettings: 'Administra las preferencias de tu cuenta',
@@ -149,32 +155,37 @@ export default {
       analysisCompleted: 'Análisis completado',
       newFeatures: 'Nuevas características',
       marketingEmails: 'Correos de marketing',
-      billing: 'Notificaciones de facturación'
+      billing: 'Notificaciones de facturación',
     },
     models: 'Modelos',
     modelSelection: 'Selección de Modelo',
-    modelSelectionDescription: 'Elige el modelo de IA para usar en la segmentación celular',
+    modelSelectionDescription:
+      'Elige el modelo de IA para usar en la segmentación celular',
     confidenceThreshold: 'Umbral de Confianza',
-    confidenceThresholdDescription: 'Confianza mínima requerida para las predicciones de segmentación',
+    confidenceThresholdDescription:
+      'Confianza mínima requerida para las predicciones de segmentación',
     currentThreshold: 'Umbral actual',
     modelSelected: 'Modelo seleccionado con éxito',
     modelSettingsSaved: 'Configuración de modelo guardada con éxito',
     modelSize: {
       small: 'Pequeño',
       medium: 'Mediano',
-      large: 'Grande'
+      large: 'Grande',
     },
     modelDescription: {
       hrnet: 'Modelo rápido y eficiente para segmentación en tiempo real',
-      resunet_small: 'Velocidad y precisión equilibradas para la mayoría de casos de uso',
-      resunet_advanced: 'Mayor precisión con mecanismos de atención'
+      resunet_small:
+        'Velocidad y precisión equilibradas para la mayoría de casos de uso',
+      resunet_advanced: 'Mayor precisión con mecanismos de atención',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
-    dataUsageDescription: 'Controla cómo se utilizan tus datos para el aprendizaje automático y la investigación',
+    dataUsageDescription:
+      'Controla cómo se utilizan tus datos para el aprendizaje automático y la investigación',
     allowMLTraining: {
       label: 'Permitir entrenamiento de modelos ML',
-      description: 'Permitir que tus datos se utilicen para entrenar y mejorar nuestros modelos de segmentación'
-    }
+      description:
+        'Permitir que tus datos se utilicen para entrenar y mejorar nuestros modelos de segmentación',
+    },
   },
   auth: {
     signIn: 'Iniciar sesión',
@@ -195,11 +206,12 @@ export default {
     passwordsDontMatch: 'Las contraseñas no coinciden',
     successfulSignIn: 'Inicio de sesión exitoso',
     successfulSignUp: 'Registro exitoso',
-    verifyEmail: 'Por favor, verifica tu correo electrónico para confirmar tu cuenta',
+    verifyEmail:
+      'Por favor, verifica tu correo electrónico para confirmar tu cuenta',
     successfulSignOut: 'Cierre de sesión exitoso',
     checkingAuthentication: 'Verificando autenticación...',
     loadingAccount: 'Cargando tu cuenta...',
-    processingRequest: 'Procesando tu solicitud...'
+    processingRequest: 'Procesando tu solicitud...',
   },
   profile: {
     title: 'Perfil',
@@ -243,7 +255,7 @@ export default {
     completionRate: 'tasa de finalización',
     createdProject: 'Creó proyecto',
     completedSegmentation: 'Completó segmentación para',
-    uploadedImage: 'Subió imagen'
+    uploadedImage: 'Subió imagen',
   },
   segmentation: {
     mode: {
@@ -256,7 +268,7 @@ export default {
       slice: 'Cortar',
       delete: 'Eliminar',
       deletePolygon: 'Eliminar polígono',
-      unknown: 'Desconocido'
+      unknown: 'Desconocido',
     },
     modeDescription: {
       view: 'Navegar y seleccionar polígonos',
@@ -264,7 +276,7 @@ export default {
       addPoints: 'Añadir puntos entre vértices',
       create: 'Crear nuevos polígonos',
       slice: 'Dividir polígonos con una línea',
-      delete: 'Eliminar polígonos'
+      delete: 'Eliminar polígonos',
     },
     toolbar: {
       mode: 'Modo',
@@ -285,7 +297,8 @@ export default {
       unsavedChanges: 'Cambios no guardados',
       saving: 'Guardando...',
       save: 'Guardar',
-      keyboardShortcuts: 'V: Ver • E: Editar • A: Añadir • N: Nuevo • S: Cortar • D: Eliminar'
+      keyboardShortcuts:
+        'V: Ver • E: Editar • A: Añadir • N: Nuevo • S: Cortar • D: Eliminar',
     },
     status: {
       polygons: 'polígonos',
@@ -294,8 +307,8 @@ export default {
       hidden: 'ocultos',
       selected: 'seleccionado',
       saved: 'Guardado',
-      unsaved: 'No guardado'
-    }
+      unsaved: 'No guardado',
+    },
   },
   status: {
     segmented: 'Segmentado',
@@ -305,6 +318,6 @@ export default {
     no_segmentation: 'Sin segmentación',
     disconnected: 'Desconectado del servidor',
     error: 'Error del servicio ML',
-    ready: 'Listo para segmentación'
-  }
+    ready: 'Listo para segmentación',
+  },
 };

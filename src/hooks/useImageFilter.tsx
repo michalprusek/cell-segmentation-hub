@@ -1,6 +1,6 @@
-
 import { useState, useEffect, useMemo } from 'react';
 import type { ProjectImage } from '@/types';
+import { logger } from '@/lib/logger';
 
 type SortField = 'name' | 'updatedAt' | 'segmentationStatus';
 type SortDirection = 'asc' | 'desc';
@@ -19,7 +19,7 @@ const getStoredSettings = (): FilterSettings => {
       return JSON.parse(stored);
     }
   } catch (error) {
-    console.warn('Failed to load filter settings from localStorage:', error);
+    logger.warn('Failed to load filter settings from localStorage:', error);
   }
   return { sortField: 'updatedAt', sortDirection: 'desc' };
 };
@@ -28,16 +28,16 @@ const saveSettings = (settings: FilterSettings) => {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
   } catch (error) {
-    console.warn('Failed to save filter settings to localStorage:', error);
+    logger.warn('Failed to save filter settings to localStorage:', error);
   }
 };
 
 const getImageComparator = (settings?: FilterSettings) => {
   const { sortField, sortDirection } = settings || getStoredSettings();
-  
+
   return (a: ProjectImage, b: ProjectImage): number => {
     let comparison = 0;
-    
+
     switch (sortField) {
       case 'name':
         comparison = a.name.localeCompare(b.name);
@@ -46,35 +46,45 @@ const getImageComparator = (settings?: FilterSettings) => {
         comparison = a.updatedAt.getTime() - b.updatedAt.getTime();
         break;
       case 'segmentationStatus': {
-        const statusOrder = { completed: 1, processing: 2, pending: 3, failed: 4 };
-        comparison = statusOrder[a.segmentationStatus] - statusOrder[b.segmentationStatus];
+        const statusOrder = {
+          completed: 1,
+          processing: 2,
+          pending: 3,
+          failed: 4,
+        };
+        comparison =
+          statusOrder[a.segmentationStatus] - statusOrder[b.segmentationStatus];
         break;
       }
     }
-    
+
     return sortDirection === 'asc' ? comparison : -comparison;
   };
 };
 
 export const useImageFilter = (images: ProjectImage[]) => {
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  
+  const [searchTerm, setSearchTerm] = useState<string>('');
+
   const storedSettings = getStoredSettings();
-  const [sortField, setSortField] = useState<SortField>(storedSettings.sortField);
-  const [sortDirection, setSortDirection] = useState<SortDirection>(storedSettings.sortDirection);
+  const [sortField, setSortField] = useState<SortField>(
+    storedSettings.sortField
+  );
+  const [sortDirection, setSortDirection] = useState<SortDirection>(
+    storedSettings.sortDirection
+  );
 
   // Use useMemo to prevent infinite loops and unnecessary recalculations
   const filteredImages = useMemo(() => {
     let result = [...images];
-    
+
     if (searchTerm) {
-      result = result.filter(img => 
+      result = result.filter(img =>
         img.name.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
-    
+
     result.sort(getImageComparator({ sortField, sortDirection }));
-    
+
     return result;
   }, [images, searchTerm, sortField, sortDirection]);
 
@@ -85,7 +95,7 @@ export const useImageFilter = (images: ProjectImage[]) => {
   const handleSort = (field: SortField) => {
     let newSortDirection: SortDirection;
     let newSortField: SortField;
-    
+
     if (field === sortField) {
       newSortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
       newSortField = field;
@@ -93,7 +103,7 @@ export const useImageFilter = (images: ProjectImage[]) => {
       newSortField = field;
       newSortDirection = 'asc';
     }
-    
+
     setSortField(newSortField);
     setSortDirection(newSortDirection);
     saveSettings({ sortField: newSortField, sortDirection: newSortDirection });
@@ -105,13 +115,16 @@ export const useImageFilter = (images: ProjectImage[]) => {
     sortField,
     sortDirection,
     handleSearch,
-    handleSort
+    handleSort,
   };
 };
 
 export const getImageSortSettings = getStoredSettings;
 export { getImageComparator };
 
-export const sortImagesBySettings = (images: ProjectImage[], settings?: FilterSettings): ProjectImage[] => {
+export const sortImagesBySettings = (
+  images: ProjectImage[],
+  settings?: FilterSettings
+): ProjectImage[] => {
   return [...images].sort(getImageComparator(settings));
 };

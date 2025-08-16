@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { Info } from "lucide-react";
-import ProjectSelector from "@/components/ProjectSelector";
+import { Info } from 'lucide-react';
+import ProjectSelector from '@/components/ProjectSelector';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 interface UploaderOptionsProps {
@@ -10,14 +9,14 @@ interface UploaderOptionsProps {
   onProjectChange: (value: string) => void;
 }
 
-const UploaderOptions = ({ 
-  showProjectSelector, 
-  projectId, 
-  onProjectChange 
+const UploaderOptions = ({
+  showProjectSelector,
+  projectId,
+  onProjectChange,
 }: UploaderOptionsProps) => {
   const { t } = useLanguage();
   const [showInfoBar, setShowInfoBar] = useState(!projectId);
-  
+
   // Skryje info bar když je vybrán projekt
   useEffect(() => {
     if (projectId) {
@@ -36,7 +35,9 @@ const UploaderOptions = ({
               <div className="flex items-start">
                 <Info className="h-5 w-5 text-blue-500 mr-3 mt-0.5" />
                 <div>
-                  <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">{t('projects.selectProject')}</h3>
+                  <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                    {t('projects.selectProject')}
+                  </h3>
                   <p className="text-sm text-blue-600 dark:text-blue-400 mt-1">
                     {t('images.projectRequired')}
                   </p>
@@ -44,12 +45,17 @@ const UploaderOptions = ({
               </div>
             </div>
           )}
-          
+
           <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
-            <h3 className="text-lg font-semibold mb-3 dark:text-white">{t('projects.projectSelection')}</h3>
-            <ProjectSelector value={projectId} onChange={(value) => {
-              onProjectChange(value);
-            }} />
+            <h3 className="text-lg font-semibold mb-3 dark:text-white">
+              {t('projects.projectSelection')}
+            </h3>
+            <ProjectSelector
+              value={projectId}
+              onChange={value => {
+                onProjectChange(value);
+              }}
+            />
           </div>
         </>
       )}

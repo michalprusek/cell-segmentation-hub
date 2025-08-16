@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Eye, EyeOff, Edit3, Trash2, MoreVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { 
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -34,7 +34,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   hiddenPolygonIds = new Set(),
   onTogglePolygonVisibility,
   onRenamePolygon,
-  onDeletePolygon
+  onDeletePolygon,
 }) => {
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
@@ -113,19 +113,22 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                 transition={{ delay: index * 0.05 }}
                 className={`
                   relative group rounded-lg border transition-all duration-200 cursor-pointer
-                  ${isSelected 
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' 
-                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                  ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                   }
                   ${isHidden ? 'opacity-50' : ''}
                 `}
-                onClick={() => !isEditing && onSelectPolygon(isSelected ? null : polygon.id)}
+                onClick={() =>
+                  !isEditing && onSelectPolygon(isSelected ? null : polygon.id)
+                }
               >
                 <div className="p-3">
                   <div className="flex items-center gap-3">
                     {/* Color indicator */}
-                    <div 
-                      className={`w-3 h-3 rounded-full ${getPolygonColor(polygon.type || 'external')}`} 
+                    <div
+                      className={`w-3 h-3 rounded-full ${getPolygonColor(polygon.type || 'external')}`}
                     />
 
                     {/* Name */}
@@ -133,26 +136,28 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                       {isEditing ? (
                         <Input
                           value={editingName}
-                          onChange={(e) => setEditingName(e.target.value)}
-                          onKeyDown={(e) => {
+                          onChange={e => setEditingName(e.target.value)}
+                          onKeyDown={e => {
                             if (e.key === 'Enter') handleSaveRename();
                             if (e.key === 'Escape') handleCancelRename();
                           }}
                           onBlur={handleSaveRename}
                           className="h-6 text-xs"
                           autoFocus
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={e => e.stopPropagation()}
                         />
                       ) : (
                         <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                           {polygonName}
                         </div>
                       )}
-                      
+
                       <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
                         <span>{polygon.points?.length || 0} vrcholů</span>
                         <span>•</span>
-                        <span>{polygon.type === 'external' ? 'Externí' : 'Interní'}</span>
+                        <span>
+                          {polygon.type === 'external' ? 'Externí' : 'Interní'}
+                        </span>
                         {polygon.area && (
                           <>
                             <span>•</span>
@@ -169,7 +174,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
-                        onClick={(e) => {
+                        onClick={e => {
                           e.stopPropagation();
                           onTogglePolygonVisibility?.(polygon.id);
                         }}
@@ -188,17 +193,19 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                             variant="ghost"
                             size="icon"
                             className="h-6 w-6"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={e => e.stopPropagation()}
                           >
                             <MoreVertical className="h-3 w-3" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleStartRename(polygon)}>
+                          <DropdownMenuItem
+                            onClick={() => handleStartRename(polygon)}
+                          >
                             <Edit3 className="h-3 w-3 mr-2" />
                             Přejmenovat
                           </DropdownMenuItem>
-                          <DropdownMenuItem 
+                          <DropdownMenuItem
                             onClick={() => onDeletePolygon?.(polygon.id)}
                             className="text-red-600 dark:text-red-400"
                           >

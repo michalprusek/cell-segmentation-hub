@@ -1,83 +1,86 @@
-import React, { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogFooter, 
-  DialogHeader, 
+import React, { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { PlusCircle } from "lucide-react";
-import apiClient from "@/lib/api";
-import { useAuth } from "@/contexts/AuthContext";
-import { getErrorMessage } from "@/types";
+} from '@/components/ui/dialog';
+import { PlusCircle } from 'lucide-react';
+import apiClient from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
+import { getErrorMessage } from '@/types';
+import { logger } from '@/lib/logger';
 
 interface NewProjectProps {
   onProjectCreated?: (projectId: string) => void;
 }
 
 const NewProject = ({ onProjectCreated }: NewProjectProps) => {
-  const [projectName, setProjectName] = useState("");
-  const [projectDescription, setProjectDescription] = useState("");
+  const [projectName, setProjectName] = useState('');
+  const [projectDescription, setProjectDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!projectName.trim()) {
-      toast.error("Please enter a project name");
+      toast.error('Please enter a project name');
       return;
     }
 
     if (!user) {
-      toast.error("You must be logged in to create a project");
+      toast.error('You must be logged in to create a project');
       return;
     }
-    
+
     setIsCreating(true);
-    
+
     try {
       const projectData = await apiClient.createProject({
         name: projectName,
-        description: projectDescription || "No description provided"
+        description: projectDescription || 'No description provided',
       });
-      
+
       // Validate response
       if (!projectData || !projectData.id) {
-        console.error("Invalid project creation response:", projectData);
-        toast.error("Failed to create project", {
-          description: "Server response was invalid"
+        logger.error('Invalid project creation response:', projectData);
+        toast.error('Failed to create project', {
+          description: 'Server response was invalid',
         });
         return;
       }
-      
-      toast.success("Project created successfully", {
-        description: `"${projectName}" is ready for images`
+
+      toast.success('Project created successfully', {
+        description: `"${projectName}" is ready for images`,
       });
-      
+
       setOpen(false);
-      setProjectName("");
-      setProjectDescription("");
-      
+      setProjectName('');
+      setProjectDescription('');
+
       // Notify parent component about creation but don't redirect
       if (onProjectCreated && projectData) {
         onProjectCreated(projectData.id);
       }
-      
+
       // Also dispatch global event for dashboard refresh
-      const event = new CustomEvent('project-created', { detail: { projectId: projectData.id } });
+      const event = new CustomEvent('project-created', {
+        detail: { projectId: projectData.id },
+      });
       window.dispatchEvent(event);
     } catch (error: unknown) {
-      console.error("Error creating project:", error);
-      const errorMessage = getErrorMessage(error) || "Failed to create project";
-      toast.error("Failed to create project: " + errorMessage);
+      logger.error('Error creating project:', error);
+      const errorMessage = getErrorMessage(error) || 'Failed to create project';
+      toast.error('Failed to create project: ' + errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -108,7 +111,7 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
                 id="projectName"
                 placeholder="e.g., HeLa Cell Spheroids"
                 value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
+                onChange={e => setProjectName(e.target.value)}
                 required
               />
             </div>
@@ -120,13 +123,13 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
                 id="projectDescription"
                 placeholder="e.g., Analysis of tumor spheroids for drug resistance studies"
                 value={projectDescription}
-                onChange={(e) => setProjectDescription(e.target.value)}
+                onChange={e => setProjectDescription(e.target.value)}
               />
             </div>
           </div>
           <DialogFooter>
             <Button type="submit" disabled={isCreating}>
-              {isCreating ? "Creating..." : "Create Project"}
+              {isCreating ? 'Creating...' : 'Create Project'}
             </Button>
           </DialogFooter>
         </form>

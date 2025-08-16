@@ -1,8 +1,8 @@
-
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { getErrorMessage } from '@/types';
+import { logger } from '@/lib/logger';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -16,7 +16,9 @@ const ThemeContext = createContext<ThemeContextType>({
   setTheme: () => {},
 });
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const { user } = useAuth();
   const [theme, setThemeState] = useState<Theme>('system');
   const [loaded, setLoaded] = useState(false);
@@ -26,12 +28,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const fetchUserTheme = async () => {
       // První zkusíme načíst z localStorage
       const localTheme = localStorage.getItem('theme') as Theme | null;
-      
+
       // Pokud jsme přihlášeni, zkusíme získat motiv z profilu
       if (user) {
         try {
           const profileData = await apiClient.getUserProfile();
-          
+
           if (profileData && profileData.preferred_theme) {
             const dbTheme = profileData.preferred_theme as Theme;
             setThemeState(dbTheme);
@@ -41,12 +43,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return;
           }
         } catch (error: unknown) {
-          console.error('Error loading theme preference:', error);
-          const errorMessage = getErrorMessage(error) || "Failed to load theme";
-          console.error('Theme load error:', errorMessage);
+          logger.error('Error loading theme preference:', error);
+          const errorMessage = getErrorMessage(error) || 'Failed to load theme';
+          logger.error('Theme load error:', errorMessage);
         }
       }
-      
+
       // Pokud nemáme motiv z profilu, použijeme localStorage nebo výchozí hodnotu
       if (localTheme) {
         setThemeState(localTheme);
@@ -55,10 +57,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setThemeState('system');
         applyTheme('system');
       }
-      
+
       setLoaded(true);
     };
-    
+
     fetchUserTheme();
   }, [user]);
 
@@ -66,27 +68,28 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('theme', newTheme);
     setThemeState(newTheme);
     applyTheme(newTheme);
-    
+
     // Uložení do databáze, pokud jsme přihlášeni
     if (user) {
       try {
         await apiClient.updateUserProfile({ preferred_theme: newTheme });
       } catch (error: unknown) {
-        console.error('Error updating profile:', error);
-        const errorMessage = getErrorMessage(error) || "Failed to save theme";
-        console.error('Theme save error:', errorMessage);
+        logger.error('Error updating profile:', error);
+        const errorMessage = getErrorMessage(error) || 'Failed to save theme';
+        logger.error('Theme save error:', errorMessage);
       }
     }
   };
 
   const applyTheme = (theme: Theme) => {
     const root = window.document.documentElement;
-    
+
     if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
+        .matches
         ? 'dark'
         : 'light';
-      
+
       root.classList.remove('light', 'dark');
       root.classList.add(systemTheme);
 
@@ -95,7 +98,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } else {
       root.classList.remove('light', 'dark');
       root.classList.add(theme);
-      
+
       // Set data-theme attribute for components that use it
       root.setAttribute('data-theme', theme);
     }
@@ -107,7 +110,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       document.body.classList.add('dark');
       document.body.classList.remove('light');
     } else {
-      document.documentElement.style.backgroundColor = '#f9fafb'; // bg-gray-50 
+      document.documentElement.style.backgroundColor = '#f9fafb'; // bg-gray-50
       document.body.style.backgroundColor = '#f9fafb'; // bg-gray-50
       document.body.classList.add('light');
       document.body.classList.remove('dark');
@@ -117,17 +120,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Initial theme application
   useEffect(() => {
     if (!loaded) return;
-    
+
     applyTheme(theme);
 
     // Listen for system theme changes if using system theme
     if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      
+
       const handleChange = () => {
         applyTheme('system');
       };
-      
+
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     }

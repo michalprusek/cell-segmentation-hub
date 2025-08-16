@@ -1,25 +1,26 @@
-
-import React from "react";
-import { useNavigate, useLocation } from "react-router-dom";
-import { Bell } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Bell } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface NotificationsDropdownProps {
   hasNotifications: boolean;
 }
 
-const NotificationsDropdown = ({ hasNotifications }: NotificationsDropdownProps) => {
+const NotificationsDropdown = ({
+  hasNotifications,
+}: NotificationsDropdownProps) => {
   const navigate = useNavigate();
   const location = useLocation();
 
   return (
-    <Button 
-      variant="ghost" 
-      size="icon" 
+    <Button
+      variant="ghost"
+      size="icon"
       className="relative dark:text-gray-300"
       onClick={() => {
-        if (location.pathname !== "/settings") {
-          navigate("/settings?tab=notifications");
+        if (location.pathname !== '/settings') {
+          navigate('/settings?tab=notifications');
         }
       }}
     >

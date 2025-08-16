@@ -1,26 +1,25 @@
-
-import { toast as sonnerToast, type ToastT } from "sonner";
-import { useState } from "react";
-import { ReactElement } from "react";
+import { toast as sonnerToast, type ToastT } from 'sonner';
+import { useState } from 'react';
+import { ReactElement } from 'react';
 
 type ToastProps = {
   title?: string;
   description?: string;
-  variant?: "default" | "destructive";
+  variant?: 'default' | 'destructive';
 };
 
 type Toast = {
   id: string | number;
   title?: string;
   description?: string;
-  variant?: "default" | "destructive";
+  variant?: 'default' | 'destructive';
   action?: ReactElement;
 };
 
-export function toast({ title, description, variant = "default" }: ToastProps) {
+export function toast({ title, description, variant = 'default' }: ToastProps) {
   const options: ToastT = {
     id: Date.now(),
-    className: variant === "destructive" ? "destructive" : "",
+    className: variant === 'destructive' ? 'destructive' : '',
   };
 
   return sonnerToast(title, {
@@ -31,10 +30,10 @@ export function toast({ title, description, variant = "default" }: ToastProps) {
 
 export const useToast = () => {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  
+
   // Vracíme pouze funkci toast, ale zachováváme kompatibilitu s Toaster komponentou
-  return { 
+  return {
     toast,
-    toasts 
+    toasts,
   };
 };

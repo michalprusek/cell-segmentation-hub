@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 export interface QueueStats {
   projectId: string;
@@ -46,7 +47,7 @@ type DisconnectionListener = (reason: string) => void;
 type ConnectionErrorListener = (error: Error) => void;
 
 // Union type for all possible event listeners
-type EventListener = 
+type EventListener =
   | SegmentationUpdateListener
   | QueueStatsUpdateListener
   | NotificationListener
@@ -78,11 +79,11 @@ class WebSocketManager {
     this.eventListeners = {
       'segmentation-update': new Set(),
       'queue-stats-update': new Set(),
-      'notification': new Set(),
+      notification: new Set(),
       'system-message': new Set(),
-      'connect': new Set(),
-      'disconnect': new Set(),
-      'connect_error': new Set()
+      connect: new Set(),
+      disconnect: new Set(),
+      connect_error: new Set(),
     };
   }
 
@@ -98,33 +99,42 @@ class WebSocketManager {
    */
   async connect(user: { id: string; token: string }): Promise<void> {
     // If already connected with same user, don't reconnect
-    if (this.socket?.connected && this.currentUser?.id === user.id && this.currentUser?.token === user.token) {
-      console.log('WebSocket already connected for user:', user.id);
+    if (
+      this.socket?.connected &&
+      this.currentUser?.id === user.id &&
+      this.currentUser?.token === user.token
+    ) {
+      logger.debug('WebSocket already connected for user:', user.id);
       return;
     }
 
     // If connecting with different user, disconnect first
     if (this.socket && this.currentUser?.id !== user.id) {
-      console.log('Switching WebSocket user from', this.currentUser?.id, 'to', user.id);
+      logger.info(
+        'Switching WebSocket user from ' +
+          this.currentUser?.id +
+          ' to ' +
+          user.id
+      );
       this.disconnect();
     }
 
     // Prevent multiple concurrent connection attempts
     if (this.isConnecting) {
-      console.log('WebSocket connection already in progress, waiting...');
+      logger.debug('WebSocket connection already in progress, waiting...');
       return new Promise((resolve, reject) => {
         const maxWaitTime = 30000; // 30 seconds max wait
         const startTime = Date.now();
-        
+
         const checkConnection = () => {
           const elapsed = Date.now() - startTime;
-          
+
           // Timeout if waiting too long
           if (elapsed > maxWaitTime) {
             reject(new Error('Connection wait timeout'));
             return;
           }
-          
+
           if (!this.isConnecting) {
             if (this.socket?.connected) {
               resolve();
@@ -154,19 +164,20 @@ class WebSocketManager {
       throw new Error('No user credentials provided');
     }
 
-    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+    const apiBaseUrl =
+      import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
     const serverUrl = apiBaseUrl.replace('/api', '');
-    
-    console.log('🔄 Creating WebSocket connection to:', serverUrl);
-    
+
+    logger.info('Creating WebSocket connection to:', serverUrl);
+
     this.socket = io(serverUrl, {
       auth: {
-        token: this.currentUser.token
+        token: this.currentUser.token,
       },
       transports: ['websocket', 'polling'],
       reconnection: false, // We'll handle reconnection manually
       timeout: 10000,
-      autoConnect: true
+      autoConnect: true,
     });
 
     this.setupEventHandlers();
@@ -182,7 +193,7 @@ class WebSocketManager {
         resolve();
       });
 
-      this.socket!.on('connect_error', (error) => {
+      this.socket!.on('connect_error', error => {
         clearTimeout(timeout);
         reject(error);
       });
@@ -194,27 +205,27 @@ class WebSocketManager {
 
     // Connection events
     this.socket.on('connect', () => {
-      console.log('✅ WebSocket CONNECTED! Socket ID:', this.socket?.id);
+      logger.info('WebSocket CONNECTED! Socket ID:', this.socket?.id);
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
       this.flushMessageQueue();
       this.emitToListeners('connect');
     });
 
-    this.socket.on('disconnect', (reason) => {
-      console.log('❌ WebSocket DISCONNECTED! Reason:', reason);
+    this.socket.on('disconnect', reason => {
+      logger.info('WebSocket DISCONNECTED! Reason:', reason);
       this.emitToListeners('disconnect', reason);
-      
+
       // Auto-reconnect unless disconnect was intentional
       if (reason !== 'io client disconnect' && reason !== 'transport close') {
         this.handleReconnect();
       }
     });
 
-    this.socket.on('connect_error', (error) => {
-      console.error('⚠️ WebSocket CONNECTION ERROR:', error.message);
+    this.socket.on('connect_error', error => {
+      logger.error('WebSocket CONNECTION ERROR:', error.message);
       this.emitToListeners('connect_error', error);
-      
+
       // Show toast only occasionally to avoid spam
       const now = Date.now();
       if (now - this.lastToastTime > this.toastCooldown) {
@@ -223,39 +234,39 @@ class WebSocketManager {
         }
         this.lastToastTime = now;
       }
-      
+
       this.handleReconnect();
     });
 
-    this.socket.on('error', (error) => {
-      console.error('⚠️ WebSocket ERROR:', error);
+    this.socket.on('error', error => {
+      logger.error('WebSocket ERROR:', error);
     });
 
     // Data events
     this.socket.on('segmentation-update', (update: SegmentationUpdate) => {
       if (process.env.NODE_ENV === 'development') {
-        console.log('Segmentation update received:', update);
+        logger.debug('Segmentation update received:', update);
       }
       this.emitToListeners('segmentation-update', update);
     });
 
     this.socket.on('queue-stats-update', (stats: QueueStats) => {
       if (process.env.NODE_ENV === 'development') {
-        console.log('Queue stats update received:', stats);
+        logger.debug('Queue stats update received:', stats);
       }
       this.emitToListeners('queue-stats-update', stats);
     });
 
     this.socket.on('notification', (notification: Notification) => {
       if (process.env.NODE_ENV === 'development') {
-        console.log('Notification received:', notification);
+        logger.debug('Notification received:', notification);
       }
       this.emitToListeners('notification', notification);
     });
 
     this.socket.on('system-message', (message: SystemMessage) => {
       if (process.env.NODE_ENV === 'development') {
-        console.log('System message received:', message);
+        logger.debug('System message received:', message);
       }
       this.emitToListeners('system-message', message);
     });
@@ -263,22 +274,27 @@ class WebSocketManager {
 
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.log('❌ Max reconnection attempts reached');
+      logger.error('Max reconnection attempts reached');
       toast.error('Připojení k serveru se nepodařilo obnovit');
       return;
     }
 
     this.reconnectAttempts++;
-    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), this.maxReconnectDelay);
-    
-    console.log(`🔄 Attempting reconnect #${this.reconnectAttempts} in ${delay}ms`);
-    
+    const delay = Math.min(
+      this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1),
+      this.maxReconnectDelay
+    );
+
+    logger.info(
+      `Attempting reconnect #${this.reconnectAttempts} in ${delay}ms`
+    );
+
     setTimeout(async () => {
       if (this.currentUser && !this.socket?.connected) {
         try {
           await this.createConnection();
         } catch (error) {
-          console.error('Reconnection failed:', error);
+          logger.error('Reconnection failed:', error);
         }
       }
     }, delay);
@@ -291,7 +307,10 @@ class WebSocketManager {
         try {
           listener(...args);
         } catch (error) {
-          console.error(`Error in WebSocket event listener for ${event}:`, error);
+          logger.error(
+            `Error in WebSocket event listener for ${event}:`,
+            error
+          );
         }
       });
     }
@@ -332,7 +351,7 @@ class WebSocketManager {
     } else {
       // Queue message for when connection is restored
       this.messageQueue.push({ event, data });
-      console.log(`Queued message: ${event}`, data);
+      logger.debug(`Queued message: ${event}`, data);
     }
   }
 
@@ -340,7 +359,7 @@ class WebSocketManager {
    * Join project room
    */
   joinProject(projectId: string): void {
-    console.log('Joining project room:', projectId);
+    logger.debug('Joining project room:', projectId);
     this.emit('join-project', projectId);
   }
 
@@ -348,7 +367,7 @@ class WebSocketManager {
    * Leave project room
    */
   leaveProject(projectId: string): void {
-    console.log('Leaving project room:', projectId);
+    logger.debug('Leaving project room:', projectId);
     this.emit('leave-project', projectId);
   }
 
@@ -377,20 +396,20 @@ class WebSocketManager {
    * Disconnect and cleanup
    */
   disconnect(): void {
-    console.log('Disconnecting WebSocket manager');
-    
+    logger.info('Disconnecting WebSocket manager');
+
     if (this.socket) {
       this.socket.removeAllListeners();
       this.socket.disconnect();
       this.socket = null;
     }
-    
+
     this.currentUser = null;
     this.isInitialized = false;
     this.isConnecting = false;
     this.messageQueue = [];
     this.reconnectAttempts = 0;
-    
+
     // Clear all event listeners
     Object.keys(this.eventListeners).forEach(event => {
       this.eventListeners[event].clear();
@@ -405,12 +424,19 @@ class WebSocketManager {
       WebSocketManager.instance.disconnect();
       WebSocketManager.instance = null;
     }
-    
+
     // Remove beforeunload listener if it exists
-    if (typeof window !== 'undefined' && '_beforeUnloadHandler' in WebSocketManager) {
-      const managerWithHandler = WebSocketManager as typeof WebSocketManager & WebSocketManagerWithHandler;
+    if (
+      typeof window !== 'undefined' &&
+      '_beforeUnloadHandler' in WebSocketManager
+    ) {
+      const managerWithHandler = WebSocketManager as typeof WebSocketManager &
+        WebSocketManagerWithHandler;
       if (managerWithHandler._beforeUnloadHandler) {
-        window.removeEventListener('beforeunload', managerWithHandler._beforeUnloadHandler);
+        window.removeEventListener(
+          'beforeunload',
+          managerWithHandler._beforeUnloadHandler
+        );
         delete managerWithHandler._beforeUnloadHandler;
       }
     }
@@ -422,12 +448,14 @@ if (typeof window !== 'undefined') {
   const handleBeforeUnload = () => {
     WebSocketManager.cleanup();
   };
-  
+
   // Add listener
   window.addEventListener('beforeunload', handleBeforeUnload);
-  
+
   // Store reference to remove listener if needed
-  (WebSocketManager as typeof WebSocketManager & WebSocketManagerWithHandler)._beforeUnloadHandler = handleBeforeUnload;
+  (
+    WebSocketManager as typeof WebSocketManager & WebSocketManagerWithHandler
+  )._beforeUnloadHandler = handleBeforeUnload;
 }
 
 export default WebSocketManager;

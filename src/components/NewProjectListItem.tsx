@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { Card } from "@/components/ui/card";
+import { Card } from '@/components/ui/card';
 import { Plus } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -12,7 +11,7 @@ const NewProjectListItem = ({ onClick }: NewProjectListItemProps) => {
   const { t } = useLanguage();
 
   return (
-    <Card 
+    <Card
       className="overflow-hidden cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-all duration-300 w-full"
       onClick={onClick}
     >

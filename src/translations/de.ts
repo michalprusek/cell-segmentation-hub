@@ -54,19 +54,21 @@ export default {
     createAccount: 'Konto erstellen',
     signInToAccount: 'Bei Ihrem Konto anmelden',
     sort: 'Sortieren',
-    no_preview: 'Keine Vorschau'
+    no_preview: 'Keine Vorschau',
   },
   dashboard: {
     manageProjects: 'Verwalten Sie Ihre Forschungsprojekte und Analysen',
     projectGallery: 'Projektgalerie',
-    projectGalleryDescription: 'Durchsuchen und verwalten Sie alle Ihre Segmentierungsprojekte',
+    projectGalleryDescription:
+      'Durchsuchen und verwalten Sie alle Ihre Segmentierungsprojekte',
     statsOverview: 'Statistik-Übersicht',
     totalProjects: 'Projekte gesamt',
     activeProjects: 'Aktive Projekte',
     totalImages: 'Bilder gesamt',
     totalAnalyses: 'Analysen gesamt',
     lastUpdated: 'Zuletzt aktualisiert',
-    noProjectsDescription: 'Sie haben noch keine Projekte erstellt. Erstellen Sie Ihr erstes Projekt, um zu beginnen.',
+    noProjectsDescription:
+      'Sie haben noch keine Projekte erstellt. Erstellen Sie Ihr erstes Projekt, um zu beginnen.',
     noImagesDescription: 'Laden Sie einige Bilder hoch, um zu beginnen',
     searchProjectsPlaceholder: 'Projekte suchen...',
     searchImagesPlaceholder: 'Bilder nach Namen suchen...',
@@ -77,13 +79,15 @@ export default {
     completed: 'Abgeschlossen',
     processing: 'Verarbeitung',
     pending: 'Ausstehend',
-    failed: 'Fehlgeschlagen'
+    failed: 'Fehlgeschlagen',
   },
   projects: {
     createProject: 'Neues Projekt erstellen',
-    createProjectDesc: 'Fügen Sie ein neues Projekt hinzu, um Ihre Sphäroid-Bilder und Analysen zu organisieren.',
+    createProjectDesc:
+      'Fügen Sie ein neues Projekt hinzu, um Ihre Sphäroid-Bilder und Analysen zu organisieren.',
     projectNamePlaceholder: 'z.B. HeLa-Zell-Sphäroide',
-    projectDescPlaceholder: 'z.B. Analyse von Tumor-Sphäroiden für Arzneimittelresistenz-Studien',
+    projectDescPlaceholder:
+      'z.B. Analyse von Tumor-Sphäroiden für Arzneimittelresistenz-Studien',
     creatingProject: 'Erstelle...',
     duplicateProject: 'Duplizieren',
     shareProject: 'Teilen',
@@ -99,19 +103,22 @@ export default {
     imageDeleted: 'Bild erfolgreich gelöscht',
     deleteImageError: 'Löschen des Bildes fehlgeschlagen',
     deleteImageFailed: 'Bildlöschung fehlgeschlagen',
-    imagesQueuedForSegmentation: '{{count}} Bilder zur Segmentierungswarteschlange hinzugefügt',
-    allImagesAlreadySegmented: 'Alle Bilder sind bereits segmentiert oder in der Warteschlange',
+    imagesQueuedForSegmentation:
+      '{{count}} Bilder zur Segmentierungswarteschlange hinzugefügt',
+    allImagesAlreadySegmented:
+      'Alle Bilder sind bereits segmentiert oder in der Warteschlange',
     errorAddingToQueue: 'Fehler beim Hinzufügen zur Warteschlange',
     imageAlreadyProcessing: 'Bild wird bereits verarbeitet',
     processImageFailed: 'Bildverarbeitung fehlgeschlagen',
     segmentationCompleted: 'Segmentierung für Bild abgeschlossen',
     segmentationFailed: 'Segmentierung fehlgeschlagen',
     segmentationStarted: 'Segmentierung hat begonnen',
-    segmentationCompleteWithCount: 'Segmentierung abgeschlossen! {{count}} Objekte gefunden'
+    segmentationCompleteWithCount:
+      'Segmentierung abgeschlossen! {{count}} Objekte gefunden',
   },
   errors: {
     noProjectOrUser: 'Fehler: Kein Projekt oder Benutzer ausgewählt',
-    unknown: 'Unbekannter Fehler'
+    unknown: 'Unbekannter Fehler',
   },
   images: {
     uploadImages: 'Bilder hochladen',
@@ -132,12 +139,13 @@ export default {
     viewResults: 'Ergebnisse anzeigen',
     dropImagesHere: 'Bilder hier ablegen...',
     selectProjectFirst: 'Bitte wählen Sie zuerst ein Projekt aus',
-    projectRequired: 'Sie müssen ein Projekt auswählen, bevor Sie Bilder hochladen können',
+    projectRequired:
+      'Sie müssen ein Projekt auswählen, bevor Sie Bilder hochladen können',
     pending: 'Ausstehend',
     uploading: 'Hochladen',
     processing: 'Verarbeitung',
     complete: 'Abgeschlossen',
-    error: 'Fehler'
+    error: 'Fehler',
   },
   settings: {
     manageSettings: 'Ihre Kontoeinstellungen verwalten',
@@ -160,7 +168,7 @@ export default {
       analysisCompleted: 'Analyse abgeschlossen',
       newFeatures: 'Neue Funktionen',
       marketingEmails: 'Marketing-E-Mails',
-      billing: 'Rechnungsbenachrichtigungen'
+      billing: 'Rechnungsbenachrichtigungen',
     },
     personal: 'Persönliche Informationen',
     fullName: 'Vollständiger Name',
@@ -170,28 +178,32 @@ export default {
     bio: 'Biografie',
     makeProfileVisible: 'Mein Profil für andere Forscher sichtbar machen',
     dangerZone: 'Gefahrenbereich',
-    deleteAccountWarning: 'Sobald Sie Ihr Konto löschen, gibt es kein Zurück. Alle Ihre Daten werden dauerhaft gelöscht.',
+    deleteAccountWarning:
+      'Sobald Sie Ihr Konto löschen, gibt es kein Zurück. Alle Ihre Daten werden dauerhaft gelöscht.',
     currentPassword: 'Aktuelles Passwort',
     newPassword: 'Neues Passwort',
     confirmNewPassword: 'Neues Passwort bestätigen',
     models: 'Modelle',
     modelSelection: 'Modellauswahl',
-    modelSelectionDescription: 'Wählen Sie das KI-Modell für die Zellsegmentierung',
+    modelSelectionDescription:
+      'Wählen Sie das KI-Modell für die Zellsegmentierung',
     confidenceThreshold: 'Vertrauensschwelle',
-    confidenceThresholdDescription: 'Mindestvertrauen für Segmentierungsvorhersagen erforderlich',
+    confidenceThresholdDescription:
+      'Mindestvertrauen für Segmentierungsvorhersagen erforderlich',
     currentThreshold: 'Aktuelle Schwelle',
     modelSelected: 'Modell erfolgreich ausgewählt',
     modelSettingsSaved: 'Modelleinstellungen erfolgreich gespeichert',
     modelSize: {
       small: 'Klein',
       medium: 'Mittel',
-      large: 'Groß'
+      large: 'Groß',
     },
     modelDescription: {
       hrnet: 'Schnelles und effizientes Modell für Echzeit-Segmentierung',
-      resunet_small: 'Ausgewogene Geschwindigkeit und Genauigkeit für die meisten Anwendungsfälle',
-      resunet_advanced: 'Höchste Genauigkeit mit Aufmerksamkeitsmechanismen'
-    }
+      resunet_small:
+        'Ausgewogene Geschwindigkeit und Genauigkeit für die meisten Anwendungsfälle',
+      resunet_advanced: 'Höchste Genauigkeit mit Aufmerksamkeitsmechanismen',
+    },
   },
   auth: {
     signIn: 'Anmelden',
@@ -216,7 +228,7 @@ export default {
     successfulSignOut: 'Erfolgreich abgemeldet',
     checkingAuthentication: 'Authentifizierung prüfen...',
     loadingAccount: 'Ihr Konto wird geladen...',
-    processingRequest: 'Ihre Anfrage wird bearbeitet...'
+    processingRequest: 'Ihre Anfrage wird bearbeitet...',
   },
   profile: {
     title: 'Profil',
@@ -260,7 +272,7 @@ export default {
     completionRate: 'Abschlussrate',
     createdProject: 'Projekt erstellt',
     completedSegmentation: 'Segmentierung abgeschlossen für',
-    uploadedImage: 'Bild hochgeladen'
+    uploadedImage: 'Bild hochgeladen',
   },
   segmentation: {
     mode: {
@@ -273,7 +285,7 @@ export default {
       slice: 'Schneiden',
       delete: 'Löschen',
       deletePolygon: 'Polygon löschen',
-      unknown: 'Unbekannt'
+      unknown: 'Unbekannt',
     },
     modeDescription: {
       view: 'Navigieren und Polygone auswählen',
@@ -281,7 +293,7 @@ export default {
       addPoints: 'Punkte zwischen Eckpunkten hinzufügen',
       create: 'Neue Polygone erstellen',
       slice: 'Polygone mit einer Linie teilen',
-      delete: 'Polygone entfernen'
+      delete: 'Polygone entfernen',
     },
     toolbar: {
       mode: 'Modus',
@@ -302,7 +314,8 @@ export default {
       unsavedChanges: 'Nicht gespeicherte Änderungen',
       saving: 'Speichern...',
       save: 'Speichern',
-      keyboardShortcuts: 'V: Anzeigen • E: Bearbeiten • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen'
+      keyboardShortcuts:
+        'V: Anzeigen • E: Bearbeiten • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen',
     },
     status: {
       polygons: 'Polygone',
@@ -311,8 +324,8 @@ export default {
       hidden: 'versteckt',
       selected: 'ausgewählt',
       saved: 'Gespeichert',
-      unsaved: 'Nicht gespeichert'
-    }
+      unsaved: 'Nicht gespeichert',
+    },
   },
   status: {
     segmented: 'Segmentiert',
@@ -322,6 +335,6 @@ export default {
     no_segmentation: 'Keine Segmentierung',
     disconnected: 'Vom Server getrennt',
     error: 'ML-Service-Fehler',
-    ready: 'Bereit für Segmentierung'
-  }
+    ready: 'Bereit für Segmentierung',
+  },
 };

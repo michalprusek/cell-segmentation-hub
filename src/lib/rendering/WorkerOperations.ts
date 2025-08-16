@@ -52,9 +52,12 @@ export interface AreaCalculationResponse {
 /**
  * Polygon simplification operation
  */
-export class SimplifyPolygonOperation extends WorkerOperation<SimplifyRequest, Point[]> {
+export class SimplifyPolygonOperation extends WorkerOperation<
+  SimplifyRequest,
+  Point[]
+> {
   readonly type = 'simplify';
-  
+
   async execute(input: SimplifyRequest): Promise<Point[]> {
     // This will be handled by the worker - this method is not called directly
     throw new Error('This method should not be called directly');
@@ -64,9 +67,12 @@ export class SimplifyPolygonOperation extends WorkerOperation<SimplifyRequest, P
 /**
  * Polygon intersection operation
  */
-export class PolygonIntersectionOperation extends WorkerOperation<IntersectionRequest, Point[]> {
+export class PolygonIntersectionOperation extends WorkerOperation<
+  IntersectionRequest,
+  Point[]
+> {
   readonly type = 'intersections';
-  
+
   async execute(input: IntersectionRequest): Promise<Point[]> {
     throw new Error('This method should not be called directly');
   }
@@ -75,9 +81,12 @@ export class PolygonIntersectionOperation extends WorkerOperation<IntersectionRe
 /**
  * Polygon slicing operation
  */
-export class SlicePolygonOperation extends WorkerOperation<SliceRequest, Point[][]> {
+export class SlicePolygonOperation extends WorkerOperation<
+  SliceRequest,
+  Point[][]
+> {
   readonly type = 'slice';
-  
+
   async execute(input: SliceRequest): Promise<Point[][]> {
     throw new Error('This method should not be called directly');
   }
@@ -86,10 +95,15 @@ export class SlicePolygonOperation extends WorkerOperation<SliceRequest, Point[]
 /**
  * Area and perimeter calculation operation
  */
-export class CalculateAreaOperation extends WorkerOperation<AreaCalculationRequest, AreaCalculationResponse> {
+export class CalculateAreaOperation extends WorkerOperation<
+  AreaCalculationRequest,
+  AreaCalculationResponse
+> {
   readonly type = 'area';
-  
-  async execute(input: AreaCalculationRequest): Promise<AreaCalculationResponse> {
+
+  async execute(
+    input: AreaCalculationRequest
+  ): Promise<AreaCalculationResponse> {
     throw new Error('This method should not be called directly');
   }
 }
@@ -97,9 +111,12 @@ export class CalculateAreaOperation extends WorkerOperation<AreaCalculationReque
 /**
  * Convex hull calculation operation
  */
-export class ConvexHullOperation extends WorkerOperation<ConvexHullRequest, Point[]> {
+export class ConvexHullOperation extends WorkerOperation<
+  ConvexHullRequest,
+  Point[]
+> {
   readonly type = 'convexHull';
-  
+
   async execute(input: ConvexHullRequest): Promise<Point[]> {
     throw new Error('This method should not be called directly');
   }
@@ -108,9 +125,12 @@ export class ConvexHullOperation extends WorkerOperation<ConvexHullRequest, Poin
 /**
  * Polygon buffer operation
  */
-export class BufferPolygonOperation extends WorkerOperation<BufferRequest, Point[]> {
+export class BufferPolygonOperation extends WorkerOperation<
+  BufferRequest,
+  Point[]
+> {
   readonly type = 'buffer';
-  
+
   async execute(input: BufferRequest): Promise<Point[]> {
     throw new Error('This method should not be called directly');
   }
@@ -119,9 +139,12 @@ export class BufferPolygonOperation extends WorkerOperation<BufferRequest, Point
 /**
  * Point in polygon test operation
  */
-export class PointInPolygonOperation extends WorkerOperation<PointInPolygonRequest, boolean> {
+export class PointInPolygonOperation extends WorkerOperation<
+  PointInPolygonRequest,
+  boolean
+> {
   readonly type = 'pointInPolygon';
-  
+
   async execute(input: PointInPolygonRequest): Promise<boolean> {
     throw new Error('This method should not be called directly');
   }
@@ -151,7 +174,7 @@ export class PolygonProcessingService {
       area: new CalculateAreaOperation(),
       convexHull: new ConvexHullOperation(),
       buffer: new BufferPolygonOperation(),
-      pointInPolygon: new PointInPolygonOperation()
+      pointInPolygon: new PointInPolygonOperation(),
     };
   }
 
@@ -159,14 +182,14 @@ export class PolygonProcessingService {
    * Simplify polygon using Ramer-Douglas-Peucker algorithm
    */
   async simplifyPolygon(
-    points: Point[], 
-    tolerance: number, 
+    points: Point[],
+    tolerance: number,
     preserveTopology: boolean = true
   ): Promise<Point[]> {
     return this.workerPool.execute(this.operations.simplify, {
       points,
       tolerance,
-      preserveTopology
+      preserveTopology,
     });
   }
 
@@ -180,19 +203,22 @@ export class PolygonProcessingService {
     const requests = polygons.map(p => ({
       points: p.points,
       tolerance: p.tolerance,
-      preserveTopology
+      preserveTopology,
     }));
-    
+
     return this.workerPool.executeParallel(this.operations.simplify, requests);
   }
 
   /**
    * Find intersection points between two polygons
    */
-  async findIntersections(polygon1: Point[], polygon2: Point[]): Promise<Point[]> {
+  async findIntersections(
+    polygon1: Point[],
+    polygon2: Point[]
+  ): Promise<Point[]> {
     return this.workerPool.execute(this.operations.intersections, {
       polygon1,
-      polygon2
+      polygon2,
     });
   }
 
@@ -200,14 +226,14 @@ export class PolygonProcessingService {
    * Slice polygon with a line
    */
   async slicePolygon(
-    polygon: Point[], 
-    lineStart: Point, 
+    polygon: Point[],
+    lineStart: Point,
     lineEnd: Point
   ): Promise<Point[][]> {
     return this.workerPool.execute(this.operations.slice, {
       polygon,
       lineStart,
-      lineEnd
+      lineEnd,
     });
   }
 
@@ -221,7 +247,9 @@ export class PolygonProcessingService {
   /**
    * Calculate areas for multiple polygons
    */
-  async calculateAreas(polygonsPoints: Point[][]): Promise<AreaCalculationResponse[]> {
+  async calculateAreas(
+    polygonsPoints: Point[][]
+  ): Promise<AreaCalculationResponse[]> {
     const requests = polygonsPoints.map(points => ({ points }));
     return this.workerPool.executeParallel(this.operations.area, requests);
   }
@@ -237,14 +265,14 @@ export class PolygonProcessingService {
    * Create buffer around polygon
    */
   async bufferPolygon(
-    points: Point[], 
-    distance: number, 
+    points: Point[],
+    distance: number,
     segments: number = 8
   ): Promise<Point[]> {
     return this.workerPool.execute(this.operations.buffer, {
       points,
       distance,
-      segments
+      segments,
     });
   }
 
@@ -254,7 +282,7 @@ export class PolygonProcessingService {
   async pointInPolygon(point: Point, polygon: Point[]): Promise<boolean> {
     return this.workerPool.execute(this.operations.pointInPolygon, {
       point,
-      polygon
+      polygon,
     });
   }
 
@@ -263,7 +291,10 @@ export class PolygonProcessingService {
    */
   async pointsInPolygon(points: Point[], polygon: Point[]): Promise<boolean[]> {
     const requests = points.map(point => ({ point, polygon }));
-    return this.workerPool.executeParallel(this.operations.pointInPolygon, requests);
+    return this.workerPool.executeParallel(
+      this.operations.pointInPolygon,
+      requests
+    );
   }
 
   /**
@@ -311,14 +342,14 @@ let initializationPromise: Promise<PolygonProcessingService> | null = null;
 export function getPolygonProcessingService(): PolygonProcessingService {
   if (!globalPolygonService) {
     let workerPool: WorkerPool;
-    
+
     try {
       workerPool = new WorkerPool('/workers/polygonWorker.js', {
         maxWorkers: Math.min(4, navigator.hardwareConcurrency || 2),
         idleTimeout: 30000,
-        maxTasksPerWorker: 100
+        maxTasksPerWorker: 100,
       });
-      
+
       globalPolygonService = new PolygonProcessingService(workerPool);
     } catch (error) {
       // Clean up any partially constructed worker pool
@@ -328,7 +359,7 @@ export function getPolygonProcessingService(): PolygonProcessingService {
       throw error;
     }
   }
-  
+
   return globalPolygonService;
 }
 
@@ -340,13 +371,13 @@ export async function initializePolygonProcessing(): Promise<PolygonProcessingSe
   if (initializationPromise) {
     return initializationPromise;
   }
-  
+
   initializationPromise = (async () => {
     const service = getPolygonProcessingService();
     await service.warmUp();
     return service;
   })();
-  
+
   try {
     return await initializationPromise;
   } catch (error) {
@@ -364,7 +395,7 @@ export function cleanupPolygonProcessing(): void {
     globalPolygonService.terminate();
     globalPolygonService = null;
   }
-  
+
   // Reset initialization promise to allow clean re-initialization
   initializationPromise = null;
 }

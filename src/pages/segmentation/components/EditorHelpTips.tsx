@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Info } from 'lucide-react';
@@ -9,33 +8,37 @@ interface EditorHelpTipsProps {
   pointAddingMode: boolean;
 }
 
-const EditorHelpTips = ({ editMode, slicingMode, pointAddingMode }: EditorHelpTipsProps) => {
+const EditorHelpTips = ({
+  editMode,
+  slicingMode,
+  pointAddingMode,
+}: EditorHelpTipsProps) => {
   const tipVariants = {
     initial: { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0, transition: { duration: 0.3 } },
-    exit: { opacity: 0, y: 10, transition: { duration: 0.2 } }
+    exit: { opacity: 0, y: 10, transition: { duration: 0.2 } },
   };
 
   const getHelpTips = () => {
     if (editMode) {
       return [
-        "Kliknutím vytvořte nový bod",
-        "Držením Shift vytvoříte automaticky posloupnost bodů",
-        "Uzavřete polygon kliknutím na první bod"
+        'Kliknutím vytvořte nový bod',
+        'Držením Shift vytvoříte automaticky posloupnost bodů',
+        'Uzavřete polygon kliknutím na první bod',
       ];
     }
     if (slicingMode) {
       return [
-        "Klikněte pro začátek řezu",
-        "Klikněte znovu pro dokončení řezu",
-        "Esc zruší řezání"
+        'Klikněte pro začátek řezu',
+        'Klikněte znovu pro dokončení řezu',
+        'Esc zruší řezání',
       ];
     }
     if (pointAddingMode) {
       return [
-        "Najeďte kurzorem nad linii polygonu",
-        "Kliknutím přidáte bod do vybraného polygonu",
-        "Esc ukončí režim přidávání"
+        'Najeďte kurzorem nad linii polygonu',
+        'Kliknutím přidáte bod do vybraného polygonu',
+        'Esc ukončí režim přidávání',
       ];
     }
     return [];
@@ -59,7 +62,7 @@ const EditorHelpTips = ({ editMode, slicingMode, pointAddingMode }: EditorHelpTi
       </div>
       <ul className="space-y-2 text-sm">
         {tips.map((tip, index) => (
-          <motion.li 
+          <motion.li
             key={index}
             className="flex items-start"
             initial={{ opacity: 0, x: -10 }}

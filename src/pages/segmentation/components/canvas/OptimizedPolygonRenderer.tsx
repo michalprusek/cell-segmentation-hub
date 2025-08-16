@@ -3,7 +3,13 @@
  * Implements advanced SVG optimizations and render batching
  */
 
-import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
+import React, {
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect,
+  useState,
+} from 'react';
 import { Polygon } from '@/lib/segmentation';
 import { RenderBatch } from '@/lib/rendering/RenderBatchManager';
 import { VertexDragState } from '@/pages/segmentation/types';
@@ -48,12 +54,15 @@ interface PolygonRenderData {
 /**
  * Optimized SVG path generation with caching
  */
-const generateSVGPath = (polygon: Polygon, useSimplification: boolean = false): string => {
+const generateSVGPath = (
+  polygon: Polygon,
+  useSimplification: boolean = false
+): string => {
   const points = polygon.points;
   if (points.length === 0) return '';
 
   let pathData = `M ${points[0].x},${points[0].y}`;
-  
+
   if (useSimplification && points.length > 50) {
     // Use simplified path for complex polygons
     for (let i = 2; i < points.length; i += 2) {
@@ -65,7 +74,7 @@ const generateSVGPath = (polygon: Polygon, useSimplification: boolean = false): 
       pathData += ` L ${points[i].x},${points[i].y}`;
     }
   }
-  
+
   return pathData + ' Z';
 };
 
@@ -79,26 +88,22 @@ const getPolygonColors = (
   renderQuality: string
 ) => {
   const baseAlpha = renderQuality === 'low' ? 0.6 : 0.8;
-  
+
   if (polygon.type === 'internal') {
     return {
-      fill: isSelected 
-        ? `rgba(14, 165, 233, ${baseAlpha})` 
+      fill: isSelected
+        ? `rgba(14, 165, 233, ${baseAlpha})`
         : `rgba(14, 165, 233, ${baseAlpha * 0.7})`,
-      stroke: isSelected || isHovered 
-        ? '#0EA5E9' 
-        : 'rgba(14, 165, 233, 0.9)',
-      strokeWidth: isSelected ? 2 : 1.5
+      stroke: isSelected || isHovered ? '#0EA5E9' : 'rgba(14, 165, 233, 0.9)',
+      strokeWidth: isSelected ? 2 : 1.5,
     };
   } else {
     return {
-      fill: isSelected 
-        ? `rgba(234, 56, 76, ${baseAlpha})` 
+      fill: isSelected
+        ? `rgba(234, 56, 76, ${baseAlpha})`
         : `rgba(234, 56, 76, ${baseAlpha * 0.7})`,
-      stroke: isSelected || isHovered 
-        ? '#ea384c' 
-        : 'rgba(234, 56, 76, 0.9)',
-      strokeWidth: isSelected ? 2 : 1.5
+      stroke: isSelected || isHovered ? '#ea384c' : 'rgba(234, 56, 76, 0.9)',
+      strokeWidth: isSelected ? 2 : 1.5,
     };
   }
 };
@@ -110,29 +115,35 @@ const OptimizedPolygon = React.memo<{
   renderData: PolygonRenderData;
   onSelect?: (id: string) => void;
 }>(({ renderData, onSelect }) => {
-  const handleClick = useCallback((event: React.MouseEvent) => {
-    event.stopPropagation();
-    if (onSelect) {
-      onSelect(renderData.id);
-    }
-  }, [renderData.id, onSelect]);
+  const handleClick = useCallback(
+    (event: React.MouseEvent) => {
+      event.stopPropagation();
+      if (onSelect) {
+        onSelect(renderData.id);
+      }
+    },
+    [renderData.id, onSelect]
+  );
 
   return (
     <path
       d={renderData.pathData}
       fill={renderData.renderHints.fillEnabled ? renderData.fillColor : 'none'}
-      stroke={renderData.renderHints.strokeEnabled ? renderData.strokeColor : 'none'}
+      stroke={
+        renderData.renderHints.strokeEnabled ? renderData.strokeColor : 'none'
+      }
       strokeWidth={renderData.strokeWidth}
       opacity={renderData.opacity}
       style={{
         cursor: 'pointer',
         transition: renderData.isSelected ? 'none' : 'opacity 0.15s ease',
-        filter: renderData.renderHints.shadowEnabled && renderData.isSelected 
-          ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' 
-          : 'none',
-        shapeRendering: renderData.renderHints.antiAliasing 
-          ? 'geometricPrecision' 
-          : 'optimizeSpeed'
+        filter:
+          renderData.renderHints.shadowEnabled && renderData.isSelected
+            ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))'
+            : 'none',
+        shapeRendering: renderData.renderHints.antiAliasing
+          ? 'geometricPrecision'
+          : 'optimizeSpeed',
       }}
       onClick={handleClick}
       data-polygon-id={renderData.id}
@@ -152,50 +163,68 @@ const BatchRenderer = React.memo<{
   hoveredVertex: { polygonId: string | null; vertexIndex: number | null };
   renderQuality: 'low' | 'medium' | 'high' | 'ultra';
   onSelectPolygon?: (id: string) => void;
-}>(({ batch, selectedPolygonId, hoveredVertex, renderQuality, onSelectPolygon }) => {
-  const renderData = useMemo(() => {
-    return batch.polygons.map((polygon, index) => {
-      const isSelected = polygon.id === selectedPolygonId;
-      const isHovered = hoveredVertex.polygonId === polygon.id;
-      const colors = getPolygonColors(polygon, isSelected, isHovered, renderQuality);
-      
-      return {
-        id: polygon.id,
-        pathData: generateSVGPath(polygon, batch.renderHints.useSimplification),
-        fillColor: colors.fill,
-        strokeColor: colors.stroke,
-        strokeWidth: colors.strokeWidth / batch.renderHints.simplificationTolerance,
-        opacity: 1.0,
-        isSelected,
-        isHovered,
-        priority: batch.priority,
-        renderHints: {
-          fillEnabled: true,
-          strokeEnabled: true,
-          shadowEnabled: renderQuality === 'high' || renderQuality === 'ultra',
-          antiAliasing: renderQuality === 'ultra'
-        }
-      } as PolygonRenderData;
-    });
-  }, [batch, selectedPolygonId, hoveredVertex, renderQuality]);
+}>(
+  ({
+    batch,
+    selectedPolygonId,
+    hoveredVertex,
+    renderQuality,
+    onSelectPolygon,
+  }) => {
+    const renderData = useMemo(() => {
+      return batch.polygons.map((polygon, index) => {
+        const isSelected = polygon.id === selectedPolygonId;
+        const isHovered = hoveredVertex.polygonId === polygon.id;
+        const colors = getPolygonColors(
+          polygon,
+          isSelected,
+          isHovered,
+          renderQuality
+        );
 
-  return (
-    <g 
-      className="polygon-batch"
-      data-batch-id={batch.id}
-      data-batch-priority={batch.priority}
-      data-polygon-count={batch.polygons.length}
-    >
-      {renderData.map((data) => (
-        <OptimizedPolygon
-          key={data.id}
-          renderData={data}
-          onSelect={onSelectPolygon}
-        />
-      ))}
-    </g>
-  );
-});
+        return {
+          id: polygon.id,
+          pathData: generateSVGPath(
+            polygon,
+            batch.renderHints.useSimplification
+          ),
+          fillColor: colors.fill,
+          strokeColor: colors.stroke,
+          strokeWidth:
+            colors.strokeWidth / batch.renderHints.simplificationTolerance,
+          opacity: 1.0,
+          isSelected,
+          isHovered,
+          priority: batch.priority,
+          renderHints: {
+            fillEnabled: true,
+            strokeEnabled: true,
+            shadowEnabled:
+              renderQuality === 'high' || renderQuality === 'ultra',
+            antiAliasing: renderQuality === 'ultra',
+          },
+        } as PolygonRenderData;
+      });
+    }, [batch, selectedPolygonId, hoveredVertex, renderQuality]);
+
+    return (
+      <g
+        className="polygon-batch"
+        data-batch-id={batch.id}
+        data-batch-priority={batch.priority}
+        data-polygon-count={batch.polygons.length}
+      >
+        {renderData.map(data => (
+          <OptimizedPolygon
+            key={data.id}
+            renderData={data}
+            onSelect={onSelectPolygon}
+          />
+        ))}
+      </g>
+    );
+  }
+);
 
 BatchRenderer.displayName = 'BatchRenderer';
 
@@ -215,7 +244,7 @@ const ProgressiveBatchRenderer: React.FC<{
   hoveredVertex,
   renderQuality,
   onSelectPolygon,
-  maxBatchesPerFrame = 5
+  maxBatchesPerFrame = 5,
 }) => {
   const [renderedBatches, setRenderedBatches] = useState<RenderBatch[]>([]);
   const [renderIndex, setRenderIndex] = useState(0);
@@ -244,7 +273,7 @@ const ProgressiveBatchRenderer: React.FC<{
             renderIndex,
             Math.min(renderIndex + maxBatchesPerFrame, sortedBatches.length)
           );
-          
+
           setRenderedBatches(prev => [...prev, ...nextBatches]);
           setRenderIndex(prev => prev + nextBatches.length);
         }
@@ -268,7 +297,7 @@ const ProgressiveBatchRenderer: React.FC<{
 
   return (
     <g className="progressive-polygon-renderer">
-      {renderedBatches.map((batch) => (
+      {renderedBatches.map(batch => (
         <BatchRenderer
           key={batch.id}
           batch={batch}
@@ -300,15 +329,20 @@ const OptimizedPolygonRenderer: React.FC<OptimizedPolygonRendererProps> = ({
   onSelectPolygon,
   onDeletePolygon,
   onSlicePolygon,
-  onEditPolygon
+  onEditPolygon,
 }) => {
-  const [renderMode, setRenderMode] = useState<'immediate' | 'progressive'>('immediate');
+  const [renderMode, setRenderMode] = useState<'immediate' | 'progressive'>(
+    'immediate'
+  );
 
   // Determine render mode based on complexity
   useEffect(() => {
-    const totalPolygons = batches.reduce((sum, batch) => sum + batch.polygons.length, 0);
+    const totalPolygons = batches.reduce(
+      (sum, batch) => sum + batch.polygons.length,
+      0
+    );
     const shouldUseProgressive = totalPolygons > 100 || batches.length > 20;
-    
+
     setRenderMode(shouldUseProgressive ? 'progressive' : 'immediate');
   }, [batches]);
 
@@ -316,7 +350,7 @@ const OptimizedPolygonRenderer: React.FC<OptimizedPolygonRendererProps> = ({
   const renderImmediate = useCallback(() => {
     return (
       <g className="immediate-polygon-renderer">
-        {batches.map((batch) => (
+        {batches.map(batch => (
           <BatchRenderer
             key={batch.id}
             batch={batch}
@@ -328,7 +362,13 @@ const OptimizedPolygonRenderer: React.FC<OptimizedPolygonRendererProps> = ({
         ))}
       </g>
     );
-  }, [batches, selectedPolygonId, hoveredVertex, renderQuality, onSelectPolygon]);
+  }, [
+    batches,
+    selectedPolygonId,
+    hoveredVertex,
+    renderQuality,
+    onSelectPolygon,
+  ]);
 
   // Empty state
   if (polygons.length === 0 || batches.length === 0) {
