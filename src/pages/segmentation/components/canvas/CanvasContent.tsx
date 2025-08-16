@@ -34,7 +34,7 @@ const CanvasContent = ({
       <div
         style={{
           transform: `translate3d(${actualTransform.translateX}px, ${actualTransform.translateY}px, 0) scale(${actualTransform.zoom})`,
-          transformOrigin: 'center center',
+          transformOrigin: '0 0',
           willChange: isZooming ? 'transform' : 'auto',
           position: 'relative',
           backfaceVisibility: 'hidden',

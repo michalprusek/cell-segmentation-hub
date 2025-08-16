@@ -3,7 +3,6 @@ import { logger } from '../utils/logger';
 import { QueueService } from '../services/queueService';
 import { SegmentationService } from '../services/segmentationService';
 import { ImageService } from '../services/imageService';
-import { WebSocketService } from '../services/websocketService';
 
 export class QueueWorker {
   private static instance: QueueWorker;
@@ -15,7 +14,7 @@ export class QueueWorker {
   
   constructor(
     private prisma: PrismaClient,
-    private intervalMs: number = 5000 // Check every 5 seconds
+    private intervalMs = 5000 // Check every 5 seconds
   ) {
     // Initialize services
     this.imageService = new ImageService(prisma);
@@ -91,10 +90,16 @@ export class QueueWorker {
         return; // Nothing to process
       }
       
+      const firstItem = batch[0];
+      if (!firstItem) {
+        logger.warn('Empty batch received', 'QueueWorker');
+        return;
+      }
+      
       logger.info('Processing segmentation queue batch', 'QueueWorker', {
         batchSize: batch.length,
-        model: batch[0]!.model,
-        threshold: batch[0]!.threshold,
+        model: firstItem.model,
+        threshold: firstItem.threshold,
         itemIds: batch.map(item => item.id)
       });
       
@@ -102,14 +107,16 @@ export class QueueWorker {
       try {
         await this.queueService.processBatch(batch);
         
+        const firstItem = batch[0];
         logger.info('Batch processing completed successfully', 'QueueWorker', {
           batchSize: batch.length,
-          model: batch[0]!.model
+          model: firstItem?.model || 'unknown'
         });
       } catch (error) {
+        const firstItem = batch[0];
         logger.error('Failed to process queue batch', error instanceof Error ? error : undefined, 'QueueWorker', {
           batchSize: batch.length,
-          model: batch[0]!.model,
+          model: firstItem?.model || 'unknown',
           itemIds: batch.map(item => item.id)
         });
         

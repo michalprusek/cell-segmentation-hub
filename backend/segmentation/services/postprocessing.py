@@ -91,9 +91,9 @@ class PostprocessingService:
                           region: Any) -> Dict[str, Any]:
         """Convert a single region to polygon format"""
         try:
-            # Find contours - use CHAIN_APPROX_NONE to preserve all contour points
+            # Find contours - use CHAIN_APPROX_SIMPLE to compress segments
             contours, _ = cv2.findContours(
-                region_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+                region_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
             )
             
             if not contours:

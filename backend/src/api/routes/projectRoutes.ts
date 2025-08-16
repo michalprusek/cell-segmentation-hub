@@ -1,6 +1,13 @@
 import { Router } from 'express';
-import { ProjectController } from '../controllers/projectController';
-import { authenticate, requireEmailVerification } from '../../middleware/auth';
+import { 
+  createProject,
+  getProjects,
+  getProject,
+  updateProject,
+  deleteProject,
+  getProjectStats
+} from '../controllers/projectController';
+import { authenticate } from '../../middleware/auth';
 import { validateBody, validateQuery, validateParams } from '../../middleware/validation';
 import { 
   createProjectSchema, 
@@ -23,7 +30,7 @@ router.use(authenticate);
 router.post(
   '/',
   validateBody(createProjectSchema),
-  ProjectController.createProject
+  createProject
 );
 
 /**
@@ -33,7 +40,7 @@ router.post(
 router.get(
   '/',
   validateQuery(projectQuerySchema),
-  ProjectController.getProjects
+  getProjects
 );
 
 /**
@@ -43,7 +50,7 @@ router.get(
 router.get(
   '/:id',
   validateParams(projectIdSchema),
-  ProjectController.getProject
+  getProject
 );
 
 /**
@@ -54,7 +61,7 @@ router.put(
   '/:id',
   validateParams(projectIdSchema),
   validateBody(updateProjectSchema),
-  ProjectController.updateProject
+  updateProject
 );
 
 /**
@@ -64,7 +71,7 @@ router.put(
 router.delete(
   '/:id',
   validateParams(projectIdSchema),
-  ProjectController.deleteProject
+  deleteProject
 );
 
 /**
@@ -74,7 +81,7 @@ router.delete(
 router.get(
   '/:id/stats',
   validateParams(projectIdSchema),
-  ProjectController.getProjectStats
+  getProjectStats
 );
 
 // Mount image routes

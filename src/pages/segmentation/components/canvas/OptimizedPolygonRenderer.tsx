@@ -191,7 +191,7 @@ const BatchRenderer = React.memo<{
           fillColor: colors.fill,
           strokeColor: colors.stroke,
           strokeWidth:
-            colors.strokeWidth / batch.renderHints.simplificationTolerance,
+            colors.strokeWidth / Math.max(batch.renderHints.simplificationTolerance || 1, 0.001),
           opacity: 1.0,
           isSelected,
           isHovered,

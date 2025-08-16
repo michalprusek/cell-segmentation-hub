@@ -1,5 +1,4 @@
-import React, { useMemo } from 'react';
-import { cn } from '@/lib/utils';
+import React from 'react';
 import { Point } from '@/lib/segmentation';
 
 interface CanvasVertexProps {
@@ -9,12 +8,13 @@ interface CanvasVertexProps {
   isSelected: boolean;
   isHovered: boolean;
   isDragging: boolean;
+  dragOffset?: { x: number; y: number };
   zoom: number;
   type?: 'external' | 'internal';
   isStartPoint?: boolean;
 }
 
-const CanvasVertex = React.memo(
+const CanvasVertex = React.memo<CanvasVertexProps>(
   ({
     point,
     polygonId,
@@ -22,96 +22,59 @@ const CanvasVertex = React.memo(
     isSelected,
     isHovered,
     isDragging,
+    dragOffset,
     zoom,
     type = 'external',
     isStartPoint = false,
-  }: CanvasVertexProps) => {
-    // Memoized radius calculation for performance
-    const radius = useMemo(() => {
-      // Base radius is smaller for non-selected polygons
-      const baseSize = isSelected ? 1.0 : 0.7;
+  }) => {
+    // Simple radius calculation
+    const baseRadius = 4;
+    const radius = baseRadius / zoom;
+    const hoverScale = isHovered ? 1.3 : 1;
+    const startPointScale = isStartPoint ? 1.1 : 1;
+    const finalRadius = radius * hoverScale * startPointScale;
 
-      let calculatedRadius;
+    // Simple color scheme
+    const fillColor = type === 'internal' 
+      ? (isDragging ? '#0077cc' : isHovered ? '#3498db' : '#0EA5E9')
+      : (isDragging ? '#c0392b' : isHovered ? '#e74c3c' : '#ea384c');
+    
+    const strokeColor = '#ffffff';
+    const strokeWidth = 1.5 / zoom;
+    const opacity = isSelected ? 1 : 0.8;
 
-      if (zoom > 4) {
-        // At extreme zoom (zoom > 4) enlarge points
-        calculatedRadius = (7 * baseSize) / zoom;
-      } else if (zoom > 3) {
-        // At high zoom (zoom > 3) enlarge points
-        calculatedRadius = (6 * baseSize) / zoom;
-      } else if (zoom < 0.5) {
-        // When zoomed out a lot (zoom < 0.5) significantly reduce vertex size
-        calculatedRadius = (2.5 * baseSize) / zoom;
-      } else if (zoom < 0.7) {
-        // When slightly zoomed out (zoom < 0.7) reduce vertex size
-        calculatedRadius = (3 * baseSize) / zoom;
-      } else {
-        // Default size for normal zoom
-        calculatedRadius = (4 * baseSize) / zoom;
-      }
-
-      // Adjust for start point
-      return isStartPoint ? calculatedRadius * 1.2 : calculatedRadius;
-    }, [zoom, isSelected, isStartPoint]);
-
-    // Memoized vertex color calculation
-    const vertexColor = useMemo(() => {
-      if (type === 'internal') {
-        return isDragging
-          ? '#0077cc'
-          : isHovered
-            ? '#3498db'
-            : isSelected
-              ? '#0EA5E9'
-              : 'rgba(14, 165, 233, 0.7)';
-      } else {
-        return isDragging
-          ? '#c0392b'
-          : isHovered
-            ? '#e74c3c'
-            : isSelected
-              ? '#ea384c'
-              : 'rgba(234, 56, 76, 0.7)';
-      }
-    }, [type, isDragging, isHovered, isSelected]);
-
-    // Memoized stroke width calculation
-    const strokeWidth = useMemo(() => {
-      const baseWidth = isSelected ? 1.5 : 1.0;
-      return baseWidth / zoom;
-    }, [isSelected, zoom]);
-
-    // Memoized class names
-    const classNames = useMemo(() => {
-      return cn(
-        'polygon-vertex transition-colors duration-150',
-        isDragging ? 'cursor-grabbing' : 'cursor-grab',
-        isHovered && 'z-10',
-        isSelected &&
-          (type === 'internal' ? 'filter-glow-blue' : 'filter-glow-red')
-      );
-    }, [isDragging, isHovered, isSelected, type]);
+    // Calculate actual position with drag offset
+    const actualX = isDragging && dragOffset ? point.x + dragOffset.x : point.x;
+    const actualY = isDragging && dragOffset ? point.y + dragOffset.y : point.y;
 
     return (
       <circle
-        cx={point.x}
-        cy={point.y}
-        r={radius}
-        fill={vertexColor}
-        stroke="#fff"
+        cx={actualX}
+        cy={actualY}
+        r={finalRadius}
+        fill={fillColor}
+        stroke={strokeColor}
         strokeWidth={strokeWidth}
-        className={classNames}
-        filter={isSelected || isHovered ? 'url(#point-shadow)' : ''}
+        opacity={opacity}
         data-polygon-id={polygonId}
         data-vertex-index={vertexIndex}
-        vectorEffect="non-scaling-stroke"
-        shapeRendering="optimizeSpeed"
-        pointerEvents="visible"
+        style={{
+          cursor: isDragging ? 'grabbing' : 'grab',
+          transition: isDragging ? 'none' : 'all 0.15s ease-out',
+          pointerEvents: 'all',
+        }}
       />
     );
   },
   (prevProps, nextProps) => {
-    // Custom comparison for optimal performance
+    // Custom comparison for optimization
+    const sameDragOffset = 
+      (!prevProps.dragOffset && !nextProps.dragOffset) ||
+      (prevProps.dragOffset && 
+       nextProps.dragOffset &&
+       prevProps.dragOffset.x === nextProps.dragOffset.x &&
+       prevProps.dragOffset.y === nextProps.dragOffset.y);
+    
     return (
       prevProps.point.x === nextProps.point.x &&
       prevProps.point.y === nextProps.point.y &&
@@ -122,7 +85,8 @@ const CanvasVertex = React.memo(
       prevProps.isDragging === nextProps.isDragging &&
       prevProps.zoom === nextProps.zoom &&
       prevProps.type === nextProps.type &&
-      prevProps.isStartPoint === nextProps.isStartPoint
+      prevProps.isStartPoint === nextProps.isStartPoint &&
+      sameDragOffset
     );
   }
 );

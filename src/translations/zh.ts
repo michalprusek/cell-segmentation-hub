@@ -286,7 +286,7 @@ export default {
     },
     toolbar: {
       mode: '模式',
-      keyboard: '按键: {key}',
+      keyboard: '按键: {{key}}',
       requiresSelection: '需要选择多边形',
       requiresPolygonSelection: '需要选择多边形',
       select: '选择',

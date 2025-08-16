@@ -198,9 +198,8 @@ export function useOptimizedPolygonRendering(
       }
 
       // Clear performance monitor
-      const monitor = performanceMonitor.current;
-      if (monitor) {
-        monitor.reset?.();
+      if (performanceMonitor.current) {
+        performanceMonitor.current.reset?.();
       }
     };
   }, [opts.enableWorkers, opts.targetFPS]);
@@ -331,6 +330,7 @@ export function useOptimizedPolygonRendering(
     } finally {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     polygons,
     visibilityContext,
@@ -373,8 +373,9 @@ export function useOptimizedPolygonRendering(
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      const monitor = performanceMonitor.current;
-      monitor.reset();
+      if (performanceMonitor.current) {
+        performanceMonitor.current.reset();
+      }
     };
   }, []);
 
@@ -437,9 +438,7 @@ export function usePolygonProcessing() {
       if (serviceRef.current) return serviceRef.current;
 
       if (!servicePromiseRef.current) {
-        servicePromiseRef.current = Promise.resolve(
-          getPolygonProcessingService()
-        );
+        throw new Error('PolygonProcessingService not initialized');
       }
 
       const service = await servicePromiseRef.current;

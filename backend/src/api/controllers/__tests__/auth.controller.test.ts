@@ -1,30 +1,29 @@
 import request from 'supertest'
 import express from 'express'
-import { AuthController } from '../auth.controller'
-import { AuthService } from '../../services/auth.service'
-import { prismaMock } from '../../../test/setup'
+import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { register, login, refreshToken, logout } from '../authController.js'
+import { AuthService } from '../../../services/authService.js'
+import { prismaMock } from '../../../test/setup.js'
 
 // Mock AuthService
-jest.mock('../../services/auth.service')
-const MockAuthService = AuthService as jest.MockedClass<typeof AuthService>
+jest.mock('../../../services/authService.js')
+const MockedAuthService = AuthService as jest.Mocked<typeof AuthService>
 
-describe('AuthController', () => {
+describe('Auth Controller Functions', () => {
   let app: express.Application
-  let authService: jest.Mocked<AuthService>
-  let authController: AuthController
 
   beforeEach(() => {
     app = express()
     app.use(express.json())
     
-    authService = new MockAuthService() as jest.Mocked<AuthService>
-    authController = new AuthController(authService)
-    
     // Setup routes
-    app.post('/auth/register', authController.register.bind(authController))
-    app.post('/auth/login', authController.login.bind(authController))
-    app.post('/auth/refresh', authController.refreshToken.bind(authController))
-    app.post('/auth/logout', authController.logout.bind(authController))
+    app.post('/auth/register', register)
+    app.post('/auth/login', login)
+    app.post('/auth/refresh', refreshToken)
+    app.post('/auth/logout', logout)
+    
+    // Reset mocks
+    jest.clearAllMocks()
   })
 
   describe('POST /auth/register', () => {

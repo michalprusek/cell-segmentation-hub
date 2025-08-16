@@ -305,7 +305,7 @@ export default {
     },
     toolbar: {
       mode: 'Mode',
-      keyboard: 'Touche: {key}',
+      keyboard: 'Touche: {{key}}',
       requiresSelection: "Nécessite la sélection d'un polygone",
       requiresPolygonSelection: "Nécessite la sélection d'un polygone",
       select: 'Sélectionner',

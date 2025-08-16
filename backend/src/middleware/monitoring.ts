@@ -66,7 +66,7 @@ const uploadedFiles = new client.Counter({
 });
 
 // Middleware pro monitoring HTTP požadavků
-export function createMonitoringMiddleware() {
+export function createMonitoringMiddleware(): (req: Request, res: Response, next: NextFunction) => void {
   return (req: Request, res: Response, next: NextFunction) => {
     const startTime = Date.now();
     
@@ -102,7 +102,7 @@ export function createMonitoringMiddleware() {
 }
 
 // Endpoint pro Prometheus scraping
-export function getMetricsEndpoint() {
+export function getMetricsEndpoint(): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response) => {
     try {
       res.set('Content-Type', register.contentType);
@@ -116,27 +116,28 @@ export function getMetricsEndpoint() {
 }
 
 // Funkce pro trackování ML modelů
-export function trackMLModelInference(modelName: string, duration: number, success: boolean) {
+export function trackMLModelInference(modelName: string, duration: number, success: boolean): void {
   const status = success ? 'success' : 'error';
   mlModelInferenceTime.observe({ model_name: modelName, status }, duration);
   mlModelRequests.inc({ model_name: modelName, status });
 }
 
 // Funkce pro trackování uploadů
-export function trackFileUpload(fileType: string, success: boolean) {
+export function trackFileUpload(fileType: string, success: boolean): void {
   const status = success ? 'success' : 'error';
   uploadedFiles.inc({ file_type: fileType, status });
 }
 
 // Funkce pro aktualizaci databázových spojení
-export function updateDatabaseConnections(count: number) {
+export function updateDatabaseConnections(count: number): void {
   databaseConnections.set(count);
 }
 
 // Health check pro monitoring systém
-export function getMonitoringHealth() {
+export function getMonitoringHealth(): {healthy: boolean; message: string; metricsCount?: number; lastScrape?: string; error?: string} {
   try {
-    const metrics = register.getSingleMetricAsString('process_cpu_user_seconds_total');
+    // Check if register is working by attempting to get metrics
+    register.getSingleMetricAsString('process_cpu_user_seconds_total');
     return {
       healthy: true,
       message: 'Monitoring system is operational',

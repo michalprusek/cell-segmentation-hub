@@ -1,9 +1,10 @@
 import { logger } from '@/lib/logger';
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Microscope, Image, FileUp, FileClock } from 'lucide-react';
+import { Microscope, Image, FileUp, HardDrive } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getErrorMessage } from '@/types';
 
 interface StatCardProps {
@@ -65,13 +66,14 @@ const StatCard = ({
 
 const StatsOverview = () => {
   const { user } = useAuth();
+  const { t } = useLanguage();
   const [projectCount, setProjectCount] = useState(0);
   const [imageCount, setImageCount] = useState(0);
   const [completedImageCount, setCompletedImageCount] = useState(0);
   const [todayUploadCount, setTodayUploadCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [avgProcessingTime, setAvgProcessingTime] = useState('2.7s');
-  const [processedFaster, setProcessedFaster] = useState('0.3s');
+  const [storageUsed, setStorageUsed] = useState('0 MB');
+  const [storageGrowth, setStorageGrowth] = useState('0 MB');
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -135,11 +137,27 @@ const StatsOverview = () => {
         setCompletedImageCount(completedImages);
         setTodayUploadCount(todayImages);
 
-        // TODO: Replace with real metrics from API
-        // For now, show placeholder values clearly marked as demo data
-        if (completedImages > 0) {
-          setAvgProcessingTime('~12.5s (demo)');
-          setProcessedFaster('~0.3s (demo)');
+        // Fetch storage stats
+        try {
+          const storageStats = await apiClient.getUserStorageStats();
+          
+          // Format storage used based on size
+          let formattedStorage = '0 MB';
+          if (storageStats.totalStorageGB >= 1) {
+            formattedStorage = `${storageStats.totalStorageGB} GB`;
+          } else {
+            formattedStorage = `${storageStats.totalStorageMB} MB`;
+          }
+          setStorageUsed(formattedStorage);
+          
+          // Calculate growth (placeholder for now - could be enhanced with historical data)
+          if (storageStats.totalImages > 0) {
+            const avgSize = storageStats.averageImageSizeMB;
+            setStorageGrowth(`~${avgSize} MB per image`);
+          }
+        } catch (error) {
+          logger.error('Error fetching storage stats:', error);
+          // Keep default values on error
         }
       } catch (error: unknown) {
         logger.error('Error fetching stats:', error);
@@ -187,14 +205,16 @@ const StatsOverview = () => {
       icon: <FileUp size={16} />,
     },
     {
-      title: 'Segmentation Time',
-      value: avgProcessingTime,
-      description: 'Average per image',
-      icon: <FileClock size={16} />,
-      trend: {
-        value: `${processedFaster} faster than before`,
-        isPositive: true,
-      },
+      title: t('dashboard.storageUsed') || 'Storage Used',
+      value: loading ? '...' : storageUsed,
+      description: 'Total space used',
+      icon: <HardDrive size={16} />,
+      trend: storageGrowth !== '0 MB'
+        ? {
+            value: storageGrowth,
+            isPositive: false,
+          }
+        : undefined,
     },
   ];
 

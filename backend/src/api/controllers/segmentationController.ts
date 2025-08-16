@@ -27,7 +27,7 @@ class SegmentationController {
   /**
    * Validate required route parameters
    */
-  private validateParams(params: Record<string, any>, required: string[], res: Response): boolean {
+  private validateParams(params: Record<string, string | undefined>, required: string[], res: Response): boolean {
     for (const param of required) {
       if (!params[param]) {
         ResponseHelper.validationError(res, `Missing required parameter: ${param}`);
@@ -40,32 +40,32 @@ class SegmentationController {
   /**
    * Get available segmentation models
    */
-  getAvailableModels = async (req: Request, res: Response) => {
+  getAvailableModels = async (req: Request, res: Response): Promise<void> => {
     try {
       const models = await this.segmentationService.getAvailableModels();
       
-      return ResponseHelper.success(res, models, 'Dostupné modely načteny');
+      ResponseHelper.success(res, models, 'Dostupné modely načteny');
     } catch (error) {
       logger.error('Failed to get available models', error instanceof Error ? error : undefined, 'SegmentationController');
-      return ResponseHelper.internalError(res, error as Error, 'Chyba při načítání dostupných modelů');
+      ResponseHelper.internalError(res, error as Error, 'Chyba při načítání dostupných modelů');
     }
   };
 
   /**
    * Check segmentation service health
    */
-  checkHealth = async (req: Request, res: Response) => {
+  checkHealth = async (req: Request, res: Response): Promise<void> => {
     try {
       const isHealthy = await this.segmentationService.checkServiceHealth();
       
       if (isHealthy) {
-        return ResponseHelper.success(res, { healthy: true }, 'Segmentační služba je dostupná');
+        ResponseHelper.success(res, { healthy: true }, 'Segmentační služba je dostupná');
       } else {
-        return ResponseHelper.serviceUnavailable(res, 'Segmentační služba není dostupná');
+        ResponseHelper.serviceUnavailable(res, 'Segmentační služba není dostupná');
       }
     } catch (error) {
       logger.error('Failed to check service health', error instanceof Error ? error : undefined, 'SegmentationController');
-      return ResponseHelper.serviceUnavailable(res, 'Chyba při kontrole segmentační služby');
+      ResponseHelper.serviceUnavailable(res, 'Chyba při kontrole segmentační služby');
     }
   };
 
@@ -77,7 +77,9 @@ class SegmentationController {
       const { imageId } = req.params;
       const { model = 'hrnet', threshold = 0.5 } = req.body;
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       // Validate parameters
       if (!['hrnet', 'resunet_advanced', 'resunet_small'].includes(model)) {
@@ -129,7 +131,9 @@ class SegmentationController {
     try {
       const { imageId } = req.params;
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       if (!imageId) {
         ResponseHelper.badRequest(res, 'Image ID is required');
@@ -165,17 +169,21 @@ class SegmentationController {
       
       // Validate user authentication
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
       
       // Validate required parameters
-      if (!this.validateParams(req.params, ['imageId'], res)) return;
+      if (!this.validateParams(req.params, ['imageId'], res)) {
+        return;
+      }
       
       if (!polygons || !Array.isArray(polygons)) {
         ResponseHelper.validationError(res, 'Polygony musí být pole');
         return;
       }
 
-      const result = await this.segmentationService.updateSegmentationResults(imageId!, polygons, userId!);
+      const result = await this.segmentationService.updateSegmentationResults(imageId as string, polygons, userId);
 
       ResponseHelper.success(res, result, 'Výsledky segmentace aktualizovány');
 
@@ -199,12 +207,16 @@ class SegmentationController {
       
       // Validate user authentication
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
       
       // Validate required parameters
-      if (!this.validateParams(req.params, ['imageId'], res)) return;
+      if (!this.validateParams(req.params, ['imageId'], res)) {
+        return;
+      }
 
-      await this.segmentationService.deleteSegmentationResults(imageId!, userId!);
+      await this.segmentationService.deleteSegmentationResults(imageId as string, userId);
 
       ResponseHelper.success(res, undefined, 'Výsledky segmentace smazány');
 
@@ -228,7 +240,9 @@ class SegmentationController {
       
       // Validate user authentication
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       // Validate parameters
       if (!Array.isArray(imageIds) || imageIds.length === 0) {
@@ -286,12 +300,21 @@ class SegmentationController {
       
       // Validate user authentication
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
       
       // Validate required parameters
-      if (!this.validateParams(req.params, ['projectId'], res)) return;
+      if (!this.validateParams(req.params, ['projectId'], res)) {
+        return;
+      }
 
-      const stats = await this.segmentationService.getProjectSegmentationStats(projectId!, userId!);
+      if (!projectId || !userId) {
+        ResponseHelper.badRequest(res, 'Missing required parameters');
+        return;
+      }
+      
+      const stats = await this.segmentationService.getProjectSegmentationStats(projectId, userId);
 
       ResponseHelper.success(res, stats, 'Statistiky segmentace načteny');
 

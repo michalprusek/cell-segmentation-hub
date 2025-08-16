@@ -215,8 +215,8 @@ class ModelLoader:
             # Postprocess
             binary_mask = self.postprocess_mask(output, original_size, threshold)
         
-            # Find contours for polygon extraction - use CHAIN_APPROX_NONE to preserve all points
-            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+            # Find contours for polygon extraction - use CHAIN_APPROX_SIMPLE to compress segments
+            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
             # Convert contours to polygons - preserve full resolution without simplification
             polygons = []

@@ -3,14 +3,6 @@ import { ImageService } from '../../services/imageService';
 import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/index';
-import {
-  imageQuerySchema,
-  projectIdSchema,
-  projectImageParamsSchema,
-  ImageQueryParams,
-  ProjectIdParams,
-  ProjectImageParams
-} from '../../types/validation';
 
 export class ImageController {
   private imageService: ImageService;
@@ -25,11 +17,26 @@ export class ImageController {
    */
   uploadImages = async (req: Request, res: Response): Promise<void> => {
     try {
-      const userId = req.user!.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
       const { id: projectId } = req.params;
+      if (!projectId) {
+        ResponseHelper.badRequest(res, 'Project ID is required');
+        return;
+      }
 
       // Check if files were uploaded
-      const files = req.files as Express.Multer.File[];
+      const files = req.files as Array<{
+        fieldname: string;
+        originalname: string;
+        path: string;
+        size: number;
+        buffer: Buffer;
+        mimetype: string;
+      }> | undefined;
       if (!files || files.length === 0) {
         ResponseHelper.validationError(res, 'Je nutné vybrat alespoň jeden soubor');
         return;
@@ -72,8 +79,8 @@ export class ImageController {
 
       // Upload images
       const uploadedImages = await this.imageService.uploadImages(
-        projectId!,
-        userId!,
+        projectId,
+        userId,
         uploadFiles
       );
 
@@ -103,14 +110,55 @@ export class ImageController {
    */
   getImages = async (req: Request, res: Response): Promise<void> => {
     try {
-      const userId = req.user!.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
       const { id: projectId } = req.params;
-      const queryParams = req.query as any; // Already validated by middleware
-
       if (!projectId) {
         ResponseHelper.badRequest(res, 'Project ID is required');
         return;
       }
+
+      // Parse query parameters with defaults
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const sortByRaw = (req.query.sortBy as string) || 'createdAt';
+      const sortOrderRaw = (req.query.sortOrder as string) || 'desc';
+      const statusRaw = req.query.status as string | undefined;
+
+      // Validate sortBy
+      const allowedSortFields = ['name', 'createdAt', 'updatedAt', 'fileSize'];
+      if (!allowedSortFields.includes(sortByRaw)) {
+        res.status(400).json({ error: 'Invalid query parameter', field: 'sortBy' });
+        return;
+      }
+
+      // Validate sortOrder
+      if (!['asc', 'desc'].includes(sortOrderRaw)) {
+        res.status(400).json({ error: 'Invalid query parameter', field: 'sortOrder' });
+        return;
+      }
+
+      // Validate status
+      const allowedStatuses = ['pending', 'processing', 'completed', 'failed'];
+      if (statusRaw && !allowedStatuses.includes(statusRaw)) {
+        res.status(400).json({ error: 'Invalid query parameter', field: 'status' });
+        return;
+      }
+
+      const sortBy = sortByRaw;
+      const sortOrder = sortOrderRaw;
+      const status = statusRaw;
+
+      const queryParams = {
+        page,
+        limit,
+        sortBy: sortBy as 'name' | 'createdAt' | 'updatedAt' | 'fileSize',
+        sortOrder: sortOrder as 'asc' | 'desc',
+        status: status as 'pending' | 'processing' | 'completed' | 'failed' | undefined
+      };
 
       logger.info('Getting project images', 'ImageController', {
         projectId,
@@ -147,7 +195,11 @@ export class ImageController {
    */
   getImage = async (req: Request, res: Response): Promise<void> => {
     try {
-      const userId = req.user!.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
       const { imageId } = req.params;
 
       if (!imageId) {
@@ -185,7 +237,11 @@ export class ImageController {
    */
   deleteImage = async (req: Request, res: Response): Promise<void> => {
     try {
-      const userId = req.user!.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
       const { imageId } = req.params;
 
       if (!imageId) {
@@ -223,7 +279,11 @@ export class ImageController {
    */
   getImageWithSegmentation = async (req: Request, res: Response): Promise<void> => {
     try {
-      const userId = req.user!.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
       const { imageId } = req.params;
       const { includeSegmentation } = req.query;
 
@@ -257,8 +317,9 @@ export class ImageController {
           try {
             parsedPolygons = JSON.parse(segmentation.polygons);
           } catch (error) {
-            logger.error('Failed to parse segmentation polygons:', error);
-            return ResponseHelper.error(res, 'Invalid segmentation data format', 500);
+            logger.error('Failed to parse segmentation polygons:', error instanceof Error ? error : new Error(String(error)), 'ImageController');
+            ResponseHelper.internalError(res, new Error('Invalid segmentation data format'));
+            return;
           }
           ResponseHelper.success(res, {
             ...image,
@@ -290,7 +351,6 @@ export class ImageController {
         imageId: req.params.imageId
       });
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
       ResponseHelper.internalError(res, error as Error);
     }
   };
@@ -301,7 +361,11 @@ export class ImageController {
    */
   getImageStats = async (req: Request, res: Response): Promise<void> => {
     try {
-      const userId = req.user!.id;
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
       const { id: projectId } = req.params;
 
       if (!projectId) {

@@ -68,19 +68,22 @@ export function debounce<T extends unknown[]>(
   callback: (...args: T) => void,
   delay: number
 ): { (...args: T): void; cancel: () => void } {
-  let timeoutId: ReturnType<typeof setTimeout>;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
   const debouncedFunction = (...args: T) => {
-    clearTimeout(timeoutId);
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
     timeoutId = setTimeout(() => callback(...args), delay);
   };
 
   debouncedFunction.cancel = () => {
-    clearTimeout(timeoutId);
+    if (timeoutId !== undefined) clearTimeout(timeoutId);
   };
 
   return debouncedFunction;
 }
+
+// Helper type for debounced functions
+type DebouncedVoid = (() => void) & { cancel: () => void };
 
 // Progressive rendering state manager
 export class ProgressiveRenderer {
@@ -88,7 +91,7 @@ export class ProgressiveRenderer {
   private onAnimationStart?: () => void;
   private onAnimationEnd?: () => void;
 
-  private endAnimation: () => void;
+  private endAnimation: DebouncedVoid;
 
   constructor(
     onAnimationStart?: () => void,
@@ -116,9 +119,7 @@ export class ProgressiveRenderer {
 
   dispose() {
     // Cancel any pending debounced calls
-    if (this.endAnimation && typeof this.endAnimation.cancel === 'function') {
-      this.endAnimation.cancel();
-    }
+    this.endAnimation.cancel();
 
     // Clear references to prevent memory leaks
     this.onAnimationStart = undefined;

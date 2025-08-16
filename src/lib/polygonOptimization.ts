@@ -139,6 +139,11 @@ export const shouldRenderVertices = (
   isSelected: boolean,
   isHovered: boolean = false
 ): boolean => {
+  // Always show vertices for selected polygons regardless of zoom level
+  return isSelected || isHovered;
+  
+  // Original code kept for reference:
+  /*
   if (zoom < 0.5) {
     // Never render vertices at very low zoom
     return false;
@@ -149,6 +154,7 @@ export const shouldRenderVertices = (
     // Render vertices for selected polygons at high zoom
     return isSelected;
   }
+  */
 };
 
 // Level of Detail (LOD) system for vertex decimation
@@ -182,6 +188,11 @@ export const getDecimatedVertices = (
   points: Point[],
   zoom: number
 ): Point[] => {
+  // DISABLED DECIMATION - Always return all vertices for full visibility
+  return points;
+  
+  // Original decimation code kept for reference:
+  /*
   const step = getVertexDecimationStep(zoom, points.length);
 
   if (step <= 0) return []; // Don't render vertices
@@ -215,6 +226,7 @@ export const getDecimatedVertices = (
   }
 
   return decimatedPoints;
+  */
 };
 
 // Calculate viewport bounds from current transform

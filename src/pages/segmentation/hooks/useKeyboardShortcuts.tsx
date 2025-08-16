@@ -178,7 +178,9 @@ export const useKeyboardShortcuts = ({
           if (
             selectedPolygonId &&
             handleDeletePolygon &&
-            (editMode === EditMode.View || editMode === EditMode.EditVertices)
+            (editMode === EditMode.View || 
+             editMode === EditMode.EditVertices || 
+             editMode === EditMode.DeletePolygon)
           ) {
             event.preventDefault();
             handleDeletePolygon();

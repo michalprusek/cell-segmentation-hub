@@ -3,6 +3,23 @@ import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
 import { ZodError } from 'zod';
 
+// Interface for Prisma errors
+interface PrismaError extends Error {
+  code: string;
+  meta?: {
+    target?: string[];
+    field_name?: string;
+    [key: string]: unknown;
+  };
+}
+
+// Interface for Multer upload errors
+interface MulterError extends Error {
+  code: string;
+  field?: string;
+  storageErrors?: Error[];
+}
+
 /**
  * Global error handling middleware
  */
@@ -11,7 +28,7 @@ export const errorHandler = (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): void => {
   // If response was already sent, delegate to default Express error handler
   if (res.headersSent) {
     return next(error);
@@ -31,110 +48,127 @@ export const errorHandler = (
       errors[path].push(err.message);
     });
 
-    return ResponseHelper.validationError(res, errors, context);
+    ResponseHelper.validationError(res, errors, context);
+    return;
   }
 
   // Handle Prisma errors
   if (error.name === 'PrismaClientKnownRequestError') {
-    return handlePrismaError(error as any, res, context);
+    handlePrismaError(error as PrismaError, res, context);
+    return;
   }
 
   // Handle JWT errors
   if (error.name === 'JsonWebTokenError') {
-    return ResponseHelper.unauthorized(res, 'Neplatný token', context);
+    ResponseHelper.unauthorized(res, 'Neplatný token', context);
+    return;
   }
 
   if (error.name === 'TokenExpiredError') {
-    return ResponseHelper.unauthorized(res, 'Token vypršel', context);
+    ResponseHelper.unauthorized(res, 'Token vypršel', context);
+    return;
   }
 
   // Handle multer errors (file upload)
   if (error.name === 'MulterError') {
-    return handleMulterError(error as any, res, context);
+    handleMulterError(error as MulterError, res, context);
+    return;
   }
 
   // Handle custom API errors
   if (error instanceof ApiError) {
-    return ResponseHelper.error(res, error, error.statusCode, undefined, context);
+    ResponseHelper.error(res, error, error.statusCode, undefined, context);
+    return;
   }
 
   // Handle generic errors based on message patterns
   if (error.message.includes('ENOENT')) {
-    return ResponseHelper.notFound(res, 'Soubor nebyl nalezen', context);
+    ResponseHelper.notFound(res, 'Soubor nebyl nalezen', context);
+    return;
   }
 
   if (error.message.includes('EACCES')) {
-    return ResponseHelper.forbidden(res, 'Nedostatečná oprávnění k souboru', context);
+    ResponseHelper.forbidden(res, 'Nedostatečná oprávnění k souboru', context);
+    return;
   }
 
   if (error.message.includes('EMFILE') || error.message.includes('ENFILE')) {
-    return ResponseHelper.serviceUnavailable(res, 'Server je přetížený', context);
+    ResponseHelper.serviceUnavailable(res, 'Server je přetížený', context);
+    return;
   }
 
   // Default to internal server error
-  return ResponseHelper.internalError(res, error, undefined, context);
+  ResponseHelper.internalError(res, error, undefined, context);
 };
 
 /**
  * Handle Prisma database errors
  */
-function handlePrismaError(error: any, res: Response, context: string) {
+function handlePrismaError(error: PrismaError, res: Response, context: string): void {
   const { code, meta } = error;
 
   switch (code) {
-    case 'P2002':
+    case 'P2002': {
       // Unique constraint violation
       const field = meta?.target?.[0] || 'pole';
-      return ResponseHelper.conflict(
+      ResponseHelper.conflict(
         res,
         `Hodnota pro ${field} již existuje`,
         context
       );
+      break;
+    }
 
     case 'P2025':
       // Record not found
-      return ResponseHelper.notFound(
+      ResponseHelper.notFound(
         res,
         'Záznam nebyl nalezen',
         context
       );
+      break;
 
     case 'P2003':
       // Foreign key constraint violation
-      return ResponseHelper.conflict(
+      ResponseHelper.conflict(
         res,
         'Nelze provést operaci kvůli vazbám na jiné záznamy',
         context
       );
+      break;
 
-    case 'P2011':
+    case 'P2011': {
       // Null constraint violation
       const nullField = meta?.column_name || 'povinné pole';
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         `${nullField} je povinné`,
         context
       );
+      break;
+    }
 
     case 'P2012':
       // Missing required value
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Chybí povinná hodnota',
         context
       );
+      break;
 
     case 'P2014':
       // Invalid ID
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Neplatné ID',
         context
       );
+      break;
 
     default:
       logger.error(`Neznámá Prisma chyba: ${code}`, error, context);
-      return ResponseHelper.internalError(
+      ResponseHelper.internalError(
         res,
         error,
         'Chyba databáze',
@@ -146,59 +180,66 @@ function handlePrismaError(error: any, res: Response, context: string) {
 /**
  * Handle Multer file upload errors
  */
-function handleMulterError(error: any, res: Response, context: string) {
+function handleMulterError(error: MulterError, res: Response, context: string): void {
   switch (error.code) {
     case 'LIMIT_FILE_SIZE':
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Soubor je příliš velký',
         context
       );
+      break;
 
     case 'LIMIT_FILE_COUNT':
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Příliš mnoho souborů',
         context
       );
+      break;
 
     case 'LIMIT_UNEXPECTED_FILE':
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Neočekávaný soubor',
         context
       );
+      break;
 
     case 'LIMIT_FIELD_KEY':
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Neplatný název pole',
         context
       );
+      break;
 
     case 'LIMIT_FIELD_VALUE':
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Hodnota pole je příliš dlouhá',
         context
       );
+      break;
 
     case 'LIMIT_FIELD_COUNT':
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Příliš mnoho polí',
         context
       );
+      break;
 
     case 'LIMIT_PART_COUNT':
-      return ResponseHelper.validationError(
+      ResponseHelper.validationError(
         res,
         'Příliš mnoho částí',
         context
       );
+      break;
 
     default:
-      return ResponseHelper.internalError(
+      ResponseHelper.internalError(
         res,
         error,
         'Chyba při nahrávání souboru',
@@ -214,7 +255,7 @@ export class ApiError extends Error {
   public statusCode: number;
   public code: string;
 
-  constructor(message: string, statusCode: number = 400, code: string = 'API_ERROR') {
+  constructor(message: string, statusCode = 400, code = 'API_ERROR') {
     super(message);
     this.name = 'ApiError';
     this.statusCode = statusCode;
@@ -226,27 +267,27 @@ export class ApiError extends Error {
     }
   }
 
-  static badRequest(message: string, code: string = 'BAD_REQUEST') {
+  static badRequest(message: string, code = 'BAD_REQUEST'): ApiError {
     return new ApiError(message, 400, code);
   }
 
-  static unauthorized(message: string = 'Neautorizovaný přístup', code: string = 'UNAUTHORIZED') {
+  static unauthorized(message = 'Neautorizovaný přístup', code = 'UNAUTHORIZED'): ApiError {
     return new ApiError(message, 401, code);
   }
 
-  static forbidden(message: string = 'Nedostatečná oprávnění', code: string = 'FORBIDDEN') {
+  static forbidden(message = 'Nedostatečná oprávnění', code = 'FORBIDDEN'): ApiError {
     return new ApiError(message, 403, code);
   }
 
-  static notFound(message: string = 'Nenalezeno', code: string = 'NOT_FOUND') {
+  static notFound(message = 'Nenalezeno', code = 'NOT_FOUND'): ApiError {
     return new ApiError(message, 404, code);
   }
 
-  static conflict(message: string = 'Konflikt', code: string = 'CONFLICT') {
+  static conflict(message = 'Konflikt', code = 'CONFLICT'): ApiError {
     return new ApiError(message, 409, code);
   }
 
-  static internalError(message: string = 'Interní chyba serveru', code: string = 'INTERNAL_ERROR') {
+  static internalError(message = 'Interní chyba serveru', code = 'INTERNAL_ERROR'): ApiError {
     return new ApiError(message, 500, code);
   }
 }
@@ -254,6 +295,6 @@ export class ApiError extends Error {
 /**
  * Middleware to handle 404 errors
  */
-export const notFoundHandler = (req: Request, res: Response, next: NextFunction) => {
-  return ResponseHelper.notFound(res, `Endpoint ${req.method} ${req.path} nebyl nalezen`);
+export const notFoundHandler = (req: Request, res: Response, _next: NextFunction): void => {
+  ResponseHelper.notFound(res, `Endpoint ${req.method} ${req.path} nebyl nalezen`);
 };

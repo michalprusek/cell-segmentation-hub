@@ -168,15 +168,6 @@ const StatusBar = ({
         </div>
       </div>
 
-      {/* Center - Mode indicator */}
-      {editMode && (
-        <div
-          className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border ${getModeColor()}`}
-        >
-          {getModeIcon()}
-          <span className="text-xs font-medium">{getModeLabel()}</span>
-        </div>
-      )}
 
       {/* Right side - Polygon count */}
       <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">

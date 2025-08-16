@@ -1,7 +1,7 @@
 import multer from 'multer';
 import path from 'path';
 import { Request, Response, NextFunction } from 'express';
-import { config } from '../utils/config';
+import type { Express } from 'express-serve-static-core';
 import { SUPPORTED_MIME_TYPES, SUPPORTED_EXTENSIONS, MAX_FILE_SIZE } from '../storage/interface';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
@@ -32,7 +32,7 @@ const upload = multer({
     // Check file extension
     const fileExtension = path.extname(file.originalname).toLowerCase();
     
-    if (!SUPPORTED_EXTENSIONS.includes(fileExtension as any)) {
+    if (!SUPPORTED_EXTENSIONS.includes(fileExtension as typeof SUPPORTED_EXTENSIONS[number])) {
       logger.warn('File upload rejected - unsupported extension', 'UploadMiddleware', {
         filename: file.originalname,
         extension: fileExtension,

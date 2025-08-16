@@ -1,18 +1,21 @@
-import { Router } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { queueController } from '../controllers/queueController';
 import { authenticate } from '../../middleware/auth';
 import { body, param } from 'express-validator';
-import { validationResult } from 'express-validator';
+import { validationResult, ValidationError } from 'express-validator';
 import { ResponseHelper } from '../../utils/response';
 
 // Middleware to handle express-validator results
-const handleValidation = (req: any, res: any, next: any): void => {
+const handleValidation = (req: Request, res: Response, next: NextFunction): void => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     const errorMap = errors.array().reduce((acc, error) => {
-      const field = (error as any).param || 'unknown';
-      if (!acc[field]) acc[field] = [];
-      acc[field].push((error as any).msg);
+      const validationError = error as ValidationError & { param?: string; msg: string };
+      const field = validationError.param || 'unknown';
+      if (!acc[field]) {
+        acc[field] = [];
+      }
+      acc[field].push(validationError.msg);
       return acc;
     }, {} as Record<string, string[]>);
     ResponseHelper.validationError(res, errorMap);

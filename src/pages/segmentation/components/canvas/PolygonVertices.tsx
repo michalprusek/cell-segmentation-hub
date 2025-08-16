@@ -36,34 +36,25 @@ const PolygonVertices = React.memo(
     onDeleteVertex,
     onDuplicateVertex,
   }: PolygonVerticesProps) => {
-    // Determine if vertices should be rendered based on zoom and selection
-    const shouldShowVertices = shouldRenderVertices(
-      zoom,
-      isSelected,
-      isHovered
-    );
+    // Always show vertices for selected polygons to enable dragging
+    const shouldShowVertices = isSelected;
 
-    // Get decimated and viewport-culled vertices for better performance
+    // Get all vertices without decimation or approximation
     const visibleVertices = React.useMemo(() => {
       if (!shouldShowVertices || points.length === 0) {
         return [];
       }
 
-      const decimated = getDecimatedVertices(points, zoom);
+      // NO DECIMATION - Use all points directly
+      // Map all points with their original indices
+      let verticesWithIndices = points.map((point, index) => ({
+        point,
+        originalIndex: index,
+      }));
 
-      // Return array with original indices for proper event handling
-      let verticesWithIndices = decimated
-        .map(point => {
-          const originalIndex = points.findIndex(
-            p => p.x === point.x && p.y === point.y
-          );
-          return { point, originalIndex };
-        })
-        .filter(item => item.originalIndex !== -1);
-
-      // Apply viewport culling if bounds are provided
+      // Apply viewport culling if bounds are provided (keep this for performance)
       if (viewportBounds) {
-        const buffer = 50; // Buffer in pixels for smooth scrolling
+        const buffer = 100; // Increased buffer for better visibility
         verticesWithIndices = verticesWithIndices.filter(({ point }) => {
           return (
             point.x >= viewportBounds.x - buffer &&
@@ -75,7 +66,7 @@ const PolygonVertices = React.memo(
       }
 
       return verticesWithIndices;
-    }, [shouldShowVertices, points, zoom, viewportBounds]);
+    }, [shouldShowVertices, points, viewportBounds]);
 
     if (
       !shouldShowVertices ||
@@ -95,6 +86,7 @@ const PolygonVertices = React.memo(
             vertexDragState?.isDragging &&
             vertexDragState?.polygonId === polygonId &&
             vertexDragState?.vertexIndex === originalIndex;
+          const dragOffset = isDragging ? vertexDragState?.dragOffset : undefined;
 
           return (
             <VertexContextMenu
@@ -112,6 +104,7 @@ const PolygonVertices = React.memo(
                   isSelected={isSelected}
                   isHovered={isVertexHovered}
                   isDragging={isDragging}
+                  dragOffset={dragOffset}
                   zoom={zoom}
                   type={polygonType}
                   isStartPoint={originalIndex === 0}
@@ -156,6 +149,14 @@ const PolygonVertices = React.memo(
         prevProps.viewportBounds.width === nextProps.viewportBounds.width &&
         prevProps.viewportBounds.height === nextProps.viewportBounds.height);
 
+    // Check if drag offset changed
+    const sameDragOffset = 
+      (!prevProps.vertexDragState?.dragOffset && !nextProps.vertexDragState?.dragOffset) ||
+      (prevProps.vertexDragState?.dragOffset && 
+       nextProps.vertexDragState?.dragOffset &&
+       prevProps.vertexDragState.dragOffset.x === nextProps.vertexDragState.dragOffset.x &&
+       prevProps.vertexDragState.dragOffset.y === nextProps.vertexDragState.dragOffset.y);
+
     return (
       prevProps.polygonId === nextProps.polygonId &&
       prevProps.points.length === nextProps.points.length &&
@@ -173,7 +174,8 @@ const PolygonVertices = React.memo(
       prevProps.vertexDragState?.polygonId ===
         nextProps.vertexDragState?.polygonId &&
       prevProps.vertexDragState?.vertexIndex ===
-        nextProps.vertexDragState?.vertexIndex
+        nextProps.vertexDragState?.vertexIndex &&
+      sameDragOffset
     );
   }
 );

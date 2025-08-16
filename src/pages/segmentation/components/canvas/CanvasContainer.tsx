@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { EditMode } from '../../types';
 
@@ -37,6 +37,30 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
     ref
   ) => {
     const { theme } = useTheme();
+    const [isAltPressed, setIsAltPressed] = useState(false);
+
+    // Listen for Alt key press/release
+    useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.altKey && !isAltPressed) {
+          setIsAltPressed(true);
+        }
+      };
+
+      const handleKeyUp = (e: KeyboardEvent) => {
+        if (!e.altKey && isAltPressed) {
+          setIsAltPressed(false);
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      window.addEventListener('keyup', handleKeyUp);
+
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        window.removeEventListener('keyup', handleKeyUp);
+      };
+    }, [isAltPressed]);
 
     // Theme-aware dot colors for grid
     const dotColor = theme === 'dark' ? '#6b7280' : '#9ca3af'; // gray-500 for dark, gray-400 for light
@@ -60,8 +84,13 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       }
     };
 
-    // Get cursor style based on mode
+    // Get cursor style based on mode and Alt key
     const getCursorStyle = () => {
+      // If Alt is pressed, always show grab cursor for panning
+      if (isAltPressed) {
+        return 'grab';
+      }
+      
       switch (editMode) {
         case EditMode.View:
           return 'grab';
@@ -83,11 +112,15 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
     return (
       <div
         ref={ref}
-        className={`flex-1 overflow-hidden relative bg-gray-50 dark:bg-gray-800 min-h-[400px] h-full rounded-lg border-4 transition-all duration-200 ${getBorderColor()}`}
+        className={`flex-1 overflow-hidden relative bg-gray-50 dark:bg-gray-800 min-h-[400px] h-full rounded-lg border-4 transition-all duration-200 select-none ${getBorderColor()}`}
         style={{
           cursor: getCursorStyle(),
           backgroundImage: `radial-gradient(circle, ${dotColor} 1px, transparent 1px)`,
           backgroundSize: '20px 20px',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          MozUserSelect: 'none',
+          msUserSelect: 'none',
         }}
         onMouseDown={onMouseDown}
         onMouseMove={onMouseMove}

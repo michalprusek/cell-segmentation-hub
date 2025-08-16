@@ -112,4 +112,5 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 };
 
 export default WebSocketProvider;
+// eslint-disable-next-line react-refresh/only-export-components
 export { useWebSocket };

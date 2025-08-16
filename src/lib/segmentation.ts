@@ -14,6 +14,9 @@ export interface Polygon {
   points: Point[];
   type: 'external' | 'internal'; // Changed from optional to required
   class?: string;
+  name?: string;
+  confidence?: number;
+  area?: number;
 }
 
 // SegmentationResult type removed - use Polygon[] directly
@@ -25,7 +28,7 @@ export const applyThresholding = async (
 ): Promise<ImageData> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'Anonymous';
+    img.crossOrigin = 'anonymous';
     img.onload = () => {
       // Create a canvas to draw the image
       const canvas = document.createElement('canvas');

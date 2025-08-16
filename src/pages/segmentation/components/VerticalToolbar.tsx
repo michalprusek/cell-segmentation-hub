@@ -7,6 +7,9 @@ import {
   PenTool,
   Scissors,
   Trash2,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { EditMode } from '../types';
@@ -16,6 +19,9 @@ interface VerticalToolbarProps {
   selectedPolygonId: string | null;
   setEditMode: (mode: EditMode) => void;
   disabled?: boolean;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetView?: () => void;
 }
 
 /**
@@ -26,6 +32,9 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   selectedPolygonId,
   setEditMode,
   disabled = false,
+  onZoomIn,
+  onZoomOut,
+  onResetView,
 }) => {
   const { t } = useLanguage();
 
@@ -127,8 +136,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   const isRequiredSelectionMode = (mode: EditMode) => {
     return (
       mode === EditMode.EditVertices ||
-      mode === EditMode.AddPoints ||
-      mode === EditMode.Slice
+      mode === EditMode.AddPoints
     );
   };
 
@@ -150,7 +158,15 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
           variant="ghost"
           size="icon"
           disabled={!canActivate}
-          onClick={() => canActivate && setEditMode(mode)}
+          onClick={() => {
+            if (!canActivate) return;
+            // If clicking on the active mode, switch to View mode
+            if (isActive) {
+              setEditMode(EditMode.View);
+            } else {
+              setEditMode(mode);
+            }
+          }}
           className={`
             w-12 h-12 rounded-lg transition-all duration-200 relative
             ${isActive ? getActiveColor(mode) : getModeColor(mode)}
@@ -186,12 +202,67 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
 
   return (
     <div className="w-14 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 gap-2">
+      {/* Mode buttons */}
       <ModeButton mode={EditMode.View} />
-      <ModeButton mode={EditMode.EditVertices} />
       <ModeButton mode={EditMode.AddPoints} />
       <ModeButton mode={EditMode.CreatePolygon} />
       <ModeButton mode={EditMode.Slice} />
       <ModeButton mode={EditMode.DeletePolygon} />
+      
+      {/* Separator */}
+      <div className="w-10 h-px bg-gray-300 dark:bg-gray-600 my-2" />
+      
+      {/* Zoom controls */}
+      <div className="relative group">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onZoomIn}
+          disabled={disabled}
+          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <ZoomIn size={20} />
+        </Button>
+        <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+          <div className="font-medium">{t('segmentation.toolbar.zoomIn')}</div>
+          <div className="text-xs text-gray-300 mt-1">+</div>
+          <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
+        </div>
+      </div>
+      
+      <div className="relative group">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onZoomOut}
+          disabled={disabled}
+          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <ZoomOut size={20} />
+        </Button>
+        <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+          <div className="font-medium">{t('segmentation.toolbar.zoomOut')}</div>
+          <div className="text-xs text-gray-300 mt-1">-</div>
+          <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
+        </div>
+      </div>
+      
+      <div className="relative group">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onResetView}
+          disabled={disabled}
+          className="w-12 h-12 rounded-lg transition-all duration-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <Maximize2 size={20} />
+        </Button>
+        <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
+          <div className="font-medium">{t('segmentation.toolbar.resetView')}</div>
+          <div className="text-xs text-gray-300 mt-1">R</div>
+          <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
+        </div>
+      </div>
     </div>
   );
 };

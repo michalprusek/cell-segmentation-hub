@@ -39,13 +39,14 @@ const CanvasTemporaryGeometryLayer: React.FC<
 
     // Render existing temp points
     tempPoints.forEach((point, index) => {
+      const isFirstPoint = index === 0;
       elements.push(
         <circle
           key={`temp-vertex-${index}`}
           cx={point.x}
           cy={point.y}
           r={vertexRadius}
-          fill="#4ade80"
+          fill={isFirstPoint ? "#3b82f6" : "#4ade80"}
           stroke="#fff"
           strokeWidth={strokeWidth}
           style={{ opacity: 0.8 }}
@@ -316,29 +317,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
   };
 
   const renderDragPreview = () => {
-    if (
-      !interactionState.isDraggingVertex ||
-      !interactionState.draggedVertexInfo
-    ) {
-      return null;
-    }
-
-    // Show a ghost of the original position during dragging
-    if (interactionState.originalVertexPosition) {
-      return (
-        <circle
-          cx={interactionState.originalVertexPosition.x}
-          cy={interactionState.originalVertexPosition.y}
-          r={vertexRadius}
-          fill="none"
-          stroke="#94a3b8"
-          strokeWidth={strokeWidth}
-          strokeDasharray={`${2 / transform.zoom} ${1 / transform.zoom}`}
-          style={{ opacity: 0.5 }}
-        />
-      );
-    }
-
+    // Drag preview disabled - no ghost circle shown
     return null;
   };
 

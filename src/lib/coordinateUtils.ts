@@ -20,14 +20,23 @@ export const getCanvasCoordinates = (
   }
 
   const rect = canvasRef.current.getBoundingClientRect();
-
+  
   // Canvas coordinates (relative to canvas element)
   const canvasX = mouseX - rect.left;
   const canvasY = mouseY - rect.top;
-
-  // Image coordinates (accounting for zoom and translation)
-  const imageX = (canvasX - transform.translateX) / transform.zoom;
-  const imageY = (canvasY - transform.translateY) / transform.zoom;
+  
+  // With transformOrigin at 0 0, the calculation is simpler
+  // We need to account for the centering of the content
+  const containerWidth = rect.width;
+  const containerHeight = rect.height;
+  
+  // The content is centered, so we need to adjust for that
+  const centerOffsetX = containerWidth / 2;
+  const centerOffsetY = containerHeight / 2;
+  
+  // Adjust for centering and then apply inverse transform
+  const imageX = (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
+  const imageY = (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
 
   return { imageX, imageY, canvasX, canvasY };
 };
@@ -47,6 +56,7 @@ export const imageToCanvasCoordinates = (
 
 /**
  * Convert canvas coordinates to image coordinates
+ * Note: canvasPoint should be relative to the container center
  */
 export const canvasToImageCoordinates = (
   canvasPoint: Point,
@@ -76,12 +86,14 @@ export const calculateCenteringTransform = (
   const scaleY = availableHeight / imageHeight;
   const zoom = Math.min(scaleX, scaleY, 1); // Don't zoom in above 100%
 
-  // Calculate translation to center the image
+  // With transformOrigin at 0 0 and centering in the parent container,
+  // we need to adjust the translation
   const scaledWidth = imageWidth * zoom;
   const scaledHeight = imageHeight * zoom;
 
-  const translateX = (canvasWidth - scaledWidth) / 2;
-  const translateY = (canvasHeight - scaledHeight) / 2;
+  // Since we start from the center of the container, we need to offset by half the scaled image size
+  const translateX = -scaledWidth / 2;
+  const translateY = -scaledHeight / 2;
 
   return {
     zoom,
@@ -110,10 +122,12 @@ export const calculateWheelZoom = (
  */
 export const calculateFixedPointZoom = (
   currentTransform: TransformState,
-  fixedPoint: Point, // Point to keep fixed (in canvas coordinates)
+  fixedPoint: Point, // Point to keep fixed (in canvas container coordinates)
   zoomFactor: number,
   minZoom: number = 0.1,
-  maxZoom: number = 10
+  maxZoom: number = 10,
+  containerWidth?: number,
+  containerHeight?: number
 ): TransformState => {
   const newZoom = Math.max(
     minZoom,
@@ -124,8 +138,18 @@ export const calculateFixedPointZoom = (
     return currentTransform;
   }
 
-  // Calculate the point in image coordinates
-  const imagePoint = canvasToImageCoordinates(fixedPoint, currentTransform);
+  // Convert the fixed point from container coordinates to centered coordinates
+  // The canvas content is centered in the container, so we need to adjust
+  const centerOffsetX = containerWidth ? containerWidth / 2 : 0;
+  const centerOffsetY = containerHeight ? containerHeight / 2 : 0;
+  
+  const centeredPoint = {
+    x: fixedPoint.x - centerOffsetX,
+    y: fixedPoint.y - centerOffsetY,
+  };
+
+  // Calculate the point in image coordinates using the centered point
+  const imagePoint = canvasToImageCoordinates(centeredPoint, currentTransform);
 
   // Calculate new translation to keep the image point under the fixed canvas point
   const newCanvasPoint = imageToCanvasCoordinates(imagePoint, {
@@ -134,9 +158,9 @@ export const calculateFixedPointZoom = (
   });
 
   const translateX =
-    currentTransform.translateX + (fixedPoint.x - newCanvasPoint.x);
+    currentTransform.translateX + (centeredPoint.x - newCanvasPoint.x);
   const translateY =
-    currentTransform.translateY + (fixedPoint.y - newCanvasPoint.y);
+    currentTransform.translateY + (centeredPoint.y - newCanvasPoint.y);
 
   return {
     zoom: newZoom,
@@ -147,6 +171,7 @@ export const calculateFixedPointZoom = (
 
 /**
  * Constrain transform to keep image within reasonable bounds
+ * Now allows much more freedom for panning while preventing complete loss of image
  */
 export const constrainTransform = (
   transform: TransformState,
@@ -164,42 +189,23 @@ export const constrainTransform = (
   const scaledWidth = imageWidth * zoom;
   const scaledHeight = imageHeight * zoom;
 
-  // Prevent image from moving too far off-screen
-  // Allow only a small margin (10% of image size) to be hidden beyond canvas edges
-  const marginX = Math.min(scaledWidth * 0.1, 100); // Max 100px margin
-  const marginY = Math.min(scaledHeight * 0.1, 100); // Max 100px margin
-
-  // Calculate boundaries
-  const maxTranslateX = marginX;
-  const minTranslateX = canvasWidth - scaledWidth - marginX;
-  const maxTranslateY = marginY;
-  const minTranslateY = canvasHeight - scaledHeight - marginY;
-
-  // For small images or high zoom levels, center the image if it fits within canvas
+  // With the new coordinate system (transformOrigin at 0 0 and centering)
   let translateX = transform.translateX;
   let translateY = transform.translateY;
 
-  if (scaledWidth <= canvasWidth) {
-    // Image fits horizontally - center it
-    translateX = (canvasWidth - scaledWidth) / 2;
-  } else {
-    // Apply constraints
-    translateX = Math.max(
-      minTranslateX,
-      Math.min(maxTranslateX, transform.translateX)
-    );
-  }
+  // Allow much more generous panning - only prevent complete loss of image
+  const generousPanMargin = Math.max(canvasWidth, canvasHeight) * 1.5; // Very generous margin
+  const minVisibleSize = 20; // Minimum pixels that must remain visible
+  
+  // For X axis - allow generous panning in both directions
+  const maxTranslateX = generousPanMargin - scaledWidth / 2;
+  const minTranslateX = -scaledWidth / 2 - generousPanMargin + minVisibleSize;
+  translateX = Math.max(minTranslateX, Math.min(maxTranslateX, transform.translateX));
 
-  if (scaledHeight <= canvasHeight) {
-    // Image fits vertically - center it
-    translateY = (canvasHeight - scaledHeight) / 2;
-  } else {
-    // Apply constraints
-    translateY = Math.max(
-      minTranslateY,
-      Math.min(maxTranslateY, transform.translateY)
-    );
-  }
+  // For Y axis - allow generous panning in both directions  
+  const maxTranslateY = generousPanMargin - scaledHeight / 2;
+  const minTranslateY = -scaledHeight / 2 - generousPanMargin + minVisibleSize;
+  translateY = Math.max(minTranslateY, Math.min(maxTranslateY, transform.translateY));
 
   return {
     zoom,

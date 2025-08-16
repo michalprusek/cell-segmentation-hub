@@ -297,7 +297,7 @@ export default {
     },
     toolbar: {
       mode: 'Modus',
-      keyboard: 'Taste: {key}',
+      keyboard: 'Taste: {{key}}',
       requiresSelection: 'Erfordert Polygon-Auswahl',
       requiresPolygonSelection: 'Erfordert Polygon-Auswahl',
       select: 'Auswählen',

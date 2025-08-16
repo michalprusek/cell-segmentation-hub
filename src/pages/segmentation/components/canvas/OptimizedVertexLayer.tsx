@@ -293,6 +293,7 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
     renderQuality,
     isZooming,
     viewportBounds,
+    lodManager,
   ]);
 
   // Update spatial index
@@ -459,7 +460,7 @@ const OptimizedVertexLayer: React.FC<OptimizedVertexLayerProps> = ({
       frameTimeRef.current.reduce((sum, time) => sum + time, 0) /
       frameTimeRef.current.length
     );
-  }, [vertexRenderData]);
+  }, []);
 
   return (
     <>

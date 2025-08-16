@@ -18,11 +18,14 @@ export interface TokenPair {
  */
 export const generateAccessToken = (payload: JwtPayload): string => {
   try {
-    return jwt.sign(payload as any, config.JWT_ACCESS_SECRET as any, {
+    if (!config.JWT_ACCESS_SECRET) {
+      throw new Error('JWT_ACCESS_SECRET is not configured');
+    }
+    return jwt.sign(payload, config.JWT_ACCESS_SECRET, {
       expiresIn: config.JWT_ACCESS_EXPIRY,
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app'
-    } as any);
+    });
   } catch (error) {
     logger.error('Failed to generate access token:', error as Error, 'JWT');
     throw new Error('Token generation failed');
@@ -34,11 +37,14 @@ export const generateAccessToken = (payload: JwtPayload): string => {
  */
 export const generateRefreshToken = (payload: JwtPayload): string => {
   try {
-    return jwt.sign(payload as any, config.JWT_REFRESH_SECRET as any, {
+    if (!config.JWT_REFRESH_SECRET) {
+      throw new Error('JWT_REFRESH_SECRET is not configured');
+    }
+    return jwt.sign(payload, config.JWT_REFRESH_SECRET, {
       expiresIn: config.JWT_REFRESH_EXPIRY,
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app'
-    } as any);
+    });
   } catch (error) {
     logger.error('Failed to generate refresh token:', error as Error, 'JWT');
     throw new Error('Token generation failed');
@@ -122,12 +128,12 @@ export const extractTokenFromHeader = (authHeader: string | undefined): string |
  */
 export const getTokenExpiration = (token: string): Date | null => {
   try {
-    const decoded = jwt.decode(token) as any;
+    const decoded = jwt.decode(token) as jwt.JwtPayload;
     if (!decoded || !decoded.exp) {
       return null;
     }
     return new Date(decoded.exp * 1000);
-  } catch (error) {
+  } catch {
     return null;
   }
 };

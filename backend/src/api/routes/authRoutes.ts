@@ -76,6 +76,10 @@ router.get('/check',
   authController.checkAuth
 );
 
+router.get('/storage-stats',
+  authController.getUserStorageStats
+);
+
 router.post('/change-password',
   validateBody(changePasswordSchema),
   authController.changePassword

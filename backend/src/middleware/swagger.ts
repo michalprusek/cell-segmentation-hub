@@ -3,7 +3,12 @@ import swaggerUi from 'swagger-ui-express';
 import { Express } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { logger } from '../utils/logger';
+
+// ES module equivalent for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Build list of YAML candidate paths and pick the first that exists
 const yamlCandidates = [
@@ -63,7 +68,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
   apis: apiGlobs,
 };
 
-export function setupSwagger(app: Express) {
+export function setupSwagger(app: Express): void {
   try {
     // OpenAPI YAML specification path (for future use)
     // const openApiYamlPath = path.join(__dirname, '../api/openapi.yaml');
@@ -79,7 +84,7 @@ export function setupSwagger(app: Express) {
         filter: true,
         showRequestDuration: true,
         tryItOutEnabled: true,
-        requestInterceptor: (req: any) => {
+        requestInterceptor: (req: Record<string, unknown>): Record<string, unknown> => {
           // Note: CORS headers should be configured on server responses, not requests
           return req;
         },
@@ -97,7 +102,7 @@ export function setupSwagger(app: Express) {
     app.get('/api-docs', swaggerUi.setup(specs, swaggerUiOptions));
 
     // Endpoint pro raw OpenAPI JSON
-    app.get('/api-docs/openapi.json', (req, res) => {
+    app.get('/api-docs/openapi.json', (req, res): void => {
       try {
         res.setHeader('Content-Type', 'application/json');
         res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
@@ -109,7 +114,7 @@ export function setupSwagger(app: Express) {
     });
 
     // Endpoint pro Postman import
-    app.get('/api-docs/postman.json', (req, res) => {
+    app.get('/api-docs/postman.json', (req, res): void => {
       try {
         const postmanCollection = convertToPostman(specs);
         res.setHeader('Content-Type', 'application/json');
@@ -130,11 +135,77 @@ export function setupSwagger(app: Express) {
   }
 }
 
+interface PostmanRequest {
+  name: string;
+  request: {
+    method: string;
+    header: Array<{
+      key: string;
+      value: string;
+      type: string;
+    }>;
+    url: string;
+    description: string;
+    auth?: {
+      type: string;
+      bearer: Array<{
+        key: string;
+        value: string;
+        type: string;
+      }>;
+    };
+  };
+}
+
+interface PostmanFolder {
+  name: string;
+  item: PostmanRequest[];
+}
+
+interface PostmanCollection {
+  info: {
+    name: string;
+    description: string;
+    schema: string;
+  };
+  auth: {
+    type: string;
+    bearer: Array<{
+      key: string;
+      value: string;
+      type: string;
+    }>;
+  };
+  variable: Array<{
+    key: string;
+    value: string;
+    type: string;
+  }>;
+  item: PostmanFolder[];
+}
+
+interface OpenAPISpec {
+  info?: {
+    title?: string;
+    description?: string;
+  };
+  servers?: Array<{
+    url?: string;
+  }>;
+  paths?: Record<string, Record<string, {
+    tags?: string[];
+    summary?: string;
+    description?: string;
+    security?: Array<Record<string, string[]>>;
+  }>>;
+  security?: Array<Record<string, string[]>>;
+}
+
 /**
  * Převede OpenAPI spec na Postman kolekci
  */
-function convertToPostman(openApiSpec: any) {
-  const collection = {
+function convertToPostman(openApiSpec: OpenAPISpec): PostmanCollection {
+  const collection: PostmanCollection = {
     info: {
       name: openApiSpec.info?.title || 'API Collection',
       description: openApiSpec.info?.description || '',
@@ -166,12 +237,14 @@ function convertToPostman(openApiSpec: any) {
   };
 
   // Vytvoří folders podle tags
-  const folders: { [key: string]: any } = {};
+  const folders: Record<string, PostmanFolder> = {};
   
   if (openApiSpec.paths) {
-    Object.entries(openApiSpec.paths).forEach(([path, pathItem]: [string, any]) => {
-      Object.entries(pathItem).forEach(([method, operation]: [string, any]) => {
-        if (method === 'parameters') return;
+    Object.entries(openApiSpec.paths).forEach(([path, pathItem]) => {
+      Object.entries(pathItem).forEach(([method, operation]) => {
+        if (method === 'parameters') {
+          return;
+        }
 
         const tag = operation.tags?.[0] || 'Default';
         
@@ -182,7 +255,7 @@ function convertToPostman(openApiSpec: any) {
           };
         }
 
-        const postmanRequest = {
+        const postmanRequest: PostmanRequest = {
           name: operation.summary || `${method.toUpperCase()} ${path}`,
           request: {
             method: method.toUpperCase(),
@@ -199,17 +272,17 @@ function convertToPostman(openApiSpec: any) {
         };
 
         // Compute effective security by merging/inheriting from operation, pathItem, and root document
-        const effectiveSecurity = operation.security || pathItem.security || openApiSpec.security;
+        const effectiveSecurity = operation.security || (pathItem as Record<string, unknown>).security || openApiSpec.security;
         if (effectiveSecurity && effectiveSecurity.length > 0) {
           // Check if any security requirement includes bearerAuth or similar JWT auth
-          const requiresAuth = effectiveSecurity.some((secReq: any) => 
+          const requiresAuth = effectiveSecurity.some((secReq: Record<string, string[]>) => 
             Object.keys(secReq).some(key => 
               key === 'bearerAuth' || key.toLowerCase().includes('bearer') || key.toLowerCase().includes('jwt')
             )
           );
           
           if (requiresAuth) {
-            (postmanRequest.request as any).auth = {
+            postmanRequest.request.auth = {
               type: 'bearer',
               bearer: [
                 {
@@ -227,7 +300,7 @@ function convertToPostman(openApiSpec: any) {
     });
   }
 
-  (collection as any).item = Object.values(folders);
+  collection.item = Object.values(folders);
   return collection;
 }
 

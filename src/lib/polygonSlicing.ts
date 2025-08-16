@@ -77,6 +77,12 @@ export function slicePolygon(
       Math.pow(sliceEnd.y - sliceStart.y, 2)
   );
 
+  // Check for degenerate slice line (too short length)
+  if (sliceLineLength < 1) {
+    const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
+    return null;
+  }
+
   // Calculate position along slice line for each intersection
   const intersectionsWithPosition = intersections.map(intersection => {
     const distFromStart = Math.sqrt(

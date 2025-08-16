@@ -35,7 +35,7 @@ const CanvasImage = ({
       width={width}
       height={height}
       className={cn(
-        'absolute top-0 left-0 pointer-events-none max-w-none object-contain transition-opacity',
+        'absolute top-0 left-0 pointer-events-none max-w-none object-contain transition-opacity select-none',
         loading ? 'opacity-100' : 'opacity-50'
       )}
       style={{
@@ -43,6 +43,10 @@ const CanvasImage = ({
         WebkitFontSmoothing: 'none', // Improving text rendering in WebKit browsers
         width: width ? `${width}px` : 'auto',
         height: height ? `${height}px` : 'auto',
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        MozUserSelect: 'none',
+        msUserSelect: 'none',
       }}
       onLoad={handleLoad}
       draggable={false}

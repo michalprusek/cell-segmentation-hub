@@ -80,22 +80,27 @@ const ModelSettingsSection = () => {
             {availableModels.map(model => (
               <div key={model.id} className="flex items-center space-x-4">
                 <RadioGroupItem value={model.id} id={model.id} />
-                <Card className="flex-1">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        {getSizeIcon(model.size)}
-                        {model.displayName}
-                      </CardTitle>
-                      <Badge className={getSizeBadgeColor(model.size)}>
-                        {t(`settings.modelSize.${model.size}`)}
-                      </Badge>
-                    </div>
-                    <CardDescription className="text-sm">
-                      {t(`settings.modelDescription.${model.id}`)}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
+                <Label 
+                  htmlFor={model.id} 
+                  className="flex-1 cursor-pointer"
+                >
+                  <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <CardTitle className="text-base flex items-center gap-2">
+                          {getSizeIcon(model.size)}
+                          {model.displayName}
+                        </CardTitle>
+                        <Badge className={getSizeBadgeColor(model.size)}>
+                          {t(`settings.modelSize.${model.size}`)}
+                        </Badge>
+                      </div>
+                      <CardDescription className="text-sm">
+                        {t(`settings.modelDescription.${model.id}`)}
+                      </CardDescription>
+                    </CardHeader>
+                  </Card>
+                </Label>
               </div>
             ))}
           </div>

@@ -916,6 +916,17 @@ class ApiClient {
     return this.extractData(response);
   }
 
+  async getUserStorageStats(): Promise<{
+    totalStorageBytes: number;
+    totalStorageMB: number;
+    totalStorageGB: number;
+    totalImages: number;
+    averageImageSizeMB: number;
+  }> {
+    const response = await this.instance.get('/auth/storage-stats');
+    return this.extractData(response);
+  }
+
   async deleteAccount(): Promise<void> {
     try {
       await this.instance.delete('/auth/profile');

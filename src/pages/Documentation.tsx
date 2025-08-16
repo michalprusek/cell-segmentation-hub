@@ -9,9 +9,27 @@ import {
   BookOpen,
   Microscope,
   ArrowRight,
+  Download,
+  Settings,
+  Edit3,
+  Cpu,
+  Layers,
 } from 'lucide-react';
+import { useActiveSection } from '@/hooks/useActiveSection';
 
 const Documentation = () => {
+  const sectionIds = [
+    'introduction',
+    'getting-started',
+    'upload-images',
+    'models-selection',
+    'segmentation',
+    'segmentation-editor',
+    'export-features'
+  ];
+  
+  const { activeSection, scrollToSection } = useActiveSection(sectionIds);
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -39,41 +57,83 @@ const Documentation = () => {
               <div className="sticky top-24 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="font-semibold text-lg mb-4">Navigation</h3>
                 <nav className="space-y-2">
-                  <a
-                    href="#introduction"
-                    className="flex items-center text-blue-600 p-2 rounded-md bg-blue-50"
+                  <button
+                    onClick={() => scrollToSection('introduction')}
+                    className={`flex items-center w-full text-left p-2 rounded-md transition-colors ${
+                      activeSection === 'introduction'
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
                   >
                     <Info className="w-4 h-4 mr-2" />
                     Introduction
-                  </a>
-                  <a
-                    href="#getting-started"
-                    className="flex items-center text-gray-700 hover:text-blue-600 p-2 rounded-md hover:bg-gray-50"
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('getting-started')}
+                    className={`flex items-center w-full text-left p-2 rounded-md transition-colors ${
+                      activeSection === 'getting-started'
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
                   >
                     <BookOpen className="w-4 h-4 mr-2" />
                     Getting Started
-                  </a>
-                  <a
-                    href="#upload-images"
-                    className="flex items-center text-gray-700 hover:text-blue-600 p-2 rounded-md hover:bg-gray-50"
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('upload-images')}
+                    className={`flex items-center w-full text-left p-2 rounded-md transition-colors ${
+                      activeSection === 'upload-images'
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
                   >
                     <FileText className="w-4 h-4 mr-2" />
                     Uploading Images
-                  </a>
-                  <a
-                    href="#segmentation"
-                    className="flex items-center text-gray-700 hover:text-blue-600 p-2 rounded-md hover:bg-gray-50"
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('models-selection')}
+                    className={`flex items-center w-full text-left p-2 rounded-md transition-colors ${
+                      activeSection === 'models-selection'
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Cpu className="w-4 h-4 mr-2" />
+                    Model Selection
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('segmentation')}
+                    className={`flex items-center w-full text-left p-2 rounded-md transition-colors ${
+                      activeSection === 'segmentation'
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
                   >
                     <Microscope className="w-4 h-4 mr-2" />
                     Segmentation Process
-                  </a>
-                  <a
-                    href="#api"
-                    className="flex items-center text-gray-700 hover:text-blue-600 p-2 rounded-md hover:bg-gray-50"
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('segmentation-editor')}
+                    className={`flex items-center w-full text-left p-2 rounded-md transition-colors ${
+                      activeSection === 'segmentation-editor'
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
                   >
-                    <Code className="w-4 h-4 mr-2" />
-                    API Reference
-                  </a>
+                    <Edit3 className="w-4 h-4 mr-2" />
+                    Segmentation Editor
+                  </button>
+                  <button
+                    onClick={() => scrollToSection('export-features')}
+                    className={`flex items-center w-full text-left p-2 rounded-md transition-colors ${
+                      activeSection === 'export-features'
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Features
+                  </button>
                 </nav>
               </div>
             </aside>
@@ -230,96 +290,347 @@ const Documentation = () => {
                   </div>
                 </section>
 
+                <section id="models-selection" className="mb-12">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                    Model Selection
+                  </h2>
+
+                  <p className="mb-4">
+                    SpheroSeg offers three different AI models optimized for different use cases. 
+                    Choose the model that best fits your requirements for speed vs accuracy.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="flex items-center mb-2">
+                        <Cpu className="w-5 h-5 text-green-600 mr-2" />
+                        <h3 className="font-semibold text-green-800">HRNet (Small)</h3>
+                      </div>
+                      <p className="text-sm text-green-700 mb-2">
+                        <strong>Inference time:</strong> ~3.1 seconds
+                      </p>
+                      <p className="text-sm text-green-700 mb-2">
+                        <strong>Best for:</strong> Real-time processing and quick results
+                      </p>
+                      <p className="text-sm text-green-700">
+                        Fast and efficient model ideal for rapid segmentation when speed is prioritized over maximum accuracy.
+                      </p>
+                    </div>
+
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <div className="flex items-center mb-2">
+                        <Layers className="w-5 h-5 text-blue-600 mr-2" />
+                        <h3 className="font-semibold text-blue-800">CBAM-ResUNet (Medium)</h3>
+                      </div>
+                      <p className="text-sm text-blue-700 mb-2">
+                        <strong>Inference time:</strong> ~6.9 seconds
+                      </p>
+                      <p className="text-sm text-blue-700 mb-2">
+                        <strong>Best for:</strong> Balanced speed and accuracy
+                      </p>
+                      <p className="text-sm text-blue-700">
+                        Optimal balance between processing speed and segmentation quality for most use cases.
+                      </p>
+                    </div>
+
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <div className="flex items-center mb-2">
+                        <Settings className="w-5 h-5 text-purple-600 mr-2" />
+                        <h3 className="font-semibold text-purple-800">MA-ResUNet (Large)</h3>
+                      </div>
+                      <p className="text-sm text-purple-700 mb-2">
+                        <strong>Inference time:</strong> ~18.1 seconds
+                      </p>
+                      <p className="text-sm text-purple-700 mb-2">
+                        <strong>Best for:</strong> Maximum precision
+                      </p>
+                      <p className="text-sm text-purple-700">
+                        Highest accuracy model with attention mechanisms for the most precise spheroid boundary detection.
+                      </p>
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-semibold mb-3">How to Select a Model</h3>
+                  <ol className="list-decimal pl-6 mb-6 space-y-2">
+                    <li>Open your project and navigate to any image</li>
+                    <li>In the project toolbar, find the model selection dropdown</li>
+                    <li>Choose from HRNet, CBAM-ResUNet, or MA-ResUNet</li>
+                    <li>Adjust the confidence threshold (0.0-1.0) to fine-tune detection sensitivity</li>
+                    <li>Your selection is automatically saved for future processing</li>
+                  </ol>
+
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <Info className="h-5 w-5 text-blue-400" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-blue-700">
+                          <strong>Tip:</strong> Start with CBAM-ResUNet for most cases. Use HRNet for rapid prototyping 
+                          and MA-ResUNet when you need the highest possible accuracy for research or publication.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
                 <section id="segmentation" className="mb-12">
                   <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
                     Segmentation Process
                   </h2>
 
                   <p className="mb-4">
-                    The segmentation process identifies the boundaries of
-                    spheroids in your images, allowing for precise analysis of
-                    their morphology.
+                    The segmentation process uses advanced AI models to automatically detect spheroid boundaries 
+                    in your microscopic images. The system supports both automatic processing and manual refinement.
                   </p>
 
-                  <h3 className="text-xl font-semibold mb-3">
-                    Automatic Segmentation
-                  </h3>
+                  <h3 className="text-xl font-semibold mb-3">Queue-based Processing</h3>
                   <p className="mb-4">
-                    Our AI-powered automatic segmentation can detect spheroid
-                    boundaries with high precision:
-                  </p>
-                  <ol className="list-decimal pl-6 mb-6 space-y-2">
-                    <li>Select an image from your project</li>
-                    <li>Click "Auto-Segment" to start the process</li>
-                    <li>
-                      The system will process the image and display the detected
-                      boundaries
-                    </li>
-                    <li>Review the results in the segmentation editor</li>
-                  </ol>
-
-                  <h3 className="text-xl font-semibold mb-3">Manual Editing</h3>
-                  <p className="mb-4">
-                    Sometimes the automatic segmentation may need refinement.
-                    Our editor provides tools to:
+                    SpheroSeg uses a processing queue system to handle multiple segmentation tasks efficiently:
                   </p>
                   <ul className="list-disc pl-6 mb-6 space-y-2">
-                    <li>Add or remove vertices along the boundary</li>
-                    <li>Adjust vertex positions for more precise boundaries</li>
-                    <li>Split or merge regions</li>
-                    <li>Add or remove holes within spheroids</li>
+                    <li><strong>Real-time status:</strong> WebSocket notifications provide live updates on processing progress</li>
+                    <li><strong>Batch processing:</strong> Process multiple images simultaneously</li>
+                    <li><strong>Priority handling:</strong> More recent requests are processed first</li>
+                    <li><strong>Error recovery:</strong> Failed jobs are automatically retried with detailed error reporting</li>
                   </ul>
+
+                  <h3 className="text-xl font-semibold mb-3">Automatic Segmentation Workflow</h3>
+                  <ol className="list-decimal pl-6 mb-6 space-y-2">
+                    <li>Upload your microscopic images to a project</li>
+                    <li>Select your preferred AI model (HRNet, CBAM-ResUNet, or MA-ResUNet)</li>
+                    <li>Adjust the confidence threshold if needed (default: 0.5)</li>
+                    <li>Click "Auto-Segment" or use batch processing for multiple images</li>
+                    <li>Monitor real-time progress through the status indicators</li>
+                    <li>Review results in the segmentation editor once processing completes</li>
+                  </ol>
+
+                  <h3 className="text-xl font-semibold mb-3">Polygon Types</h3>
+                  <p className="mb-4">The system detects two types of polygons:</p>
+                  <ul className="list-disc pl-6 mb-6 space-y-2">
+                    <li><strong>External polygons:</strong> Main spheroid boundaries (shown in green by default)</li>
+                    <li><strong>Internal polygons:</strong> Holes or internal structures within spheroids (shown in red by default)</li>
+                  </ul>
+
+                  <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <Info className="h-5 w-5 text-yellow-400" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-yellow-700">
+                          <strong>Processing times vary by model:</strong> HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). 
+                          Choose based on your accuracy requirements and time constraints.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </section>
 
-                <section id="api" className="mb-12">
+                <section id="segmentation-editor" className="mb-12">
                   <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
-                    API Reference
+                    Segmentation Editor
                   </h2>
 
                   <p className="mb-4">
-                    SpheroSeg offers a RESTful API for programmatic access to
-                    the platform's capabilities. This is ideal for integrating
-                    with your existing workflows or batch processing.
+                    The segmentation editor is a powerful tool for refining AI-generated segmentations 
+                    and creating manual annotations. It features multiple editing modes, keyboard shortcuts, 
+                    and advanced polygon manipulation tools.
                   </p>
 
-                  <div className="bg-gray-50 p-4 rounded-md mb-6">
-                    <p className="font-mono text-sm mb-2">
-                      GET /api/v1/projects
-                    </p>
-                    <p className="text-gray-700 text-sm">
-                      Retrieves a list of all your projects
-                    </p>
+                  <h3 className="text-xl font-semibold mb-3">Editing Modes</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="bg-gray-50 border rounded-lg p-4">
+                      <h4 className="font-semibold text-gray-800 mb-2">View Mode</h4>
+                      <p className="text-sm text-gray-600">
+                        Navigate and inspect polygons without making changes. 
+                        Click polygons to select them and view details.
+                      </p>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-blue-800 mb-2">Edit Vertices</h4>
+                      <p className="text-sm text-blue-600">
+                        Drag individual vertices to refine polygon boundaries. 
+                        Precise control for boundary adjustments.
+                      </p>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-green-800 mb-2">Add Points</h4>
+                      <p className="text-sm text-green-600">
+                        Insert new vertices between existing ones. 
+                        Shift+click for automatic point placement.
+                      </p>
+                    </div>
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-purple-800 mb-2">Create Polygon</h4>
+                      <p className="text-sm text-purple-600">
+                        Draw new polygons from scratch. 
+                        Click to add points, double-click to complete.
+                      </p>
+                    </div>
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-orange-800 mb-2">Slice Mode</h4>
+                      <p className="text-sm text-orange-600">
+                        Cut polygons into multiple parts by drawing 
+                        lines through them.
+                      </p>
+                    </div>
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-red-800 mb-2">Delete Polygon</h4>
+                      <p className="text-sm text-red-600">
+                        Remove unwanted polygons by clicking on them. 
+                        Useful for eliminating false detections.
+                      </p>
+                    </div>
                   </div>
 
-                  <div className="bg-gray-50 p-4 rounded-md mb-6">
-                    <p className="font-mono text-sm mb-2">
-                      GET /api/v1/projects/:id/images
-                    </p>
-                    <p className="text-gray-700 text-sm">
-                      Retrieves all images within a specific project
-                    </p>
+                  <h3 className="text-xl font-semibold mb-3">Key Features</h3>
+                  <ul className="list-disc pl-6 mb-6 space-y-2">
+                    <li><strong>Undo/Redo System:</strong> Full history tracking with Ctrl+Z/Ctrl+Y support</li>
+                    <li><strong>Auto-save:</strong> Periodic saving with visual indicators showing unsaved changes</li>
+                    <li><strong>Zoom & Pan:</strong> Mouse wheel zooming and drag-to-pan navigation</li>
+                    <li><strong>Polygon Management:</strong> Show/hide, rename, and batch operations</li>
+                    <li><strong>Keyboard Shortcuts:</strong> Comprehensive hotkeys for efficient editing</li>
+                    <li><strong>Real-time Feedback:</strong> Live preview of edits and status updates</li>
+                  </ul>
+
+                  <h3 className="text-xl font-semibold mb-3">Essential Keyboard Shortcuts</h3>
+                  <div className="bg-gray-50 border rounded-lg p-4 mb-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="font-medium mb-1">Navigation:</p>
+                        <ul className="space-y-1">
+                          <li><kbd className="bg-gray-200 px-2 py-1 rounded">V</kbd> - View mode</li>
+                          <li><kbd className="bg-gray-200 px-2 py-1 rounded">E</kbd> - Edit vertices</li>
+                          <li><kbd className="bg-gray-200 px-2 py-1 rounded">A</kbd> - Add points</li>
+                          <li><kbd className="bg-gray-200 px-2 py-1 rounded">N</kbd> - Create polygon</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-medium mb-1">Actions:</p>
+                        <ul className="space-y-1">
+                          <li><kbd className="bg-gray-200 px-2 py-1 rounded">Ctrl+Z</kbd> - Undo</li>
+                          <li><kbd className="bg-gray-200 px-2 py-1 rounded">Ctrl+Y</kbd> - Redo</li>
+                          <li><kbd className="bg-gray-200 px-2 py-1 rounded">Ctrl+S</kbd> - Save</li>
+                          <li><kbd className="bg-gray-200 px-2 py-1 rounded">Delete</kbd> - Remove selected</li>
+                        </ul>
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="bg-gray-50 p-4 rounded-md mb-6">
-                    <p className="font-mono text-sm mb-2">
-                      POST /api/v1/images/:id/segment
-                    </p>
-                    <p className="text-gray-700 text-sm">
-                      Triggers segmentation for a specific image
-                    </p>
-                  </div>
+                  <h3 className="text-xl font-semibold mb-3">Working with Polygons</h3>
+                  <ol className="list-decimal pl-6 mb-6 space-y-2">
+                    <li>Select a polygon by clicking on it (highlighted in blue when selected)</li>
+                    <li>Switch to the appropriate editing mode for your task</li>
+                    <li>Make your modifications using mouse interactions</li>
+                    <li>Use the polygon panel on the right to manage visibility and properties</li>
+                    <li>Save your changes periodically or rely on auto-save</li>
+                  </ol>
+                </section>
+
+                <section id="export-features" className="mb-12">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                    Export Features
+                  </h2>
 
                   <p className="mb-4">
-                    For full API documentation and authentication details,
-                    please contact us at{' '}
-                    <a
-                      href="mailto:prusemic@cvut.cz"
-                      className="text-blue-600 hover:underline"
-                    >
-                      prusemic@cvut.cz
-                    </a>
-                    .
+                    SpheroSeg provides comprehensive export capabilities to integrate with your research workflow. 
+                    Export segmentation data in multiple formats suitable for machine learning frameworks and analysis tools.
                   </p>
+
+                  <h3 className="text-xl font-semibold mb-3">Export Package Contents</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
+                        <FileText className="w-4 h-4 mr-2" />
+                        Original Images
+                      </h4>
+                      <p className="text-sm text-blue-600">
+                        High-quality original microscopic images in their native format.
+                      </p>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <h4 className="font-semibold text-green-800 mb-2 flex items-center">
+                        <Layers className="w-4 h-4 mr-2" />
+                        Visualizations
+                      </h4>
+                      <p className="text-sm text-green-600">
+                        Annotated images with numbered polygons and customizable colors.
+                      </p>
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-semibold mb-3">Annotation Formats</h3>
+                  <ul className="list-disc pl-6 mb-6 space-y-2">
+                    <li><strong>COCO Format:</strong> Common Objects in Context - standard format for object detection frameworks like PyTorch and TensorFlow</li>
+                    <li><strong>YOLO Format:</strong> You Only Look Once - optimized format for YOLO-based detection models</li>
+                    <li><strong>Custom JSON:</strong> Structured JSON format with detailed polygon coordinates and metadata</li>
+                  </ul>
+
+                  <h3 className="text-xl font-semibold mb-3">Calculated Metrics</h3>
+                  <p className="mb-4">
+                    SpheroSeg automatically calculates comprehensive morphological metrics for each detected spheroid:
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                    <div>
+                      <h4 className="font-semibold mb-2">Basic Measurements:</h4>
+                      <ul className="list-disc pl-6 text-sm space-y-1">
+                        <li>Area (pixels and scaled units)</li>
+                        <li>Perimeter</li>
+                        <li>Equivalent diameter</li>
+                        <li>Circularity</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Advanced Metrics:</h4>
+                      <ul className="list-disc pl-6 text-sm space-y-1">
+                        <li>Feret diameters (max, min, aspect ratio)</li>
+                        <li>Major/minor diameter through centroid</li>
+                        <li>Compactness, convexity, solidity</li>
+                        <li>Sphericity index</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <h3 className="text-xl font-semibold mb-3">Metrics Export Formats</h3>
+                  <ul className="list-disc pl-6 mb-6 space-y-2">
+                    <li><strong>Excel (.xlsx):</strong> Formatted spreadsheet with separate sheets for summary and detailed data</li>
+                    <li><strong>CSV:</strong> Comma-separated values for easy import into statistical software</li>
+                    <li><strong>JSON:</strong> Structured data format for programmatic analysis</li>
+                  </ul>
+
+                  <h3 className="text-xl font-semibold mb-3">Visualization Customization</h3>
+                  <ul className="list-disc pl-6 mb-6 space-y-2">
+                    <li><strong>Polygon colors:</strong> Customize external (green) and internal (red) polygon colors</li>
+                    <li><strong>Numbering:</strong> Show/hide polygon numbers for identification</li>
+                    <li><strong>Stroke width:</strong> Adjust line thickness (1-10px)</li>
+                    <li><strong>Font size:</strong> Control text size for polygon numbers (10-30px)</li>
+                    <li><strong>Transparency:</strong> Set polygon fill transparency (0-100%)</li>
+                  </ul>
+
+                  <h3 className="text-xl font-semibold mb-3">How to Export</h3>
+                  <ol className="list-decimal pl-6 mb-6 space-y-2">
+                    <li>Navigate to your project dashboard</li>
+                    <li>Select the images you want to export (or export all)</li>
+                    <li>Click "Advanced Export" to open the export dialog</li>
+                    <li>Configure your export settings across the three tabs: General, Visualization, and Formats</li>
+                    <li>Review the export summary</li>
+                    <li>Click "Start Export" to generate and download your package</li>
+                  </ol>
+
+                  <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <Download className="h-5 w-5 text-green-400" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-green-700">
+                          <strong>Export packages are comprehensive:</strong> Each export includes documentation, 
+                          metadata, and all selected content types organized in a clear folder structure for easy use.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </section>
 
                 <div className="flex justify-between items-center mt-8 pt-4 border-t border-gray-200">
@@ -330,13 +641,13 @@ const Documentation = () => {
                     <ArrowRight className="w-4 h-4 mr-2 transform rotate-180" />
                     Back to Home
                   </Link>
-                  <a
-                    href="#introduction"
+                  <button
+                    onClick={() => scrollToSection('introduction')}
                     className="inline-flex items-center text-blue-600 hover:text-blue-800"
                   >
                     Back to Top
                     <ArrowRight className="w-4 h-4 ml-2 transform -rotate-90" />
-                  </a>
+                  </button>
                 </div>
               </div>
             </div>

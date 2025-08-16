@@ -43,8 +43,10 @@ export class LocalStorageProvider implements StorageProvider {
         const imageMetadata = await sharp(buffer).metadata();
         width = imageMetadata.width;
         height = imageMetadata.height;
-        mimeType = `image/${imageMetadata.format}` || mimeType;
-      } catch (error) {
+        if (imageMetadata.format) {
+          mimeType = `image/${imageMetadata.format}`;
+        }
+      } catch {
         logger.warn('Failed to extract image metadata', 'LocalStorage', { key });
       }
 
@@ -151,10 +153,8 @@ export class LocalStorageProvider implements StorageProvider {
   /**
    * Get URL for accessing file
    */
-  async getUrl(key: string, signed: boolean = false): Promise<string> {
+  async getUrl(key: string): Promise<string> {
     // For local storage, we return an absolute URL with proper host/port
-    // The signed parameter is ignored for local storage
-    const host = process.env.HOST || '0.0.0.0';
     const port = process.env.PORT || '3001';
     
     // In Docker, we need to use localhost for frontend access
@@ -256,7 +256,7 @@ export class LocalStorageProvider implements StorageProvider {
   /**
    * Generate storage key for file
    */
-  public static generateKey(userId: string | undefined, projectId: string | undefined, filename: string, isOriginal: boolean = true): string {
+  public static generateKey(userId: string | undefined, projectId: string | undefined, filename: string, isOriginal = true): string {
     // Sanitize user and project IDs to prevent path traversal
     const sanitizedUserId = (userId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
     const sanitizedProjectId = (projectId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -277,7 +277,8 @@ export class LocalStorageProvider implements StorageProvider {
     const parts = originalKey.split('/');
     
     // Validate that we have enough path segments and a valid filename
-    if (parts.length < 4 || !parts[parts.length - 1] || parts[parts.length - 1]!.trim() === '') {
+    const lastPart = parts[parts.length - 1];
+    if (parts.length < 4 || !lastPart || lastPart.trim() === '') {
       throw new StorageError(
         `Invalid key format for thumbnail generation: ${originalKey}`,
         'INVALID_KEY_FORMAT',
@@ -287,7 +288,7 @@ export class LocalStorageProvider implements StorageProvider {
     
     // Replace 'originals' with 'thumbnails' and change extension to .jpg
     parts[2] = 'thumbnails';
-    const filename = parts[parts.length - 1]!; // Safe after validation above
+    const filename = lastPart; // Safe after validation above
     const nameWithoutExt = path.basename(filename, path.extname(filename));
     parts[parts.length - 1] = `${nameWithoutExt}.jpg`;
     
@@ -308,7 +309,7 @@ export class LocalStorageProvider implements StorageProvider {
     try {
       await fs.mkdir(dirPath, { recursive: true });
     } catch (error) {
-      if ((error as any).code !== 'EEXIST') {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
         throw error;
       }
     }

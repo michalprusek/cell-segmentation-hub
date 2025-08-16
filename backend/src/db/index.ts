@@ -8,7 +8,7 @@ declare global {
 }
 
 // Initialize Prisma client
-const createPrismaClient = () => {
+const createPrismaClient = (): PrismaClient => {
   return new PrismaClient();
 };
 
@@ -23,7 +23,7 @@ if (config.NODE_ENV === 'development') {
 // Note: Commenting out detailed Prisma logging to avoid TypeScript conflicts
 
 // Initialize database connection
-export const initializeDatabase = async () => {
+export const initializeDatabase = async (): Promise<PrismaClient> => {
   try {
     logger.info('Initializing database connection...', 'Database');
     
@@ -46,7 +46,7 @@ export const initializeDatabase = async () => {
 };
 
 // Graceful shutdown
-export const disconnectDatabase = async () => {
+export const disconnectDatabase = async (): Promise<void> => {
   try {
     logger.info('Disconnecting from database...', 'Database');
     await prisma.$disconnect();
@@ -57,7 +57,7 @@ export const disconnectDatabase = async () => {
 };
 
 // Database health check
-export const checkDatabaseHealth = async () => {
+export const checkDatabaseHealth = async (): Promise<{healthy: boolean; message: string}> => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     return { healthy: true, message: 'Database is accessible' };
@@ -69,7 +69,7 @@ export const checkDatabaseHealth = async () => {
 
 // Helper function for transactions
 export const transaction = async <T>(
-  callback: (prisma: any) => Promise<T>
+  callback: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
 ): Promise<T> => {
   return await prisma.$transaction(callback);
 };

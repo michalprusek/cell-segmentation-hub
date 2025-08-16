@@ -2,6 +2,7 @@
   "name": "cell-segmentation-backend",
   "version": "1.0.0",
   "description": "Backend API for cell segmentation platform",
+  "type": "module",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
@@ -33,10 +34,13 @@
   "license": "MIT",
   "dependencies": {
     "@prisma/client": "^5.22.0",
+    "archiver": "^6.0.2",
     "axios": "^1.7.8",
     "bcryptjs": "^2.4.3",
     "bull": "^4.16.3",
+    "canvas": "^2.11.2",
     "cors": "^2.8.5",
+    "csv-writer": "^1.6.0",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "express-rate-limit": "^7.4.1",
@@ -53,9 +57,11 @@
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^11.1.0",
+    "xlsx": "^0.18.5",
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/archiver": "^6.0.3",
     "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^5.0.0",
@@ -70,6 +76,7 @@
     "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "@types/uuid": "^10.0.0",
+    "@types/xlsx": "^0.0.35",
     "@typescript-eslint/eslint-plugin": "^8.15.0",
     "@typescript-eslint/parser": "^8.15.0",
     "eslint": "^9.15.0",

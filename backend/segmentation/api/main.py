@@ -21,6 +21,7 @@ from contextlib import asynccontextmanager
 
 from api.routes import router
 from api.models import ErrorResponse, HealthResponse
+from api.metrics_endpoint import router as metrics_router
 from ml.model_loader import ModelLoader
 
 # Configure logging
@@ -79,6 +80,7 @@ app.add_middleware(
 
 # Include routes
 app.include_router(router, prefix="/api/v1")
+app.include_router(metrics_router)
 
 # Global exception handler
 @app.exception_handler(Exception)

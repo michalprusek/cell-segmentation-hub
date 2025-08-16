@@ -49,7 +49,7 @@ const RegionPanel = ({
         return isPointInPolygon(centroid, external.points);
       }),
     }));
-  }, [segmentation]);
+  }, [polygons]);
 
   const handlePolygonSelect = (id: string) => {
     setSelectedPolygonId(id === selectedPolygonId ? null : id);

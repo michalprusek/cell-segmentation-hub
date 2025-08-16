@@ -80,150 +80,6 @@ export const useAdvancedInteractions = ({
   const lastAutoAddedPoint = useRef<Point | null>(null);
 
   /**
-   * Handle mouse down events with mode-specific logic
-   */
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      // Right-click - always cancel current operation
-      if (e.button === 2) {
-        if (editMode !== EditMode.View) {
-          setEditMode(EditMode.View);
-          setTempPoints([]);
-        }
-        e.stopPropagation();
-        return;
-      }
-
-      // Left-click handling
-      if (e.button === 0) {
-        const coordinates = getCanvasCoordinates(
-          e.clientX,
-          e.clientY,
-          transform,
-          canvasRef
-        );
-        const imagePoint = { x: coordinates.imageX, y: coordinates.imageY };
-
-        // Check if Alt key is pressed for forced panning in any mode
-        if (e.altKey) {
-          // Start panning regardless of current mode
-          setInteractionState({
-            ...interactionState,
-            isPanning: true,
-            panStart: { x: e.clientX, y: e.clientY },
-          });
-          return;
-        }
-
-        // Check if we clicked on a vertex element directly
-        const target = e.target as SVGElement;
-        if (target && target.dataset) {
-          const polygonId = target.dataset.polygonId;
-          const vertexIndex = target.dataset.vertexIndex;
-
-          if (
-            polygonId &&
-            vertexIndex !== undefined &&
-            editMode === EditMode.EditVertices
-          ) {
-            // We clicked directly on a vertex
-            const index = parseInt(vertexIndex, 10);
-            const polygons = getPolygons();
-            const polygon = polygons.find(p => p.id === polygonId);
-            if (polygon && polygon.points[index]) {
-              const originalPosition = polygon.points[index];
-
-              // Check if Shift is pressed - start add points mode
-              if (e.shiftKey) {
-                // Only set selected polygon if it's not already selected
-                if (selectedPolygonId !== polygonId) {
-                  setSelectedPolygonId(polygonId);
-                }
-                setEditMode(EditMode.AddPoints);
-                setInteractionState({
-                  ...interactionState,
-                  isAddingPoints: true,
-                  addPointStartVertex: {
-                    polygonId,
-                    vertexIndex: index,
-                  },
-                });
-                setTempPoints([]);
-                return;
-              }
-
-              // Start dragging this vertex
-              setInteractionState({
-                ...interactionState,
-                isDraggingVertex: true,
-                draggedVertexInfo: {
-                  polygonId,
-                  vertexIndex: index,
-                },
-                originalVertexPosition: {
-                  ...originalPosition,
-                },
-              });
-
-              // Initialize vertex drag state with original position
-              if (setVertexDragState) {
-                setVertexDragState({
-                  isDragging: true,
-                  polygonId,
-                  vertexIndex: index,
-                  originalPosition: { ...originalPosition },
-                  dragOffset: { x: 0, y: 0 },
-                });
-              }
-              return;
-            }
-          }
-        }
-
-        switch (editMode) {
-          case EditMode.View:
-            handleViewModeClick(imagePoint, e);
-            break;
-          case EditMode.CreatePolygon:
-            handleCreatePolygonClick(imagePoint);
-            break;
-          case EditMode.EditVertices:
-            handleEditVerticesClick(imagePoint);
-            break;
-          case EditMode.AddPoints:
-            handleAddPointsClick(imagePoint);
-            break;
-          case EditMode.Slice:
-            handleSliceClick(imagePoint);
-            break;
-          case EditMode.DeletePolygon:
-            handleDeletePolygonClick(imagePoint);
-            break;
-        }
-      }
-    },
-    [
-      editMode,
-      interactionState,
-      transform,
-      selectedPolygonId,
-      getPolygons,
-      setInteractionState,
-      setVertexDragState,
-      setEditMode,
-      setTempPoints,
-      canvasRef,
-      handleAddPointsClick,
-      handleCreatePolygonClick,
-      handleDeletePolygonClick,
-      handleEditVerticesClick,
-      handleSliceClick,
-      handleViewModeClick,
-      setSelectedPolygonId,
-    ]
-  );
-
-  /**
    * Handle View mode clicks - polygon selection and panning
    */
   const handleViewModeClick = useCallback(
@@ -546,6 +402,150 @@ export const useAdvancedInteractions = ({
       }
     },
     [getPolygons, updatePolygons, selectedPolygonId, setSelectedPolygonId]
+  );
+
+  /**
+   * Handle mouse down events with mode-specific logic
+   */
+  const handleMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      // Right-click - always cancel current operation
+      if (e.button === 2) {
+        if (editMode !== EditMode.View) {
+          setEditMode(EditMode.View);
+          setTempPoints([]);
+        }
+        e.stopPropagation();
+        return;
+      }
+
+      // Left-click handling
+      if (e.button === 0) {
+        const coordinates = getCanvasCoordinates(
+          e.clientX,
+          e.clientY,
+          transform,
+          canvasRef
+        );
+        const imagePoint = { x: coordinates.imageX, y: coordinates.imageY };
+
+        // Check if Alt key is pressed for forced panning in any mode
+        if (e.altKey) {
+          // Start panning regardless of current mode
+          setInteractionState({
+            ...interactionState,
+            isPanning: true,
+            panStart: { x: e.clientX, y: e.clientY },
+          });
+          return;
+        }
+
+        // Check if we clicked on a vertex element directly
+        const target = e.target as SVGElement;
+        if (target && target.dataset) {
+          const polygonId = target.dataset.polygonId;
+          const vertexIndex = target.dataset.vertexIndex;
+
+          if (
+            polygonId &&
+            vertexIndex !== undefined &&
+            editMode === EditMode.EditVertices
+          ) {
+            // We clicked directly on a vertex
+            const index = parseInt(vertexIndex, 10);
+            const polygons = getPolygons();
+            const polygon = polygons.find(p => p.id === polygonId);
+            if (polygon && polygon.points[index]) {
+              const originalPosition = polygon.points[index];
+
+              // Check if Shift is pressed - start add points mode
+              if (e.shiftKey) {
+                // Only set selected polygon if it's not already selected
+                if (selectedPolygonId !== polygonId) {
+                  setSelectedPolygonId(polygonId);
+                }
+                setEditMode(EditMode.AddPoints);
+                setInteractionState({
+                  ...interactionState,
+                  isAddingPoints: true,
+                  addPointStartVertex: {
+                    polygonId,
+                    vertexIndex: index,
+                  },
+                });
+                setTempPoints([]);
+                return;
+              }
+
+              // Start dragging this vertex
+              setInteractionState({
+                ...interactionState,
+                isDraggingVertex: true,
+                draggedVertexInfo: {
+                  polygonId,
+                  vertexIndex: index,
+                },
+                originalVertexPosition: {
+                  ...originalPosition,
+                },
+              });
+
+              // Initialize vertex drag state with original position
+              if (setVertexDragState) {
+                setVertexDragState({
+                  isDragging: true,
+                  polygonId,
+                  vertexIndex: index,
+                  originalPosition: { ...originalPosition },
+                  dragOffset: { x: 0, y: 0 },
+                });
+              }
+              return;
+            }
+          }
+        }
+
+        switch (editMode) {
+          case EditMode.View:
+            handleViewModeClick(imagePoint, e);
+            break;
+          case EditMode.CreatePolygon:
+            handleCreatePolygonClick(imagePoint);
+            break;
+          case EditMode.EditVertices:
+            handleEditVerticesClick(imagePoint);
+            break;
+          case EditMode.AddPoints:
+            handleAddPointsClick(imagePoint);
+            break;
+          case EditMode.Slice:
+            handleSliceClick(imagePoint);
+            break;
+          case EditMode.DeletePolygon:
+            handleDeletePolygonClick(imagePoint);
+            break;
+        }
+      }
+    },
+    [
+      editMode,
+      interactionState,
+      transform,
+      selectedPolygonId,
+      getPolygons,
+      setInteractionState,
+      setVertexDragState,
+      setEditMode,
+      setTempPoints,
+      canvasRef,
+      handleAddPointsClick,
+      handleCreatePolygonClick,
+      handleDeletePolygonClick,
+      handleEditVerticesClick,
+      handleSliceClick,
+      handleViewModeClick,
+      setSelectedPolygonId,
+    ]
   );
 
   /**

@@ -38,8 +38,8 @@ export const EDITING_CONSTANTS = {
   SEGMENT_HIT_DISTANCE: 20, // Distance threshold for segment clicking
   MIN_AUTO_ADD_DISTANCE: 10, // Minimum distance for auto-adding points with Shift
   ZOOM_FACTOR: 1.2, // Zoom multiplier
-  MIN_ZOOM: 0.1,
-  MAX_ZOOM: 10,
+  MIN_ZOOM: 0.5,  // 50% minimum zoom
+  MAX_ZOOM: 10,   // 1000% maximum zoom
 } as const;
 
 export interface ProjectImage {
@@ -64,6 +64,8 @@ export interface VertexDragState {
   isDragging: boolean;
   polygonId: string | null;
   vertexIndex: number | null;
+  dragOffset?: { x: number; y: number };
+  originalPosition?: { x: number; y: number };
 }
 
 export interface TempPointsState {

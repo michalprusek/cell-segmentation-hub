@@ -1,9 +1,9 @@
-import { PrismaClient } from '@prisma/client'
+import { jest } from '@jest/globals'
 // import { mockDeep, mockReset, DeepMockProxy } from 'jest-mock-extended'
 
 // Mock Prisma client  
 // export const prismaMock = mockDeep<PrismaClient>() as unknown as DeepMockProxy<PrismaClient>
-export const prismaMock = {} as any
+export const prismaMock = {} as Record<string, jest.Mock>
 
 // Mock Redis client
 export const redisMock = {
@@ -30,36 +30,25 @@ export const queueMock = {
 }
 
 // Mock JWT
-jest.mock('jsonwebtoken', () => ({
-  sign: jest.fn().mockReturnValue('mock-jwt-token'),
-  verify: jest.fn().mockReturnValue({ id: 'user-id', email: 'test@example.com' }),
-  decode: jest.fn().mockReturnValue({ id: 'user-id', email: 'test@example.com' }),
-}))
+jest.mock('jsonwebtoken')
 
 // Mock bcryptjs
-jest.mock('bcryptjs', () => ({
-  hash: jest.fn().mockResolvedValue('hashed-password'),
-  compare: jest.fn().mockResolvedValue(true),
-  genSalt: jest.fn().mockResolvedValue('salt'),
-}))
+jest.mock('bcryptjs')
 
 // Mock Prisma client
-jest.mock('../lib/prisma', () => ({
+jest.mock('../db', () => ({
   __esModule: true,
-  default: prismaMock,
+  prisma: prismaMock,
 }))
 
 // Mock Redis client
-jest.mock('../lib/redis', () => ({
+jest.mock('../redis/client', () => ({
   __esModule: true,
   default: redisMock,
 }))
 
 // Mock Bull queue
-jest.mock('../lib/queue', () => ({
-  __esModule: true,
-  segmentationQueue: queueMock,
-}))
+jest.mock('bull')
 
 // Mock file system operations
 jest.mock('fs/promises', () => ({
@@ -72,44 +61,17 @@ jest.mock('fs/promises', () => ({
 }))
 
 // Mock sharp for image processing
-jest.mock('sharp', () => {
-  const mockSharp = jest.fn(() => ({
-    resize: jest.fn().mockReturnThis(),
-    jpeg: jest.fn().mockReturnThis(),
-    png: jest.fn().mockReturnThis(),
-    toBuffer: jest.fn().mockResolvedValue(Buffer.from('mock-image')),
-    toFile: jest.fn().mockResolvedValue(undefined),
-    metadata: jest.fn().mockResolvedValue({
-      width: 1000,
-      height: 1000,
-      format: 'jpeg'
-    }),
-  }))
-  return mockSharp
-})
+jest.mock('sharp')
 
 // Mock nodemailer
-jest.mock('nodemailer', () => ({
-  createTransport: jest.fn().mockReturnValue({
-    sendMail: jest.fn().mockResolvedValue({ messageId: 'mock-message-id' }),
-  }),
-}))
+jest.mock('nodemailer')
 
 // Mock axios for external API calls
-jest.mock('axios', () => ({
-  create: jest.fn(() => ({
-    get: jest.fn(),
-    post: jest.fn(),
-    put: jest.fn(),
-    delete: jest.fn(),
-  })),
-  get: jest.fn(),
-  post: jest.fn(),
-  put: jest.fn(),
-  delete: jest.fn(),
-}))
+jest.mock('axios')
 
 // Setup and teardown
+import { beforeEach, afterEach } from '@jest/globals'
+
 beforeEach(() => {
   // mockReset(prismaMock)
   jest.clearAllMocks()

@@ -38,10 +38,12 @@ class QueueController {
       const { model = 'hrnet', threshold = 0.5, priority = 0 } = req.body;
       
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       // Get image to validate ownership and get projectId
-      const image = await this.imageService.getImageById(imageId!, userId!);
+      const image = await this.imageService.getImageById(imageId as string, userId);
       
       if (!image) {
         ResponseHelper.notFound(res, 'Obrázek nenalezen nebo nemáte oprávnění');
@@ -49,9 +51,9 @@ class QueueController {
       }
 
       const queueEntry = await this.queueService.addToQueue(
-        imageId!,
+        imageId as string,
         image.projectId,
-        userId!,
+        userId,
         model,
         threshold,
         priority
@@ -59,8 +61,8 @@ class QueueController {
 
       // Emit WebSocket update
       const websocketService = WebSocketService.getInstance();
-      websocketService.emitSegmentationUpdate(userId!, {
-        imageId: imageId!,
+      websocketService.emitSegmentationUpdate(userId, {
+        imageId: imageId as string,
         projectId: image.projectId,
         status: 'queued',
         queueId: queueEntry.id
@@ -95,7 +97,9 @@ class QueueController {
       const { imageIds, projectId, model = 'hrnet', threshold = 0.5, priority = 0 } = req.body;
       
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       // Validate input
       if (!Array.isArray(imageIds) || imageIds.length === 0) {
@@ -176,7 +180,9 @@ class QueueController {
       const { projectId } = req.params;
       
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       // Verify project ownership
       const project = await prisma.project.findFirst({
@@ -215,7 +221,9 @@ class QueueController {
       const { projectId } = req.params;
       
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       // Verify project ownership
       const project = await prisma.project.findFirst({
@@ -230,7 +238,7 @@ class QueueController {
         return;
       }
 
-      const items = await this.queueService.getQueueItems(projectId!, userId!);
+      const items = await this.queueService.getQueueItems(projectId as string, userId);
 
       ResponseHelper.success(res, items, 'Položky fronty načteny');
 
@@ -254,7 +262,9 @@ class QueueController {
       const { queueId } = req.params;
       
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       // Get queue item to get imageId and projectId for WebSocket updates
       const queueItem = await prisma.segmentationQueue.findFirst({
@@ -269,7 +279,11 @@ class QueueController {
         return;
       }
 
-      await this.queueService.removeFromQueue(queueId!, userId!);
+      if (!queueId) {
+        ResponseHelper.badRequest(res, 'Queue ID is required');
+        return;
+      }
+      await this.queueService.removeFromQueue(queueId, userId);
 
       // Emit WebSocket updates
       const websocketService = WebSocketService.getInstance();
@@ -306,7 +320,9 @@ class QueueController {
   getOverallQueueStats = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       const stats = await this.queueService.getQueueStats();
 
@@ -331,7 +347,9 @@ class QueueController {
       const { daysOld = 7 } = req.body;
       
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       const deletedCount = await this.queueService.cleanupOldEntries(daysOld);
 
@@ -354,7 +372,9 @@ class QueueController {
   getQueueHealth = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       const healthStatus = await this.queueService.getQueueHealthStatus();
 
@@ -383,7 +403,9 @@ class QueueController {
       const { maxProcessingMinutes = 10 } = req.body;
       
       const userId = this.validateUser(req, res);
-      if (!userId) return;
+      if (!userId) {
+        return;
+      }
 
       const resetCount = await this.queueService.resetStuckItems(maxProcessingMinutes);
 

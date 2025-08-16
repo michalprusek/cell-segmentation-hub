@@ -11,6 +11,7 @@ import type {
   ChangePasswordData,
   RefreshTokenData
 } from '../auth/validation';
+import type { User, Profile } from '@prisma/client';
 
 export interface ProfileUpdateData {
   username?: string;
@@ -35,7 +36,7 @@ export interface AuthResult {
     id: string;
     email: string;
     emailVerified: boolean;
-    profile?: any;
+    profile?: Profile | null;
   };
   accessToken: string;
   refreshToken: string;
@@ -45,7 +46,7 @@ export class AuthService {
   /**
    * Register a new user
    */
-  static async register(data: RegisterData): Promise<{ message: string; user: any; accessToken: string; refreshToken: string }> {
+  static async register(data: RegisterData): Promise<{ message: string; user: { id: string; email: string; username?: string; emailVerified: boolean }; accessToken: string; refreshToken: string }> {
     try {
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
@@ -433,7 +434,7 @@ export class AuthService {
   /**
    * Update user profile
    */
-  static async updateProfile(userId: string, profileData: ProfileUpdateData): Promise<any> {
+  static async updateProfile(userId: string, profileData: ProfileUpdateData): Promise<{ user: { id: string; email: string; emailVerified: boolean; profile: Profile } }> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },

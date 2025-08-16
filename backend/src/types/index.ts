@@ -1,5 +1,5 @@
 // Simple types for backend (temporary until shared is set up properly)
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -21,5 +21,5 @@ export interface PaginatedResponse<T> {
 export interface ApiError {
   code: string;
   message: string;
-  details?: any;
+  details?: Record<string, unknown>;
 }

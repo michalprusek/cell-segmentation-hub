@@ -25,6 +25,19 @@ export interface QueueStatsUpdate {
   total: number;
 }
 
+interface WebSocketEventData {
+  [key: string]: unknown;
+}
+
+interface DataSummary {
+  type: string;
+  value?: unknown;
+  length?: number;
+  preview?: string;
+  keys?: number;
+  keyNames?: string[];
+}
+
 export class WebSocketService {
   private static instance: WebSocketService;
   private io: SocketIOServer;
@@ -33,7 +46,7 @@ export class WebSocketService {
   constructor(server: HTTPServer, private prisma: PrismaClient) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: (origin, callback) => {
+        origin: (origin, callback: (err: Error | null, success?: boolean) => void): void => {
           // Environment-aware CORS origin validation
           if (process.env.NODE_ENV === 'development') {
             // Allow all localhost origins for development
@@ -152,7 +165,10 @@ export class WebSocketService {
         if (!this.connectedUsers.has(socket.userId)) {
           this.connectedUsers.set(socket.userId, new Set());
         }
-        this.connectedUsers.get(socket.userId)!.add(socket.id);
+        const userSockets = this.connectedUsers.get(socket.userId);
+        if (userSockets) {
+          userSockets.add(socket.id);
+        }
       }
 
       // Join user to their personal room
@@ -214,8 +230,10 @@ export class WebSocketService {
 
         // Clean up user tracking
         if (socket.userId && this.connectedUsers.has(socket.userId)) {
-          const userSockets = this.connectedUsers.get(socket.userId)!;
-          userSockets.delete(socket.id);
+          const userSockets = this.connectedUsers.get(socket.userId);
+          if (userSockets) {
+            userSockets.delete(socket.id);
+          }
           
           if (userSockets.size === 0) {
             this.connectedUsers.delete(socket.userId);
@@ -341,7 +359,86 @@ export class WebSocketService {
    * Check if user is connected
    */
   public isUserConnected(userId: string): boolean {
-    return this.connectedUsers.has(userId) && this.connectedUsers.get(userId)!.size > 0;
+    const userSockets = this.connectedUsers.get(userId);
+    return this.connectedUsers.has(userId) && userSockets !== undefined && userSockets.size > 0;
+  }
+
+  /**
+   * Emit custom event to specific user
+   */
+  public emitToUser(userId: string, event: string, data: WebSocketEventData): void {
+    try {
+      // Validate inputs
+      if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
+        logger.warn('Invalid userId provided to emitToUser', 'WebSocketService', {
+          userId: typeof userId,
+          event
+        });
+        return;
+      }
+
+      if (!event || typeof event !== 'string' || event.trim().length === 0) {
+        logger.warn('Invalid event provided to emitToUser', 'WebSocketService', {
+          userId,
+          event: typeof event
+        });
+        return;
+      }
+
+      this.io.to(`user:${userId}`).emit(event, data);
+      
+      // Create sanitized summary for logging
+      const dataSummary = this.createDataSummary(data);
+      
+      logger.debug('Custom event emitted to user', 'WebSocketService', {
+        userId,
+        event,
+        dataSummary
+      });
+    } catch (error) {
+      // Create sanitized summary for error logging
+      const dataSummary = this.createDataSummary(data);
+      
+      logger.error('Error emitting custom event to user', error instanceof Error ? error : undefined, 'WebSocketService', {
+        userId,
+        event,
+        dataSummary
+      });
+    }
+  }
+
+  /**
+   * Create sanitized summary of data for logging
+   */
+  private createDataSummary(data: WebSocketEventData): DataSummary {
+    if (data === null || data === undefined) {
+      return { type: typeof data, value: data };
+    }
+
+    if (typeof data === 'string') {
+      return { 
+        type: 'string', 
+        length: data.length,
+        preview: data.length > 50 ? `${data.substring(0, 50)}...` : data
+      };
+    }
+
+    if (typeof data === 'object') {
+      if (Array.isArray(data)) {
+        return {
+          type: 'array',
+          length: data.length
+        };
+      }
+      
+      return {
+        type: 'object',
+        keys: Object.keys(data).length,
+        keyNames: Object.keys(data).slice(0, 5)
+      };
+    }
+
+    return { type: typeof data, value: data };
   }
 
   /**

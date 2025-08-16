@@ -240,7 +240,7 @@ export default {
     },
     toolbar: {
       mode: 'Mode',
-      keyboard: 'Key: {key}',
+      keyboard: 'Key: {{key}}',
       requiresSelection: 'Requires polygon selection',
       requiresPolygonSelection: 'Requires polygon selection',
       select: 'Select',

@@ -280,7 +280,7 @@ export default {
     },
     toolbar: {
       mode: 'Modo',
-      keyboard: 'Tecla: {key}',
+      keyboard: 'Tecla: {{key}}',
       requiresSelection: 'Requiere selección de polígono',
       requiresPolygonSelection: 'Requiere selección de polígono',
       select: 'Seleccionar',

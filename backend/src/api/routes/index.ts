@@ -1,10 +1,11 @@
-import { Express, Router, Request, Response, NextFunction, RequestHandler } from 'express';
+import { Express, Request, Response, NextFunction, RequestHandler } from 'express';
 import { logger } from '../../utils/logger';
 import authRoutes from './authRoutes';
 import projectRoutes from './projectRoutes';
 import imageRoutes from './imageRoutes';
 import { segmentationRoutes } from './segmentationRoutes';
 import { queueRoutes } from './queueRoutes';
+import { exportRoutes } from './exportRoutes';
 
 interface RouteInfo {
   path: string;
@@ -19,7 +20,7 @@ export const routeRegistry: RouteInfo[] = [];
 const MAX_ENDPOINTS = 1000;
 const ENDPOINT_TTL = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
-let globalEndpointStats = new Map<string, {
+const globalEndpointStats = new Map<string, {
   calls: number;
   lastCalled: Date;
   lastSeen: number; // timestamp for eviction
@@ -31,14 +32,14 @@ let globalEndpointStats = new Map<string, {
 /**
  * Registruje route do centrálního registru
  */
-export function registerRoute(info: RouteInfo) {
+export function registerRoute(info: RouteInfo): void {
   routeRegistry.push(info);
 }
 
 /**
  * Nastaví všechny API routes
  */
-export function setupRoutes(app: Express) {
+export function setupRoutes(app: Express): void {
   // Registrace routes
   app.use('/api/auth', authRoutes);
   app.use('/api/projects', projectRoutes);
@@ -46,6 +47,7 @@ export function setupRoutes(app: Express) {
   app.use('/api/images', imageRoutes); // Direct image routes
   app.use('/api/segmentation', segmentationRoutes);
   app.use('/api/queue', queueRoutes);
+  app.use('/api', exportRoutes); // Export routes
 
   // Manuální registrace známých routes
   registerKnownRoutes();
@@ -84,7 +86,7 @@ export function setupRoutes(app: Express) {
  * Manuálně registruje známé routes
  * TODO: Automatizovat pomocí route inspection
  */
-function registerKnownRoutes() {
+function registerKnownRoutes(): void {
   // Health endpoints
   registerRoute({
     path: '/health',
@@ -227,13 +229,15 @@ function registerKnownRoutes() {
 /**
  * Výpis všech registrovaných routes do konzole
  */
-function logRegisteredRoutes() {
+function logRegisteredRoutes(): void {
   logger.info('\n📍 Registered API Endpoints:');
   logger.info('=====================================');
   
   const groupedRoutes = routeRegistry.reduce((groups, route) => {
     const group = route.path.split('/')[1] || 'root';
-    if (!groups[group]) groups[group] = [];
+    if (!groups[group]) {
+      groups[group] = [];
+    }
     groups[group].push(route);
     return groups;
   }, {} as Record<string, RouteInfo[]>);
@@ -257,7 +261,7 @@ export function createEndpointTracker(): RequestHandler {
   // Periodic cleanup of old entries
   setInterval(() => {
     const now = Date.now();
-    for (const [key, value] of globalEndpointStats.entries()) {
+    for (const [key, value] of Array.from(globalEndpointStats.entries())) {
       if (now - value.lastSeen > ENDPOINT_TTL) {
         globalEndpointStats.delete(key);
       }
@@ -276,7 +280,10 @@ export function createEndpointTracker(): RequestHandler {
       // Remove oldest 10% of entries
       const toRemove = Math.floor(MAX_ENDPOINTS * 0.1);
       for (let i = 0; i < toRemove; i++) {
-        globalEndpointStats.delete(sortedEntries[i]![0]);
+        const entry = sortedEntries[i];
+        if (entry) {
+          globalEndpointStats.delete(entry[0]);
+        }
       }
     }
 
@@ -307,7 +314,7 @@ export function createEndpointTracker(): RequestHandler {
     });
 
     // Přidání stats do req objektu pro monitoring
-    (req as any).endpointStats = globalEndpointStats;
+    (req as Request & { endpointStats?: Map<string, unknown> }).endpointStats = globalEndpointStats;
     
     next();
   };
@@ -316,7 +323,7 @@ export function createEndpointTracker(): RequestHandler {
 /**
  * Kontrola zdraví všech endpoints
  */
-async function checkEndpointsHealth() {
+async function checkEndpointsHealth(): Promise<Record<string, unknown>> {
   
   // Simulace kontroly každého endpointu
   const healthChecks = routeRegistry.map(async (route) => {

@@ -6,7 +6,15 @@ WORKDIR /app
 RUN apk add --no-cache \
     openssl \
     dumb-init \
-    curl
+    curl \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
+    pixman-dev
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
@@ -40,7 +48,7 @@ EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:3001/health || exit 1
+    CMD curl -f http://127.0.0.1:3001/health || exit 1
 
 # Start script with proper signal handling
 ENTRYPOINT ["dumb-init", "--"]

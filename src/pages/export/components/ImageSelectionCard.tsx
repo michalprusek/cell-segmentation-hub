@@ -52,6 +52,7 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
                   <Checkbox
                     checked={!!selectedImages[image.id]}
                     onCheckedChange={() => handleSelectImage(image.id)}
+                    onClick={(e) => e.stopPropagation()}
                     id={`check-${image.id}`}
                   />
                 </div>

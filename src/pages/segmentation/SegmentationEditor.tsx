@@ -244,7 +244,7 @@ const SegmentationEditor = () => {
       }
       editor.setSelectedPolygonId(polygonId);
     },
-    [editor]
+    [editor, editor.editMode, editor.setEditMode, editor.setSelectedPolygonId]
   );
 
   // Load segmentation data
@@ -323,7 +323,7 @@ const SegmentationEditor = () => {
           }
         : null,
     });
-  }, [editor.polygons, hiddenPolygonIds, imageDimensions]);
+  }, [editor.polygons, hiddenPolygonIds, imageDimensions, canvasHeight, canvasWidth, editor.transform]);
 
   // Handle image load to get dimensions
   const handleImageLoad = (width: number, height: number) => {

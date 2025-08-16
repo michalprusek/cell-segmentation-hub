@@ -101,29 +101,65 @@ const Profile = () => {
         let imageError = null;
         let completedError = null;
         try {
-          // Fetch all project IDs to get total image counts
-          const allProjectsResponse = await apiClient.getProjects({
-            limit: 100,
-          }); // Reasonable limit
-          const projects = allProjectsResponse.projects || [];
+          // Fetch projects with pagination to avoid memory issues
+          const pageSize = 20; // Reasonable page size
+          let currentPage = 1;
+          let hasMoreProjects = true;
 
-          // Aggregate image counts from all projects
-          for (const project of projects) {
-            try {
-              const imagesResponse = await apiClient.getProjectImages(
-                project.id,
-                { limit: 1000 }
-              );
-              const projectImages = imagesResponse.images || [];
-              imageCount += projectImages.length;
-              completedCount += projectImages.filter(
-                img => img.segmentation_status === 'completed'
-              ).length;
-            } catch (error) {
-              logger.warn(
-                `Error fetching images for project ${project.id}:`,
-                error
-              );
+          while (hasMoreProjects) {
+            const allProjectsResponse = await apiClient.getProjects({
+              limit: pageSize,
+              page: currentPage,
+            });
+            const projects = allProjectsResponse.projects || [];
+            
+            if (projects.length === 0) {
+              hasMoreProjects = false;
+              break;
+            }
+
+            // For each project, just get the image count from pagination metadata
+            for (const project of projects) {
+              try {
+                // Fetch with limit: 1 to get just the count from pagination
+                const imagesResponse = await apiClient.getProjectImages(
+                  project.id,
+                  { limit: 1 }
+                );
+                // Use total from pagination instead of fetching all images
+                const totalImages = imagesResponse.total || 0;
+                imageCount += totalImages;
+                
+                // For completed count, we need to fetch with a filter if API supports it
+                // Otherwise fetch a small batch to estimate
+                if (totalImages > 0) {
+                  const sampleResponse = await apiClient.getProjectImages(
+                    project.id,
+                    { limit: Math.min(50, totalImages) }
+                  );
+                  const sampleImages = sampleResponse.images || [];
+                  const completedInSample = sampleImages.filter(
+                    img => img.segmentation_status === 'completed'
+                  ).length;
+                  // Estimate based on sample
+                  const completionRate = sampleImages.length > 0 
+                    ? completedInSample / sampleImages.length 
+                    : 0;
+                  completedCount += Math.round(totalImages * completionRate);
+                }
+              } catch (error) {
+                logger.warn(
+                  `Error fetching images for project ${project.id}:`,
+                  error
+                );
+              }
+            }
+
+            // Check if there are more pages
+            if (projects.length < pageSize) {
+              hasMoreProjects = false;
+            } else {
+              currentPage++;
             }
           }
         } catch (error) {

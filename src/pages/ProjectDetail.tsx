@@ -149,9 +149,8 @@ const ProjectDetail = () => {
   // Cleanup debounce timeouts on unmount
   useEffect(() => {
     return () => {
-      const timeouts = debounceTimeoutRef.current;
-      if (timeouts) {
-        for (const timeout of Object.values(timeouts)) {
+      if (debounceTimeoutRef.current) {
+        for (const timeout of Object.values(debounceTimeoutRef.current)) {
           clearTimeout(timeout);
         }
       }
@@ -310,6 +309,8 @@ const ProjectDetail = () => {
               onToggleUploader={toggleUploader}
               viewMode={viewMode}
               setViewMode={setViewMode}
+              projectName={projectTitle}
+              images={images}
             />
 
             {/* Queue Stats Panel */}

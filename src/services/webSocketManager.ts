@@ -74,6 +74,7 @@ class WebSocketManager {
   private maxReconnectDelay = 30000;
   private lastToastTime = 0;
   private toastCooldown = 5000; // 5 seconds between similar toasts
+  private pingInterval: NodeJS.Timeout | null = null;
 
   private constructor() {
     this.eventListeners = {
@@ -175,7 +176,10 @@ class WebSocketManager {
         token: this.currentUser.token,
       },
       transports: ['websocket', 'polling'],
-      reconnection: false, // We'll handle reconnection manually
+      reconnection: true, // Enable automatic reconnection
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
       timeout: 10000,
       autoConnect: true,
     });
@@ -210,36 +214,66 @@ class WebSocketManager {
       this.reconnectDelay = 1000;
       this.flushMessageQueue();
       this.emitToListeners('connect');
+      
+      // Start ping interval to keep connection alive
+      this.startPingInterval();
     });
 
     this.socket.on('disconnect', reason => {
       logger.info('WebSocket DISCONNECTED! Reason:', reason);
       this.emitToListeners('disconnect', reason);
+      
+      // Stop ping interval when disconnected
+      this.stopPingInterval();
 
-      // Auto-reconnect unless disconnect was intentional
-      if (reason !== 'io client disconnect' && reason !== 'transport close') {
+      // Socket.io will handle automatic reconnection for most cases
+      // We only manually reconnect for specific server-side disconnects
+      if (reason === 'io server disconnect') {
+        // Server forcefully disconnected us, try manual reconnect
         this.handleReconnect();
       }
+      // For 'transport close', 'ping timeout' etc., Socket.io will auto-reconnect
     });
 
     this.socket.on('connect_error', error => {
       logger.error('WebSocket CONNECTION ERROR:', error.message);
       this.emitToListeners('connect_error', error);
 
-      // Show toast only occasionally to avoid spam
+      // Show toast only occasionally to avoid spam and not during auto-reconnect
       const now = Date.now();
       if (now - this.lastToastTime > this.toastCooldown) {
-        if (!error.message.includes('Authentication')) {
-          toast.error('Chyba připojení k serveru pro real-time aktualizace');
+        if (!error.message.includes('Authentication') && this.reconnectAttempts > 2) {
+          // Only show toast after a few failed attempts
+          toast.error('Probíhá opětovné připojení k serveru...');
         }
         this.lastToastTime = now;
       }
 
-      this.handleReconnect();
+      // Socket.io will handle reconnection automatically
+      // We don't need to call handleReconnect() here
     });
 
     this.socket.on('error', error => {
       logger.error('WebSocket ERROR:', error);
+    });
+
+    // Add reconnection event handlers for better debugging
+    this.socket.io.on('reconnect', (attempt: number) => {
+      logger.info(`WebSocket reconnected after ${attempt} attempts`);
+      toast.success('Připojení k serveru obnoveno');
+    });
+
+    this.socket.io.on('reconnect_attempt', (attempt: number) => {
+      logger.debug(`WebSocket reconnection attempt #${attempt}`);
+    });
+
+    this.socket.io.on('reconnect_error', (error: Error) => {
+      logger.error('WebSocket reconnection error:', error.message);
+    });
+
+    this.socket.io.on('reconnect_failed', () => {
+      logger.error('WebSocket reconnection failed after all attempts');
+      toast.error('Nepodařilo se obnovit připojení k serveru');
     });
 
     // Data events
@@ -393,10 +427,37 @@ class WebSocketManager {
   }
 
   /**
+   * Start ping interval to keep connection alive
+   */
+  private startPingInterval(): void {
+    this.stopPingInterval(); // Clear any existing interval
+    
+    // Send ping every 25 seconds (Socket.io default timeout is 60s)
+    this.pingInterval = setInterval(() => {
+      if (this.socket?.connected) {
+        this.socket.emit('ping');
+        logger.debug('Sent ping to keep connection alive');
+      }
+    }, 25000);
+  }
+
+  /**
+   * Stop ping interval
+   */
+  private stopPingInterval(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
+  }
+
+  /**
    * Disconnect and cleanup
    */
   disconnect(): void {
     logger.info('Disconnecting WebSocket manager');
+    
+    this.stopPingInterval();
 
     if (this.socket) {
       this.socket.removeAllListeners();

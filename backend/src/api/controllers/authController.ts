@@ -1,14 +1,11 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../../services/authService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
-import { logger } from '../../utils/logger';
+import { prisma } from '../../db';
 import {
   loginSchema,
   registerSchema,
-  resetPasswordRequestSchema,
-  resetPasswordConfirmSchema,
-  changePasswordSchema,
-  refreshTokenSchema
+  resetPasswordRequestSchema
 } from '../../auth/validation';
 import type {
   LoginData,
@@ -93,7 +90,12 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       field: err.path.join('.'),
       message: err.message
     }));
-    return ResponseHelper.error(res, 'Validation failed', 400, { errors });
+    const apiError = {
+      code: 'VALIDATION_ERROR' as const,
+      message: 'Validation failed',
+      details: { errors }
+    };
+    return ResponseHelper.error(res, apiError, 400);
   }
   
   const data: RegisterData = validationResult.data;
@@ -164,7 +166,12 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       field: err.path.join('.'),
       message: err.message
     }));
-    return ResponseHelper.error(res, 'Validation failed', 400, { errors });
+    const apiError = {
+      code: 'VALIDATION_ERROR' as const,
+      message: 'Validation failed',
+      details: { errors }
+    };
+    return ResponseHelper.error(res, apiError, 400);
   }
   
   const data: LoginData = validationResult.data;
@@ -209,7 +216,12 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
       field: err.path.join('.'),
       message: err.message
     }));
-    return ResponseHelper.error(res, 'Validation failed', 400, { errors });
+    const apiError = {
+      code: 'VALIDATION_ERROR' as const,
+      message: 'Validation failed',
+      details: { errors }
+    };
+    return ResponseHelper.error(res, apiError, 400);
   }
   
   const data: ResetPasswordRequestData = validationResult.data;
@@ -235,8 +247,12 @@ export const confirmPasswordReset = asyncHandler(async (req: Request, res: Respo
  */
 export const changePassword = asyncHandler(async (req: Request, res: Response) => {
   const data: ChangePasswordData = req.body;
-  const userId = req.user!.id; // User is guaranteed to exist due to auth middleware
   
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
+  
+  const userId = req.user.id;
   const result = await AuthService.changePassword(userId, data);
   
   return ResponseHelper.success(res, result, result.message);
@@ -272,8 +288,11 @@ export const resendVerificationEmail = asyncHandler(async (req: Request, res: Re
  * Get current user profile
  */
 export const getProfile = asyncHandler(async (req: Request, res: Response) => {
-  const user = req.user!; // User is guaranteed to exist due to auth middleware
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
   
+  const user = req.user;
   return ResponseHelper.success(res, { user }, 'Profil uživatele');
 });
 
@@ -281,7 +300,11 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
  * Update user profile
  */
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
-  const user = req.user!; // User is guaranteed to exist due to auth middleware
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
+  
+  const user = req.user;
   const profileData = req.body;
   
   const updatedProfile = await AuthService.updateProfile(user.id, profileData);
@@ -293,8 +316,11 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
  * Delete user account
  */
 export const deleteAccount = asyncHandler(async (req: Request, res: Response) => {
-  const user = req.user!; // User is guaranteed to exist due to auth middleware
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
   
+  const user = req.user;
   await AuthService.deleteAccount(user.id);
   
   return ResponseHelper.success(res, null, 'Účet byl úspěšně smazán');
@@ -304,8 +330,11 @@ export const deleteAccount = asyncHandler(async (req: Request, res: Response) =>
  * Check authentication status
  */
 export const checkAuth = asyncHandler(async (req: Request, res: Response) => {
-  const user = req.user!; // User is guaranteed to exist due to auth middleware
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
   
+  const user = req.user;
   return ResponseHelper.success(res, { 
     authenticated: true,
     user: {
@@ -314,4 +343,51 @@ export const checkAuth = asyncHandler(async (req: Request, res: Response) => {
       emailVerified: user.emailVerified
     }
   }, 'Uživatel je přihlášen');
+});
+
+/**
+ * Get user storage statistics
+ */
+export const getUserStorageStats = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
+  
+  const user = req.user;
+  
+  // Get all images from user's projects
+  const userProjects = await prisma.project.findMany({
+    where: { userId: user.id },
+    include: {
+      images: {
+        select: {
+          fileSize: true
+        }
+      }
+    }
+  });
+  
+  // Calculate total storage used
+  let totalStorageBytes = 0;
+  let totalImages = 0;
+  
+  for (const project of userProjects) {
+    for (const image of project.images) {
+      if (image.fileSize) {
+        totalStorageBytes += image.fileSize;
+      }
+      totalImages++;
+    }
+  }
+  
+  // Convert to MB for easier display
+  const totalStorageMB = totalStorageBytes / (1024 * 1024);
+  
+  return ResponseHelper.success(res, {
+    totalStorageBytes,
+    totalStorageMB: Math.round(totalStorageMB * 100) / 100, // Round to 2 decimal places
+    totalStorageGB: Math.round((totalStorageMB / 1024) * 100) / 100, // Round to 2 decimal places
+    totalImages,
+    averageImageSizeMB: totalImages > 0 ? Math.round((totalStorageMB / totalImages) * 100) / 100 : 0
+  }, 'Storage statistics retrieved successfully');
 });

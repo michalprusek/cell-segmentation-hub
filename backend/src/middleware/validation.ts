@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import type { Express } from 'express-serve-static-core';
 import { ZodSchema, ZodError } from 'zod';
 import { ResponseHelper } from '../utils/response';
 
@@ -7,17 +8,17 @@ export type ValidationTarget = 'body' | 'query' | 'params';
 /**
  * Middleware for validating request data using Zod schemas
  */
-export const validate = (
-  schema: ZodSchema<any>,
+export const validate = <T>(
+  schema: ZodSchema<T>,
   target: ValidationTarget = 'body'
-) => {
+): (req: Request, res: Response, next: NextFunction) => void => {
   return (req: Request, res: Response, next: NextFunction) => {
     try {
       const data = req[target];
       const validatedData = schema.parse(data);
       
       // Replace the original data with validated data
-      (req as any)[target] = validatedData;
+      (req as unknown as Record<string, unknown>)[target] = validatedData;
       
       return next();
     } catch (error) {
@@ -43,21 +44,21 @@ export const validate = (
 /**
  * Validate request body
  */
-export const validateBody = (schema: ZodSchema<any>) => {
+export const validateBody = <T>(schema: ZodSchema<T>): (req: Request, res: Response, next: NextFunction) => void => {
   return validate(schema, 'body');
 };
 
 /**
  * Validate query parameters
  */
-export const validateQuery = (schema: ZodSchema<any>) => {
+export const validateQuery = <T>(schema: ZodSchema<T>): (req: Request, res: Response, next: NextFunction) => void => {
   return validate(schema, 'query');
 };
 
 /**
  * Validate URL parameters
  */
-export const validateParams = (schema: ZodSchema<any>) => {
+export const validateParams = <T>(schema: ZodSchema<T>): (req: Request, res: Response, next: NextFunction) => void => {
   return validate(schema, 'params');
 };
 
@@ -70,7 +71,7 @@ export const validateFile = (
     maxSize?: number;
     allowedMimeTypes?: string[];
   } = {}
-) => {
+): (req: Request, res: Response, next: NextFunction) => void => {
   const {
     required = false,
     maxSize = 10 * 1024 * 1024, // 10MB default
@@ -123,7 +124,7 @@ export const validateFiles = (
     maxSize?: number;
     allowedMimeTypes?: string[];
   } = {}
-) => {
+): (req: Request, res: Response, next: NextFunction) => void => {
   const {
     maxFiles = 10,
     maxSize = 10 * 1024 * 1024, // 10MB default

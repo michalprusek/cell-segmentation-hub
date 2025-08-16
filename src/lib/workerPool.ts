@@ -66,6 +66,7 @@ export class WorkerPool {
       resolve: (value: unknown) => void;
       reject: (error: Error) => void;
       startTime: number;
+      workerId: string;
     }
   >();
   private taskQueue: Array<{
@@ -215,11 +216,21 @@ export class WorkerPool {
     pooledWorker.taskCount++;
     pooledWorker.lastUsed = Date.now();
 
+    // Get workerId for this pooledWorker
+    let workerId = '';
+    for (const [id, worker] of this.workers.entries()) {
+      if (worker === pooledWorker) {
+        workerId = id;
+        break;
+      }
+    }
+
     // Store the promise callbacks
     this.pendingTasks.set(message.id, {
       resolve,
       reject,
       startTime: performance.now(),
+      workerId,
     });
 
     // Send the message with transferables if provided
@@ -282,7 +293,7 @@ export class WorkerPool {
     const tasksToReject: string[] = [];
     for (const [taskId, task] of this.pendingTasks.entries()) {
       // Check if this task was assigned to the failed worker
-      if (pooledWorker.busy) {
+      if (task.workerId === workerId) {
         tasksToReject.push(taskId);
       }
     }
@@ -291,7 +302,7 @@ export class WorkerPool {
     for (const taskId of tasksToReject) {
       const task = this.pendingTasks.get(taskId);
       if (task) {
-        task.reject(new Error(`Worker error: ${error.message}`));
+        task.reject(new Error(`Worker ${task.workerId} error: ${error.message}`));
         this.pendingTasks.delete(taskId);
       }
     }
@@ -454,7 +465,7 @@ export class WorkerPool {
 
     // Reject all pending tasks
     for (const task of this.pendingTasks.values()) {
-      task.reject(new Error('Worker pool terminated'));
+      task.reject(new Error(`Worker pool terminated (worker: ${task.workerId})`));
     }
     this.pendingTasks.clear();
 

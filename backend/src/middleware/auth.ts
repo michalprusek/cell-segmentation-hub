@@ -5,16 +5,25 @@ import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
 
 // Extend Express Request interface to include user
-declare global {
-  namespace Express {
-    interface Request {
-      user?: {
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: {
+      id: string;
+      email: string;
+      emailVerified: boolean;
+      profile?: {
         id: string;
-        email: string;
-        emailVerified: boolean;
-        profile?: any;
-      };
-    }
+        firstName?: string | null;
+        lastName?: string | null;
+        organizationName?: string | null;
+        role?: string | null;
+        bio?: string | null;
+        avatarUrl?: string | null;
+        userId: string;
+        createdAt: Date;
+        updatedAt: Date;
+      } | null;
+    };
   }
 }
 
@@ -25,12 +34,13 @@ export const authenticate = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const token = extractTokenFromHeader(req.headers.authorization);
     
     if (!token) {
-      return ResponseHelper.unauthorized(res, 'Chybí autentizační token', 'Auth');
+      ResponseHelper.unauthorized(res, 'Chybí autentizační token', 'Auth');
+      return;
     }
 
     // Verify the token
@@ -40,9 +50,11 @@ export const authenticate = async (
     } catch (error) {
       const message = (error as Error).message;
       if (message.includes('expired')) {
-        return ResponseHelper.unauthorized(res, 'Token vypršel', 'Auth');
+        ResponseHelper.unauthorized(res, 'Token vypršel', 'Auth');
+        return;
       } else {
-        return ResponseHelper.unauthorized(res, 'Neplatný token', 'Auth');
+        ResponseHelper.unauthorized(res, 'Neplatný token', 'Auth');
+        return;
       }
     }
 
@@ -55,7 +67,8 @@ export const authenticate = async (
     });
 
     if (!user) {
-      return ResponseHelper.unauthorized(res, 'Uživatel nenalezen', 'Auth');
+      ResponseHelper.unauthorized(res, 'Uživatel nenalezen', 'Auth');
+      return;
     }
 
     // Add user to request object
@@ -69,7 +82,8 @@ export const authenticate = async (
     return next();
   } catch (error) {
     logger.error('Authentication middleware error:', error as Error, 'Auth');
-    return ResponseHelper.internalError(res, error as Error, 'Chyba autentizace', 'Auth');
+    ResponseHelper.internalError(res, error as Error, 'Chyba autentizace', 'Auth');
+    return;
   }
 };
 
@@ -80,13 +94,15 @@ export const requireEmailVerification = (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): void => {
   if (!req.user) {
-    return ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'Auth');
+    ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'Auth');
+    return;
   }
 
   if (!req.user.emailVerified) {
-    return ResponseHelper.forbidden(res, 'Email není ověřen', 'Auth');
+    ResponseHelper.forbidden(res, 'Email není ověřen', 'Auth');
+    return;
   }
 
   return next();
@@ -95,16 +111,18 @@ export const requireEmailVerification = (
 /**
  * Middleware to check if user owns resource
  */
-export const requireResourceOwnership = (resourceModel: string, resourceUserIdField: string = 'userId') => {
-  return async (req: Request, res: Response, next: NextFunction) => {
+export const requireResourceOwnership = (resourceModel: string, resourceUserIdField = 'userId') => {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     if (!req.user) {
-      return ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'Auth');
+      ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'Auth');
+      return;
     }
 
     // Get resource ID from params
     const resourceId = req.params.id;
     if (!resourceId) {
-      return ResponseHelper.validationError(res, 'Chybí ID zdroje', 'Auth');
+      ResponseHelper.validationError(res, 'Chybí ID zdroje', 'Auth');
+      return;
     }
 
     try {
@@ -114,7 +132,7 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
       }
 
       // Dynamic access to Prisma model
-      const model = (prisma as any)[resourceModel];
+      const model = (prisma as Record<string, any>)[resourceModel];
       
       const resource = await model.findUnique({
         where: { id: resourceId },
@@ -122,17 +140,20 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
       });
 
       if (!resource) {
-        return ResponseHelper.notFound(res, 'Zdroj nenalezen', 'Auth');
+        ResponseHelper.notFound(res, 'Zdroj nenalezen', 'Auth');
+        return;
       }
 
       if (resource[resourceUserIdField] !== req.user.id) {
-        return ResponseHelper.forbidden(res, 'Nedostatečná oprávnění', 'Auth');
+        ResponseHelper.forbidden(res, 'Nedostatečná oprávnění', 'Auth');
+        return;
       }
 
       return next();
     } catch (error) {
       logger.error('Resource ownership check failed:', error as Error, 'Auth');
-      return ResponseHelper.internalError(res, error as Error, 'Chyba kontroly oprávnění', 'Auth');
+      ResponseHelper.internalError(res, error as Error, 'Chyba kontroly oprávnění', 'Auth');
+      return;
     }
   };
 };
@@ -144,7 +165,7 @@ export const optionalAuthenticate = async (
   req: Request,
   res: Response,
   next: NextFunction
-) => {
+): Promise<void> => {
   try {
     const token = extractTokenFromHeader(req.headers.authorization);
     
@@ -156,7 +177,7 @@ export const optionalAuthenticate = async (
     let payload: JwtPayload;
     try {
       payload = verifyAccessToken(token);
-    } catch (error) {
+    } catch {
       return next(); // Invalid token, continue without user
     }
 

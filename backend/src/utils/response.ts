@@ -2,15 +2,15 @@ import { Request, Response, NextFunction } from 'express';
 import { ApiResponse, PaginatedResponse, ApiError } from '../types';
 import { logger } from './logger';
 
-export class ResponseHelper {
+export const ResponseHelper = {
   /**
    * Send successful response
    */
-  static success<T>(
+  success<T>(
     res: Response,
     data?: T,
     message?: string,
-    statusCode: number = 200
+    statusCode = 200
   ): Response<ApiResponse<T>> {
     const response: ApiResponse<T> = {
       success: true,
@@ -19,12 +19,12 @@ export class ResponseHelper {
     };
 
     return res.status(statusCode).json(response);
-  }
+  },
 
   /**
    * Send paginated response
    */
-  static paginated<T>(
+  paginated<T>(
     res: Response,
     data: T[],
     pagination: {
@@ -34,7 +34,7 @@ export class ResponseHelper {
       totalPages: number;
     },
     message?: string,
-    statusCode: number = 200
+    statusCode = 200
   ): Response<PaginatedResponse<T>> {
     const response: PaginatedResponse<T> = {
       success: true,
@@ -44,15 +44,15 @@ export class ResponseHelper {
     };
 
     return res.status(statusCode).json(response);
-  }
+  },
 
   /**
    * Send error response
    */
-  static error(
+  error(
     res: Response,
     error: string | ApiError,
-    statusCode: number = 400,
+    statusCode = 400,
     logError?: Error,
     context?: string
   ): Response<ApiResponse> {
@@ -89,14 +89,14 @@ export class ResponseHelper {
     };
 
     return res.status(statusCode).json(response);
-  }
+  },
 
   /**
    * Send bad request error
    */
-  static badRequest(
+  badRequest(
     res: Response,
-    message: string = 'Neplatný požadavek',
+    message = 'Neplatný požadavek',
     context?: string
   ): Response<ApiResponse> {
     const apiError: ApiError = {
@@ -105,12 +105,12 @@ export class ResponseHelper {
     };
 
     return ResponseHelper.error(res, apiError, 400, undefined, context);
-  }
+  },
 
   /**
    * Send validation error response
    */
-  static validationError(
+  validationError(
     res: Response,
     errors: Record<string, string[]> | string,
     context?: string
@@ -126,14 +126,14 @@ export class ResponseHelper {
     };
 
     return ResponseHelper.error(res, apiError, 400, undefined, context);
-  }
+  },
 
   /**
    * Send unauthorized error
    */
-  static unauthorized(
+  unauthorized(
     res: Response,
-    message: string = 'Unauthorized access',
+    message = 'Unauthorized access',
     context?: string
   ): Response<ApiResponse> {
     const apiError: ApiError = {
@@ -142,14 +142,14 @@ export class ResponseHelper {
     };
 
     return ResponseHelper.error(res, apiError, 401, undefined, context);
-  }
+  },
 
   /**
    * Send forbidden error
    */
-  static forbidden(
+  forbidden(
     res: Response,
-    message: string = 'Insufficient permissions',
+    message = 'Insufficient permissions',
     context?: string
   ): Response<ApiResponse> {
     const apiError: ApiError = {
@@ -158,14 +158,14 @@ export class ResponseHelper {
     };
 
     return ResponseHelper.error(res, apiError, 403, undefined, context);
-  }
+  },
 
   /**
    * Send not found error
    */
-  static notFound(
+  notFound(
     res: Response,
-    message: string = 'Zdroj nenalezen',
+    message = 'Zdroj nenalezen',
     context?: string
   ): Response<ApiResponse> {
     const apiError: ApiError = {
@@ -174,14 +174,14 @@ export class ResponseHelper {
     };
 
     return ResponseHelper.error(res, apiError, 404, undefined, context);
-  }
+  },
 
   /**
    * Send conflict error
    */
-  static conflict(
+  conflict(
     res: Response,
-    message: string = 'Konflikt dat',
+    message = 'Konflikt dat',
     context?: string
   ): Response<ApiResponse> {
     const apiError: ApiError = {
@@ -190,14 +190,14 @@ export class ResponseHelper {
     };
 
     return ResponseHelper.error(res, apiError, 409, undefined, context);
-  }
+  },
 
   /**
    * Send rate limit error
    */
-  static rateLimit(
+  rateLimit(
     res: Response,
-    message: string = 'Too many requests',
+    message = 'Too many requests',
     context?: string
   ): Response<ApiResponse> {
     const apiError: ApiError = {
@@ -206,15 +206,15 @@ export class ResponseHelper {
     };
 
     return ResponseHelper.error(res, apiError, 429, undefined, context);
-  }
+  },
 
   /**
    * Send internal server error
    */
-  static internalError(
+  internalError(
     res: Response,
     error?: Error,
-    message: string = 'Interní chyba serveru',
+    message = 'Interní chyba serveru',
     context?: string
   ): Response<ApiResponse> {
     const apiError: ApiError = {
@@ -223,14 +223,14 @@ export class ResponseHelper {
     };
 
     return ResponseHelper.error(res, apiError, 500, error, context);
-  }
+  },
 
   /**
    * Send service unavailable error
    */
-  static serviceUnavailable(
+  serviceUnavailable(
     res: Response,
-    message: string = 'Service unavailable',
+    message = 'Service unavailable',
     context?: string
   ): Response<ApiResponse> {
     const apiError: ApiError = {
@@ -240,23 +240,23 @@ export class ResponseHelper {
 
     return ResponseHelper.error(res, apiError, 503, undefined, context);
   }
-}
+};
 
 // Helper function for async error handling
 export const asyncHandler = (
-  fn: (req: Request, res: Response, next: NextFunction) => Promise<any>
+  fn: (req: Request, res: Response, next: NextFunction) => Promise<unknown>
 ) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     Promise.resolve(fn(req, res, next)).catch(next);
   };
 };
 
 // Helper function to calculate pagination
 export const calculatePagination = (
-  page: number = 1,
-  limit: number = 10,
+  page = 1,
+  limit = 10,
   total: number
-) => {
+): {page: number; limit: number; total: number; totalPages: number; offset: number; hasNext: boolean; hasPrev: boolean} => {
   const offset = (page - 1) * limit;
   const totalPages = Math.ceil(total / limit);
 

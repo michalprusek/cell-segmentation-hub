@@ -118,7 +118,7 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 // Start server
-const startServer = async () => {
+const startServer = async (): Promise<void> => {
   try {
     // Initialize database connection
     await initializeDatabase();
@@ -129,11 +129,12 @@ const startServer = async () => {
     // Initialize WebSocket service
     const websocketService = WebSocketService.getInstance(server, prisma);
     
-    // Connect WebSocket service to QueueService
+    // Connect WebSocket service to QueueService and ExportService
     try {
       const { QueueService } = await import('./services/queueService');
       const { SegmentationService } = await import('./services/segmentationService');
       const { ImageService } = await import('./services/imageService');
+      const { ExportService } = await import('./services/exportService');
       const { QueueWorker } = await import('./workers/queueWorker');
       
       const imageService = new ImageService(prisma);
@@ -141,7 +142,11 @@ const startServer = async () => {
       const queueService = QueueService.getInstance(prisma, segmentationService, imageService);
       queueService.setWebSocketService(websocketService);
       
-      logger.info('🔗 WebSocket service connected to QueueService');
+      // Connect ExportService to WebSocketService
+      const exportService = ExportService.getInstance();
+      exportService.setWebSocketService(websocketService);
+      
+      logger.info('🔗 WebSocket service connected to QueueService and ExportService');
       
       // Start queue worker
       const queueWorker = QueueWorker.getInstance(prisma);
@@ -163,7 +168,7 @@ const startServer = async () => {
     });
 
     // Graceful shutdown
-    const gracefulShutdown = async (signal: string) => {
+    const gracefulShutdown = async (signal: string): Promise<void> => {
       logger.info(`${signal} received, shutting down gracefully`);
       
       // Shutdown WebSocket service first
@@ -191,7 +196,7 @@ const startServer = async () => {
 
     // Handle unhandled promise rejections
     process.on('unhandledRejection', (reason, promise) => {
-      logger.error('Unhandled Rejection at:', reason as Error, 'Promise:', promise);
+      logger.error('Unhandled Rejection at:', reason as Error, 'Promise', { promise: String(promise) });
       process.exit(1);
     });
 

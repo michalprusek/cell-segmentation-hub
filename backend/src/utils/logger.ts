@@ -1,4 +1,5 @@
-import { config, isDevelopment } from './config';
+import { Request, Response, NextFunction } from 'express';
+import { isDevelopment } from './config';
 
 export enum LogLevel {
   ERROR = 0,
@@ -12,7 +13,7 @@ export interface LogEntry {
   message: string;
   timestamp: Date;
   context?: string;
-  data?: any;
+  data?: Record<string, unknown> | string | number | boolean | null;
   error?: Error;
 }
 
@@ -49,27 +50,33 @@ class Logger {
   }
 
   private log(entry: LogEntry): void {
-    if (!this.shouldLog(entry.level)) return;
+    if (!this.shouldLog(entry.level)) {
+      return;
+    }
 
     const message = this.formatMessage(entry);
     
     switch (entry.level) {
       case LogLevel.ERROR:
+        // eslint-disable-next-line no-console
         console.error(message);
         break;
       case LogLevel.WARN:
+        // eslint-disable-next-line no-console
         console.warn(message);
         break;
       case LogLevel.INFO:
+        // eslint-disable-next-line no-console
         console.info(message);
         break;
       case LogLevel.DEBUG:
+        // eslint-disable-next-line no-console
         console.debug(message);
         break;
     }
   }
 
-  error(message: string, error?: Error, context?: string, data?: any): void {
+  error(message: string, error?: Error, context?: string, data?: Record<string, unknown> | string | number | boolean | null): void {
     this.log({
       level: LogLevel.ERROR,
       message,
@@ -80,7 +87,7 @@ class Logger {
     });
   }
 
-  warn(message: string, context?: string, data?: any): void {
+  warn(message: string, context?: string, data?: Record<string, unknown> | string | number | boolean | null): void {
     this.log({
       level: LogLevel.WARN,
       message,
@@ -90,7 +97,7 @@ class Logger {
     });
   }
 
-  info(message: string, context?: string, data?: any): void {
+  info(message: string, context?: string, data?: Record<string, unknown> | string | number | boolean | null): void {
     this.log({
       level: LogLevel.INFO,
       message,
@@ -100,7 +107,7 @@ class Logger {
     });
   }
 
-  debug(message: string, context?: string, data?: any): void {
+  debug(message: string, context?: string, data?: Record<string, unknown> | string | number | boolean | null): void {
     this.log({
       level: LogLevel.DEBUG,
       message,
@@ -118,8 +125,8 @@ class Logger {
 export const logger = new Logger();
 
 // Helper function for express middleware
-export const createRequestLogger = (context: string = 'HTTP') => {
-  return (req: any, res: any, next: any) => {
+export const createRequestLogger = (context = 'HTTP'): (req: Request, res: Response, next: NextFunction) => void => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     const start = Date.now();
     
     res.on('finish', () => {

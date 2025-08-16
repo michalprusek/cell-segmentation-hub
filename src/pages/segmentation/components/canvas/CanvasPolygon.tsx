@@ -64,13 +64,34 @@ const CanvasPolygon = React.memo(
     }, [points]);
 
     // Generate SVG path string from valid points (no simplification)
+    // Apply drag offset to the dragged vertex
     const pathString = useMemo(() => {
       if (!validPoints || validPoints.length < 3) {
         return '';
       }
-      const path = `M${validPoints.map(p => `${p.x},${p.y}`).join(' L')} Z`;
+      
+      // If we're dragging a vertex from this polygon, apply the offset
+      let pointsToRender = validPoints;
+      if (
+        vertexDragState?.isDragging &&
+        vertexDragState.polygonId === id &&
+        vertexDragState.vertexIndex !== null &&
+        vertexDragState.dragOffset
+      ) {
+        pointsToRender = validPoints.map((p, index) => {
+          if (index === vertexDragState.vertexIndex) {
+            return {
+              x: p.x + vertexDragState.dragOffset.x,
+              y: p.y + vertexDragState.dragOffset.y,
+            };
+          }
+          return p;
+        });
+      }
+      
+      const path = `M${pointsToRender.map(p => `${p.x},${p.y}`).join(' L')} Z`;
       return path;
-    }, [validPoints]);
+    }, [validPoints, vertexDragState, id]);
 
     // For the path stroke width, we need to adjust based on zoom level
     // When zoomed in, the stroke appears thicker so we need to make it thinner
@@ -142,8 +163,12 @@ const CanvasPolygon = React.memo(
               type === 'internal' ? 'polygon-internal' : 'polygon-external',
               isSelected && 'polygon-selected'
             )}
+            fill={type === 'internal' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(239, 68, 68, 0.1)'}
             stroke={pathColor}
-            strokeWidth={Math.max(strokeWidth, 1)}
+            strokeWidth={Math.max(strokeWidth, 0.5)}
+            strokeOpacity={1}
+            strokeLinecap="round"
+            strokeLinejoin="round"
             onClick={handleClick}
             filter={
               isSelected
@@ -151,8 +176,8 @@ const CanvasPolygon = React.memo(
                 : ''
             }
             vectorEffect="non-scaling-stroke"
-            shapeRendering="optimizeSpeed"
-            pointerEvents="visible"
+            shapeRendering="geometricPrecision"
+            pointerEvents="all"
           />
 
           {/* Render vertices using separate component for performance */}
@@ -188,6 +213,14 @@ const CanvasPolygon = React.memo(
           return point.x === nextPoint.x && point.y === nextPoint.y;
         }));
 
+    // Check if drag offset changed
+    const sameDragOffset = 
+      (!prevProps.vertexDragState?.dragOffset && !nextProps.vertexDragState?.dragOffset) ||
+      (prevProps.vertexDragState?.dragOffset && 
+       nextProps.vertexDragState?.dragOffset &&
+       prevProps.vertexDragState.dragOffset.x === nextProps.vertexDragState.dragOffset.x &&
+       prevProps.vertexDragState.dragOffset.y === nextProps.vertexDragState.dragOffset.y);
+
     return (
       prevProps.polygon.id === nextProps.polygon.id &&
       samePoints &&
@@ -206,7 +239,8 @@ const CanvasPolygon = React.memo(
       prevProps.vertexDragState?.polygonId ===
         nextProps.vertexDragState?.polygonId &&
       prevProps.vertexDragState?.vertexIndex ===
-        nextProps.vertexDragState?.vertexIndex
+        nextProps.vertexDragState?.vertexIndex &&
+      sameDragOffset
     );
   }
 );

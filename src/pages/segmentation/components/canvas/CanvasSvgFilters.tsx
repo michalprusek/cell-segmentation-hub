@@ -12,7 +12,7 @@ const CanvasSvgFilters = () => {
         <feComposite in="SourceGraphic" in2="blur" operator="over" />
       </filter>
 
-      <filter id="filter-glow-red" x="-50%" y="-50%" width="200%" height="200%">
+      <filter id="red-glow" x="-50%" y="-50%" width="200%" height="200%">
         <feFlood floodColor="#ea384c" floodOpacity="0.3" result="flood" />
         <feComposite
           in="flood"
@@ -25,7 +25,7 @@ const CanvasSvgFilters = () => {
       </filter>
 
       <filter
-        id="filter-glow-blue"
+        id="blue-glow"
         x="-50%"
         y="-50%"
         width="200%"

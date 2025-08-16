@@ -1,17 +1,20 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { segmentationController } from '../controllers/segmentationController';
 import { authenticate } from '../../middleware/auth';
-import { validationResult, ValidationError, body, param } from 'express-validator';
+import { validationResult, body, param, ValidationError } from 'express-validator';
 import { ResponseHelper } from '../../utils/response';
 
 // Middleware to handle express-validator results
 const handleValidation = (req: Request, res: Response, next: NextFunction): void => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const errorMap = errors.array().reduce((acc, error: any) => {
-      const field = error.path || error.param || 'unknown';
-      if (!acc[field]) acc[field] = [];
-      acc[field].push(error.msg);
+    const errorMap = errors.array().reduce((acc, error) => {
+      const validationError = error as ValidationError & { path?: string; param?: string; msg: string };
+      const field = validationError.path || validationError.param || 'unknown';
+      if (!acc[field]) {
+        acc[field] = [];
+      }
+      acc[field].push(validationError.msg);
       return acc;
     }, {} as Record<string, string[]>);
     ResponseHelper.validationError(res, errorMap);

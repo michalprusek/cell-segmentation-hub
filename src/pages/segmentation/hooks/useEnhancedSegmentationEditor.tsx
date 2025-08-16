@@ -53,6 +53,19 @@ export const useEnhancedSegmentationEditor = ({
     vertexIndex: number;
   } | null>(null);
   const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
+  
+  // Vertex drag state for smooth dragging
+  const [vertexDragState, setVertexDragState] = useState<{
+    isDragging: boolean;
+    polygonId: string | null;
+    vertexIndex: number | null;
+    dragOffset?: { x: number; y: number };
+    originalPosition?: { x: number; y: number };
+  }>({
+    isDragging: false,
+    polygonId: null,
+    vertexIndex: null,
+  });
 
   // Transform state
   const [transform, setTransform] = useState<TransformState>(() =>
@@ -96,26 +109,39 @@ export const useEnhancedSegmentationEditor = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Update polygons when initialPolygons changes (e.g., when segmentation data loads)
+  // Only update polygons from initialPolygons on first mount or when image changes
+  const initialPolygonsRef = useRef<Polygon[]>([]);
+  const hasInitialized = useRef(false);
+  
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development') {
-      logger.debug(
-        '🔄 Initial polygons changed:',
-        initialPolygons.length,
-        'polygons'
-      );
-    }
-    setPolygons(initialPolygons);
-    // Reset history with new initial state
-    setHistory([initialPolygons]);
-    setHistoryIndex(0);
-    setHasUnsavedChanges(false);
-    if (process.env.NODE_ENV === 'development') {
-      logger.debug(
-        '✅ Updated editor with',
-        initialPolygons.length,
-        'polygons'
-      );
+    // Check if this is truly new data (different length or first load)
+    const isNewData = !hasInitialized.current || 
+                     initialPolygons.length !== initialPolygonsRef.current.length;
+    
+    if (isNewData) {
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug(
+          '🔄 Loading new polygon data:',
+          initialPolygons.length,
+          'polygons'
+        );
+      }
+      setPolygons(initialPolygons);
+      // Reset history with new initial state
+      setHistory([initialPolygons]);
+      setHistoryIndex(0);
+      setHasUnsavedChanges(false);
+      
+      initialPolygonsRef.current = initialPolygons;
+      hasInitialized.current = true;
+      
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug(
+          '✅ Loaded',
+          initialPolygons.length,
+          'polygons'
+        );
+      }
     }
   }, [initialPolygons]);
 
@@ -197,7 +223,9 @@ export const useEnhancedSegmentationEditor = ({
       center,
       EDITING_CONSTANTS.ZOOM_FACTOR,
       EDITING_CONSTANTS.MIN_ZOOM,
-      EDITING_CONSTANTS.MAX_ZOOM
+      EDITING_CONSTANTS.MAX_ZOOM,
+      canvasWidth,
+      canvasHeight
     );
     const constrainedTransform = constrainTransform(
       newTransform,
@@ -216,7 +244,9 @@ export const useEnhancedSegmentationEditor = ({
       center,
       1 / EDITING_CONSTANTS.ZOOM_FACTOR,
       EDITING_CONSTANTS.MIN_ZOOM,
-      EDITING_CONSTANTS.MAX_ZOOM
+      EDITING_CONSTANTS.MAX_ZOOM,
+      canvasWidth,
+      canvasHeight
     );
     const constrainedTransform = constrainTransform(
       newTransform,
@@ -271,39 +301,16 @@ export const useEnhancedSegmentationEditor = ({
       addPointEndVertex: null,
       isAddingPoints: false,
     });
-    setEditMode(EditMode.View);
-  }, []);
+    // If we have a selected polygon, go to EditVertices mode instead of View mode
+    // This keeps the polygon selected when exiting other modes
+    if (selectedPolygonId) {
+      setEditMode(EditMode.EditVertices);
+    } else {
+      setEditMode(EditMode.View);
+    }
+  }, [selectedPolygonId]);
 
-  // Initialize hooks
-  const interactions = useAdvancedInteractions({
-    editMode,
-    interactionState,
-    transform,
-    canvasRef,
-    selectedPolygonId,
-    tempPoints,
-    cursorPosition,
-    setSelectedPolygonId,
-    setEditMode,
-    setInteractionState,
-    setTempPoints,
-    setHoveredVertex,
-    updatePolygons,
-    getPolygons,
-  });
-
-  const slicing = usePolygonSlicing({
-    polygons,
-    selectedPolygonId,
-    tempPoints,
-    interactionState,
-    setSelectedPolygonId,
-    setTempPoints,
-    setInteractionState,
-    setEditMode,
-    updatePolygons,
-  });
-
+  // Initialize keyboard shortcuts first to get access to shift key state
   const keyboardShortcuts = useKeyboardShortcuts({
     editMode,
     canUndo,
@@ -319,6 +326,37 @@ export const useEnhancedSegmentationEditor = ({
     handleDeletePolygon,
     onEscape: handleEscape,
   });
+
+  // Initialize hooks (moved after handlePan definition to avoid TDZ error)
+
+  const slicing = usePolygonSlicing({
+    polygons,
+    selectedPolygonId,
+    tempPoints,
+    interactionState,
+    setSelectedPolygonId,
+    setTempPoints,
+    setInteractionState,
+    setEditMode,
+    updatePolygons,
+  });
+
+  // Handle slice completion when two temp points are placed in slice mode
+  useEffect(() => {
+    if (editMode === EditMode.Slice && tempPoints.length === 2) {
+      // Trigger slice action with error handling
+      const executeSliceAction = async () => {
+        try {
+          await slicing.handleSliceAction();
+        } catch (error) {
+          console.error('Failed to execute slice action:', error);
+          // TODO: Set error state or show user notification
+          // setSliceError(error) or toast.error('Slice operation failed')
+        }
+      };
+      executeSliceAction();
+    }
+  }, [editMode, tempPoints.length, slicing]);
 
   // Enhanced wheel handler with non-passive event listener
   useEffect(() => {
@@ -344,7 +382,9 @@ export const useEnhancedSegmentationEditor = ({
         mousePoint,
         zoomFactor,
         EDITING_CONSTANTS.MIN_ZOOM,
-        EDITING_CONSTANTS.MAX_ZOOM
+        EDITING_CONSTANTS.MAX_ZOOM,
+        rect.width,
+        rect.height
       );
 
       setTransform(
@@ -369,7 +409,7 @@ export const useEnhancedSegmentationEditor = ({
     }
   }, [imageWidth, imageHeight, canvasWidth, canvasHeight]); // Removed transform from dependencies
 
-  // Enhanced pan handler with proper constraints
+  // Enhanced pan handler with smooth continuous movement
   const handlePan = useCallback(
     (deltaX: number, deltaY: number) => {
       const newTransform = {
@@ -378,7 +418,7 @@ export const useEnhancedSegmentationEditor = ({
         translateY: transform.translateY + deltaY,
       };
 
-      // Apply constraints to prevent image from getting stuck at boundaries
+      // Apply generous constraints that allow free movement
       const constrainedTransform = constrainTransform(
         newTransform,
         imageWidth,
@@ -392,6 +432,27 @@ export const useEnhancedSegmentationEditor = ({
     [transform, imageWidth, imageHeight, canvasWidth, canvasHeight]
   );
 
+  // Initialize advanced interactions after handlePan is defined
+  const interactions = useAdvancedInteractions({
+    editMode,
+    interactionState,
+    transform,
+    canvasRef,
+    selectedPolygonId,
+    tempPoints,
+    cursorPosition,
+    isShiftPressed: keyboardShortcuts.isShiftPressed,
+    setSelectedPolygonId,
+    setEditMode,
+    setInteractionState,
+    setTempPoints,
+    setHoveredVertex,
+    setVertexDragState,
+    updatePolygons,
+    getPolygons,
+    handlePan,
+  });
+
   // Update interaction handlers to include pan handling
   const enhancedHandleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -400,22 +461,32 @@ export const useEnhancedSegmentationEditor = ({
         const rect = canvasRef.current.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
+        
+        // Get the container dimensions
+        const containerWidth = rect.width;
+        const containerHeight = rect.height;
+        
+        // The content is centered, so we need to adjust for that
+        const centerOffsetX = containerWidth / 2;
+        const centerOffsetY = containerHeight / 2;
 
-        // Convert to image coordinates
-        const imageX = (canvasX - transform.translateX) / transform.zoom;
-        const imageY = (canvasY - transform.translateY) / transform.zoom;
+        // Convert to image coordinates using the same calculation as getCanvasCoordinates
+        const imageX = (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
+        const imageY = (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
 
         // Use throttled version to prevent excessive re-renders
         throttledSetCursorPosition({ x: imageX, y: imageY });
       }
 
-      // Handle panning if active
+      // Handle panning if active - use incremental deltas for smooth movement
       if (interactionState.isPanning && interactionState.panStart) {
         const deltaX = e.clientX - interactionState.panStart.x;
         const deltaY = e.clientY - interactionState.panStart.y;
 
+        // Apply the delta movement
         handlePan(deltaX, deltaY);
 
+        // Update pan start position for next delta calculation
         setInteractionState({
           ...interactionState,
           panStart: { x: e.clientX, y: e.clientY },
@@ -472,6 +543,7 @@ export const useEnhancedSegmentationEditor = ({
   return {
     // State
     ...editorState,
+    vertexDragState,
 
     // Refs
     canvasRef,
@@ -482,6 +554,7 @@ export const useEnhancedSegmentationEditor = ({
     setTempPoints,
     setInteractionState,
     setHoveredVertex,
+    setVertexDragState,
     setTransform,
 
     // Core operations

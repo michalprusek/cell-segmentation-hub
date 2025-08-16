@@ -37,7 +37,7 @@ export const generateSecureToken = (): string => {
 /**
  * Generate random password
  */
-export const generateRandomPassword = (length: number = 12): string => {
+export const generateRandomPassword = (length = 12): string => {
   const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
   let password = '';
   

@@ -224,7 +224,7 @@ export default {
     },
     toolbar: {
       mode: 'Režim',
-      keyboard: 'Klávesa: {key}',
+      keyboard: 'Klávesa: {{key}}',
       requiresSelection: 'Vyžaduje výběr polygonu',
       requiresPolygonSelection: 'Vyžaduje výběr polygonu',
       select: 'Vybrat',

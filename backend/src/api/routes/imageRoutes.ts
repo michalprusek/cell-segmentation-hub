@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { ImageController } from '../controllers/imageController';
-import { authenticate, requireEmailVerification } from '../../middleware/auth';
+import { authenticate } from '../../middleware/auth';
 import { validateParams, validateQuery } from '../../middleware/validation';
 import { 
   uploadImages, 

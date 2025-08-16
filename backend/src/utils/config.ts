@@ -34,7 +34,9 @@ const configSchema = z.object({
   UPLOAD_DIR: z.string().min(1, 'Upload directory cannot be empty').default('./uploads'),
   MAX_FILE_SIZE: z.string().transform((val) => {
     const num = Number(val);
-    if (isNaN(num) || num <= 0) throw new Error('MAX_FILE_SIZE must be a positive number');
+    if (isNaN(num) || num <= 0) {
+      throw new Error('MAX_FILE_SIZE must be a positive number');
+    }
     return num;
   }).default('10485760'), // 10MB
   S3_ENDPOINT: z.string().optional(),
@@ -93,25 +95,38 @@ const configSchema = z.object({
   return true;
 });
 
+// TypeScript type for configuration
+type ConfigType = z.infer<typeof configSchema>;
+
 // Parse and validate configuration
-const parseConfig = () => {
+const parseConfig = (): ConfigType => {
   try {
     return configSchema.parse(process.env);
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('❌ Invalid environment configuration:');
     if (error instanceof z.ZodError) {
+      // eslint-disable-next-line no-console
       console.error('Zod validation errors:');
       error.errors.forEach((err) => {
+        // eslint-disable-next-line no-console
         console.error(`  ${err.path.join('.')}: ${err.message}`);
+        // eslint-disable-next-line no-console
         console.error(`    Code: ${err.code}`);
       });
     } else {
+      // eslint-disable-next-line no-console
       console.error('Non-Zod error:', error);
     }
+    // eslint-disable-next-line no-console
     console.error('Environment variables:');
+    // eslint-disable-next-line no-console
     console.error('NODE_ENV:', process.env.NODE_ENV);
+    // eslint-disable-next-line no-console
     console.error('FROM_EMAIL:', process.env.FROM_EMAIL);
+    // eslint-disable-next-line no-console
     console.error('JWT_ACCESS_SECRET length:', process.env.JWT_ACCESS_SECRET?.length);
+    // eslint-disable-next-line no-console
     console.error('JWT_REFRESH_SECRET length:', process.env.JWT_REFRESH_SECRET?.length);
     process.exit(1);
   }
@@ -125,35 +140,35 @@ export const isProduction = config.NODE_ENV === 'production';
 export const isTest = config.NODE_ENV === 'test';
 
 // Helper functions
-export const getOrigins = () => {
+export const getOrigins = (): string[] => {
   return config.ALLOWED_ORIGINS.split(',').map(origin => origin.trim());
 };
 
-export const getEmailConfig = () => {
+export const getEmailConfig = (): { service: 'sendgrid' | 'smtp'; apiKey?: string; host?: string; port?: number; user?: string; pass?: string } => {
   if (config.EMAIL_SERVICE === 'sendgrid') {
     return {
       service: 'sendgrid' as const,
-      apiKey: config.SENDGRID_API_KEY!
+      apiKey: config.SENDGRID_API_KEY || ''
     };
   } else {
     return {
       service: 'smtp' as const,
-      host: config.SMTP_HOST!,
-      port: config.SMTP_PORT!,
-      user: config.SMTP_USER!,
-      pass: config.SMTP_PASS!
+      host: config.SMTP_HOST || '',
+      port: config.SMTP_PORT || 587,
+      user: config.SMTP_USER || '',
+      pass: config.SMTP_PASS || ''
     };
   }
 };
 
-export const getStorageConfig = () => {
+export const getStorageConfig = (): { type: 's3' | 'local'; endpoint?: string; accessKey?: string; secretKey?: string; bucket?: string; uploadDir?: string; region?: string; maxFileSize?: number } => {
   if (config.STORAGE_TYPE === 's3') {
     return {
       type: 's3' as const,
       endpoint: config.S3_ENDPOINT,
-      accessKey: config.S3_ACCESS_KEY!,
-      secretKey: config.S3_SECRET_KEY!,
-      bucket: config.S3_BUCKET!,
+      accessKey: config.S3_ACCESS_KEY || '',
+      secretKey: config.S3_SECRET_KEY || '',
+      bucket: config.S3_BUCKET || '',
       region: config.S3_REGION
     };
   } else {

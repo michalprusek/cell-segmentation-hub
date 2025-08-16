@@ -5,16 +5,13 @@ import { CreateProjectData, UpdateProjectData, ProjectQueryParams } from '../../
 import { logger } from '../../utils/logger';
 
 /**
- * Controller for project-related operations
+ * Create a new project
+ * POST /api/projects
  */
-export class ProjectController {
-  /**
-   * Create a new project
-   * POST /api/projects
-   */
-  static createProject = asyncHandler(async (req: Request, res: Response) => {
+export const createProject = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user) {
-      return ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      return;
     }
 
     const data: CreateProjectData = req.body;
@@ -22,7 +19,7 @@ export class ProjectController {
     try {
       const project = await ProjectService.createProject(req.user.id, data);
       
-      return ResponseHelper.success(
+      ResponseHelper.success(
         res,
         project,
         'Projekt byl úspěšně vytvořen',
@@ -34,7 +31,7 @@ export class ProjectController {
         data
       });
       
-      return ResponseHelper.internalError(
+      ResponseHelper.internalError(
         res,
         error as Error,
         'Nepodařilo se vytvořit projekt',
@@ -43,13 +40,14 @@ export class ProjectController {
     }
   });
 
-  /**
-   * Get user projects with pagination and search
-   * GET /api/projects
-   */
-  static getProjects = asyncHandler(async (req: Request, res: Response) => {
+/**
+ * Get user projects with pagination and search
+ * GET /api/projects
+ */
+export const getProjects = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user) {
-      return ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      return;
     }
 
     // Validate and parse query parameters
@@ -58,17 +56,20 @@ export class ProjectController {
     
     // Validate numeric parameters
     if (page !== undefined && (!Number.isInteger(page) || page < 1)) {
-      return ResponseHelper.badRequest(res, 'Invalid page parameter: must be a positive integer');
+      ResponseHelper.badRequest(res, 'Invalid page parameter: must be a positive integer');
+      return;
     }
     
     if (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 100)) {
-      return ResponseHelper.badRequest(res, 'Invalid limit parameter: must be an integer between 1 and 100');
+      ResponseHelper.badRequest(res, 'Invalid limit parameter: must be an integer between 1 and 100');
+      return;
     }
     
     // Validate sortOrder
     const sortOrder = req.query.sortOrder as string | undefined;
     if (sortOrder && sortOrder !== 'asc' && sortOrder !== 'desc') {
-      return ResponseHelper.badRequest(res, 'Invalid sortOrder: must be "asc" or "desc"');
+      ResponseHelper.badRequest(res, 'Invalid sortOrder: must be "asc" or "desc"');
+      return;
     }
     
     const queryParams: ProjectQueryParams = {
@@ -82,7 +83,7 @@ export class ProjectController {
     try {
       const result = await ProjectService.getUserProjects(req.user.id, queryParams);
       
-      return ResponseHelper.paginated(
+      ResponseHelper.paginated(
         res,
         result.projects,
         result.pagination,
@@ -94,7 +95,7 @@ export class ProjectController {
         queryParams
       });
       
-      return ResponseHelper.internalError(
+      ResponseHelper.internalError(
         res,
         error as Error,
         'Nepodařilo se načíst projekty',
@@ -103,29 +104,35 @@ export class ProjectController {
     }
   });
 
-  /**
-   * Get a specific project by ID
-   * GET /api/projects/:id
-   */
-  static getProject = asyncHandler(async (req: Request, res: Response) => {
+/**
+ * Get a specific project by ID
+ * GET /api/projects/:id
+ */
+export const getProject = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user) {
-      return ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      return;
     }
 
     const projectId = req.params.id;
+    if (!projectId) {
+      ResponseHelper.badRequest(res, 'Project ID is required');
+      return;
+    }
     
     try {
-      const project = await ProjectService.getProjectById(projectId!, req.user.id);
+      const project = await ProjectService.getProjectById(projectId, req.user.id);
       
       if (!project) {
-        return ResponseHelper.notFound(
+        ResponseHelper.notFound(
           res,
           'Projekt nebyl nalezen nebo k němu nemáte oprávnění',
           'ProjectController'
         );
+        return;
       }
       
-      return ResponseHelper.success(
+      ResponseHelper.success(
         res,
         project,
         'Projekt byl úspěšně načten'
@@ -136,7 +143,7 @@ export class ProjectController {
         projectId
       });
       
-      return ResponseHelper.internalError(
+      ResponseHelper.internalError(
         res,
         error as Error,
         'Nepodařilo se načíst projekt',
@@ -145,30 +152,36 @@ export class ProjectController {
     }
   });
 
-  /**
-   * Update a project
-   * PUT /api/projects/:id
-   */
-  static updateProject = asyncHandler(async (req: Request, res: Response) => {
+/**
+ * Update a project
+ * PUT /api/projects/:id
+ */
+export const updateProject = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user) {
-      return ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      return;
     }
 
     const projectId = req.params.id;
+    if (!projectId) {
+      ResponseHelper.badRequest(res, 'Project ID is required');
+      return;
+    }
     const data: UpdateProjectData = req.body;
     
     try {
-      const project = await ProjectService.updateProject(projectId!, req.user.id, data);
+      const project = await ProjectService.updateProject(projectId, req.user.id, data);
       
       if (!project) {
-        return ResponseHelper.notFound(
+        ResponseHelper.notFound(
           res,
           'Projekt nebyl nalezen nebo k němu nemáte oprávnění',
           'ProjectController'
         );
+        return;
       }
       
-      return ResponseHelper.success(
+      ResponseHelper.success(
         res,
         project,
         'Projekt byl úspěšně aktualizován'
@@ -180,7 +193,7 @@ export class ProjectController {
         data
       });
       
-      return ResponseHelper.internalError(
+      ResponseHelper.internalError(
         res,
         error as Error,
         'Nepodařilo se aktualizovat projekt',
@@ -189,29 +202,35 @@ export class ProjectController {
     }
   });
 
-  /**
-   * Delete a project
-   * DELETE /api/projects/:id
-   */
-  static deleteProject = asyncHandler(async (req: Request, res: Response) => {
+/**
+ * Delete a project
+ * DELETE /api/projects/:id
+ */
+export const deleteProject = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user) {
-      return ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      return;
     }
 
     const projectId = req.params.id;
+    if (!projectId) {
+      ResponseHelper.badRequest(res, 'Project ID is required');
+      return;
+    }
     
     try {
-      const deletedProject = await ProjectService.deleteProject(projectId!, req.user.id);
+      const deletedProject = await ProjectService.deleteProject(projectId, req.user.id);
       
       if (!deletedProject) {
-        return ResponseHelper.notFound(
+        ResponseHelper.notFound(
           res,
           'Projekt nebyl nalezen nebo k němu nemáte oprávnění',
           'ProjectController'
         );
+        return;
       }
       
-      return ResponseHelper.success(
+      ResponseHelper.success(
         res,
         {
           id: deletedProject.id,
@@ -226,7 +245,7 @@ export class ProjectController {
         projectId
       });
       
-      return ResponseHelper.internalError(
+      ResponseHelper.internalError(
         res,
         error as Error,
         'Nepodařilo se smazat projekt',
@@ -235,29 +254,35 @@ export class ProjectController {
     }
   });
 
-  /**
-   * Get project statistics
-   * GET /api/projects/:id/stats
-   */
-  static getProjectStats = asyncHandler(async (req: Request, res: Response) => {
+/**
+ * Get project statistics
+ * GET /api/projects/:id/stats
+ */
+export const getProjectStats = asyncHandler(async (req: Request, res: Response): Promise<void> => {
     if (!req.user) {
-      return ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'ProjectController');
+      return;
     }
 
     const projectId = req.params.id;
+    if (!projectId) {
+      ResponseHelper.badRequest(res, 'Project ID is required');
+      return;
+    }
     
     try {
-      const stats = await ProjectService.getProjectStats(projectId!, req.user.id);
+      const stats = await ProjectService.getProjectStats(projectId, req.user.id);
       
       if (!stats) {
-        return ResponseHelper.notFound(
+        ResponseHelper.notFound(
           res,
           'Projekt nebyl nalezen nebo k němu nemáte oprávnění',
           'ProjectController'
         );
+        return;
       }
       
-      return ResponseHelper.success(
+      ResponseHelper.success(
         res,
         stats,
         'Statistiky projektu byly úspěšně načteny'
@@ -268,7 +293,7 @@ export class ProjectController {
         projectId
       });
       
-      return ResponseHelper.internalError(
+      ResponseHelper.internalError(
         res,
         error as Error,
         'Nepodařilo se načíst statistiky projektu',
@@ -276,4 +301,3 @@ export class ProjectController {
       );
     }
   });
-}

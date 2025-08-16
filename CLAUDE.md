@@ -70,6 +70,12 @@ These only work for building static assets, but the app must run in Docker:
 - `npm run lint` - Code linting
 - `npm run preview` - Preview build (but use Docker for development)
 
+### Docker Build Commands (Use Desktop Commander MCP)
+**IMPORTANT: Use Desktop Commander MCP for long-running build operations to prevent macOS terminal crashes**
+- For Docker builds longer than 30s, use `mcp__desktop-commander__start_process` instead of Bash tool
+- Example: `mcp__desktop-commander__start_process("docker compose build backend", 600000)`
+- Monitor with `mcp__desktop-commander__read_process_output` and `mcp__desktop-commander__interact_with_process`
+
 ## Project Architecture
 
 This is a React-based cell segmentation application with a full-stack microservices architecture. The system consists of three main services running in Docker containers:
@@ -143,8 +149,8 @@ Uses JWT-based authentication with access/refresh tokens. The `AuthContext` mana
 
 ### ML Models in Production
 - **HRNetV2** - Best accuracy, ~3.1s inference time
-- **ResUNet Small** - Fastest inference, ~6.9s inference time  
-- **ResUNet Advanced** - Most precise, ~18.1s inference time with attention mechanisms
+- **CBAM-ResUNet** - Fastest inference, ~6.9s inference time  
+- **MA-ResUNet** - Most precise, ~18.1s inference time with attention mechanisms
 
 ### API Documentation
 - **Swagger UI**: http://localhost:3001/api-docs (interactive documentation)
@@ -165,15 +171,31 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 
 ### Testing and Quality
 - **Linting**: Run `npm run lint` for code quality checks
+- **Type checking**: Run `npm run type-check` to verify TypeScript types
+- **Unit tests**: Run `npm run test` for Vitest unit tests
+- **E2E tests**: Run `npm run test:e2e` for Playwright end-to-end tests (requires services running)
+- **Test coverage**: Run `npm run test:coverage` to generate coverage report
 - **API testing**: Use Swagger UI at http://localhost:3001/api-docs
 - **Health checks**: Use `make health` to verify all services are running
 - **Service logs**: Use `make logs-f` to monitor all services in real-time
+
+### Git Hooks and Pre-commit Checks
+The project uses Husky for pre-commit hooks and lint-staged for running checks:
+- **Pre-commit**: Automatically runs `npm run --silent lint-staged` before commits
+- **Lint-staged**: Runs ESLint, Prettier, and TypeScript type-check on staged files
+- **Commit messages**: Follow conventional commit format (e.g., `feat:`, `fix:`, `chore:`)
+- **To bypass hooks** (emergency only): Use `git commit --no-verify`
 
 ### Common Development Tasks
 - **Adding new API endpoints**: Add routes in `/backend/src/api/routes/`, controllers in `/backend/src/api/controllers/`, and update OpenAPI spec
 - **Frontend components**: Create in `/src/components/` following existing patterns, use shadcn/ui primitives
 - **ML model changes**: Modify `/backend/segmentation/models/` and update model loading in `/backend/segmentation/services/`
-- **Database changes**: Update `/backend/prisma/schema.prisma` and run `npx prisma migrate dev` in backend container
+- **Database changes**: 
+  - Update `/backend/prisma/schema.prisma`
+  - Shell into backend container: `make shell-be`
+  - Run migration: `npx prisma migrate dev --name your_migration_name`
+  - Generate client: `npx prisma generate`
+- **Viewing database**: Run `cd backend && npm run db:studio` (opens Prisma Studio)
 
 ## Current System Status
 
@@ -201,3 +223,22 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 - **Performance**: Optimized Docker containers, efficient image processing
 - **Scalability**: Microservices architecture, queue-based ML processing
 - **Developer Experience**: Hot reload in development, comprehensive API docs
+- nikdy nepřeskakuj pre-commit hook!
+
+## Recent Implementations & Important Notes
+
+### Storage Space Indicator (Dashboard)
+- **Backend Endpoint**: `GET /api/auth/storage-stats` - Returns user's total storage usage
+- **Frontend**: Replaced average segmentation time with storage usage indicator in dashboard
+- **Location**: `StatsOverview` component shows storage in MB/GB with HardDrive icon from lucide-react
+- **Translation keys**: Already exist - `dashboard.storageUsed` in all language files
+
+### Critical Import Paths
+- **Backend Prisma imports**: Use stable import aliases like `@db/prisma` or `@/db` instead of fragile relative paths. Configure TypeScript path aliases in `tsconfig.json` paths and update bundler/module resolution configs (webpack/ts-node/next) so imports work from any directory depth. Example alias: `"@db/*": ["./src/db/*"]` then use `import { prisma } from '@db/prisma'`. Relative fallback `import { prisma } from '../../db'` may be used but is discouraged.
+- **This is essential** - wrong import path causes MODULE_NOT_FOUND errors and backend crash
+
+### WebSocket Segmentation Queue Fix
+- **Problem**: WebSocket disconnecting with "transport close" and not reconnecting
+- **Solution**: Enable Socket.io auto-reconnection, add keep-alive pings, fix disconnect handling
+- **Key settings**: `reconnection: true`, ping interval every 25s, proper reconnect event handlers
+- **Location**: `/src/services/webSocketManager.ts`

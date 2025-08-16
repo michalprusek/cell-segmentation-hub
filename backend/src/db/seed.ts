@@ -1,8 +1,15 @@
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
+import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 import { logger } from '../utils/logger';
-import dotenv from 'dotenv';
+import * as dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import * as path from 'path';
+
+// ES module equivalents for __dirname and require.main
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 
 // Load environment variables
 dotenv.config();
@@ -15,7 +22,7 @@ const SEGMENTATION_MODELS = {
 
 const prisma = new PrismaClient();
 
-async function seedDatabase() {
+async function seedDatabase(): Promise<void> {
   try {
     logger.info('Starting database seeding...', 'Seed');
 
@@ -53,9 +60,8 @@ async function seedDatabase() {
       where: { email: adminEmail },
     });
 
-    let adminUser;
     if (!existingAdmin) {
-      adminUser = await prisma.user.create({
+      await prisma.user.create({
         data: {
           email: adminEmail,
           password: adminPassword,
@@ -78,7 +84,6 @@ async function seedDatabase() {
       });
       logger.info('Admin user created', 'Seed', { email: adminEmail });
     } else {
-      adminUser = existingAdmin;
       logger.info('Admin user already exists', 'Seed', { email: adminEmail });
     }
 
@@ -146,8 +151,12 @@ async function seedDatabase() {
     }
 
     // Create sample projects for test user
+    if (!testUser) {
+      throw new Error('Test user not found');
+    }
+    
     const existingProjects = await prisma.project.findMany({
-      where: { userId: testUser!.id },
+      where: { userId: testUser.id },
     });
 
     if (existingProjects.length === 0) {
@@ -155,17 +164,17 @@ async function seedDatabase() {
         {
           title: 'Buněčné kultury - Experiment 1',
           description: 'Analýza růstu buněčných kultur v různých podmínkách',
-          userId: testUser!.id,
+          userId: testUser.id,
         },
         {
           title: 'Sféroidy - Kontrolní skupina',
           description: 'Segmentace sféroidů z kontrolní skupiny',
-          userId: testUser!.id,
+          userId: testUser.id,
         },
         {
           title: 'Test segmentace',
           description: 'Testovací projekt pro ověření funkčnosti segmentace',
-          userId: testUser!.id,
+          userId: testUser.id,
         },
       ];
 
@@ -198,7 +207,7 @@ async function seedDatabase() {
       },
     ];
 
-    for (const requestData of sampleRequests) {
+    for (const _requestData of sampleRequests) {
       // Skipping access request seeding - table removed
       /*const existingRequest = await prisma.accessRequest.findUnique({
         where: { email: requestData.email },
@@ -231,10 +240,10 @@ async function seedDatabase() {
 }
 
 // Run seeding if this file is executed directly
-if (require.main === module) {
+if (isMainModule) {
   seedDatabase()
     .catch((error) => {
-      console.error('Seeding failed:', error);
+      logger.error('Seeding failed:', error as Error, 'Seed');
       process.exit(1);
     });
 }
