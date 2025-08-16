@@ -94,3 +94,5 @@ docs/api/generated/
 
 # Development tools
 .vscode/settings.json
+
+.eslintcache
