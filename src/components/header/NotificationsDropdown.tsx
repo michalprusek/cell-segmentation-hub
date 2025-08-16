@@ -19,9 +19,7 @@ const NotificationsDropdown = ({
       size="icon"
       className="relative dark:text-gray-300"
       onClick={() => {
-        if (location.pathname !== '/settings') {
-          navigate('/settings?tab=notifications');
-        }
+        navigate('/settings?tab=notifications');
       }}
     >
       <Bell className="h-5 w-5" />

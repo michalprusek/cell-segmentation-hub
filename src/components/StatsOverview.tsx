@@ -44,7 +44,7 @@ const StatCard = ({
         >
           <span>{trend.value}</span>
           <svg
-            className={`h-3 w-3 ml-1 ${!trend.isPositive && 'rotate-180'}`}
+            className={`h-3 w-3 ml-1 ${!trend.isPositive ? 'rotate-180' : ''}`}
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"

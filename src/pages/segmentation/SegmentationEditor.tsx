@@ -1,13 +1,10 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
-import {
-  convertPolygonsToSegmentation,
-  convertSegmentationToPolygons,
-} from './adapters/legacyAdapter';
 import { EditMode } from './types';
+import { Polygon } from '@/lib/segmentation';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
@@ -56,8 +53,8 @@ const SegmentationEditor = () => {
   const selectedImage = projectImages.find(img => img.id === imageId);
   const project = { name: projectTitle || 'Unknown Project' };
 
-  // State for segmentation data
-  const [segmentationData, setSegmentationData] = useState(null);
+  // State for segmentation polygons
+  const [segmentationPolygons, setSegmentationPolygons] = useState<Polygon[] | null>(null);
   const [imageDimensions, setImageDimensions] = useState<{
     width: number;
     height: number;
@@ -71,33 +68,33 @@ const SegmentationEditor = () => {
   });
 
   // Calculate canvas dimensions dynamically based on container and image
-  const updateCanvasDimensions = (
-    containerWidth: number,
-    containerHeight: number
-  ) => {
-    if (imageDimensions) {
-      const imageAspectRatio = imageDimensions.width / imageDimensions.height;
-      const containerAspectRatio = containerWidth / containerHeight;
+  const updateCanvasDimensions = useCallback(
+    (containerWidth: number, containerHeight: number) => {
+      if (imageDimensions) {
+        const imageAspectRatio = imageDimensions.width / imageDimensions.height;
+        const containerAspectRatio = containerWidth / containerHeight;
 
-      let newWidth, newHeight;
-      if (imageAspectRatio > containerAspectRatio) {
-        // Image is wider than container
-        newWidth = containerWidth;
-        newHeight = containerWidth / imageAspectRatio;
-      } else {
-        // Image is taller than container
-        newHeight = containerHeight;
-        newWidth = containerHeight * imageAspectRatio;
+        let newWidth, newHeight;
+        if (imageAspectRatio > containerAspectRatio) {
+          // Image is wider than container
+          newWidth = containerWidth;
+          newHeight = containerWidth / imageAspectRatio;
+        } else {
+          // Image is taller than container
+          newHeight = containerHeight;
+          newWidth = containerHeight * imageAspectRatio;
+        }
+
+        // Apply devicePixelRatio for crisp rendering
+        const dpr = window.devicePixelRatio || 1;
+        setCanvasDimensions({
+          width: Math.round(newWidth * dpr) / dpr,
+          height: Math.round(newHeight * dpr) / dpr,
+        });
       }
-
-      // Apply devicePixelRatio for crisp rendering
-      const dpr = window.devicePixelRatio || 1;
-      setCanvasDimensions({
-        width: Math.round(newWidth * dpr) / dpr,
-        height: Math.round(newHeight * dpr) / dpr,
-      });
-    }
-  };
+    },
+    [imageDimensions]
+  );
 
   // Update canvas dimensions when image dimensions change
   useEffect(() => {
@@ -114,27 +111,14 @@ const SegmentationEditor = () => {
 
   // Get initial polygons from segmentation data
   const initialPolygons = useMemo(() => {
-    const polygons = segmentationData
-      ? convertSegmentationToPolygons(
-          segmentationData,
-          imageDimensions?.width,
-          imageDimensions?.height
-        )
-      : [];
-    logger.debug('🔄 Converting segmentation data to polygons:', {
-      hasSegmentationData: !!segmentationData,
+    const polygons = segmentationPolygons || [];
+    logger.debug('🔄 Using segmentation polygons:', {
+      hasSegmentationData: !!segmentationPolygons,
       polygonCount: polygons.length,
       imageDimensions,
-      segmentationData: segmentationData
-        ? {
-            polygons: segmentationData.polygons?.length || 0,
-            imageWidth: segmentationData.imageWidth,
-            imageHeight: segmentationData.imageHeight,
-          }
-        : null,
     });
     return polygons;
-  }, [segmentationData, imageDimensions]);
+  }, [segmentationPolygons, imageDimensions]);
 
   // Initialize enhanced editor
   const editor = useEnhancedSegmentationEditor({
@@ -144,7 +128,7 @@ const SegmentationEditor = () => {
     canvasWidth,
     canvasHeight,
     onSave: async polygons => {
-      if (!projectId || !imageId) return false;
+      if (!projectId || !imageId) return;
 
       try {
         const polygonData = polygons.map(polygon => ({
@@ -156,26 +140,17 @@ const SegmentationEditor = () => {
           area: polygon.area,
         }));
 
-        await apiClient.updateSegmentationResults(imageId, polygonData);
-        const updatedSegmentation = convertPolygonsToSegmentation(
-          polygons,
-          segmentationData
-        );
-        setSegmentationData(updatedSegmentation);
-        return true;
+        const updatedPolygons = await apiClient.updateSegmentationResults(imageId, polygonData);
+        setSegmentationPolygons(updatedPolygons);
+        toast.success('Segmentation saved successfully');
       } catch (error) {
         logger.error('Failed to save segmentation:', error);
         toast.error('Failed to save segmentation data');
-        return false;
       }
     },
     onPolygonsChange: polygons => {
-      // Update segmentation data when polygons change
-      const updatedSegmentation = convertPolygonsToSegmentation(
-        polygons,
-        segmentationData
-      );
-      setSegmentationData(updatedSegmentation);
+      // Update local polygon state when polygons change
+      setSegmentationPolygons(polygons);
     },
   });
 
@@ -185,14 +160,14 @@ const SegmentationEditor = () => {
       if (!projectId || !imageId) return;
 
       try {
-        const segmentation = await apiClient.getSegmentationResults(imageId);
+        const polygons = await apiClient.getSegmentationResults(imageId);
         // Handle empty or null segmentation gracefully
-        if (!segmentation) {
+        if (!polygons) {
           logger.debug('No segmentation data found for image:', imageId);
-          setSegmentationData(null);
+          setSegmentationPolygons(null);
           return;
         }
-        setSegmentationData(segmentation);
+        setSegmentationPolygons(polygons);
       } catch (error) {
         logger.error('Failed to load segmentation:', error);
         // Set to null instead of showing error for missing segmentation
@@ -203,10 +178,10 @@ const SegmentationEditor = () => {
           (error as { response?: { status?: number } }).response?.status === 404
         ) {
           logger.debug('No segmentation found for image (404):', imageId);
-          setSegmentationData(null);
+          setSegmentationPolygons(null);
         } else {
           toast.error('Failed to load segmentation data');
-          setSegmentationData(null);
+          setSegmentationPolygons(null);
         }
       }
     };
@@ -224,10 +199,6 @@ const SegmentationEditor = () => {
       visiblePolygons: filteredPolygons.length,
       hiddenCount: hiddenPolygonIds.size,
       imageDimensions,
-      segmentationDimensions: {
-        width: segmentationData?.imageWidth,
-        height: segmentationData?.imageHeight,
-      },
       firstPolygon: filteredPolygons[0]
         ? {
             id: filteredPolygons[0].id,
@@ -244,7 +215,7 @@ const SegmentationEditor = () => {
           }
         : null,
     });
-  }, [editor.polygons, hiddenPolygonIds, imageDimensions, segmentationData]);
+  }, [editor.polygons, hiddenPolygonIds, imageDimensions]);
 
   // Handle image load to get dimensions
   const handleImageLoad = (width: number, height: number) => {
@@ -416,10 +387,7 @@ const SegmentationEditor = () => {
                     }}
                     data-transform={JSON.stringify(editor.transform)}
                     data-image-dims={JSON.stringify(imageDimensions)}
-                    data-segmentation-dims={JSON.stringify({
-                      width: segmentationData?.imageWidth,
-                      height: segmentationData?.imageHeight,
-                    })}
+                    data-polygon-count={editor.polygons.length}
                   >
                     {/* Render all polygons */}
                     {editor.polygons
@@ -505,7 +473,7 @@ const SegmentationEditor = () => {
             {/* Right: Polygon List Panel */}
             <PolygonListPanel
               loading={projectLoading}
-              segmentation={segmentationData}
+              polygons={editor.polygons}
               selectedPolygonId={editor.selectedPolygonId}
               onSelectPolygon={editor.setSelectedPolygonId}
               hiddenPolygonIds={hiddenPolygonIds}
@@ -524,7 +492,7 @@ const SegmentationEditor = () => {
 
         {/* Status Bar */}
         <StatusBar
-          segmentation={segmentationData}
+          polygons={editor.polygons}
           editMode={editor.editMode}
           selectedPolygonId={editor.selectedPolygonId}
           visiblePolygonsCount={visiblePolygonsCount}

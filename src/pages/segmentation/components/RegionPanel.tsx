@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Circle } from 'lucide-react';
-import { SegmentationResult } from '@/lib/segmentation';
+import { Polygon } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import PolygonItem from './PolygonItem';
@@ -8,7 +8,7 @@ import { isPointInPolygon, getPolygonCentroid } from '@/lib/polygonGeometry';
 
 interface RegionPanelProps {
   loading: boolean;
-  segmentation: SegmentationResult | null;
+  polygons: Polygon[];
   selectedPolygonId: string | null;
   onSelectPolygon: (id: string | null) => void;
   hiddenPolygonIds?: Set<string>;
@@ -19,7 +19,7 @@ interface RegionPanelProps {
 
 const RegionPanel = ({
   loading,
-  segmentation,
+  polygons,
   selectedPolygonId,
   onSelectPolygon: setSelectedPolygonId,
   hiddenPolygonIds = new Set(),
@@ -36,10 +36,10 @@ const RegionPanel = ({
 
   // Organize polygons by hierarchy (external with internal polygons under them)
   const organizedPolygons = useMemo(() => {
-    if (!segmentation) return [];
+    if (!polygons) return [];
 
-    const externals = segmentation.polygons.filter(p => p.type === 'external');
-    const internals = segmentation.polygons.filter(p => p.type === 'internal');
+    const externals = polygons.filter(p => p.type === 'external');
+    const internals = polygons.filter(p => p.type === 'internal');
 
     return externals.map(external => ({
       ...external,
@@ -99,7 +99,7 @@ const RegionPanel = ({
     onDeletePolygon?.(id);
   };
 
-  if (!segmentation) return null;
+  if (!polygons) return null;
 
   return (
     <motion.div
@@ -114,7 +114,7 @@ const RegionPanel = ({
           Polygons
         </h3>
         <div className="text-sm text-gray-600 dark:text-gray-400">
-          {segmentation.polygons.length} total polygons
+          {polygons.length} total polygons
         </div>
       </div>
 

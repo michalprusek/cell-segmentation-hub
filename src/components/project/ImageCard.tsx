@@ -93,6 +93,12 @@ export const ImageCard = ({
   const [fallbackIndex, setFallbackIndex] = useState(0);
   const { t } = useLanguage();
 
+  // Reset fallback state when image changes
+  React.useEffect(() => {
+    setFallbackIndex(0);
+    setImageError(false);
+  }, [image.id, image.thumbnail_url, image.url, image.image_url]);
+
   // Create ordered list of candidate URLs, deduplicating falsy/identical entries
   const candidateUrls = React.useMemo(() => {
     const urls = [image.thumbnail_url, image.url, image.image_url]
@@ -134,7 +140,7 @@ export const ImageCard = ({
         <div className="absolute inset-0">
           {!imageError && candidateUrls.length > 0 ? (
             <img
-              src={candidateUrls[fallbackIndex] || ''}
+              src={candidateUrls[Math.min(fallbackIndex, candidateUrls.length - 1)] || ''}
               alt={image.name || 'Image'}
               className="w-full h-full object-cover"
               loading="lazy"

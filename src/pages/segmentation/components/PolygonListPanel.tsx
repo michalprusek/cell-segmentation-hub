@@ -9,12 +9,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Polygon } from '@/lib/segmentation';
-import { SegmentationResult } from '@/lib/segmentation';
 import { motion } from 'framer-motion';
 
 interface PolygonListPanelProps {
   loading: boolean;
-  segmentation: SegmentationResult | null;
+  polygons: Polygon[];
   selectedPolygonId: string | null;
   onSelectPolygon: (id: string | null) => void;
   hiddenPolygonIds?: Set<string>;
@@ -28,7 +27,7 @@ interface PolygonListPanelProps {
  */
 const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   loading,
-  segmentation,
+  polygons,
   selectedPolygonId,
   onSelectPolygon,
   hiddenPolygonIds = new Set(),
@@ -69,7 +68,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
     );
   }
 
-  if (!segmentation || segmentation.polygons.length === 0) {
+  if (!polygons || polygons.length === 0) {
     return (
       <div className="w-72 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
@@ -92,14 +91,14 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-          Seznam polygonů ({segmentation.polygons.length})
+          Seznam polygonů ({polygons.length})
         </h3>
       </div>
 
       {/* Polygon List */}
       <div className="flex-1 overflow-y-auto">
         <div className="p-2 space-y-1">
-          {segmentation.polygons.map((polygon, index) => {
+          {polygons.map((polygon, index) => {
             const isSelected = selectedPolygonId === polygon.id;
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;

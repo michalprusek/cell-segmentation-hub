@@ -16,7 +16,7 @@ export interface Polygon {
   class?: string;
 }
 
-export type SegmentationResult = SegmentationData;
+// SegmentationResult type removed - use Polygon[] directly
 
 // Apply a simple thresholding algorithm to create a binary mask
 export const applyThresholding = async (

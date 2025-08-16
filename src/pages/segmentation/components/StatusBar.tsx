@@ -1,5 +1,5 @@
 import React from 'react';
-import { SegmentationResult } from '@/lib/segmentation';
+import { Polygon } from '@/lib/segmentation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { EditMode } from '../types';
 import {
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 interface StatusBarProps {
-  segmentation: SegmentationResult | null;
+  polygons: Polygon[];
   editMode?: EditMode;
   selectedPolygonId?: string | null;
   visiblePolygonsCount?: number;
@@ -28,7 +28,7 @@ interface StatusBarProps {
 }
 
 const StatusBar = ({
-  segmentation,
+  polygons,
   editMode,
   selectedPolygonId,
   visiblePolygonsCount,
@@ -36,10 +36,10 @@ const StatusBar = ({
 }: StatusBarProps) => {
   const { t } = useLanguage();
 
-  if (!segmentation) return null;
+  if (!polygons) return null;
 
   // Vypočítáme celkový počet bodů napříč všemi polygony
-  const totalVertices = segmentation.polygons.reduce(
+  const totalVertices = polygons.reduce(
     (sum, polygon) => sum + polygon.points.length,
     0
   );
@@ -102,7 +102,7 @@ const StatusBar = ({
   };
 
   // Spočítáme viditelné a skryté polygony
-  const totalPolygons = segmentation.polygons.length;
+  const totalPolygons = polygons.length;
   const visibleCount = visiblePolygonsCount ?? totalPolygons;
   const hiddenCount = hiddenPolygonsCount ?? 0;
 
@@ -161,17 +161,9 @@ const StatusBar = ({
         )}
 
         <div className="flex items-center space-x-2">
-          {segmentation.id ? (
-            <CheckCircle className="h-3 w-3 text-green-500" />
-          ) : (
-            <XCircle className="h-3 w-3 text-gray-400" />
-          )}
-          <span
-            className={`text-xs ${segmentation.id ? 'text-green-500' : 'text-gray-400'}`}
-          >
-            {segmentation.id
-              ? t('segmentation.status.saved')
-              : t('segmentation.status.unsaved')}
+          <CheckCircle className="h-3 w-3 text-green-500" />
+          <span className="text-xs text-green-500">
+            {t('segmentation.status.saved')}
           </span>
         </div>
       </div>
@@ -186,15 +178,13 @@ const StatusBar = ({
         </div>
       )}
 
-      {/* Right side - Segmentation ID */}
-      {segmentation.id && (
-        <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
-          <Hash className="h-3 w-3" />
-          <span className="text-xs font-mono">
-            ID: {segmentation.id.substring(0, 8)}
-          </span>
-        </div>
-      )}
+      {/* Right side - Polygon count */}
+      <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+        <Shapes className="h-3 w-3" />
+        <span className="text-xs">
+          {totalPolygons} {t('segmentation.status.polygons')}
+        </span>
+      </div>
     </div>
   );
 };

@@ -682,24 +682,49 @@ class ApiClient {
     return this.extractData(response);
   }
 
-  async getSegmentationResults(imageId: string): Promise<SegmentationResult> {
-    const response = await this.instance.get(
-      `/segmentation/images/${imageId}/results`
-    );
-    return this.extractData(response);
+  async getSegmentationResults(imageId: string): Promise<SegmentationPolygon[] | null> {
+    try {
+      const response = await this.instance.get(
+        `/segmentation/images/${imageId}/results`
+      );
+      const data = this.extractData(response);
+      // If the API returns an object with polygons property, extract it
+      if (data && typeof data === 'object' && 'polygons' in data) {
+        return (data as { polygons: SegmentationPolygon[] }).polygons || [];
+      }
+      // If it's already an array of polygons, return directly
+      if (Array.isArray(data)) {
+        return data;
+      }
+      return null;
+    } catch (error) {
+      if ((error as { response?: { status?: number } })?.response?.status === 404) {
+        return null; // No segmentation exists yet
+      }
+      throw error;
+    }
   }
 
   async updateSegmentationResults(
     imageId: string,
     polygons: SegmentationPolygon[]
-  ): Promise<SegmentationResult> {
+  ): Promise<SegmentationPolygon[]> {
     const response = await this.instance.put(
       `/segmentation/images/${imageId}/results`,
       {
         polygons,
       }
     );
-    return this.extractData(response);
+    const data = this.extractData(response);
+    // If the API returns an object with polygons property, extract it
+    if (data && typeof data === 'object' && 'polygons' in data) {
+      return (data as { polygons: SegmentationPolygon[] }).polygons || [];
+    }
+    // If it's already an array of polygons, return directly
+    if (Array.isArray(data)) {
+      return data;
+    }
+    return polygons; // Return what was sent if response is unexpected
   }
 
   async deleteSegmentationResults(imageId: string): Promise<void> {

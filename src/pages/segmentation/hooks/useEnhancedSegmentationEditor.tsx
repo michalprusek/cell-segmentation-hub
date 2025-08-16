@@ -16,6 +16,7 @@ import {
   calculateFixedPointZoom,
   constrainTransform,
 } from '@/lib/coordinateUtils';
+import { rafThrottle } from '@/lib/performanceUtils';
 
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];
@@ -63,8 +64,18 @@ export const useEnhancedSegmentationEditor = ({
     )
   );
 
+  // Refs (declare before using)
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const transformRef = useRef<TransformState>(transform);
+
   // Update transformRef whenever transform changes
   transformRef.current = transform;
+
+  // Create throttled cursor position update
+  const throttledSetCursorPosition = useMemo(
+    () => rafThrottle((position: Point) => setCursorPosition(position), 16).fn,
+    []
+  );
 
   // Interaction state
   const [interactionState, setInteractionState] = useState<InteractionState>({
@@ -84,10 +95,6 @@ export const useEnhancedSegmentationEditor = ({
   const [historyIndex, setHistoryIndex] = useState(0);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  // Refs
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const transformRef = useRef<TransformState>(transform);
 
   // Update polygons when initialPolygons changes (e.g., when segmentation data loads)
   useEffect(() => {
@@ -398,7 +405,8 @@ export const useEnhancedSegmentationEditor = ({
         const imageX = (canvasX - transform.translateX) / transform.zoom;
         const imageY = (canvasY - transform.translateY) / transform.zoom;
 
-        setCursorPosition({ x: imageX, y: imageY });
+        // Use throttled version to prevent excessive re-renders
+        throttledSetCursorPosition({ x: imageX, y: imageY });
       }
 
       // Handle panning if active
@@ -418,7 +426,7 @@ export const useEnhancedSegmentationEditor = ({
       // Delegate to advanced interactions
       interactions.handleMouseMove(e);
     },
-    [interactionState, handlePan, interactions, transform, canvasRef]
+    [interactionState, handlePan, interactions, transform, canvasRef, throttledSetCursorPosition]
   );
 
   // Computed values
