@@ -49,8 +49,8 @@ fi
 # Run backend type checking
 print_status "Running backend TypeScript type checking..."
 if ! (cd backend && npm run type-check); then
-    print_warning "Backend TypeScript type checking failed! (Currently non-blocking)"
-    # OVERALL_SUCCESS=false  # Temporarily disabled for setup
+    print_error "Backend TypeScript type checking failed!"
+    OVERALL_SUCCESS=false
 else
     print_success "Backend TypeScript type checking passed"
 fi

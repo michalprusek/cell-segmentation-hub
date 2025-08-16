@@ -99,7 +99,7 @@ export class MetricsCalculator {
     for (let imageIdx = 0; imageIdx < images.length; imageIdx++) {
       const image = images[imageIdx];
       
-      if (image.segmentation?.polygons) {
+      if (image && image.segmentation?.polygons) {
         const result = image.segmentation;
         if (result.polygons) {
           try {
@@ -581,10 +581,10 @@ export class MetricsCalculator {
     let inside = false;
 
     for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
-      const xi = points[i].x;
-      const yi = points[i].y;
-      const xj = points[j].x;
-      const yj = points[j].y;
+      const xi = points[i]?.x || 0;
+      const yi = points[i]?.y || 0;
+      const xj = points[j]?.x || 0;
+      const yj = points[j]?.y || 0;
 
       if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
         inside = !inside;

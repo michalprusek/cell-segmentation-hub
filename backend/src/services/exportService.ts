@@ -119,7 +119,7 @@ export class ExportService {
         } else if (event === 'export:completed') {
           logger.info('Export completed notification sent', 'ExportService', { userId, jobId: data.jobId });
         } else if (event === 'export:failed') {
-          logger.error('Export failed notification sent', new Error(data.error), 'ExportService', { userId, jobId: data.jobId });
+          logger.error('Export failed notification sent', new Error(String(data.error)), 'ExportService', { userId, jobId: data.jobId });
         }
       } catch (error) {
         logger.error('Failed to send WebSocket message', error instanceof Error ? error : new Error(String(error)), 'ExportService', { userId, event, data });
@@ -371,15 +371,15 @@ export class ExportService {
     
     for (let i = 0; i < images.length; i++) {
       const image = images[i];
-      if (image.path) {
-        const candidateSourcePath = path.join(uploadDir, image.path);
+      if (image && image.originalPath) {
+        const candidateSourcePath = path.join(uploadDir, image.originalPath);
         const resolvedSourcePath = path.resolve(candidateSourcePath);
         
         // Security check: ensure resolved path starts with upload directory
         if (!resolvedSourcePath.startsWith(resolvedUploadDir)) {
           logger.warn(`Path traversal attempt detected for image ${image.id}`, 'ExportService', {
             imageId: image.id,
-            imagePath: image.path,
+            imagePath: image.originalPath,
             resolvedPath: resolvedSourcePath,
             uploadDir: resolvedUploadDir
           });
@@ -410,8 +410,8 @@ export class ExportService {
     
     for (let i = 0; i < images.length; i++) {
       const image = images[i];
-      if (image.segmentationResults?.length > 0) {
-        const result = image.segmentationResults[0];
+      if (image && image.segmentation) {
+        const result = image.segmentation;
         if (result.polygons) {
           const vizPath = path.join(
             vizDir,
@@ -430,7 +430,7 @@ export class ExportService {
           
           try {
             await this.visualizationGenerator.generateVisualization(
-              image.path,
+              image.originalPath,
               polygons,
               vizPath,
               options
@@ -438,7 +438,7 @@ export class ExportService {
           } catch (error) {
             logger.error('Visualization generation failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService', {
               imageId: image.id,
-              imagePath: image.path
+              imagePath: image.originalPath
             });
             // Continue with other images even if visualization fails
           }
@@ -456,7 +456,20 @@ export class ExportService {
       const formatDir = path.join(exportDir, 'annotations', format);
       
       if (format === 'coco') {
-        const cocoData = await this.formatConverter.convertToCOCO(images);
+        // Convert ImageWithSegmentation[] to ImageData[]
+        const imageDataArray = images.map((image, index) => ({
+          id: image.id,
+          filename: `image_${String(index + 1).padStart(3, '0')}.jpg`,
+          width: image.width || 0,
+          height: image.height || 0,
+          segmentationResults: image.segmentation ? [{
+            polygons: image.segmentation.polygons,
+            cellCount: 0,
+            timestamp: new Date()
+          }] : []
+        }));
+        
+        const cocoData = await this.formatConverter.convertToCOCO(imageDataArray);
         await fs.writeFile(
           path.join(formatDir, 'annotations.json'),
           JSON.stringify(cocoData, null, 2)
@@ -464,11 +477,11 @@ export class ExportService {
       } else if (format === 'yolo') {
         for (let i = 0; i < images.length; i++) {
           const image = images[i];
-          if (image.segmentationResults?.length > 0) {
+          if (image && image.segmentation) {
             const yoloData = await this.formatConverter.convertToYOLO(
-              image.segmentationResults[0].polygons,
-              image.width,
-              image.height
+              image.segmentation.polygons,
+              image.width || 0,
+              image.height || 0
             );
             await fs.writeFile(
               path.join(formatDir, `image_${String(i + 1).padStart(3, '0')}.txt`),
@@ -477,7 +490,20 @@ export class ExportService {
           }
         }
       } else if (format === 'json') {
-        const jsonData = await this.formatConverter.convertToJSON(images);
+        // Convert ImageWithSegmentation[] to ImageData[]
+        const imageDataArray = images.map((image, index) => ({
+          id: image.id,
+          filename: `image_${String(index + 1).padStart(3, '0')}.jpg`,
+          width: image.width || 0,
+          height: image.height || 0,
+          segmentationResults: image.segmentation ? [{
+            polygons: image.segmentation.polygons,
+            cellCount: 0,
+            timestamp: new Date()
+          }] : []
+        }));
+        
+        const jsonData = await this.formatConverter.convertToJSON(imageDataArray);
         await fs.writeFile(
           path.join(formatDir, 'segmentation_data.json'),
           JSON.stringify(jsonData, null, 2)
@@ -493,7 +519,22 @@ export class ExportService {
     projectName: string
   ): Promise<void> {
     const metricsDir = path.join(exportDir, 'metrics');
-    const allMetrics = await this.metricsCalculator.calculateAllMetrics(images);
+    // Convert images to the format expected by metrics calculator
+    const metricsImages = images.map(image => ({
+      id: image.id,
+      name: image.name,
+      width: image.width || undefined,
+      height: image.height || undefined,
+      segmentation: image.segmentation ? {
+        polygons: image.segmentation.polygons,
+        model: image.segmentation.model,
+        threshold: image.segmentation.threshold,
+        confidence: image.segmentation.confidence || undefined,
+        processingTime: image.segmentation.processingTime || undefined
+      } : undefined
+    }));
+    
+    const allMetrics = await this.metricsCalculator.calculateAllMetrics(metricsImages as Parameters<typeof this.metricsCalculator.calculateAllMetrics>[0]);
 
     for (const format of formats) {
       if (format === 'excel') {
@@ -793,8 +834,8 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
     if (job && job.projectId === projectId && job.userId === userId) {
       job.status = 'cancelled';
       // Cancel the Bull queue job if bullJobId exists and queue is available
-      if (job.bullJobId && this.exportQueue) {
-        const queueJob = await this.exportQueue.getJob(job.bullJobId);
+      if (job.bullJobId && this.exportQueue && typeof (this.exportQueue as any).getJob === 'function') {
+        const queueJob = await (this.exportQueue as any).getJob(job.bullJobId);
         if (queueJob && ['waiting', 'delayed'].includes(await queueJob.getState())) {
           await queueJob.remove();
         }

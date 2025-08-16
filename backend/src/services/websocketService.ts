@@ -25,9 +25,7 @@ export interface QueueStatsUpdate {
   total: number;
 }
 
-interface WebSocketEventData {
-  [key: string]: unknown;
-}
+type WebSocketEventData = unknown;
 
 interface DataSummary {
   type: string;
@@ -233,10 +231,10 @@ export class WebSocketService {
           const userSockets = this.connectedUsers.get(socket.userId);
           if (userSockets) {
             userSockets.delete(socket.id);
-          }
-          
-          if (userSockets.size === 0) {
-            this.connectedUsers.delete(socket.userId);
+            
+            if (userSockets.size === 0) {
+              this.connectedUsers.delete(socket.userId);
+            }
           }
         }
       });

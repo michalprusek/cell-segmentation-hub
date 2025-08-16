@@ -6,13 +6,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: [
-      'dist',
-      'backend/**',
-      '**/dist/**',
-      '**/*.d.ts',
-      'characteristic_functions.py',
-    ],
+    ignores: ['dist', '**/dist/**', '**/*.d.ts', 'characteristic_functions.py'],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
@@ -32,6 +26,15 @@ export default tseslint.config(
         { allowConstantExport: true },
       ],
       '@typescript-eslint/no-unused-vars': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-expressions': [
+        'error',
+        {
+          allowShortCircuit: true,
+          allowTernary: true,
+          allowTaggedTemplates: true,
+        },
+      ],
     },
   }
 );
