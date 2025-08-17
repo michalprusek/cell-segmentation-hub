@@ -1,6 +1,57 @@
 import { Point } from '@/lib/segmentation';
 import { calculatePolygonArea, calculatePerimeter } from '@/lib/segmentation';
 
+/**
+ * Calculate convex hull using Graham scan algorithm
+ */
+function calculateConvexHull(points: Point[]): Point[] {
+  if (points.length < 3) return points;
+
+  // Sort points by x-coordinate, then by y-coordinate
+  const sortedPoints = [...points].sort((a, b) => {
+    if (a.x === b.x) return a.y - b.y;
+    return a.x - b.x;
+  });
+
+  // Build lower hull
+  const lower: Point[] = [];
+  for (const point of sortedPoints) {
+    while (
+      lower.length >= 2 &&
+      cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0
+    ) {
+      lower.pop();
+    }
+    lower.push(point);
+  }
+
+  // Build upper hull
+  const upper: Point[] = [];
+  for (let i = sortedPoints.length - 1; i >= 0; i--) {
+    const point = sortedPoints[i];
+    while (
+      upper.length >= 2 &&
+      cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0
+    ) {
+      upper.pop();
+    }
+    upper.push(point);
+  }
+
+  // Remove last point of each half because it's repeated
+  lower.pop();
+  upper.pop();
+
+  return lower.concat(upper);
+}
+
+/**
+ * Calculate cross product for convex hull algorithm
+ */
+function cross(o: Point, a: Point, b: Point): number {
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
 export interface PolygonMetrics {
   Area: number;
   Perimeter: number;
@@ -110,9 +161,16 @@ export const calculateMetrics = (
   const boundingBoxArea = width * height;
   const compactness = boundingBoxArea > 0 ? area / boundingBoxArea : 0;
 
-  // Convexity and solidity (approximated - would need convex hull for precise calculation)
-  const convexity = Math.min(1.0, circularity * 1.2); // Approximation
-  const solidity = Math.min(1.0, compactness * 1.1); // Approximation
+  // Calculate convex hull for proper convexity and solidity
+  const convexHull = calculateConvexHull(points);
+  const convexArea = calculatePolygonArea(convexHull);
+  const convexPerimeter = calculatePerimeter(convexHull);
+
+  // Convexity = perimeter of convex hull / perimeter of polygon
+  const convexity = perimeter > 0 ? convexPerimeter / perimeter : 0;
+
+  // Solidity = area of polygon / area of convex hull
+  const solidity = convexArea > 0 ? area / convexArea : 0;
 
   // Sphericity (approximated)
   const sphericity = Math.min(1.0, circularity);

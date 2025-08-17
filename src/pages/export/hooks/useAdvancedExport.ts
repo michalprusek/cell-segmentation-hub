@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import apiClient from '@/lib/api';
 import { useWebSocket } from '@/contexts/WebSocketContext';
 import { logger } from '@/lib/logger';
+import { EXPORT_DEFAULTS } from '@/lib/export-config';
 
 export interface ExportOptions {
   includeOriginalImages?: boolean;
@@ -32,21 +33,21 @@ interface ExportJob {
 
 export const useAdvancedExport = (projectId: string) => {
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
-    includeOriginalImages: true,
-    includeVisualizations: true,
+    includeOriginalImages: EXPORT_DEFAULTS.OPTIONS.INCLUDE_ORIGINAL_IMAGES,
+    includeVisualizations: EXPORT_DEFAULTS.OPTIONS.INCLUDE_VISUALIZATIONS,
     visualizationOptions: {
-      showNumbers: true,
+      showNumbers: EXPORT_DEFAULTS.VISUALIZATION.SHOW_NUMBERS,
       polygonColors: {
-        external: '#FF0000',
-        internal: '#0000FF',
+        external: EXPORT_DEFAULTS.COLORS.EXTERNAL_POLYGON,
+        internal: EXPORT_DEFAULTS.COLORS.INTERNAL_POLYGON,
       },
-      strokeWidth: 2,
-      fontSize: 32,
-      transparency: 0.3,
+      strokeWidth: EXPORT_DEFAULTS.VISUALIZATION.STROKE_WIDTH,
+      fontSize: EXPORT_DEFAULTS.VISUALIZATION.FONT_SIZE,
+      transparency: EXPORT_DEFAULTS.VISUALIZATION.TRANSPARENCY,
     },
-    annotationFormats: ['coco', 'json'],
-    metricsFormats: ['excel'],
-    includeDocumentation: true,
+    annotationFormats: [...EXPORT_DEFAULTS.FORMATS.ANNOTATION],
+    metricsFormats: [...EXPORT_DEFAULTS.FORMATS.METRICS],
+    includeDocumentation: EXPORT_DEFAULTS.OPTIONS.INCLUDE_DOCUMENTATION,
   });
 
   const [currentJob, setCurrentJob] = useState<ExportJob | null>(null);

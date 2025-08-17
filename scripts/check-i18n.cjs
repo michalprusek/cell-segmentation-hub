@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const ts = require('typescript');
 
 // Configuration
 const TRANSLATIONS_DIR = './src/translations';
@@ -16,30 +17,79 @@ const SRC_DIR = './src';
 const LANGUAGES = ['en', 'cs', 'es', 'fr', 'de', 'zh'];
 
 /**
- * Load and parse a translation file using eval (safe in Node.js context)
+ * Load and parse a translation file using TypeScript AST parser
  */
 function loadTranslations(langCode) {
   try {
     const filePath = path.join(TRANSLATIONS_DIR, `${langCode}.ts`);
     const content = fs.readFileSync(filePath, 'utf8');
 
-    // Extract the export default object content
-    const match = content.match(/export default (\{[\s\S]*\});?\s*$/);
-    if (!match) {
-      throw new Error(`Cannot parse ${langCode}.ts - invalid format`);
+    // Parse TypeScript file using AST
+    const sourceFile = ts.createSourceFile(
+      filePath,
+      content,
+      ts.ScriptTarget.Latest,
+      true
+    );
+
+    // Find the export default statement
+    let exportObject = null;
+    
+    function visit(node) {
+      if (ts.isExportAssignment(node) && node.isExportEquals === false) {
+        // Found export default
+        if (ts.isObjectLiteralExpression(node.expression)) {
+          exportObject = parseObjectLiteral(node.expression);
+        }
+      }
+      ts.forEachChild(node, visit);
+    }
+    
+    visit(sourceFile);
+
+    if (!exportObject) {
+      throw new Error(`Cannot parse ${langCode}.ts - no export default object found`);
     }
 
-    // Use eval to parse the TypeScript object (safe in Node.js build context)
-    const objectStr = match[1];
-
-    // Create a safe evaluation context
-    const evalResult = eval(`(${objectStr})`);
-
-    return evalResult;
+    return exportObject;
   } catch (error) {
     console.error(`Error loading ${langCode} translations:`, error.message);
     return {};
   }
+}
+
+/**
+ * Parse TypeScript object literal expression to JavaScript object
+ */
+function parseObjectLiteral(node) {
+  const result = {};
+  
+  for (const property of node.properties) {
+    if (ts.isPropertyAssignment(property)) {
+      let key;
+      
+      // Get property name
+      if (ts.isIdentifier(property.name)) {
+        key = property.name.text;
+      } else if (ts.isStringLiteral(property.name)) {
+        key = property.name.text;
+      } else {
+        continue; // Skip computed properties
+      }
+      
+      // Get property value
+      if (ts.isStringLiteral(property.initializer)) {
+        result[key] = property.initializer.text;
+      } else if (ts.isObjectLiteralExpression(property.initializer)) {
+        result[key] = parseObjectLiteral(property.initializer);
+      } else if (ts.isNoSubstitutionTemplateLiteral(property.initializer)) {
+        result[key] = property.initializer.text;
+      }
+      // Skip other types (functions, computed values, etc.)
+    }
+  }
+  
+  return result;
 }
 
 /**
@@ -49,7 +99,7 @@ function flattenKeys(obj, prefix = '') {
   const flattened = {};
 
   for (const key in obj) {
-    if (obj.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
       const newKey = prefix ? `${prefix}.${key}` : key;
 
       if (

@@ -1228,7 +1228,7 @@ export default {
             'Při vytváření účtu si můžete vybrat, zda povolíte použití vašich dat pro trénování ML. Tyto preference můžete kdykoli změnit.',
           manageTitle: 'Pro správu vašeho souhlasu:',
           manageContent:
-            'Přejděte do Nastavení → záložka Soukromí ve vašem přehledu. Tam můžete povolit nebo zakázat souhlas s trénovánímML a vybrat konkrétní účely (zlepšení algoritmů, vývoj funkcí), pro které mohou být vaše data použita.',
+            'Přejděte do Nastavení → záložka Soukromí ve vašem přehledu. Tam můžete povolit nebo zakázat souhlas s trénováním ML a vybrat konkrétní účely (zlepšení algoritmů, vývoj funkcí), pro které mohou být vaše data použita.',
           howWeUse: {
             title: 'Jak používáme vaše data pro ML:',
             items: [

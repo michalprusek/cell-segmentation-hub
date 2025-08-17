@@ -27,7 +27,7 @@ module.exports = {
           Route: ['path'],
           img: ['alt', 'src'],
           Button: ['variant', 'size', 'type'],
-          Input: ['type', 'placeholder'],
+          Input: ['type'],
           Card: ['className'],
           div: ['className', 'id'],
         },
@@ -48,12 +48,13 @@ module.exports = {
         'no-restricted-syntax': [
           'warn',
           {
-            selector: 'JSXText[value=/^[A-Za-z\\s]{4,}$/]',
+            selector: 'JSXText[value=/^[\\p{L}\\p{N}\\p{P}\\p{S}\\s]{4,}$/u]',
             message:
               'Hardcoded text detected. Use t("key") for translatable strings.',
           },
           {
-            selector: 'Literal[value=/^[A-Za-z\\s]{4,}$/]:has(JSXElement)',
+            selector:
+              'Literal[value=/^[\\p{L}\\p{N}\\p{P}\\p{S}\\s]{4,}$/u]:has(JSXElement)',
             message:
               'Hardcoded string in JSX. Use t("key") for translatable strings.',
           },

@@ -46,6 +46,7 @@ import {
 import { useAdvancedExport } from './hooks/useAdvancedExport';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ProjectImage } from '@/types';
+import { EXPORT_DEFAULTS } from '@/lib/export-config';
 
 interface AdvancedExportDialogProps {
   open: boolean;
@@ -226,7 +227,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       type="color"
                       value={
                         exportOptions.visualizationOptions?.polygonColors
-                          ?.external || '#FF0000'
+                          ?.external || EXPORT_DEFAULTS.COLORS.EXTERNAL_POLYGON
                       }
                       onChange={e =>
                         updateExportOptions({
@@ -245,7 +246,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     <Input
                       value={
                         exportOptions.visualizationOptions?.polygonColors
-                          ?.external || '#FF0000'
+                          ?.external || EXPORT_DEFAULTS.COLORS.EXTERNAL_POLYGON
                       }
                       onChange={e =>
                         updateExportOptions({
@@ -271,7 +272,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       type="color"
                       value={
                         exportOptions.visualizationOptions?.polygonColors
-                          ?.internal || '#0000FF'
+                          ?.internal || EXPORT_DEFAULTS.COLORS.INTERNAL_POLYGON
                       }
                       onChange={e =>
                         updateExportOptions({
@@ -290,7 +291,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     <Input
                       value={
                         exportOptions.visualizationOptions?.polygonColors
-                          ?.internal || '#0000FF'
+                          ?.internal || EXPORT_DEFAULTS.COLORS.INTERNAL_POLYGON
                       }
                       onChange={e =>
                         updateExportOptions({
@@ -425,7 +426,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="yolo-format">YOLO format</Label>
+                  <Label htmlFor="yolo-format">
+                    {t('export.formats.yolo')}
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -470,7 +473,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="excel-metrics">Excel (.xlsx)</Label>
+                  <Label htmlFor="excel-metrics">
+                    {t('export.formats.excel')}
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -504,7 +509,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="json-metrics">JSON</Label>
+                  <Label htmlFor="json-metrics">
+                    {t('export.formats.json')}
+                  </Label>
                 </div>
               </CardContent>
             </Card>

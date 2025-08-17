@@ -427,12 +427,24 @@ test.describe('Complete Segmentation Workflow', () => {
 
     // Ensure the invalid file exists for testing
     const fs = await import('fs');
-    if (!fs.default.existsSync(invalidFilePath)) {
+    const fileCreated = !fs.default.existsSync(invalidFilePath);
+    if (fileCreated) {
       fs.default.writeFileSync(
         invalidFilePath,
         'This is not an image file - testing invalid upload'
       );
     }
+
+    // Cleanup function to remove created file
+    const cleanup = () => {
+      if (fileCreated && fs.default.existsSync(invalidFilePath)) {
+        try {
+          fs.default.unlinkSync(invalidFilePath);
+        } catch (error) {
+          console.warn('Failed to cleanup test file:', error);
+        }
+      }
+    };
 
     const fileInput = page.locator('input[type="file"]').first();
     if (await fileInput.isVisible()) {
@@ -478,6 +490,9 @@ test.describe('Complete Segmentation Workflow', () => {
         });
       }
     }
+
+    // Cleanup created test file
+    cleanup();
   });
 
   test('should maintain performance with large images', async ({ page }) => {

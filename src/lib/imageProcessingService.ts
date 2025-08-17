@@ -9,6 +9,7 @@ interface ProcessImageParams {
   imageId: string;
   imageUrl: string;
   onComplete?: (result: SegmentationData) => void;
+  onError?: (error: Error) => void;
 }
 
 export const updateImageProcessingStatus = async ({
@@ -16,6 +17,7 @@ export const updateImageProcessingStatus = async ({
   imageId,
   imageUrl,
   onComplete,
+  onError,
 }: ProcessImageParams) => {
   const abortController = new AbortController();
   let timeoutId: NodeJS.Timeout | null = null;
@@ -77,7 +79,11 @@ export const updateImageProcessingStatus = async ({
           }
           return;
         } else if (latestResult?.status === 'failed') {
+          const error = new Error('Segmentation failed');
           toast.error('Segmentation failed');
+          if (onError) {
+            onError(error);
+          }
           return;
         }
 
@@ -90,13 +96,20 @@ export const updateImageProcessingStatus = async ({
             timeoutId = setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
           }
         } else if (!latestResult) {
+          const error = new Error('No segmentation result found');
           logger.error('No segmentation result found');
           toast.error('Failed to get segmentation result');
+          if (onError) {
+            onError(error);
+          }
         }
       } catch (error) {
         if (!cancelled) {
           logger.error('Error polling segmentation status:', error);
           toast.error('Failed to check segmentation status');
+          if (onError && error instanceof Error) {
+            onError(error);
+          }
         }
       }
     };
@@ -111,6 +124,9 @@ export const updateImageProcessingStatus = async ({
     logger.error('Error requesting segmentation:', error);
     const errorMessage = getErrorMessage(error) || 'Failed to process image';
     toast.error('Failed to process image: ' + errorMessage);
+    if (onError && error instanceof Error) {
+      onError(error);
+    }
     return { cancel };
   }
 };

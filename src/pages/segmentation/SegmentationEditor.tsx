@@ -359,7 +359,7 @@ const SegmentationEditor = () => {
     };
 
     loadSegmentation();
-  }, [projectId, imageId, t, selectedImage.width, selectedImage.height]);
+  }, [projectId, imageId, t, selectedImage?.width, selectedImage?.height]);
 
   // Debug logging for polygon rendering (only when polygons change)
   useEffect(() => {

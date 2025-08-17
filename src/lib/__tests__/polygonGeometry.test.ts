@@ -165,14 +165,15 @@ describe('Polygon Geometry Utilities', () => {
     it('should handle point on edge', () => {
       const point: Point = { x: 0, y: 50 };
       const result = isPointInPolygon(point, testPolygons.square);
-      // Edge cases may vary depending on implementation details
-      expect(typeof result).toBe('boolean');
+      // Edge cases may vary depending on implementation details - should be either true or false
+      expect(result === true || result === false).toBe(true);
     });
 
     it('should handle point on vertex', () => {
       const point: Point = { x: 0, y: 0 };
       const result = isPointInPolygon(point, testPolygons.square);
-      expect(typeof result).toBe('boolean');
+      // Vertex cases may vary depending on implementation details - should be either true or false
+      expect(result === true || result === false).toBe(true);
     });
 
     it('should work with complex polygons', () => {

@@ -829,8 +829,15 @@ class ApiClient {
   ): Promise<SegmentationResultData> {
     const payload: any = { polygons };
 
-    // Include image dimensions if provided
-    if (imageWidth && imageHeight) {
+    // Include image dimensions if provided and valid
+    if (
+      imageWidth &&
+      imageHeight &&
+      typeof imageWidth === 'number' &&
+      typeof imageHeight === 'number' &&
+      imageWidth > 0 &&
+      imageHeight > 0
+    ) {
       payload.imageWidth = imageWidth;
       payload.imageHeight = imageHeight;
     }

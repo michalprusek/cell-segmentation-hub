@@ -453,6 +453,11 @@ export class ImageService {
     const convertedPath = path.join(process.env.UPLOAD_DIR || './uploads', convertedKey);
     
     if (existsSync(convertedPath)) {
+      // Periodically clean up old converted files (don't await to avoid blocking)
+      this.cleanupConvertedCache().catch(error => 
+        logger.error('Background cleanup failed', error)
+      );
+      
       logger.info('Serving cached converted image', 'ImageService', { imageId, originalType: image.mimeType });
       const cachedBuffer = await fs.readFile(convertedPath);
       return {
@@ -515,7 +520,7 @@ export class ImageService {
   private getDisplayUrl(imageId: string): string {
     const port = process.env.PORT || '3001';
     const baseUrl = process.env.NODE_ENV === 'production' 
-      ? '' 
+      ? (process.env.API_BASE_URL || process.env.BACKEND_URL || `https://api.yourdomain.com`)
       : `http://localhost:${port}`;
     
     return `${baseUrl}/api/images/${imageId}/display`;
@@ -537,6 +542,62 @@ export class ImageService {
     } else {
       // For other storage providers, implement buffer retrieval
       throw new Error('Buffer retrieval not implemented for this storage provider');
+    }
+  }
+
+  /**
+   * Clean up old converted PNG files from cache
+   */
+  private async cleanupConvertedCache(retentionDays: number = 7): Promise<void> {
+    try {
+      const convertedDir = path.join(process.env.UPLOAD_DIR || './uploads', 'converted');
+      
+      // Skip if directory doesn't exist
+      if (!existsSync(convertedDir)) {
+        return;
+      }
+
+      const files = await fs.readdir(convertedDir);
+      const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+
+      for (const file of files) {
+        const filePath = path.join(convertedDir, file);
+        
+        try {
+          const stats = await fs.stat(filePath);
+          if (stats.mtimeMs < cutoffTime) {
+            await fs.unlink(filePath);
+            logger.info('Removed old converted file', 'ImageService', { 
+              file, 
+              ageInDays: Math.floor((Date.now() - stats.mtimeMs) / (24 * 60 * 60 * 1000)) 
+            });
+          }
+        } catch (error) {
+          logger.error('Failed to process converted file during cleanup', error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to cleanup converted cache', error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  /**
+   * Remove converted files for a specific image
+   */
+  async removeConvertedFile(imageId: string): Promise<void> {
+    try {
+      const convertedPath = path.join(
+        process.env.UPLOAD_DIR || './uploads',
+        'converted',
+        `${imageId}.png`
+      );
+      
+      if (existsSync(convertedPath)) {
+        await fs.unlink(convertedPath);
+        logger.info('Removed converted file for deleted image', 'ImageService', { imageId });
+      }
+    } catch (error) {
+      logger.error('Failed to remove converted file', error instanceof Error ? error : new Error(String(error)));
     }
   }
 }

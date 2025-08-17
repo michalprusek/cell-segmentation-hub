@@ -273,7 +273,7 @@ export default {
         segmentation: '所有分割数据和结果',
         settings: '账户设置和偏好',
       },
-      confirmationLabel: '请输入 {email} 以确认：',
+      confirmationLabel: '请输入 {{email}} 以确认：',
       confirmationPlaceholder: '{email}',
     },
     pageTitle: '设置',
@@ -841,8 +841,8 @@ export default {
       polygonTypes: '多边形类型',
       polygonDescription: '系统检测两种类型：',
       polygonTypesList: {
-        external: '外部多边形（绿色）',
-        internal: '内部多边形（红色）',
+        external: '外部多边形（红色）',
+        internal: '内部多边形（蓝色）',
       },
       processingNote: '处理时间因模型而异：',
       processingTimes:

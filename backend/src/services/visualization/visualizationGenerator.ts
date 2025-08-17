@@ -1,4 +1,5 @@
 import { createCanvas, loadImage, Canvas, CanvasRenderingContext2D } from 'canvas';
+import { writeFile } from 'fs/promises';
 import { logger } from '../../utils/logger';
 
 
@@ -67,7 +68,7 @@ export class VisualizationGenerator {
 
       // Save the canvas to file
       const buffer = canvas.toBuffer('image/png');
-      await import('fs/promises').then(fs => fs.writeFile(outputPath, buffer));
+      await writeFile(outputPath, buffer);
 
       logger.info(`Visualization generated: ${outputPath}`, 'VisualizationGenerator');
       return VisualizationResult.SUCCESS;
@@ -140,7 +141,7 @@ export class VisualizationGenerator {
     ctx.fillStyle = '#FFFFFF';
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 5;
-    ctx.font = `bold ${options.fontSize || 24}px Arial`;
+    ctx.font = `bold ${options.fontSize ?? 32}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

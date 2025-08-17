@@ -49,8 +49,15 @@ const PrivacyPolicy = () => {
               )}
             </h3>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t(
-                'legal.privacy.sections.informationCollected.personalInfo.items'
+              {(Array.isArray(
+                t(
+                  'legal.privacy.sections.informationCollected.personalInfo.items'
+                )
+              )
+                ? t(
+                    'legal.privacy.sections.informationCollected.personalInfo.items'
+                  )
+                : []
               ).map((item: string, index: number) => (
                 <li key={index}>{item}</li>
               ))}

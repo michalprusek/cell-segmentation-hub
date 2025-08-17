@@ -187,11 +187,19 @@ describe('Polygon Slicing', () => {
 
       const result = slicePolygon(square, sliceStart, sliceEnd);
 
-      // Should either work or fail gracefully
-      if (result) {
+      // Should either succeed with valid polygons or fail explicitly
+      if (result !== null) {
         const [polygon1, polygon2] = result;
         expect(polygon1.points.length).toBeGreaterThanOrEqual(3);
         expect(polygon2.points.length).toBeGreaterThanOrEqual(3);
+        // Verify both polygons have positive area
+        const area1 = calculatePolygonArea(polygon1.points);
+        const area2 = calculatePolygonArea(polygon2.points);
+        expect(area1).toBeGreaterThan(0);
+        expect(area2).toBeGreaterThan(0);
+      } else {
+        // If it fails, that's also acceptable for vertex edge cases
+        expect(result).toBeNull();
       }
     });
   });

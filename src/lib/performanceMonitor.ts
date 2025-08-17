@@ -15,9 +15,15 @@ interface PerformanceStats {
   total: number;
 }
 
+interface PendingTiming {
+  name: string;
+  startTime: number;
+  metadata?: Record<string, any>;
+}
+
 class PerformanceMonitor {
   private metrics: Map<string, PerformanceMetric[]> = new Map();
-  private startTimes: Map<string, number> = new Map();
+  private pendingTimings: Map<string, PendingTiming> = new Map();
   private maxMetricsPerType = 100; // Keep last 100 measurements per metric type
 
   /**
@@ -25,12 +31,12 @@ class PerformanceMonitor {
    */
   startTiming(name: string, metadata?: Record<string, any>): string {
     const id = `${name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    this.startTimes.set(id, performance.now());
-
-    if (metadata) {
-      // Store metadata for later use
-      this.startTimes.set(`${id}-metadata`, metadata as any);
-    }
+    const pendingTiming: PendingTiming = {
+      name,
+      startTime: performance.now(),
+      metadata,
+    };
+    this.pendingTimings.set(id, pendingTiming);
 
     return id;
   }
@@ -39,34 +45,25 @@ class PerformanceMonitor {
    * End timing and record measurement
    */
   endTiming(id: string): number {
-    const startTime = this.startTimes.get(id);
-    if (!startTime) {
+    const pendingTiming = this.pendingTimings.get(id);
+    if (!pendingTiming) {
       logger.warn('Performance timing not found', { id });
       return 0;
     }
 
-    const duration = performance.now() - startTime;
-    const metadata = this.startTimes.get(`${id}-metadata`) as
-      | Record<string, any>
-      | undefined;
-
-    // Extract metric name from ID
-    const name = id.split('-')[0];
+    const duration = performance.now() - pendingTiming.startTime;
 
     const metric: PerformanceMetric = {
-      name,
+      name: pendingTiming.name,
       duration,
       timestamp: Date.now(),
-      metadata,
+      metadata: pendingTiming.metadata,
     };
 
     this.recordMetric(metric);
 
     // Cleanup
-    this.startTimes.delete(id);
-    if (metadata) {
-      this.startTimes.delete(`${id}-metadata`);
-    }
+    this.pendingTimings.delete(id);
 
     return duration;
   }
@@ -168,7 +165,7 @@ class PerformanceMonitor {
    */
   clear(): void {
     this.metrics.clear();
-    this.startTimes.clear();
+    this.pendingTimings.clear();
   }
 
   /**

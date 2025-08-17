@@ -182,21 +182,32 @@ export const mockBrowserAPIs = () => {
   let rafIdCounter = 1;
   const rafTimeouts = new Map<number, NodeJS.Timeout>();
 
-  global.requestAnimationFrame = vi.fn(cb => {
-    const id = rafIdCounter++;
-    const timeoutHandle = setTimeout(cb, 16);
-    rafTimeouts.set(id, timeoutHandle);
-    return id;
-  });
+  // Only mock if not already mocked
+  if (
+    !global.requestAnimationFrame ||
+    !vi.isMockFunction(global.requestAnimationFrame)
+  ) {
+    global.requestAnimationFrame = vi.fn(cb => {
+      const id = rafIdCounter++;
+      const timeoutHandle = setTimeout(cb, 16);
+      rafTimeouts.set(id, timeoutHandle);
+      return id;
+    });
+  }
 
   // Mock cancelAnimationFrame
-  global.cancelAnimationFrame = vi.fn((id: number) => {
-    const timeoutHandle = rafTimeouts.get(id);
-    if (timeoutHandle) {
-      clearTimeout(timeoutHandle);
-      rafTimeouts.delete(id);
-    }
-  });
+  if (
+    !global.cancelAnimationFrame ||
+    !vi.isMockFunction(global.cancelAnimationFrame)
+  ) {
+    global.cancelAnimationFrame = vi.fn((id: number) => {
+      const timeoutHandle = rafTimeouts.get(id);
+      if (timeoutHandle) {
+        clearTimeout(timeoutHandle);
+        rafTimeouts.delete(id);
+      }
+    });
+  }
 
   // Mock ResizeObserver
   global.ResizeObserver = vi.fn().mockImplementation(() => ({
@@ -244,8 +255,13 @@ export const createMockKeyboardEvent = (
     cancelable: true,
   });
 
-  if (options.preventDefault) {
-    event.preventDefault = options.preventDefault;
+  if (options.preventDefault && typeof options.preventDefault === 'function') {
+    // Store original preventDefault and override it
+    const originalPreventDefault = event.preventDefault;
+    event.preventDefault = () => {
+      originalPreventDefault.call(event);
+      options.preventDefault?.();
+    };
   }
 
   return event;
@@ -340,10 +356,14 @@ export const createMockFile = (
   type: string
 ): File => {
   const file = new File(['test content'], name, { type });
-  Object.defineProperty(file, 'size', {
-    value: size,
-    writable: false,
-  });
+  // Only redefine size if it's different from the default
+  if (file.size !== size) {
+    Object.defineProperty(file, 'size', {
+      value: size,
+      writable: false,
+      configurable: true,
+    });
+  }
   return file;
 };
 

@@ -544,11 +544,7 @@ export class SegmentationService {
       });
 
       if (!response.data || !response.data.results) {
-        logger.error('Invalid response from ML service', new Error('SegmentationService'), JSON.stringify({
-          responseData: response.data,
-          responseStatus: response.status,
-          responseHeaders: response.headers
-        }));
+        logger.error('Invalid response from ML service', new Error(`Invalid ML service response: status ${response.status}, data: ${JSON.stringify(response.data)}`));
         throw new Error('Invalid response from ML service');
       }
 

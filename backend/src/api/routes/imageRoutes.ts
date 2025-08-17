@@ -36,11 +36,10 @@ router.use(authenticate);
 
 /**
  * Get project images with optimized thumbnails
- * GET /projects/:projectId/images-with-thumbnails?lod=low&page=1&limit=50
- * POZOR: Musí být před ostatními routes kvůli pořadí matchování
+ * GET /projects/:projectId/images/with-thumbnails?lod=low&page=1&limit=50
  */
 router.get(
-  '/:projectId/images-with-thumbnails',
+  '/:projectId/images/with-thumbnails',
   validateParams(projectIdSchema),
   imageController.getProjectImagesWithThumbnails
 );

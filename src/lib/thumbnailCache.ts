@@ -230,14 +230,19 @@ class ThumbnailCache {
         const store = transaction.objectStore(this.storeName);
         const index = store.index('imageId');
 
-        const request = index.openCursor(IDBKeyRange.only(imageId));
-        request.onsuccess = event => {
-          const cursor = (event.target as IDBRequest).result;
-          if (cursor) {
-            cursor.delete();
-            cursor.continue();
-          }
-        };
+        await new Promise<void>((resolve, reject) => {
+          const request = index.openCursor(IDBKeyRange.only(imageId));
+          request.onsuccess = event => {
+            const cursor = (event.target as IDBRequest).result;
+            if (cursor) {
+              cursor.delete();
+              cursor.continue();
+            } else {
+              resolve(); // No more entries
+            }
+          };
+          request.onerror = () => reject(request.error);
+        });
 
         logger.debug(
           '🗑️ Invalidated thumbnail cache for image',
@@ -398,7 +403,11 @@ class ThumbnailCache {
       try {
         const transaction = this.db.transaction([this.storeName], 'readwrite');
         const store = transaction.objectStore(this.storeName);
-        await store.clear();
+        await new Promise<void>((resolve, reject) => {
+          const clearRequest = store.clear();
+          clearRequest.onsuccess = () => resolve();
+          clearRequest.onerror = () => reject(clearRequest.error);
+        });
 
         logger.debug('🧹 Cleared all thumbnail cache data', 'ThumbnailCache');
       } catch (error) {
@@ -424,7 +433,7 @@ class ThumbnailCache {
 export const thumbnailCache = new ThumbnailCache();
 
 // Auto-cleanup every hour
-setInterval(
+const cleanupIntervalId = setInterval(
   () => {
     thumbnailCache.cleanExpired().catch(error => {
       logger.error(
@@ -436,3 +445,10 @@ setInterval(
   },
   60 * 60 * 1000
 );
+
+// Clear interval on page unload
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    clearInterval(cleanupIntervalId);
+  });
+}

@@ -430,9 +430,15 @@ export class ExportService {
           }
           
           try {
+            // Validate originalPath before joining
+            if (typeof image.originalPath !== 'string' || !image.originalPath) {
+              logger.error('Invalid or empty originalPath for image', new Error(`Invalid originalPath for image ${image.id}: ${image.originalPath}`));
+              continue; // Skip this image
+            }
+            
             // Construct full path to the image
             const uploadDir = process.env.UPLOAD_DIR || './uploads';
-            const fullImagePath = path.join(uploadDir, image.originalPath);
+            const fullImagePath = path.resolve(path.join(uploadDir, image.originalPath));
             
             await this.visualizationGenerator.generateVisualization(
               fullImagePath,

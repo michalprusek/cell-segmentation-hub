@@ -7,6 +7,8 @@ import { ImageService } from '../services/imageService';
 export class QueueWorker {
   private static instance: QueueWorker;
   private intervalId: NodeJS.Timeout | null = null;
+  private healthCheckIntervalId: NodeJS.Timeout | null = null;
+  private cleanupIntervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
   private queueService: QueueService;
   private imageService: ImageService;
@@ -55,12 +57,12 @@ export class QueueWorker {
     }, this.intervalMs);
     
     // Set up interval for periodic health checks and stuck item reset (every minute)
-    setInterval(() => {
+    this.healthCheckIntervalId = setInterval(() => {
       this.performHealthCheck();
     }, 60000);
     
     // Set up interval for periodic cleanup of old completed/failed items (every hour)
-    setInterval(() => {
+    this.cleanupIntervalId = setInterval(() => {
       this.performQueueCleanup();
     }, 3600000); // 1 hour
   }
@@ -77,6 +79,16 @@ export class QueueWorker {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
+    }
+    
+    if (this.healthCheckIntervalId) {
+      clearInterval(this.healthCheckIntervalId);
+      this.healthCheckIntervalId = null;
+    }
+    
+    if (this.cleanupIntervalId) {
+      clearInterval(this.cleanupIntervalId);
+      this.cleanupIntervalId = null;
     }
     
     this.isRunning = false;

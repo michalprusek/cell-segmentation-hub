@@ -453,7 +453,25 @@ test.describe('Segmentation Performance Benchmarks', () => {
     // Make some modifications
     const canvas = page.locator('canvas, .canvas-container').first();
     await canvas.click({ position: { x: 300, y: 300 } });
-    await page.keyboard.press('Delete'); // Delete a polygon
+
+    // Check if any polygons are available before trying to delete
+    const polygonIndicators = [
+      page.getByText(/polygon/i),
+      page.getByText(/selected/i),
+      page.locator('[data-testid*="polygon"]'),
+    ];
+
+    let polygonSelected = false;
+    for (const indicator of polygonIndicators) {
+      if (await indicator.isVisible({ timeout: 1000 })) {
+        polygonSelected = true;
+        break;
+      }
+    }
+
+    if (polygonSelected) {
+      await page.keyboard.press('Delete'); // Delete a polygon
+    }
 
     // Test save performance
     const saveButton = page.getByRole('button', { name: /save/i });

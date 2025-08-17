@@ -129,7 +129,9 @@ export class ThumbnailService {
       });
 
       const totalPoints = simplifiedPolygons.reduce((sum, p) => sum + p.points.length, 0);
-      const averageCompressionRatio = simplifiedPolygons.reduce((sum, p) => sum + p.compressionRatio, 0) / simplifiedPolygons.length;
+      const averageCompressionRatio = simplifiedPolygons.length === 0 
+        ? 0 
+        : simplifiedPolygons.reduce((sum, p) => sum + p.compressionRatio, 0) / simplifiedPolygons.length;
 
       levels.push({
         levelOfDetail: level as 'low' | 'medium' | 'high',

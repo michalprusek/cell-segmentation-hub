@@ -467,7 +467,14 @@ test.describe('WebSocket Queue Processing E2E Tests', () => {
       let cancellationHandled = false;
       for (const indicator of cancellationIndicators) {
         if (await indicator.isVisible({ timeout: 5000 })) {
-          if (indicator.role === 'button') {
+          // Check if it's a button by trying to get the role attribute
+          const role = await indicator.getAttribute('role');
+          if (
+            role === 'button' ||
+            (await indicator.evaluate(
+              el => el.tagName.toLowerCase() === 'button'
+            ))
+          ) {
             await indicator.click(); // Confirm cancellation
           }
           cancellationHandled = true;

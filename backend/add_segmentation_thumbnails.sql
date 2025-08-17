@@ -147,9 +147,6 @@ CREATE INDEX "idx_image_project_status" ON "images"("projectId", "segmentationSt
 CREATE UNIQUE INDEX "segmentations_imageId_key" ON "segmentations"("imageId");
 
 -- CreateIndex
-CREATE INDEX "idx_thumbnail_segmentation_lod" ON "segmentation_thumbnails"("segmentationId", "levelOfDetail");
-
--- CreateIndex
 CREATE UNIQUE INDEX "segmentation_thumbnails_segmentationId_levelOfDetail_key" ON "segmentation_thumbnails"("segmentationId", "levelOfDetail");
 
 -- CreateIndex

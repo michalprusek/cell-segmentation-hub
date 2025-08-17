@@ -284,7 +284,7 @@ export default {
         segmentation: 'All segmentation data and results',
         settings: 'Account settings and preferences',
       },
-      confirmationLabel: 'Please type {0} to confirm:',
+      confirmationLabel: 'Please type {email} to confirm:',
       confirmationPlaceholder: 'Enter email to confirm',
     },
     fillAllFields: 'Please fill in all required fields',
