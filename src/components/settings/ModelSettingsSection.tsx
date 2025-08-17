@@ -12,8 +12,9 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { useModel, ModelType } from '@/contexts/ModelContext';
+import { ModelType } from '@/contexts/ModelContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useLocalizedModels } from '@/hooks/useLocalizedModels';
 import { Cpu, Zap, Target } from 'lucide-react';
 
 const ModelSettingsSection = () => {
@@ -24,7 +25,7 @@ const ModelSettingsSection = () => {
     setSelectedModel,
     setConfidenceThreshold,
     availableModels,
-  } = useModel();
+  } = useLocalizedModels();
 
   const handleModelChange = (modelId: string) => {
     setSelectedModel(modelId as ModelType);
@@ -69,10 +70,10 @@ const ModelSettingsSection = () => {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-medium mb-4">
-          {t('settings.modelSelection')}
+          {t('settings.modelSelection.title')}
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-          {t('settings.modelSelectionDescription')}
+          {t('settings.modelSelection.description')}
         </p>
 
         <RadioGroup value={selectedModel} onValueChange={handleModelChange}>
@@ -80,10 +81,7 @@ const ModelSettingsSection = () => {
             {availableModels.map(model => (
               <div key={model.id} className="flex items-center space-x-4">
                 <RadioGroupItem value={model.id} id={model.id} />
-                <Label 
-                  htmlFor={model.id} 
-                  className="flex-1 cursor-pointer"
-                >
+                <Label htmlFor={model.id} className="flex-1 cursor-pointer">
                   <Card className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/50">
                     <CardHeader className="pb-3">
                       <div className="flex items-center justify-between">
@@ -138,11 +136,6 @@ const ModelSettingsSection = () => {
             onValueCommit={handleThresholdCommit}
             className="w-full"
           />
-
-          <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-            {t('settings.currentThreshold')}:{' '}
-            {Math.round(confidenceThreshold * 100)}%
-          </div>
         </div>
       </div>
     </div>

@@ -10,7 +10,9 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { logger } from '@/lib/logger';
+import { toast } from 'sonner';
 
 interface MobileMenuProps {
   isMenuOpen: boolean;
@@ -25,10 +27,12 @@ const MobileMenu = ({
 }: MobileMenuProps) => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const { t } = useLanguage();
 
   const handleSignOut = async () => {
     try {
       await signOut();
+      toast.success(t('auth.successfulSignOut'));
     } catch (error) {
       logger.error('Error signing out:', error);
     }
@@ -38,7 +42,7 @@ const MobileMenu = ({
     <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
       <SheetTrigger asChild>
         <Button variant="ghost" size="icon" className="dark:text-gray-300">
-          <span className="sr-only">Open menu</span>
+          <span className="sr-only">{t('common.openMenu')}</span>
         </Button>
       </SheetTrigger>
       <SheetContent side="right" className="p-0 dark:bg-gray-800">
@@ -71,7 +75,7 @@ const MobileMenu = ({
             }}
           >
             <UserIcon className="h-5 w-5 mr-3 text-gray-500" />
-            <span>Profile</span>
+            <span>{t('common.profile')}</span>
           </button>
           <button
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -81,7 +85,7 @@ const MobileMenu = ({
             }}
           >
             <SettingsIcon className="h-5 w-5 mr-3 text-gray-500" />
-            <span>Settings</span>
+            <span>{t('common.settings')}</span>
           </button>
           <button
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -91,7 +95,7 @@ const MobileMenu = ({
             }}
           >
             <Bell className="h-5 w-5 mr-3 text-gray-500" />
-            <span>Notifications</span>
+            <span>{t('common.notifications')}</span>
             {hasNotifications && (
               <span className="ml-2 h-2 w-2 rounded-full bg-red-500"></span>
             )}
@@ -102,7 +106,7 @@ const MobileMenu = ({
             onClick={handleSignOut}
           >
             <LogOut className="h-5 w-5 mr-3" />
-            <span>Log out</span>
+            <span>{t('common.logOut')}</span>
           </button>
         </div>
       </SheetContent>

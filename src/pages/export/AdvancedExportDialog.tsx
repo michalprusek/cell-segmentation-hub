@@ -12,16 +12,28 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
-import { 
-  Download, 
-  FileImage, 
-  FileJson, 
-  FileSpreadsheet, 
+import {
+  Download,
+  FileImage,
+  FileJson,
+  FileSpreadsheet,
   Package,
   Settings,
   Palette,
@@ -29,10 +41,12 @@ import {
   Archive,
   WifiOff,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
 } from 'lucide-react';
 import { useAdvancedExport } from './hooks/useAdvancedExport';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { ProjectImage } from '@/types';
+import { EXPORT_DEFAULTS } from '@/lib/export-config';
 
 interface AdvancedExportDialogProps {
   open: boolean;
@@ -51,6 +65,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
   images,
   selectedImageIds,
 }) => {
+  const { t } = useLanguage();
   const {
     exportOptions,
     updateExportOptions,
@@ -77,10 +92,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
   const handleExport = async () => {
     try {
       await startExport(projectName);
-      toast.success('Export completed successfully!');
+      toast.success(t('toast.exportCompleted'));
       onClose();
     } catch (error) {
-      toast.error('Export failed. Please try again.');
+      toast.error(t('toast.exportFailed'));
     }
   };
 
@@ -90,18 +105,18 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Advanced Export Options
+            {t('export.advancedOptions')}
           </DialogTitle>
-          <DialogDescription>
-            Configure your export settings to create a comprehensive dataset package
-          </DialogDescription>
+          <DialogDescription>{t('export.configureSettings')}</DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="visualization">Visualization</TabsTrigger>
-            <TabsTrigger value="formats">Formats</TabsTrigger>
+            <TabsTrigger value="general">{t('export.general')}</TabsTrigger>
+            <TabsTrigger value="visualization">
+              {t('export.visualization')}
+            </TabsTrigger>
+            <TabsTrigger value="formats">{t('export.formats')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-4">
@@ -109,34 +124,34 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileImage className="h-4 w-4" />
-                  Export Contents
+                  {t('export.exportContents')}
                 </CardTitle>
-                <CardDescription>
-                  Select which content types to include in your export
-                </CardDescription>
+                <CardDescription>{t('export.selectContent')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="original-images"
                     checked={exportOptions.includeOriginalImages}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={checked =>
                       updateExportOptions({ includeOriginalImages: !!checked })
                     }
                   />
-                  <Label htmlFor="original-images">Include original images</Label>
+                  <Label htmlFor="original-images">
+                    {t('export.includeOriginal')}
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="visualizations"
                     checked={exportOptions.includeVisualizations}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={checked =>
                       updateExportOptions({ includeVisualizations: !!checked })
                     }
                   />
                   <Label htmlFor="visualizations">
-                    Include visualizations with numbered polygons
+                    {t('export.includeVisualizations')}
                   </Label>
                 </div>
 
@@ -144,12 +159,12 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                   <Checkbox
                     id="documentation"
                     checked={exportOptions.includeDocumentation}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={checked =>
                       updateExportOptions({ includeDocumentation: !!checked })
                     }
                   />
                   <Label htmlFor="documentation">
-                    Include documentation and metadata
+                    {t('export.includeDocumentation')}
                   </Label>
                 </div>
               </CardContent>
@@ -157,14 +172,19 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
 
             <Card>
               <CardHeader>
-                <CardTitle>Selected Images</CardTitle>
+                <CardTitle>{t('export.selectedImages')}</CardTitle>
                 <CardDescription>
-                  {exportOptions.selectedImageIds?.length || images.length} of {images.length} images selected
+                  {t('export.imagesSelected', {
+                    count:
+                      exportOptions.selectedImageIds?.length || images.length,
+                    total: images.length,
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="text-sm text-muted-foreground">
-                  {exportOptions.selectedImageIds?.length === 0 || !exportOptions.selectedImageIds
+                  {exportOptions.selectedImageIds?.length === 0 ||
+                  !exportOptions.selectedImageIds
                     ? 'All images will be exported'
                     : `Exporting ${exportOptions.selectedImageIds.length} selected images`}
                 </div>
@@ -177,18 +197,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Palette className="h-4 w-4" />
-                  Visualization Settings
+                  {t('export.colorSettings')}
                 </CardTitle>
-                <CardDescription>
-                  Customize how polygons are displayed in visualizations
-                </CardDescription>
+                <CardDescription>{t('export.colorSettings')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="show-numbers"
                     checked={exportOptions.visualizationOptions?.showNumbers}
-                    onCheckedChange={(checked) =>
+                    onCheckedChange={checked =>
                       updateExportOptions({
                         visualizationOptions: {
                           ...exportOptions.visualizationOptions,
@@ -197,21 +215,27 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       })
                     }
                   />
-                  <Label htmlFor="show-numbers">Show polygon numbers</Label>
+                  <Label htmlFor="show-numbers">
+                    {t('export.showNumbers')}
+                  </Label>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>External Polygon Color</Label>
+                  <Label>{t('export.strokeColor')}</Label>
                   <div className="flex gap-2">
                     <Input
                       type="color"
-                      value={exportOptions.visualizationOptions?.polygonColors?.external || '#00FF00'}
-                      onChange={(e) =>
+                      value={
+                        exportOptions.visualizationOptions?.polygonColors
+                          ?.external || EXPORT_DEFAULTS.COLORS.EXTERNAL_POLYGON
+                      }
+                      onChange={e =>
                         updateExportOptions({
                           visualizationOptions: {
                             ...exportOptions.visualizationOptions,
                             polygonColors: {
-                              ...exportOptions.visualizationOptions?.polygonColors,
+                              ...exportOptions.visualizationOptions
+                                ?.polygonColors,
                               external: e.target.value,
                             },
                           },
@@ -220,13 +244,17 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       className="w-20"
                     />
                     <Input
-                      value={exportOptions.visualizationOptions?.polygonColors?.external || '#00FF00'}
-                      onChange={(e) =>
+                      value={
+                        exportOptions.visualizationOptions?.polygonColors
+                          ?.external || EXPORT_DEFAULTS.COLORS.EXTERNAL_POLYGON
+                      }
+                      onChange={e =>
                         updateExportOptions({
                           visualizationOptions: {
                             ...exportOptions.visualizationOptions,
                             polygonColors: {
-                              ...exportOptions.visualizationOptions?.polygonColors,
+                              ...exportOptions.visualizationOptions
+                                ?.polygonColors,
                               external: e.target.value,
                             },
                           },
@@ -238,17 +266,21 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Internal Polygon Color</Label>
+                  <Label>{t('export.backgroundColor')}</Label>
                   <div className="flex gap-2">
                     <Input
                       type="color"
-                      value={exportOptions.visualizationOptions?.polygonColors?.internal || '#FF0000'}
-                      onChange={(e) =>
+                      value={
+                        exportOptions.visualizationOptions?.polygonColors
+                          ?.internal || EXPORT_DEFAULTS.COLORS.INTERNAL_POLYGON
+                      }
+                      onChange={e =>
                         updateExportOptions({
                           visualizationOptions: {
                             ...exportOptions.visualizationOptions,
                             polygonColors: {
-                              ...exportOptions.visualizationOptions?.polygonColors,
+                              ...exportOptions.visualizationOptions
+                                ?.polygonColors,
                               internal: e.target.value,
                             },
                           },
@@ -257,13 +289,17 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       className="w-20"
                     />
                     <Input
-                      value={exportOptions.visualizationOptions?.polygonColors?.internal || '#FF0000'}
-                      onChange={(e) =>
+                      value={
+                        exportOptions.visualizationOptions?.polygonColors
+                          ?.internal || EXPORT_DEFAULTS.COLORS.INTERNAL_POLYGON
+                      }
+                      onChange={e =>
                         updateExportOptions({
                           visualizationOptions: {
                             ...exportOptions.visualizationOptions,
                             polygonColors: {
-                              ...exportOptions.visualizationOptions?.polygonColors,
+                              ...exportOptions.visualizationOptions
+                                ?.polygonColors,
                               internal: e.target.value,
                             },
                           },
@@ -275,9 +311,14 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Stroke Width: {exportOptions.visualizationOptions?.strokeWidth || 2}px</Label>
+                  <Label>
+                    {t('export.strokeWidth')}:{' '}
+                    {exportOptions.visualizationOptions?.strokeWidth || 2}px
+                  </Label>
                   <Slider
-                    value={[exportOptions.visualizationOptions?.strokeWidth || 2]}
+                    value={[
+                      exportOptions.visualizationOptions?.strokeWidth || 2,
+                    ]}
                     onValueChange={([value]) =>
                       updateExportOptions({
                         visualizationOptions: {
@@ -293,9 +334,12 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Font Size: {exportOptions.visualizationOptions?.fontSize || 16}px</Label>
+                  <Label>
+                    {t('export.fontSize')}:{' '}
+                    {exportOptions.visualizationOptions?.fontSize || 32}px
+                  </Label>
                   <Slider
-                    value={[exportOptions.visualizationOptions?.fontSize || 16]}
+                    value={[exportOptions.visualizationOptions?.fontSize || 32]}
                     onValueChange={([value]) =>
                       updateExportOptions({
                         visualizationOptions: {
@@ -305,15 +349,25 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       })
                     }
                     min={10}
-                    max={30}
+                    max={50}
                     step={2}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Transparency: {Math.round((exportOptions.visualizationOptions?.transparency || 0.3) * 100)}%</Label>
+                  <Label>
+                    Transparency:{' '}
+                    {Math.round(
+                      (exportOptions.visualizationOptions?.transparency ||
+                        0.3) * 100
+                    )}
+                    %
+                  </Label>
                   <Slider
-                    value={[(exportOptions.visualizationOptions?.transparency || 0.3) * 100]}
+                    value={[
+                      (exportOptions.visualizationOptions?.transparency ||
+                        0.3) * 100,
+                    ]}
                     onValueChange={([value]) =>
                       updateExportOptions({
                         visualizationOptions: {
@@ -336,18 +390,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileJson className="h-4 w-4" />
-                  Annotation Formats
+                  {t('export.exportFormats')}
                 </CardTitle>
-                <CardDescription>
-                  Select annotation formats for machine learning frameworks
-                </CardDescription>
+                <CardDescription>{t('export.exportFormats')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="coco-format"
                     checked={exportOptions.annotationFormats?.includes('coco')}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={checked => {
                       const formats = exportOptions.annotationFormats || [];
                       updateExportOptions({
                         annotationFormats: checked
@@ -356,14 +408,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="coco-format">COCO format (Common Objects in Context)</Label>
+                  <Label htmlFor="coco-format">
+                    {t('export.includeCocoFormat')}
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="yolo-format"
                     checked={exportOptions.annotationFormats?.includes('yolo')}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={checked => {
                       const formats = exportOptions.annotationFormats || [];
                       updateExportOptions({
                         annotationFormats: checked
@@ -372,14 +426,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="yolo-format">YOLO format (You Only Look Once)</Label>
+                  <Label htmlFor="yolo-format">
+                    {t('export.formats.yolo')}
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="json-format"
                     checked={exportOptions.annotationFormats?.includes('json')}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={checked => {
                       const formats = exportOptions.annotationFormats || [];
                       updateExportOptions({
                         annotationFormats: checked
@@ -388,7 +444,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="json-format">Custom JSON format</Label>
+                  <Label htmlFor="json-format">
+                    {t('export.includeJsonMetadata')}
+                  </Label>
                 </div>
               </CardContent>
             </Card>
@@ -397,18 +455,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4" />
-                  Metrics Formats
+                  {t('export.outputSettings')}
                 </CardTitle>
-                <CardDescription>
-                  Select formats for exporting calculated metrics
-                </CardDescription>
+                <CardDescription>{t('export.generateExcel')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="excel-metrics"
                     checked={exportOptions.metricsFormats?.includes('excel')}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={checked => {
                       const formats = exportOptions.metricsFormats || [];
                       updateExportOptions({
                         metricsFormats: checked
@@ -417,14 +473,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="excel-metrics">Excel (.xlsx)</Label>
+                  <Label htmlFor="excel-metrics">
+                    {t('export.formats.excel')}
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="csv-metrics"
                     checked={exportOptions.metricsFormats?.includes('csv')}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={checked => {
                       const formats = exportOptions.metricsFormats || [];
                       updateExportOptions({
                         metricsFormats: checked
@@ -433,14 +491,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="csv-metrics">CSV (Comma-separated values)</Label>
+                  <Label htmlFor="csv-metrics">
+                    CSV (Comma-separated values)
+                  </Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
                   <Checkbox
                     id="json-metrics"
                     checked={exportOptions.metricsFormats?.includes('json')}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={checked => {
                       const formats = exportOptions.metricsFormats || [];
                       updateExportOptions({
                         metricsFormats: checked
@@ -449,34 +509,50 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="json-metrics">JSON</Label>
+                  <Label htmlFor="json-metrics">
+                    {t('export.formats.json')}
+                  </Label>
                 </div>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader>
-                <CardTitle>Export Summary</CardTitle>
+                <CardTitle>{t('export.completed')}</CardTitle>
                 <CardDescription>
-                  Review your export configuration
+                  {t('export.configureSettings')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div>• Images: {exportOptions.selectedImageIds?.length || images.length}</div>
-                {exportOptions.includeOriginalImages && <div>• Original images included</div>}
-                {exportOptions.includeVisualizations && <div>• Visualizations with numbered polygons</div>}
+                <div>
+                  • Images:{' '}
+                  {exportOptions.selectedImageIds?.length || images.length}
+                </div>
+                {exportOptions.includeOriginalImages && (
+                  <div>• Original images included</div>
+                )}
+                {exportOptions.includeVisualizations && (
+                  <div>• Visualizations with numbered polygons</div>
+                )}
                 {exportOptions.annotationFormats?.length > 0 && (
-                  <div>• Annotations: {exportOptions.annotationFormats.join(', ').toUpperCase()}</div>
+                  <div>
+                    • Annotations:{' '}
+                    {exportOptions.annotationFormats.join(', ').toUpperCase()}
+                  </div>
                 )}
                 {exportOptions.metricsFormats?.length > 0 && (
-                  <div>• Metrics: {exportOptions.metricsFormats.join(', ').toUpperCase()}</div>
+                  <div>
+                    • Metrics:{' '}
+                    {exportOptions.metricsFormats.join(', ').toUpperCase()}
+                  </div>
                 )}
-                {exportOptions.includeDocumentation && <div>• Documentation and metadata</div>}
+                {exportOptions.includeDocumentation && (
+                  <div>• Documentation and metadata</div>
+                )}
                 <div>• No compression (full quality)</div>
               </CardContent>
             </Card>
           </TabsContent>
-
         </Tabs>
 
         {/* Connection Status */}
@@ -501,24 +577,23 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
         )}
 
         {/* Completed Export - Manual Download */}
-        {completedJobId && !isExporting && currentJob?.status === 'completed' && (
-          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-            <AlertCircle className="h-4 w-4 text-green-600" />
-            <div className="flex-1">
-              <span className="text-sm text-green-800">
-                Export completed successfully! Click below to download if it didn't start automatically.
-              </span>
+        {completedJobId &&
+          !isExporting &&
+          currentJob?.status === 'completed' && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <AlertCircle className="h-4 w-4 text-green-600" />
+              <div className="flex-1">
+                <span className="text-sm text-green-800">
+                  Export completed successfully! Click below to download if it
+                  didn't start automatically.
+                </span>
+              </div>
+              <Button size="sm" onClick={triggerDownload} className="ml-2">
+                <Download className="h-4 w-4 mr-1" />
+                {t('export.download')}
+              </Button>
             </div>
-            <Button 
-              size="sm" 
-              onClick={triggerDownload}
-              className="ml-2"
-            >
-              <Download className="h-4 w-4 mr-1" />
-              Download
-            </Button>
-          </div>
-        )}
+          )}
 
         {/* Failed Export */}
         {currentJob?.status === 'failed' && (
@@ -532,16 +607,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isExporting}>
-            Cancel
+            {t('export.cancel')}
           </Button>
           {isExporting ? (
             <Button onClick={cancelExport} variant="destructive">
-              Stop Export
+              {t('export.cancel')}
             </Button>
           ) : (
             <Button onClick={handleExport} disabled={isExporting}>
               <Download className="mr-2 h-4 w-4" />
-              Start Export
+              {t('export.startExport')}
             </Button>
           )}
         </DialogFooter>

@@ -5,7 +5,7 @@ import tsParser from '@typescript-eslint/parser';
 export default [
   js.configs.recommended,
   {
-    files: ['src/**/*.ts'],
+    files: ['**/*.ts', '!node_modules/**'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -53,7 +53,7 @@ export default [
     },
   },
   {
-    files: ['src/**/*.test.ts', 'src/**/__tests__/**/*.ts', 'src/test/**/*.ts'],
+    files: ['**/*.test.ts', '**/__tests__/**/*.ts', '**/test/**/*.ts'],
     languageOptions: {
       globals: {
         // Jest globals are now imported from @jest/globals, so we don't need them as globals anymore
@@ -77,6 +77,6 @@ export default [
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', 'src/**/__tests__/**', 'src/**/*.test.ts'],
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '**/__tests__/**', '**/*.test.ts'],
   },
 ];

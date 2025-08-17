@@ -3,6 +3,7 @@
 User authentication endpoints for registration, login, logout, and token management.
 
 ## Base Path
+
 `/api/auth`
 
 ## Endpoints
@@ -16,6 +17,7 @@ Create a new user account.
 **Rate Limit**: 10 requests per hour per IP
 
 #### Request Body
+
 ```json
 {
   "email": "user@example.com",
@@ -24,10 +26,12 @@ Create a new user account.
 ```
 
 #### Validation Rules
+
 - `email`: Valid email address, unique in system
 - `password`: Minimum 8 characters, must contain uppercase, lowercase, number, and special character
 
 #### Success Response `201`
+
 ```json
 {
   "success": true,
@@ -50,6 +54,7 @@ Create a new user account.
 ```
 
 #### Error Responses
+
 ```json
 // 400 - Validation Error
 {
@@ -77,6 +82,7 @@ Authenticate user and receive JWT tokens.
 **Rate Limit**: 5 requests per 15 minutes per IP
 
 #### Request Body
+
 ```json
 {
   "email": "user@example.com",
@@ -85,6 +91,7 @@ Authenticate user and receive JWT tokens.
 ```
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -115,6 +122,7 @@ Authenticate user and receive JWT tokens.
 ```
 
 #### Error Responses
+
 ```json
 // 401 - Invalid Credentials
 {
@@ -138,6 +146,7 @@ Exchange refresh token for new access token.
 **Rate Limit**: 100 requests per hour per IP
 
 #### Request Body
+
 ```json
 {
   "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -145,6 +154,7 @@ Exchange refresh token for new access token.
 ```
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -157,6 +167,7 @@ Exchange refresh token for new access token.
 ```
 
 #### Error Responses
+
 ```json
 // 401 - Invalid Refresh Token
 {
@@ -173,6 +184,7 @@ Invalidate user's refresh token and log out.
 **Authentication**: Required (Bearer token)
 
 #### Request Body
+
 ```json
 {
   "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
@@ -180,6 +192,7 @@ Invalidate user's refresh token and log out.
 ```
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -195,6 +208,7 @@ Retrieve current authenticated user's information.
 **Authentication**: Required (Bearer token)
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -231,6 +245,7 @@ Update user profile information.
 **Authentication**: Required (Bearer token)
 
 #### Request Body
+
 ```json
 {
   "username": "new_username",
@@ -244,6 +259,7 @@ Update user profile information.
 ```
 
 #### Validation Rules
+
 - `username`: 3-30 characters, alphanumeric and underscores only, unique
 - `bio`: Maximum 500 characters
 - `preferredModel`: Must be one of: `hrnet`, `resunet_advanced`, `resunet_small`
@@ -252,6 +268,7 @@ Update user profile information.
 - `preferredTheme`: Must be one of: `light`, `dark`
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -281,6 +298,7 @@ Delete user account and all associated data. Requires email confirmation for sec
 **Rate Limit**: 3 requests per hour per user
 
 #### Request Body
+
 ```json
 {
   "email": "user@example.com",
@@ -289,10 +307,12 @@ Delete user account and all associated data. Requires email confirmation for sec
 ```
 
 #### Validation Rules
+
 - `email`: Must match authenticated user's email exactly
 - `password`: Must match user's current password
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -301,6 +321,7 @@ Delete user account and all associated data. Requires email confirmation for sec
 ```
 
 #### Error Responses
+
 ```json
 // 400 - Email Mismatch
 {
@@ -322,6 +343,7 @@ Delete user account and all associated data. Requires email confirmation for sec
 ```
 
 **Security Notes**:
+
 - Account deletion is immediate and irreversible
 - All user data including projects, images, and segmentations are permanently deleted
 - User receives email confirmation after successful deletion
@@ -336,6 +358,7 @@ Change user's password.
 **Rate Limit**: 5 requests per hour per user
 
 #### Request Body
+
 ```json
 {
   "currentPassword": "OldPassword123!",
@@ -344,10 +367,12 @@ Change user's password.
 ```
 
 #### Validation Rules
+
 - `currentPassword`: Must match user's current password
 - `newPassword`: Same rules as registration password
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -356,6 +381,7 @@ Change user's password.
 ```
 
 #### Error Responses
+
 ```json
 // 400 - Current Password Incorrect
 {
@@ -382,6 +408,7 @@ Request password reset email.
 **Rate Limit**: 3 requests per hour per IP
 
 #### Request Body
+
 ```json
 {
   "email": "user@example.com"
@@ -389,6 +416,7 @@ Request password reset email.
 ```
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -396,7 +424,7 @@ Request password reset email.
 }
 ```
 
-*Note: For security reasons, this endpoint always returns success, even if the email doesn't exist.*
+_Note: For security reasons, this endpoint always returns success, even if the email doesn't exist._
 
 ### Reset Password
 
@@ -407,6 +435,7 @@ Reset password using token from email.
 **Rate Limit**: 10 requests per hour per IP
 
 #### Request Body
+
 ```json
 {
   "token": "reset_token_from_email",
@@ -415,6 +444,7 @@ Reset password using token from email.
 ```
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -423,6 +453,7 @@ Reset password using token from email.
 ```
 
 #### Error Responses
+
 ```json
 // 400 - Invalid or Expired Token
 {
@@ -439,6 +470,7 @@ Verify user's email address using token from email.
 **Authentication**: None
 
 #### Request Body
+
 ```json
 {
   "token": "verification_token_from_email"
@@ -446,6 +478,7 @@ Verify user's email address using token from email.
 ```
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -462,6 +495,7 @@ Send verification email again.
 **Rate Limit**: 3 requests per hour per user
 
 #### Success Response `200`
+
 ```json
 {
   "success": true,
@@ -472,6 +506,7 @@ Send verification email again.
 ## JWT Token Structure
 
 ### Access Token Payload
+
 ```json
 {
   "userId": "user_123",
@@ -482,6 +517,7 @@ Send verification email again.
 ```
 
 ### Refresh Token Payload
+
 ```json
 {
   "userId": "user_123",
@@ -495,12 +531,13 @@ Send verification email again.
 ## Authentication Flow Examples
 
 ### Frontend Login Flow
+
 ```typescript
 // 1. Login user
 const loginResponse = await fetch('/api/auth/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ email, password })
+  body: JSON.stringify({ email, password }),
 });
 
 const { tokens } = await loginResponse.json();
@@ -510,50 +547,54 @@ setAccessToken(tokens.accessToken);
 setRefreshToken(tokens.refreshToken);
 
 // 3. Set up automatic token refresh
-setInterval(async () => {
-  try {
-    const refreshResponse = await fetch('/api/auth/refresh', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken })
-    });
-    
-    const { accessToken } = await refreshResponse.json();
-    setAccessToken(accessToken);
-  } catch (error) {
-    // Redirect to login
-    window.location.href = '/login';
-  }
-}, 14 * 60 * 1000); // Refresh 1 minute before expiry
+setInterval(
+  async () => {
+    try {
+      const refreshResponse = await fetch('/api/auth/refresh', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      const { accessToken } = await refreshResponse.json();
+      setAccessToken(accessToken);
+    } catch (error) {
+      // Redirect to login
+      window.location.href = '/login';
+    }
+  },
+  14 * 60 * 1000
+); // Refresh 1 minute before expiry
 ```
 
 ### API Request with Authentication
+
 ```typescript
 const makeAuthenticatedRequest = async (url, options = {}) => {
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${accessToken}`,
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
-      ...options.headers
-    }
+      ...options.headers,
+    },
   });
-  
+
   if (response.status === 401) {
     // Try refreshing token
     await refreshAccessToken();
-    
+
     // Retry original request
     return fetch(url, {
       ...options,
       headers: {
-        'Authorization': `Bearer ${newAccessToken}`,
+        Authorization: `Bearer ${newAccessToken}`,
         'Content-Type': 'application/json',
-        ...options.headers
-      }
+        ...options.headers,
+      },
     });
   }
-  
+
   return response;
 };
 ```
@@ -561,18 +602,21 @@ const makeAuthenticatedRequest = async (url, options = {}) => {
 ## Security Considerations
 
 ### Token Security
+
 - **Access tokens**: Short-lived (15 minutes) to limit exposure
 - **Refresh tokens**: Stored in database for revocation capability
 - **HTTPS only**: All authentication endpoints require HTTPS in production
 - **Secure cookies**: Refresh tokens can optionally be stored in httpOnly cookies
 
 ### Password Security
+
 - **bcrypt hashing**: Passwords hashed with salt rounds = 12
 - **Password complexity**: Enforced minimum security requirements
 - **Rate limiting**: Prevents brute force attacks
 - **Account lockout**: Optional feature for repeated failed attempts
 
 ### Session Management
+
 - **Token rotation**: Refresh tokens rotate on use (optional)
 - **Session tracking**: All active sessions tracked in database
 - **Remote logout**: Ability to invalidate all sessions for user

@@ -47,6 +47,7 @@ export const useKeyboardShortcuts = ({
   const isShiftPressed = useRef(false);
   const isCtrlPressed = useRef(false);
   const isAltPressed = useRef(false);
+  const isSpacePressed = useRef(false);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -54,6 +55,21 @@ export const useKeyboardShortcuts = ({
       isShiftPressed.current = event.shiftKey;
       isCtrlPressed.current = event.ctrlKey || event.metaKey;
       isAltPressed.current = event.altKey;
+
+      // Update Space key state - only when not in input fields
+      if (event.code === 'Space') {
+        // Don't process Space when typing in inputs
+        const target = event.target as HTMLElement;
+        if (
+          target.tagName !== 'INPUT' &&
+          target.tagName !== 'TEXTAREA' &&
+          !target.isContentEditable
+        ) {
+          isSpacePressed.current = true;
+          // Prevent space from scrolling the page when used for panning
+          event.preventDefault();
+        }
+      }
 
       // Don't process shortcuts when typing in inputs
       const target = event.target as HTMLElement;
@@ -178,9 +194,9 @@ export const useKeyboardShortcuts = ({
           if (
             selectedPolygonId &&
             handleDeletePolygon &&
-            (editMode === EditMode.View || 
-             editMode === EditMode.EditVertices || 
-             editMode === EditMode.DeletePolygon)
+            (editMode === EditMode.View ||
+              editMode === EditMode.EditVertices ||
+              editMode === EditMode.DeletePolygon)
           ) {
             event.preventDefault();
             handleDeletePolygon();
@@ -244,6 +260,11 @@ export const useKeyboardShortcuts = ({
     isShiftPressed.current = event.shiftKey;
     isCtrlPressed.current = event.ctrlKey || event.metaKey;
     isAltPressed.current = event.altKey;
+
+    // Update Space key state - always reset on keyup regardless of target
+    if (event.code === 'Space') {
+      isSpacePressed.current = false;
+    }
   }, []);
 
   useEffect(() => {
@@ -260,6 +281,7 @@ export const useKeyboardShortcuts = ({
     isShiftPressed: () => isShiftPressed.current,
     isCtrlPressed: () => isCtrlPressed.current,
     isAltPressed: () => isAltPressed.current,
+    isSpacePressed: () => isSpacePressed.current,
   };
 };
 

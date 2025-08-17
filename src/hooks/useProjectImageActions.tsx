@@ -77,6 +77,7 @@ export const useProjectImageActions = ({
 
       // Process the image
       updateImageProcessingStatus({
+        projectId: projectId!,
         imageId: imageId,
         imageUrl: image.url,
         onComplete: (result: SegmentationData) => {

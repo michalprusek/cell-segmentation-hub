@@ -134,10 +134,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
   };
 
   const isRequiredSelectionMode = (mode: EditMode) => {
-    return (
-      mode === EditMode.EditVertices ||
-      mode === EditMode.AddPoints
-    );
+    return mode === EditMode.EditVertices || mode === EditMode.AddPoints;
   };
 
   const canActivateMode = (mode: EditMode) => {
@@ -208,10 +205,10 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
       <ModeButton mode={EditMode.CreatePolygon} />
       <ModeButton mode={EditMode.Slice} />
       <ModeButton mode={EditMode.DeletePolygon} />
-      
+
       {/* Separator */}
       <div className="w-10 h-px bg-gray-300 dark:bg-gray-600 my-2" />
-      
+
       {/* Zoom controls */}
       <div className="relative group">
         <Button
@@ -229,7 +226,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
           <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
         </div>
       </div>
-      
+
       <div className="relative group">
         <Button
           variant="ghost"
@@ -246,7 +243,7 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
           <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
         </div>
       </div>
-      
+
       <div className="relative group">
         <Button
           variant="ghost"
@@ -258,7 +255,9 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
           <Maximize2 size={20} />
         </Button>
         <div className="absolute left-full ml-2 top-1/2 transform -translate-y-1/2 px-3 py-2 bg-black text-white text-sm rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-50">
-          <div className="font-medium">{t('segmentation.toolbar.resetView')}</div>
+          <div className="font-medium">
+            {t('segmentation.toolbar.resetView')}
+          </div>
           <div className="text-xs text-gray-300 mt-1">R</div>
           <div className="absolute right-full top-1/2 transform -translate-y-1/2 border-4 border-transparent border-r-black" />
         </div>

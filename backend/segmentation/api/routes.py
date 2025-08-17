@@ -137,7 +137,13 @@ async def segment_image(
         result["processing_time"] = processing_time
         result["success"] = True
         
-        logger.info(f"Segmentation completed in {processing_time:.2f}s, found {len(result['polygons'])} polygons")
+        # Add warning metadata if no polygons detected
+        polygon_count = len(result.get('polygons', []))
+        if polygon_count == 0:
+            result["warning"] = "No polygons detected - image may not contain detectable cells or threshold may need adjustment"
+            logger.warning(f"Segmentation completed in {processing_time:.2f}s, but found 0 polygons - potential detection issue")
+        else:
+            logger.info(f"Segmentation completed in {processing_time:.2f}s, found {polygon_count} polygons")
         
         return result
         

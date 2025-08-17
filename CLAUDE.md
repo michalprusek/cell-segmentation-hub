@@ -17,15 +17,18 @@ VERY IMPORTANT: Use subagents often to save context. They dont have shared conte
 ### Usage Guidelines
 
 **ALWAYS use knowledge systems when:**
+
 - **Planning tasks**: Retrieve relevant knowledge before starting implementation
 - **Solving problems**: Check for existing solutions and patterns
 - **After completing work**: Store insights, solutions, and best practices
 - **Debugging issues**: Look for similar problems and their resolutions
 
 ### Knowledge Storage Strategy
+
 Store these types of information in the knowledge system:
+
 - **Code patterns**: Successful implementation approaches for common tasks
-- **Bug fixes**: Solutions to specific errors and their root causes  
+- **Bug fixes**: Solutions to specific errors and their root causes
 - **Architecture decisions**: Why certain technical choices were made
 - **Configuration solutions**: Docker, database, and service setup fixes
 - **Performance optimizations**: Techniques that improved application performance
@@ -33,13 +36,16 @@ Store these types of information in the knowledge system:
 - **Testing approaches**: Effective testing strategies and test case patterns
 
 ### Retrieval Best Practices
+
 Before starting work, query the knowledge system for:
+
 - Similar features or components already implemented
 - Known issues and their solutions related to your task
 - Established patterns for the type of work you're doing
 - Configuration requirements for related services
 
 ### Example Queries
+
 - "React hook patterns for data fetching"
 - "Docker container debugging techniques"
 - "Prisma database migration best practices"
@@ -49,7 +55,8 @@ Before starting work, query the knowledge system for:
 **Remember**: The knowledge system serves as the project's institutional memory - use it to avoid repeating work and to build upon proven solutions.
 
 ### Docker Environment (Required)
-- **Start all services**: `make up` or `make dev-setup` 
+
+- **Start all services**: `make up` or `make dev-setup`
 - **View logs**: `make logs-f` (all services) or `make logs-fe`/`make logs-be`/`make logs-ml`
 - **Stop services**: `make down`
 - **Health check**: `make health` or `make test`
@@ -57,21 +64,28 @@ Before starting work, query the knowledge system for:
 - **Shell access**: `make shell-fe`/`make shell-be`/`make shell-ml`
 
 ### Service URLs (Docker only)
-- **Frontend**: http://localhost:3000 
+
+- **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3001
 - **ML Service**: http://localhost:8000
 - **API Documentation**: http://localhost:3001/api-docs
 - **Prometheus**: http://localhost:9090
 - **Grafana**: http://localhost:3030
 
+**Note**: Some documentation may reference port 8082 for frontend - this is legacy. Always use port 3000 for Docker development.
+
 ### Legacy Frontend Commands (Do NOT use in development)
+
 These only work for building static assets, but the app must run in Docker:
+
 - `npm run build` - Production build
 - `npm run lint` - Code linting
 - `npm run preview` - Preview build (but use Docker for development)
 
 ### Docker Build Commands (Use Desktop Commander MCP)
+
 **IMPORTANT: Use Desktop Commander MCP for long-running build operations to prevent macOS terminal crashes**
+
 - For Docker builds longer than 30s, use `mcp__desktop-commander__start_process` instead of Bash tool
 - Example: `mcp__desktop-commander__start_process("docker compose build backend", 600000)`
 - Monitor with `mcp__desktop-commander__read_process_output` and `mcp__desktop-commander__interact_with_process`
@@ -81,8 +95,9 @@ These only work for building static assets, but the app must run in Docker:
 This is a React-based cell segmentation application with a full-stack microservices architecture. The system consists of three main services running in Docker containers:
 
 ### Core Technologies
+
 - **Frontend**: React 18 + TypeScript + Vite (port 3000)
-- **Backend API**: Node.js + Express + TypeScript (port 3001)  
+- **Backend API**: Node.js + Express + TypeScript (port 3001)
 - **ML Service**: Python + FastAPI + PyTorch (port 8000)
 - **Database**: SQLite (development) / PostgreSQL (CI/production) with Prisma ORM
 - **Authentication**: JWT access/refresh tokens
@@ -92,7 +107,9 @@ This is a React-based cell segmentation application with a full-stack microservi
 - **Monitoring**: Prometheus + Grafana stack
 
 ### Key Directory Structure
+
 **Frontend (React/TypeScript):**
+
 - `/src/pages/` - Main application pages (Dashboard, ProjectDetail, SegmentationEditor)
 - `/src/pages/segmentation/` - Complex segmentation editor with advanced polygon editing
 - `/src/components/` - Reusable UI components organized by feature
@@ -101,6 +118,7 @@ This is a React-based cell segmentation application with a full-stack microservi
 - `/src/lib/` - Utility libraries (API client, image processing, segmentation algorithms)
 
 **Backend (Node.js/Express):**
+
 - `/backend/src/api/` - Controllers and routes for REST API
 - `/backend/src/services/` - Business logic services
 - `/backend/src/middleware/` - Authentication, validation, error handling, monitoring
@@ -108,12 +126,14 @@ This is a React-based cell segmentation application with a full-stack microservi
 - `/backend/prisma/` - Database schema and migrations
 
 **ML Service (Python/FastAPI):**
+
 - `/backend/segmentation/api/` - FastAPI routes and models
 - `/backend/segmentation/services/` - ML inference and postprocessing
 - `/backend/segmentation/models/` - PyTorch model definitions (HRNet, ResUNet variants)
 - `/backend/segmentation/weights/` - Pre-trained model weights
 
 ### Segmentation Editor Architecture
+
 The segmentation editor (`/src/pages/segmentation/`) is the most complex part of the application:
 
 - **Main Editor**: `SegmentationEditor.tsx` orchestrates the entire editing experience
@@ -124,45 +144,55 @@ The segmentation editor (`/src/pages/segmentation/`) is the most complex part of
 - **Export System**: Supports COCO format export and Excel-based metrics
 
 ### Database Schema
+
 The application uses Prisma ORM with different databases per environment:
+
 - **Development**: SQLite (`file:./data/dev.db`)
 - **CI/Testing**: PostgreSQL 15 (service container)
 - **Production**: PostgreSQL (managed service)
 
 Key tables include:
+
 - `User` - User accounts and authentication
-- `Project` - Project metadata and settings  
+- `Project` - Project metadata and settings
 - `ProjectImage` - Image files and processing status
 - `SegmentationResult` - ML model results and polygon annotations
 - `QueueItem` - Processing queue for ML operations
 
 ### Path Aliases
+
 - `@/` maps to `./src/` for clean import paths
 
 ### TypeScript Configuration
+
 - Relaxed TypeScript settings (`noImplicitAny: false`, `strictNullChecks: false`)
 - Path mapping configured for `@/*` imports
 - Separate configs for app and Node.js code
 
 ### Authentication Flow
+
 Uses JWT-based authentication with access/refresh tokens. The `AuthContext` manages user state and the `ProtectedRoute` component guards authenticated pages.
 
 ### ML Models in Production
+
 - **HRNetV2** - Best accuracy, ~3.1s inference time
-- **CBAM-ResUNet** - Fastest inference, ~6.9s inference time  
+- **CBAM-ResUNet** - Fastest inference, ~6.9s inference time
 - **MA-ResUNet** - Most precise, ~18.1s inference time with attention mechanisms
 
 ### API Documentation
+
 - **Swagger UI**: http://localhost:3001/api-docs (interactive documentation)
 - **OpenAPI spec**: http://localhost:3001/api-docs/openapi.json
 - **Endpoint registry**: http://localhost:3001/api/endpoints
 
 ### Internationalization
-Multi-language support via `LanguageContext` with translations in `/src/translations/`.
+
+Multi-language support via `LanguageContext` with translations in `/src/translations/`. The system includes comprehensive validation to ensure translation completeness across all supported languages (EN, CS, ES, DE, FR, ZH).
 
 ## Development Best Practices
 
 ### Important Reminders
+
 - **Docker-first development**: Always use `make` commands, never direct npm/node commands
 - **File editing**: Always prefer editing existing files over creating new ones
 - **Documentation**: Only create docs when explicitly requested by the user
@@ -170,36 +200,67 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 - **VERY IMPORTANT - MacOS Terminal Issue**: When running long commands (>30s), ALWAYS use the appropriate MCP tools for process management instead of Bash tool, as long-running Bash commands cause Claude Code terminal crashes on macOS
 
 ### Testing and Quality
+
 - **Linting**: Run `npm run lint` for code quality checks
+- **Lint fix**: Run `npm run lint:fix` to auto-fix ESLint issues
 - **Type checking**: Run `npm run type-check` to verify TypeScript types
 - **Unit tests**: Run `npm run test` for Vitest unit tests
+- **Test UI**: Run `npm run test:ui` for interactive Vitest interface
 - **E2E tests**: Run `npm run test:e2e` for Playwright end-to-end tests (requires services running)
+- **E2E UI**: Run `npm run test:e2e:ui` for interactive Playwright interface
 - **Test coverage**: Run `npm run test:coverage` to generate coverage report
+- **Formatting**: Run `npm run format` to format code with Prettier
+- **Format check**: Run `npm run format:check` to check formatting without changes
 - **API testing**: Use Swagger UI at http://localhost:3001/api-docs
 - **Health checks**: Use `make health` to verify all services are running
 - **Service logs**: Use `make logs-f` to monitor all services in real-time
 
+### Internationalization (i18n)
+
+- **Translation validation**: Run `npm run i18n:validate` to check translation completeness and consistency
+- **Translation check**: Run `npm run i18n:check` to verify all translation keys exist
+- **Translation lint**: Run `npm run i18n:lint` to lint i18n-specific rules
+- **Supported languages**: English (en), Czech (cs), Spanish (es), German (de), French (fr), Chinese (zh)
+- **Translation files**: Located in `/src/translations/`
+
 ### Git Hooks and Pre-commit Checks
-The project uses Husky for pre-commit hooks and lint-staged for running checks:
-- **Pre-commit**: Automatically runs `npm run --silent lint-staged` before commits
-- **Lint-staged**: Runs ESLint, Prettier, and TypeScript type-check on staged files
-- **Commit messages**: Follow conventional commit format (e.g., `feat:`, `fix:`, `chore:`)
-- **To bypass hooks** (emergency only): Use `git commit --no-verify`
+
+The project uses Husky for comprehensive pre-commit validation:
+
+**Automated Checks (Cannot be bypassed):**
+
+- **ESLint**: Code quality with 0 warnings allowed
+- **Prettier**: Code formatting verification
+- **TypeScript**: Type checking for both frontend and backend
+- **Security**: Prevents console.log in production code
+- **Code quality**: Blocks debugger statements and merge conflict markers
+- **File size**: Warns about files >1MB
+- **Package consistency**: Validates package-lock.json updates
+
+**Manual bypass** (emergency only): Use `git commit --no-verify`
+
+**Conventional Commits**: Use format `feat:`, `fix:`, `chore:`, `docs:`, `style:`, `refactor:`, `test:`
 
 ### Common Development Tasks
+
 - **Adding new API endpoints**: Add routes in `/backend/src/api/routes/`, controllers in `/backend/src/api/controllers/`, and update OpenAPI spec
 - **Frontend components**: Create in `/src/components/` following existing patterns, use shadcn/ui primitives
 - **ML model changes**: Modify `/backend/segmentation/models/` and update model loading in `/backend/segmentation/services/`
-- **Database changes**: 
+- **Adding translations**: Add new keys to all language files in `/src/translations/`, run `npm run i18n:validate` to verify
+- **Database changes**:
   - Update `/backend/prisma/schema.prisma`
   - Shell into backend container: `make shell-be`
   - Run migration: `npx prisma migrate dev --name your_migration_name`
   - Generate client: `npx prisma generate`
 - **Viewing database**: Run `cd backend && npm run db:studio` (opens Prisma Studio)
+- **Docker operations**: All docker commands available via `make` targets (see `make help`)
+- **Running single tests**: Use Vitest filtering: `npm run test -- --run specific-test-name`
+- **Frontend debugging**: Use browser dev tools with source maps enabled in development
 
 ## Current System Status
 
 **Production-Ready Components:**
+
 - ✅ **Full-stack architecture**: React frontend + Node.js API + Python ML service
 - ✅ **Authentication system**: JWT-based with access/refresh tokens
 - ✅ **Database layer**: Prisma ORM (SQLite dev, PostgreSQL CI/prod), full CRUD operations
@@ -210,34 +271,53 @@ The project uses Husky for pre-commit hooks and lint-staged for running checks:
 - ✅ **Docker environment**: Full containerization with health checks
 
 **Key Features Working:**
+
 - User registration, authentication, and profile management
 - Project creation and management with image uploads
 - Real-time ML segmentation with polygon extraction
 - Advanced polygon editing with multiple interaction modes
 - Export functionality (COCO format, Excel metrics)
-- Multi-language support (EN, CS, ES)
+- Multi-language support (EN, CS, ES, DE, FR, ZH) with i18n validation
 - Real-time WebSocket notifications for queue processing
 
 **Architecture Highlights:**
+
 - **Security**: JWT tokens stored securely, CORS configured, rate limiting
 - **Performance**: Optimized Docker containers, efficient image processing
 - **Scalability**: Microservices architecture, queue-based ML processing
 - **Developer Experience**: Hot reload in development, comprehensive API docs
 - nikdy nepřeskakuj pre-commit hook!
 
+### Development Workflow Best Practices
+
+**Before making changes:**
+
+1. Always use Docker environment (`make up` to start)
+2. Query knowledge system for existing patterns and solutions
+3. Check if translations need updates for UI changes
+
+**During development:** 4. Run `npm run dev` for frontend development with hot reload 5. Use `make logs-f` to monitor all services 6. Test changes with `npm run test` and `npm run test:e2e` 7. Validate translations with `npm run i18n:validate` if applicable
+
+**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.)
+
+**Quality assurance:** 11. Always run `npm run type-check` and `npm run lint` before major changes 12. Use `make health` to verify all services are running correctly 13. Store learnings and solutions in the knowledge system for future reference
+
 ## Recent Implementations & Important Notes
 
 ### Storage Space Indicator (Dashboard)
+
 - **Backend Endpoint**: `GET /api/auth/storage-stats` - Returns user's total storage usage
 - **Frontend**: Replaced average segmentation time with storage usage indicator in dashboard
 - **Location**: `StatsOverview` component shows storage in MB/GB with HardDrive icon from lucide-react
 - **Translation keys**: Already exist - `dashboard.storageUsed` in all language files
 
 ### Critical Import Paths
+
 - **Backend Prisma imports**: Use stable import aliases like `@db/prisma` or `@/db` instead of fragile relative paths. Configure TypeScript path aliases in `tsconfig.json` paths and update bundler/module resolution configs (webpack/ts-node/next) so imports work from any directory depth. Example alias: `"@db/*": ["./src/db/*"]` then use `import { prisma } from '@db/prisma'`. Relative fallback `import { prisma } from '../../db'` may be used but is discouraged.
 - **This is essential** - wrong import path causes MODULE_NOT_FOUND errors and backend crash
 
 ### WebSocket Segmentation Queue Fix
+
 - **Problem**: WebSocket disconnecting with "transport close" and not reconnecting
 - **Solution**: Enable Socket.io auto-reconnection, add keep-alive pings, fix disconnect handling
 - **Key settings**: `reconnection: true`, ping interval every 25s, proper reconnect event handlers

@@ -5,11 +5,13 @@ import { toast } from 'sonner';
 import { ProjectImage, SpheroidMetric, PolygonData } from '@/types';
 import { calculateMetrics } from '@/pages/segmentation/utils/metricCalculations';
 import { logger } from '@/lib/logger';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export const useExportFunctions = (
   images: ProjectImage[],
   projectTitle: string
 ) => {
+  const { t } = useLanguage();
   const [selectedImages, setSelectedImages] = useState<Record<string, boolean>>(
     {}
   );
@@ -189,10 +191,10 @@ export const useExportFunctions = (
       const filename = `${projectTitle || 'project'}_metrics_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
       XLSX.writeFile(workbook, filename);
 
-      toast.success('Export metrik dokončen');
+      toast.success(t('export.metricsExportComplete'));
     } catch (error) {
       logger.error('Export failed:', error);
-      toast.error('Export selhal');
+      toast.error(t('export.exportFailed'));
     } finally {
       setIsExporting(false);
     }
@@ -245,10 +247,10 @@ export const useExportFunctions = (
         await handleExportMetricsAsXlsx();
       }
 
-      toast.success('Export dokončen');
+      toast.success(t('export.exportComplete'));
     } catch (error) {
       logger.error('Export failed:', error);
-      toast.error('Export selhal');
+      toast.error(t('export.exportFailed'));
     } finally {
       setIsExporting(false);
     }

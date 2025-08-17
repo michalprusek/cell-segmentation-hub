@@ -7,7 +7,7 @@ The Cell Segmentation Hub implements a comprehensive endpoint registry system th
 The endpoint registry system consists of several components:
 
 - **Route Registry**: Central repository of all API endpoints
-- **Endpoint Tracker**: Middleware for usage statistics and performance monitoring  
+- **Endpoint Tracker**: Middleware for usage statistics and performance monitoring
 - **Health Monitor**: Real-time health checks for individual endpoints
 - **API Discovery**: Dynamic endpoint listing and documentation
 
@@ -64,9 +64,9 @@ app.get('/api/endpoints', (req, res) => {
     success: true,
     data: {
       endpoints: routeRegistry,
-      count: routeRegistry.length
+      count: routeRegistry.length,
     },
-    message: 'Seznam všech API endpoints'
+    message: 'Seznam všech API endpoints',
   });
 });
 
@@ -76,7 +76,7 @@ app.get('/api/health/endpoints', async (req, res) => {
   res.json({
     success: true,
     data: endpointHealth,
-    message: 'Zdravotní stav všech endpoints'
+    message: 'Zdravotní stav všech endpoints',
   });
 });
 ```
@@ -88,21 +88,25 @@ app.get('/api/health/endpoints', async (req, res) => {
 The system currently tracks **19 API endpoints** organized into **6 categories**:
 
 #### Health Endpoints (🌐 Public)
+
 - `GET /health` - Kontrola zdraví serveru
 - `GET /api/endpoints` - Seznam všech API endpoints
 - `GET /api/health/endpoints` - Zdravotní stav všech endpoints
 
 #### Authentication Endpoints (🌐 Public)
+
 - `POST /api/auth/register` - Registrace nového uživatele
 - `POST /api/auth/login` - Přihlášení uživatele
 - `POST /api/auth/refresh` - Obnovení access tokenu
 
 #### Protected Authentication (🔒 Protected)
+
 - `POST /api/auth/logout` - Odhlášení uživatele
 - `PUT /api/auth/profile` - Aktualizace profilu uživatele
 - `DELETE /api/auth/profile` - Smazání uživatelského účtu
 
 #### Project Management (🔒 Protected)
+
 - `GET /api/projects` - Seznam projektů uživatele
 - `POST /api/projects` - Vytvoření nového projektu
 - `GET /api/projects/:projectId` - Detail konkrétního projektu
@@ -110,12 +114,14 @@ The system currently tracks **19 API endpoints** organized into **6 categories**
 - `DELETE /api/projects/:projectId` - Smazání projektu
 
 #### Image Management (🔒 Protected)
+
 - `POST /api/projects/:projectId/images` - Upload obrázku do projektu
 - `GET /api/projects/:projectId/images/:imageId` - Detail obrázku
 - `DELETE /api/projects/:projectId/images/:imageId` - Smazání obrázku
 - `POST /api/projects/:projectId/images/:imageId/segment` - Spuštění segmentace obrázku
 
 #### Documentation Endpoints (🌐 Public)
+
 - `GET /api-docs` - Swagger UI dokumentace
 - `GET /api-docs/openapi.json` - OpenAPI JSON specifikace
 - `GET /api-docs/postman.json` - Postman kolekce
@@ -128,12 +134,15 @@ The endpoint tracker middleware automatically collects usage statistics:
 
 ```typescript
 export function createEndpointTracker() {
-  const endpointStats = new Map<string, {
-    calls: number;
-    lastCalled: Date;
-    avgResponseTime: number;
-    errors: number;
-  }>();
+  const endpointStats = new Map<
+    string,
+    {
+      calls: number;
+      lastCalled: Date;
+      avgResponseTime: number;
+      errors: number;
+    }
+  >();
 
   return (req: any, res: any, next: any) => {
     const startTime = Date.now();
@@ -144,7 +153,7 @@ export function createEndpointTracker() {
       calls: 0,
       lastCalled: new Date(),
       avgResponseTime: 0,
-      errors: 0
+      errors: 0,
     };
 
     stats.calls++;
@@ -153,11 +162,11 @@ export function createEndpointTracker() {
     res.on('finish', () => {
       const responseTime = Date.now() - startTime;
       stats.avgResponseTime = (stats.avgResponseTime + responseTime) / 2;
-      
+
       if (res.statusCode >= 400) {
         stats.errors++;
       }
-      
+
       endpointStats.set(endpoint, stats);
     });
 
@@ -184,11 +193,11 @@ The system performs health checks on all registered endpoints:
 
 ```typescript
 async function checkEndpointsHealth() {
-  const healthChecks = routeRegistry.map(async (route) => {
+  const healthChecks = routeRegistry.map(async route => {
     try {
       // Health check logic for each endpoint type
       const isHealthy = await performHealthCheck(route);
-      
+
       return {
         endpoint: route.path,
         method: route.method,
@@ -212,7 +221,7 @@ async function checkEndpointsHealth() {
   });
 
   const results = await Promise.all(healthChecks);
-  
+
   return {
     summary: {
       total: results.length,
@@ -277,7 +286,7 @@ During development, the system logs all registered endpoints:
 
 🔹 HEALTH:
    🌐 GET    /health - Kontrola zdraví serveru
-   🌐 GET    /api/endpoints - Seznam všech API endpoints  
+   🌐 GET    /api/endpoints - Seznam všech API endpoints
    🌐 GET    /api/health/endpoints - Zdravotní stav všech endpoints
 
 🔹 API:
@@ -304,6 +313,7 @@ During development, the system logs all registered endpoints:
 ```
 
 **Legend**:
+
 - 🌐 = Public endpoint (no authentication required)
 - 🔒 = Protected endpoint (JWT authentication required)
 
@@ -349,10 +359,11 @@ curl http://localhost:3001/api/health/endpoints
 const checkApiHealth = async () => {
   const response = await fetch('http://localhost:3001/api/health/endpoints');
   const health = await response.json();
-  
-  const unhealthyEndpoints = health.data.endpoints
-    .filter(endpoint => endpoint.status !== 'healthy');
-    
+
+  const unhealthyEndpoints = health.data.endpoints.filter(
+    endpoint => endpoint.status !== 'healthy'
+  );
+
   if (unhealthyEndpoints.length > 0) {
     console.warn('Unhealthy endpoints detected:', unhealthyEndpoints);
     // Send alert to monitoring system
@@ -374,13 +385,13 @@ The endpoint registry integrates with the Prometheus monitoring system:
 const endpointCalls = new promClient.Counter({
   name: 'api_endpoint_calls_total',
   help: 'Total number of API endpoint calls',
-  labelNames: ['endpoint', 'method', 'status']
+  labelNames: ['endpoint', 'method', 'status'],
 });
 
 const endpointDuration = new promClient.Histogram({
   name: 'api_endpoint_duration_seconds',
   help: 'API endpoint response time',
-  labelNames: ['endpoint', 'method']
+  labelNames: ['endpoint', 'method'],
 });
 ```
 
@@ -394,15 +405,15 @@ The registry integrates with the main health check system:
 // Main health check includes endpoint registry status
 app.get('/health', async (req, res) => {
   const endpointHealth = await getEndpointRegistryHealth();
-  
+
   return ResponseHelper.success(res, {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     components: {
       database: dbHealth,
       endpoints: endpointHealth,
-      monitoring: monitoringHealth
-    }
+      monitoring: monitoringHealth,
+    },
   });
 });
 ```
@@ -441,7 +452,7 @@ registerRoute({
   path: '/api/your-endpoint',
   method: 'POST',
   description: 'Your endpoint description',
-  authenticated: true
+  authenticated: true,
 });
 ```
 
@@ -480,6 +491,7 @@ npm run dev
 ```
 
 Debug mode provides detailed information about:
+
 - Route registration process
 - Health check execution
 - Statistics collection

@@ -2,7 +2,8 @@ import { logger } from '@/lib/logger';
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import apiClient from '@/lib/api';
+import { useLanguage } from '@/contexts/LanguageContext';
+import apiClient, { SegmentationResultData } from '@/lib/api';
 import type { SegmentationData } from '@/types';
 import type { ProjectImage } from '@/types';
 import { getErrorMessage } from '@/types';
@@ -46,7 +47,7 @@ const enrichImagesWithSegmentation = async (
         const segmentationData = await apiClient.getSegmentationResults(img.id);
 
         logger.debug(
-          `✅ Successfully fetched segmentation for ${img.id.slice(0, 8)}: ${segmentationData.polygons?.length || 0} polygons, ${segmentationData.imageWidth}x${segmentationData.imageHeight}`,
+          `✅ Successfully fetched segmentation for ${img.id.slice(0, 8)}: ${segmentationData?.polygons?.length || 0} polygons, ${segmentationData?.imageWidth || 'unknown'}x${segmentationData?.imageHeight || 'unknown'}`,
           {
             segmentationData,
           }
@@ -54,14 +55,24 @@ const enrichImagesWithSegmentation = async (
 
         return {
           imageId: img.id,
-          result: {
-            polygons: segmentationData.polygons || [],
-            imageWidth: segmentationData.imageWidth,
-            imageHeight: segmentationData.imageHeight,
-            modelUsed: segmentationData.modelUsed,
-            confidence: segmentationData.confidence,
-            processingTime: segmentationData.processingTime,
-          },
+          result: segmentationData
+            ? {
+                polygons: segmentationData.polygons || [],
+                imageWidth: segmentationData.imageWidth || img.width || null,
+                imageHeight: segmentationData.imageHeight || img.height || null,
+                modelUsed: segmentationData.modelUsed,
+                confidence: segmentationData.confidence,
+                processingTime: segmentationData.processingTime,
+                levelOfDetail: 'medium', // Default level of detail for thumbnails
+                polygonCount: segmentationData.polygons?.length || 0,
+                pointCount:
+                  segmentationData.polygons?.reduce(
+                    (sum, p) => sum + p.points.length,
+                    0
+                  ) || 0,
+                compressionRatio: 1.0, // Default compression ratio
+              }
+            : null,
         };
       } catch (error) {
         logger.error(
@@ -114,6 +125,7 @@ export const useProjectData = (
   projectId: string | undefined,
   userId: string | undefined
 ) => {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [projectTitle, setProjectTitle] = useState<string>('');
   const [images, setImages] = useState<ProjectImage[]>([]);
@@ -121,6 +133,10 @@ export const useProjectData = (
 
   // Track pending requests to prevent duplicates
   const pendingRequestsRef = useRef<Set<string>>(new Set());
+
+  // Store navigate function in ref to avoid dependency issues
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -134,8 +150,8 @@ export const useProjectData = (
         const project = await apiClient.getProject(projectId);
 
         if (!project) {
-          toast.error('Project not found');
-          navigate('/dashboard');
+          toast.error(t('toast.project.notFound'));
+          navigateRef.current('/dashboard');
           return;
         }
 
@@ -159,6 +175,8 @@ export const useProjectData = (
             id: img.id,
             name: img.name,
             url: img.url || img.image_url, // Use url field that's already mapped in api.ts
+            width: img.width,
+            height: img.height,
             thumbnail_url: img.thumbnail_url,
             createdAt: new Date(img.created_at || img.createdAt),
             updatedAt: new Date(img.updated_at || img.updatedAt),
@@ -182,8 +200,8 @@ export const useProjectData = (
           'response' in error &&
           (error as { response?: { status?: number } }).response?.status === 404
         ) {
-          toast.error('Project not found');
-          navigate('/dashboard');
+          toast.error(t('toast.project.notFound'));
+          navigateRef.current('/dashboard');
         } else {
           const errorMessage = getErrorMessage(error);
           toast.error(errorMessage || 'Failed to load project data');
@@ -194,7 +212,7 @@ export const useProjectData = (
     };
 
     fetchData();
-  }, [projectId, navigate, userId]);
+  }, [projectId, userId, t]);
 
   const updateImages = (
     newImages: ProjectImage[] | ((prev: ProjectImage[]) => ProjectImage[])
@@ -232,8 +250,8 @@ export const useProjectData = (
               ...img,
               segmentationResult: {
                 polygons: segmentationData.polygons || [],
-                imageWidth: segmentationData.imageWidth,
-                imageHeight: segmentationData.imageHeight,
+                imageWidth: segmentationData.imageWidth || img.width || null,
+                imageHeight: segmentationData.imageHeight || img.height || null,
                 modelUsed: segmentationData.modelUsed,
                 confidence: segmentationData.confidence,
                 processingTime: segmentationData.processingTime,

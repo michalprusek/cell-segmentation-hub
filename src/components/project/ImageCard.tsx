@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import SegmentationThumbnail from './SegmentationThumbnail';
+import CanvasThumbnailRenderer from './CanvasThumbnailRenderer';
 
 interface ImageCardProps {
   image: ProjectImage & {
@@ -24,9 +24,15 @@ interface ImageCardProps {
         points: Array<{ x: number; y: number }>;
         type: 'external' | 'internal';
         class?: string;
+        originalPointCount?: number;
+        compressionRatio?: number;
       }>;
       imageWidth?: number;
       imageHeight?: number;
+      levelOfDetail?: 'low' | 'medium' | 'high';
+      polygonCount?: number;
+      pointCount?: number;
+      compressionRatio?: number;
     };
   };
   onDelete: (imageId: string) => void;
@@ -130,17 +136,28 @@ export const ImageCard = ({
     >
       <div
         className={cn(
-          'relative aspect-square overflow-hidden rounded-lg cursor-pointer',
+          'relative overflow-hidden rounded-lg cursor-pointer',
           'bg-gray-100 dark:bg-gray-800 group transition-all duration-300',
           'hover:shadow-xl hover:scale-[1.02]'
         )}
+        style={{
+          // Fixed dimensions for stable rendering across viewport changes
+          width: '250px',
+          height: '167px', // Proportional height (250/280 * 192 = 171, rounded to 167)
+          minWidth: '250px',
+          minHeight: '167px',
+        }}
         onClick={() => onOpen(image.id)}
       >
         {/* Image preview */}
         <div className="absolute inset-0">
           {!imageError && candidateUrls.length > 0 ? (
             <img
-              src={candidateUrls[Math.min(fallbackIndex, candidateUrls.length - 1)] || ''}
+              src={
+                candidateUrls[
+                  Math.min(fallbackIndex, candidateUrls.length - 1)
+                ] || ''
+              }
               alt={image.name || 'Image'}
               className="w-full h-full object-cover"
               loading="lazy"
@@ -174,14 +191,25 @@ export const ImageCard = ({
             image.segmentationResult.imageWidth &&
             image.segmentationResult.imageHeight;
 
-          // Debug logging removed for production - no console output
-
           return shouldShowSegmentation ? (
-            <SegmentationThumbnail
-              polygons={image.segmentationResult.polygons}
-              imageWidth={image.segmentationResult.imageWidth}
-              imageHeight={image.segmentationResult.imageHeight}
-              simplified={true}
+            <CanvasThumbnailRenderer
+              thumbnailData={{
+                polygons: image.segmentationResult.polygons,
+                imageWidth: image.segmentationResult.imageWidth,
+                imageHeight: image.segmentationResult.imageHeight,
+                levelOfDetail: image.segmentationResult.levelOfDetail || 'low',
+                polygonCount:
+                  image.segmentationResult.polygonCount ||
+                  image.segmentationResult.polygons.length,
+                pointCount:
+                  image.segmentationResult.pointCount ||
+                  image.segmentationResult.polygons.reduce(
+                    (sum, p) => sum + p.points.length,
+                    0
+                  ),
+                compressionRatio:
+                  image.segmentationResult.compressionRatio || 1,
+              }}
             />
           ) : null;
         })()}
@@ -190,9 +218,9 @@ export const ImageCard = ({
         <div
           className={cn(
             'absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent',
-            'transition-opacity duration-300',
-            isHovered ? 'opacity-100' : 'opacity-60'
+            'transition-opacity duration-300'
           )}
+          style={{ zIndex: 5 }}
         />
 
         {/* Top action buttons */}
@@ -201,6 +229,7 @@ export const ImageCard = ({
             'absolute top-2 right-2 flex gap-1 transition-all duration-300',
             isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
           )}
+          style={{ zIndex: 15 }}
         >
           <Button
             size="icon"
@@ -213,7 +242,10 @@ export const ImageCard = ({
         </div>
 
         {/* Bottom info overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
+        <div
+          className="absolute bottom-0 left-0 right-0 p-3 text-white"
+          style={{ zIndex: 15 }}
+        >
           {/* File name */}
           <h3
             className="font-semibold text-sm truncate mb-1"

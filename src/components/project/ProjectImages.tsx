@@ -20,7 +20,13 @@ const ProjectImages = ({
   if (viewMode === 'grid') {
     return (
       <motion.div
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"
+        className="grid justify-items-start"
+        style={{
+          // Use auto-fill for constant gaps - doesn't stretch items to fill width
+          gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 250px))',
+          maxWidth: '100%',
+          gap: '16px', // Constant gap between all items
+        }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}

@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export const useActiveSection = (sectionIds: string[]) => {
-  const [activeSection, setActiveSection] = useState<string>(sectionIds[0] || '');
+  const [activeSection, setActiveSection] = useState<string>(
+    sectionIds[0] || ''
+  );
 
   const handleScroll = useCallback(() => {
     // Get all sections
@@ -13,9 +15,9 @@ export const useActiveSection = (sectionIds: string[]) => {
 
     // Find which section is currently in view
     const scrollTop = window.scrollY + 100; // Add offset for header
-    
+
     let currentSection = sectionIds[0];
-    
+
     for (let i = sections.length - 1; i >= 0; i--) {
       const section = sections[i];
       if (section && section.offsetTop <= scrollTop) {
@@ -33,7 +35,7 @@ export const useActiveSection = (sectionIds: string[]) => {
 
     // Add scroll listener
     window.addEventListener('scroll', handleScroll, { passive: true });
-    
+
     // Cleanup
     return () => {
       window.removeEventListener('scroll', handleScroll);
@@ -49,7 +51,7 @@ export const useActiveSection = (sectionIds: string[]) => {
 
       window.scrollTo({
         top: offsetPosition,
-        behavior: 'smooth'
+        behavior: 'smooth',
       });
     }
   }, []);

@@ -17,6 +17,7 @@ import {
   constrainTransform,
 } from '@/lib/coordinateUtils';
 import { rafThrottle } from '@/lib/performanceUtils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];
@@ -26,6 +27,7 @@ interface UseEnhancedSegmentationEditorProps {
   canvasHeight: number;
   onSave?: (polygons: Polygon[]) => Promise<void>;
   onPolygonsChange?: (polygons: Polygon[]) => void;
+  imageId?: string; // Add imageId to detect image changes
 }
 
 /**
@@ -40,7 +42,10 @@ export const useEnhancedSegmentationEditor = ({
   canvasHeight,
   onSave,
   onPolygonsChange,
+  imageId,
 }: UseEnhancedSegmentationEditorProps) => {
+  const { t } = useLanguage();
+
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
   const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(
@@ -53,7 +58,7 @@ export const useEnhancedSegmentationEditor = ({
     vertexIndex: number;
   } | null>(null);
   const [cursorPosition, setCursorPosition] = useState<Point | null>(null);
-  
+
   // Vertex drag state for smooth dragging
   const [vertexDragState, setVertexDragState] = useState<{
     isDragging: boolean;
@@ -109,41 +114,75 @@ export const useEnhancedSegmentationEditor = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Only update polygons from initialPolygons on first mount or when image changes
+  // Track image changes and polygon data
   const initialPolygonsRef = useRef<Polygon[]>([]);
+  const currentImageIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
-  
+
   useEffect(() => {
-    // Check if this is truly new data (different length or first load)
-    const isNewData = !hasInitialized.current || 
-                     initialPolygons.length !== initialPolygonsRef.current.length;
-    
+    // Check if this is truly new data (different imageId, different length, or first load)
+    const imageChanged = currentImageIdRef.current !== imageId;
+    const lengthChanged =
+      initialPolygons.length !== initialPolygonsRef.current.length;
+    const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
+
     if (isNewData) {
       if (process.env.NODE_ENV === 'development') {
         logger.debug(
           '🔄 Loading new polygon data:',
           initialPolygons.length,
-          'polygons'
+          'polygons for image:',
+          imageId,
+          { imageChanged, lengthChanged, isFirstLoad: !hasInitialized.current }
         );
       }
+
+      // Reset all editor state when switching images
       setPolygons(initialPolygons);
+      setSelectedPolygonId(null); // Clear selection
+      setEditMode(EditMode.View); // Reset to view mode
+      setTempPoints([]); // Clear temp points
+      setHoveredVertex(null); // Clear hover state
+      setCursorPosition(null); // Clear cursor
+      setVertexDragState({
+        isDragging: false,
+        polygonId: null,
+        vertexIndex: null,
+      }); // Reset drag state
+
+      // Reset interaction state
+      setInteractionState({
+        isDraggingVertex: false,
+        isPanning: false,
+        panStart: null,
+        draggedVertexInfo: null,
+        originalVertexPosition: null,
+        sliceStartPoint: null,
+        addPointStartVertex: null,
+        addPointEndVertex: null,
+        isAddingPoints: false,
+      });
+
       // Reset history with new initial state
       setHistory([initialPolygons]);
       setHistoryIndex(0);
       setHasUnsavedChanges(false);
-      
+
+      // Update refs
       initialPolygonsRef.current = initialPolygons;
+      currentImageIdRef.current = imageId;
       hasInitialized.current = true;
-      
+
       if (process.env.NODE_ENV === 'development') {
         logger.debug(
           '✅ Loaded',
           initialPolygons.length,
-          'polygons'
+          'polygons for image:',
+          imageId
         );
       }
     }
-  }, [initialPolygons]);
+  }, [initialPolygons, imageId]);
 
   // Update polygons with history tracking
   const updatePolygons = useCallback(
@@ -206,14 +245,14 @@ export const useEnhancedSegmentationEditor = ({
     try {
       await onSave(polygons);
       setHasUnsavedChanges(false);
-      toast.success('Segmentation saved successfully');
+      toast.success(t('toast.segmentation.saved'));
     } catch (error) {
-      toast.error('Failed to save segmentation');
+      toast.error(t('toast.segmentation.failed'));
       logger.error('Save error:', error);
     } finally {
       setIsSaving(false);
     }
-  }, [onSave, hasUnsavedChanges, polygons]);
+  }, [onSave, hasUnsavedChanges, polygons, t]);
 
   // Transform operations with improved constraints
   const handleZoomIn = useCallback(() => {
@@ -281,9 +320,9 @@ export const useEnhancedSegmentationEditor = ({
         setSelectedPolygonId(null);
       }
 
-      toast.success('Polygon deleted');
+      toast.success(t('toast.segmentation.deleted'));
     },
-    [polygons, selectedPolygonId, updatePolygons]
+    [polygons, selectedPolygonId, updatePolygons, t]
   );
 
   // Escape handler
@@ -442,6 +481,7 @@ export const useEnhancedSegmentationEditor = ({
     tempPoints,
     cursorPosition,
     isShiftPressed: keyboardShortcuts.isShiftPressed,
+    isSpacePressed: keyboardShortcuts.isSpacePressed,
     setSelectedPolygonId,
     setEditMode,
     setInteractionState,
@@ -461,18 +501,20 @@ export const useEnhancedSegmentationEditor = ({
         const rect = canvasRef.current.getBoundingClientRect();
         const canvasX = e.clientX - rect.left;
         const canvasY = e.clientY - rect.top;
-        
+
         // Get the container dimensions
         const containerWidth = rect.width;
         const containerHeight = rect.height;
-        
+
         // The content is centered, so we need to adjust for that
         const centerOffsetX = containerWidth / 2;
         const centerOffsetY = containerHeight / 2;
 
         // Convert to image coordinates using the same calculation as getCanvasCoordinates
-        const imageX = (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
-        const imageY = (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
+        const imageX =
+          (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
+        const imageY =
+          (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
 
         // Use throttled version to prevent excessive re-renders
         throttledSetCursorPosition({ x: imageX, y: imageY });
@@ -497,7 +539,14 @@ export const useEnhancedSegmentationEditor = ({
       // Delegate to advanced interactions
       interactions.handleMouseMove(e);
     },
-    [interactionState, handlePan, interactions, transform, canvasRef, throttledSetCursorPosition]
+    [
+      interactionState,
+      handlePan,
+      interactions,
+      transform,
+      canvasRef,
+      throttledSetCursorPosition,
+    ]
   );
 
   // Computed values

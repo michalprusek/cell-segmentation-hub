@@ -25,7 +25,7 @@ export const generateAccessToken = (payload: JwtPayload): string => {
       expiresIn: config.JWT_ACCESS_EXPIRY,
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app'
-    });
+    } as jwt.SignOptions);
   } catch (error) {
     logger.error('Failed to generate access token:', error as Error, 'JWT');
     throw new Error('Token generation failed');
@@ -44,7 +44,7 @@ export const generateRefreshToken = (payload: JwtPayload): string => {
       expiresIn: config.JWT_REFRESH_EXPIRY,
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app'
-    });
+    } as jwt.SignOptions);
   } catch (error) {
     logger.error('Failed to generate refresh token:', error as Error, 'JWT');
     throw new Error('Token generation failed');
@@ -66,6 +66,9 @@ export const generateTokenPair = (payload: JwtPayload): TokenPair => {
  */
 export const verifyAccessToken = (token: string): JwtPayload => {
   try {
+    if (!config.JWT_ACCESS_SECRET) {
+      throw new Error('JWT_ACCESS_SECRET is not configured');
+    }
     const payload = jwt.verify(token, config.JWT_ACCESS_SECRET, {
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app'
@@ -89,6 +92,9 @@ export const verifyAccessToken = (token: string): JwtPayload => {
  */
 export const verifyRefreshToken = (token: string): JwtPayload => {
   try {
+    if (!config.JWT_REFRESH_SECRET) {
+      throw new Error('JWT_REFRESH_SECRET is not configured');
+    }
     const payload = jwt.verify(token, config.JWT_REFRESH_SECRET, {
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app'

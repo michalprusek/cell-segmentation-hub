@@ -272,8 +272,9 @@ function convertToPostman(openApiSpec: OpenAPISpec): PostmanCollection {
         };
 
         // Compute effective security by merging/inheriting from operation, pathItem, and root document
-        const effectiveSecurity = operation.security || (pathItem as Record<string, unknown>).security || openApiSpec.security;
-        if (effectiveSecurity && effectiveSecurity.length > 0) {
+        const pathItemSecurity = 'security' in pathItem ? pathItem.security : undefined;
+        const effectiveSecurity = operation.security || pathItemSecurity || openApiSpec.security;
+        if (effectiveSecurity && Array.isArray(effectiveSecurity) && effectiveSecurity.length > 0) {
           // Check if any security requirement includes bearerAuth or similar JWT auth
           const requiresAuth = effectiveSecurity.some((secReq: Record<string, string[]>) => 
             Object.keys(secReq).some(key => 

@@ -5,6 +5,7 @@ import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProjectImage } from '@/types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ImageSelectionCardProps {
   images: ProjectImage[];
@@ -21,14 +22,15 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
   handleSelectAll,
   handleSelectImage,
 }) => {
+  const { t } = useLanguage();
   return (
     <Card className="md:col-span-2">
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Vyberte obrázky k exportu</CardTitle>
+        <CardTitle>{t('exportDialog.selectImages')}</CardTitle>
         <Button variant="outline" size="sm" onClick={handleSelectAll}>
           {images.every(img => selectedImages[img.id])
-            ? 'Odznačit vše'
-            : 'Vybrat vše'}
+            ? t('exportDialog.selectNone')
+            : t('exportDialog.selectAll')}
         </Button>
       </CardHeader>
       <CardContent>
@@ -38,7 +40,7 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
           </div>
         ) : images.length === 0 ? (
           <div className="text-center text-gray-500 py-8">
-            Žádné obrázky nejsou k dispozici
+            {t('exportDialog.noImagesAvailable')}
           </div>
         ) : (
           <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
@@ -52,7 +54,7 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
                   <Checkbox
                     checked={!!selectedImages[image.id]}
                     onCheckedChange={() => handleSelectImage(image.id)}
-                    onClick={(e) => e.stopPropagation()}
+                    onClick={e => e.stopPropagation()}
                     id={`check-${image.id}`}
                   />
                 </div>
@@ -66,7 +68,9 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
                     />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">
-                      <span className="text-xs text-gray-400">No preview</span>
+                      <span className="text-xs text-gray-400">
+                        {t('common.no_preview')}
+                      </span>
                     </div>
                   )}
                 </div>

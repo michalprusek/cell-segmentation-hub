@@ -18,7 +18,7 @@ The frontend is a modern React application built with TypeScript and Vite, provi
 ```
 src/
 ├── components/           # Reusable UI components
-│   ├── ui/              # shadcn/ui base components  
+│   ├── ui/              # shadcn/ui base components
 │   ├── upload/          # File upload components
 │   ├── project/         # Project-specific components
 │   ├── settings/        # Settings page components
@@ -52,7 +52,7 @@ src/
 ```
 App.tsx
 ├── AuthContext.Provider
-├── ThemeContext.Provider  
+├── ThemeContext.Provider
 ├── LanguageContext.Provider
 ├── QueryClient.Provider
 └── Router
@@ -82,7 +82,7 @@ SegmentationEditor.tsx (orchestrator)
 │   └── useSegmentationHistory.tsx  # Undo/redo system
 ├── components/
 │   ├── canvas/          # Canvas rendering system
-│   ├── toolbar/         # Editor tools & controls  
+│   ├── toolbar/         # Editor tools & controls
 │   ├── sidebar/         # Properties & settings
 │   └── dialogs/         # Modal dialogs
 └── contexts/
@@ -92,6 +92,7 @@ SegmentationEditor.tsx (orchestrator)
 ## State Management
 
 ### Server State (React Query)
+
 ```typescript
 // Project data fetching with caching
 const { data: projects, isLoading } = useQuery({
@@ -110,20 +111,27 @@ const createProjectMutation = useMutation({
 ```
 
 ### Client State (React Context)
+
 ```typescript
 // Authentication state with safe default
-const AuthContext = createContext<{
-  user: User | null;
-  login: (credentials: LoginData) => Promise<void>;
-  logout: () => void;
-  isLoading: boolean;
-} | undefined>(undefined);
+const AuthContext = createContext<
+  | {
+      user: User | null;
+      login: (credentials: LoginData) => Promise<void>;
+      logout: () => void;
+      isLoading: boolean;
+    }
+  | undefined
+>(undefined);
 
 // Theme state with safe default
-const ThemeContext = createContext<{
-  theme: 'light' | 'dark';
-  setTheme: (theme: 'light' | 'dark') => void;
-} | undefined>(undefined);
+const ThemeContext = createContext<
+  | {
+      theme: 'light' | 'dark';
+      setTheme: (theme: 'light' | 'dark') => void;
+    }
+  | undefined
+>(undefined);
 
 // Typed getter hooks that throw clear errors if context is undefined
 const useAuth = () => {
@@ -152,24 +160,30 @@ The segmentation editor includes sophisticated polygon manipulation:
 ```typescript
 // Vertex drag system with coordinate transformation
 const useVertexDrag = (zoom, offset, segmentation, setSegmentation) => {
-  const handleVertexDrag = useCallback((e, containerElement) => {
-    // Get container bounding rectangle for coordinate transformation
-    const rect = containerElement.getBoundingClientRect();
-    
-    // Transform screen coordinates to image coordinates
-    const x = (e.clientX - rect.left) / zoom - offset.x;
-    const y = (e.clientY - rect.top) / zoom - offset.y;
-    
-    // Update polygon vertex position
-    setSegmentation(prevSegmentation => ({
-      ...prevSegmentation,
-      polygons: prevSegmentation.polygons.map(polygon => 
-        polygon.id === selectedPolygonId 
-          ? { ...polygon, points: updateVertexAt(polygon.points, vertexIndex, {x, y}) }
-          : polygon
-      )
-    }));
-  }, [zoom, offset, selectedPolygonId, vertexIndex]);
+  const handleVertexDrag = useCallback(
+    (e, containerElement) => {
+      // Get container bounding rectangle for coordinate transformation
+      const rect = containerElement.getBoundingClientRect();
+
+      // Transform screen coordinates to image coordinates
+      const x = (e.clientX - rect.left) / zoom - offset.x;
+      const y = (e.clientY - rect.top) / zoom - offset.y;
+
+      // Update polygon vertex position
+      setSegmentation(prevSegmentation => ({
+        ...prevSegmentation,
+        polygons: prevSegmentation.polygons.map(polygon =>
+          polygon.id === selectedPolygonId
+            ? {
+                ...polygon,
+                points: updateVertexAt(polygon.points, vertexIndex, { x, y }),
+              }
+            : polygon
+        ),
+      }));
+    },
+    [zoom, offset, selectedPolygonId, vertexIndex]
+  );
 };
 ```
 
@@ -181,28 +195,28 @@ Custom canvas system for high-performance polygon rendering:
 // Canvas rendering with zoom and pan
 const CanvasRenderer = ({ image, polygons, zoom, offset }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const ctx = canvas.getContext('2d');
-    
+
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Apply zoom and pan transforms
     ctx.save();
     ctx.scale(zoom, zoom);
     ctx.translate(offset.x, offset.y);
-    
+
     // Render image
     ctx.drawImage(image, 0, 0);
-    
+
     // Render polygons
     polygons.forEach(polygon => renderPolygon(ctx, polygon));
-    
+
     ctx.restore();
   }, [image, polygons, zoom, offset]);
-  
+
   return <canvas ref={canvasRef} />;
 };
 ```
@@ -215,16 +229,19 @@ Sophisticated undo/redo system for segmentation editing:
 const useSegmentationHistory = (segmentation, setSegmentation) => {
   const [history, setHistory] = useState<SegmentationState[]>([]);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  
-  const addToHistory = useCallback((state: SegmentationState) => {
-    setHistory(prev => {
-      const newHistory = prev.slice(0, historyIndex + 1);
-      newHistory.push(state);
-      return newHistory.slice(-MAX_HISTORY_SIZE);
-    });
-    setHistoryIndex(prev => prev + 1);
-  }, [historyIndex]);
-  
+
+  const addToHistory = useCallback(
+    (state: SegmentationState) => {
+      setHistory(prev => {
+        const newHistory = prev.slice(0, historyIndex + 1);
+        newHistory.push(state);
+        return newHistory.slice(-MAX_HISTORY_SIZE);
+      });
+      setHistoryIndex(prev => prev + 1);
+    },
+    [historyIndex]
+  );
+
   const undo = useCallback(() => {
     if (historyIndex > 0) {
       const previousState = history[historyIndex - 1];
@@ -246,7 +263,7 @@ const apiClient = axios.create({
 });
 
 // Request interceptor for JWT tokens
-apiClient.interceptors.request.use((config) => {
+apiClient.interceptors.request.use(config => {
   const token = getAccessToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -256,8 +273,8 @@ apiClient.interceptors.request.use((config) => {
 
 // Response interceptor for token refresh
 apiClient.interceptors.response.use(
-  (response) => response,
-  async (error) => {
+  response => response,
+  async error => {
     if (error.response?.status === 401) {
       try {
         await refreshAccessToken();
@@ -276,6 +293,7 @@ apiClient.interceptors.response.use(
 ## Performance Optimizations
 
 ### Code Splitting
+
 ```typescript
 // Lazy loading of routes
 const SegmentationEditor = lazy(() => import('./pages/segmentation/SegmentationEditor'));
@@ -293,6 +311,7 @@ const AppRoutes = () => (
 ```
 
 ### React Query Optimizations
+
 ```typescript
 // Efficient caching strategies
 const useProjectData = (projectId: string) => {
@@ -300,7 +319,7 @@ const useProjectData = (projectId: string) => {
     queryKey: ['project', projectId],
     queryFn: () => apiClient.getProject(projectId),
     staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000,   // 10 minutes
+    gcTime: 10 * 60 * 1000, // 10 minutes
     refetchOnWindowFocus: false,
   });
 };
@@ -315,18 +334,19 @@ const prefetchProject = (projectId: string) => {
 ```
 
 ### Image Optimization
+
 ```typescript
 // Lazy image loading with thumbnails
 const OptimizedImage = ({ src, thumbnail, alt }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [inView, ref] = useInView({ threshold: 0.1 });
-  
+
   return (
     <div ref={ref}>
       {inView && (
         <>
           {!imageLoaded && <img src={thumbnail} alt={alt} className="blur-sm" />}
-          <img 
+          <img
             src={src}
             alt={alt}
             onLoad={() => setImageLoaded(true)}
@@ -342,6 +362,7 @@ const OptimizedImage = ({ src, thumbnail, alt }) => {
 ## Component Patterns
 
 ### Compound Components
+
 ```typescript
 // Flexible component composition
 const ImageUploader = {
@@ -360,6 +381,7 @@ const ImageUploader = {
 ```
 
 ### Hook Composition
+
 ```typescript
 // Composable editor functionality
 const useSegmentationEditor = (projectId, imageId, userId) => {
@@ -367,7 +389,7 @@ const useSegmentationEditor = (projectId, imageId, userId) => {
   const view = useSegmentationView(core.canvasContainerRef, core.imageSrc);
   const interaction = usePolygonInteraction(/* ... */);
   const history = useSegmentationHistory(/* ... */);
-  
+
   return {
     ...core,
     ...view,
@@ -380,19 +402,20 @@ const useSegmentationEditor = (projectId, imageId, userId) => {
 ## Testing Strategy
 
 ### Component Testing
+
 ```typescript
 // React Testing Library with user events
 describe('ImageUploader', () => {
   test('uploads files and triggers segmentation', async () => {
     const mockFiles = [new File(['content'], 'test.png', { type: 'image/png' })];
-    
+
     render(<ImageUploader projectId="test-id" />);
-    
+
     const dropzone = screen.getByTestId('dropzone');
     await user.upload(dropzone, mockFiles);
-    
+
     expect(screen.getByText('Uploading...')).toBeInTheDocument();
-    
+
     await waitFor(() => {
       expect(screen.getByText('Upload complete')).toBeInTheDocument();
     });
@@ -401,18 +424,19 @@ describe('ImageUploader', () => {
 ```
 
 ### Hook Testing
+
 ```typescript
 // Custom hook testing
 describe('useSegmentationEditor', () => {
   test('handles vertex dragging', () => {
-    const { result } = renderHook(() => 
+    const { result } = renderHook(() =>
       useSegmentationEditor('project-1', 'image-1', 'user-1')
     );
-    
+
     act(() => {
       result.current.handleVertexClick(100, 100, mockElement);
     });
-    
+
     expect(result.current.vertexDragState.current.isDragging).toBe(true);
   });
 });
@@ -421,6 +445,7 @@ describe('useSegmentationEditor', () => {
 ## Build Configuration
 
 ### Vite Configuration
+
 ```typescript
 // vite.config.ts
 export default defineConfig({
