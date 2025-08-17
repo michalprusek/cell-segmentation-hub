@@ -173,7 +173,8 @@ export const calculateFixedPointZoom = (
 
 /**
  * Constrain transform to keep image within reasonable bounds
- * Now allows much more freedom for panning while preventing complete loss of image
+ * When zoomed in, allows unlimited panning for better user experience
+ * When zoomed out, applies gentle constraints to prevent losing the image
  */
 export const constrainTransform = (
   transform: TransformState,
@@ -195,21 +196,59 @@ export const constrainTransform = (
   let translateX = transform.translateX;
   let translateY = transform.translateY;
 
-  // Allow much more generous panning - only prevent complete loss of image
-  const generousPanMargin = Math.max(canvasWidth, canvasHeight) * 1.5; // Very generous margin
-  const minVisibleSize = 20; // Minimum pixels that must remain visible
+  // When zoomed in significantly (>= 2x), allow unlimited panning
+  // This fixes the issue where highly zoomed images get stuck at boundaries
+  if (zoom >= 2.0) {
+    return {
+      zoom,
+      translateX: transform.translateX,
+      translateY: transform.translateY,
+    };
+  }
 
-  // For X axis - allow generous panning in both directions
-  const maxTranslateX = generousPanMargin - scaledWidth / 2;
-  const minTranslateX = -scaledWidth / 2 - generousPanMargin + minVisibleSize;
+  // For zoom levels 1x to 2x, apply very generous constraints
+  if (zoom >= 1.0) {
+    const veryGenerousMargin = Math.max(canvasWidth, canvasHeight) * 3.0;
+    const minVisibleSize = 10; // Very small minimum visibility requirement
+
+    // For X axis - allow very generous panning
+    const maxTranslateX = veryGenerousMargin - scaledWidth / 2;
+    const minTranslateX = -scaledWidth / 2 - veryGenerousMargin + minVisibleSize;
+    translateX = Math.max(
+      minTranslateX,
+      Math.min(maxTranslateX, transform.translateX)
+    );
+
+    // For Y axis - allow very generous panning  
+    const maxTranslateY = veryGenerousMargin - scaledHeight / 2;
+    const minTranslateY = -scaledHeight / 2 - veryGenerousMargin + minVisibleSize;
+    translateY = Math.max(
+      minTranslateY,
+      Math.min(maxTranslateY, transform.translateY)
+    );
+
+    return {
+      zoom,
+      translateX,
+      translateY,
+    };
+  }
+
+  // For zoom levels < 1x (zoomed out), apply moderate constraints to prevent complete loss
+  const moderateMargin = Math.max(canvasWidth, canvasHeight) * 0.8;
+  const minVisibleSize = 50; // Larger minimum visibility for zoomed out images
+
+  // For X axis - moderate constraints for zoomed out images
+  const maxTranslateX = moderateMargin - scaledWidth / 2;
+  const minTranslateX = -scaledWidth / 2 - moderateMargin + minVisibleSize;
   translateX = Math.max(
     minTranslateX,
     Math.min(maxTranslateX, transform.translateX)
   );
 
-  // For Y axis - allow generous panning in both directions
-  const maxTranslateY = generousPanMargin - scaledHeight / 2;
-  const minTranslateY = -scaledHeight / 2 - generousPanMargin + minVisibleSize;
+  // For Y axis - moderate constraints for zoomed out images
+  const maxTranslateY = moderateMargin - scaledHeight / 2;
+  const minTranslateY = -scaledHeight / 2 - moderateMargin + minVisibleSize;
   translateY = Math.max(
     minTranslateY,
     Math.min(maxTranslateY, transform.translateY)

@@ -125,9 +125,9 @@ class ModelLoader:
             except Exception as e1:
                 logger.warning(f"Failed to load with weights_only=True: {e1}")
                 try:
-                    # Fallback to weights_only=False for older model files
-                    checkpoint = torch.load(weights_full_path, map_location=self.device, weights_only=False)
-                    logger.info(f"Successfully loaded {model_name} with weights_only=False")
+                    # Fallback without weights_only parameter for older PyTorch versions
+                    checkpoint = torch.load(weights_full_path, map_location=self.device)
+                    logger.info(f"Successfully loaded {model_name} without weights_only parameter")
                 except Exception as e2:
                     logger.error(f"Failed to load checkpoint completely: {e2}")
                     raise e2

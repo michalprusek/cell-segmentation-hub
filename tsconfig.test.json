@@ -4,7 +4,8 @@
     "jsx": "react-jsx",
     "allowImportingTsExtensions": false,
     "noEmit": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom", "node"],
+    "composite": true,
+    "types": ["vitest/globals", "@testing-library/jest-dom", "node", "vite/client"],
     "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
   "include": [

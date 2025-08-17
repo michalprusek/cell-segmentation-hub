@@ -32,6 +32,7 @@ interface UseAdvancedInteractionsProps {
   tempPoints: Point[];
   cursorPosition: Point | null;
   isShiftPressed?: () => boolean;
+  isSpacePressed?: () => boolean;
 
   // State setters
   setSelectedPolygonId: (id: string | null) => void;
@@ -66,6 +67,7 @@ export const useAdvancedInteractions = ({
   tempPoints,
   cursorPosition,
   isShiftPressed: isShiftPressedCallback,
+  isSpacePressed: isSpacePressedCallback,
   setSelectedPolygonId,
   setEditMode,
   setInteractionState,
@@ -165,7 +167,7 @@ export const useAdvancedInteractions = ({
    * Handle Edit Vertices mode clicks
    */
   const handleEditVerticesClick = useCallback(
-    (imagePoint: Point) => {
+    (imagePoint: Point, e?: React.MouseEvent) => {
       if (!selectedPolygonId) return;
 
       const polygons = getPolygons();
@@ -204,6 +206,16 @@ export const useAdvancedInteractions = ({
             vertexIndex: closestVertex.index,
             originalPosition: { ...originalPosition },
             dragOffset: { x: 0, y: 0 },
+          });
+        }
+      } else {
+        // No vertex clicked - check if we're inside the selected polygon and start panning
+        // This allows panning when clicking inside a selected polygon but not on a vertex
+        if (isPointInPolygon(imagePoint, selectedPolygon.points) && e) {
+          setInteractionState({
+            ...interactionState,
+            isPanning: true,
+            panStart: { x: e.clientX, y: e.clientY },
           });
         }
       }
@@ -409,6 +421,17 @@ export const useAdvancedInteractions = ({
    */
   const handleMouseDown = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      // Middle mouse button - always start panning in any mode
+      if (e.button === 1) {
+        setInteractionState({
+          ...interactionState,
+          isPanning: true,
+          panStart: { x: e.clientX, y: e.clientY },
+        });
+        e.preventDefault();
+        return;
+      }
+
       // Right-click - always cancel current operation
       if (e.button === 2) {
         if (editMode !== EditMode.View) {
@@ -429,8 +452,8 @@ export const useAdvancedInteractions = ({
         );
         const imagePoint = { x: coordinates.imageX, y: coordinates.imageY };
 
-        // Check if Alt key is pressed for forced panning in any mode
-        if (e.altKey) {
+        // Check if Alt key or Space key is pressed for forced panning in any mode
+        if (e.altKey || (isSpacePressedCallback && isSpacePressedCallback())) {
           // Start panning regardless of current mode
           setInteractionState({
             ...interactionState,
@@ -513,7 +536,7 @@ export const useAdvancedInteractions = ({
             handleCreatePolygonClick(imagePoint);
             break;
           case EditMode.EditVertices:
-            handleEditVerticesClick(imagePoint);
+            handleEditVerticesClick(imagePoint, e);
             break;
           case EditMode.AddPoints:
             handleAddPointsClick(imagePoint);
@@ -545,6 +568,7 @@ export const useAdvancedInteractions = ({
       handleSliceClick,
       handleViewModeClick,
       setSelectedPolygonId,
+      isSpacePressedCallback,
     ]
   );
 

@@ -173,7 +173,13 @@ export const useStatusReconciliation = ({
     // If queue just became empty, do reconciliation with longer delay
     if (isNowEmpty) {
       logger.debug('🎯 Queue became empty, scheduling delayed status reconciliation');
-      setTimeout(() => {
+      
+      // Clear any existing timeout before setting a new one
+      if (reconciliationTimeoutRef.current) {
+        clearTimeout(reconciliationTimeoutRef.current);
+      }
+      
+      reconciliationTimeoutRef.current = setTimeout(() => {
         reconcileImageStatuses();
       }, 5000); // Longer delay to let all WebSocket updates arrive and settle
     }

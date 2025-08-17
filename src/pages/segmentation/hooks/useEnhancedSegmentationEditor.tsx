@@ -472,6 +472,7 @@ export const useEnhancedSegmentationEditor = ({
     tempPoints,
     cursorPosition,
     isShiftPressed: keyboardShortcuts.isShiftPressed,
+    isSpacePressed: keyboardShortcuts.isSpacePressed,
     setSelectedPolygonId,
     setEditMode,
     setInteractionState,

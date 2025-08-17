@@ -282,7 +282,7 @@ export default {
     alreadyLoggedIn: 'Vous êtes déjà connecté',
     alreadySignedUp: 'Vous êtes déjà inscrit et connecté.',
     goToDashboard: 'Aller au tableau de bord',
-    signUpFailed: 'Échec de l\'inscription',
+    signUpFailed: "Échec de l'inscription",
     signInFailed: 'Échec de la connexion',
   },
   profile: {

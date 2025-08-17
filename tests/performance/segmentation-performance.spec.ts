@@ -185,10 +185,9 @@ test.describe('Segmentation Performance Benchmarks', () => {
 
       // Select specific model
       const modelSelector = page.getByRole('combobox', { name: /model/i });
-      if (await modelSelector.isVisible()) {
-        await modelSelector.click();
-        await page.getByText(new RegExp(model.name, 'i')).first().click();
-      }
+      await expect(modelSelector).toBeVisible();
+      await modelSelector.click();
+      await page.getByText(new RegExp(model.name, 'i')).first().click();
 
       const startButtonClick = Date.now();
       await page
@@ -501,9 +500,20 @@ test.describe('Segmentation Performance Benchmarks', () => {
         );
         expect(download.suggestedFilename()).toMatch(/\.(json|zip)$/);
       } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         console.log(
-          'Export download test failed - this may be expected in test environment'
+          `Export download test failed: ${errorMessage}. Stack: ${error instanceof Error ? error.stack : 'No stack trace'}`
         );
+        
+        // Check if this is a known test environment limitation
+        if (errorMessage.includes('Download not supported') || errorMessage.includes('Browser not available')) {
+          console.log('Skipping download test due to test environment limitations');
+          test.skip();
+          return;
+        }
+        
+        // For other errors, fail the test with detailed information
+        throw new Error(`Export download failed: ${errorMessage}`);
       }
     }
   });
@@ -519,16 +529,20 @@ test.describe('Segmentation Performance Benchmarks', () => {
         peakMemory: 0,
       };
 
-      if (performance && 'memory' in performance && typeof (performance as any).memory.usedJSHeapSize === 'number') {
-        window.performanceMetrics.startMemory = (
-          performance as any
-        ).memory.usedJSHeapSize;
+      const perfWithMemory = performance as Performance & { 
+        memory?: { usedJSHeapSize?: number } 
+      };
+      
+      if (perfWithMemory.memory?.usedJSHeapSize && typeof perfWithMemory.memory.usedJSHeapSize === 'number') {
+        window.performanceMetrics.startMemory = perfWithMemory.memory.usedJSHeapSize;
 
         setInterval(() => {
-          const currentMemory = (performance as any).memory.usedJSHeapSize;
-          window.performanceMetrics.memoryUsage.push(currentMemory);
-          if (currentMemory > window.performanceMetrics.peakMemory) {
-            window.performanceMetrics.peakMemory = currentMemory;
+          const currentMemory = perfWithMemory.memory?.usedJSHeapSize;
+          if (currentMemory && typeof currentMemory === 'number') {
+            window.performanceMetrics.memoryUsage.push(currentMemory);
+            if (currentMemory > window.performanceMetrics.peakMemory) {
+              window.performanceMetrics.peakMemory = currentMemory;
+            }
           }
         }, 1000);
       }
@@ -648,18 +662,14 @@ test.describe('Segmentation Performance Benchmarks', () => {
 
     // Perform rapid operations to test responsiveness
     const rapidOperations = async () => {
-      const operations = [];
-
-      for (let i = 0; i < 10; i++) {
-        operations.push(
-          canvas.click({ position: { x: 100 + i * 20, y: 100 + i * 20 } }),
-          page.mouse.wheel(0, -20),
-          page.mouse.wheel(0, 20)
-        );
-      }
-
       const startTime = Date.now();
-      await Promise.all(operations);
+      
+      for (let i = 0; i < 10; i++) {
+        await canvas.click({ position: { x: 100 + i * 20, y: 100 + i * 20 } });
+        await page.mouse.wheel(0, -20);
+        await page.mouse.wheel(0, 20);
+      }
+      
       return Date.now() - startTime;
     };
 

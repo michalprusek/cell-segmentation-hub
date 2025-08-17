@@ -152,9 +152,6 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
     const canvas = canvasRef.current;
     if (!canvas || !thumbnailData.polygons.length) return;
 
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
     // Performance monitoring
     const endRenderMeasure = measureThumbnailRender(
       thumbnailData.polygonCount,
@@ -172,9 +169,13 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
       const devicePixelRatio = window.devicePixelRatio || 1;
       const { scale, offsetX, offsetY } = scalingParams;
 
-      // Set actual canvas size accounting for device pixel ratio
+      // Set actual canvas size accounting for device pixel ratio (this resets context)
       canvas.width = width * devicePixelRatio;
       canvas.height = height * devicePixelRatio;
+      
+      // Re-acquire context after setting dimensions
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
       
       // Scale context to account for device pixel ratio
       ctx.scale(devicePixelRatio, devicePixelRatio);
