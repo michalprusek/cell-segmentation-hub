@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Menu } from 'lucide-react';
+import { Menu, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { useModel } from '@/contexts/ModelContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useLocalizedModels } from '@/hooks/useLocalizedModels';
 import { Badge } from '@/components/ui/badge';
 import Logo from '@/components/header/Logo';
 import UserProfileDropdown from '@/components/header/UserProfileDropdown';
@@ -21,11 +21,16 @@ const DashboardHeader = () => {
     'idle' | 'processing' | 'error'
   >('idle');
   const { user } = useAuth();
-  const { selectedModel, getModelInfo } = useModel();
+  const { selectedModel, getSelectedModelInfo } = useLocalizedModels();
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
-  const { isConnected, queueStats } = useSegmentationQueue();
+
+  // Check if we're on a project detail page to avoid conflicts
+  const isProjectDetailPage = location.pathname.includes('/project/');
+  const { isConnected, queueStats } = useSegmentationQueue(
+    isProjectDetailPage ? 'DISABLE_GLOBAL' : undefined
+  );
 
   // Skrýt header v segmentačním editoru
   const isSegmentationEditor = location.pathname.includes('/segmentation/');
@@ -106,6 +111,17 @@ const DashboardHeader = () => {
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex items-center space-x-4">
+          {/* Documentation Link */}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
+            onClick={() => navigate('/documentation')}
+          >
+            <BookOpen className="h-4 w-4 mr-2" />
+            {t('common.documentation', 'Documentation')}
+          </Button>
+
           {/* Current Model Badge - Clickable */}
           <Badge
             variant="secondary"
@@ -116,7 +132,7 @@ const DashboardHeader = () => {
             <div
               className={`w-2 h-2 ${getStatusColor()} rounded-full animate-pulse`}
             ></div>
-            {getModelInfo(selectedModel).displayName}
+            {getSelectedModelInfo().displayName}
           </Badge>
           <UserProfileDropdown
             username={user?.email?.split('@')[0] || 'User'}

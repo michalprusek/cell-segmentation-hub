@@ -63,9 +63,9 @@ class ModelManager:
                 "params": {
                     "in_channels": 3,
                     "out_channels": 1,
-                    "features": [64, 128, 256, 512],  # Match the ModelLoader config
+                    "features": [64, 128, 256, 512],  # Match trained model architecture
                     "use_instance_norm": True,
-                    "dropout_rate": 0.15
+                    "dropout_rate": 0.2
                 },
                 "description": "Advanced ResUNet with attention mechanisms",
                 "parameters": 66_000_000
@@ -170,8 +170,10 @@ class ModelManager:
                 
                 if missing_keys:
                     logger.warning(f"Missing keys in {model_name}: {len(missing_keys)} keys")
+                    logger.debug(f"Missing keys: {missing_keys[:10]}...")  # Log first 10 missing keys
                 if unexpected_keys:
                     logger.warning(f"Unexpected keys in {model_name}: {len(unexpected_keys)} keys")
+                    logger.debug(f"Unexpected keys: {unexpected_keys[:10]}...")  # Log first 10 unexpected keys
                 
                 # Move to device and set eval mode
                 model.to(self.device)

@@ -246,20 +246,20 @@ export const SEGMENTATION_MODELS = {
     id: 'hrnet',
     name: 'HRNetV2',
     description: 'High-Resolution Network for semantic segmentation',
-    defaultThreshold: 0.5
+    defaultThreshold: 0.5,
   },
   resunet_advanced: {
     id: 'resunet_advanced',
     name: 'ResUNet Advanced',
     description: 'Advanced ResUNet with attention mechanisms',
-    defaultThreshold: 0.6
+    defaultThreshold: 0.6,
   },
   resunet_small: {
     id: 'resunet_small',
     name: 'ResUNet Small',
     description: 'Efficient ResUNet for fast segmentation',
-    defaultThreshold: 0.7
-  }
+    defaultThreshold: 0.7,
+  },
 } as const;
 
 export type SegmentationModelId = keyof typeof SEGMENTATION_MODELS;

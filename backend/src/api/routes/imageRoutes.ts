@@ -16,9 +16,33 @@ import {
 const router = Router();
 const imageController = new ImageController();
 
-// All routes require authentication (email verification disabled for development)
+/**
+ * Public routes that don't require authentication
+ */
+
+/**
+ * Get browser-compatible image for display
+ * GET /images/:imageId/display
+ * Note: No authentication required for image display
+ */
+router.get(
+  '/:imageId/display',
+  imageController.getImageForDisplay
+);
+
+// All other routes require authentication (email verification disabled for development)
 router.use(authenticate);
 // router.use(requireEmailVerification); // Temporarily disabled for development
+
+/**
+ * Get project images with optimized thumbnails
+ * GET /projects/:projectId/images/with-thumbnails?lod=low&page=1&limit=50
+ */
+router.get(
+  '/:projectId/images/with-thumbnails',
+  validateParams(projectIdSchema),
+  imageController.getProjectImagesWithThumbnails
+);
 
 /**
  * Get image statistics for project

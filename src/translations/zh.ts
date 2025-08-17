@@ -19,6 +19,7 @@ export default {
     dashboard: '控制台',
     project: '项目',
     projects: '项目',
+    polygon: '多边形',
     newProject: '新项目',
     upload: '上传',
     uploadImages: '上传图像',
@@ -47,6 +48,7 @@ export default {
     notifications: '通知',
     passwordConfirm: '确认密码',
     manageAccount: '管理您的账户',
+    documentation: '文档',
     changePassword: '更改密码',
     deleteAccount: '删除账户',
     termsOfService: '服务条款',
@@ -55,6 +57,14 @@ export default {
     signInToAccount: '登录到您的账户',
     sort: '排序',
     no_preview: '无预览',
+    // Navigation and UI
+    openMenu: '打开菜单',
+    logOut: '退出登录',
+    // Error pages
+    pageNotFound: '哎呀！页面未找到',
+    returnToHome: '返回主页',
+    // Navigation
+    next: '下一个',
   },
   dashboard: {
     manageProjects: '管理您的研究项目和分析',
@@ -74,10 +84,22 @@ export default {
     name: '名称',
     lastChange: '最后修改',
     status: '状态',
+    // Stats overview
+    stats: {
+      totalProjects: '项目总数',
+      totalProjectsDesc: '活跃的球体研究',
+      processedImages: '已处理图像',
+      processedImagesDesc: '成功分割',
+      uploadedToday: '今日上传',
+      uploadedTodayDesc: '球体图像',
+      storageUsed: '已用存储',
+      totalSpaceUsed: '总使用空间',
+    },
     completed: '已完成',
     processing: '处理中',
     pending: '等待中',
     failed: '失败',
+    storageUsed: '已用存储',
   },
   projects: {
     createProject: '创建新项目',
@@ -108,10 +130,25 @@ export default {
     segmentationFailed: '分割失败',
     segmentationStarted: '分割已开始',
     segmentationCompleteWithCount: '分割完成！找到 {{count}} 个对象',
+    // Project management errors and messages
+    failedToLoadProjects: '加载项目失败',
+    projectNameRequired: '请输入项目名称',
+    mustBeLoggedIn: '您必须登录才能创建项目',
+    failedToCreateProject: '创建项目失败',
+    serverResponseInvalid: '服务器响应无效',
+    projectCreatedDesc: '"{{name}}" 已准备好添加图像',
+    descriptionOptional: '描述（可选）',
+    noDescriptionProvided: '未提供描述',
+    selectProjectHeader: '选择项目',
+    noProjects: '未找到项目',
   },
   errors: {
     noProjectOrUser: '错误：未选择项目或用户',
     unknown: '未知错误',
+    validation: {
+      projectNameRequired: '请输入项目名称',
+      loginRequired: '您必须登录才能创建项目',
+    },
   },
   images: {
     uploadImages: '上传图像',
@@ -138,6 +175,11 @@ export default {
     processing: '处理中',
     complete: '完成',
     error: '错误',
+    imageDeleted: '图像删除成功',
+    deleteImageFailed: '删除图像失败',
+    deleteImageError: '删除图像时出错',
+    imageAlreadyProcessing: '图像正在处理中',
+    processImageFailed: '图像处理失败',
   },
   settings: {
     manageSettings: '管理您的账户偏好',
@@ -176,8 +218,24 @@ export default {
     newPassword: '新密码',
     confirmNewPassword: '确认新密码',
     models: '模型',
-    modelSelection: '模型选择',
-    modelSelectionDescription: '选择用于细胞分割的AI模型',
+    modelSelection: {
+      title: '模型选择',
+      description: '选择用于细胞分割的AI模型',
+      models: {
+        hrnet: {
+          name: 'HRNet',
+          description: '快速高效的实时分割模型',
+        },
+        cbam: {
+          name: 'CBAM-ResUNet',
+          description: '大多数用例的平衡速度和准确性',
+        },
+        ma: {
+          name: 'MA-ResUNet',
+          description: '具有注意力机制的最高准确性',
+        },
+      },
+    },
     confidenceThreshold: '置信度阈值',
     confidenceThresholdDescription: '分割预测所需的最小置信度',
     currentThreshold: '当前阈值',
@@ -193,6 +251,51 @@ export default {
       resunet_small: '大多数用例的平衡速度和准确性',
       resunet_advanced: '具有注意力机制的最高准确性',
     },
+    dataUsageTitle: '数据使用和隐私',
+    dataUsageDescription: '控制您的数据如何用于机器学习和研究',
+    allowMLTraining: {
+      label: '允许ML模型训练',
+      description: '允许使用您的数据来训练和改进我们的分割模型',
+    },
+    cancel: '取消',
+    deleting: '删除中...',
+    deleteAccount: '删除账户',
+    accountDeleted: '账户删除成功',
+    deleteAccountError: '删除账户失败',
+    deleteAccountDialog: {
+      title: '删除账户',
+      description:
+        '此操作无法撤销。这将永久删除您的账户并从我们的服务器中移除您的所有数据。',
+      whatWillBeDeleted: '将被删除的内容：',
+      deleteItems: {
+        account: '您的用户账户和个人资料',
+        projects: '您的所有项目和图像',
+        segmentation: '所有分割数据和结果',
+        settings: '账户设置和偏好',
+      },
+      confirmationLabel: '请输入 {{email}} 以确认：',
+      confirmationPlaceholder: '{email}',
+    },
+    pageTitle: '设置',
+    profile: '个人资料',
+    account: '账户',
+    fillAllFields: '请填写所有必填字段',
+    passwordsDoNotMatch: '密码不匹配',
+    passwordTooShort: '密码至少需要6个字符',
+    passwordChanged: '密码修改成功',
+    passwordsMatch: '密码匹配',
+    changingPassword: '修改密码中...',
+    changePassword: '修改密码',
+    languageUpdated: '语言更新成功',
+    themeUpdated: '主题更新成功',
+    appearanceDescription: '自定义应用程序外观',
+    language: '语言',
+    languageDescription: '选择您的首选语言',
+    theme: '主题',
+    themeDescription: '选择浅色、深色或系统主题',
+    light: '浅色',
+    dark: '深色',
+    system: '系统',
   },
   auth: {
     signIn: '登录',
@@ -218,6 +321,42 @@ export default {
     checkingAuthentication: '验证身份中...',
     loadingAccount: '加载您的账户...',
     processingRequest: '处理您的请求...',
+    // SignIn page specific
+    signInToAccount: '登录您的账户',
+    accessPlatform: '访问球状体分割平台',
+    emailAddress: '邮箱地址',
+    emailPlaceholder: 'you@example.com',
+    password: '密码',
+    passwordPlaceholder: '••••••••',
+    signingIn: '登录中...',
+    redirectingToDashboard: '正在跳转到仪表板...',
+    fillAllFields: '请填写所有字段',
+    // Toast messages
+    signInSuccess: '登录成功',
+    signInFailed: '登录失败',
+    registrationSuccess: '注册成功',
+    registrationFailed: '注册失败',
+    logoutFailed: '退出登录失败',
+    profileUpdateFailed: '个人资料更新失败',
+    welcomeMessage: '欢迎使用球体分割平台',
+    confirmationRequired: '确认文本是必需的，并且必须与您的邮箱地址相匹配',
+    agreeToTerms: '登录即表示您同意我们的',
+    termsOfService: '服务条款',
+    and: '和',
+    privacyPolicy: '隐私政策',
+    // SignUp page specific
+    createAccount: '创建您的账户',
+    signUpPlatform: '注册以使用球状体分割平台',
+    confirmPassword: '确认密码',
+    passwordsMatch: '密码匹配',
+    passwordsDoNotMatch: '密码不匹配',
+    agreeToTermsCheckbox: '我同意',
+    mustAgreeToTerms: '您必须同意条款和条件',
+    creatingAccount: '创建账户中...',
+    alreadyLoggedIn: '您已经登录',
+    alreadySignedUp: '您已经注册并登录了。',
+    goToDashboard: '前往仪表板',
+    signUpFailed: '注册失败',
   },
   profile: {
     title: '个人资料',
@@ -305,6 +444,7 @@ export default {
       save: '保存',
       keyboardShortcuts:
         'V: 查看 • E: 编辑 • A: 添加 • N: 新建 • S: 切割 • D: 删除',
+      nothingToSave: '所有更改已保存',
     },
     status: {
       polygons: '多边形',
@@ -314,16 +454,802 @@ export default {
       selected: '已选择',
       saved: '已保存',
       unsaved: '未保存',
+      noPolygons: '无多边形',
+      startCreating: '开始创建多边形',
+      polygonList: '多边形列表',
+    },
+    shortcuts: {
+      buttonText: '快捷键',
+      dialogTitle: '键盘快捷键',
+      footerNote: '这些快捷键在分割编辑器中起作用，让工作更快更便利。',
+      v: '查看模式',
+      e: '编辑顶点模式',
+      a: '添加点模式',
+      n: '创建新多边形',
+      s: '切割模式',
+      d: '删除模式',
+      shift: '按住以自动添加点',
+      ctrlZ: '撤销',
+      ctrlY: '重做',
+      delete: '删除选中的多边形',
+      esc: '取消当前操作',
+      plus: '放大',
+      minus: '缩小',
+      r: '重置视图',
+    },
+    tips: {
+      header: '提示：',
+      edit: {
+        createPoint: '点击创建新点',
+        holdShift: '按住Shift自动创建点序列',
+        closePolygon: '点击第一个点关闭多边形',
+      },
+      slice: {
+        startSlice: '点击开始切割',
+        endSlice: '再次点击完成切割',
+        cancelSlice: 'Esc取消切割',
+      },
+      addPoints: {
+        hoverLine: '将鼠标悬停在多边形线上',
+        clickAdd: '点击向选中的多边形添加点',
+        escCancel: 'Esc结束添加模式',
+      },
+    },
+    helpTips: {
+      editMode: [
+        '点击创建新点',
+        '按住Shift自动创建点序列',
+        '点击第一个点关闭多边形',
+      ],
+      slicingMode: ['点击开始切割', '再次点击完成切割', 'Esc取消切割'],
+      pointAddingMode: [
+        '将鼠标悬停在多边形线上',
+        '点击向选中的多边形添加点',
+        'Esc退出添加模式',
+      ],
+    },
+    loading: '正在加载分割...',
+    noPolygons: '未找到多边形',
+    polygonNotFound: '多边形未找到',
+    invalidSlice: '无效的切割操作',
+    sliceSuccess: '多边形切割成功',
+    sliceFailed: '多边形切割失败',
+    instructions: {
+      slice: {
+        selectPolygon: '1. 点击多边形选择要切割的对象',
+        placeFirstPoint: '2. 点击放置第一个切割点',
+        placeSecondPoint: '3. 点击放置第二个切割点并执行切割',
+        cancel: '按ESC取消',
+      },
+      create: {
+        startPolygon: '1. 点击开始创建多边形',
+        continuePoints: '2. 继续点击添加更多点（至少需要3个）',
+        finishPolygon: '3. 继续添加点或在第一个点附近点击以关闭多边形',
+        holdShift: '按住SHIFT自动添加点',
+        cancel: '按ESC取消',
+      },
+      addPoints: {
+        clickVertex: '点击任意顶点开始添加点',
+        addPoints: '点击添加点，然后点击另一个顶点完成',
+        holdShift: '按住SHIFT自动添加点',
+        cancel: '按ESC取消',
+      },
+      editVertices: {
+        selectPolygon: '点击多边形选择要编辑的对象',
+        dragVertices: '点击并拖动顶点移动它们',
+        addPoints: '按住SHIFT并点击顶点以添加点',
+        deleteVertex: '双击顶点删除它',
+      },
+      deletePolygon: {
+        clickToDelete: '点击多边形删除它',
+      },
+      view: {
+        selectPolygon: '点击多边形选择它',
+        navigation: '拖动平移 • 滚动缩放',
+      },
+      modes: {
+        slice: '切割模式',
+        create: '多边形创建模式',
+        addPoints: '点添加模式',
+        editVertices: '顶点编辑模式',
+        deletePolygon: '多边形删除模式',
+        view: '查看模式',
+      },
+      shiftIndicator: '⚡ SHIFT：自动添加点',
     },
   },
   status: {
     segmented: '已分割',
-    processing: '正在处理 {{count}} 张图像',
+    processing: '处理中',
     queued: '排队中',
     failed: '失败',
     no_segmentation: '未分割',
     disconnected: '与服务器断开连接',
     error: 'ML服务错误',
     ready: '准备分割',
+  },
+  queue: {
+    title: '分割队列',
+    connected: '已连接',
+    disconnected: '已断开',
+    waiting: '等待中',
+    processing: '处理中',
+    segmentAll: '分割全部',
+    totalProgress: '总进度',
+    images: '图像',
+    loadingStats: '加载统计数据...',
+    connectingMessage: '连接到服务器... 实时更新即将可用。',
+    emptyMessage: '队列中没有图像。上传图像并将其添加到队列进行分割。',
+    addingToQueue: '添加到队列...',
+  },
+  toast: {
+    // Generic messages
+    error: '发生错误',
+    success: '操作成功',
+    info: '信息',
+    warning: '警告',
+    loading: '加载中...',
+    // Common errors
+    failedToUpdate: '更新数据失败。请重试。',
+    fillAllFields: '请填写所有字段',
+    operationFailed: '操作失败。请重试。',
+    // Error boundary
+    unexpectedError: '意外错误',
+    somethingWentWrong: '出现了问题。请稍后重试。',
+    somethingWentWrongPage: '加载此页面时出现问题。',
+    returnToHome: '返回首页',
+    // Success messages
+    operationCompleted: '操作成功完成',
+    dataSaved: '数据保存成功',
+    dataUpdated: '数据更新成功',
+    // Connection messages
+    reconnecting: '正在重新连接服务器...',
+    reconnected: '服务器连接已恢复',
+    connectionFailed: '恢复服务器连接失败',
+    // Segmentation messages
+    segmentationRequested: '已提交分割请求',
+    segmentationCompleted: '图像分割完成',
+    segmentationFailed: '分割失败',
+    segmentationResultFailed: '获取分割结果失败',
+    segmentationStatusFailed: '检查分割状态失败',
+    // Export messages
+    exportCompleted: '导出成功完成！',
+    exportFailed: '导出失败。请重试。',
+    // Project actions
+    project: {
+      created: '项目创建成功',
+      createFailed: '创建项目失败',
+      deleted: '项目删除成功',
+      deleteFailed: '删除项目失败',
+      urlCopied: '项目URL已复制到剪贴板',
+      notFound: '项目未找到',
+      invalidResponse: '服务器响应无效',
+      readyForImages: '已准备好接收图片',
+    },
+    // Profile actions
+    profile: {
+      consentUpdated: '同意偏好设置更新成功',
+      loadFailed: '加载个人资料数据失败',
+    },
+    // Upload actions
+    upload: {
+      failed: '上传后刷新图像失败',
+    },
+    // Segmentation actions
+    segmentation: {
+      saved: '分割保存成功',
+      failed: '保存分割失败',
+      deleted: '多边形已删除',
+    },
+  },
+  export: {
+    // Dialog headers
+    advancedOptions: '高级导出选项',
+    configureSettings: '配置您的导出设置以创建全面的数据包',
+    // Tabs
+    general: '常规',
+    visualization: '可视化',
+    formats: '格式',
+    // Content selection
+    exportContents: '导出内容',
+    selectContent: '选择要包含在导出中的内容类型',
+    includeOriginal: '包含原始图像',
+    includeVisualizations: '包含带编号多边形的可视化',
+    includeDocumentation: '包含文档和元数据',
+    // Image selection
+    selectedImages: '已选择图像',
+    imagesSelected: '已选择 {{count}} 张图像，共 {{total}} 张',
+    selectAll: '全选',
+    selectNone: '全不选',
+    imageSelection: '图像选择',
+    chooseImages: '选择要包含在导出中的图像',
+    // Quality settings
+    qualitySettings: '质量设置',
+    imageQuality: '图像质量',
+    compressionLevel: '压缩级别',
+    outputResolution: '输出分辨率',
+    // Visualization settings
+    colorSettings: '颜色设置',
+    backgroundColor: '背景色',
+    strokeColor: '描边颜色',
+    strokeWidth: '描边宽度',
+    fontSize: '字体大小',
+    showNumbers: '显示多边形编号',
+    showLabels: '显示标签',
+    // Format options
+    outputSettings: '输出设置',
+    exportFormats: '导出格式',
+    exportToZip: '导出为ZIP存档',
+    generateExcel: '生成Excel指标',
+    includeCocoFormat: '包含COCO格式注释',
+    includeJsonMetadata: '包含JSON元数据',
+    // Progress and status
+    preparing: '准备导出中...',
+    processing: '处理 {{current}} / {{total}}',
+    packaging: '创建包中...',
+    completed: '导出完成',
+    downloading: '下载中...',
+    cancelled: '导出已取消',
+    // Connection status
+    connected: '已连接',
+    disconnected: '已断开',
+    reconnecting: '重新连接中...',
+    // Buttons
+    startExport: '开始导出',
+    cancel: '取消',
+    download: '下载',
+    retry: '重试',
+    close: '关闭',
+    // Error messages
+    exportError: '导出失败',
+    exportFailed: '导出失败',
+    exportComplete: '导出完成',
+    metricsExportComplete: '指标导出完成',
+    connectionError: '导出过程中连接丢失',
+    serverError: '服务器错误发生',
+    invalidSelection: '请至少选择一张图像',
+    noData: '没有可用于导出的数据',
+  },
+  // Standalone image action messages (used without prefix)
+  imageDeleted: '图像删除成功',
+  deleteImageFailed: '删除图像失败',
+  deleteImageError: '删除图像时出错',
+  imageAlreadyProcessing: '图像正在处理中',
+  processImageFailed: '图像处理失败',
+
+  exportDialog: {
+    title: '导出选项',
+    includeMetadata: '包含元数据',
+    includeSegmentation: '包含分割',
+    includeObjectMetrics: '包含对象指标',
+    exportMetricsOnly: '仅导出指标(XLSX)',
+    selectImages: '选择要导出的图像',
+    selectAll: '全选',
+    selectNone: '全不选',
+    noImagesAvailable: '无可用图像',
+  },
+  docs: {
+    badge: '文档',
+    title: 'SpheroSeg 文档',
+    subtitle: '我们球状体分割平台的综合使用指南',
+    navigation: '导航',
+    nav: {
+      introduction: '介绍',
+      gettingStarted: '入门指南',
+      uploadingImages: '上传图像',
+      modelSelection: '模型选择',
+      segmentationProcess: '分割过程',
+      segmentationEditor: '分割编辑器',
+      exportFeatures: '导出功能',
+    },
+    introduction: {
+      title: '介绍',
+      whatIs: '什么是 SpheroSeg？',
+      description:
+        'SpheroSeg 是专门为显微镜图像中细胞球状体的分割和分析而设计的先进平台。',
+      developedBy:
+        '该平台由布拉格捷克技术大学核科学与物理工程学院的学生 Bc. Michal Průšek 开发。',
+      addresses:
+        'SpheroSeg 解决了在显微镜图像中准确识别和分割球状体边界的挑战性任务。',
+    },
+    gettingStarted: {
+      title: '入门指南',
+      accountCreation: '创建账户',
+      accountDescription: '要使用 SpheroSeg，您需要创建一个账户。',
+      accountSteps: {
+        step1: '转到注册页面',
+        step2: '输入您的机构电子邮件地址',
+        step3: '完善您的个人资料',
+        step4: '验证您的电子邮件地址',
+      },
+      firstProject: '创建您的第一个项目',
+      projectDescription: '项目帮助您组织工作。',
+      projectSteps: {
+        step1: '点击"新建项目"',
+        step2: '输入项目名称和描述',
+        step3: '选择项目类型',
+        step4: '点击"创建项目"',
+      },
+    },
+    uploadImages: {
+      title: '上传图像',
+      description: 'SpheroSeg 支持各种显微镜常用的图像格式。',
+      methods: '上传方法',
+      methodsDescription: '有多种上传图像的方式：',
+      methodsList: {
+        dragDrop: '拖放文件到上传区域',
+        browse: '点击浏览选择文件',
+        batch: '批量上传多张图像',
+      },
+      note: '注意：',
+      noteText: '确保您的显微镜图像具有良好的对比度。',
+    },
+    modelSelection: {
+      title: '模型选择',
+      description: 'SpheroSeg 提供三种不同的AI模型。',
+      models: {
+        hrnet: {
+          name: 'HRNet（小型）',
+          inferenceTime: '推理时间：约3.1秒',
+          bestFor: '最适合：实时处理',
+          description: '快速高效的模型。',
+        },
+        cbam: {
+          name: 'CBAM-ResUNet（中型）',
+          inferenceTime: '推理时间：约6.9秒',
+          bestFor: '最适合：平衡速度和精度',
+          description: '速度和质量的最佳平衡。',
+        },
+        ma: {
+          name: 'MA-ResUNet（大型）',
+          inferenceTime: '推理时间：约18.1秒',
+          bestFor: '最适合：最高精度',
+          description: '具有注意力机制的最精确模型。',
+        },
+      },
+      howToSelect: '如何选择模型',
+      selectionSteps: {
+        step1: '打开您的项目',
+        step2: '找到模型选择菜单',
+        step3: '选择您的模型',
+        step4: '调整置信度阈值',
+        step5: '您的选择将被保存',
+      },
+      tip: '提示：',
+      tipText: '大多数情况下从 CBAM-ResUNet 开始。',
+    },
+    segmentationProcess: {
+      title: '分割过程',
+      description: '该过程使用先进的AI模型。',
+      queueBased: '基于队列的处理',
+      queueDescription: 'SpheroSeg 使用处理队列系统。',
+      queueFeatures: {
+        realTime: '使用 WebSocket 的实时状态',
+        batch: '批量处理',
+        priority: '优先级管理',
+        recovery: '自动错误恢复',
+      },
+      workflow: '自动分割工作流程',
+      workflowSteps: {
+        step1: '上传您的图像',
+        step2: '选择您的AI模型',
+        step3: '调整置信度阈值',
+        step4: '点击"自动分割"',
+        step5: '实时监控进度',
+        step6: '检查结果',
+      },
+      polygonTypes: '多边形类型',
+      polygonDescription: '系统检测两种类型：',
+      polygonTypesList: {
+        external: '外部多边形（红色）',
+        internal: '内部多边形（蓝色）',
+      },
+      processingNote: '处理时间因模型而异：',
+      processingTimes:
+        'HRNet（约3秒），CBAM-ResUNet（约7秒），MA-ResUNet（约18秒）。',
+    },
+    segmentationEditor: {
+      title: '分割编辑器',
+      description: '用于细化分割的强大工具。',
+      editingModes: '编辑模式',
+      modes: {
+        view: {
+          title: '查看模式',
+          description: '导航和检查而不进行更改。',
+        },
+        editVertices: {
+          title: '编辑顶点',
+          description: '拖动单个顶点。',
+        },
+        addPoints: {
+          title: '添加点',
+          description: '插入新顶点。',
+        },
+        createPolygon: {
+          title: '创建多边形',
+          description: '绘制新多边形。',
+        },
+        sliceMode: {
+          title: '切片模式',
+          description: '将多边形切成多个部分。',
+        },
+        deletePolygon: {
+          title: '删除多边形',
+          description: '移除不需要的多边形。',
+        },
+      },
+      keyFeatures: '主要功能',
+      features: {
+        undoRedo: '撤销/重做系统',
+        autoSave: '自动保存',
+        zoomPan: '缩放和平移',
+        polygonManagement: '多边形管理',
+        keyboardShortcuts: '键盘快捷键',
+        realTimeFeedback: '实时反馈',
+      },
+      shortcuts: '基本键盘快捷键',
+      shortcutCategories: {
+        navigation: '导航：',
+        actions: '操作：',
+      },
+      shortcutsList: {
+        v: '查看模式',
+        e: '编辑顶点',
+        a: '添加点',
+        n: '创建多边形',
+        ctrlZ: '撤销',
+        ctrlY: '重做',
+        ctrlS: '保存',
+        delete: '删除选中项',
+      },
+      workingWithPolygons: '处理多边形',
+      polygonSteps: {
+        step1: '选择多边形',
+        step2: '切换到适当的模式',
+        step3: '进行修改',
+        step4: '使用右侧面板',
+        step5: '定期保存',
+      },
+    },
+    exportFeatures: {
+      title: '导出功能',
+      description: '全面的导出功能。',
+      packageContents: '导出包内容',
+      contents: {
+        originalImages: {
+          title: '原始图像',
+          description: '高质量的原始显微镜图像。',
+        },
+        visualizations: {
+          title: '可视化',
+          description: '带编号多边形的注释图像。',
+        },
+      },
+      annotationFormats: '注释格式',
+      formats: {
+        coco: 'COCO格式：PyTorch和TensorFlow的标准',
+        yolo: 'YOLO格式：为YOLO模型优化',
+        json: '自定义JSON：结构化详细格式',
+      },
+      calculatedMetrics: '计算指标',
+      metricsDescription: 'SpheroSeg 自动计算指标。',
+      metricsCategories: {
+        basic: {
+          title: '基本测量：',
+          items: {
+            area: '面积',
+            perimeter: '周长',
+            diameter: '等效直径',
+            circularity: '圆形度',
+          },
+        },
+        advanced: {
+          title: '高级指标：',
+          items: {
+            feret: 'Feret直径',
+            majorMinor: '主/次直径',
+            compactness: '紧密度、凸性',
+            sphericity: '球形度指数',
+          },
+        },
+      },
+      exportFormats: '指标导出格式',
+      exportFormatsList: {
+        excel: 'Excel（.xlsx）：格式化电子表格',
+        csv: 'CSV：逗号分隔值',
+        jsonExport: 'JSON：结构化格式',
+      },
+      visualizationCustomization: '可视化自定义',
+      customizationOptions: {
+        colors: '可自定义的多边形颜色',
+        numbering: '可显示/隐藏的编号',
+        strokeWidth: '可调整的线条粗细',
+        fontSize: '可控制的字体大小',
+        transparency: '可设置的透明度',
+      },
+      howToExport: '如何导出',
+      exportSteps: {
+        step1: '转到仪表板',
+        step2: '选择图像',
+        step3: '点击"高级导出"',
+        step4: '配置设置',
+        step5: '查看摘要',
+        step6: '点击"开始导出"',
+      },
+      exportNote: '导出包是全面的：',
+      exportNoteText: '每个导出都包含文档和元数据。',
+    },
+    footer: {
+      backToHome: '返回首页',
+      backToTop: '返回顶部',
+    },
+  },
+  legal: {
+    terms: {
+      title: '服务条款',
+      lastUpdated: '最后更新：2025年1月',
+      disclaimer: '使用SpheroSeg即表示您同意这些条款。请仔细阅读。',
+      sections: {
+        acceptance: {
+          title: '1. 条款接受',
+          content:
+            '通过访问或使用SpheroSeg（"服务"），您同意受这些服务条款（"条款"）以及所有适用法律法规的约束。如果您不同意这些条款中的任何一项，您被禁止使用此服务。这些条款构成您与SpheroSeg之间具有法律约束力的协议。',
+        },
+        useLicense: {
+          title: '2. 使用许可和允许用途',
+          content: '使用SpheroSeg的权限被授予用于：',
+          permittedUses: [
+            '个人、非商业研究目的',
+            '学术和教育研究',
+            '科学出版物和研究',
+            '生物医学研究和分析',
+          ],
+          licenseNote:
+            '这是许可的授予，而不是所有权的转让。未经明确书面同意，您不得将服务用于商业目的。',
+        },
+        dataUsage: {
+          title: '3. 数据使用和机器学习',
+          importantTitle: '重要：您的数据使用',
+          importantContent:
+            '通过将图像和数据上传到SpheroSeg，您同意我们使用这些数据来改进和训练我们的机器学习模型，以获得更好的分割准确性。',
+          ownershipTitle: '数据所有权：',
+          ownershipContent:
+            '您保留对上传到SpheroSeg的所有数据的所有权。但是，通过使用我们的服务，您授予我们以下权限：',
+          permissions: [
+            '处理您的图像进行分割分析',
+            '使用上传的数据（匿名形式）来改进我们的ML算法',
+            '通过持续学习提高模型准确性',
+            '开发新功能和分割能力',
+          ],
+          protectionNote:
+            '用于ML训练的所有数据都经过匿名处理，并剥离识别信息。未经明确同意，我们不会与第三方共享您的原始数据。',
+        },
+        userResponsibilities: {
+          title: '4. 用户责任',
+          content: '您同意：',
+          responsibilities: [
+            '仅将服务用于合法目的',
+            '尊重知识产权',
+            '不试图逆向工程或破坏服务',
+            '在创建账户时提供准确信息',
+            '维护您账户凭据的安全',
+          ],
+        },
+        serviceAvailability: {
+          title: '5. 服务可用性和限制',
+          content:
+            '虽然我们努力维持服务的持续可用性，但SpheroSeg按"原样"提供，不提供任何类型的保证。我们不保证不间断的访问，服务可能会受到维护、更新或临时不可用的影响。',
+        },
+        limitationLiability: {
+          title: '6. 责任限制',
+          content:
+            '在任何情况下，SpheroSeg、其开发人员或关联公司都不对任何间接、偶然、特殊、后果性或惩罚性损害负责，包括但不限于数据丢失、利润或商业机会损失，这些损害源于您对服务的使用。',
+        },
+        privacy: {
+          title: '7. 隐私和数据保护',
+          content:
+            '您的隐私对我们很重要。请查看我们的隐私政策，该政策规定了我们如何收集、使用和保护您的个人信息和研究数据。',
+        },
+        changes: {
+          title: '8. 条款变更',
+          content:
+            '我们保留随时修改这些条款的权利。变更将在发布后立即生效。您继续使用服务即表示接受修改后的条款。',
+        },
+        termination: {
+          title: '9. 终止',
+          content:
+            '任何一方都可以随时终止本协议。终止后，您访问服务的权利将立即停止，尽管这些条款在先前使用方面仍然有效。',
+        },
+        governingLaw: {
+          title: '10. 适用法律',
+          content:
+            '这些条款受适用法律管辖和解释。任何争议将通过有约束力的仲裁或在有管辖权的法院解决。',
+        },
+      },
+      contact: {
+        title: '联系信息：',
+        content: '如果您对这些条款有疑问，请通过spheroseg@utia.cas.cz联系我们',
+      },
+      navigation: {
+        backToHome: '返回首页',
+        privacyPolicy: '隐私政策',
+      },
+    },
+    privacy: {
+      title: '隐私政策',
+      lastUpdated: '最后更新：2025年1月',
+      disclaimer:
+        '您的隐私对我们很重要。本政策解释了我们如何收集、使用和保护您的数据。',
+      sections: {
+        introduction: {
+          title: '1. 介绍',
+          content:
+            '本隐私政策解释了SpheroSeg（"我们"、"我们的"）在您使用我们的球状体分割和分析平台时如何收集、使用、保护和共享您的信息。通过使用我们的服务，您同意本政策中描述的数据实践。',
+        },
+        informationCollected: {
+          title: '2. 我们收集的信息',
+          content:
+            '当您创建账户、上传图像、创建项目并与我们的服务互动时，我们收集您直接提供给我们的信息。',
+          personalInfo: {
+            title: '2.1 个人信息',
+            items: [
+              '姓名和电子邮件地址',
+              '机构或组织隶属关系',
+              '账户凭据和偏好设置',
+              '支持请求的联系信息',
+            ],
+          },
+          researchData: {
+            title: '2.2 研究数据和图像',
+            ownershipTitle: '您的研究数据',
+            ownershipContent:
+              '您保留对上传到SpheroSeg的所有图像和研究数据的完全所有权。我们从不声称拥有您内容的所有权。',
+            items: [
+              '您上传用于分析的图像',
+              '项目元数据和设置',
+              '分割结果和注释',
+              '分析参数和自定义配置',
+            ],
+          },
+          usageInfo: {
+            title: '2.3 使用信息',
+            items: [
+              '日志数据和访问时间戳',
+              '设备信息和浏览器类型',
+              '使用模式和功能交互',
+              '性能指标和错误报告',
+            ],
+          },
+        },
+        mlTraining: {
+          title: '3. 机器学习和数据改进',
+          importantTitle: '重要：您的数据用于AI训练',
+          importantIntro:
+            '为了持续改进我们的分割算法，我们可能使用上传的图像和数据来训练和增强我们的机器学习模型。',
+          controlTitle: '您完全控制您的数据：',
+          controlContent:
+            '在创建账户时，您可以选择是否允许您的数据用于ML训练。您可以随时更改这些偏好设置。',
+          manageTitle: '管理您的同意：',
+          manageContent:
+            '转到设置→仪表板中的隐私选项卡。在那里您可以启用或禁用ML训练同意，并选择可以使用您数据的特定目的（算法改进、功能开发）。',
+          howWeUse: {
+            title: '我们如何使用您的数据进行ML：',
+            items: [
+              '模型训练：图像用于训练分割算法以获得更好的准确性',
+              '算法增强：您的分割修正有助于改进自动检测',
+              '功能开发：使用模式指导新分析工具的开发',
+              '质量保证：数据帮助验证和测试新模型版本',
+            ],
+          },
+          protection: {
+            title: 'ML训练中的数据保护：',
+            items: [
+              '匿名化：所有数据在ML训练中使用前都经过匿名处理',
+              '元数据删除：个人和机构识别信息被删除',
+              '安全处理：训练在安全、隔离的环境中进行',
+              '无原始数据分发：您的原始图像从不与第三方共享',
+            ],
+          },
+        },
+        howWeUse: {
+          title: '4. 我们如何使用您的信息',
+          content: '我们使用收集的信息来：',
+          purposes: [
+            '提供和维护分割服务',
+            '处理您的图像并生成分析结果',
+            '改进我们的算法并开发新功能',
+            '与您就您的账户和更新进行沟通',
+            '提供技术支持和故障排除',
+            '遵守法律义务并保护我们的权利',
+          ],
+        },
+        dataSecurity: {
+          title: '5. 数据安全和保护',
+          content: '我们实施强有力的安全措施，包括：',
+          measures: [
+            '传输和静态数据的加密',
+            '定期安全审计和漏洞评估',
+            '访问控制和身份验证系统',
+            '安全备份和灾难恢复程序',
+            '员工安全培训和访问限制',
+          ],
+        },
+        dataSharing: {
+          title: '6. 数据共享和第三方',
+          noSaleStatement: '我们不出售您的个人信息或研究数据。',
+          sharingContent: '我们只在以下有限情况下共享信息：',
+          circumstances: [
+            '经您明确同意',
+            '遵守法律义务或法院命令',
+            '与帮助运营我们平台的可信服务提供商（在严格保密协议下）',
+            '保护我们的权利、安全或财产',
+            '以匿名、汇总形式用于研究出版物（经您同意）',
+          ],
+        },
+        privacyRights: {
+          title: '7. 您的隐私权利和选择',
+          content: '您有权：',
+          rights: [
+            '访问：请求您的个人数据和研究内容的副本',
+            '更正：更新或纠正不准确的信息',
+            '删除：请求删除您的账户和相关数据',
+            '可移植性：以机器可读格式导出您的数据',
+            '选择退出：请求排除在ML训练之外。注意：这可能限制以下功能：自动分割准确性、个性化模型推荐、自适应阈值建议、批处理优化以及未来的AI驱动改进。请联系支持以了解对您账户的具体影响。',
+            '限制：限制我们如何处理您的信息',
+          ],
+          contactNote:
+            '要行使这些权利，请通过spheroseg@utia.cas.cz联系我们。我们将在30天内回复。',
+        },
+        dataRetention: {
+          title: '8. 数据保留',
+          content: '我们区分个人数据和ML训练数据：',
+          categories: [
+            '个人/账户数据：所有个人标识符、个人资料信息、账户设置和交易历史将在账户关闭后90天内永久删除。',
+            '研究数据：与您账户关联的原始图像和项目数据将在账户关闭后90天内删除。',
+            'ML训练数据：用于ML训练的数据首先被匿名化/化名化以删除所有个人标识符。这些匿名数据可能被无限期保留以保持模型改进，除非您特别选择退出ML训练或请求完全删除。',
+            '选择退出选项：您可以通过联系spheroseg@utia.cas.cz请求完全删除所有数据，包括匿名化的ML训练数据。处理时间通常为30天。',
+          ],
+        },
+        internationalTransfers: {
+          title: '9. 国际数据传输',
+          content:
+            '您的数据可能在您所在国家以外的国家进行处理。我们确保为国际传输提供适当的保障和保护，包括标准合同条款和充分性决定。',
+        },
+        childrensPrivacy: {
+          title: '10. 儿童隐私',
+          content:
+            '我们的服务面向研究人员，不针对16岁以下的儿童。我们不会故意收集16岁以下儿童的个人信息。如果我们发现此类收集，我们将及时删除信息。',
+        },
+        policyChanges: {
+          title: '11. 本政策的变更',
+          content:
+            '我们可能会更新本隐私政策以反映我们实践或法律要求的变化。我们将通过电子邮件或我们网站上的显著通知告知您重大变更。继续使用即表示接受更新的条款。',
+        },
+        contact: {
+          title: '12. 联系信息',
+          dpo: '数据保护官：spheroseg@utia.cas.cz',
+          general: '一般查询：spheroseg@utia.cas.cz',
+          postal: '邮政地址：',
+          address: {
+            line1: 'ÚTIA AV ČR',
+            line2: 'Pod Vodárenskou věží 4',
+            line3: '182 08 布拉格8',
+            line4: '捷克共和国',
+          },
+        },
+      },
+      navigation: {
+        backToHome: '返回首页',
+        termsOfService: '服务条款',
+      },
+    },
+  },
+
+  // WebSocket messages
+  websocket: {
+    reconnecting: '正在重新连接服务器...',
+    reconnected: '服务器连接已恢复',
+    reconnectFailed: '恢复服务器连接失败',
+    connectionLost: '与服务器的连接丢失',
   },
 };

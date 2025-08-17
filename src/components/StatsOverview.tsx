@@ -140,7 +140,7 @@ const StatsOverview = () => {
         // Fetch storage stats
         try {
           const storageStats = await apiClient.getUserStorageStats();
-          
+
           // Format storage used based on size
           let formattedStorage = '0 MB';
           if (storageStats.totalStorageGB >= 1) {
@@ -149,7 +149,7 @@ const StatsOverview = () => {
             formattedStorage = `${storageStats.totalStorageMB} MB`;
           }
           setStorageUsed(formattedStorage);
-          
+
           // Calculate growth (placeholder for now - could be enhanced with historical data)
           if (storageStats.totalImages > 0) {
             const avgSize = storageStats.averageImageSizeMB;
@@ -177,44 +177,25 @@ const StatsOverview = () => {
       value: loading ? '...' : String(projectCount),
       description: 'Active spheroid studies',
       icon: <Microscope size={16} />,
-      trend:
-        projectCount > 0
-          ? {
-              value: `${Math.min(projectCount, 5)} new this month`,
-              isPositive: true,
-            }
-          : undefined,
     },
     {
       title: 'Processed Images',
       value: loading ? '...' : String(completedImageCount),
       description: 'Successfully segmented',
       icon: <Image size={16} />,
-      trend:
-        completedImageCount > 0 && imageCount > 0
-          ? {
-              value: `${Math.round((completedImageCount / Math.max(imageCount, 1)) * 100)}% completion rate`,
-              isPositive: true,
-            }
-          : undefined,
     },
     {
       title: 'Uploaded Today',
       value: loading ? '...' : String(todayUploadCount),
-      description: 'Spheroid images pending',
+      description: 'Spheroid images',
       icon: <FileUp size={16} />,
     },
     {
       title: t('dashboard.storageUsed') || 'Storage Used',
       value: loading ? '...' : storageUsed,
-      description: 'Total space used',
+      description:
+        storageGrowth !== '0 MB' ? storageGrowth : 'Total space used',
       icon: <HardDrive size={16} />,
-      trend: storageGrowth !== '0 MB'
-        ? {
-            value: storageGrowth,
-            isPositive: false,
-          }
-        : undefined,
     },
   ];
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Info } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface EditorHelpTipsProps {
   editMode: boolean;
@@ -13,6 +14,7 @@ const EditorHelpTips = ({
   slicingMode,
   pointAddingMode,
 }: EditorHelpTipsProps) => {
+  const { t } = useLanguage();
   const tipVariants = {
     initial: { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0, transition: { duration: 0.3 } },
@@ -21,25 +23,13 @@ const EditorHelpTips = ({
 
   const getHelpTips = () => {
     if (editMode) {
-      return [
-        'Kliknutím vytvořte nový bod',
-        'Držením Shift vytvoříte automaticky posloupnost bodů',
-        'Uzavřete polygon kliknutím na první bod',
-      ];
+      return t('segmentation.helpTips.editMode');
     }
     if (slicingMode) {
-      return [
-        'Klikněte pro začátek řezu',
-        'Klikněte znovu pro dokončení řezu',
-        'Esc zruší řezání',
-      ];
+      return t('segmentation.helpTips.slicingMode');
     }
     if (pointAddingMode) {
-      return [
-        'Najeďte kurzorem nad linii polygonu',
-        'Kliknutím přidáte bod do vybraného polygonu',
-        'Esc ukončí režim přidávání',
-      ];
+      return t('segmentation.helpTips.pointAddingMode');
     }
     return [];
   };
@@ -58,7 +48,7 @@ const EditorHelpTips = ({
     >
       <div className="flex items-center mb-2 border-b border-gray-700 pb-2">
         <Info className="h-5 w-5 mr-2 text-blue-400" />
-        <span className="font-medium">Tipy:</span>
+        <span className="font-medium">{t('segmentation.tips.header')}</span>
       </div>
       <ul className="space-y-2 text-sm">
         {tips.map((tip, index) => (

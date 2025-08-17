@@ -69,7 +69,7 @@ const CanvasPolygon = React.memo(
       if (!validPoints || validPoints.length < 3) {
         return '';
       }
-      
+
       // If we're dragging a vertex from this polygon, apply the offset
       let pointsToRender = validPoints;
       if (
@@ -88,7 +88,7 @@ const CanvasPolygon = React.memo(
           return p;
         });
       }
-      
+
       const path = `M${pointsToRender.map(p => `${p.x},${p.y}`).join(' L')} Z`;
       return path;
     }, [validPoints, vertexDragState, id]);
@@ -163,7 +163,11 @@ const CanvasPolygon = React.memo(
               type === 'internal' ? 'polygon-internal' : 'polygon-external',
               isSelected && 'polygon-selected'
             )}
-            fill={type === 'internal' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(239, 68, 68, 0.1)'}
+            fill={
+              type === 'internal'
+                ? 'rgba(14, 165, 233, 0.1)'
+                : 'rgba(239, 68, 68, 0.1)'
+            }
             stroke={pathColor}
             strokeWidth={Math.max(strokeWidth, 0.5)}
             strokeOpacity={1}
@@ -214,12 +218,15 @@ const CanvasPolygon = React.memo(
         }));
 
     // Check if drag offset changed
-    const sameDragOffset = 
-      (!prevProps.vertexDragState?.dragOffset && !nextProps.vertexDragState?.dragOffset) ||
-      (prevProps.vertexDragState?.dragOffset && 
-       nextProps.vertexDragState?.dragOffset &&
-       prevProps.vertexDragState.dragOffset.x === nextProps.vertexDragState.dragOffset.x &&
-       prevProps.vertexDragState.dragOffset.y === nextProps.vertexDragState.dragOffset.y);
+    const sameDragOffset =
+      (!prevProps.vertexDragState?.dragOffset &&
+        !nextProps.vertexDragState?.dragOffset) ||
+      (prevProps.vertexDragState?.dragOffset &&
+        nextProps.vertexDragState?.dragOffset &&
+        prevProps.vertexDragState.dragOffset.x ===
+          nextProps.vertexDragState.dragOffset.x &&
+        prevProps.vertexDragState.dragOffset.y ===
+          nextProps.vertexDragState.dragOffset.y);
 
     return (
       prevProps.polygon.id === nextProps.polygon.id &&

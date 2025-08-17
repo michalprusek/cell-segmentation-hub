@@ -5,6 +5,7 @@ import React, {
   useEffect,
   ReactNode,
 } from 'react';
+import { BASIC_MODEL_INFO } from '@/lib/modelUtils';
 
 export type ModelType = 'hrnet' | 'resunet_small' | 'resunet_advanced';
 
@@ -26,32 +27,7 @@ interface ModelContextType {
   availableModels: ModelInfo[];
 }
 
-const AVAILABLE_MODELS: ModelInfo[] = [
-  {
-    id: 'hrnet',
-    name: 'HRNet',
-    displayName: 'HRNet (small)',
-    description: 'Fast and efficient model for real-time segmentation',
-    size: 'small',
-    defaultThreshold: 0.5,
-  },
-  {
-    id: 'resunet_small',
-    name: 'CBAM-ResUNet',
-    displayName: 'CBAM-ResUNet (medium)',
-    description: 'Balanced speed and accuracy',
-    size: 'medium',
-    defaultThreshold: 0.5,
-  },
-  {
-    id: 'resunet_advanced',
-    name: 'MA-ResUNet',
-    displayName: 'MA-ResUNet (large)',
-    description: 'Highest accuracy with attention mechanisms',
-    size: 'large',
-    defaultThreshold: 0.5,
-  },
-];
+const AVAILABLE_MODELS: ModelInfo[] = Object.values(BASIC_MODEL_INFO);
 
 const ModelContext = createContext<ModelContextType>({
   selectedModel: 'hrnet',

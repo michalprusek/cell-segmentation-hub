@@ -141,7 +141,7 @@ export const shouldRenderVertices = (
 ): boolean => {
   // Always show vertices for selected polygons regardless of zoom level
   return isSelected || isHovered;
-  
+
   // Original code kept for reference:
   /*
   if (zoom < 0.5) {
@@ -190,7 +190,7 @@ export const getDecimatedVertices = (
 ): Point[] => {
   // DISABLED DECIMATION - Always return all vertices for full visibility
   return points;
-  
+
   // Original decimation code kept for reference:
   /*
   const step = getVertexDecimationStep(zoom, points.length);

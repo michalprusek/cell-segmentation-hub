@@ -82,7 +82,7 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
         consentUpdatedAt: new Date().toISOString(),
       });
 
-      toast.success('Consent preferences updated successfully');
+      toast.success(t('toast.profile.consentUpdated'));
       setHasChanges(false);
     } catch (error: unknown) {
       logger.error('Error saving consent preferences:', error);

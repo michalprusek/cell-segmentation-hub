@@ -35,10 +35,19 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
     const finalRadius = radius * hoverScale * startPointScale;
 
     // Simple color scheme
-    const fillColor = type === 'internal' 
-      ? (isDragging ? '#0077cc' : isHovered ? '#3498db' : '#0EA5E9')
-      : (isDragging ? '#c0392b' : isHovered ? '#e74c3c' : '#ea384c');
-    
+    const fillColor =
+      type === 'internal'
+        ? isDragging
+          ? '#0077cc'
+          : isHovered
+            ? '#3498db'
+            : '#0EA5E9'
+        : isDragging
+          ? '#c0392b'
+          : isHovered
+            ? '#e74c3c'
+            : '#ea384c';
+
     const strokeColor = '#ffffff';
     const strokeWidth = 1.5 / zoom;
     const opacity = isSelected ? 1 : 0.8;
@@ -68,13 +77,13 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
   },
   (prevProps, nextProps) => {
     // Custom comparison for optimization
-    const sameDragOffset = 
+    const sameDragOffset =
       (!prevProps.dragOffset && !nextProps.dragOffset) ||
-      (prevProps.dragOffset && 
-       nextProps.dragOffset &&
-       prevProps.dragOffset.x === nextProps.dragOffset.x &&
-       prevProps.dragOffset.y === nextProps.dragOffset.y);
-    
+      (prevProps.dragOffset &&
+        nextProps.dragOffset &&
+        prevProps.dragOffset.x === nextProps.dragOffset.x &&
+        prevProps.dragOffset.y === nextProps.dragOffset.y);
+
     return (
       prevProps.point.x === nextProps.point.x &&
       prevProps.point.y === nextProps.point.y &&

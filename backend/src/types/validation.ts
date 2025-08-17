@@ -37,18 +37,8 @@ export const updateProjectSchema = z.object({
  * Schema for project query parameters (pagination, search, sort)
  */
 export const projectQuerySchema = z.object({
-  page: z.string()
-    .optional()
-    .refine((val) => !val || (!isNaN(Number(val)) && Number(val) > 0), {
-      message: 'Stránka musí být kladné číslo'
-    })
-    .transform((val) => val ? Number(val) : 1),
-  limit: z.string()
-    .optional()
-    .refine((val) => !val || (!isNaN(Number(val)) && Number(val) > 0 && Number(val) <= 100), {
-      message: 'Limit musí být mezi 1 a 100'
-    })
-    .transform((val) => val ? Number(val) : 10),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(10),
   search: z.string()
     .max(255, 'Vyhledávací dotaz může mít maximálně 255 znaků')
     .trim()
@@ -96,18 +86,8 @@ export const imageUploadSchema = z.object({
  * Schema for image query parameters
  */
 export const imageQuerySchema = z.object({
-  page: z.string()
-    .optional()
-    .refine((val) => !val || (!isNaN(Number(val)) && Number(val) > 0), {
-      message: 'Stránka musí být kladné číslo'
-    })
-    .transform((val) => val ? Number(val) : 1),
-  limit: z.string()
-    .optional()
-    .refine((val) => !val || (!isNaN(Number(val)) && Number(val) > 0 && Number(val) <= 50), {
-      message: 'Limit musí být mezi 1 a 50'
-    })
-    .transform((val) => val ? Number(val) : 20),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
   status: z.enum(['pending', 'processing', 'completed', 'failed'], {
     errorMap: () => ({ message: 'Neplatný status. Možné hodnoty: pending, processing, completed, failed' })
   }).optional(),

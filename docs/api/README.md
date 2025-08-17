@@ -16,12 +16,15 @@ Authorization: Bearer <access_token>
 ```
 
 ### Token Management
+
 - **Access Token**: Short-lived (15 minutes), used for API requests
 - **Refresh Token**: Long-lived (7 days), used to obtain new access tokens
 - **Automatic Refresh**: Frontend handles token refresh automatically
 
 ### Token Storage Best Practices
+
 For secure token storage in client applications:
+
 - **Access tokens** should be kept in memory or sessionStorage (avoid localStorage)
 - **Refresh tokens** should be stored in httpOnly, secure, SameSite cookies when possible
 - **Never store tokens** in URL parameters, browser history, or unencrypted storage
@@ -29,16 +32,17 @@ For secure token storage in client applications:
 
 ## API Endpoints Overview
 
-| Endpoint Group | Base Path | Description |
-|----------------|-----------|-------------|
-| **Authentication** | `/auth` | User registration, login, token management |
-| **Projects** | `/projects` | Project CRUD operations |
-| **Images** | `/projects/:id/images` | Image upload and management |
-| **Segmentation** | `/segmentation` | ML segmentation services |
+| Endpoint Group     | Base Path              | Description                                |
+| ------------------ | ---------------------- | ------------------------------------------ |
+| **Authentication** | `/auth`                | User registration, login, token management |
+| **Projects**       | `/projects`            | Project CRUD operations                    |
+| **Images**         | `/projects/:id/images` | Image upload and management                |
+| **Segmentation**   | `/segmentation`        | ML segmentation services                   |
 
 ## Response Format
 
 ### Success Response
+
 ```json
 {
   "success": true,
@@ -51,6 +55,7 @@ For secure token storage in client applications:
 ```
 
 ### Error Response
+
 ```json
 {
   "success": false,
@@ -64,18 +69,18 @@ For secure token storage in client applications:
 
 ## HTTP Status Codes
 
-| Code | Description |
-|------|-------------|
-| `200` | Success |
-| `201` | Created |
-| `400` | Bad Request (validation error) |
-| `401` | Unauthorized (invalid/missing token) |
-| `403` | Forbidden (insufficient permissions) |
-| `404` | Not Found |
-| `409` | Conflict (resource already exists) |
+| Code  | Description                              |
+| ----- | ---------------------------------------- |
+| `200` | Success                                  |
+| `201` | Created                                  |
+| `400` | Bad Request (validation error)           |
+| `401` | Unauthorized (invalid/missing token)     |
+| `403` | Forbidden (insufficient permissions)     |
+| `404` | Not Found                                |
+| `409` | Conflict (resource already exists)       |
 | `422` | Unprocessable Entity (validation failed) |
-| `429` | Too Many Requests (rate limited) |
-| `500` | Internal Server Error |
+| `429` | Too Many Requests (rate limited)         |
+| `500` | Internal Server Error                    |
 
 ## Rate Limiting
 
@@ -86,6 +91,7 @@ API requests are rate-limited to prevent abuse:
 - **File Upload**: 50 requests per hour per user
 
 Rate limit headers are included in responses:
+
 ```http
 X-RateLimit-Limit: 1000
 X-RateLimit-Remaining: 999
@@ -100,22 +106,23 @@ X-RateLimit-Reset: 1640995200
 
 ## Error Codes
 
-| Code | Description | HTTP Status |
-|------|-------------|-------------|
-| `VALIDATION_ERROR` | Request validation failed | 400 |
-| `UNAUTHORIZED` | Authentication required | 401 |
-| `TOKEN_EXPIRED` | Access token expired | 401 |
-| `FORBIDDEN` | Insufficient permissions | 403 |
-| `NOT_FOUND` | Resource not found | 404 |
-| `CONFLICT` | Resource already exists | 409 |
-| `RATE_LIMITED` | Too many requests | 429 |
-| `INTERNAL_ERROR` | Server error | 500 |
+| Code               | Description               | HTTP Status |
+| ------------------ | ------------------------- | ----------- |
+| `VALIDATION_ERROR` | Request validation failed | 400         |
+| `UNAUTHORIZED`     | Authentication required   | 401         |
+| `TOKEN_EXPIRED`    | Access token expired      | 401         |
+| `FORBIDDEN`        | Insufficient permissions  | 403         |
+| `NOT_FOUND`        | Resource not found        | 404         |
+| `CONFLICT`         | Resource already exists   | 409         |
+| `RATE_LIMITED`     | Too many requests         | 429         |
+| `INTERNAL_ERROR`   | Server error              | 500         |
 
 ## Data Types
 
 ### Common Types
 
 #### User
+
 ```typescript
 interface User {
   id: string;
@@ -128,6 +135,7 @@ interface User {
 ```
 
 #### Profile
+
 ```typescript
 interface Profile {
   id: string;
@@ -146,6 +154,7 @@ interface Profile {
 ```
 
 #### Project
+
 ```typescript
 interface Project {
   id: string;
@@ -162,6 +171,7 @@ interface Project {
 ```
 
 #### Image
+
 ```typescript
 interface Image {
   id: string;
@@ -183,6 +193,7 @@ interface Image {
 ```
 
 #### Segmentation
+
 ```typescript
 interface Segmentation {
   id: string;
@@ -198,6 +209,7 @@ interface Segmentation {
 ```
 
 #### Polygon
+
 ```typescript
 interface Polygon {
   id: string;
@@ -216,14 +228,15 @@ interface Point {
 
 List endpoints support pagination with the following query parameters:
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `page` | number | 1 | Page number (1-based) |
-| `limit` | number | 20 | Items per page (max 100) |
-| `sortBy` | string | 'createdAt' | Field to sort by |
-| `sortOrder` | string | 'desc' | Sort order ('asc' or 'desc') |
+| Parameter   | Type   | Default     | Description                  |
+| ----------- | ------ | ----------- | ---------------------------- |
+| `page`      | number | 1           | Page number (1-based)        |
+| `limit`     | number | 20          | Items per page (max 100)     |
+| `sortBy`    | string | 'createdAt' | Field to sort by             |
+| `sortOrder` | string | 'desc'      | Sort order ('asc' or 'desc') |
 
 ### Pagination Response
+
 ```json
 {
   "success": true,
@@ -244,12 +257,14 @@ List endpoints support pagination with the following query parameters:
 ## File Upload Specifications
 
 ### Supported Image Formats
+
 - **JPEG/JPG**: `.jpg`, `.jpeg`
 - **PNG**: `.png`
 - **Maximum File Size**: 50MB per file
 - **Maximum Batch Size**: 20 files per upload
 
 ### Upload Response
+
 ```json
 {
   "success": true,
@@ -295,6 +310,7 @@ interface SegmentationCompleteEvent {
 ## SDK Usage Examples
 
 ### JavaScript/TypeScript
+
 ```typescript
 import { ApiClient } from './api-client';
 
@@ -306,7 +322,7 @@ await client.auth.login({ email: 'user@example.com', password: 'password' });
 // Create project
 const project = await client.projects.create({
   title: 'My Cell Analysis',
-  description: 'Analyzing cell samples'
+  description: 'Analyzing cell samples',
 });
 
 // Upload images
@@ -316,7 +332,7 @@ const images = await client.projects.uploadImages(project.id, fileList);
 for (const image of images) {
   await client.segmentation.request(image.id, {
     model: 'hrnet',
-    threshold: 0.5
+    threshold: 0.5,
   });
 }
 ```
@@ -343,6 +359,7 @@ curl -o cell-segmentation-api.postman_collection.json \
 ## OpenAPI/Swagger Specification
 
 The complete API specification is available at:
+
 - **Development**: `http://localhost:3001/api-docs`
 - **Swagger UI**: `http://localhost:3001/swagger-ui`
 
@@ -353,16 +370,19 @@ The complete API specification is available at:
 The API provides comprehensive interactive documentation through multiple interfaces:
 
 #### Swagger UI
+
 - **Development**: http://localhost:3001/api-docs
 - **Features**: Interactive endpoint testing, authentication, real-time examples
 - **Try It Out**: Test endpoints directly from the browser interface
 
 #### OpenAPI 3.0 Specification
+
 - **JSON Format**: http://localhost:3001/api-docs/openapi.json
 - **Standards Compliant**: Full OpenAPI 3.0 specification
 - **Code Generation**: Use with tools like `@openapitools/openapi-generator-cli`
 
 #### Postman Collection
+
 - **Auto-generated**: http://localhost:3001/api-docs/postman.json
 - **JWT Authentication**: Pre-configured Bearer token authentication
 - **Environment Variables**: `{{baseUrl}}` and `{{accessToken}}`
@@ -387,6 +407,7 @@ curl -o cell-segmentation-api.json http://localhost:3001/api-docs/postman.json
 ```
 
 **Setup in Postman**:
+
 1. Set `baseUrl` variable to `http://localhost:3001/api`
 2. Login via `/auth/login` to get JWT token
 3. Set `accessToken` variable with the received token
@@ -431,6 +452,7 @@ For detailed documentation about the Swagger/OpenAPI system, see [Swagger/OpenAP
 ## Client Libraries
 
 Official client libraries are available for:
+
 - **JavaScript/TypeScript**: `@cell-segmentation/api-client`
 - **Python**: `cell-segmentation-client`
 

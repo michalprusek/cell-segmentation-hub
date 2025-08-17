@@ -86,7 +86,9 @@ const PolygonVertices = React.memo(
             vertexDragState?.isDragging &&
             vertexDragState?.polygonId === polygonId &&
             vertexDragState?.vertexIndex === originalIndex;
-          const dragOffset = isDragging ? vertexDragState?.dragOffset : undefined;
+          const dragOffset = isDragging
+            ? vertexDragState?.dragOffset
+            : undefined;
 
           return (
             <VertexContextMenu
@@ -150,12 +152,15 @@ const PolygonVertices = React.memo(
         prevProps.viewportBounds.height === nextProps.viewportBounds.height);
 
     // Check if drag offset changed
-    const sameDragOffset = 
-      (!prevProps.vertexDragState?.dragOffset && !nextProps.vertexDragState?.dragOffset) ||
-      (prevProps.vertexDragState?.dragOffset && 
-       nextProps.vertexDragState?.dragOffset &&
-       prevProps.vertexDragState.dragOffset.x === nextProps.vertexDragState.dragOffset.x &&
-       prevProps.vertexDragState.dragOffset.y === nextProps.vertexDragState.dragOffset.y);
+    const sameDragOffset =
+      (!prevProps.vertexDragState?.dragOffset &&
+        !nextProps.vertexDragState?.dragOffset) ||
+      (prevProps.vertexDragState?.dragOffset &&
+        nextProps.vertexDragState?.dragOffset &&
+        prevProps.vertexDragState.dragOffset.x ===
+          nextProps.vertexDragState.dragOffset.x &&
+        prevProps.vertexDragState.dragOffset.y ===
+          nextProps.vertexDragState.dragOffset.y);
 
     return (
       prevProps.polygonId === nextProps.polygonId &&

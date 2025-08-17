@@ -5,15 +5,19 @@ import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 
 interface ProcessImageParams {
+  projectId: string;
   imageId: string;
   imageUrl: string;
   onComplete?: (result: SegmentationData) => void;
+  onError?: (error: Error) => void;
 }
 
 export const updateImageProcessingStatus = async ({
+  projectId,
   imageId,
   imageUrl,
   onComplete,
+  onError,
 }: ProcessImageParams) => {
   const abortController = new AbortController();
   let timeoutId: NodeJS.Timeout | null = null;
@@ -29,8 +33,8 @@ export const updateImageProcessingStatus = async ({
   };
 
   try {
-    // Request segmentation through the API
-    await apiClient.requestSegmentation(imageId);
+    // Request segmentation through the batch API (more efficient)
+    await apiClient.requestBatchSegmentation([imageId]);
 
     toast.success('Segmentation request submitted');
 
@@ -39,18 +43,25 @@ export const updateImageProcessingStatus = async ({
       if (cancelled) return;
 
       try {
-        const results = await apiClient.getSegmentationResults(imageId);
+        const segmentationData =
+          await apiClient.getSegmentationResults(imageId);
 
         if (cancelled) return;
 
-        // Validate that results is an array before accessing
-        if (!Array.isArray(results) || results.length === 0) {
+        // Validate that segmentation data exists and has polygons
+        if (
+          !segmentationData ||
+          !Array.isArray(segmentationData.polygons) ||
+          segmentationData.polygons.length === 0
+        ) {
           // No results yet, continue polling
           if (!cancelled) {
             timeoutId = setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
           }
           return;
         }
+
+        const results = segmentationData.polygons;
 
         const latestResult = results[0]; // Now safe to access after validation
 
@@ -68,7 +79,11 @@ export const updateImageProcessingStatus = async ({
           }
           return;
         } else if (latestResult?.status === 'failed') {
+          const error = new Error('Segmentation failed');
           toast.error('Segmentation failed');
+          if (onError) {
+            onError(error);
+          }
           return;
         }
 
@@ -81,13 +96,20 @@ export const updateImageProcessingStatus = async ({
             timeoutId = setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
           }
         } else if (!latestResult) {
+          const error = new Error('No segmentation result found');
           logger.error('No segmentation result found');
           toast.error('Failed to get segmentation result');
+          if (onError) {
+            onError(error);
+          }
         }
       } catch (error) {
         if (!cancelled) {
           logger.error('Error polling segmentation status:', error);
           toast.error('Failed to check segmentation status');
+          if (onError && error instanceof Error) {
+            onError(error);
+          }
         }
       }
     };
@@ -102,6 +124,9 @@ export const updateImageProcessingStatus = async ({
     logger.error('Error requesting segmentation:', error);
     const errorMessage = getErrorMessage(error) || 'Failed to process image';
     toast.error('Failed to process image: ' + errorMessage);
+    if (onError && error instanceof Error) {
+      onError(error);
+    }
     return { cancel };
   }
 };

@@ -1,12 +1,16 @@
 {
   "*.{ts,tsx}": [
-    "eslint --fix --cache --max-warnings=10 --format=stylish",
+    "eslint --fix --cache --max-warnings=0 --format=stylish",
     "prettier --write"
   ],
+  "src/**/*.{ts,tsx}": ["bash -c 'npm run type-check'"],
   "*.{js,jsx}": [
-    "eslint --fix --cache --max-warnings=10 --format=stylish",
+    "eslint --fix --cache --max-warnings=0 --format=stylish",
     "prettier --write"
   ],
+  "backend/src/**/*.{ts,tsx}": ["bash -c 'cd backend && npm run type-check'"],
   "*.{css,scss}": ["prettier --write"],
-  "*.{json,md,html,yml,yaml}": ["prettier --write"]
+  "*.{json,md,html,yml,yaml}": ["prettier --write"],
+  "package.json": ["prettier --write"],
+  "backend/package.json": ["prettier --write"]
 }

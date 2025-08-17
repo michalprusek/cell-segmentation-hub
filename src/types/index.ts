@@ -184,6 +184,9 @@ export interface ProjectImage {
   id: string;
   name: string;
   url: string;
+  displayUrl?: string; // Browser-compatible URL for display
+  width?: number | null; // Image width in pixels
+  height?: number | null; // Image height in pixels
   createdAt: Date;
   updatedAt: Date;
   segmentationStatus: 'pending' | 'processing' | 'completed' | 'failed';

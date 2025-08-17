@@ -4,6 +4,7 @@ import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface UseProjectFormProps {
   onSuccess?: (projectId: string) => void;
@@ -11,6 +12,7 @@ interface UseProjectFormProps {
 }
 
 export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
+  const { t } = useLanguage();
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -20,12 +22,12 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
     e.preventDefault();
 
     if (!projectName.trim()) {
-      toast.error('Please enter a project name');
+      toast.error(t('errors.validation.projectNameRequired'));
       return;
     }
 
     if (!user) {
-      toast.error('You must be logged in to create a project');
+      toast.error(t('errors.validation.loginRequired'));
       return;
     }
 
@@ -40,14 +42,14 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
       // Validate response
       if (!projectData || !projectData.id) {
         logger.error('Invalid project creation response:', projectData);
-        toast.error('Failed to create project', {
-          description: 'Server response was invalid',
+        toast.error(t('toast.project.createFailed'), {
+          description: t('toast.project.invalidResponse'),
         });
         return;
       }
 
-      toast.success('Project created successfully', {
-        description: `"${projectName}" is ready for images`,
+      toast.success(t('toast.project.created'), {
+        description: `"${projectName}" ${t('toast.project.readyForImages')}`,
       });
 
       onClose();

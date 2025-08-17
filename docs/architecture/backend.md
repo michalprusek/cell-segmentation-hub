@@ -69,7 +69,7 @@ The backend follows a clean layered architecture:
 ┌─────────────────────┐
 │    Controllers      │  ← Handle HTTP requests/responses
 ├─────────────────────┤
-│     Services        │  ← Business logic & orchestration  
+│     Services        │  ← Business logic & orchestration
 ├─────────────────────┤
 │   Data Access       │  ← Database operations (Prisma)
 ├─────────────────────┤
@@ -87,7 +87,7 @@ sequenceDiagram
     participant Svc as Service
     participant DB as Database
     participant FS as FileSystem
-    
+
     C->>M: HTTP Request
     M->>M: Auth, Validation, Rate Limit
     M->>Ctrl: Validated Request
@@ -106,7 +106,7 @@ sequenceDiagram
 ```typescript
 // Dual token approach
 interface TokenPair {
-  accessToken: string;  // Short-lived (15 minutes)
+  accessToken: string; // Short-lived (15 minutes)
   refreshToken: string; // Long-lived (7 days)
 }
 
@@ -117,13 +117,13 @@ const generateTokenPair = (userId: string): TokenPair => {
     config.JWT_ACCESS_SECRET,
     { expiresIn: '15m' }
   );
-  
+
   const refreshToken = jwt.sign(
     { userId, type: 'refresh' },
     config.JWT_REFRESH_SECRET,
     { expiresIn: '7d' }
   );
-  
+
   return { accessToken, refreshToken };
 };
 ```
@@ -138,18 +138,20 @@ export const authenticateToken = async (
 ) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
-    
+    const token = authHeader?.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : null;
+
     if (!token) {
       return ResponseHelper.unauthorized(res, 'Access token required');
     }
-    
+
     const decoded = jwt.verify(token, config.JWT_ACCESS_SECRET) as JWTPayload;
-    
+
     if (decoded.type !== 'access') {
       return ResponseHelper.unauthorized(res, 'Invalid token type');
     }
-    
+
     // Attach user to request
     req.userId = decoded.userId;
     next();
@@ -189,7 +191,8 @@ export const comparePasswords = async (
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient({
-  log: config.NODE_ENV === 'development' ? ['query', 'info', 'warn'] : ['error'],
+  log:
+    config.NODE_ENV === 'development' ? ['query', 'info', 'warn'] : ['error'],
   errorFormat: 'pretty',
 });
 
@@ -219,13 +222,13 @@ export class ProjectService {
     userId: string,
     projectData: CreateProjectData
   ): Promise<Project> {
-    return prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async tx => {
       // Validate user exists
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) {
         throw new AppError('User not found', 404);
       }
-      
+
       // Create project
       const project = await tx.project.create({
         data: {
@@ -234,16 +237,16 @@ export class ProjectService {
         },
         include: {
           user: {
-            select: { id: true, email: true }
-          }
-        }
+            select: { id: true, email: true },
+          },
+        },
       });
-      
+
       logger.info(`Project created: ${project.id} by user: ${userId}`);
       return project;
     });
   }
-  
+
   static async getUserProjects(userId: string): Promise<Project[]> {
     return prisma.project.findMany({
       where: { userId },
@@ -253,14 +256,14 @@ export class ProjectService {
             id: true,
             name: true,
             segmentationStatus: true,
-            createdAt: true
-          }
+            createdAt: true,
+          },
         },
         _count: {
-          select: { images: true }
-        }
+          select: { images: true },
+        },
       },
-      orderBy: { updatedAt: 'desc' }
+      orderBy: { updatedAt: 'desc' },
     });
   }
 }
@@ -282,18 +285,24 @@ export interface StorageInterface {
 // Local filesystem implementation
 export class LocalStorage implements StorageInterface {
   constructor(private baseDir: string) {}
-  
-  async uploadFile(file: Express.Multer.File, relativePath: string): Promise<string> {
+
+  async uploadFile(
+    file: Express.Multer.File,
+    relativePath: string
+  ): Promise<string> {
     const fullPath = path.join(this.baseDir, relativePath);
     await fs.ensureDir(path.dirname(fullPath));
     await fs.move(file.path, fullPath);
     return relativePath;
   }
-  
-  async generateThumbnail(originalPath: string, thumbnailPath: string): Promise<void> {
+
+  async generateThumbnail(
+    originalPath: string,
+    thumbnailPath: string
+  ): Promise<void> {
     const fullOriginalPath = path.join(this.baseDir, originalPath);
     const fullThumbnailPath = path.join(this.baseDir, thumbnailPath);
-    
+
     await sharp(fullOriginalPath)
       .resize(300, 300, { fit: 'inside', withoutEnlargement: true })
       .jpeg({ quality: 80 })
@@ -312,21 +321,21 @@ export class ImageService {
     files: Express.Multer.File[]
   ): Promise<ImageWithMetadata[]> {
     const results = await Promise.all(
-      files.map(async (file) => {
+      files.map(async file => {
         // Generate paths
         const filename = `${uuid.v4()}-${file.originalname}`;
         const originalPath = `projects/${projectId}/images/${filename}`;
         const thumbnailPath = `projects/${projectId}/thumbnails/thumb_${filename}`;
-        
+
         // Upload original
         await storage.uploadFile(file, originalPath);
-        
+
         // Get image metadata
         const metadata = await sharp(file.path).metadata();
-        
+
         // Generate thumbnail
         await storage.generateThumbnail(originalPath, thumbnailPath);
-        
+
         // Save to database
         const image = await prisma.image.create({
           data: {
@@ -338,9 +347,9 @@ export class ImageService {
             width: metadata.width,
             height: metadata.height,
             mimeType: file.mimetype,
-          }
+          },
         });
-        
+
         return {
           ...image,
           url: storage.getFileUrl(originalPath),
@@ -348,7 +357,7 @@ export class ImageService {
         };
       })
     );
-    
+
     return results;
   }
 }
@@ -367,38 +376,42 @@ export class SegmentationService {
     threshold: number = 0.5
   ): Promise<SegmentationResult> {
     const image = await prisma.image.findUnique({
-      where: { id: imageId }
+      where: { id: imageId },
     });
-    
+
     if (!image) {
       throw new AppError('Image not found', 404);
     }
-    
+
     // Update status to processing
     await prisma.image.update({
       where: { id: imageId },
-      data: { segmentationStatus: 'processing' }
+      data: { segmentationStatus: 'processing' },
     });
-    
+
     try {
       // Call ML service
       const formData = new FormData();
       // Validate and sanitize the file path to prevent directory traversal
-      if (!image.originalPath || image.originalPath.includes('..') || path.isAbsolute(image.originalPath)) {
+      if (
+        !image.originalPath ||
+        image.originalPath.includes('..') ||
+        path.isAbsolute(image.originalPath)
+      ) {
         throw new Error('Invalid file path');
       }
-      
+
       const safePath = path.resolve(config.UPLOAD_DIR, image.originalPath);
       const uploadDirResolved = path.resolve(config.UPLOAD_DIR);
-      
+
       // Ensure the resolved path is within the upload directory
       if (!safePath.startsWith(uploadDirResolved)) {
         throw new Error('Path traversal attempt detected');
       }
-      
+
       const imageBuffer = await fs.readFile(safePath);
       formData.append('file', imageBuffer, image.name);
-      
+
       const response = await axios.post(
         `${config.SEGMENTATION_SERVICE_URL}/api/v1/segment`,
         formData,
@@ -408,7 +421,7 @@ export class SegmentationService {
           timeout: 120000, // 2 minutes
         }
       );
-      
+
       // Save results
       const segmentation = await prisma.segmentation.create({
         data: {
@@ -418,29 +431,28 @@ export class SegmentationService {
           threshold,
           confidence: response.data.confidence,
           processingTime: response.data.processing_time,
-        }
+        },
       });
-      
+
       // Update image status
       await prisma.image.update({
         where: { id: imageId },
-        data: { segmentationStatus: 'completed' }
+        data: { segmentationStatus: 'completed' },
       });
-      
+
       return {
         id: segmentation.id,
         polygons: JSON.parse(segmentation.polygons),
         confidence: segmentation.confidence,
         processingTime: segmentation.processingTime,
       };
-      
     } catch (error) {
       // Update status to failed
       await prisma.image.update({
         where: { id: imageId },
-        data: { segmentationStatus: 'failed' }
+        data: { segmentationStatus: 'failed' },
       });
-      
+
       throw error;
     }
   }
@@ -478,15 +490,15 @@ export const errorHandler = (
     method: req.method,
     userId: req.userId,
   });
-  
+
   if (error instanceof AppError) {
     return ResponseHelper.error(res, error.message, error.statusCode);
   }
-  
+
   if (error.name === 'ValidationError') {
     return ResponseHelper.badRequest(res, error.message);
   }
-  
+
   // Default server error
   return ResponseHelper.internalServerError(res, 'Internal server error');
 };
@@ -497,7 +509,12 @@ export const errorHandler = (
 ```typescript
 // Consistent response format
 export class ResponseHelper {
-  static success<T>(res: Response, data: T, message?: string, statusCode: number = 200) {
+  static success<T>(
+    res: Response,
+    data: T,
+    message?: string,
+    statusCode: number = 200
+  ) {
     return res.status(statusCode).json({
       success: true,
       message,
@@ -505,8 +522,13 @@ export class ResponseHelper {
       timestamp: new Date().toISOString(),
     });
   }
-  
-  static error(res: Response, message: string, statusCode: number = 400, errors?: any) {
+
+  static error(
+    res: Response,
+    message: string,
+    statusCode: number = 400,
+    errors?: any
+  ) {
     return res.status(statusCode).json({
       success: false,
       error: message,
@@ -514,11 +536,11 @@ export class ResponseHelper {
       timestamp: new Date().toISOString(),
     });
   }
-  
+
   static unauthorized(res: Response, message: string = 'Unauthorized') {
     return this.error(res, message, 401);
   }
-  
+
   static forbidden(res: Response, message: string = 'Forbidden') {
     return this.error(res, message, 403);
   }
@@ -535,7 +557,7 @@ export const createProjectSchema = z.object({
   body: z.object({
     title: z.string().min(1).max(255),
     description: z.string().max(1000).optional(),
-  })
+  }),
 });
 
 // Validation middleware
@@ -547,17 +569,17 @@ export const validateRequest = (schema: z.ZodSchema) => {
         query: req.query,
         params: req.params,
       });
-      
+
       // Replace request data with validated data
       req.body = validatedData.body || req.body;
       req.query = validatedData.query || req.query;
       req.params = validatedData.params || req.params;
-      
+
       next();
     } catch (error) {
       if (error instanceof z.ZodError) {
         return ResponseHelper.badRequest(res, 'Validation failed', {
-          issues: error.errors
+          issues: error.errors,
         });
       }
       next(error);
@@ -580,22 +602,25 @@ const createRateLimiter = (options: {
     max: options.max,
     message: {
       success: false,
-      error: options.message
+      error: options.message,
     },
     standardHeaders: true,
     legacyHeaders: false,
     handler: (req, res) => {
       return ResponseHelper.error(res, options.message, 429);
-    }
+    },
   });
 };
 
 // Different limits for different endpoints
-app.use('/api/auth/login', createRateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // 5 attempts per window
-  message: 'Too many login attempts'
-}));
+app.use(
+  '/api/auth/login',
+  createRateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 5, // 5 attempts per window
+    message: 'Too many login attempts',
+  })
+);
 ```
 
 ## Logging & Monitoring
@@ -613,31 +638,32 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.Console({
-      format: config.NODE_ENV === 'development' 
-        ? winston.format.combine(
-            winston.format.colorize(),
-            winston.format.simple()
-          )
-        : winston.format.json()
+      format:
+        config.NODE_ENV === 'development'
+          ? winston.format.combine(
+              winston.format.colorize(),
+              winston.format.simple()
+            )
+          : winston.format.json(),
     }),
-    new winston.transports.File({ 
-      filename: 'logs/error.log', 
-      level: 'error' 
+    new winston.transports.File({
+      filename: 'logs/error.log',
+      level: 'error',
     }),
-    new winston.transports.File({ 
-      filename: 'logs/combined.log' 
-    })
-  ]
+    new winston.transports.File({
+      filename: 'logs/combined.log',
+    }),
+  ],
 });
 
 // Request logging middleware
 export const createRequestLogger = (serviceName: string) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
-    
+
     res.on('finish', () => {
       const duration = Date.now() - start;
-      
+
       logger.info('HTTP Request', {
         service: serviceName,
         method: req.method,
@@ -649,7 +675,7 @@ export const createRequestLogger = (serviceName: string) => {
         userId: req.userId,
       });
     });
-    
+
     next();
   };
 };
@@ -664,10 +690,10 @@ export const checkDatabaseHealth = async () => {
     await prisma.$queryRaw`SELECT 1`;
     return { healthy: true, message: 'Database connection successful' };
   } catch (error) {
-    return { 
-      healthy: false, 
+    return {
+      healthy: false,
       message: 'Database connection failed',
-      error: error.message 
+      error: error.message,
     };
   }
 };
@@ -675,7 +701,7 @@ export const checkDatabaseHealth = async () => {
 // Comprehensive health endpoint
 app.get('/health', async (req, res) => {
   const dbHealth = await checkDatabaseHealth();
-  
+
   const healthData = {
     status: dbHealth.healthy ? 'healthy' : 'unhealthy',
     timestamp: new Date().toISOString(),
@@ -685,8 +711,10 @@ app.get('/health', async (req, res) => {
     memory: process.memoryUsage(),
     database: dbHealth,
   };
-  
-  return ResponseHelper.success(res, healthData, 
+
+  return ResponseHelper.success(
+    res,
+    healthData,
     dbHealth.healthy ? 'Service is healthy' : 'Service has issues'
   );
 });

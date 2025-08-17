@@ -7,7 +7,7 @@ Comprehensive testing strategy and implementation guide for the SphereSeg cell s
 SphereSeg implements a complete testing pyramid with the following layers:
 
 - **Unit Tests**: Individual component and function testing
-- **Integration Tests**: API, database, and service interaction testing  
+- **Integration Tests**: API, database, and service interaction testing
 - **End-to-End Tests**: Complete user workflow testing
 - **Performance Tests**: Load testing and performance benchmarking
 - **Security Tests**: Vulnerability scanning and security auditing
@@ -64,12 +64,12 @@ import { ImageUploader } from '@/components/ImageUploader'
 test('should upload file successfully', async () => {
   const onUpload = vi.fn()
   render(<ImageUploader onUpload={onUpload} />)
-  
+
   const file = new File(['test'], 'test.jpg', { type: 'image/jpeg' })
   const input = screen.getByLabelText(/upload/i)
-  
+
   fireEvent.change(input, { target: { files: [file] } })
-  
+
   await waitFor(() => {
     expect(onUpload).toHaveBeenCalledWith(expect.objectContaining({
       filename: 'test.jpg'
@@ -93,13 +93,13 @@ describe('POST /api/projects', () => {
       .set('Authorization', `Bearer ${authToken}`)
       .send({
         name: 'Test Project',
-        description: 'Test description'
+        description: 'Test description',
       })
-      .expect(201)
-    
-    expect(response.body.data.name).toBe('Test Project')
-  })
-})
+      .expect(201);
+
+    expect(response.body.data.name).toBe('Test Project');
+  });
+});
 ```
 
 **Coverage**: 75%+ target for controllers, services, and middleware
@@ -114,10 +114,10 @@ describe('POST /api/projects', () => {
 async def test_segment_image(async_client, sample_image_bytes):
     files = {"image": ("test.jpg", io.BytesIO(sample_image_bytes), "image/jpeg")}
     data = {"model_name": "hrnet"}
-    
+
     response = await async_client.post("/api/v1/segment", files=files, data=data)
     assert response.status_code == 200
-    
+
     result = response.json()
     assert "polygons" in result
     assert len(result["polygons"]) > 0
@@ -131,12 +131,12 @@ async def test_segment_image(async_client, sample_image_bytes):
 
 The application uses different databases per environment for optimal development and testing:
 
-| Environment | Database | Configuration |
-|------------|----------|---------------|
-| **Development** | SQLite | `file:./data/dev.db` - Fast local development |
+| Environment         | Database         | Configuration                                     |
+| ------------------- | ---------------- | ------------------------------------------------- |
+| **Development**     | SQLite           | `file:./data/dev.db` - Fast local development     |
 | **Testing (Local)** | In-Memory SQLite | `file::memory:?cache=shared` - Isolated test runs |
-| **CI/Integration** | PostgreSQL 15 | Service container - Production parity |
-| **Production** | PostgreSQL | Managed service - Full features |
+| **CI/Integration**  | PostgreSQL 15    | Service container - Production parity             |
+| **Production**      | PostgreSQL       | Managed service - Full features                   |
 
 **Schema Consistency**: All environments use identical Prisma schema. Migrations ensure compatibility across SQLite and PostgreSQL.
 
@@ -144,11 +144,12 @@ The application uses different databases per environment for optimal development
 
 ```typescript
 // Using test fixtures
-import { testHelpers } from '@/tests/fixtures/database-seed'
+import { testHelpers } from '@/tests/fixtures/database-seed';
 
-const user = await testHelpers.createAuthenticatedUser()
-const project = await testHelpers.createTestProject(user.id)
-const { image, segmentationResult } = await testHelpers.createTestImageWithSegmentation(project.id)
+const user = await testHelpers.createAuthenticatedUser();
+const project = await testHelpers.createTestProject(user.id);
+const { image, segmentationResult } =
+  await testHelpers.createTestImageWithSegmentation(project.id);
 ```
 
 ### Test Images
@@ -168,11 +169,11 @@ python tests/fixtures/generate-test-images.py
 
 ```typescript
 // Access predefined mock responses
-import { testData } from '@/tests/fixtures/test-data.json'
+import { testData } from '@/tests/fixtures/test-data.json';
 
-const mockResponse = testData.mockResponses.authSuccess
-const testPolygons = testData.samplePolygons.circular
-const testScenario = testData.testScenarios.authentication.validUser
+const mockResponse = testData.mockResponses.authSuccess;
+const testPolygons = testData.samplePolygons.circular;
+const testScenario = testData.testScenarios.authentication.validUser;
 ```
 
 ## Performance Testing
@@ -183,22 +184,22 @@ const testScenario = testData.testScenarios.authentication.validUser
 // API load test configuration
 export const options = {
   stages: [
-    { duration: '2m', target: 10 },  // Ramp up
-    { duration: '5m', target: 10 },  // Sustained load
-    { duration: '2m', target: 20 },  // Peak load
-    { duration: '2m', target: 0 },   // Ramp down
+    { duration: '2m', target: 10 }, // Ramp up
+    { duration: '5m', target: 10 }, // Sustained load
+    { duration: '2m', target: 20 }, // Peak load
+    { duration: '2m', target: 0 }, // Ramp down
   ],
   thresholds: {
     http_req_duration: ['p(95)<2000'], // 95% under 2s
-    http_req_failed: ['rate<0.1'],     // <10% errors
+    http_req_failed: ['rate<0.1'], // <10% errors
   },
-}
+};
 ```
 
 ### Performance Benchmarks
 
 - **API Response Time**: p95 < 2000ms
-- **ML Inference Time**: 
+- **ML Inference Time**:
   - HRNet: ~3.1s
   - ResUNet Small: ~6.9s
   - ResUNet Advanced: ~18.1s
@@ -262,7 +263,7 @@ export default defineConfig({
     { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
     { name: 'webkit', use: { ...devices['Desktop Safari'] } },
   ],
-})
+});
 ```
 
 ### E2E Test Scenarios
@@ -296,22 +297,22 @@ export default defineConfig({
 ```yaml
 # .github/workflows/ci.yml structure
 jobs:
-  lint:         # Code quality checks
-  test-frontend: # Frontend unit tests  
-  test-backend:  # Backend unit tests
-  test-ml:      # ML service tests
+  lint: # Code quality checks
+  test-frontend: # Frontend unit tests
+  test-backend: # Backend unit tests
+  test-ml: # ML service tests
   test-integration: # API integration tests
-  test-e2e:     # End-to-end tests
+  test-e2e: # End-to-end tests
   security-scan: # Security testing
-  build:        # Docker builds
-  performance:  # Performance testing
-  deploy:       # Staging/production deployment
+  build: # Docker builds
+  performance: # Performance testing
+  deploy: # Staging/production deployment
 ```
 
 ### Quality Gates
 
 - **All unit tests pass** (required)
-- **Integration tests pass** (required)  
+- **Integration tests pass** (required)
 - **E2E tests pass** (required)
 - **Security scan passes** (no high-risk findings)
 - **Performance benchmarks met** (staging only)
@@ -358,7 +359,7 @@ The CI environment uses production-like infrastructure to catch environment-spec
 ### Coverage Reports
 
 - **Frontend**: Vitest coverage → Codecov
-- **Backend**: Jest coverage → Codecov  
+- **Backend**: Jest coverage → Codecov
 - **ML Service**: pytest-cov → Codecov
 - **Overall**: Combined coverage dashboard
 
@@ -405,21 +406,25 @@ The CI environment uses production-like infrastructure to catch environment-spec
 ### Common Issues
 
 **Tests fail in CI but pass locally**
+
 - Check environment variables and dependencies
 - Verify database setup and migrations
 - Review timing issues (add appropriate waits)
 
-**Flaky E2E tests**  
+**Flaky E2E tests**
+
 - Add explicit waits for async operations
 - Use data-testid attributes for reliable selectors
 - Mock external services when possible
 
 **High test execution time**
+
 - Profile slow tests and optimize
 - Increase parallelization
 - Use test filtering for faster feedback
 
 **Coverage gaps**
+
 - Identify untested code paths
 - Add tests for critical business logic
 - Remove dead code
@@ -443,6 +448,6 @@ The CI environment uses production-like infrastructure to catch environment-spec
 ### Quality Metrics
 
 - **Security Issues**: Zero high-risk findings
-- **Performance Regression**: <10% degradation threshold  
+- **Performance Regression**: <10% degradation threshold
 - **API Reliability**: 99.9% uptime in tests
 - **User Experience**: All critical paths tested

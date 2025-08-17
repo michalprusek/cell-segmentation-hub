@@ -19,8 +19,8 @@ The application uses a modern glass-morphism design system with the following ke
 The main application logo component used in headers and navigation.
 
 ```tsx
-import React from "react";
-import { Link } from "react-router-dom";
+import React from 'react';
+import { Link } from 'react-router-dom';
 
 const Logo = () => {
   return (
@@ -35,12 +35,14 @@ const Logo = () => {
 ```
 
 **Features**:
+
 - SVG logo with responsive sizing
 - Text label hidden on small screens
 - Dark mode support
 - Links to dashboard when authenticated
 
 **Usage**:
+
 - Main navigation (`Navbar.tsx`)
 - Dashboard header (`Logo.tsx`)
 - Authentication pages (SignIn/SignUp)
@@ -50,26 +52,26 @@ const Logo = () => {
 GitHub-style account deletion confirmation dialog with security measures.
 
 **Key Features**:
+
 - **Email confirmation**: User must type their exact email address
 - **Glass-morphism styling**: Consistent with app design
 - **Real-time validation**: Delete button only enables when email matches
 - **Security-focused**: Prevents accidental deletions
 
 **Implementation Pattern**:
+
 ```tsx
-const [confirmationText, setConfirmationText] = useState("");
+const [confirmationText, setConfirmationText] = useState('');
 const isConfirmationValid = confirmationText === userEmail;
 
 // Delete button only enabled when confirmation is valid
-<Button 
-  disabled={!isConfirmationValid}
-  variant="destructive"
->
+<Button disabled={!isConfirmationValid} variant="destructive">
   Delete Account
-</Button>
+</Button>;
 ```
 
 **Security Considerations**:
+
 - Requires exact email match (case-sensitive)
 - Immediate and irreversible deletion
 - Rate limited on backend (3 attempts per hour)
@@ -80,19 +82,22 @@ const isConfirmationValid = confirmationText === userEmail;
 The application extensively uses glass-morphism effects for modern UI aesthetics.
 
 **Base Glass Classes**:
+
 ```css
 .glass-morphism {
   @apply bg-white/80 backdrop-blur-md border border-white/20;
 }
 
 .shadow-glass-lg {
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 
-              0 10px 10px -5px rgba(0, 0, 0, 0.04),
-              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow:
+    0 20px 25px -5px rgba(0, 0, 0, 0.1),
+    0 10px 10px -5px rgba(0, 0, 0, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 ```
 
 **Common Usage**:
+
 - Authentication forms (SignIn/SignUp)
 - Modal dialogs
 - Card components
@@ -103,6 +108,7 @@ The application extensively uses glass-morphism effects for modern UI aesthetics
 #### SignIn Component (`src/pages/SignIn.tsx`)
 
 **Features**:
+
 - Glass-morphism card design
 - Floating background animations
 - Absolute positioned back button (top-left)
@@ -110,24 +116,36 @@ The application extensively uses glass-morphism effects for modern UI aesthetics
 - Error handling with toast notifications
 
 **Key Implementation**:
+
 ```tsx
-{/* Back button - positioned at top left of screen */}
+{
+  /* Back button - positioned at top left of screen */
+}
 <div className="absolute top-6 left-6 z-10">
-  <Link to="/" className="inline-flex items-center justify-center w-10 h-10 glass-morphism rounded-full hover:bg-white/20 transition-all duration-200">
+  <Link
+    to="/"
+    className="inline-flex items-center justify-center w-10 h-10 glass-morphism rounded-full hover:bg-white/20 transition-all duration-200"
+  >
     <ArrowLeft className="w-5 h-5 text-gray-700" />
   </Link>
-</div>
+</div>;
 
-{/* Floating background animations */}
+{
+  /* Floating background animations */
+}
 <div className="absolute inset-0 -z-10">
   <div className="absolute top-1/3 left-1/4 w-64 h-64 bg-blue-200/30 rounded-full filter blur-3xl animate-float" />
-  <div className="absolute bottom-1/4 right-1/3 w-80 h-80 bg-blue-300/20 rounded-full filter blur-3xl animate-float" style={{ animationDelay: "-2s" }} />
-</div>
+  <div
+    className="absolute bottom-1/4 right-1/3 w-80 h-80 bg-blue-300/20 rounded-full filter blur-3xl animate-float"
+    style={{ animationDelay: '-2s' }}
+  />
+</div>;
 ```
 
 #### SignUp Component (`src/pages/SignUp.tsx`)
 
 Similar design to SignIn with additional fields:
+
 - Email validation
 - Password confirmation
 - Terms acceptance checkbox
@@ -140,12 +158,14 @@ Similar design to SignIn with additional fields:
 Main navigation for public pages (before authentication).
 
 **Features**:
+
 - Responsive design with mobile menu
 - Scroll-based background changes
 - Logo integration
 - Glass-morphism effects on scroll
 
 **Responsive Behavior**:
+
 ```tsx
 const [isScrolled, setIsScrolled] = useState(false);
 
@@ -166,11 +186,19 @@ Used in authenticated dashboard areas.
 ### CSS Animations
 
 **Float Animation** (for background elements):
+
 ```css
 @keyframes float {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  33% { transform: translateY(-10px) rotate(1deg); }
-  66% { transform: translateY(5px) rotate(-1deg); }
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-10px) rotate(1deg);
+  }
+  66% {
+    transform: translateY(5px) rotate(-1deg);
+  }
 }
 
 .animate-float {
@@ -179,10 +207,17 @@ Used in authenticated dashboard areas.
 ```
 
 **Scale Animation** (for modal entries):
+
 ```css
 @keyframes scale-in {
-  0% { transform: scale(0.9); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .animate-scale-in {
@@ -193,6 +228,7 @@ Used in authenticated dashboard areas.
 ### Transition Patterns
 
 **Standard Transitions**:
+
 - `transition-all duration-200` - For button hovers
 - `transition-colors` - For color-only changes
 - `transition-opacity` - For fade effects
@@ -211,6 +247,7 @@ const handleThresholdChange = (value: number[]) => {
 ```
 
 **Benefits**:
+
 - Immediate feedback
 - No "Save" button required
 - Reduced cognitive load
@@ -218,16 +255,17 @@ const handleThresholdChange = (value: number[]) => {
 ### Validation Patterns
 
 **Real-time Validation**:
+
 ```tsx
-const [confirmationText, setConfirmationText] = useState("");
+const [confirmationText, setConfirmationText] = useState('');
 const isValid = confirmationText === requiredValue;
 
 // Visual feedback
 <Input
-  className={isValid ? "border-green-500" : "border-gray-300"}
+  className={isValid ? 'border-green-500' : 'border-gray-300'}
   value={confirmationText}
-  onChange={(e) => setConfirmationText(e.target.value)}
-/>
+  onChange={e => setConfirmationText(e.target.value)}
+/>;
 ```
 
 ## Toast Notifications
@@ -235,18 +273,19 @@ const isValid = confirmationText === requiredValue;
 The application uses Sonner for toast notifications with specific positioning:
 
 ```tsx
-import { Toaster as Sonner } from "@/components/ui/sonner";
+import { Toaster as Sonner } from '@/components/ui/sonner';
 
-<Sonner 
-  position="bottom-right" 
-  closeButton 
-  toastOptions={{ 
-    className: "animate-slide-in-right" 
-  }} 
-/>
+<Sonner
+  position="bottom-right"
+  closeButton
+  toastOptions={{
+    className: 'animate-slide-in-right',
+  }}
+/>;
 ```
 
 **Best Practices**:
+
 - Only bottom-right positioning (duplicate toasters removed)
 - Success messages for auto-save operations
 - Error messages for failed validations
@@ -288,7 +327,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 ### Example Implementation
 
 ```tsx
-<button 
+<button
   className="md:hidden text-gray-700"
   onClick={toggleMobileMenu}
   aria-label="Toggle menu"
@@ -305,9 +344,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 Components prepared for dark mode with conditional classes:
 
 ```tsx
-<span className="dark:text-white">
-  Text that adapts to theme
-</span>
+<span className="dark:text-white">Text that adapts to theme</span>
 ```
 
 ### Color Variables
@@ -316,7 +353,7 @@ The application uses CSS custom properties for consistent theming:
 
 ```css
 :root {
-  --primary-blue: #3E74B6;
+  --primary-blue: #3e74b6;
   --glass-bg: rgba(255, 255, 255, 0.8);
   --glass-border: rgba(255, 255, 255, 0.2);
 }

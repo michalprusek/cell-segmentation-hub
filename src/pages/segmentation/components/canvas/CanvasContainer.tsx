@@ -90,7 +90,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       if (isAltPressed) {
         return 'grab';
       }
-      
+
       switch (editMode) {
         case EditMode.View:
           return 'grab';

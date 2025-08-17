@@ -141,6 +141,7 @@ const startServer = async (): Promise<void> => {
       const segmentationService = new SegmentationService(prisma, imageService);
       const queueService = QueueService.getInstance(prisma, segmentationService, imageService);
       queueService.setWebSocketService(websocketService);
+      websocketService.setQueueService(queueService);
       
       // Connect ExportService to WebSocketService
       const exportService = ExportService.getInstance();

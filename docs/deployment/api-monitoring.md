@@ -49,24 +49,24 @@ The primary health check endpoint provides comprehensive system status:
 export async function checkDatabaseHealth() {
   try {
     const startTime = Date.now();
-    
+
     // Test database connection with simple query
     await prisma.$queryRaw`SELECT 1`;
-    
+
     const responseTime = Date.now() - startTime;
     const connectionCount = await prisma.$metrics.get().then(m => m.pool.size);
-    
+
     return {
       healthy: true,
       responseTime,
       connectionCount,
-      lastChecked: new Date().toISOString()
+      lastChecked: new Date().toISOString(),
     };
   } catch (error) {
     return {
       healthy: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      lastChecked: new Date().toISOString()
+      lastChecked: new Date().toISOString(),
     };
   }
 }
@@ -150,19 +150,19 @@ promClient.collectDefaultMetrics();
 const apiCallsCounter = new promClient.Counter({
   name: 'api_endpoint_calls_total',
   help: 'Total number of API endpoint calls',
-  labelNames: ['endpoint', 'method', 'status']
+  labelNames: ['endpoint', 'method', 'status'],
 });
 
 const apiDurationHistogram = new promClient.Histogram({
   name: 'api_endpoint_duration_seconds',
   help: 'API endpoint response time in seconds',
   labelNames: ['endpoint', 'method'],
-  buckets: [0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+  buckets: [0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
 });
 
 const activeConnectionsGauge = new promClient.Gauge({
   name: 'api_active_connections',
-  help: 'Number of active API connections'
+  help: 'Number of active API connections',
 });
 
 export function getMetricsEndpoint() {
@@ -191,13 +191,9 @@ export function createMonitoringMiddleware() {
       const duration = Number(endTime - startTime) / 1e9; // Convert to seconds
 
       // Record metrics
-      apiCallsCounter
-        .labels(endpoint, method, res.statusCode.toString())
-        .inc();
+      apiCallsCounter.labels(endpoint, method, res.statusCode.toString()).inc();
 
-      apiDurationHistogram
-        .labels(endpoint, method)
-        .observe(duration);
+      apiDurationHistogram.labels(endpoint, method).observe(duration);
     });
 
     next();
@@ -318,8 +314,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High error rate detected"
-          description: "Error rate is {{ $value }} for endpoint {{ $labels.endpoint }}"
+          summary: 'High error rate detected'
+          description: 'Error rate is {{ $value }} for endpoint {{ $labels.endpoint }}'
 
       - alert: HighResponseTime
         expr: histogram_quantile(0.95, rate(api_endpoint_duration_seconds_bucket[5m])) > 2
@@ -327,8 +323,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High response time detected"
-          description: "95th percentile response time is {{ $value }}s"
+          summary: 'High response time detected'
+          description: '95th percentile response time is {{ $value }}s'
 
       - alert: DatabaseDown
         expr: database_health_status == 0
@@ -336,8 +332,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Database is down"
-          description: "Database health check failed"
+          summary: 'Database is down'
+          description: 'Database health check failed'
 
       - alert: APIServiceDown
         expr: up{job="cell-segmentation-api"} == 0
@@ -345,8 +341,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "API service is down"
-          description: "API service is not responding"
+          summary: 'API service is down'
+          description: 'API service is not responding'
 ```
 
 ## Docker Compose Monitoring Stack
@@ -362,7 +358,7 @@ services:
   api:
     build: .
     ports:
-      - "3001:3001"
+      - '3001:3001'
     environment:
       - NODE_ENV=production
     networks:
@@ -372,7 +368,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - '9090:9090'
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml
@@ -391,7 +387,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - '3000:3000'
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
@@ -406,7 +402,7 @@ services:
   alertmanager:
     image: prom/alertmanager:latest
     ports:
-      - "9093:9093"
+      - '9093:9093'
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
       - alertmanager-data:/alertmanager
@@ -417,7 +413,7 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     ports:
-      - "9100:9100"
+      - '9100:9100'
     volumes:
       - /proc:/host/proc:ro
       - /sys:/host/sys:ro
@@ -449,13 +445,13 @@ global:
   evaluation_interval: 15s
 
 rule_files:
-  - "alerts.yml"
+  - 'alerts.yml'
 
 alerting:
   alertmanagers:
     - static_configs:
         - targets:
-          - alertmanager:9093
+            - alertmanager:9093
 
 scrape_configs:
   - job_name: 'cell-segmentation-api'
@@ -489,16 +485,16 @@ export const logger = winston.createLogger({
   ),
   defaultMeta: { service: 'cell-segmentation-api' },
   transports: [
-    new winston.transports.File({ 
-      filename: 'logs/error.log', 
-      level: 'error' 
+    new winston.transports.File({
+      filename: 'logs/error.log',
+      level: 'error',
     }),
-    new winston.transports.File({ 
-      filename: 'logs/combined.log' 
+    new winston.transports.File({
+      filename: 'logs/combined.log',
     }),
     new winston.transports.Console({
-      format: winston.format.simple()
-    })
+      format: winston.format.simple(),
+    }),
   ],
 });
 
@@ -506,10 +502,10 @@ export const logger = winston.createLogger({
 export function createRequestLogger() {
   return (req: Request, res: Response, next: NextFunction) => {
     const startTime = Date.now();
-    
+
     res.on('finish', () => {
       const duration = Date.now() - startTime;
-      
+
       logger.info('HTTP Request', {
         method: req.method,
         url: req.url,
@@ -517,10 +513,10 @@ export function createRequestLogger() {
         duration,
         userAgent: req.get('User-Agent'),
         ip: req.ip,
-        userId: req.user?.id
+        userId: req.user?.id,
       });
     });
-    
+
     next();
   };
 }
@@ -539,14 +535,14 @@ services:
       - discovery.type=single-node
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
     ports:
-      - "9200:9200"
+      - '9200:9200'
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
 
   kibana:
     image: kibana:7.14.0
     ports:
-      - "5601:5601"
+      - '5601:5601'
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
     depends_on:
@@ -586,12 +582,12 @@ apm.start({
 export function trackTransaction(name: string, type: string) {
   return (req: Request, res: Response, next: NextFunction) => {
     const transaction = apm.startTransaction(name, type);
-    
+
     res.on('finish', () => {
       transaction?.setOutcome(res.statusCode < 400 ? 'success' : 'failure');
       transaction?.end();
     });
-    
+
     next();
   };
 }
@@ -605,23 +601,23 @@ export function monitorMemory() {
   const memoryUsageGauge = new promClient.Gauge({
     name: 'nodejs_memory_usage_bytes',
     help: 'Node.js memory usage by type',
-    labelNames: ['type']
+    labelNames: ['type'],
   });
 
   setInterval(() => {
     const memUsage = process.memoryUsage();
-    
+
     memoryUsageGauge.labels('rss').set(memUsage.rss);
     memoryUsageGauge.labels('heapTotal').set(memUsage.heapTotal);
     memoryUsageGauge.labels('heapUsed').set(memUsage.heapUsed);
     memoryUsageGauge.labels('external').set(memUsage.external);
-    
+
     // Log memory warnings
     const heapUsedMB = memUsage.heapUsed / 1024 / 1024;
     if (heapUsedMB > 500) {
       logger.warn('High memory usage detected', {
         heapUsedMB,
-        heapTotalMB: memUsage.heapTotal / 1024 / 1024
+        heapTotalMB: memUsage.heapTotal / 1024 / 1024,
       });
     }
   }, 10000); // Every 10 seconds
@@ -634,30 +630,35 @@ export function monitorMemory() {
 
 ```typescript
 // Slack webhook for alerts
-export async function sendSlackAlert(message: string, severity: 'info' | 'warning' | 'critical') {
+export async function sendSlackAlert(
+  message: string,
+  severity: 'info' | 'warning' | 'critical'
+) {
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   if (!webhookUrl) return;
 
   const colors = {
     info: '#36a64f',
     warning: '#ff9800',
-    critical: '#ff5722'
+    critical: '#ff5722',
   };
 
   const payload = {
-    attachments: [{
-      color: colors[severity],
-      title: `Cell Segmentation Hub Alert - ${severity.toUpperCase()}`,
-      text: message,
-      timestamp: Math.floor(Date.now() / 1000)
-    }]
+    attachments: [
+      {
+        color: colors[severity],
+        title: `Cell Segmentation Hub Alert - ${severity.toUpperCase()}`,
+        text: message,
+        timestamp: Math.floor(Date.now() / 1000),
+      },
+    ],
   };
 
   try {
     await fetch(webhookUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
     });
   } catch (error) {
     logger.error('Failed to send Slack alert', error);
@@ -667,14 +668,14 @@ export async function sendSlackAlert(message: string, severity: 'info' | 'warnin
 // Health check with alerting
 export async function performHealthCheckWithAlerting() {
   const health = await checkDatabaseHealth();
-  
+
   if (!health.healthy) {
     await sendSlackAlert(
       `Database health check failed: ${health.error}`,
       'critical'
     );
   }
-  
+
   return health;
 }
 ```
@@ -691,8 +692,8 @@ export async function sendEmailAlert(subject: string, message: string) {
     secure: false,
     auth: {
       user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASSWORD
-    }
+      pass: process.env.SMTP_PASSWORD,
+    },
   });
 
   await transporter.sendMail({
@@ -700,7 +701,7 @@ export async function sendEmailAlert(subject: string, message: string) {
     to: process.env.ALERT_TO_EMAIL,
     subject: `[Cell Segmentation Hub] ${subject}`,
     text: message,
-    html: `<p>${message}</p>`
+    html: `<p>${message}</p>`,
   });
 }
 ```
@@ -721,14 +722,14 @@ export async function sendEmailAlert(subject: string, message: string) {
 
 ### Alert Thresholds
 
-| Metric | Warning | Critical | Action |
-|--------|---------|----------|---------|
-| Error Rate | > 5% | > 10% | Check logs, investigate errors |
-| Response Time (p95) | > 1s | > 3s | Optimize slow endpoints |
-| Memory Usage | > 80% | > 95% | Restart service, investigate leaks |
-| CPU Usage | > 80% | > 95% | Scale horizontally |
-| Database Response | > 100ms | > 500ms | Check queries, connections |
-| Disk Space | < 20% | < 10% | Clean logs, add storage |
+| Metric              | Warning | Critical | Action                             |
+| ------------------- | ------- | -------- | ---------------------------------- |
+| Error Rate          | > 5%    | > 10%    | Check logs, investigate errors     |
+| Response Time (p95) | > 1s    | > 3s     | Optimize slow endpoints            |
+| Memory Usage        | > 80%   | > 95%    | Restart service, investigate leaks |
+| CPU Usage           | > 80%   | > 95%    | Scale horizontally                 |
+| Database Response   | > 100ms | > 500ms  | Check queries, connections         |
+| Disk Space          | < 20%   | < 10%    | Clean logs, add storage            |
 
 ### Monitoring Automation
 

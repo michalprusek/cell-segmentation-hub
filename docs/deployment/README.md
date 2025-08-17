@@ -23,6 +23,7 @@ curl http://localhost:3001/health
 ```
 
 Services will be available at:
+
 - **Frontend**: http://localhost:3000 (development: 8082)
 - **Backend API**: http://localhost:3001
 - **ML Service**: http://localhost:8000
@@ -30,6 +31,7 @@ Services will be available at:
 ## Production Architecture
 
 ### Container Overview
+
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Load Balancer                        │
@@ -55,18 +57,21 @@ Services will be available at:
 ### Service Configuration
 
 #### Frontend Container
+
 - **Image**: Custom React build
 - **Port**: 5173 (internal)
 - **Environment**: Production optimized build
 - **Resources**: 512MB RAM, 0.5 CPU
 
 #### Backend Container
+
 - **Image**: Node.js with Express
 - **Port**: 3001 (internal)
 - **Environment**: Production database, JWT secrets
 - **Resources**: 1GB RAM, 1 CPU
 
 #### ML Service Container
+
 - **Image**: Python with PyTorch
 - **Port**: 8000 (internal)
 - **Environment**: GPU support (optional)
@@ -258,8 +263,8 @@ services:
       dockerfile: docker/frontend.Dockerfile
     container_name: cellseg-frontend-prod
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
       - ./ssl:/etc/ssl/certs
@@ -271,8 +276,8 @@ services:
       - cellseg-network
     restart: unless-stopped
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.frontend.rule=Host(`yourdomain.com`)"
+      - 'traefik.enable=true'
+      - 'traefik.http.routers.frontend.rule=Host(`yourdomain.com`)'
 
   # Backend Service
   backend:
@@ -281,7 +286,7 @@ services:
       dockerfile: ../docker/backend.Dockerfile
     container_name: cellseg-backend-prod
     ports:
-      - "3001:3001"
+      - '3001:3001'
     volumes:
       - ./uploads:/app/uploads
       - ./logs:/app/logs
@@ -309,7 +314,7 @@ services:
       dockerfile: ../../docker/ml.Dockerfile
     container_name: cellseg-ml-prod
     ports:
-      - "8000:8000"
+      - '8000:8000'
     volumes:
       - ./ml-models:/app/weights
     environment:
@@ -330,7 +335,7 @@ services:
     image: postgres:14-alpine
     container_name: cellseg-postgres-prod
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./backups:/backups
@@ -347,7 +352,7 @@ services:
     image: redis:7-alpine
     container_name: cellseg-redis-prod
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
@@ -372,7 +377,7 @@ services:
       - postgres
     networks:
       - cellseg-network
-    restart: "no"
+    restart: 'no'
 
 networks:
   cellseg-network:
@@ -395,6 +400,7 @@ volumes:
 #### Using AWS ECS (Elastic Container Service)
 
 1. **Create ECR Repositories**
+
 ```bash
 # Create repositories for each service
 aws ecr create-repository --repository-name cellseg/frontend
@@ -403,6 +409,7 @@ aws ecr create-repository --repository-name cellseg/ml-service
 ```
 
 2. **Build and Push Images**
+
 ```bash
 # Login to ECR
 aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789.dkr.ecr.us-east-1.amazonaws.com
@@ -414,6 +421,7 @@ docker push 123456789.dkr.ecr.us-east-1.amazonaws.com/cellseg/frontend:latest
 ```
 
 3. **ECS Task Definition**
+
 ```json
 {
   "family": "cellseg-backend",
@@ -503,18 +511,18 @@ spec:
         app: cellseg-backend
     spec:
       containers:
-      - name: backend
-        image: gcr.io/PROJECT-ID/cellseg-backend:latest
-        ports:
-        - containerPort: 3001
-        env:
-        - name: NODE_ENV
-          value: "production"
-        - name: DATABASE_URL
-          valueFrom:
-            secretKeyRef:
-              name: cellseg-secrets
-              key: database-url
+        - name: backend
+          image: gcr.io/PROJECT-ID/cellseg-backend:latest
+          ports:
+            - containerPort: 3001
+          env:
+            - name: NODE_ENV
+              value: 'production'
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: cellseg-secrets
+                  key: database-url
 ```
 
 ### Azure Deployment
@@ -541,29 +549,31 @@ az container create \
 ### Application Monitoring
 
 #### Health Checks
+
 ```bash
 # Backend health
 curl https://api.yourdomain.com/health
 
-# ML Service health  
+# ML Service health
 curl https://ml.yourdomain.com/health
 ```
 
 #### Prometheus Metrics
+
 ```yaml
 # docker-compose.monitoring.yml
 services:
   prometheus:
     image: prom/prometheus
     ports:
-      - "9090:9090"
+      - '9090:9090'
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
 
   grafana:
     image: grafana/grafana
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
 ```
@@ -571,6 +581,7 @@ services:
 ### Log Management
 
 #### Centralized Logging with ELK Stack
+
 ```yaml
 services:
   elasticsearch:
@@ -578,12 +589,12 @@ services:
     environment:
       - discovery.type=single-node
     ports:
-      - "9200:9200"
+      - '9200:9200'
 
   kibana:
     image: kibana:7.14.0
     ports:
-      - "5601:5601"
+      - '5601:5601'
     depends_on:
       - elasticsearch
 
@@ -623,19 +634,19 @@ server {
 server {
     listen 443 ssl http2;
     server_name yourdomain.com;
-    
+
     ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-    
+
     # SSL Security headers
     add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
     add_header X-Frame-Options DENY;
     add_header X-Content-Type-Options nosniff;
-    
+
     location / {
         try_files $uri $uri/ /index.html;
     }
-    
+
     location /api {
         proxy_pass http://backend:3001;
         proxy_set_header Host $host;
@@ -688,15 +699,15 @@ services:
   backend-1:
     <<: *backend-service
     container_name: cellseg-backend-1
-    
+
   backend-2:
-    <<: *backend-service  
+    <<: *backend-service
     container_name: cellseg-backend-2
-    
+
   backend-3:
     <<: *backend-service
     container_name: cellseg-backend-3
-    
+
   load-balancer:
     image: nginx:alpine
     ports:
@@ -722,12 +733,12 @@ spec:
   minReplicas: 2
   maxReplicas: 10
   metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
 ```
 
 ## Troubleshooting
@@ -735,6 +746,7 @@ spec:
 ### Common Issues
 
 #### Container Health Check Failures
+
 ```bash
 # Check container logs
 docker logs cellseg-backend-prod
@@ -747,6 +759,7 @@ docker exec -it cellseg-backend-prod /bin/bash
 ```
 
 #### Database Connection Issues
+
 ```bash
 # Test database connection
 docker exec cellseg-postgres-prod psql -U cellseg -c "SELECT 1;"
@@ -756,6 +769,7 @@ echo $DATABASE_URL
 ```
 
 #### SSL Certificate Problems
+
 ```bash
 # Check certificate validity
 openssl x509 -in /etc/letsencrypt/live/yourdomain.com/cert.pem -text -noout
@@ -782,6 +796,7 @@ For detailed troubleshooting steps, see [Production Troubleshooting Guide](./tro
 ## Performance Optimization
 
 ### Database Optimization
+
 ```sql
 -- Add indexes for common queries
 CREATE INDEX CONCURRENTLY idx_projects_user_updated ON projects(userId, updatedAt DESC);
@@ -792,6 +807,7 @@ EXPLAIN ANALYZE SELECT * FROM projects WHERE userId = 'user123';
 ```
 
 ### Caching Strategy
+
 ```yaml
 # Redis caching configuration
 services:
@@ -801,6 +817,7 @@ services:
 ```
 
 ### CDN Integration
+
 ```nginx
 # Static asset caching
 location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
@@ -812,6 +829,7 @@ location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
 ## Maintenance
 
 ### Regular Tasks
+
 - Database backups (automated)
 - SSL certificate renewal (automated)
 - Security updates (monthly)
@@ -820,6 +838,7 @@ location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
 - Cleanup old data (quarterly)
 
 ### Update Procedure
+
 ```bash
 # 1. Backup current state
 ./scripts/backup.sh

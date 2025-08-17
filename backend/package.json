@@ -15,6 +15,7 @@
     "db:reset": "prisma migrate reset",
     "db:seed": "tsx src/db/seed.ts",
     "lint": "eslint src --ext .ts",
+    "type-check": "tsc --noEmit --skipLibCheck",
     "list-endpoints": "tsx -e \"import { routeRegistry } from './src/api/routes'; console.log('Registered API Endpoints:'); routeRegistry.forEach(r => console.log('  ' + r.method.padEnd(6) + ' ' + r.path + ' - ' + (r.description || 'No description')));\"",
     "test": "jest",
     "test:watch": "jest --watch",

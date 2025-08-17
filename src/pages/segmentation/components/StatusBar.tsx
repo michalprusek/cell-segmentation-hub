@@ -168,7 +168,6 @@ const StatusBar = ({
         </div>
       </div>
 
-
       {/* Right side - Polygon count */}
       <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
         <Shapes className="h-3 w-3" />

@@ -5,12 +5,14 @@ This guide will help you set up the Cell Segmentation Hub for local development.
 ## Prerequisites
 
 ### Required Software
+
 - **Node.js**: Version 18.0 or higher
-- **Python**: Version 3.9 or higher  
+- **Python**: Version 3.9 or higher
 - **Docker**: Version 20.10 or higher (optional, for containerized development)
 - **Git**: For version control
 
 ### Recommended Tools
+
 - **VS Code**: With TypeScript, Python, and Docker extensions
 - **Postman**: For API testing
 - **Docker Desktop**: For container management
@@ -29,7 +31,7 @@ npm run docker:dev
 
 # 3. Wait for services to start (may take a few minutes on first run)
 # Frontend: http://localhost:3000
-# Backend API: http://localhost:3001  
+# Backend API: http://localhost:3001
 # ML Service: http://localhost:8000
 ```
 
@@ -62,6 +64,7 @@ npm run dev
 ```
 
 #### Frontend Environment Variables
+
 ```bash
 # .env
 VITE_API_BASE_URL=http://localhost:3001/api
@@ -91,6 +94,7 @@ npm run dev
 ```
 
 #### Backend Environment Variables
+
 ```bash
 # backend/.env
 NODE_ENV=development
@@ -147,6 +151,7 @@ python api/main.py
 ```
 
 #### ML Service Environment Variables
+
 ```bash
 # backend/segmentation/.env
 PYTHONUNBUFFERED=1
@@ -206,7 +211,7 @@ wget https://example.com/models/hrnet_w32_cell_segmentation.pth
 # ResUNet Advanced weights
 wget https://example.com/models/resunet_advanced_cell_segmentation.pth
 
-# ResUNet Small weights  
+# ResUNet Small weights
 wget https://example.com/models/resunet_small_cell_segmentation.pth
 ```
 
@@ -224,7 +229,7 @@ AVAILABLE_MODELS = {
     },
     "resunet_advanced": {
         "class": ResUNetAdvanced,
-        "weights": "weights/resunet_advanced_cell_segmentation.pth", 
+        "weights": "weights/resunet_advanced_cell_segmentation.pth",
         "features": [64, 128, 256, 512]
     },
     "resunet_small": {
@@ -246,7 +251,7 @@ npm run dev
 # Terminal 2: Backend
 cd backend && npm run dev
 
-# Terminal 3: ML Service  
+# Terminal 3: ML Service
 cd backend/segmentation && python api/main.py
 ```
 
@@ -294,6 +299,7 @@ Create `.vscode/settings.json`:
 ### VS Code Extensions
 
 Recommended extensions:
+
 - TypeScript and JavaScript Language Features
 - Python
 - Prisma
@@ -324,7 +330,7 @@ npm run db:migrate
 # Frontend linting
 npm run lint
 
-# Backend linting  
+# Backend linting
 cd backend && npm run lint
 
 # Type checking
@@ -370,6 +376,7 @@ curl -X POST http://localhost:3001/api/projects/$PROJECT_ID/images \
 ### Common Issues
 
 #### Frontend not connecting to backend
+
 ```bash
 # Check if backend is running
 curl http://localhost:3001/health
@@ -379,6 +386,7 @@ ALLOWED_ORIGINS=http://localhost:3000
 ```
 
 #### ML Service connection issues
+
 ```bash
 # Check Python dependencies
 cd backend/segmentation
@@ -389,6 +397,7 @@ ls -la weights/
 ```
 
 #### Database connection errors
+
 ```bash
 # Regenerate Prisma client
 cd backend
@@ -399,10 +408,11 @@ ls -la dev.db
 ```
 
 #### Port conflicts
+
 ```bash
 # Check what's running on ports
 lsof -i :3001  # Backend
-lsof -i :3000  # Frontend  
+lsof -i :3000  # Frontend
 lsof -i :8000  # ML Service
 
 # Kill processes if needed
@@ -412,6 +422,7 @@ kill -9 PID
 ### Log Files
 
 Development logs are available at:
+
 - **Frontend**: Browser console
 - **Backend**: Terminal output + `backend/logs/`
 - **ML Service**: Terminal output
@@ -440,6 +451,7 @@ All services support hot reloading in development:
 ## Environment-Specific Configuration
 
 ### Development
+
 - SQLite database
 - Local file storage
 - Verbose logging
@@ -447,12 +459,14 @@ All services support hot reloading in development:
 - CORS allows localhost origins
 
 ### Testing
+
 - In-memory database
 - Mock file storage
 - Minimal logging
 - Fast test execution
 
 ### Production
+
 - PostgreSQL database
 - Cloud storage (S3/GCS)
 - Structured logging

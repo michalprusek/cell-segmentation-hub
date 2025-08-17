@@ -37,92 +37,8 @@ class SegmentationController {
     return true;
   }
 
-  /**
-   * Get available segmentation models
-   */
-  getAvailableModels = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const models = await this.segmentationService.getAvailableModels();
-      
-      ResponseHelper.success(res, models, 'Dostupné modely načteny');
-    } catch (error) {
-      logger.error('Failed to get available models', error instanceof Error ? error : undefined, 'SegmentationController');
-      ResponseHelper.internalError(res, error as Error, 'Chyba při načítání dostupných modelů');
-    }
-  };
 
-  /**
-   * Check segmentation service health
-   */
-  checkHealth = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const isHealthy = await this.segmentationService.checkServiceHealth();
-      
-      if (isHealthy) {
-        ResponseHelper.success(res, { healthy: true }, 'Segmentační služba je dostupná');
-      } else {
-        ResponseHelper.serviceUnavailable(res, 'Segmentační služba není dostupná');
-      }
-    } catch (error) {
-      logger.error('Failed to check service health', error instanceof Error ? error : undefined, 'SegmentationController');
-      ResponseHelper.serviceUnavailable(res, 'Chyba při kontrole segmentační služby');
-    }
-  };
 
-  /**
-   * Request segmentation for a single image
-   */
-  segmentImage = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { imageId } = req.params;
-      const { model = 'hrnet', threshold = 0.5 } = req.body;
-      const userId = this.validateUser(req, res);
-      if (!userId) {
-        return;
-      }
-
-      // Validate parameters
-      if (!['hrnet', 'resunet_advanced', 'resunet_small'].includes(model)) {
-        ResponseHelper.validationError(res, 'Neplatný model');
-        return;
-      }
-
-      if (threshold < 0.1 || threshold > 0.9) {
-        ResponseHelper.validationError(res, 'Threshold musí být mezi 0.1 a 0.9');
-        return;
-      }
-
-      if (!imageId) {
-        ResponseHelper.badRequest(res, 'Image ID is required');
-        return;
-      }
-
-      logger.info('Starting image segmentation', 'SegmentationController', {
-        imageId,
-        model,
-        threshold,
-        userId
-      });
-
-      const result = await this.segmentationService.requestSegmentation({
-        imageId,
-        model,
-        threshold,
-        userId
-      });
-
-      ResponseHelper.success(res, result, 'Segmentace dokončena');
-
-    } catch (error) {
-      logger.error('Segmentation failed', error instanceof Error ? error : undefined, 'SegmentationController', { 
-        imageId: req.params.imageId,
-        userId: req.user?.id
-      });
-      
-      const errorMessage = error instanceof Error ? error.message : 'Chyba při segmentaci obrázku';
-      ResponseHelper.internalError(res, error as Error, errorMessage);
-    }
-  };
 
   /**
    * Get segmentation results for an image
@@ -140,11 +56,25 @@ class SegmentationController {
         return;
       }
 
+      logger.debug('Controller: Fetching segmentation results', 'SegmentationController', {
+        imageId,
+        userId
+      });
+
       const results = await this.segmentationService.getSegmentationResults(imageId, userId);
 
       if (results) {
+        logger.debug('Controller: Segmentation results found', 'SegmentationController', {
+          imageId,
+          polygonCount: results.polygons?.length || 0,
+          hasResults: !!results
+        });
         ResponseHelper.success(res, results, 'Výsledky segmentace načteny');
       } else {
+        logger.debug('Controller: No segmentation results found', 'SegmentationController', {
+          imageId,
+          userId
+        });
         ResponseHelper.notFound(res, 'Výsledky segmentace nenalezeny');
       }
 
@@ -165,7 +95,7 @@ class SegmentationController {
   updateSegmentationResults = async (req: Request, res: Response): Promise<void> => {
     try {
       const { imageId } = req.params;
-      const { polygons } = req.body;
+      const { polygons, imageWidth, imageHeight } = req.body;
       
       // Validate user authentication
       const userId = this.validateUser(req, res);
@@ -183,7 +113,13 @@ class SegmentationController {
         return;
       }
 
-      const result = await this.segmentationService.updateSegmentationResults(imageId as string, polygons, userId);
+      const result = await this.segmentationService.updateSegmentationResults(
+        imageId as string, 
+        polygons, 
+        userId, 
+        imageWidth, 
+        imageHeight
+      );
 
       ResponseHelper.success(res, result, 'Výsledky segmentace aktualizovány');
 
@@ -291,43 +227,6 @@ class SegmentationController {
     }
   };
 
-  /**
-   * Get segmentation statistics for a project
-   */
-  getProjectStats = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const { projectId } = req.params;
-      
-      // Validate user authentication
-      const userId = this.validateUser(req, res);
-      if (!userId) {
-        return;
-      }
-      
-      // Validate required parameters
-      if (!this.validateParams(req.params, ['projectId'], res)) {
-        return;
-      }
-
-      if (!projectId || !userId) {
-        ResponseHelper.badRequest(res, 'Missing required parameters');
-        return;
-      }
-      
-      const stats = await this.segmentationService.getProjectSegmentationStats(projectId, userId);
-
-      ResponseHelper.success(res, stats, 'Statistiky segmentace načteny');
-
-    } catch (error) {
-      logger.error('Failed to get segmentation stats', error instanceof Error ? error : undefined, 'SegmentationController', {
-        projectId: req.params.projectId,
-        userId: req.user?.id
-      });
-      
-      const errorMessage = error instanceof Error ? error.message : 'Chyba při načítání statistik';
-      ResponseHelper.internalError(res, error as Error, errorMessage);
-    }
-  };
 }
 
 export const segmentationController = new SegmentationController();

@@ -29,42 +29,6 @@ const router = Router();
 router.use(authenticate);
 
 /**
- * @route GET /api/segmentation/health
- * @description Check if segmentation service is healthy
- * @access Private
- */
-router.get('/health', segmentationController.checkHealth);
-
-/**
- * @route GET /api/segmentation/models
- * @description Get available segmentation models
- * @access Private
- */
-router.get('/models', segmentationController.getAvailableModels);
-
-/**
- * @route POST /api/segmentation/images/:imageId/segment
- * @description Request segmentation for a single image
- * @access Private
- */
-router.post(
-  '/images/:imageId/segment',
-  [
-    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID'),
-    body('model')
-      .optional()
-      .isIn(['hrnet', 'resunet_advanced', 'resunet_small'])
-      .withMessage('Model musí být hrnet, resunet_advanced nebo resunet_small'),
-    body('threshold')
-      .optional()
-      .isFloat({ min: 0.1, max: 0.9 })
-      .withMessage('Threshold musí být mezi 0.1 a 0.9')
-  ],
-  handleValidation,
-  segmentationController.segmentImage
-);
-
-/**
  * @route GET /api/segmentation/images/:imageId/results
  * @description Get segmentation results for an image
  * @access Private
@@ -90,7 +54,9 @@ router.put(
     body('polygons').isArray().withMessage('Polygony musí být pole'),
     body('polygons.*.id').isString().withMessage('ID polygonu musí být řetězec'),
     body('polygons.*.points').isArray().withMessage('Body polygonu musí být pole'),
-    body('polygons.*.type').isIn(['external', 'internal']).withMessage('Typ polygonu musí být external nebo internal')
+    body('polygons.*.type').isIn(['external', 'internal']).withMessage('Typ polygonu musí být external nebo internal'),
+    body('imageWidth').optional().isInt({ min: 1 }).withMessage('Šířka obrázku musí být kladné číslo'),
+    body('imageHeight').optional().isInt({ min: 1 }).withMessage('Výška obrázku musí být kladné číslo')
   ],
   handleValidation,
   segmentationController.updateSegmentationResults
@@ -141,20 +107,6 @@ router.post(
   ],
   handleValidation,
   segmentationController.batchSegment
-);
-
-/**
- * @route GET /api/segmentation/projects/:projectId/stats
- * @description Get segmentation statistics for a project
- * @access Private
- */
-router.get(
-  '/projects/:projectId/stats',
-  [
-    param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')
-  ],
-  handleValidation,
-  segmentationController.getProjectStats
 );
 
 export { router as segmentationRoutes };

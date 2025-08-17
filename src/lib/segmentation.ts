@@ -17,6 +17,7 @@ export interface Polygon {
   name?: string;
   confidence?: number;
   area?: number;
+  parent_id?: string; // For internal polygons, references the parent external polygon
 }
 
 // SegmentationResult type removed - use Polygon[] directly
@@ -80,7 +81,7 @@ export const findContours = (imageData: ImageData): Polygon[] => {
 // Main segmentation function - returns empty result as segmentation is done by backend
 export const segmentImage = async (
   imageSrc: string
-): Promise<SegmentationResult> => {
+): Promise<SegmentationData> => {
   // In production, segmentation is performed by the ML backend service
   // This function returns an empty result
   return {

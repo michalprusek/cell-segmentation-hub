@@ -67,7 +67,6 @@ const TopToolbar: React.FC<TopToolbarProps> = ({
         </Button>
       </div>
 
-
       {/* Right side - Save Button */}
       <div className="flex items-center gap-2">
         {!hasUnsavedChanges && (

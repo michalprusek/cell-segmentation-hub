@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test'
+import { defineConfig, devices } from '@playwright/test';
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -17,25 +17,25 @@ export default defineConfig({
   reporter: [
     ['html'],
     ['json', { outputFile: 'test-results/results.json' }],
-    ['junit', { outputFile: 'test-results/results.xml' }]
+    ['junit', { outputFile: 'test-results/results.xml' }],
   ],
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
     /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL: 'http://localhost:3000',
-    
+
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
-    
+
     /* Record video on failure */
     video: 'retain-on-failure',
-    
+
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
-    
+
     /* Global timeout for each action */
     actionTimeout: 30000,
-    
+
     /* Global timeout for navigation */
     navigationTimeout: 30000,
   },
@@ -91,12 +91,12 @@ export default defineConfig({
       url: 'http://localhost:3001/health',
       reuseExistingServer: !process.env.CI,
       timeout: 60000,
-    }
+    },
   ],
 
   /* Global test timeout */
   timeout: 60000,
-  
+
   /* Expect timeout */
   expect: {
     timeout: 10000,
@@ -104,7 +104,7 @@ export default defineConfig({
 
   /* Output folder for test results */
   outputDir: 'test-results/',
-  
+
   /* Keep test artifacts on failure */
   preserveOutput: 'failures-only',
-})
+});

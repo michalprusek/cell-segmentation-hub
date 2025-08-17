@@ -191,12 +191,14 @@ const AccountSection = () => {
         </div>
 
         <div className="space-y-4">
-          <h3 className="text-lg font-medium text-red-600">
+          <h3 className="text-lg font-medium text-red-600 dark:text-red-400">
             {t('settings.dangerZone')}
           </h3>
-          <div className="p-4 border border-red-200 bg-red-50 rounded-md">
-            <h4 className="font-medium mb-2">{t('common.deleteAccount')}</h4>
-            <p className="text-sm text-gray-700 mb-4">
+          <div className="p-4 border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 rounded-md">
+            <h4 className="font-medium mb-2 text-gray-900 dark:text-red-100">
+              {t('common.deleteAccount')}
+            </h4>
+            <p className="text-sm text-gray-700 dark:text-red-200 mb-4">
               {t('settings.deleteAccountWarning')}
             </p>
             <Button

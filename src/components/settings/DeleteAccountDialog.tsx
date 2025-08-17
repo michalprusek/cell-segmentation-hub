@@ -63,34 +63,38 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-red-600">
             <AlertTriangle className="h-5 w-5" />
-            {t('common.deleteAccount')}
+            {t('settings.deleteAccountDialog.title')}
           </DialogTitle>
           <DialogDescription className="text-base leading-relaxed pt-2">
-            This action <strong>cannot be undone</strong>. This will permanently
-            delete your account and remove all of your data from our servers.
+            {t('settings.deleteAccountDialog.description')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="bg-red-50 border border-red-200 rounded-md p-4">
             <h4 className="font-semibold text-red-800 mb-2">
-              What will be deleted:
+              {t('settings.deleteAccountDialog.whatWillBeDeleted')}
             </h4>
             <ul className="text-sm text-red-700 space-y-1">
-              <li>• Your user account and profile</li>
-              <li>• All your projects and images</li>
-              <li>• All segmentation data and results</li>
-              <li>• Account settings and preferences</li>
+              <li>• {t('settings.deleteAccountDialog.deleteItems.account')}</li>
+              <li>
+                • {t('settings.deleteAccountDialog.deleteItems.projects')}
+              </li>
+              <li>
+                • {t('settings.deleteAccountDialog.deleteItems.segmentation')}
+              </li>
+              <li>
+                • {t('settings.deleteAccountDialog.deleteItems.settings')}
+              </li>
             </ul>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="confirmation" className="text-sm font-medium">
-              Please type{' '}
-              <span className="font-mono bg-gray-100 px-1 rounded">
-                {userEmail}
-              </span>{' '}
-              to confirm:
+              {t('settings.deleteAccountDialog.confirmationLabel').replace(
+                '{0}',
+                userEmail
+              )}
             </Label>
             <Input
               id="confirmation"

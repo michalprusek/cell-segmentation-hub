@@ -302,7 +302,9 @@ export class WorkerPool {
     for (const taskId of tasksToReject) {
       const task = this.pendingTasks.get(taskId);
       if (task) {
-        task.reject(new Error(`Worker ${task.workerId} error: ${error.message}`));
+        task.reject(
+          new Error(`Worker ${task.workerId} error: ${error.message}`)
+        );
         this.pendingTasks.delete(taskId);
       }
     }
@@ -465,7 +467,9 @@ export class WorkerPool {
 
     // Reject all pending tasks
     for (const task of this.pendingTasks.values()) {
-      task.reject(new Error(`Worker pool terminated (worker: ${task.workerId})`));
+      task.reject(
+        new Error(`Worker pool terminated (worker: ${task.workerId})`)
+      );
     }
     this.pendingTasks.clear();
 

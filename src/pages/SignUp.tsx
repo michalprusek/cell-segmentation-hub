@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Loader2, ArrowLeft, Check, X } from 'lucide-react';
 import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
@@ -18,6 +19,7 @@ const SignUp = () => {
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { signUp, user } = useAuth();
+  const { t } = useLanguage();
 
   // Real-time validation
   const passwordsMatch = useMemo(() => {
@@ -31,17 +33,17 @@ const SignUp = () => {
     e.preventDefault();
 
     if (!email || !password) {
-      toast.error('Please fill in all fields');
+      toast.error(t('auth.fillAllFields'));
       return;
     }
 
     if (password !== confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error(t('auth.passwordsDoNotMatch'));
       return;
     }
 
     if (!agreeTerms) {
-      toast.error('You must agree to the terms and conditions');
+      toast.error(t('auth.mustAgreeToTerms'));
       return;
     }
 
@@ -54,7 +56,7 @@ const SignUp = () => {
       // signUp already navigates to /dashboard automatically
     } catch (error) {
       logger.error('Sign up error:', error);
-      const errorMessage = getErrorMessage(error) || 'Sign up failed';
+      const errorMessage = getErrorMessage(error) || t('auth.signUpFailed');
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -66,12 +68,12 @@ const SignUp = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full glass-morphism rounded-2xl overflow-hidden shadow-glass-lg p-10 text-center">
-          <h2 className="text-2xl font-bold mb-4">You're already logged in</h2>
-          <p className="mb-6 text-gray-600">
-            You're already signed up and logged in.
-          </p>
+          <h2 className="text-2xl font-bold mb-4">
+            {t('auth.alreadyLoggedIn')}
+          </h2>
+          <p className="mb-6 text-gray-600">{t('auth.alreadySignedUp')}</p>
           <Button asChild className="w-full">
-            <Link to="/dashboard">Go to Dashboard</Link>
+            <Link to="/dashboard">{t('auth.goToDashboard')}</Link>
           </Button>
         </div>
       </div>
@@ -109,20 +111,18 @@ const SignUp = () => {
               <img src="/logo.svg" alt="SpheroSeg Logo" className="w-12 h-12" />
             </Link>
             <h2 className="mt-4 text-3xl font-bold text-gray-900">
-              Create your account
+              {t('auth.createAccount')}
             </h2>
-            <p className="mt-2 text-gray-600">
-              Sign up to use the spheroid segmentation platform
-            </p>
+            <p className="mt-2 text-gray-600">{t('auth.signUpPlatform')}</p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
+              <Label htmlFor="email">{t('auth.emailAddress')}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="h-11"
@@ -131,11 +131,11 @@ const SignUp = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('auth.password')}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder={t('auth.passwordPlaceholder')}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="h-11"
@@ -144,11 +144,13 @@ const SignUp = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Label htmlFor="confirmPassword">
+                {t('auth.confirmPassword')}
+              </Label>
               <Input
                 id="confirmPassword"
                 type="password"
-                placeholder="••••••••"
+                placeholder={t('auth.passwordPlaceholder')}
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 className={`h-11 ${showPasswordMatchIndicator ? (passwordsMatch ? 'border-green-500' : 'border-red-500') : ''}`}
@@ -161,12 +163,12 @@ const SignUp = () => {
                   {passwordsMatch ? (
                     <>
                       <Check className="w-4 h-4" />
-                      <span>Passwords match</span>
+                      <span>{t('auth.passwordsMatch')}</span>
                     </>
                   ) : (
                     <>
                       <X className="w-4 h-4" />
-                      <span>Passwords do not match</span>
+                      <span>{t('auth.passwordsDoNotMatch')}</span>
                     </>
                   )}
                 </div>
@@ -184,19 +186,19 @@ const SignUp = () => {
                   htmlFor="terms"
                   className="ml-2 block text-sm text-gray-700"
                 >
-                  I agree to the{' '}
+                  {t('auth.agreeToTermsCheckbox')}{' '}
                   <Link
                     to="/terms-of-service"
                     className="text-blue-600 hover:text-blue-500 transition-colors"
                   >
-                    Terms of Service
+                    {t('auth.termsOfService')}
                   </Link>{' '}
-                  and{' '}
+                  {t('auth.and')}{' '}
                   <Link
                     to="/privacy-policy"
                     className="text-blue-600 hover:text-blue-500 transition-colors"
                   >
-                    Privacy Policy
+                    {t('auth.privacyPolicy')}
                   </Link>
                 </label>
               </div>
@@ -210,22 +212,22 @@ const SignUp = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
+                  {t('auth.creatingAccount')}
                 </>
               ) : (
-                'Sign up'
+                t('auth.signUp')
               )}
             </Button>
           </form>
 
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600">
-              Already have an account?{' '}
+              {t('auth.alreadyHaveAccount')}{' '}
               <Link
                 to="/sign-in"
                 className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
               >
-                Sign in
+                {t('auth.signIn')}
               </Link>
             </p>
           </div>
