@@ -65,12 +65,14 @@ Before starting work, query the knowledge system for:
 
 ### Service URLs (Docker only)
 
-- **Frontend**: http://localhost:3000
+- **Frontend**: http://localhost:3000 
 - **Backend API**: http://localhost:3001
 - **ML Service**: http://localhost:8000
 - **API Documentation**: http://localhost:3001/api-docs
 - **Prometheus**: http://localhost:9090
 - **Grafana**: http://localhost:3030
+
+**Note**: Some documentation may reference port 8082 for frontend - this is legacy. Always use port 3000 for Docker development.
 
 ### Legacy Frontend Commands (Do NOT use in development)
 
@@ -185,7 +187,7 @@ Uses JWT-based authentication with access/refresh tokens. The `AuthContext` mana
 
 ### Internationalization
 
-Multi-language support via `LanguageContext` with translations in `/src/translations/`.
+Multi-language support via `LanguageContext` with translations in `/src/translations/`. The system includes comprehensive validation to ensure translation completeness across all supported languages (EN, CS, ES, DE, FR, ZH).
 
 ## Development Best Practices
 
@@ -199,35 +201,60 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 
 ### Testing and Quality
 
-- **Linting**: Run `npm run lint` for code quality checks
+- **Linting**: Run `npm run lint` for code quality checks  
+- **Lint fix**: Run `npm run lint:fix` to auto-fix ESLint issues
 - **Type checking**: Run `npm run type-check` to verify TypeScript types
 - **Unit tests**: Run `npm run test` for Vitest unit tests
+- **Test UI**: Run `npm run test:ui` for interactive Vitest interface
 - **E2E tests**: Run `npm run test:e2e` for Playwright end-to-end tests (requires services running)
+- **E2E UI**: Run `npm run test:e2e:ui` for interactive Playwright interface
 - **Test coverage**: Run `npm run test:coverage` to generate coverage report
+- **Formatting**: Run `npm run format` to format code with Prettier
+- **Format check**: Run `npm run format:check` to check formatting without changes
 - **API testing**: Use Swagger UI at http://localhost:3001/api-docs
 - **Health checks**: Use `make health` to verify all services are running
 - **Service logs**: Use `make logs-f` to monitor all services in real-time
 
+### Internationalization (i18n)
+
+- **Translation validation**: Run `npm run i18n:validate` to check translation completeness and consistency
+- **Translation check**: Run `npm run i18n:check` to verify all translation keys exist
+- **Translation lint**: Run `npm run i18n:lint` to lint i18n-specific rules
+- **Supported languages**: English (en), Czech (cs), Spanish (es), German (de), French (fr), Chinese (zh)
+- **Translation files**: Located in `/src/translations/`
+
 ### Git Hooks and Pre-commit Checks
 
-The project uses Husky for pre-commit hooks and lint-staged for running checks:
+The project uses Husky for comprehensive pre-commit validation:
 
-- **Pre-commit**: Automatically runs `npm run --silent lint-staged` before commits
-- **Lint-staged**: Runs ESLint, Prettier, and TypeScript type-check on staged files
-- **Commit messages**: Follow conventional commit format (e.g., `feat:`, `fix:`, `chore:`)
-- **To bypass hooks** (emergency only): Use `git commit --no-verify`
+**Automated Checks (Cannot be bypassed):**
+- **ESLint**: Code quality with 0 warnings allowed
+- **Prettier**: Code formatting verification
+- **TypeScript**: Type checking for both frontend and backend
+- **Security**: Prevents console.log in production code
+- **Code quality**: Blocks debugger statements and merge conflict markers
+- **File size**: Warns about files >1MB
+- **Package consistency**: Validates package-lock.json updates
+
+**Manual bypass** (emergency only): Use `git commit --no-verify`
+
+**Conventional Commits**: Use format `feat:`, `fix:`, `chore:`, `docs:`, `style:`, `refactor:`, `test:`
 
 ### Common Development Tasks
 
 - **Adding new API endpoints**: Add routes in `/backend/src/api/routes/`, controllers in `/backend/src/api/controllers/`, and update OpenAPI spec
 - **Frontend components**: Create in `/src/components/` following existing patterns, use shadcn/ui primitives
 - **ML model changes**: Modify `/backend/segmentation/models/` and update model loading in `/backend/segmentation/services/`
+- **Adding translations**: Add new keys to all language files in `/src/translations/`, run `npm run i18n:validate` to verify
 - **Database changes**:
   - Update `/backend/prisma/schema.prisma`
   - Shell into backend container: `make shell-be`
   - Run migration: `npx prisma migrate dev --name your_migration_name`
   - Generate client: `npx prisma generate`
 - **Viewing database**: Run `cd backend && npm run db:studio` (opens Prisma Studio)
+- **Docker operations**: All docker commands available via `make` targets (see `make help`)
+- **Running single tests**: Use Vitest filtering: `npm run test -- --run specific-test-name`
+- **Frontend debugging**: Use browser dev tools with source maps enabled in development
 
 ## Current System Status
 
@@ -249,7 +276,7 @@ The project uses Husky for pre-commit hooks and lint-staged for running checks:
 - Real-time ML segmentation with polygon extraction
 - Advanced polygon editing with multiple interaction modes
 - Export functionality (COCO format, Excel metrics)
-- Multi-language support (EN, CS, ES)
+- Multi-language support (EN, CS, ES, DE, FR, ZH) with i18n validation
 - Real-time WebSocket notifications for queue processing
 
 **Architecture Highlights:**
@@ -259,6 +286,29 @@ The project uses Husky for pre-commit hooks and lint-staged for running checks:
 - **Scalability**: Microservices architecture, queue-based ML processing
 - **Developer Experience**: Hot reload in development, comprehensive API docs
 - nikdy nepřeskakuj pre-commit hook!
+
+### Development Workflow Best Practices
+
+**Before making changes:**
+1. Always use Docker environment (`make up` to start)
+2. Query knowledge system for existing patterns and solutions
+3. Check if translations need updates for UI changes
+
+**During development:**
+4. Run `npm run dev` for frontend development with hot reload
+5. Use `make logs-f` to monitor all services
+6. Test changes with `npm run test` and `npm run test:e2e` 
+7. Validate translations with `npm run i18n:validate` if applicable
+
+**Before committing:**
+8. The pre-commit hook automatically runs comprehensive checks
+9. All checks must pass (ESLint, Prettier, TypeScript, security)
+10. Use conventional commit format (feat:, fix:, chore:, etc.)
+
+**Quality assurance:**
+11. Always run `npm run type-check` and `npm run lint` before major changes
+12. Use `make health` to verify all services are running correctly
+13. Store learnings and solutions in the knowledge system for future reference
 
 ## Recent Implementations & Important Notes
 

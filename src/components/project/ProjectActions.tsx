@@ -12,12 +12,14 @@ import {
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { getErrorMessage } from '@/types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProjectActionsProps {
   projectId: string;
 }
 
 const ProjectActions = ({ projectId }: ProjectActionsProps) => {
+  const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
 
   const handleDeleteProject = async (e: React.MouseEvent) => {
@@ -30,7 +32,7 @@ const ProjectActions = ({ projectId }: ProjectActionsProps) => {
       // Delete project using API
       await apiClient.deleteProject(projectId);
 
-      toast.success('Project deleted successfully');
+      toast.success(t('toast.project.deleted'));
 
       // Refresh projects list instead of page reload
       const event = new CustomEvent('project-deleted', {
@@ -40,7 +42,7 @@ const ProjectActions = ({ projectId }: ProjectActionsProps) => {
     } catch (error: unknown) {
       logger.error('Error deleting project:', error);
       const errorMessage = getErrorMessage(error) || 'Failed to delete project';
-      toast.error('Failed to delete project: ' + errorMessage);
+      toast.error(t('toast.project.deleteFailed') || 'Failed to delete project: ' + errorMessage);
     } finally {
       setLoading(false);
     }
@@ -54,7 +56,7 @@ const ProjectActions = ({ projectId }: ProjectActionsProps) => {
     const projectUrl = `${window.location.origin}/project/${projectId}`;
     navigator.clipboard.writeText(projectUrl);
 
-    toast.success('Project URL copied to clipboard');
+    toast.success(t('toast.project.urlCopied'));
   };
 
   return (
@@ -71,7 +73,7 @@ const ProjectActions = ({ projectId }: ProjectActionsProps) => {
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={handleShare}>
           <Share className="h-4 w-4 mr-2" />
-          Share
+          {t('projects.shareProject')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
@@ -80,7 +82,7 @@ const ProjectActions = ({ projectId }: ProjectActionsProps) => {
           disabled={loading}
         >
           <Trash className="h-4 w-4 mr-2" />
-          Delete
+          {t('common.delete')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

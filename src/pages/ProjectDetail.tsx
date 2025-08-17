@@ -9,6 +9,7 @@ import { useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useModel } from '@/contexts/ModelContext';
 import ProjectHeader from '@/components/project/ProjectHeader';
 import ProjectToolbar from '@/components/project/ProjectToolbar';
 import EmptyState from '@/components/project/EmptyState';
@@ -28,6 +29,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { selectedModel, confidenceThreshold } = useModel();
   const [showUploader, setShowUploader] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
@@ -149,9 +151,12 @@ const ProjectDetail = () => {
 
     // Real-time update processing
 
-    // Normalize status to match frontend expectations
-    const normalizedStatus =
-      lastUpdate.status === 'segmented' ? 'completed' : lastUpdate.status;
+    // Normalize status to match frontend expectations, but validate segmented status
+    let normalizedStatus = lastUpdate.status;
+    if (lastUpdate.status === 'segmented') {
+      // Don't immediately set to completed - verify segmentation data exists first
+      normalizedStatus = 'processing'; // Keep as processing until we verify data
+    }
 
     // Update the specific image status in the images array immediately
     updateImagesRef.current(prevImages =>
@@ -166,13 +171,41 @@ const ProjectDetail = () => {
       )
     );
 
-    // For completed segmentation, refresh immediately to get polygon data
+    // For completed segmentation, refresh immediately to get polygon data and validate
     if (
       lastUpdate.status === 'segmented' ||
       lastUpdate.status === 'completed'
     ) {
-      // Immediate refresh for completed status - no debounce
-      refreshImageSegmentationRef.current(lastUpdate.imageId);
+      // Immediate refresh for completed status - this will also validate if polygons exist
+      refreshImageSegmentationRef.current(lastUpdate.imageId).then(() => {
+        // After refresh, check if we actually have segmentation data
+        updateImagesRef.current(prevImages =>
+          prevImages.map(img => {
+            if (img.id === lastUpdate.imageId) {
+              // Only mark as completed if we have actual polygon data
+              const hasPolygons = img.segmentationResult && 
+                                img.segmentationResult.polygons && 
+                                img.segmentationResult.polygons.length > 0;
+              
+              return {
+                ...img,
+                segmentationStatus: hasPolygons ? 'completed' : 'no_segmentation',
+                updatedAt: new Date()
+              };
+            }
+            return img;
+          })
+        );
+      }).catch(() => {
+        // If refresh fails, mark as no_segmentation
+        updateImagesRef.current(prevImages =>
+          prevImages.map(img =>
+            img.id === lastUpdate.imageId
+              ? { ...img, segmentationStatus: 'no_segmentation', updatedAt: new Date() }
+              : img
+          )
+        );
+      });
     }
 
     // Reset batch submitted state when queue becomes empty
@@ -247,7 +280,7 @@ const ProjectDetail = () => {
 
         updateImages(formattedImages);
       } catch (error) {
-        toast.error('Failed to refresh images after upload');
+        toast.error(t('toast.upload.failed'));
       }
     }
   };
@@ -293,8 +326,8 @@ const ProjectDetail = () => {
       const response = await apiClient.addBatchToQueue(
         imageIds,
         id,
-        'hrnet', // Default model, could be configurable
-        0.5
+        selectedModel,
+        confidenceThreshold
       );
 
       toast.success(

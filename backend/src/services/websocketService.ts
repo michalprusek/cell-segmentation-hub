@@ -240,11 +240,16 @@ export class WebSocketService {
                 projectId
               });
             } else {
-              logger.warn('QueueService not available for stats request', 'WebSocketService', {
+              const errorMessage = 'QueueService not available for stats request';
+              logger.warn(errorMessage, 'WebSocketService', {
                 userId: socket.userId,
                 projectId
               });
-              socket.emit('queue-stats-requested', { projectId });
+              socket.emit('queue-stats-error', { 
+                projectId, 
+                error: errorMessage,
+                reason: 'QueueService not initialized'
+              });
             }
           }
         } catch (error) {

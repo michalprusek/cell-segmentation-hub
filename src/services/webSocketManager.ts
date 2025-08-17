@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
-import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import { webSocketEventEmitter } from '@/lib/websocketEvents';
 
 export interface QueueStats {
   projectId: string;
@@ -247,7 +247,8 @@ class WebSocketManager {
           this.reconnectAttempts > 2
         ) {
           // Only show toast after a few failed attempts
-          toast.error('Probíhá opětovné připojení k serveru...');
+          // Emit event for localized toast (handled by useWebSocketToasts hook)
+          webSocketEventEmitter.emit({ type: 'reconnecting' });
         }
         this.lastToastTime = now;
       }
@@ -263,7 +264,8 @@ class WebSocketManager {
     // Add reconnection event handlers for better debugging
     this.socket.io.on('reconnect', (attempt: number) => {
       logger.info(`WebSocket reconnected after ${attempt} attempts`);
-      toast.success('Připojení k serveru obnoveno');
+      // Emit event for localized toast (handled by useWebSocketToasts hook)
+      webSocketEventEmitter.emit({ type: 'reconnected' });
     });
 
     this.socket.io.on('reconnect_attempt', (attempt: number) => {
@@ -276,7 +278,8 @@ class WebSocketManager {
 
     this.socket.io.on('reconnect_failed', () => {
       logger.error('WebSocket reconnection failed after all attempts');
-      toast.error('Nepodařilo se obnovit připojení k serveru');
+      // Emit event for localized toast (handled by useWebSocketToasts hook)
+      webSocketEventEmitter.emit({ type: 'reconnect_failed' });
     });
 
     // Data events
@@ -312,7 +315,8 @@ class WebSocketManager {
   private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       logger.error('Max reconnection attempts reached');
-      toast.error('Připojení k serveru se nepodařilo obnovit');
+      // Emit event for localized toast (handled by useWebSocketToasts hook)
+      webSocketEventEmitter.emit({ type: 'connection_lost' });
       return;
     }
 

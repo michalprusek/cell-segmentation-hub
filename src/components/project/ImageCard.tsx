@@ -136,10 +136,17 @@ export const ImageCard = ({
     >
       <div
         className={cn(
-          'relative aspect-square overflow-hidden rounded-lg cursor-pointer',
+          'relative overflow-hidden rounded-lg cursor-pointer',
           'bg-gray-100 dark:bg-gray-800 group transition-all duration-300',
           'hover:shadow-xl hover:scale-[1.02]'
         )}
+        style={{
+          // Fixed dimensions for stable rendering across viewport changes
+          width: '250px',
+          height: '167px', // Proportional height (250/280 * 192 = 171, rounded to 167)
+          minWidth: '250px',
+          minHeight: '167px'
+        }}
         onClick={() => onOpen(image.id)}
       >
         {/* Image preview */}
@@ -203,9 +210,9 @@ export const ImageCard = ({
         <div
           className={cn(
             'absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent',
-            'transition-opacity duration-300',
-            isHovered ? 'opacity-100' : 'opacity-60'
+            'transition-opacity duration-300'
           )}
+          style={{ zIndex: 5 }}
         />
 
         {/* Top action buttons */}
@@ -214,6 +221,7 @@ export const ImageCard = ({
             'absolute top-2 right-2 flex gap-1 transition-all duration-300',
             isHovered ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-2'
           )}
+          style={{ zIndex: 15 }}
         >
           <Button
             size="icon"
@@ -226,7 +234,7 @@ export const ImageCard = ({
         </div>
 
         {/* Bottom info overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 text-white">
+        <div className="absolute bottom-0 left-0 right-0 p-3 text-white" style={{ zIndex: 15 }}>
           {/* File name */}
           <h3
             className="font-semibold text-sm truncate mb-1"

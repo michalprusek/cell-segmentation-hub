@@ -49,8 +49,8 @@ interface UseOptimizedProjectImagesResult {
     totalImages: number;
     imagesWithThumbnails: number;
   };
-  refetch: () => void;
-  invalidateCache: (imageId?: string) => void;
+  refetch: () => Promise<void>;
+  invalidateCache: (imageId?: string) => Promise<void>;
 }
 
 export const useOptimizedProjectImages = ({

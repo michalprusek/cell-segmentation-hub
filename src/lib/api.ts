@@ -105,6 +105,18 @@ export interface SegmentationPolygon {
   area?: number;
 }
 
+export interface SegmentationResultData {
+  polygons: SegmentationPolygon[];
+  imageWidth?: number;
+  imageHeight?: number;
+  modelUsed?: string;
+  thresholdUsed?: number;
+  confidence?: number;
+  processingTime?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SegmentationResult {
   id: string;
   imageId: string;
@@ -488,6 +500,8 @@ class ApiClient {
       (image.originalUrl as string) || (image.image_url as string) || '';
     let thumbnailUrl =
       (image.thumbnailUrl as string) || (image.thumbnail_url as string);
+    let displayUrl = 
+      (image.displayUrl as string) || imageUrl; // Fallback to original URL
 
     // Ensure URLs are absolute for Docker environment
     const ensureAbsoluteUrl = (url: string): string => {
@@ -502,14 +516,19 @@ class ApiClient {
 
     imageUrl = ensureAbsoluteUrl(imageUrl);
     thumbnailUrl = thumbnailUrl ? ensureAbsoluteUrl(thumbnailUrl) : imageUrl;
+    displayUrl = ensureAbsoluteUrl(displayUrl);
 
     return {
       id: image.id as string,
       name: image.name as string,
       project_id: (image.projectId as string) || (image.project_id as string),
       user_id: (image.userId as string) || (image.user_id as string),
+      url: displayUrl, // Use displayUrl for browser compatibility
       image_url: imageUrl,
       thumbnail_url: thumbnailUrl,
+      displayUrl: displayUrl, // Explicit display URL field
+      width: (image.width as number) || null,
+      height: (image.height as number) || null,
       segmentation_status: this.mapSegmentationStatus(
         image.segmentationStatus || image.segmentation_status
       ),
@@ -743,14 +762,15 @@ class ApiClient {
   }
 
   // Segmentation methods
-  async requestSegmentation(
-    imageId: string,
+  async requestBatchSegmentation(
+    imageIds: string[],
     model?: string,
     threshold?: number
   ): Promise<SegmentationResult> {
     const response = await this.instance.post(
-      `/segmentation/images/${imageId}/segment`,
+      `/segmentation/batch`,
       {
+        imageIds,
         model: model || 'hrnet',
         threshold: threshold || 0.5,
       }
@@ -760,20 +780,37 @@ class ApiClient {
 
   async getSegmentationResults(
     imageId: string
-  ): Promise<SegmentationPolygon[] | null> {
+  ): Promise<SegmentationResultData | null> {
     try {
       const response = await this.instance.get(
         `/segmentation/images/${imageId}/results`
       );
       const data = this.extractData(response);
-      // If the API returns an object with polygons property, extract it
-      if (data && typeof data === 'object' && 'polygons' in data) {
-        return (data as { polygons: SegmentationPolygon[] }).polygons || [];
+      
+      // Return the full segmentation result data as received from backend
+      if (data && typeof data === 'object') {
+        // Ensure we have the required structure
+        const result: SegmentationResultData = {
+          polygons: Array.isArray(data.polygons) ? data.polygons : [],
+          imageWidth: data.imageWidth,
+          imageHeight: data.imageHeight,
+          modelUsed: data.modelUsed,
+          thresholdUsed: data.thresholdUsed,
+          confidence: data.confidence,
+          processingTime: data.processingTime,
+          createdAt: data.createdAt,
+          updatedAt: data.updatedAt
+        };
+        return result;
       }
-      // If it's already an array of polygons, return directly
+      
+      // If it's just an array of polygons (backward compatibility)
       if (Array.isArray(data)) {
-        return data;
+        return {
+          polygons: data,
+        };
       }
+      
       return null;
     } catch (error) {
       if (
@@ -787,24 +824,51 @@ class ApiClient {
 
   async updateSegmentationResults(
     imageId: string,
-    polygons: SegmentationPolygon[]
-  ): Promise<SegmentationPolygon[]> {
+    polygons: SegmentationPolygon[],
+    imageWidth?: number,
+    imageHeight?: number
+  ): Promise<SegmentationResultData> {
+    const payload: any = { polygons };
+    
+    // Include image dimensions if provided
+    if (imageWidth && imageHeight) {
+      payload.imageWidth = imageWidth;
+      payload.imageHeight = imageHeight;
+    }
+    
     const response = await this.instance.put(
       `/segmentation/images/${imageId}/results`,
-      {
-        polygons,
-      }
+      payload
     );
     const data = this.extractData(response);
-    // If the API returns an object with polygons property, extract it
-    if (data && typeof data === 'object' && 'polygons' in data) {
-      return (data as { polygons: SegmentationPolygon[] }).polygons || [];
+    
+    // Return the full segmentation result data
+    if (data && typeof data === 'object') {
+      const result: SegmentationResultData = {
+        polygons: Array.isArray(data.polygons) ? data.polygons : polygons,
+        imageWidth: data.imageWidth,
+        imageHeight: data.imageHeight,
+        modelUsed: data.modelUsed,
+        thresholdUsed: data.thresholdUsed,
+        confidence: data.confidence,
+        processingTime: data.processingTime,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt
+      };
+      return result;
     }
-    // If it's already an array of polygons, return directly
+    
+    // If it's just an array of polygons (backward compatibility)
     if (Array.isArray(data)) {
-      return data;
+      return {
+        polygons: data,
+      };
     }
-    return polygons; // Return what was sent if response is unexpected
+    
+    // Return what was sent if response is unexpected
+    return {
+      polygons,
+    };
   }
 
   async deleteSegmentationResults(imageId: string): Promise<void> {

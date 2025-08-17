@@ -109,9 +109,19 @@ export const useWheelZoom = (
 
   const handleWheel = useCallback(
     (e: WheelEvent) => {
-      e.preventDefault();
-
       if (!canvasContainerRef.current) return;
+
+      // Check if the wheel event is coming from a scrollable panel (like PolygonListPanel)
+      // We look for elements with overflow-y-auto class or data-scroll-area attribute
+      const target = e.target as Element;
+      const scrollableParent = target.closest('.overflow-y-auto, [data-scroll-area]');
+      
+      // If the event is from a scrollable area, don't prevent default and don't zoom
+      if (scrollableParent) {
+        return;
+      }
+
+      e.preventDefault();
 
       const container = canvasContainerRef.current;
       const rect = container.getBoundingClientRect();

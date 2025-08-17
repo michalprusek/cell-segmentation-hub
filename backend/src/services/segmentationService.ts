@@ -536,8 +536,7 @@ export class SegmentationService {
       // Send request to ML service batch endpoint
       const response = await this.httpClient.post('/api/v1/batch-segment', formData, {
         headers: {
-          ...formData.getHeaders(),
-          'Content-Type': 'multipart/form-data'
+          ...formData.getHeaders()
         },
         timeout: 300000, // 5 minute timeout for batch processing
         maxBodyLength: 100 * 1024 * 1024, // 100MB
@@ -545,6 +544,11 @@ export class SegmentationService {
       });
 
       if (!response.data || !response.data.results) {
+        logger.error('Invalid response from ML service', new Error('SegmentationService'), JSON.stringify({
+          responseData: response.data,
+          responseStatus: response.status,
+          responseHeaders: response.headers
+        }));
         throw new Error('Invalid response from ML service');
       }
 
@@ -614,12 +618,32 @@ export class SegmentationService {
       return results;
 
     } catch (error) {
-      logger.error('Batch segmentation failed', error instanceof Error ? error : undefined, 'SegmentationService', {
-        batchSize: images.length,
-        model,
-        threshold,
-        imageIds: images.map(img => img.id)
-      });
+      // Enhanced error logging for debugging ML service issues
+      if (error instanceof Error && 'response' in error) {
+        const axiosError = error as any;
+        logger.error('ML service HTTP error', error, 'SegmentationService', {
+          batchSize: images.length,
+          model,
+          threshold,
+          imageIds: images.map(img => img.id),
+          mlServiceUrl: this.pythonServiceUrl,
+          status: axiosError.response?.status,
+          statusText: axiosError.response?.statusText,
+          responseData: axiosError.response?.data,
+          requestConfig: {
+            url: axiosError.config?.url,
+            method: axiosError.config?.method,
+            contentType: axiosError.config?.headers?.['Content-Type']
+          }
+        });
+      } else {
+        logger.error('Batch segmentation failed', error instanceof Error ? error : undefined, 'SegmentationService', {
+          batchSize: images.length,
+          model,
+          threshold,
+          imageIds: images.map(img => img.id)
+        });
+      }
 
       // Return failed results for all images
       return images.map((image, index) => ({

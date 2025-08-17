@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import apiClient, { AuthResponse } from '@/lib/api';
 import { User, Profile, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
+import { authEventEmitter } from '@/lib/authEvents';
 
 interface ConsentOptions {
   consentToMLTraining?: boolean;
@@ -32,7 +32,8 @@ interface AuthContextType {
   deleteAccount: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+// eslint-disable-next-line react-refresh/only-export-components
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -140,14 +141,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const accessToken = apiClient.getAccessToken();
       setToken(accessToken);
 
-      toast.success('Successfully signed in', {
-        description: 'Welcome to the Spheroid Segmentation Platform',
-      });
+      // Emit event for localized toast (handled by useAuthToasts hook)
+      authEventEmitter.emit({ type: 'signin_success' });
 
       // Don't fetch profile immediately - let it happen naturally later
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error) || 'Sign in failed';
-      toast.error(errorMessage);
+      authEventEmitter.emit({ type: 'signin_error', data: { error: errorMessage } });
       throw error;
     } finally {
       setLoading(false);
@@ -176,16 +176,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const accessToken = apiClient.getAccessToken();
       setToken(accessToken);
 
-      toast.success('Registration successful', {
-        description: 'Welcome to the Spheroid Segmentation Platform',
-      });
+      // Emit event for localized toast (handled by useAuthToasts hook)
+      authEventEmitter.emit({ type: 'signup_success' });
 
       navigate('/dashboard');
 
       // Don't fetch profile immediately - let it happen naturally later
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error) || 'Registration failed';
-      toast.error(errorMessage);
+      authEventEmitter.emit({ type: 'signup_error', data: { error: errorMessage } });
       throw error;
     } finally {
       setLoading(false);
@@ -202,7 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(null);
       setIsAuthenticated(false);
 
-      toast.success('Signed out successfully');
+      // Toast message will be shown by the calling component
       navigate('/sign-in');
     } catch (error: unknown) {
       logger.error('Error signing out:', error);
@@ -213,7 +212,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(false);
 
       const errorMessage = getErrorMessage(error) || 'Sign out failed';
-      toast.error(errorMessage);
+      authEventEmitter.emit({ type: 'logout_error', data: { error: errorMessage } });
       navigate('/sign-in');
     } finally {
       setLoading(false);
@@ -237,12 +236,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setToken(null);
       setIsAuthenticated(false);
 
-      toast.success('Account deleted successfully');
+      // Toast message will be shown by the calling component
       navigate('/');
     } catch (error: unknown) {
       logger.error('Error deleting account:', error);
       const errorMessage = getErrorMessage(error) || 'Failed to delete account';
-      toast.error(errorMessage);
+      authEventEmitter.emit({ type: 'profile_error', data: { error: errorMessage } });
       throw error;
     } finally {
       setLoading(false);

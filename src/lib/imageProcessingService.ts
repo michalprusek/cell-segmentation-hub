@@ -5,12 +5,14 @@ import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 
 interface ProcessImageParams {
+  projectId: string;
   imageId: string;
   imageUrl: string;
   onComplete?: (result: SegmentationData) => void;
 }
 
 export const updateImageProcessingStatus = async ({
+  projectId,
   imageId,
   imageUrl,
   onComplete,
@@ -29,8 +31,8 @@ export const updateImageProcessingStatus = async ({
   };
 
   try {
-    // Request segmentation through the API
-    await apiClient.requestSegmentation(imageId);
+    // Request segmentation through the batch API (more efficient)
+    await apiClient.requestBatchSegmentation([imageId]);
 
     toast.success('Segmentation request submitted');
 
@@ -39,18 +41,20 @@ export const updateImageProcessingStatus = async ({
       if (cancelled) return;
 
       try {
-        const results = await apiClient.getSegmentationResults(imageId);
+        const segmentationData = await apiClient.getSegmentationResults(imageId);
 
         if (cancelled) return;
 
-        // Validate that results is an array before accessing
-        if (!Array.isArray(results) || results.length === 0) {
+        // Validate that segmentation data exists and has polygons
+        if (!segmentationData || !Array.isArray(segmentationData.polygons) || segmentationData.polygons.length === 0) {
           // No results yet, continue polling
           if (!cancelled) {
             timeoutId = setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
           }
           return;
         }
+        
+        const results = segmentationData.polygons;
 
         const latestResult = results[0]; // Now safe to access after validation
 

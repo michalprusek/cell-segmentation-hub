@@ -37,11 +37,11 @@ export const useAdvancedExport = (projectId: string) => {
     visualizationOptions: {
       showNumbers: true,
       polygonColors: {
-        external: '#00FF00',
-        internal: '#FF0000',
+        external: '#FF0000',
+        internal: '#0000FF',
       },
       strokeWidth: 2,
-      fontSize: 16,
+      fontSize: 32,
       transparency: 0.3,
     },
     annotationFormats: ['coco', 'json'],

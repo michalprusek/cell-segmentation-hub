@@ -110,7 +110,7 @@ class ModelLoader:
                 model = HRNetV2(n_class=1, use_instance_norm=True)
             elif model_name == 'resunet_advanced':
                 # Use correct feature dimensions matching trained weights: [64, 128, 256, 512]
-                model = AdvancedResUNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512])
+                model = AdvancedResUNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512], use_instance_norm=True, dropout_rate=0.2)
             elif model_name == 'resunet_small':
                 # Use correct feature dimensions matching trained weights: [48, 96, 192, 384, 512]  
                 model = ResUNetSmall(in_channels=3, out_channels=1, features=[48, 96, 192, 384, 512])
@@ -132,13 +132,27 @@ class ModelLoader:
                     logger.error(f"Failed to load checkpoint completely: {e2}")
                     raise e2
             
-            # Handle different checkpoint formats
+            # Extract state dict
             if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-                model.load_state_dict(checkpoint['model_state_dict'], strict=False)
+                state_dict = checkpoint['model_state_dict']
             elif isinstance(checkpoint, dict) and 'state_dict' in checkpoint:
-                model.load_state_dict(checkpoint['state_dict'], strict=False)
+                state_dict = checkpoint['state_dict']
             else:
-                model.load_state_dict(checkpoint, strict=False)
+                state_dict = checkpoint
+            
+            # For ResUNet models, try to auto-detect features from weights
+            if model_name in ['resunet_advanced', 'resunet_small']:
+                detected_features = self._detect_features_from_weights(state_dict, model_name)
+                if detected_features:
+                    logger.info(f"Auto-detected features for {model_name}: {detected_features}")
+                    # Recreate model with detected features
+                    if model_name == 'resunet_advanced':
+                        model = AdvancedResUNet(in_channels=3, out_channels=1, features=detected_features, use_instance_norm=True, dropout_rate=0.2)
+                    elif model_name == 'resunet_small':
+                        model = ResUNetSmall(in_channels=3, out_channels=1, features=detected_features)
+            
+            # Load state dict
+            model.load_state_dict(state_dict, strict=False)
             
             model.to(self.device)
             model.eval()
@@ -208,16 +222,31 @@ class ModelLoader:
         
         try:
             original_size = image.size  # (width, height)
+            logger.info(f"Starting prediction for {model_name}, image size: {original_size}")
             
             # Get model
             model = self.get_model(model_name)
+            logger.info(f"Model {model_name} loaded successfully")
             
             # Preprocess image
             input_tensor = self.preprocess_image(image)
+            logger.info(f"Image preprocessed, tensor shape: {input_tensor.shape}, device: {input_tensor.device}")
+            
+            # Check memory before inference
+            if self.device.type == 'cuda':
+                memory_before = torch.cuda.memory_allocated()
+                logger.info(f"GPU memory before inference: {memory_before / 1024**2:.1f} MB")
             
             # Perform inference
+            logger.info(f"Starting inference with {model_name}")
             with torch.no_grad():
                 output = model(input_tensor)
+            logger.info(f"Inference completed, output shape: {output.shape if not isinstance(output, tuple) else [o.shape for o in output]}")
+            
+            # Check memory after inference
+            if self.device.type == 'cuda':
+                memory_after = torch.cuda.memory_allocated()
+                logger.info(f"GPU memory after inference: {memory_after / 1024**2:.1f} MB")
             
             # Handle different output formats
             if isinstance(output, tuple):
@@ -304,6 +333,8 @@ class ModelLoader:
             if len(polygons) == 0:
                 logger.warning(f"No valid polygons detected! Total contours: {total_contours}, filtered: {filtered_count}")
                 logger.warning(f"Binary mask stats - shape: {binary_mask.shape}, unique values: {np.unique(binary_mask)}")
+                logger.warning(f"Model output stats - min: {output.min().item():.6f}, max: {output.max().item():.6f}, mean: {output.mean().item():.6f}")
+                logger.warning(f"After sigmoid - min: {torch.sigmoid(output).min().item():.6f}, max: {torch.sigmoid(output).max().item():.6f}")
             elif internal_count > 0:
                 logger.info(f"Detected {internal_count} holes/internal polygons within cells")
             
@@ -343,11 +374,50 @@ class ModelLoader:
             }
         return info
     
+    def _detect_features_from_weights(self, state_dict: dict, model_name: str) -> List[int]:
+        """Auto-detect feature dimensions from model weights"""
+        try:
+            features = []
+            
+            # Look for encoder blocks patterns
+            if model_name == 'resunet_advanced':
+                # Pattern: encoder1.0.conv1.weight, encoder2.0.conv1.weight, etc.
+                for i in range(1, 6):  # Check up to 5 encoder levels
+                    key = f"encoder{i}.0.conv1.weight"
+                    if key in state_dict:
+                        out_channels = state_dict[key].shape[0]
+                        features.append(out_channels)
+                        logger.info(f"Detected encoder{i} features: {out_channels}")
+                    else:
+                        break
+                        
+            elif model_name == 'resunet_small':
+                # Pattern: downs.0.conv1.weight, downs.1.conv1.weight, etc.
+                for i in range(6):  # Check up to 6 encoder levels
+                    key = f"downs.{i}.conv1.weight"
+                    if key in state_dict:
+                        out_channels = state_dict[key].shape[0]
+                        features.append(out_channels)
+                        logger.info(f"Detected downs.{i} features: {out_channels}")
+                    else:
+                        break
+            
+            if len(features) > 0:
+                logger.info(f"Successfully detected {len(features)} feature levels: {features}")
+                return features
+            else:
+                logger.warning(f"Could not detect features from weights for {model_name}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error detecting features from weights: {e}")
+            return None
+    
     def get_batch_limit(self, model_name: str) -> int:
         """Get batch size limit for a specific model based on memory requirements"""
         batch_limits = {
             'hrnet': 8,
-            'resunet_small': 4,
-            'resunet_advanced': 2
+            'resunet_small': 2,  # Reduced from 4 to 2 for CBAM-ResUNet stability
+            'resunet_advanced': 1  # Keep at 1 for MA-ResUNet due to high memory usage
         }
         return batch_limits.get(model_name, 1)

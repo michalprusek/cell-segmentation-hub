@@ -3,8 +3,11 @@ import { Link } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const TermsOfService = () => {
+  const { t } = useLanguage();
+  
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -12,168 +15,131 @@ const TermsOfService = () => {
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
             <h1 className="text-4xl font-bold text-gray-900 mb-4">
-              Terms of Service
+              {t('legal.terms.title')}
             </h1>
-            <p className="text-lg text-gray-600">Last updated: January 2025</p>
+            <p className="text-lg text-gray-600">{t('legal.terms.lastUpdated')}</p>
           </div>
 
           <div className="prose prose-lg prose-blue max-w-none">
             <div className="bg-blue-50 p-6 rounded-lg mb-8">
               <p className="text-blue-800 font-medium mb-0">
-                By using SpheroSeg, you agree to these terms. Please read them
-                carefully.
+                {t('legal.terms.disclaimer')}
               </p>
             </div>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              1. Acceptance of Terms
+              {t('legal.terms.sections.acceptance.title')}
             </h2>
             <p className="text-gray-700 leading-relaxed mb-6">
-              By accessing or using SpheroSeg ("the Service"), you agree to be
-              bound by these Terms of Service ("Terms") and all applicable laws
-              and regulations. If you do not agree with any of these terms, you
-              are prohibited from using this service. These Terms constitute a
-              legally binding agreement between you and SpheroSeg.
+              {t('legal.terms.sections.acceptance.content')}
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              2. Use License and Permitted Use
+              {t('legal.terms.sections.useLicense.title')}
             </h2>
             <p className="text-gray-700 leading-relaxed mb-4">
-              Permission is granted to use SpheroSeg for:
+              {t('legal.terms.sections.useLicense.content')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              <li>Personal, non-commercial research purposes</li>
-              <li>Academic and educational research</li>
-              <li>Scientific publications and studies</li>
-              <li>Biomedical research and analysis</li>
+              {t('legal.terms.sections.useLicense.permittedUses').map((use: string, index: number) => (
+                <li key={index}>{use}</li>
+              ))}
             </ul>
             <p className="text-gray-700 leading-relaxed mb-6">
-              This is the grant of a license, not a transfer of title. You may
-              not use the service for commercial purposes without explicit
-              written consent.
+              {t('legal.terms.sections.useLicense.licenseNote')}
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              3. Data Usage and Machine Learning
+              {t('legal.terms.sections.dataUsage.title')}
             </h2>
             <div className="bg-amber-50 border-l-4 border-amber-400 p-6 mb-6">
               <p className="text-amber-800 font-semibold mb-2">
-                Important: Use of Your Data
+                {t('legal.terms.sections.dataUsage.importantTitle')}
               </p>
               <p className="text-amber-700 mb-0">
-                By uploading images and data to SpheroSeg, you consent to us
-                using this data to improve and train our machine learning models
-                for better segmentation accuracy.
+                {t('legal.terms.sections.dataUsage.importantContent')}
               </p>
             </div>
             <p className="text-gray-700 leading-relaxed mb-4">
-              <strong>Data ownership:</strong> You retain ownership of all data
-              you upload to SpheroSeg. However, by using our service, you grant
-              us permission to:
+              <strong>{t('legal.terms.sections.dataUsage.ownershipTitle')}</strong> {t('legal.terms.sections.dataUsage.ownershipContent')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              <li>Process your images for segmentation analysis</li>
-              <li>
-                Use uploaded data (in anonymized form) to improve our ML
-                algorithms
-              </li>
-              <li>Enhance model accuracy through continuous learning</li>
-              <li>Develop new features and segmentation capabilities</li>
+              {t('legal.terms.sections.dataUsage.permissions').map((permission: string, index: number) => (
+                <li key={index}>{permission}</li>
+              ))}
             </ul>
             <p className="text-gray-700 leading-relaxed mb-6">
-              All data used for ML training is anonymized and stripped of
-              identifying information. We do not share your raw data with third
-              parties without explicit consent.
+              {t('legal.terms.sections.dataUsage.protectionNote')}
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              4. User Responsibilities
+              {t('legal.terms.sections.userResponsibilities.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-4">You agree to:</p>
+            <p className="text-gray-700 leading-relaxed mb-4">{t('legal.terms.sections.userResponsibilities.content')}</p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              <li>Use the service only for lawful purposes</li>
-              <li>Respect intellectual property rights</li>
-              <li>Not attempt to reverse engineer or compromise the service</li>
-              <li>Provide accurate information when creating an account</li>
-              <li>Maintain the security of your account credentials</li>
+              {t('legal.terms.sections.userResponsibilities.responsibilities').map((responsibility: string, index: number) => (
+                <li key={index}>{responsibility}</li>
+              ))}
             </ul>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              5. Service Availability and Limitations
+              {t('legal.terms.sections.serviceAvailability.title')}
             </h2>
             <p className="text-gray-700 leading-relaxed mb-6">
-              While we strive to maintain continuous service availability,
-              SpheroSeg is provided "as is" without warranties of any kind. We
-              do not guarantee uninterrupted access, and the service may be
-              subject to maintenance, updates, or temporary unavailability.
+              {t('legal.terms.sections.serviceAvailability.content')}
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              6. Limitation of Liability
+              {t('legal.terms.sections.limitationLiability.title')}
             </h2>
             <p className="text-gray-700 leading-relaxed mb-6">
-              In no event shall SpheroSeg, its developers, or affiliates be
-              liable for any indirect, incidental, special, consequential, or
-              punitive damages, including but not limited to loss of data,
-              profits, or business opportunities, arising out of your use of the
-              service.
+              {t('legal.terms.sections.limitationLiability.content')}
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              7. Privacy and Data Protection
+              {t('legal.terms.sections.privacy.title')}
             </h2>
             <p className="text-gray-700 leading-relaxed mb-6">
-              Your privacy is important to us. Please review our Privacy Policy,
-              which governs how we collect, use, and protect your personal
-              information and research data.
+              {t('legal.terms.sections.privacy.content')}
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              8. Changes to Terms
+              {t('legal.terms.sections.changes.title')}
             </h2>
             <p className="text-gray-700 leading-relaxed mb-6">
-              We reserve the right to modify these Terms at any time. Changes
-              will be effective immediately upon posting. Your continued use of
-              the service constitutes acceptance of modified Terms.
+              {t('legal.terms.sections.changes.content')}
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              9. Termination
+              {t('legal.terms.sections.termination.title')}
             </h2>
             <p className="text-gray-700 leading-relaxed mb-6">
-              Either party may terminate this agreement at any time. Upon
-              termination, your right to access the service will cease
-              immediately, though these Terms will remain in effect regarding
-              prior use.
+              {t('legal.terms.sections.termination.content')}
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
-              10. Governing Law
+              {t('legal.terms.sections.governingLaw.title')}
             </h2>
             <p className="text-gray-700 leading-relaxed mb-6">
-              These Terms are governed by and construed in accordance with
-              applicable laws. Any disputes shall be resolved through binding
-              arbitration or in courts of competent jurisdiction.
+              {t('legal.terms.sections.governingLaw.content')}
             </p>
 
             <div className="bg-gray-50 p-6 rounded-lg mt-10">
               <p className="text-gray-600 text-sm mb-2">
-                <strong>Contact Information:</strong>
+                <strong>{t('legal.terms.contact.title')}</strong>
               </p>
               <p className="text-gray-600 text-sm mb-0">
-                If you have questions about these Terms, please contact us at
-                spheroseg@utia.cas.cz
+                {t('legal.terms.contact.content')}
               </p>
             </div>
           </div>
 
           <div className="mt-8 flex justify-between">
             <Button variant="outline" asChild>
-              <Link to="/">Back to Home</Link>
+              <Link to="/">{t('legal.terms.navigation.backToHome')}</Link>
             </Button>
             <Button asChild>
-              <Link to="/privacy-policy">Privacy Policy</Link>
+              <Link to="/privacy-policy">{t('legal.terms.navigation.privacyPolicy')}</Link>
             </Button>
           </div>
         </div>

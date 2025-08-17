@@ -276,7 +276,7 @@ const Profile = () => {
         });
       } catch (error) {
         logger.error('Error fetching profile data:', error);
-        toast.error('Failed to load profile data');
+        toast.error(t('toast.profile.loadFailed'));
       } finally {
         setLoading(false);
       }

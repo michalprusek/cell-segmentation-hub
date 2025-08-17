@@ -74,17 +74,23 @@ export const useStatusReconciliation = ({
 
         // Check if status changed and if it's safe to update
         if (currentImg.segmentationStatus !== backendStatus) {
-          // Don't override recently completed images back to processing
-          // If frontend shows 'completed' and backend shows 'processing', 
+          // Don't override recently completed or segmented images back to processing
+          // If frontend shows 'completed'/'segmented' and backend shows 'processing', 
           // and the image was updated recently (within 30 seconds), trust frontend
           const timeSinceUpdate = Date.now() - new Date(currentImg.updatedAt || 0).getTime();
-          const isRecentlyCompleted = currentImg.segmentationStatus === 'completed' && 
+          const isRecentlyCompleted = (currentImg.segmentationStatus === 'completed' || currentImg.segmentationStatus === 'segmented') && 
                                      backendStatus === 'processing' && 
-                                     timeSinceUpdate < 30000; // 30 seconds
+                                     timeSinceUpdate < 30000; // Reduced to 30 seconds
 
-          if (isRecentlyCompleted) {
+          // Don't revert from completed to processing recently, but allow correction for no_segmentation
+          // This allows fixing premature "segmented" status when no polygons exist
+          const isStatusDowngrade = (currentImg.segmentationStatus === 'completed' || currentImg.segmentationStatus === 'segmented') &&
+                                   (backendStatus === 'processing' || backendStatus === 'queued') &&
+                                   timeSinceUpdate < 30000; // Reduced to 30 seconds, removed no_segmentation
+
+          if (isRecentlyCompleted || isStatusDowngrade) {
             logger.debug(
-              `⏭️ Skipping reconciliation: Image ${currentImg.id.slice(0, 8)} recently completed, not reverting to processing`
+              `⏭️ Skipping reconciliation: Image ${currentImg.id.slice(0, 8)} recently completed/segmented, not reverting from ${currentImg.segmentationStatus} to ${backendStatus}`
             );
             return currentImg; // Keep current status
           }

@@ -36,9 +36,12 @@ class ThumbnailCache {
   
   // Cache TTL: 24 hours for thumbnails
   private readonly TTL = 24 * 60 * 60 * 1000;
+  
+  // Store the initialization promise
+  private ready: Promise<void>;
 
   constructor() {
-    this.initDB();
+    this.ready = this.initDB();
   }
 
   /**
@@ -86,6 +89,7 @@ class ThumbnailCache {
    * Get thumbnail from cache
    */
   async get(imageId: string, levelOfDetail: 'low' | 'medium' | 'high' = 'low'): Promise<any | null> {
+    await this.ready;
     const cacheKey = this.getCacheKey(imageId, levelOfDetail);
     
     // Check memory cache first
@@ -142,6 +146,7 @@ class ThumbnailCache {
    * Store thumbnail in cache
    */
   async set(imageId: string, levelOfDetail: 'low' | 'medium' | 'high', thumbnailData: any): Promise<void> {
+    await this.ready;
     const cacheKey = this.getCacheKey(imageId, levelOfDetail);
     const now = Date.now();
     
@@ -179,6 +184,7 @@ class ThumbnailCache {
    * Invalidate cache for specific image
    */
   async invalidate(imageId: string): Promise<void> {
+    await this.ready;
     const levels: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'];
     
     // Remove from memory cache
@@ -335,6 +341,7 @@ class ThumbnailCache {
    * Clear all cache data
    */
   async clear(): Promise<void> {
+    await this.ready;
     // Clear memory cache
     this.memoryCache.clear();
 

@@ -343,8 +343,8 @@ export class QueueService {
     // Model batch size limits (from ML service)
     const BATCH_LIMITS = {
       'hrnet': 8,
-      'resunet_small': 4,
-      'resunet_advanced': 2
+      'resunet_small': 2,  // Reduced for CBAM-ResUNet stability
+      'resunet_advanced': 1  // Keep at 1 for MA-ResUNet due to high memory usage
     };
 
     // Get the highest priority item first
@@ -476,7 +476,11 @@ export class QueueService {
         const image = imageData[i]!;
 
         if (result && result.polygons && result.polygons.length > 0) {
-          // Success - save results and mark as completed
+          // Success - save results and update image status
+          // Prioritize image dimensions from ML service result, fallback to database
+          const imageWidth = result.image_size?.width || image.width || null;
+          const imageHeight = result.image_size?.height || image.height || null;
+          
           await this.segmentationService.saveSegmentationResults(
             item.imageId,
             result.polygons,
@@ -484,17 +488,17 @@ export class QueueService {
             threshold,
             result.confidence || null,
             result.processingTime || null,
-            image.width || null,
-            image.height || null,
+            imageWidth,
+            imageHeight,
             item.userId
           );
 
-          await this.prisma.segmentationQueue.update({
-            where: { id: item.id },
-            data: { 
-              status: 'completed',
-              completedAt: new Date()
-            }
+          // Update image status to segmented
+          await this.imageService.updateSegmentationStatus(item.imageId, 'segmented', item.userId);
+
+          // Delete completed item from queue to prevent confusion
+          await this.prisma.segmentationQueue.delete({
+            where: { id: item.id }
           });
 
           // Emit success notification via WebSocket
@@ -514,14 +518,14 @@ export class QueueService {
             );
           }
 
-          logger.info('Batch item processed successfully', 'QueueService', {
+          logger.info('Batch item processed successfully and removed from queue', 'QueueService', {
             queueId: item.id,
             imageId: item.imageId,
             polygonCount: result.polygons.length
           });
         } else {
-          // No polygons found - save empty results and mark as completed with warning
-          logger.warn('ML service returned no polygons - this may indicate detection issues', 'QueueService', {
+          // No polygons found - save empty results but mark as no_segmentation, not segmented
+          logger.warn('ML service returned no polygons - marking as no_segmentation', 'QueueService', {
             queueId: item.id,
             imageId: item.imageId,
             model,
@@ -530,6 +534,10 @@ export class QueueService {
           });
 
           // Save empty segmentation results to database so frontend can read them
+          // Prioritize image dimensions from ML service result, fallback to database
+          const imageWidth = result?.image_size?.width || image.width || null;
+          const imageHeight = result?.image_size?.height || image.height || null;
+          
           await this.segmentationService.saveSegmentationResults(
             item.imageId,
             [], // Empty polygons array
@@ -537,26 +545,24 @@ export class QueueService {
             threshold,
             result?.confidence || null,
             result?.processingTime || null,
-            image.width || null,
-            image.height || null,
+            imageWidth,
+            imageHeight,
             item.userId
           );
 
-          await this.prisma.segmentationQueue.update({
-            where: { id: item.id },
-            data: { 
-              status: 'completed',
-              completedAt: new Date()
-            }
-          });
+          // Update image status to no_segmentation (not segmented) since no polygons were detected
+          await this.imageService.updateSegmentationStatus(item.imageId, 'no_segmentation', item.userId);
 
-          await this.imageService.updateSegmentationStatus(item.imageId, 'segmented', item.userId);
+          // Delete completed item from queue to prevent confusion
+          await this.prisma.segmentationQueue.delete({
+            where: { id: item.id }
+          });
 
           if (this.websocketService) {
             this.websocketService.emitSegmentationUpdate(item.userId, {
               imageId: item.imageId,
               projectId: item.projectId,
-              status: 'segmented',
+              status: 'no_segmentation', // Changed from 'segmented' to 'no_segmentation'
               queueId: item.id
             });
 
@@ -568,7 +574,7 @@ export class QueueService {
             );
           }
 
-          logger.info('Batch item completed with no polygons - empty result saved', 'QueueService', {
+          logger.info('Batch item completed with no polygons - empty result saved as no_segmentation and removed from queue', 'QueueService', {
             queueId: item.id,
             imageId: item.imageId
           });
@@ -624,17 +630,13 @@ export class QueueService {
             });
           }
         } else {
-          // Max retries exceeded - mark as permanently failed
-          await this.prisma.segmentationQueue.update({
-            where: { id: item.id },
-            data: { 
-              status: 'failed',
-              error: error instanceof Error ? error.message : 'Unknown error',
-              completedAt: new Date()
-            }
-          });
-
+          // Max retries exceeded - mark as permanently failed and remove from queue
           await this.imageService.updateSegmentationStatus(item.imageId, 'failed', item.userId);
+
+          // Delete failed item from queue after max retries
+          await this.prisma.segmentationQueue.delete({
+            where: { id: item.id }
+          });
 
           if (this.websocketService) {
             this.websocketService.emitSegmentationUpdate(item.userId, {

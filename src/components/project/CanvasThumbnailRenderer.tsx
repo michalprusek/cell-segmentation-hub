@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { logger } from '@/lib/logger';
 import { measureThumbnailRender, measureCanvasOperation } from '@/lib/performanceMonitor';
@@ -33,17 +33,18 @@ interface CanvasThumbnailRendererProps {
   width?: number;
   height?: number;
   style?: React.CSSProperties;
+  disableResizeObserver?: boolean; // Option to disable ResizeObserver for max stability
 }
 
 // Color configuration for different polygon types
 const POLYGON_COLORS = {
   external: {
-    fill: 'rgba(239, 68, 68, 0.2)',   // red-500 with opacity
-    stroke: 'rgba(239, 68, 68, 0.8)'
+    fill: 'rgba(239, 68, 68, 0.3)',   // red-500 with higher opacity for visibility
+    stroke: 'rgba(239, 68, 68, 1.0)'  // fully opaque stroke
   },
   internal: {
-    fill: 'rgba(14, 165, 233, 0.2)',  // blue-500 with opacity  
-    stroke: 'rgba(14, 165, 233, 0.8)'
+    fill: 'rgba(14, 165, 233, 0.3)',  // blue-500 with higher opacity for visibility
+    stroke: 'rgba(14, 165, 233, 1.0)' // fully opaque stroke
   }
 } as const;
 
@@ -59,36 +60,106 @@ const setupCanvasContext = (ctx: CanvasRenderingContext2D, devicePixelRatio: num
 const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
   thumbnailData,
   className,
-  width = 300,
-  height = 300,
-  style
+  width,
+  height,
+  style,
+  disableResizeObserver = false
 }) => {
+  // Define fixed, stable dimensions matching ImageCard for consistent rendering
+  const THUMBNAIL_WIDTH = 250; // Fixed width matching ImageCard
+  const THUMBNAIL_HEIGHT = 167; // Fixed height matching ImageCard
+  
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT });
+  
+  // Use fixed size if no explicit dimensions provided, avoiding container-dependent sizing
+  const actualWidth = width || THUMBNAIL_WIDTH;
+  const actualHeight = height || THUMBNAIL_HEIGHT;
+  
+  // Still track container size for debugging but don't use it for rendering calculations
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || disableResizeObserver) {
+      // Set stable default size if ResizeObserver is disabled
+      if (disableResizeObserver) {
+        setContainerSize({ width: THUMBNAIL_WIDTH, height: THUMBNAIL_HEIGHT });
+      }
+      return;
+    }
+
+    const updateSize = () => {
+      const rect = container.getBoundingClientRect();
+      const newSize = {
+        width: rect.width || THUMBNAIL_WIDTH,
+        height: rect.height || THUMBNAIL_HEIGHT
+      };
+      setContainerSize(newSize);
+      
+      // Log size changes for debugging
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug('🔧 Container size changed (not affecting rendering):', {
+          oldSize: containerSize,
+          newSize,
+          usingFixedSize: !width && !height,
+          actualRenderSize: `${actualWidth}x${actualHeight}`,
+          disableResizeObserver
+        });
+      }
+    };
+
+    // Initial size
+    updateSize();
+
+    const resizeObserver = new ResizeObserver(updateSize);
+    resizeObserver.observe(container);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [width, height, actualWidth, actualHeight, disableResizeObserver, containerSize]);
 
   // Memoize scaling calculations
   const scalingParams = useMemo(() => {
     const { imageWidth, imageHeight } = thumbnailData;
     
-    // Calculate scale to fit within canvas while preserving aspect ratio
-    const scaleX = width / imageWidth;
-    const scaleY = height / imageHeight;
-    const scale = Math.min(scaleX, scaleY);
+    // Since the underlying image uses object-cover and may be cropped/scaled,
+    // we need to calculate how the image is actually displayed in the container.
+    // With object-cover, the image scales to fill the container while preserving aspect ratio,
+    // potentially cropping parts of the image.
     
-    // Center the scaled image
-    const scaledWidth = imageWidth * scale;
-    const scaledHeight = imageHeight * scale;
-    const offsetX = (width - scaledWidth) / 2;
-    const offsetY = (height - scaledHeight) / 2;
+    const imageAspectRatio = imageWidth / imageHeight;
+    const containerAspectRatio = actualWidth / actualHeight;
+    
+    let displayedImageWidth, displayedImageHeight;
+    let offsetX = 0, offsetY = 0;
+    
+    if (imageAspectRatio > containerAspectRatio) {
+      // Image is wider than container - height fills container, width is cropped
+      displayedImageHeight = actualHeight;
+      displayedImageWidth = actualHeight * imageAspectRatio;
+      offsetX = (actualWidth - displayedImageWidth) / 2;
+    } else {
+      // Image is taller than container - width fills container, height is cropped
+      displayedImageWidth = actualWidth;
+      displayedImageHeight = actualWidth / imageAspectRatio;
+      offsetY = (actualHeight - displayedImageHeight) / 2;
+    }
+    
+    // Calculate scale from original image coordinates to displayed image coordinates
+    const scale = Math.min(displayedImageWidth / imageWidth, displayedImageHeight / imageHeight);
 
     return {
       scale,
       offsetX,
       offsetY,
-      scaledWidth,
-      scaledHeight
+      scaledWidth: displayedImageWidth,
+      scaledHeight: displayedImageHeight,
+      imageAspectRatio,
+      containerAspectRatio
     };
-  }, [thumbnailData, width, height]);
+  }, [thumbnailData, actualWidth, actualHeight]);
 
   // Optimized polygon rendering function
   const renderPolygons = useCallback((
@@ -150,9 +221,46 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
   // Main rendering function with RAF optimization
   const render = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !thumbnailData.polygons.length) return;
+    if (!canvas) {
+      if (process.env.NODE_ENV === 'development') {
+        logger.warn('🚫 Canvas thumbnail render: No canvas element');
+      }
+      return;
+    }
+    
+    if (!thumbnailData.polygons.length) {
+      if (process.env.NODE_ENV === 'development') {
+        logger.warn('🚫 Canvas thumbnail render: No polygons to render', {
+          thumbnailData: {
+            polygonCount: thumbnailData.polygonCount,
+            pointCount: thumbnailData.pointCount,
+            imageSize: `${thumbnailData.imageWidth}x${thumbnailData.imageHeight}`
+          }
+        });
+      }
+      return;
+    }
 
     // Performance monitoring
+    // Enhanced debug logging at start
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug('🔧 Starting canvas thumbnail render', {
+        polygonCount: thumbnailData.polygons.length,
+        hasPolygons: thumbnailData.polygons.length > 0,
+        renderingMode: width && height ? 'explicit-size' : 'fixed-stable-size',
+        canvasSize: `${actualWidth}x${actualHeight}`,
+        containerSize: `${containerSize.width}x${containerSize.height}`,
+        sizeMismatch: actualWidth !== containerSize.width || actualHeight !== containerSize.height,
+        originalImageSize: `${thumbnailData.imageWidth}x${thumbnailData.imageHeight}`,
+        displayedImageSize: `${scalingParams.scaledWidth.toFixed(1)}x${scalingParams.scaledHeight.toFixed(1)}`,
+        aspectRatios: `image:${scalingParams.imageAspectRatio.toFixed(3)} container:${scalingParams.containerAspectRatio.toFixed(3)}`,
+        scale: scalingParams.scale.toFixed(3),
+        offset: `${scalingParams.offsetX.toFixed(1)},${scalingParams.offsetY.toFixed(1)}`,
+        isObjectCoverCropping: scalingParams.imageAspectRatio !== scalingParams.containerAspectRatio,
+        stableRendering: true
+      });
+    }
+
     const endRenderMeasure = measureThumbnailRender(
       thumbnailData.polygonCount,
       thumbnailData.pointCount
@@ -162,7 +270,7 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
       polygonCount: thumbnailData.polygonCount,
       pointCount: thumbnailData.pointCount,
       levelOfDetail: thumbnailData.levelOfDetail,
-      canvasSize: `${width}x${height}`
+      canvasSize: `${actualWidth}x${actualHeight}`
     });
 
     try {
@@ -170,8 +278,8 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
       const { scale, offsetX, offsetY } = scalingParams;
 
       // Set actual canvas size accounting for device pixel ratio (this resets context)
-      canvas.width = width * devicePixelRatio;
-      canvas.height = height * devicePixelRatio;
+      canvas.width = actualWidth * devicePixelRatio;
+      canvas.height = actualHeight * devicePixelRatio;
       
       // Re-acquire context after setting dimensions
       const ctx = canvas.getContext('2d');
@@ -184,7 +292,7 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
       setupCanvasContext(ctx, devicePixelRatio);
 
       // Clear canvas
-      ctx.clearRect(0, 0, width, height);
+      ctx.clearRect(0, 0, actualWidth, actualHeight);
 
       // Render polygons
       renderPolygons(ctx, thumbnailData.polygons, scale, offsetX, offsetY, devicePixelRatio);
@@ -197,15 +305,20 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
           levelOfDetail: thumbnailData.levelOfDetail,
           compressionRatio: thumbnailData.compressionRatio.toFixed(2),
           scale: scale.toFixed(3),
-          canvasSize: `${width}x${height}`,
-          devicePixelRatio
+          canvasSize: `${actualWidth}x${actualHeight}`,
+          originalImageSize: `${thumbnailData.imageWidth}x${thumbnailData.imageHeight}`,
+          displayedImageSize: `${scalingParams.scaledWidth.toFixed(1)}x${scalingParams.scaledHeight.toFixed(1)}`,
+          aspectRatios: `image:${scalingParams.imageAspectRatio.toFixed(3)} container:${scalingParams.containerAspectRatio.toFixed(3)}`,
+          offset: `${offsetX.toFixed(1)},${offsetY.toFixed(1)}`,
+          devicePixelRatio,
+          containerSize
         });
       }
     } finally {
       endRenderMeasure();
       endCanvasMeasure();
     }
-  }, [thumbnailData, scalingParams, width, height, renderPolygons]);
+  }, [thumbnailData, scalingParams, actualWidth, actualHeight, renderPolygons, containerSize, width, height]);
 
   // Effect to handle rendering with RAF
   useEffect(() => {
@@ -234,20 +347,32 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
   }, []);
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={containerRef}
       className={cn(
         'absolute inset-0 w-full h-full pointer-events-none',
         className
       )}
       style={{
         zIndex: 10,
-        width: `${width}px`,
-        height: `${height}px`,
         ...style
       }}
-      aria-label={`Segmentation thumbnail with ${thumbnailData.polygonCount} polygons`}
-    />
+    >
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          width: '100%',
+          height: '100%',
+          // Force consistent rendering size regardless of container changes
+          minWidth: `${actualWidth}px`,
+          minHeight: `${actualHeight}px`,
+          maxWidth: `${actualWidth}px`,
+          maxHeight: `${actualHeight}px`,
+        }}
+        aria-label={`Segmentation thumbnail with ${thumbnailData.polygonCount} polygons`}
+      />
+    </div>
   );
 };
 

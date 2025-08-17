@@ -5,8 +5,6 @@ import {
   BrowserRouter,
   Routes,
   Route,
-  useRouteError,
-  isRouteErrorResponse,
 } from 'react-router-dom';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
@@ -29,6 +27,8 @@ import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Documentation from './pages/Documentation';
 import ProjectExport from './pages/export/ProjectExport';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import { ToastEventProvider } from '@/components/AuthToastProvider';
 import { toast } from 'sonner';
 
 // Create a client for React Query
@@ -42,57 +42,13 @@ const queryClient = new QueryClient({
     mutations: {
       onError: (error: unknown) => {
         logger.error('Mutation error:', error);
+        // Note: Cannot use t() here as this is outside LanguageProvider scope
         toast.error('Failed to update data. Please try again.');
       },
     },
   },
 });
 
-// Error boundary component
-function ErrorBoundary() {
-  const error = useRouteError();
-
-  if (isRouteErrorResponse(error)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full">
-          <h1 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">
-            {error.status} {error.statusText}
-          </h1>
-          <p className="text-gray-700 dark:text-gray-300 mb-6">
-            {error.data?.message ||
-              'Something went wrong while loading this page.'}
-          </p>
-          <a
-            href="/"
-            className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700"
-          >
-            Return to Home
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-lg max-w-md w-full">
-        <h1 className="text-2xl font-bold text-red-600 dark:text-red-400 mb-4">
-          Unexpected Error
-        </h1>
-        <p className="text-gray-700 dark:text-gray-300 mb-6">
-          Something went wrong. Please try again later.
-        </p>
-        <a
-          href="/"
-          className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-700"
-        >
-          Return to Home
-        </a>
-      </div>
-    </div>
-  );
-}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -102,15 +58,16 @@ const App = () => (
           <WebSocketProvider>
             <ThemeProvider>
               <LanguageProvider>
-                <ModelProvider>
-                  <Sonner
-                    position="bottom-right"
-                    closeButton
-                    toastOptions={{
-                      className: 'animate-slide-in-right',
-                    }}
-                  />
-                  <div className="app-container animate-fade-in">
+                <ToastEventProvider>
+                  <ModelProvider>
+                    <Sonner
+                      position="bottom-right"
+                      closeButton
+                      toastOptions={{
+                        className: 'animate-slide-in-right',
+                      }}
+                    />
+                    <div className="app-container animate-fade-in">
                     <Routes>
                       <Route path="/" element={<Index />} />
                       <Route path="/sign-in" element={<SignIn />} />
@@ -179,8 +136,9 @@ const App = () => (
                       {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
                       <Route path="*" element={<NotFound />} />
                     </Routes>
-                  </div>
-                </ModelProvider>
+                    </div>
+                  </ModelProvider>
+                </ToastEventProvider>
               </LanguageProvider>
             </ThemeProvider>
           </WebSocketProvider>

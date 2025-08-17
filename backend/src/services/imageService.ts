@@ -3,6 +3,10 @@ import { getStorageProvider, LocalStorageProvider } from '../storage/index';
 import { logger } from '../utils/logger';
 import { ImageQueryParams } from '../types/validation';
 import { v4 as uuidv4 } from 'uuid';
+import sharp from 'sharp';
+import path from 'path';
+import { existsSync } from 'fs';
+import { promises as fs } from 'fs';
 
 export interface UploadImageData {
   originalname: string;
@@ -14,6 +18,7 @@ export interface UploadImageData {
 export interface ImageWithUrls extends Image {
   originalUrl: string;
   thumbnailUrl?: string;
+  displayUrl: string; // Browser-compatible URL for display
 }
 
 export interface ImageStats {
@@ -113,7 +118,8 @@ export class ImageService {
         uploadedImages.push({
           ...image,
           originalUrl,
-          thumbnailUrl
+          thumbnailUrl,
+          displayUrl: this.getDisplayUrl(image.id)
         });
 
         logger.info('Image uploaded successfully', 'ImageService', {
@@ -205,7 +211,8 @@ export class ImageService {
         return {
           ...image,
           originalUrl,
-          thumbnailUrl
+          thumbnailUrl,
+          displayUrl: this.getDisplayUrl(image.id)
         };
       })
     );
@@ -255,7 +262,8 @@ export class ImageService {
     return {
       ...image,
       originalUrl,
-      thumbnailUrl
+      thumbnailUrl,
+      displayUrl: this.getDisplayUrl(image.id)
     };
   }
 
@@ -397,5 +405,138 @@ export class ImageService {
       status,
       userId
     });
+  }
+
+  /**
+   * Get browser-compatible image data by converting unsupported formats
+   */
+  async getBrowserCompatibleImage(imageId: string, userId?: string): Promise<{
+    buffer: Buffer;
+    mimeType: string;
+    filename: string;
+  }> {
+    // Find the image
+    const where: Prisma.ImageWhereInput = { id: imageId };
+    if (userId) {
+      where.project = { userId };
+    }
+
+    const image = await this.prisma.image.findFirst({ where });
+    if (!image) {
+      throw new Error('Obrázek nenalezen nebo nemáte oprávnění');
+    }
+
+    const storage = getStorageProvider();
+    
+    // Check if conversion is needed
+    const browserSupportedTypes = [
+      'image/jpeg',
+      'image/jpg', 
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'image/bmp'
+    ];
+
+    // If already browser-compatible, return original
+    if (image.mimeType && browserSupportedTypes.includes(image.mimeType)) {
+      const originalBuffer = await this.getImageBuffer(image.originalPath);
+      return {
+        buffer: originalBuffer,
+        mimeType: image.mimeType,
+        filename: image.name
+      };
+    }
+
+    // Check for cached converted version
+    const convertedKey = `converted/${imageId}.png`;
+    const convertedPath = path.join(process.env.UPLOAD_DIR || './uploads', convertedKey);
+    
+    if (existsSync(convertedPath)) {
+      logger.info('Serving cached converted image', 'ImageService', { imageId, originalType: image.mimeType });
+      const cachedBuffer = await fs.readFile(convertedPath);
+      return {
+        buffer: cachedBuffer,
+        mimeType: 'image/png',
+        filename: image.name.replace(/\.[^.]+$/, '.png')
+      };
+    }
+
+    // Convert unsupported format to PNG
+    logger.info('Converting image for browser compatibility', 'ImageService', { 
+      imageId, 
+      originalType: image.mimeType,
+      targetType: 'image/png'
+    });
+
+    try {
+      const originalBuffer = await this.getImageBuffer(image.originalPath);
+      
+      // Convert using Sharp
+      const convertedBuffer = await sharp(originalBuffer)
+        .png({
+          quality: 90,
+          compressionLevel: 6
+        })
+        .toBuffer();
+
+      // Cache the converted image
+      const convertedDir = path.dirname(convertedPath);
+      if (!existsSync(convertedDir)) {
+        await fs.mkdir(convertedDir, { recursive: true });
+      }
+      await fs.writeFile(convertedPath, convertedBuffer);
+
+      logger.info('Image converted and cached successfully', 'ImageService', {
+        imageId,
+        originalSize: originalBuffer.length,
+        convertedSize: convertedBuffer.length,
+        originalType: image.mimeType
+      });
+
+      return {
+        buffer: convertedBuffer,
+        mimeType: 'image/png',
+        filename: image.name.replace(/\.[^.]+$/, '.png')
+      };
+
+    } catch (error) {
+      logger.error('Failed to convert image', error instanceof Error ? error : undefined, 'ImageService', {
+        imageId,
+        originalType: image.mimeType
+      });
+      throw new Error(`Chyba při konverzi obrázku: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  /**
+   * Generate display URL for browser-compatible image viewing
+   */
+  private getDisplayUrl(imageId: string): string {
+    const port = process.env.PORT || '3001';
+    const baseUrl = process.env.NODE_ENV === 'production' 
+      ? '' 
+      : `http://localhost:${port}`;
+    
+    return `${baseUrl}/api/images/${imageId}/display`;
+  }
+
+  /**
+   * Helper method to get image buffer from storage
+   */
+  private async getImageBuffer(imagePath: string): Promise<Buffer> {
+    const storage = getStorageProvider();
+    
+    if (storage instanceof LocalStorageProvider) {
+      // For local storage, read file directly
+      const fullPath = path.join(process.env.UPLOAD_DIR || './uploads', imagePath);
+      if (!existsSync(fullPath)) {
+        throw new Error('Image file not found');
+      }
+      return await fs.readFile(fullPath);
+    } else {
+      // For other storage providers, implement buffer retrieval
+      throw new Error('Buffer retrieval not implemented for this storage provider');
+    }
   }
 }

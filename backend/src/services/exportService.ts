@@ -386,7 +386,7 @@ export class ExportService {
           continue;
         }
         
-        const destPath = path.join(imagesDir, `image_${String(i + 1).padStart(3, '0')}.jpg`);
+        const destPath = path.join(imagesDir, image.name);
         
         try {
           await fs.copyFile(resolvedSourcePath, destPath);
@@ -413,9 +413,10 @@ export class ExportService {
       if (image && image.segmentation) {
         const result = image.segmentation;
         if (result.polygons) {
+          const imageNameWithoutExt = path.parse(image.name).name;
           const vizPath = path.join(
             vizDir,
-            `image_${String(i + 1).padStart(3, '0')}_viz.png`
+            `${imageNameWithoutExt}_viz.png`
           );
           
           let polygons;
@@ -461,9 +462,9 @@ export class ExportService {
       
       if (format === 'coco') {
         // Convert ImageWithSegmentation[] to ImageData[]
-        const imageDataArray = images.map((image, index) => ({
+        const imageDataArray = images.map((image) => ({
           id: image.id,
-          filename: `image_${String(index + 1).padStart(3, '0')}.jpg`,
+          filename: image.name,
           width: image.width || 0,
           height: image.height || 0,
           segmentationResults: image.segmentation ? [{
@@ -487,17 +488,18 @@ export class ExportService {
               image.width || 0,
               image.height || 0
             );
+            const imageNameWithoutExt = path.parse(image.name).name;
             await fs.writeFile(
-              path.join(formatDir, `image_${String(i + 1).padStart(3, '0')}.txt`),
+              path.join(formatDir, `${imageNameWithoutExt}.txt`),
               yoloData
             );
           }
         }
       } else if (format === 'json') {
         // Convert ImageWithSegmentation[] to ImageData[]
-        const imageDataArray = images.map((image, index) => ({
+        const imageDataArray = images.map((image) => ({
           id: image.id,
-          filename: `image_${String(index + 1).padStart(3, '0')}.jpg`,
+          filename: image.name,
           width: image.width || 0,
           height: image.height || 0,
           segmentationResults: image.segmentation ? [{

@@ -4,6 +4,7 @@ import { ThumbnailService } from '../../services/thumbnailService';
 import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/index';
+import { getStorageProvider } from '../../storage/index';
 
 export class ImageController {
   private imageService: ImageService;
@@ -424,9 +425,27 @@ export class ImageController {
         return;
       }
 
+      // Validate and parse page parameter
       const pageNum = parseInt(page as string, 10);
+      if (isNaN(pageNum) || pageNum < 1) {
+        ResponseHelper.badRequest(res, 'Page must be a positive integer');
+        return;
+      }
+
+      // Validate and parse limit parameter
       const limitNum = parseInt(limit as string, 10);
-      const levelOfDetail = (lod as string) as 'low' | 'medium' | 'high';
+      if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
+        ResponseHelper.badRequest(res, 'Limit must be a positive integer between 1 and 100');
+        return;
+      }
+
+      // Validate level of detail parameter
+      const validLods = ['low', 'medium', 'high'] as const;
+      const levelOfDetail = lod as string;
+      if (!validLods.includes(levelOfDetail as any)) {
+        ResponseHelper.badRequest(res, 'Level of detail must be one of: low, medium, high');
+        return;
+      }
 
       logger.info('Getting project images with thumbnails', 'ImageController', {
         projectId,
@@ -477,8 +496,11 @@ export class ImageController {
         where: { projectId }
       });
 
-      // Transform data for frontend
-      const transformedImages = images.map(image => {
+      // Get storage provider for URL generation
+      const storage = getStorageProvider();
+
+      // Transform data for frontend with proper URLs
+      const transformedImages = await Promise.all(images.map(async (image) => {
         let thumbnailData = null;
 
         if (image.segmentation && image.segmentation.segmentationThumbnails.length > 0) {
@@ -486,6 +508,22 @@ export class ImageController {
           if (thumbnail) {
             try {
               const parsedPolygons = JSON.parse(thumbnail.simplifiedData);
+              
+              // Validate the parsed data structure
+              if (!Array.isArray(parsedPolygons)) {
+                throw new Error('Parsed polygon data is not an array');
+              }
+              
+              // Basic validation for polygon structure
+              for (const polygon of parsedPolygons) {
+                if (!polygon || typeof polygon !== 'object') {
+                  throw new Error('Invalid polygon structure');
+                }
+                if (!Array.isArray(polygon.points) && !Array.isArray(polygon.coordinates)) {
+                  throw new Error('Polygon missing points/coordinates array');
+                }
+              }
+              
               thumbnailData = {
                 polygons: parsedPolygons,
                 imageWidth: image.segmentation.imageWidth,
@@ -497,20 +535,36 @@ export class ImageController {
               };
             } catch (error) {
               logger.error(
-                `Failed to parse thumbnail data for image ${image.id}`,
+                `Failed to parse or validate thumbnail data for image ${image.id}: ${error instanceof Error ? error.message : String(error)}`,
                 error instanceof Error ? error : new Error(String(error)),
                 'ImageController'
               );
+              // Use safe default when parsing fails
+              thumbnailData = {
+                polygons: [],
+                imageWidth: image.segmentation.imageWidth,
+                imageHeight: image.segmentation.imageHeight,
+                levelOfDetail: thumbnail.levelOfDetail,
+                polygonCount: 0,
+                pointCount: 0,
+                compressionRatio: thumbnail.compressionRatio
+              };
             }
           }
         }
 
+        // Generate proper URLs using storage service
+        const originalUrl = await storage.getUrl(image.originalPath);
+        const thumbnailUrl = image.thumbnailPath 
+          ? await storage.getUrl(image.thumbnailPath)
+          : originalUrl; // Fallback to original if no thumbnail
+
         return {
           id: image.id,
           name: image.name,
-          thumbnail_url: `/api/images/${image.id}/thumbnail`,
-          url: `/api/images/${image.id}`,
-          image_url: `/api/images/${image.id}`,
+          thumbnail_url: thumbnailUrl,
+          url: originalUrl,
+          image_url: originalUrl,
           projectId: image.projectId,
           segmentationStatus: image.segmentationStatus,
           fileSize: image.fileSize,
@@ -521,7 +575,7 @@ export class ImageController {
           updatedAt: image.updatedAt,
           segmentationResult: thumbnailData
         };
-      });
+      }));
 
       const response = {
         images: transformedImages,
@@ -566,6 +620,55 @@ export class ImageController {
         ResponseHelper.notFound(res, errorMessage);
       } else {
         ResponseHelper.internalError(res, error as Error);
+      }
+    }
+  };
+
+  /**
+   * Get browser-compatible image for display
+   * GET /api/images/:imageId/display
+   */
+  getImageForDisplay = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { imageId } = req.params;
+      if (!imageId) {
+        ResponseHelper.badRequest(res, 'Image ID is required');
+        return;
+      }
+
+      // Optional user ID for logging (but don't require authentication for display)
+      const userId = req.user?.id;
+      
+      logger.info('Serving image for display', 'ImageController', {
+        imageId,
+        userId: userId || 'anonymous'
+      });
+
+      // Get browser-compatible image data (without strict user permission check for display)
+      const imageData = await this.imageService.getBrowserCompatibleImage(imageId);
+
+      // Set appropriate headers
+      res.set({
+        'Content-Type': imageData.mimeType,
+        'Content-Length': imageData.buffer.length.toString(),
+        'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
+        'ETag': `"${imageId}"`,
+        'Content-Disposition': `inline; filename="${imageData.filename}"`
+      });
+
+      // Send the image buffer
+      res.send(imageData.buffer);
+
+    } catch (error) {
+      logger.error('Failed to serve image for display', error instanceof Error ? error : undefined, 'ImageController', {
+        imageId: req.params.imageId,
+        userId: req.user?.id
+      });
+
+      if (error instanceof Error && error.message.includes('nenalezen')) {
+        ResponseHelper.notFound(res, 'Image not found or access denied');
+      } else {
+        ResponseHelper.internalError(res, error as Error, undefined, 'ImageController');
       }
     }
   };

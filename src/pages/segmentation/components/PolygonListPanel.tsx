@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff, Edit3, Trash2, MoreVertical } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   const { t } = useLanguage();
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   const handleStartRename = (polygon: Polygon) => {
     setEditingPolygonId(polygon.id);
@@ -62,9 +63,39 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
     return type === 'external' ? 'bg-blue-500' : 'bg-orange-500';
   };
 
+  // Handle wheel events in the scroll area to prevent page scrolling
+  useEffect(() => {
+    const scrollArea = scrollAreaRef.current;
+    if (!scrollArea) return;
+
+    const handleWheel = (e: WheelEvent) => {
+      const element = scrollArea;
+      const { scrollTop, scrollHeight, clientHeight } = element;
+      
+      // Check if we're at the top or bottom of the scroll area
+      const atTop = scrollTop === 0;
+      const atBottom = scrollTop + clientHeight >= scrollHeight;
+      
+      // If scrolling up and at top, or scrolling down and at bottom, 
+      // let the event bubble up (which will be handled by zoom)
+      if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom)) {
+        return;
+      }
+      
+      // Otherwise, stop the event from bubbling to prevent zoom/page scroll
+      e.stopPropagation();
+    };
+
+    scrollArea.addEventListener('wheel', handleWheel, { passive: true });
+
+    return () => {
+      scrollArea.removeEventListener('wheel', handleWheel);
+    };
+  }, []);
+
   if (loading) {
     return (
-      <div className="w-72 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
+      <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
         <div className="text-gray-500">{t('common.loading')}</div>
       </div>
     );
@@ -72,7 +103,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (!polygons || polygons.length === 0) {
     return (
-      <div className="w-72 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+      <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('segmentation.status.polygons')}
@@ -89,7 +120,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   }
 
   return (
-    <div className="w-72 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+    <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -98,7 +129,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
       </div>
 
       {/* Polygon List */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollAreaRef} className="flex-1 overflow-y-auto min-h-0" data-scroll-area="true">
         <div className="p-2 space-y-1">
           {polygons.map((polygon, index) => {
             const isSelected = selectedPolygonId === polygon.id;

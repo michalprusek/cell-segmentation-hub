@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EditMode, InteractionState } from '../../types';
 import { Point } from '@/lib/segmentation';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ModeInstructionsProps {
   editMode: EditMode;
@@ -21,6 +22,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
   tempPoints,
   isShiftPressed = false,
 }) => {
+  const { t } = useLanguage();
   const [isVisible, setIsVisible] = useState(true);
 
   // Auto-hide instructions after 5 seconds in View mode
@@ -44,26 +46,26 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
       case EditMode.Slice:
         if (!selectedPolygonId) {
           return {
-            title: 'Slice Mode',
+            title: t('segmentation.instructions.modes.slice'),
             color: '#ef4444', // red-500 to match border
-            instructions: ['1. Click on a polygon to select it for slicing'],
+            instructions: [t('segmentation.instructions.slice.selectPolygon')],
           };
         } else if (tempPoints.length === 0) {
           return {
-            title: 'Slice Mode',
+            title: t('segmentation.instructions.modes.slice'),
             color: '#ef4444', // red-500 to match border
             instructions: [
-              '2. Click to place the first slice point',
-              'Press ESC to cancel',
+              t('segmentation.instructions.slice.placeFirstPoint'),
+              t('segmentation.instructions.slice.cancel'),
             ],
           };
         } else {
           return {
-            title: 'Slice Mode',
+            title: t('segmentation.instructions.modes.slice'),
             color: '#ef4444', // red-500 to match border
             instructions: [
-              '3. Click to place the second slice point and perform slice',
-              'Press ESC to cancel',
+              t('segmentation.instructions.slice.placeSecondPoint'),
+              t('segmentation.instructions.slice.cancel'),
             ],
           };
         }
@@ -71,29 +73,29 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
       case EditMode.CreatePolygon:
         if (tempPoints.length === 0) {
           return {
-            title: 'Create Polygon Mode',
+            title: t('segmentation.instructions.modes.create'),
             color: '#3b82f6', // blue-500 to match border
             instructions: [
-              '1. Click to start creating a polygon',
-              'Hold SHIFT to automatically add points',
+              t('segmentation.instructions.create.startPolygon'),
+              t('segmentation.instructions.create.holdShift'),
             ],
           };
         } else if (tempPoints.length < 3) {
           return {
-            title: 'Create Polygon Mode',
+            title: t('segmentation.instructions.modes.create'),
             color: '#3b82f6', // blue-500 to match border
             instructions: [
-              '2. Continue clicking to add more points (at least 3 needed)',
-              'Hold SHIFT to automatically add points • Press ESC to cancel',
+              t('segmentation.instructions.create.continuePoints'),
+              `${t('segmentation.instructions.create.holdShift')} • ${t('segmentation.instructions.create.cancel')}`,
             ],
           };
         } else {
           return {
-            title: 'Create Polygon Mode',
+            title: t('segmentation.instructions.modes.create'),
             color: '#3b82f6', // blue-500 to match border
             instructions: [
-              '3. Continue adding points or click near the first point to close the polygon',
-              'Hold SHIFT to automatically add points • Press ESC to cancel',
+              t('segmentation.instructions.create.finishPolygon'),
+              `${t('segmentation.instructions.create.holdShift')} • ${t('segmentation.instructions.create.cancel')}`,
             ],
           };
         }
@@ -101,20 +103,20 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
       case EditMode.AddPoints:
         if (!interactionState.isAddingPoints) {
           return {
-            title: 'Add Points Mode',
+            title: t('segmentation.instructions.modes.addPoints'),
             color: '#10b981', // emerald-500 to match border
             instructions: [
-              'Click on any vertex to start adding points',
-              'Press ESC to cancel',
+              t('segmentation.instructions.addPoints.clickVertex'),
+              t('segmentation.instructions.addPoints.cancel'),
             ],
           };
         } else {
           return {
-            title: 'Add Points Mode',
+            title: t('segmentation.instructions.modes.addPoints'),
             color: '#10b981', // emerald-500 to match border
             instructions: [
-              'Click to add points, then click on another vertex to complete',
-              'Hold SHIFT to automatically add points • Press ESC to cancel',
+              t('segmentation.instructions.addPoints.addPoints'),
+              `${t('segmentation.instructions.addPoints.holdShift')} • ${t('segmentation.instructions.addPoints.cancel')}`,
             ],
           };
         }
@@ -122,36 +124,36 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
       case EditMode.EditVertices:
         if (selectedPolygonId) {
           return {
-            title: 'Edit Vertices Mode',
+            title: t('segmentation.instructions.modes.editVertices'),
             color: '#a855f7', // purple-500 to match border
             instructions: [
-              'Click and drag vertices to move them',
-              'Hold SHIFT and click a vertex to add points • Double-click a vertex to delete it',
+              t('segmentation.instructions.editVertices.dragVertices'),
+              `${t('segmentation.instructions.editVertices.addPoints')} • ${t('segmentation.instructions.editVertices.deleteVertex')}`,
             ],
           };
         } else {
           return {
-            title: 'Edit Vertices Mode',
+            title: t('segmentation.instructions.modes.editVertices'),
             color: '#a855f7', // purple-500 to match border
-            instructions: ['Click on a polygon to select it for editing'],
+            instructions: [t('segmentation.instructions.editVertices.selectPolygon')],
           };
         }
 
       case EditMode.DeletePolygon:
         return {
-          title: 'Delete Polygon Mode',
+          title: t('segmentation.instructions.modes.deletePolygon'),
           color: '#f97316', // orange-500 to match border
-          instructions: ['Click on a polygon to delete it'],
+          instructions: [t('segmentation.instructions.deletePolygon.clickToDelete')],
         };
 
       case EditMode.View:
       default:
         return {
-          title: 'View Mode',
+          title: t('segmentation.instructions.modes.view'),
           color: '#9ca3af', // gray-400 to match border
           instructions: [
-            'Click on a polygon to select it',
-            'Drag to pan • Scroll to zoom',
+            t('segmentation.instructions.view.selectPolygon'),
+            t('segmentation.instructions.view.navigation'),
           ],
         };
     }
@@ -238,7 +240,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
               color: '#3b82f6', // blue-500 to match border
             }}
           >
-            ⚡ SHIFT: Auto-adding points
+{t('segmentation.instructions.shiftIndicator')}
           </div>
         )}
     </div>

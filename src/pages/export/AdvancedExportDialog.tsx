@@ -336,10 +336,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                 <div className="space-y-2">
                   <Label>
                     {t('export.fontSize')}:{' '}
-                    {exportOptions.visualizationOptions?.fontSize || 24}px
+                    {exportOptions.visualizationOptions?.fontSize || 32}px
                   </Label>
                   <Slider
-                    value={[exportOptions.visualizationOptions?.fontSize || 24]}
+                    value={[exportOptions.visualizationOptions?.fontSize || 32]}
                     onValueChange={([value]) =>
                       updateExportOptions({
                         visualizationOptions: {
@@ -349,7 +349,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       })
                     }
                     min={10}
-                    max={30}
+                    max={50}
                     step={2}
                   />
                 </div>

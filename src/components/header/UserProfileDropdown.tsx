@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { logger } from '@/lib/logger';
+import { toast } from 'sonner';
 
 interface UserProfileDropdownProps {
   username: string;
@@ -29,6 +30,7 @@ const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
   const handleSignOut = async () => {
     try {
       await signOut();
+      toast.success(t('auth.successfulSignOut'));
     } catch (error) {
       logger.error('Error signing out:', error);
     }

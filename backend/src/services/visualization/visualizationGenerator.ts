@@ -33,7 +33,7 @@ export class VisualizationGenerator {
       internal: '#0000FF',
     },
     strokeWidth: 2,
-    fontSize: 24,
+    fontSize: 32,
     transparency: 0.3,
   };
 

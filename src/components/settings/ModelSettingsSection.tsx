@@ -12,8 +12,9 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { useModel, ModelType } from '@/contexts/ModelContext';
+import { ModelType } from '@/contexts/ModelContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useLocalizedModels } from '@/hooks/useLocalizedModels';
 import { Cpu, Zap, Target } from 'lucide-react';
 
 const ModelSettingsSection = () => {
@@ -24,7 +25,7 @@ const ModelSettingsSection = () => {
     setSelectedModel,
     setConfidenceThreshold,
     availableModels,
-  } = useModel();
+  } = useLocalizedModels();
 
   const handleModelChange = (modelId: string) => {
     setSelectedModel(modelId as ModelType);
@@ -69,10 +70,10 @@ const ModelSettingsSection = () => {
     <div className="space-y-6">
       <div>
         <h3 className="text-lg font-medium mb-4">
-          {t('settings.modelSelection')}
+          {t('settings.modelSelection.title')}
         </h3>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-          {t('settings.modelSelectionDescription')}
+          {t('settings.modelSelection.description')}
         </p>
 
         <RadioGroup value={selectedModel} onValueChange={handleModelChange}>

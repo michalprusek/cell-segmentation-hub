@@ -3,7 +3,6 @@ import { motion } from 'framer-motion';
 import { Clock, Play, BarChart3, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { QueueStats } from '@/hooks/useSegmentationQueue';
@@ -31,13 +30,6 @@ export const QueueStatsPanel = ({
   const { t } = useLanguage();
   const hasQueuedItems = stats && stats.queued > 0;
   const isProcessing = stats && stats.processing > 0;
-  const totalItems = stats ? stats.total : 0;
-
-  // Calculate progress percentage (completed / total)
-  const progressPercentage =
-    stats && stats.total > 0
-      ? Math.round(((stats.total - stats.queued) / stats.total) * 100)
-      : 0;
 
   return (
     <motion.div
@@ -133,23 +125,6 @@ export const QueueStatsPanel = ({
               </Button>
             </div>
           </div>
-
-          {/* Progress bar */}
-          {stats && stats.total > 0 && (
-            <div className="mt-3">
-              <div className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
-                <span>{t('queue.totalProgress')}</span>
-                <span>{progressPercentage}%</span>
-              </div>
-              <Progress value={progressPercentage} className="h-2" />
-              <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-500 mt-1">
-                <span>0</span>
-                <span>
-                  {stats.total} {t('queue.images')}
-                </span>
-              </div>
-            </div>
-          )}
 
           {/* Status messages */}
           {!isConnected && (

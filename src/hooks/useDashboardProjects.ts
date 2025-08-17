@@ -62,7 +62,7 @@ export const useDashboardProjects = ({
           return {
             ...project,
             title: project.name, // Map backend 'name' to frontend 'title'
-            description: project.description || 'No description provided',
+            description: project.description,
             thumbnail,
             date: formatDate(project.updated_at),
             imageCount,

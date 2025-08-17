@@ -4,6 +4,7 @@ import { Card, CardHeader, CardContent, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ExportOptionsCardProps {
   includeMetadata: boolean;
@@ -28,10 +29,11 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
   getSelectedCount,
   isExporting,
 }) => {
+  const { t } = useLanguage();
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Možnosti exportu</CardTitle>
+        <CardTitle>{t('exportDialog.title')}</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -41,7 +43,7 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
               checked={includeMetadata}
               onCheckedChange={() => setIncludeMetadata(!includeMetadata)}
             />
-            <Label htmlFor="include-metadata">Zahrnout metadata</Label>
+            <Label htmlFor="include-metadata">{t('exportDialog.includeMetadata')}</Label>
           </div>
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -51,7 +53,7 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
                 setIncludeSegmentation(!includeSegmentation)
               }
             />
-            <Label htmlFor="include-segmentation">Zahrnout segmentaci</Label>
+            <Label htmlFor="include-segmentation">{t('exportDialog.includeSegmentation')}</Label>
           </div>
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -62,7 +64,7 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
               }
             />
             <Label htmlFor="include-object-metrics">
-              Zahrnout metriky objektů
+              {t('exportDialog.includeObjectMetrics')}
             </Label>
           </div>
 
@@ -76,7 +78,7 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
                 disabled={getSelectedCount() === 0 || isExporting}
               >
                 <FileSpreadsheet className="mr-2 h-4 w-4" />
-                Exportovat pouze metriky (XLSX)
+                {t('exportDialog.exportMetricsOnly')}
               </Button>
             </div>
           )}

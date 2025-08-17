@@ -17,6 +17,7 @@ import {
   constrainTransform,
 } from '@/lib/coordinateUtils';
 import { rafThrottle } from '@/lib/performanceUtils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];
@@ -43,6 +44,8 @@ export const useEnhancedSegmentationEditor = ({
   onPolygonsChange,
   imageId,
 }: UseEnhancedSegmentationEditorProps) => {
+  const { t } = useLanguage();
+  
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
   const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(
@@ -236,14 +239,14 @@ export const useEnhancedSegmentationEditor = ({
     try {
       await onSave(polygons);
       setHasUnsavedChanges(false);
-      toast.success('Segmentation saved successfully');
+      toast.success(t('toast.segmentation.saved'));
     } catch (error) {
-      toast.error('Failed to save segmentation');
+      toast.error(t('toast.segmentation.failed'));
       logger.error('Save error:', error);
     } finally {
       setIsSaving(false);
     }
-  }, [onSave, hasUnsavedChanges, polygons]);
+  }, [onSave, hasUnsavedChanges, polygons, t]);
 
   // Transform operations with improved constraints
   const handleZoomIn = useCallback(() => {
@@ -311,9 +314,9 @@ export const useEnhancedSegmentationEditor = ({
         setSelectedPolygonId(null);
       }
 
-      toast.success('Polygon deleted');
+      toast.success(t('toast.segmentation.deleted'));
     },
-    [polygons, selectedPolygonId, updatePolygons]
+    [polygons, selectedPolygonId, updatePolygons, t]
   );
 
   // Escape handler

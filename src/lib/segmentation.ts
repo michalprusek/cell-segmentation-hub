@@ -2,7 +2,7 @@
 // This simulates image segmentation with thresholding and contour finding
 // In a real app, this would use more advanced methods like WebAssembly or call a backend API
 
-import type { PolygonData, SegmentationData } from '@/types/index';
+import type { PolygonData, SegmentationData } from '@/types';
 
 export interface Point {
   x: number;

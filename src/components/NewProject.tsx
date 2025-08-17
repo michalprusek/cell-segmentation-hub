@@ -47,9 +47,10 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
     setIsCreating(true);
 
     try {
+      const trimmedDescription = projectDescription?.trim();
       const projectData = await apiClient.createProject({
         name: projectName,
-        description: projectDescription || t('projects.noDescriptionProvided'),
+        description: trimmedDescription || '',
       });
 
       // Validate response

@@ -268,6 +268,17 @@ export class ThumbnailService {
     segmentationId: string,
     levelOfDetail: 'low' | 'medium' | 'high' = 'low'
   ): Promise<ThumbnailData | null> {
+    // Validate levelOfDetail parameter
+    const validLevels = ['low', 'medium', 'high'] as const;
+    if (!validLevels.includes(levelOfDetail)) {
+      logger.error(
+        `Invalid levelOfDetail value: ${levelOfDetail}. Must be one of: ${validLevels.join(', ')}`,
+        new Error('Invalid levelOfDetail parameter'),
+        'ThumbnailService'
+      );
+      return null;
+    }
+    
     try {
       const thumbnail = await this.prisma.segmentationThumbnail.findUnique({
         where: {

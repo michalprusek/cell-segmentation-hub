@@ -9,6 +9,7 @@ import zh from '@/translations/zh';
 import { useAuth } from '@/contexts/AuthContext';
 import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
+import { i18nLogger } from '@/lib/i18nLogger';
 
 export type Language = 'en' | 'cs' | 'es' | 'fr' | 'de' | 'zh';
 export type Translations = typeof en;
@@ -120,13 +121,15 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
       if (translation && translation[k] !== undefined) {
         translation = translation[k];
       } else {
-        // Pokud překlad neexistuje, vrátíme původní klíč
+        // Pokud překlad neexistuje, logujeme chybějící klíč a vrátíme původní klíč
+        i18nLogger.logMissingKey(key);
         return key;
       }
     }
 
     // Pokud překlad není řetězec, vrátíme původní klíč
     if (typeof translation !== 'string') {
+      i18nLogger.logMissingKey(key);
       return key;
     }
 

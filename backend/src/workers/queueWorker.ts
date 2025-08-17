@@ -58,6 +58,11 @@ export class QueueWorker {
     setInterval(() => {
       this.performHealthCheck();
     }, 60000);
+    
+    // Set up interval for periodic cleanup of old completed/failed items (every hour)
+    setInterval(() => {
+      this.performQueueCleanup();
+    }, 3600000); // 1 hour
   }
   
   /**
@@ -175,6 +180,35 @@ export class QueueWorker {
 
     } catch (error) {
       logger.error('Failed to perform health check', error instanceof Error ? error : undefined, 'QueueWorker');
+    }
+  }
+
+  /**
+   * Perform periodic cleanup of old completed/failed items
+   */
+  private async performQueueCleanup(): Promise<void> {
+    try {
+      // Delete completed/failed items older than 24 hours
+      const twentyFourHoursAgo = new Date();
+      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+
+      const deletedItems = await this.prisma.segmentationQueue.deleteMany({
+        where: {
+          status: { in: ['completed', 'failed'] },
+          completedAt: { lt: twentyFourHoursAgo }
+        }
+      });
+
+      if (deletedItems.count > 0) {
+        logger.info('Cleaned up old queue items', 'QueueWorker', {
+          deletedCount: deletedItems.count
+        });
+      } else {
+        logger.debug('Queue cleanup: No old items to clean up', 'QueueWorker');
+      }
+
+    } catch (error) {
+      logger.error('Failed to perform queue cleanup', error instanceof Error ? error : undefined, 'QueueWorker');
     }
   }
 }
