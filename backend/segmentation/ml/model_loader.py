@@ -226,12 +226,17 @@ class ModelLoader:
             # Postprocess
             binary_mask = self.postprocess_mask(output, original_size, threshold)
         
-            # Find contours for polygon extraction - use CHAIN_APPROX_SIMPLE to compress segments
-            contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            # Find contours for polygon extraction with hierarchy - use RETR_TREE to detect holes
+            contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             
-            # Convert contours to polygons - preserve full resolution without simplification
+            # Convert contours to polygons with hierarchy information
             polygons = []
             filtered_count = 0
+            polygon_id_counter = 1
+            
+            if hierarchy is not None:
+                hierarchy = hierarchy[0]  # OpenCV returns hierarchy as shape (1, N, 4)
+            
             for i, contour in enumerate(contours):
                 # Skip very small contours (area < 50 pixels) - aligned with postprocessing service
                 if cv2.contourArea(contour) < 50:
@@ -248,24 +253,59 @@ class ModelLoader:
                     polygon_points.append({"x": float(x), "y": float(y)})
                 
                 if len(polygon_points) >= 3:  # Valid polygon needs at least 3 points
-                    polygons.append({
-                        "id": f"polygon_{len(polygons) + 1}",
+                    # Determine polygon type based on hierarchy
+                    polygon_type = "external"
+                    parent_id = None
+                    
+                    if hierarchy is not None:
+                        # hierarchy[i] = [next, previous, first_child, parent]
+                        parent_idx = hierarchy[i][3]
+                        if parent_idx != -1:
+                            # This is an internal contour (hole)
+                            polygon_type = "internal"
+                            # Find the parent polygon ID (need to account for filtered contours)
+                            parent_polygon_id = None
+                            for j, existing_polygon in enumerate(polygons):
+                                if existing_polygon.get("contour_index") == parent_idx:
+                                    parent_polygon_id = existing_polygon["id"]
+                                    break
+                            parent_id = parent_polygon_id
+                    
+                    polygon_data = {
+                        "id": f"polygon_{polygon_id_counter}",
                         "points": polygon_points,
-                        "type": "external",
+                        "type": polygon_type,
                         "class": "spheroid",
                         "confidence": float(torch.sigmoid(output).max().item()),
-                        "vertices_count": original_points
-                    })
+                        "vertices_count": original_points,
+                        "contour_index": i  # Temporary field to help with hierarchy mapping
+                    }
                     
-                    logger.info(f"Polygon {i+1}: {original_points} vertices preserved")
+                    if parent_id:
+                        polygon_data["parent_id"] = parent_id
+                    
+                    polygons.append(polygon_data)
+                    polygon_id_counter += 1
+                    
+                    logger.info(f"Polygon {polygon_id_counter-1}: {original_points} vertices, type: {polygon_type}")
             
-            # Log polygon detection results
+            # Remove temporary contour_index field
+            for polygon in polygons:
+                polygon.pop("contour_index", None)
+            
+            # Log polygon detection results with hierarchy information
             total_contours = len(contours)
-            logger.info(f"Polygon detection: {len(polygons)} valid polygons from {total_contours} contours (filtered {filtered_count} small contours)")
+            external_count = len([p for p in polygons if p["type"] == "external"])
+            internal_count = len([p for p in polygons if p["type"] == "internal"])
+            
+            logger.info(f"Polygon detection: {len(polygons)} valid polygons from {total_contours} contours "
+                       f"({external_count} external, {internal_count} internal, filtered {filtered_count} small contours)")
             
             if len(polygons) == 0:
                 logger.warning(f"No valid polygons detected! Total contours: {total_contours}, filtered: {filtered_count}")
                 logger.warning(f"Binary mask stats - shape: {binary_mask.shape}, unique values: {np.unique(binary_mask)}")
+            elif internal_count > 0:
+                logger.info(f"Detected {internal_count} holes/internal polygons within cells")
             
             result = {
                 "model_used": model_name,

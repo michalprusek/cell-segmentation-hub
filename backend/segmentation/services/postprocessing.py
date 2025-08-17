@@ -35,11 +35,8 @@ class PostprocessingService:
                 if mask.ndim > 2:
                     mask = mask[..., 0] if mask.shape[-1] <= mask.shape[0] else mask[0]
             
-            # Convert to binary mask
+            # Convert to binary mask without cleaning - preserve holes
             binary_mask = (mask > threshold).astype(np.uint8)
-            
-            # Clean up the mask
-            binary_mask = self._clean_mask(binary_mask)
             
             # Find connected components
             labeled_mask = measure.label(binary_mask, connectivity=2)
@@ -75,32 +72,14 @@ class PostprocessingService:
             logger.error(f"Failed to convert mask to polygons: {e}")
             return []
     
-    def _clean_mask(self, binary_mask: np.ndarray) -> np.ndarray:
-        """Clean up binary mask by removing noise and filling holes"""
-        # Remove small noise
-        binary_mask = cv2.medianBlur(binary_mask, 3)
-        
-        # Morphological operations to clean up
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        
-        # Close small gaps
-        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
-        
-        # Remove small objects
-        binary_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel, iterations=1)
-        
-        # Fill holes
-        binary_mask = ndimage.binary_fill_holes(binary_mask).astype(np.uint8)
-        
-        return binary_mask
     
     def _region_to_polygon(self, region_mask: np.ndarray, original_mask: np.ndarray, 
                           region: Any) -> Dict[str, Any]:
         """Convert a single region to polygon format"""
         try:
-            # Find contours - use CHAIN_APPROX_SIMPLE to compress segments
-            contours, _ = cv2.findContours(
-                region_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+            # Find contours with hierarchy - use RETR_TREE to detect holes
+            contours, hierarchy = cv2.findContours(
+                region_mask.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
             )
             
             if not contours:
@@ -142,7 +121,8 @@ class PostprocessingService:
             return {
                 "points": points,
                 "area": area,
-                "confidence": confidence
+                "confidence": confidence,
+                "type": "external"  # Postprocessing works per-region, so defaults to external
             }
             
         except Exception as e:

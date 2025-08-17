@@ -16,6 +16,8 @@ export interface SegmentationPolygon {
   points: SegmentationPoint[];
   area: number;
   confidence: number;
+  type: 'external' | 'internal';
+  parent_id?: string; // For internal polygons, references the parent external polygon
 }
 
 export interface SegmentationRequest {
@@ -383,12 +385,34 @@ export class SegmentationService {
           return false;
         }
 
+        // Validate polygon type
+        if (!polygon.type || !['external', 'internal'].includes(polygon.type)) {
+          logger.warn('Polygon has invalid or missing type', 'SegmentationService', { 
+            type: polygon.type 
+          });
+          return false;
+        }
+
+        // Validate parent_id for internal polygons
+        if (polygon.type === 'internal' && polygon.parent_id && typeof polygon.parent_id !== 'string') {
+          logger.warn('Internal polygon has invalid parent_id', 'SegmentationService', { 
+            parent_id: polygon.parent_id 
+          });
+          return false;
+        }
+
         return true;
       });
+
+      // Count polygon types for logging
+      const externalCount = validPolygons.filter(p => p.type === 'external').length;
+      const internalCount = validPolygons.filter(p => p.type === 'internal').length;
 
       logger.info('Polygon validation results', 'SegmentationService', {
         originalCount: segmentationResult.polygons?.length || 0,
         validCount: validPolygons.length,
+        externalCount,
+        internalCount,
         filteredOut: (segmentationResult.polygons?.length || 0) - validPolygons.length
       });
 
@@ -671,7 +695,13 @@ export class SegmentationService {
   /**
    * Update segmentation results for an image
    */
-  async updateSegmentationResults(imageId: string, polygons: any[], userId: string): Promise<any> {
+  async updateSegmentationResults(
+    imageId: string, 
+    polygons: any[], 
+    userId: string, 
+    imageWidth?: number, 
+    imageHeight?: number
+  ): Promise<any> {
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
@@ -692,13 +722,26 @@ export class SegmentationService {
 
     if (existingSegmentation) {
       // Update existing segmentation
+      const updateData: any = {
+        polygons: polygonsJson,
+        confidence: avgConfidence,
+        updatedAt: new Date()
+      };
+      
+      // Update image dimensions if provided
+      if (imageWidth && imageHeight) {
+        updateData.imageWidth = imageWidth;
+        updateData.imageHeight = imageHeight;
+        logger.debug('Updating segmentation with new image dimensions', 'SegmentationService', {
+          imageId,
+          oldDimensions: `${existingSegmentation.imageWidth}x${existingSegmentation.imageHeight}`,
+          newDimensions: `${imageWidth}x${imageHeight}`
+        });
+      }
+      
       const updated = await this.prisma.segmentation.update({
         where: { id: existingSegmentation.id },
-        data: {
-          polygons: polygonsJson,
-          confidence: avgConfidence,
-          updatedAt: new Date()
-        }
+        data: updateData
       });
 
       // Generate thumbnails asynchronously after update
@@ -733,14 +776,26 @@ export class SegmentationService {
       };
     } else {
       // Create new segmentation record
-      const created = await this.prisma.segmentation.create({
-        data: {
+      const createData: any = {
+        imageId,
+        polygons: polygonsJson,
+        model: 'manual', // Manual editing
+        threshold: 0.5,
+        confidence: avgConfidence
+      };
+      
+      // Include image dimensions if provided
+      if (imageWidth && imageHeight) {
+        createData.imageWidth = imageWidth;
+        createData.imageHeight = imageHeight;
+        logger.debug('Creating segmentation with image dimensions', 'SegmentationService', {
           imageId,
-          polygons: polygonsJson,
-          model: 'manual', // Manual editing
-          threshold: 0.5,
-          confidence: avgConfidence
-        }
+          dimensions: `${imageWidth}x${imageHeight}`
+        });
+      }
+      
+      const created = await this.prisma.segmentation.create({
+        data: createData
       });
 
       // Update image segmentation status
