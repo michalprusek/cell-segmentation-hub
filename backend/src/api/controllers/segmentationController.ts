@@ -140,11 +140,25 @@ class SegmentationController {
         return;
       }
 
+      logger.debug('Controller: Fetching segmentation results', 'SegmentationController', {
+        imageId,
+        userId
+      });
+
       const results = await this.segmentationService.getSegmentationResults(imageId, userId);
 
       if (results) {
+        logger.debug('Controller: Segmentation results found', 'SegmentationController', {
+          imageId,
+          polygonCount: results.polygons?.length || 0,
+          hasResults: !!results
+        });
         ResponseHelper.success(res, results, 'Výsledky segmentace načteny');
       } else {
+        logger.debug('Controller: No segmentation results found', 'SegmentationController', {
+          imageId,
+          userId
+        });
         ResponseHelper.notFound(res, 'Výsledky segmentace nenalezeny');
       }
 

@@ -94,7 +94,7 @@ export const QueueStatsPanel = ({
                 </div>
               ) : (
                 <span className="text-sm text-gray-500 dark:text-gray-400">
-                  Načítání statistik...
+                  {t('queue.loadingStats')}
                 </span>
               )}
             </div>
@@ -130,14 +130,6 @@ export const QueueStatsPanel = ({
                 {batchSubmitted
                   ? t('queue.addingToQueue')
                   : t('queue.segmentAll')}
-                {imagesToSegmentCount > 0 && !batchSubmitted && (
-                  <Badge
-                    variant="secondary"
-                    className="ml-1 bg-white text-blue-600"
-                  >
-                    {imagesToSegmentCount}
-                  </Badge>
-                )}
               </Button>
             </div>
           </div>
@@ -166,11 +158,6 @@ export const QueueStatsPanel = ({
             </div>
           )}
 
-          {stats && stats.total === 0 && isConnected && (
-            <div className="mt-3 p-2 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded text-sm text-gray-600 dark:text-gray-400">
-              {t('queue.emptyMessage')}
-            </div>
-          )}
         </CardContent>
       </Card>
     </motion.div>

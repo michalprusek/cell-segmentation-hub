@@ -1,25 +1,6 @@
-// Canvas module temporarily disabled - requires special installation
-// import { createCanvas, loadImage, Canvas, CanvasRenderingContext2D } from 'canvas';
+import { createCanvas, loadImage, Canvas, CanvasRenderingContext2D } from 'canvas';
 import { logger } from '../../utils/logger';
 
-// Temporary interface for Canvas 2D context when canvas module is disabled
-interface CanvasRenderingContext2D {
-  strokeStyle: string;
-  fillStyle: string;
-  lineWidth: number;
-  font: string;
-  textAlign: string;
-  textBaseline: string;
-  beginPath(): void;
-  moveTo(x: number, y: number): void;
-  lineTo(x: number, y: number): void;
-  closePath(): void;
-  fill(): void;
-  stroke(): void;
-  strokeText(text: string, x: number, y: number): void;
-  fillText(text: string, x: number, y: number): void;
-  arc(x: number, y: number, radius: number, startAngle: number, endAngle: number): void;
-}
 
 export interface VisualizationOptions {
   showNumbers?: boolean;
@@ -48,28 +29,56 @@ export class VisualizationGenerator {
   private defaultOptions: VisualizationOptions = {
     showNumbers: true,
     polygonColors: {
-      external: '#00FF00',
-      internal: '#FF0000',
+      external: '#FF0000',
+      internal: '#0000FF',
     },
     strokeWidth: 2,
-    fontSize: 16,
+    fontSize: 24,
     transparency: 0.3,
   };
 
   async generateVisualization(
-    _imagePath: string,
-    _polygons: Polygon[],
-    _outputPath: string,
-    _options?: VisualizationOptions
+    imagePath: string,
+    polygons: Polygon[],
+    outputPath: string,
+    options?: VisualizationOptions
   ): Promise<VisualizationResult> {
-    // Canvas module temporarily disabled - either implement fallback or throw error
-    throw new Error(
-      'Visualization generation disabled: missing canvas module; install optional dependency or use fallback'
-    );
+    const mergedOptions = { ...this.defaultOptions, ...options };
+
+    try {
+      // Load the image
+      const image = await loadImage(imagePath);
+      const canvas = createCanvas(image.width, image.height);
+      const ctx = canvas.getContext('2d');
+
+      // Draw the original image
+      ctx.drawImage(image as any, 0, 0);
+
+      // Draw polygons
+      let polygonNumber = 1;
+      for (const polygon of polygons) {
+        if (polygon.type === 'external') {
+          await this.drawPolygon(ctx, polygon, mergedOptions, polygonNumber);
+          polygonNumber++;
+        } else {
+          await this.drawPolygon(ctx, polygon, mergedOptions);
+        }
+      }
+
+      // Save the canvas to file
+      const buffer = canvas.toBuffer('image/png');
+      await import('fs/promises').then(fs => fs.writeFile(outputPath, buffer));
+
+      logger.info(`Visualization generated: ${outputPath}`, 'VisualizationGenerator');
+      return VisualizationResult.SUCCESS;
+    } catch (error) {
+      logger.error(`Failed to generate visualization for ${imagePath}:`, error instanceof Error ? error : new Error(String(error)), 'VisualizationGenerator');
+      return VisualizationResult.ERROR;
+    }
   }
 
   private async drawPolygon(
-    ctx: CanvasRenderingContext2D, // CanvasRenderingContext2D
+    ctx: CanvasRenderingContext2D,
     polygon: Polygon,
     options: VisualizationOptions,
     polygonNumber?: number
@@ -119,7 +128,7 @@ export class VisualizationGenerator {
   }
 
   private drawPolygonNumber(
-    ctx: CanvasRenderingContext2D, // CanvasRenderingContext2D
+    ctx: CanvasRenderingContext2D,
     polygon: Polygon,
     number: number,
     options: VisualizationOptions
@@ -127,22 +136,22 @@ export class VisualizationGenerator {
     // Calculate centroid
     const centroid = this.calculateCentroid(polygon.points);
 
-    // Set text style
+    // Set text style with larger, more visible font
     ctx.fillStyle = '#FFFFFF';
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 3;
-    ctx.font = `bold ${options.fontSize || 16}px Arial`;
+    ctx.lineWidth = 5;
+    ctx.font = `bold ${options.fontSize || 24}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Draw text with outline for better visibility
+    // Draw text with thick outline for better visibility
     const text = number.toString();
     ctx.strokeText(text, centroid.x, centroid.y);
     ctx.fillText(text, centroid.x, centroid.y);
   }
 
   private drawVertices(
-    ctx: CanvasRenderingContext2D, // CanvasRenderingContext2D
+    ctx: CanvasRenderingContext2D,
     polygon: Polygon,
     color: string
   ): void {

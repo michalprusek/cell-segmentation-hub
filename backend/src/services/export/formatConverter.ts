@@ -539,7 +539,7 @@ export class FormatConverter {
     height: number, 
     value: number
   ): void {
-    if (polygon.length < 3) return;
+    if (polygon.length < 3) {return;}
 
     // Create edge table
     const edges: Array<{yMin: number; yMax: number; x: number; dx: number}> = [];

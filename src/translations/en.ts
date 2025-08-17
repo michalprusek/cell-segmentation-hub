@@ -19,6 +19,7 @@ export default {
     dashboard: 'Dashboard',
     project: 'Project',
     projects: 'Projects',
+    polygon: 'Polygon',
     newProject: 'New Project',
     upload: 'Upload',
     uploadImages: 'Upload Images',
@@ -55,6 +56,14 @@ export default {
     signInToAccount: 'Sign in to your account',
     sort: 'Sort',
     no_preview: 'No preview',
+    // Navigation and UI
+    openMenu: 'Open menu',
+    logOut: 'Log out',
+    // Error pages
+    pageNotFound: 'Oops! Page not found',
+    returnToHome: 'Return to Home',
+    // Navigation
+    next: 'Next',
   },
   dashboard: {
     manageProjects: 'Manage your research projects and analyses',
@@ -113,6 +122,16 @@ export default {
     segmentationStarted: 'Segmentation has started',
     segmentationCompleteWithCount:
       'Segmentation complete! Found {{count}} objects',
+    // Project management errors and messages
+    failedToLoadProjects: 'Failed to load projects',
+    projectNameRequired: 'Please enter a project name',
+    mustBeLoggedIn: 'You must be logged in to create a project',
+    failedToCreateProject: 'Failed to create project',
+    serverResponseInvalid: 'Server response was invalid',
+    projectCreatedDesc: '"{{name}}" is ready for images',
+    descriptionOptional: 'Description (Optional)',
+    noDescriptionProvided: 'No description provided',
+    selectProjectHeader: 'Select Project',
   },
   errors: {
     noProjectOrUser: 'Error: No project or user selected',
@@ -259,6 +278,7 @@ export default {
       save: 'Save',
       keyboardShortcuts:
         'V: View • E: Edit • A: Add • N: New • S: Slice • D: Delete',
+      nothingToSave: 'All changes saved',
     },
     status: {
       polygons: 'polygons',
@@ -268,6 +288,9 @@ export default {
       selected: 'selected',
       saved: 'Saved',
       unsaved: 'Unsaved',
+      noPolygons: 'No polygons',
+      startCreating: 'Start by creating a polygon',
+      polygonList: 'Polygon List',
     },
   },
   auth: {
@@ -294,6 +317,34 @@ export default {
     checkingAuthentication: 'Checking authentication...',
     loadingAccount: 'Loading your account...',
     processingRequest: 'Processing your request...',
+    // SignIn page specific
+    signInToAccount: 'Sign in to your account',
+    accessPlatform: 'Access the spheroid segmentation platform',
+    emailAddress: 'Email address',
+    emailPlaceholder: 'you@example.com',
+    password: 'Password',
+    passwordPlaceholder: '••••••••',
+    signingIn: 'Signing in...',
+    redirectingToDashboard: 'Redirecting to dashboard...',
+    fillAllFields: 'Please fill in all fields',
+    agreeToTerms: 'By signing in, you agree to our',
+    termsOfService: 'Terms of Service',
+    and: 'and',
+    privacyPolicy: 'Privacy Policy',
+    // SignUp page specific
+    createAccount: 'Create your account',
+    signUpPlatform: 'Sign up to use the spheroid segmentation platform',
+    confirmPassword: 'Confirm Password',
+    passwordsMatch: 'Passwords match',
+    passwordsDoNotMatch: 'Passwords do not match',
+    agreeToTermsCheckbox: 'I agree to the',
+    mustAgreeToTerms: 'You must agree to the terms and conditions',
+    creatingAccount: 'Creating account...',
+    alreadyLoggedIn: "You're already logged in",
+    alreadySignedUp: "You're already signed up and logged in.",
+    goToDashboard: 'Go to Dashboard',
+    signUpFailed: 'Sign up failed',
+    signInFailed: 'Sign in failed',
   },
   profile: {
     title: 'Profile',
@@ -341,7 +392,7 @@ export default {
   },
   status: {
     segmented: 'Segmented',
-    processing: 'Processing {{count}} images',
+    processing: 'Processing',
     queued: 'Queued',
     failed: 'Failed',
     no_segmentation: 'No segmentation',
@@ -358,10 +409,105 @@ export default {
     segmentAll: 'Segment All',
     totalProgress: 'Total Progress',
     images: 'images',
+    loadingStats: 'Loading statistics...',
     connectingMessage:
       'Connecting to server... Real-time updates will be available soon.',
     emptyMessage:
       'No images in queue. Upload images and add them to the queue for segmentation.',
     addingToQueue: 'Adding to queue...',
+  },
+  toast: {
+    // Generic messages
+    error: 'An error occurred',
+    success: 'Operation successful',
+    info: 'Information',
+    warning: 'Warning',
+    loading: 'Loading...',
+    // Common errors
+    failedToUpdate: 'Failed to update data. Please try again.',
+    fillAllFields: 'Please fill in all fields',
+    operationFailed: 'Operation failed. Please try again.',
+    // Success messages
+    operationCompleted: 'Operation completed successfully',
+    dataSaved: 'Data saved successfully',
+    dataUpdated: 'Data updated successfully',
+    // Connection messages
+    reconnecting: 'Reconnecting to server...',
+    reconnected: 'Connection to server restored',
+    connectionFailed: 'Failed to restore connection to server',
+    // Segmentation messages
+    segmentationRequested: 'Segmentation request submitted',
+    segmentationCompleted: 'Image segmentation completed',
+    segmentationFailed: 'Segmentation failed',
+    segmentationResultFailed: 'Failed to get segmentation result',
+    segmentationStatusFailed: 'Failed to check segmentation status',
+    // Export messages
+    exportCompleted: 'Export completed successfully!',
+    exportFailed: 'Export failed. Please try again.',
+  },
+  export: {
+    // Dialog headers
+    advancedOptions: 'Advanced Export Options',
+    configureSettings: 'Configure your export settings to create a comprehensive dataset package',
+    // Tabs
+    general: 'General',
+    visualization: 'Visualization',
+    formats: 'Formats',
+    // Content selection
+    exportContents: 'Export Contents',
+    selectContent: 'Select which content types to include in your export',
+    includeOriginal: 'Include original images',
+    includeVisualizations: 'Include visualizations with numbered polygons',
+    includeDocumentation: 'Include documentation and metadata',
+    // Image selection
+    selectedImages: 'Selected Images',
+    imagesSelected: '{{count}} of {{total}} images selected',
+    selectAll: 'Select All',
+    selectNone: 'Select None',
+    imageSelection: 'Image Selection',
+    chooseImages: 'Choose which images to include in the export',
+    // Quality settings
+    qualitySettings: 'Quality Settings',
+    imageQuality: 'Image Quality',
+    compressionLevel: 'Compression Level',
+    outputResolution: 'Output Resolution',
+    // Visualization settings
+    colorSettings: 'Color Settings',
+    backgroundColor: 'Background Color',
+    strokeColor: 'Stroke Color',
+    strokeWidth: 'Stroke Width',
+    fontSize: 'Font Size',
+    showNumbers: 'Show polygon numbers',
+    showLabels: 'Show labels',
+    // Format options
+    outputSettings: 'Output Settings',
+    exportFormats: 'Export Formats',
+    exportToZip: 'Export to ZIP archive',
+    generateExcel: 'Generate Excel metrics',
+    includeCocoFormat: 'Include COCO format annotations',
+    includeJsonMetadata: 'Include JSON metadata',
+    // Progress and status
+    preparing: 'Preparing export...',
+    processing: 'Processing {{current}} of {{total}}',
+    packaging: 'Creating package...',
+    completed: 'Export completed',
+    downloading: 'Downloading...',
+    cancelled: 'Export cancelled',
+    // Connection status
+    connected: 'Connected',
+    disconnected: 'Disconnected',
+    reconnecting: 'Reconnecting...',
+    // Buttons
+    startExport: 'Start Export',
+    cancel: 'Cancel',
+    download: 'Download',
+    retry: 'Retry',
+    close: 'Close',
+    // Error messages
+    exportError: 'Export failed',
+    connectionError: 'Connection lost during export',
+    serverError: 'Server error occurred',
+    invalidSelection: 'Please select at least one image',
+    noData: 'No data available for export',
   },
 };

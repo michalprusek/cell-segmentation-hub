@@ -10,6 +10,7 @@ import {
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Project, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 
@@ -22,6 +23,7 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchProjects = async () => {
@@ -33,26 +35,26 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
       } catch (error: unknown) {
         logger.error('Error fetching projects:', error);
         const errorMessage =
-          getErrorMessage(error) || 'Failed to load projects';
-        toast.error('Failed to load projects: ' + errorMessage);
+          getErrorMessage(error) || t('projects.failedToLoadProjects');
+        toast.error(t('projects.failedToLoadProjects') + ': ' + errorMessage);
       } finally {
         setLoading(false);
       }
     };
 
     fetchProjects();
-  }, [user]);
+  }, [user, t]);
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium">Select Project</label>
+      <label className="text-sm font-medium">{t('projects.selectProject')}</label>
       <Select
         value={value?.toString() || ''}
         onValueChange={onChange}
         disabled={loading}
       >
         <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select a project" />
+          <SelectValue placeholder={t('projects.selectProject')} />
         </SelectTrigger>
         <SelectContent>
           {projects.map(project => (

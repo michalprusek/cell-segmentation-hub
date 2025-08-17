@@ -361,14 +361,13 @@ test.describe('Segmentation Performance Benchmarks', () => {
 
     for (const operation of zoomOperations) {
       if (operation.name.includes('button')) {
-        const button = operation.action as () => Promise<void>;
         const buttonElement = operation.name.includes('in')
           ? page.getByRole('button', { name: /zoom.*in|\+/i })
           : page.getByRole('button', { name: /zoom.*out|-/i });
 
         if (await buttonElement.isVisible()) {
           const zoomStart = Date.now();
-          await button();
+          await operation.action();
           await page.waitForTimeout(50);
           const zoomTime = Date.now() - zoomStart;
 
@@ -520,7 +519,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
         peakMemory: 0,
       };
 
-      if ('memory' in performance) {
+      if (performance && 'memory' in performance && typeof (performance as any).memory.usedJSHeapSize === 'number') {
         window.performanceMetrics.startMemory = (
           performance as any
         ).memory.usedJSHeapSize;

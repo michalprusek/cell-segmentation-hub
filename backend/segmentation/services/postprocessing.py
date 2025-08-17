@@ -13,7 +13,7 @@ class PostprocessingService:
     """Service for postprocessing segmentation masks"""
     
     def __init__(self):
-        self.min_area = 100  # Minimum polygon area in pixels
+        self.min_area = 50  # Minimum polygon area in pixels - lowered for better small cell detection
         self.simplification_tolerance = 0.1  # Douglas-Peucker tolerance - reduced for higher precision
     
     def mask_to_polygons(self, mask: np.ndarray, threshold: float = 0.5) -> List[Dict[str, Any]]:
@@ -61,7 +61,14 @@ class PostprocessingService:
                 if polygon_data:
                     polygons.append(polygon_data)
             
-            logger.info(f"Converted mask to {len(polygons)} polygons")
+            # Log detailed results including filtered polygons
+            filtered_count = len(regions) - len(polygons)
+            logger.info(f"Converted mask to {len(polygons)} polygons (filtered out {filtered_count} small regions)")
+            
+            if len(polygons) == 0:
+                logger.warning(f"No polygons detected! Original regions: {len(regions)}, filtered by area: {filtered_count}")
+                logger.warning(f"Mask stats - shape: {mask.shape}, unique values: {np.unique(binary_mask)}, max value: {mask.max()}")
+                
             return polygons
             
         except Exception as e:

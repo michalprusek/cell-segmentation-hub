@@ -232,7 +232,7 @@ export class ExportService {
     options: ExportOptions
   ) {
     const job = this.exportJobs.get(jobId);
-    if (!job) return;
+    if (!job) {return;}
 
     try {
       job.status = 'processing';
@@ -429,8 +429,12 @@ export class ExportService {
           }
           
           try {
+            // Construct full path to the image
+            const uploadDir = process.env.UPLOAD_DIR || './uploads';
+            const fullImagePath = path.join(uploadDir, image.originalPath);
+            
             await this.visualizationGenerator.generateVisualization(
-              image.originalPath,
+              fullImagePath,
               polygons,
               vizPath,
               options
@@ -703,7 +707,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
       let cleanupCalled = false;
       
       const cleanup = async () => {
-        if (cleanupCalled) return;
+        if (cleanupCalled) {return;}
         cleanupCalled = true;
         
         try {

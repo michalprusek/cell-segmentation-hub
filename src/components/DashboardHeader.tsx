@@ -25,7 +25,12 @@ const DashboardHeader = () => {
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
-  const { isConnected, queueStats } = useSegmentationQueue();
+  
+  // Check if we're on a project detail page to avoid conflicts
+  const isProjectDetailPage = location.pathname.includes('/project/');
+  const { isConnected, queueStats } = useSegmentationQueue(
+    isProjectDetailPage ? 'DISABLE_GLOBAL' : undefined
+  );
 
   // Skrýt header v segmentačním editoru
   const isSegmentationEditor = location.pathname.includes('/segmentation/');

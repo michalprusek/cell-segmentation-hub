@@ -59,6 +59,7 @@ describe('useEnhancedSegmentationEditor', () => {
       { x: 10, y: 50 },
     ],
     confidence: 0.9,
+    type: 'external'
   };
 
   const defaultProps = {
@@ -131,6 +132,7 @@ describe('useEnhancedSegmentationEditor', () => {
           { x: 60, y: 100 },
         ],
         confidence: 0.8,
+        type: 'external'
       };
 
       act(() => {
@@ -172,6 +174,7 @@ describe('useEnhancedSegmentationEditor', () => {
           { x: 100, y: 60 },
         ],
         confidence: 0.7,
+        type: 'external'
       };
 
       const { result } = renderHook(() =>
@@ -202,6 +205,7 @@ describe('useEnhancedSegmentationEditor', () => {
           { x: 100, y: 60 },
         ],
         confidence: 0.8,
+        type: 'external'
       };
 
       // Add a polygon to create history
@@ -234,6 +238,7 @@ describe('useEnhancedSegmentationEditor', () => {
           { x: 100, y: 60 },
         ],
         confidence: 0.8,
+        type: 'external'
       };
 
       // Add polygon and undo
@@ -463,6 +468,7 @@ describe('useEnhancedSegmentationEditor', () => {
           { x: 100, y: 60 },
         ],
         confidence: 0.8,
+        type: 'external'
       };
 
       const { result, rerender } = renderHook(

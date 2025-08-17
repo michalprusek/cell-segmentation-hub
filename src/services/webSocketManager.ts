@@ -430,6 +430,13 @@ class WebSocketManager {
   }
 
   /**
+   * Get socket instance for direct access
+   */
+  getSocket(): Socket | null {
+    return this.socket;
+  }
+
+  /**
    * Start ping interval to keep connection alive
    */
   private startPingInterval(): void {

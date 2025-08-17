@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { logger } from '@/lib/logger';
 
 interface UserProfileDropdownProps {
@@ -23,6 +24,7 @@ interface UserProfileDropdownProps {
 const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const { t } = useLanguage();
 
   const handleSignOut = async () => {
     try {
@@ -51,14 +53,14 @@ const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
           className="dark:text-gray-300 dark:hover:bg-gray-700"
         >
           <UserIcon className="mr-2 h-4 w-4" />
-          <span>Profile</span>
+          <span>{t('common.profile')}</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           onClick={() => navigate('/settings')}
           className="dark:text-gray-300 dark:hover:bg-gray-700"
         >
           <SettingsIcon className="mr-2 h-4 w-4" />
-          <span>Settings</span>
+          <span>{t('common.settings')}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator className="dark:bg-gray-700" />
         <DropdownMenuItem
@@ -66,7 +68,7 @@ const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
           className="dark:text-gray-300 dark:hover:bg-gray-700"
         >
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
+          <span>{t('common.logOut')}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

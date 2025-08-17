@@ -44,6 +44,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useAdvancedExport } from './hooks/useAdvancedExport';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { ProjectImage } from '@/types';
 
 interface AdvancedExportDialogProps {
@@ -63,6 +64,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
   images,
   selectedImageIds,
 }) => {
+  const { t } = useLanguage();
   const {
     exportOptions,
     updateExportOptions,
@@ -89,10 +91,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
   const handleExport = async () => {
     try {
       await startExport(projectName);
-      toast.success('Export completed successfully!');
+      toast.success(t('toast.exportCompleted'));
       onClose();
     } catch (error) {
-      toast.error('Export failed. Please try again.');
+      toast.error(t('toast.exportFailed'));
     }
   };
 
@@ -102,19 +104,18 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Package className="h-5 w-5" />
-            Advanced Export Options
+            {t('export.advancedOptions')}
           </DialogTitle>
           <DialogDescription>
-            Configure your export settings to create a comprehensive dataset
-            package
+            {t('export.configureSettings')}
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="general">General</TabsTrigger>
-            <TabsTrigger value="visualization">Visualization</TabsTrigger>
-            <TabsTrigger value="formats">Formats</TabsTrigger>
+            <TabsTrigger value="general">{t('export.general')}</TabsTrigger>
+            <TabsTrigger value="visualization">{t('export.visualization')}</TabsTrigger>
+            <TabsTrigger value="formats">{t('export.formats')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-4">
@@ -122,10 +123,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileImage className="h-4 w-4" />
-                  Export Contents
+                  {t('export.exportContents')}
                 </CardTitle>
                 <CardDescription>
-                  Select which content types to include in your export
+                  {t('export.selectContent')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -138,7 +139,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     }
                   />
                   <Label htmlFor="original-images">
-                    Include original images
+                    {t('export.includeOriginal')}
                   </Label>
                 </div>
 
@@ -151,7 +152,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     }
                   />
                   <Label htmlFor="visualizations">
-                    Include visualizations with numbered polygons
+                    {t('export.includeVisualizations')}
                   </Label>
                 </div>
 
@@ -164,7 +165,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     }
                   />
                   <Label htmlFor="documentation">
-                    Include documentation and metadata
+                    {t('export.includeDocumentation')}
                   </Label>
                 </div>
               </CardContent>
@@ -172,10 +173,12 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
 
             <Card>
               <CardHeader>
-                <CardTitle>Selected Images</CardTitle>
+                <CardTitle>{t('export.selectedImages')}</CardTitle>
                 <CardDescription>
-                  {exportOptions.selectedImageIds?.length || images.length} of{' '}
-                  {images.length} images selected
+                  {t('export.imagesSelected', {
+                    count: exportOptions.selectedImageIds?.length || images.length,
+                    total: images.length
+                  })}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -194,10 +197,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Palette className="h-4 w-4" />
-                  Visualization Settings
+                  {t('export.colorSettings')}
                 </CardTitle>
                 <CardDescription>
-                  Customize how polygons are displayed in visualizations
+                  {t('export.colorSettings')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -214,17 +217,17 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       })
                     }
                   />
-                  <Label htmlFor="show-numbers">Show polygon numbers</Label>
+                  <Label htmlFor="show-numbers">{t('export.showNumbers')}</Label>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>External Polygon Color</Label>
+                  <Label>{t('export.strokeColor')}</Label>
                   <div className="flex gap-2">
                     <Input
                       type="color"
                       value={
                         exportOptions.visualizationOptions?.polygonColors
-                          ?.external || '#00FF00'
+                          ?.external || '#FF0000'
                       }
                       onChange={e =>
                         updateExportOptions({
@@ -243,7 +246,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     <Input
                       value={
                         exportOptions.visualizationOptions?.polygonColors
-                          ?.external || '#00FF00'
+                          ?.external || '#FF0000'
                       }
                       onChange={e =>
                         updateExportOptions({
@@ -263,13 +266,13 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Internal Polygon Color</Label>
+                  <Label>{t('export.backgroundColor')}</Label>
                   <div className="flex gap-2">
                     <Input
                       type="color"
                       value={
                         exportOptions.visualizationOptions?.polygonColors
-                          ?.internal || '#FF0000'
+                          ?.internal || '#0000FF'
                       }
                       onChange={e =>
                         updateExportOptions({
@@ -288,7 +291,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     <Input
                       value={
                         exportOptions.visualizationOptions?.polygonColors
-                          ?.internal || '#FF0000'
+                          ?.internal || '#0000FF'
                       }
                       onChange={e =>
                         updateExportOptions({
@@ -309,7 +312,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
 
                 <div className="space-y-2">
                   <Label>
-                    Stroke Width:{' '}
+                    {t('export.strokeWidth')}:{' '}
                     {exportOptions.visualizationOptions?.strokeWidth || 2}px
                   </Label>
                   <Slider
@@ -332,11 +335,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
 
                 <div className="space-y-2">
                   <Label>
-                    Font Size:{' '}
-                    {exportOptions.visualizationOptions?.fontSize || 16}px
+                    {t('export.fontSize')}:{' '}
+                    {exportOptions.visualizationOptions?.fontSize || 24}px
                   </Label>
                   <Slider
-                    value={[exportOptions.visualizationOptions?.fontSize || 16]}
+                    value={[exportOptions.visualizationOptions?.fontSize || 24]}
                     onValueChange={([value]) =>
                       updateExportOptions({
                         visualizationOptions: {
@@ -387,10 +390,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileJson className="h-4 w-4" />
-                  Annotation Formats
+                  {t('export.exportFormats')}
                 </CardTitle>
                 <CardDescription>
-                  Select annotation formats for machine learning frameworks
+                  {t('export.exportFormats')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -408,7 +411,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     }}
                   />
                   <Label htmlFor="coco-format">
-                    COCO format (Common Objects in Context)
+                    {t('export.includeCocoFormat')}
                   </Label>
                 </div>
 
@@ -426,7 +429,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     }}
                   />
                   <Label htmlFor="yolo-format">
-                    YOLO format (You Only Look Once)
+                    YOLO format
                   </Label>
                 </div>
 
@@ -443,7 +446,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="json-format">Custom JSON format</Label>
+                  <Label htmlFor="json-format">{t('export.includeJsonMetadata')}</Label>
                 </div>
               </CardContent>
             </Card>
@@ -452,10 +455,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <FileSpreadsheet className="h-4 w-4" />
-                  Metrics Formats
+                  {t('export.outputSettings')}
                 </CardTitle>
                 <CardDescription>
-                  Select formats for exporting calculated metrics
+                  {t('export.generateExcel')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -513,9 +516,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
 
             <Card>
               <CardHeader>
-                <CardTitle>Export Summary</CardTitle>
+                <CardTitle>{t('export.completed')}</CardTitle>
                 <CardDescription>
-                  Review your export configuration
+                  {t('export.configureSettings')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
@@ -585,7 +588,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
               </div>
               <Button size="sm" onClick={triggerDownload} className="ml-2">
                 <Download className="h-4 w-4 mr-1" />
-                Download
+                {t('export.download')}
               </Button>
             </div>
           )}
@@ -602,16 +605,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={isExporting}>
-            Cancel
+            {t('export.cancel')}
           </Button>
           {isExporting ? (
             <Button onClick={cancelExport} variant="destructive">
-              Stop Export
+              {t('export.cancel')}
             </Button>
           ) : (
             <Button onClick={handleExport} disabled={isExporting}>
               <Download className="mr-2 h-4 w-4" />
-              Start Export
+              {t('export.startExport')}
             </Button>
           )}
         </DialogFooter>

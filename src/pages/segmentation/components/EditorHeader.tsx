@@ -1,5 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { motion } from 'framer-motion';
 import {
   ChevronLeft,
@@ -28,6 +29,7 @@ const EditorHeader = ({
   onNavigate,
 }: EditorHeaderProps) => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   const handleBackClick = () => {
     navigate(`/project/${projectId}`);
@@ -110,7 +112,7 @@ const EditorHeader = ({
             className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700"
           >
             <ChevronLeft className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">Previous</span>
+            <span className="hidden sm:inline">{t('common.back')}</span>
           </Button>
           <Button
             variant="outline"
@@ -119,7 +121,7 @@ const EditorHeader = ({
             disabled={currentImageIndex >= totalImages - 1}
             className="h-9 bg-white/60 dark:bg-slate-800/60 border-white/40 dark:border-slate-600/40 hover:bg-white dark:hover:bg-slate-700"
           >
-            <span className="hidden sm:inline">Next</span>
+            <span className="hidden sm:inline">{t('common.next')}</span>
             <ChevronRight className="h-4 w-4 ml-1" />
           </Button>
         </div>

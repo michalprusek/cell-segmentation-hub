@@ -19,6 +19,7 @@ export default {
     dashboard: 'Přehled',
     project: 'Projekt',
     projects: 'Projekty',
+    polygon: 'Polygon',
     newProject: 'Nový projekt',
     upload: 'Nahrát',
     uploadImages: 'Nahrát obrázky',
@@ -55,6 +56,14 @@ export default {
     signInToAccount: 'Přihlásit se k účtu',
     sort: 'Řadit',
     no_preview: 'Žádný náhled',
+    // Navigation and UI
+    openMenu: 'Otevřít menu',
+    logOut: 'Odhlásit se',
+    // Error pages
+    pageNotFound: 'Ojoj! Stránka nebyla nalezena',
+    returnToHome: 'Návrat domů',
+    // Navigation
+    next: 'Další',
   },
   dashboard: {
     manageProjects: 'Spravujte své výzkumné projekty a analýzy',
@@ -114,6 +123,16 @@ export default {
     segmentationStarted: 'Segmentace byla zahájena',
     segmentationCompleteWithCount:
       'Segmentace dokončena! Nalezeno {{count}} objektů',
+    // Project management errors and messages
+    failedToLoadProjects: 'Nepodařilo se načíst projekty',
+    projectNameRequired: 'Zadejte prosím název projektu',
+    mustBeLoggedIn: 'Pro vytvoření projektu se musíte přihlásit',
+    failedToCreateProject: 'Nepodařilo se vytvořit projekt',
+    serverResponseInvalid: 'Odpověď serveru byla neplatná',
+    projectCreatedDesc: '"{{name}}" je připraven pro obrázky',
+    descriptionOptional: 'Popis (volitelný)',
+    noDescriptionProvided: 'Nebyl poskytnut žádný popis',
+    selectProject: 'Vybrat projekt',
   },
   errors: {
     noProjectOrUser: 'Chyba: Není vybrán projekt nebo uživatel',
@@ -243,6 +262,7 @@ export default {
       save: 'Uložit',
       keyboardShortcuts:
         'V: Zobrazit • E: Upravit • A: Přidat • N: Nový • S: Rozřezat • D: Smazat',
+      nothingToSave: 'Všechny změny uloženy',
     },
     status: {
       polygons: 'polygonů',
@@ -252,6 +272,9 @@ export default {
       selected: 'vybrán',
       saved: 'Uloženo',
       unsaved: 'Neuloženo',
+      noPolygons: 'Žádné polygony',
+      startCreating: 'Začněte vytvářením polygonu',
+      polygonList: 'Seznam polygonů',
     },
   },
   auth: {
@@ -278,6 +301,34 @@ export default {
     checkingAuthentication: 'Kontrola ověření...',
     loadingAccount: 'Načítání vašeho účtu...',
     processingRequest: 'Zpracování vašeho požadavku...',
+    // SignIn page specific
+    signInToAccount: 'Přihlaste se ke svému účtu',
+    accessPlatform: 'Přístup k platformě pro segmentaci sféroidů',
+    emailAddress: 'E-mailová adresa',
+    emailPlaceholder: 'vas@email.com',
+    password: 'Heslo',
+    passwordPlaceholder: '••••••••',
+    signingIn: 'Přihlašování...',
+    redirectingToDashboard: 'Přesměrování na dashboard...',
+    fillAllFields: 'Vyplňte prosím všechna pole',
+    agreeToTerms: 'Přihlášením souhlasíte s našimi',
+    termsOfService: 'Podmínkami služby',
+    and: 'a',
+    privacyPolicy: 'Zásadami ochrany osobních údajů',
+    // SignUp page specific
+    createAccount: 'Vytvořte svůj účet',
+    signUpPlatform: 'Zaregistrujte se pro použití platformy pro segmentaci sféroidů',
+    confirmPassword: 'Potvrdit heslo',
+    passwordsMatch: 'Hesla se shodují',
+    passwordsDoNotMatch: 'Hesla se neshodují',
+    agreeToTermsCheckbox: 'Souhlasím s',
+    mustAgreeToTerms: 'Musíte souhlasit s podmínkami a ujednáními',
+    creatingAccount: 'Vytváření účtu...',
+    alreadyLoggedIn: 'Již jste přihlášeni',
+    alreadySignedUp: 'Již jste zaregistrováni a přihlášeni.',
+    goToDashboard: 'Přejít na Dashboard',
+    signUpFailed: 'Registrace selhala',
+    signInFailed: 'Přihlášení selhalo',
   },
   profile: {
     title: 'Profil',
@@ -325,7 +376,7 @@ export default {
   },
   status: {
     segmented: 'Segmentováno',
-    processing: 'Zpracovává se {{count}} obrázků',
+    processing: 'Zpracovává se',
     queued: 'Ve frontě',
     failed: 'Chyba',
     no_segmentation: 'Bez segmentace',
@@ -342,10 +393,104 @@ export default {
     segmentAll: 'Segmentovat vše',
     totalProgress: 'Celkový postup',
     images: 'obrázků',
+    loadingStats: 'Načítání statistik...',
     connectingMessage:
       'Připojuji se k serveru... Real-time aktualizace budou brzy dostupné.',
-    emptyMessage:
-      'Žádné obrázky ve frontě. Nahrajte obrázky a přidejte je do fronty pro segmentaci.',
+    emptyMessage: '',
     addingToQueue: 'Přidáváno do fronty...',
+  },
+  toast: {
+    // Generic messages
+    error: 'Došlo k chybě',
+    success: 'Operace úspěšná',
+    info: 'Informace',
+    warning: 'Varování',
+    loading: 'Načítání...',
+    // Common errors
+    failedToUpdate: 'Nepodařilo se aktualizovat data. Zkuste to prosím znovu.',
+    fillAllFields: 'Vyplňte prosím všechna pole',
+    operationFailed: 'Operace selhala. Zkuste to prosím znovu.',
+    // Success messages
+    operationCompleted: 'Operace byla úspěšně dokončena',
+    dataSaved: 'Data byla úspěšně uložena',
+    dataUpdated: 'Data byla úspěšně aktualizována',
+    // Connection messages
+    reconnecting: 'Znovu se připojuji k serveru...',
+    reconnected: 'Připojení k serveru obnoveno',
+    connectionFailed: 'Nepodařilo se obnovit připojení k serveru',
+    // Segmentation messages
+    segmentationRequested: 'Požadavek na segmentaci odeslán',
+    segmentationCompleted: 'Segmentace obrázku dokončena',
+    segmentationFailed: 'Segmentace selhala',
+    segmentationResultFailed: 'Nepodařilo se získat výsledek segmentace',
+    segmentationStatusFailed: 'Nepodařilo se zkontrolovat stav segmentace',
+    // Export messages
+    exportCompleted: 'Export byl úspěšně dokončen!',
+    exportFailed: 'Export selhal. Zkuste to prosím znovu.',
+  },
+  export: {
+    // Dialog headers
+    advancedOptions: 'Pokročilé možnosti exportu',
+    configureSettings: 'Nakonfigurujte nastavení exportu pro vytvoření komplexního balíčku dat',
+    // Tabs
+    general: 'Obecné',
+    visualization: 'Vizualizace',
+    formats: 'Formáty',
+    // Content selection
+    exportContents: 'Obsah exportu',
+    selectContent: 'Vyberte typy obsahu k zahrnutí do exportu',
+    includeOriginal: 'Zahrnout původní obrázky',
+    includeVisualizations: 'Zahrnout vizualizace s očíslovanými polygony',
+    includeDocumentation: 'Zahrnout dokumentaci a metadata',
+    // Image selection
+    selectedImages: 'Vybrané obrázky',
+    imagesSelected: '{{count}} z {{total}} obrázků vybráno',
+    selectAll: 'Vybrat vše',
+    selectNone: 'Nevybrat žádný',
+    imageSelection: 'Výběr obrázků',
+    chooseImages: 'Vyberte obrázky k zahrnutí do exportu',
+    // Quality settings
+    qualitySettings: 'Nastavení kvality',
+    imageQuality: 'Kvalita obrázku',
+    compressionLevel: 'Úroveň komprese',
+    outputResolution: 'Výstupní rozlišení',
+    // Visualization settings
+    colorSettings: 'Nastavení barev',
+    backgroundColor: 'Barva pozadí',
+    strokeColor: 'Barva obrysu',
+    strokeWidth: 'Šířka obrysu',
+    fontSize: 'Velikost písma',
+    showNumbers: 'Zobrazit čísla polygonů',
+    showLabels: 'Zobrazit popisky',
+    // Format options
+    outputSettings: 'Nastavení výstupu',
+    exportFormats: 'Formáty exportu',
+    exportToZip: 'Exportovat do ZIP archívu',
+    generateExcel: 'Generovat Excel metriky',
+    includeCocoFormat: 'Zahrnout anotace ve formátu COCO',
+    includeJsonMetadata: 'Zahrnout JSON metadata',
+    // Progress and status
+    preparing: 'Příprava exportu...',
+    processing: 'Zpracování {{current}} z {{total}}',
+    packaging: 'Vytváření balíčku...',
+    completed: 'Export dokončen',
+    downloading: 'Stahování...',
+    cancelled: 'Export zrušen',
+    // Connection status
+    connected: 'Připojeno',
+    disconnected: 'Odpojeno',
+    reconnecting: 'Připojování...',
+    // Buttons
+    startExport: 'Spustit export',
+    cancel: 'Zrušit',
+    download: 'Stáhnout',
+    retry: 'Opakovat',
+    close: 'Zavřít',
+    // Error messages
+    exportError: 'Export selhal',
+    connectionError: 'Spojení ztraceno během exportu',
+    serverError: 'Nastala chyba serveru',
+    invalidSelection: 'Vyberte prosím alespoň jeden obrázek',
+    noData: 'Žádná data k exportu nejsou k dispozici',
   },
 };

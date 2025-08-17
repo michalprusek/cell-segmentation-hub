@@ -14,7 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import SegmentationThumbnail from './SegmentationThumbnail';
+import CanvasThumbnailRenderer from './CanvasThumbnailRenderer';
 
 interface ImageCardProps {
   image: ProjectImage & {
@@ -24,9 +24,15 @@ interface ImageCardProps {
         points: Array<{ x: number; y: number }>;
         type: 'external' | 'internal';
         class?: string;
+        originalPointCount?: number;
+        compressionRatio?: number;
       }>;
       imageWidth?: number;
       imageHeight?: number;
+      levelOfDetail?: 'low' | 'medium' | 'high';
+      polygonCount?: number;
+      pointCount?: number;
+      compressionRatio?: number;
     };
   };
   onDelete: (imageId: string) => void;
@@ -178,14 +184,17 @@ export const ImageCard = ({
             image.segmentationResult.imageWidth &&
             image.segmentationResult.imageHeight;
 
-          // Debug logging removed for production - no console output
-
           return shouldShowSegmentation ? (
-            <SegmentationThumbnail
-              polygons={image.segmentationResult.polygons}
-              imageWidth={image.segmentationResult.imageWidth}
-              imageHeight={image.segmentationResult.imageHeight}
-              simplified={true}
+            <CanvasThumbnailRenderer
+              thumbnailData={{
+                polygons: image.segmentationResult.polygons,
+                imageWidth: image.segmentationResult.imageWidth,
+                imageHeight: image.segmentationResult.imageHeight,
+                levelOfDetail: image.segmentationResult.levelOfDetail || 'low',
+                polygonCount: image.segmentationResult.polygonCount || image.segmentationResult.polygons.length,
+                pointCount: image.segmentationResult.pointCount || image.segmentationResult.polygons.reduce((sum, p) => sum + p.points.length, 0),
+                compressionRatio: image.segmentationResult.compressionRatio || 1
+              }}
             />
           ) : null;
         })()}

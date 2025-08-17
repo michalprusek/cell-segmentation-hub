@@ -3,6 +3,7 @@ import { Server as HTTPServer } from 'http';
 import { logger } from '../utils/logger';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
+import { QueueService } from './queueService';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -16,6 +17,19 @@ export interface SegmentationUpdate {
   queueId?: string;
   progress?: number;
   error?: string;
+}
+
+export interface ThumbnailUpdate {
+  imageId: string;
+  projectId: string;
+  segmentationId: string;
+  thumbnailData: {
+    levelOfDetail: 'low' | 'medium' | 'high';
+    polygons: any[];
+    polygonCount: number;
+    pointCount: number;
+    compressionRatio: number;
+  };
 }
 
 export interface QueueStatsUpdate {
@@ -40,6 +54,7 @@ export class WebSocketService {
   private static instance: WebSocketService;
   private io: SocketIOServer;
   private connectedUsers: Map<string, Set<string>> = new Map(); // userId -> socketIds
+  private queueService: QueueService | null = null;
 
   constructor(server: HTTPServer, private prisma: PrismaClient) {
     this.io = new SocketIOServer(server, {
@@ -90,6 +105,14 @@ export class WebSocketService {
       WebSocketService.instance = new WebSocketService(server, prisma);
     }
     return WebSocketService.instance;
+  }
+
+  /**
+   * Set QueueService instance
+   */
+  public setQueueService(queueService: QueueService): void {
+    this.queueService = queueService;
+    logger.info('QueueService connected to WebSocketService', 'WebSocketService');
   }
 
   /**
@@ -209,12 +232,26 @@ export class WebSocketService {
       socket.on('request-queue-stats', async (projectId: string) => {
         try {
           if (socket.userId && await this.isValidProjectAccess(socket.userId, projectId)) {
-            // This would be called from QueueService
-            // For now, just acknowledge the request
-            socket.emit('queue-stats-requested', { projectId });
+            // Get queue stats from QueueService and emit them
+            if (this.queueService) {
+              await this.queueService.getQueueStats(projectId, socket.userId);
+              logger.debug('Queue stats requested and emitted', 'WebSocketService', {
+                userId: socket.userId,
+                projectId
+              });
+            } else {
+              logger.warn('QueueService not available for stats request', 'WebSocketService', {
+                userId: socket.userId,
+                projectId
+              });
+              socket.emit('queue-stats-requested', { projectId });
+            }
           }
         } catch (error) {
-          logger.error('Error handling queue stats request', error instanceof Error ? error : undefined, 'WebSocketService');
+          logger.error('Error handling queue stats request', error instanceof Error ? error : undefined, 'WebSocketService', {
+            userId: socket.userId,
+            projectId
+          });
         }
       });
 
@@ -359,6 +396,32 @@ export class WebSocketService {
   public isUserConnected(userId: string): boolean {
     const userSockets = this.connectedUsers.get(userId);
     return this.connectedUsers.has(userId) && userSockets !== undefined && userSockets.size > 0;
+  }
+
+  /**
+   * Broadcast thumbnail update to project room
+   */
+  public broadcastThumbnailUpdate(projectId: string, thumbnailUpdate: ThumbnailUpdate): void {
+    try {
+      logger.debug('Broadcasting thumbnail update', 'WebSocketService', {
+        projectId,
+        imageId: thumbnailUpdate.imageId,
+        levelOfDetail: thumbnailUpdate.thumbnailData.levelOfDetail,
+        polygonCount: thumbnailUpdate.thumbnailData.polygonCount
+      });
+
+      this.io.to(`project:${projectId}`).emit('thumbnail:updated', thumbnailUpdate);
+      
+      logger.debug('Thumbnail update broadcasted successfully', 'WebSocketService', {
+        projectId,
+        imageId: thumbnailUpdate.imageId
+      });
+    } catch (error) {
+      logger.error('Error broadcasting thumbnail update', error instanceof Error ? error : undefined, 'WebSocketService', {
+        projectId,
+        imageId: thumbnailUpdate.imageId
+      });
+    }
   }
 
   /**

@@ -72,9 +72,9 @@ export class QueueService {
     imageId: string,
     projectId: string,
     userId: string,
-    model: string = 'hrnet',
-    threshold: number = 0.5,
-    priority: number = 0
+    model = 'hrnet',
+    threshold = 0.5,
+    priority = 0
   ): Promise<SegmentationQueue> {
     try {
       // Check if image is already in queue
@@ -137,9 +137,9 @@ export class QueueService {
     imageIds: string[],
     projectId: string,
     userId: string,
-    model: string = 'hrnet',
-    threshold: number = 0.5,
-    priority: number = 0
+    model = 'hrnet',
+    threshold = 0.5,
+    priority = 0
   ): Promise<SegmentationQueue[]> {
     try {
       const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -520,7 +520,28 @@ export class QueueService {
             polygonCount: result.polygons.length
           });
         } else {
-          // No polygons found - mark as completed with empty result
+          // No polygons found - save empty results and mark as completed with warning
+          logger.warn('ML service returned no polygons - this may indicate detection issues', 'QueueService', {
+            queueId: item.id,
+            imageId: item.imageId,
+            model,
+            threshold,
+            result
+          });
+
+          // Save empty segmentation results to database so frontend can read them
+          await this.segmentationService.saveSegmentationResults(
+            item.imageId,
+            [], // Empty polygons array
+            model,
+            threshold,
+            result?.confidence || null,
+            result?.processingTime || null,
+            image.width || null,
+            image.height || null,
+            item.userId
+          );
+
           await this.prisma.segmentationQueue.update({
             where: { id: item.id },
             data: { 
@@ -538,9 +559,16 @@ export class QueueService {
               status: 'segmented',
               queueId: item.id
             });
+
+            this.websocketService.emitSegmentationComplete(
+              item.userId,
+              item.imageId,
+              item.projectId,
+              0 // 0 polygons found
+            );
           }
 
-          logger.info('Batch item completed with no polygons', 'QueueService', {
+          logger.info('Batch item completed with no polygons - empty result saved', 'QueueService', {
             queueId: item.id,
             imageId: item.imageId
           });
@@ -714,7 +742,7 @@ export class QueueService {
   /**
    * Reset stuck items (processing items older than specified minutes)
    */
-  async resetStuckItems(maxProcessingMinutes: number = 10): Promise<number> {
+  async resetStuckItems(maxProcessingMinutes = 10): Promise<number> {
     try {
       const cutoffTime = new Date();
       cutoffTime.setMinutes(cutoffTime.getMinutes() - maxProcessingMinutes);
@@ -748,7 +776,7 @@ export class QueueService {
   /**
    * Cleanup completed and failed queue entries older than specified days
    */
-  async cleanupOldEntries(daysOld: number = 7): Promise<number> {
+  async cleanupOldEntries(daysOld = 7): Promise<number> {
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - daysOld);

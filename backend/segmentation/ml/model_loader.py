@@ -231,9 +231,11 @@ class ModelLoader:
             
             # Convert contours to polygons - preserve full resolution without simplification
             polygons = []
+            filtered_count = 0
             for i, contour in enumerate(contours):
-                # Skip very small contours (area < 100 pixels)
-                if cv2.contourArea(contour) < 100:
+                # Skip very small contours (area < 50 pixels) - aligned with postprocessing service
+                if cv2.contourArea(contour) < 50:
+                    filtered_count += 1
                     continue
                     
                 # Use original contour without simplification for maximum precision
@@ -243,7 +245,7 @@ class ModelLoader:
                 polygon_points = []
                 for point in contour:
                     x, y = point[0]
-                    polygon_points.append([float(x), float(y)])
+                    polygon_points.append({"x": float(x), "y": float(y)})
                 
                 if len(polygon_points) >= 3:  # Valid polygon needs at least 3 points
                     polygons.append({
@@ -256,6 +258,14 @@ class ModelLoader:
                     })
                     
                     logger.info(f"Polygon {i+1}: {original_points} vertices preserved")
+            
+            # Log polygon detection results
+            total_contours = len(contours)
+            logger.info(f"Polygon detection: {len(polygons)} valid polygons from {total_contours} contours (filtered {filtered_count} small contours)")
+            
+            if len(polygons) == 0:
+                logger.warning(f"No valid polygons detected! Total contours: {total_contours}, filtered: {filtered_count}")
+                logger.warning(f"Binary mask stats - shape: {binary_mask.shape}, unique values: {np.unique(binary_mask)}")
             
             result = {
                 "model_used": model_name,

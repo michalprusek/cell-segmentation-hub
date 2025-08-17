@@ -21,6 +21,17 @@ router.use(authenticate);
 // router.use(requireEmailVerification); // Temporarily disabled for development
 
 /**
+ * Get project images with optimized thumbnails
+ * GET /projects/:projectId/images-with-thumbnails?lod=low&page=1&limit=50
+ * POZOR: Musí být před ostatními routes kvůli pořadí matchování
+ */
+router.get(
+  '/:projectId/images-with-thumbnails',
+  validateParams(projectIdSchema),
+  imageController.getProjectImagesWithThumbnails
+);
+
+/**
  * Get image statistics for project
  * GET /projects/:id/images/stats
  * POZOR: Musí být před /:id/images kvůli pořadí matchování routes

@@ -121,6 +121,10 @@ export const useProjectData = (
 
   // Track pending requests to prevent duplicates
   const pendingRequestsRef = useRef<Set<string>>(new Set());
+  
+  // Store navigate function in ref to avoid dependency issues
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -135,7 +139,7 @@ export const useProjectData = (
 
         if (!project) {
           toast.error('Project not found');
-          navigate('/dashboard');
+          navigateRef.current('/dashboard');
           return;
         }
 
@@ -183,7 +187,7 @@ export const useProjectData = (
           (error as { response?: { status?: number } }).response?.status === 404
         ) {
           toast.error('Project not found');
-          navigate('/dashboard');
+          navigateRef.current('/dashboard');
         } else {
           const errorMessage = getErrorMessage(error);
           toast.error(errorMessage || 'Failed to load project data');
@@ -194,7 +198,7 @@ export const useProjectData = (
     };
 
     fetchData();
-  }, [projectId, navigate, userId]);
+  }, [projectId, userId]);
 
   const updateImages = (
     newImages: ProjectImage[] | ((prev: ProjectImage[]) => ProjectImage[])

@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react';
+import { Socket } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import WebSocketManager from '@/services/webSocketManager';
 import { logger } from '@/lib/logger';
 
 interface WebSocketContextType {
   manager: WebSocketManager | null;
+  socket: Socket | null;
   isConnected: boolean;
 }
 
@@ -29,12 +31,14 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 }) => {
   const { user, token } = useAuth();
   const [isConnected, setIsConnected] = React.useState(false);
+  const [socketInstance, setSocketInstance] = React.useState<Socket | null>(null);
   const managerRef = useRef<WebSocketManager | null>(null);
   const isInitializedRef = useRef(false);
 
   // Connection handler
   const onConnect = useRef(() => {
     setIsConnected(true);
+    setSocketInstance(managerRef.current?.getSocket() || null);
   });
 
   const onDisconnect = useRef(() => {
@@ -53,6 +57,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
         managerRef.current.off('disconnect', disconnectHandler);
         managerRef.current = null;
         setIsConnected(false);
+        setSocketInstance(null);
       }
       isInitializedRef.current = false;
       return;
@@ -75,6 +80,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
         // Connect to WebSocket
         await manager.connect({ id: user.id, token });
+
+        // Update socket instance after connection
+        setSocketInstance(manager.getSocket());
 
         logger.debug('WebSocketProvider - WebSocket manager initialized');
       } catch (error) {
@@ -101,6 +109,7 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 
   const value = {
     manager: managerRef.current,
+    socket: socketInstance,
     isConnected,
   };
 

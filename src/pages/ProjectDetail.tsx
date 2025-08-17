@@ -19,6 +19,7 @@ import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
+import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { motion } from 'framer-motion';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
@@ -44,7 +45,7 @@ const ProjectDetail = () => {
     refreshImageSegmentation,
   } = useProjectData(id, user?.id);
 
-  // Debounced refresh function to prevent excessive API calls
+  // Optimized refresh function for real-time updates
   const debouncedRefreshSegmentation = useCallback(
     (imageId: string, currentStatus: string) => {
       // Clear existing timeout for this image
@@ -61,14 +62,21 @@ const ProjectDetail = () => {
       // Update last status
       lastStatusRef.current[imageId] = currentStatus;
 
-      // Set new timeout
+      // For completed segmentation, refresh immediately for real-time updates
+      // For other statuses, use minimal debounce
+      const delay = currentStatus === 'completed' || currentStatus === 'segmented' ? 100 : 300;
+      
       debounceTimeoutRef.current[imageId] = setTimeout(() => {
-        refreshImageSegmentation(imageId);
+        refreshImageSegmentationRef.current(imageId);
         delete debounceTimeoutRef.current[imageId];
-      }, 500); // 500ms debounce delay
+      }, delay);
     },
-    [refreshImageSegmentation]
+    []
   );
+
+  // Queue management - must be declared before using queueStats
+  const { isConnected, queueStats, lastUpdate, requestQueueStats } =
+    useSegmentationQueue(id);
 
   // Filtering and sorting with memoization
   const {
@@ -91,6 +99,18 @@ const ProjectDetail = () => {
     [images]
   );
 
+  // Check if there are any images currently processing
+  const hasProcessingImages = useMemo(
+    () => images.some(img => img.segmentationStatus === 'processing'),
+    [images]
+  );
+
+  // Check if queue has any items (processing or queued)
+  const hasActiveQueue = useMemo(
+    () => queueStats && (queueStats.processing > 0 || queueStats.queued > 0),
+    [queueStats]
+  );
+
   // Image operations
   const { handleDeleteImage, handleOpenSegmentationEditor } =
     useProjectImageActions({
@@ -99,58 +119,90 @@ const ProjectDetail = () => {
       images,
     });
 
-  // Queue management
-  const { isConnected, queueStats, lastUpdate, requestQueueStats } =
-    useSegmentationQueue(id);
+  // Status reconciliation for keeping UI in sync with backend
+  const { reconcileImageStatuses, hasStaleProcessingImages } =
+    useStatusReconciliation({
+      projectId: id,
+      images,
+      onImagesUpdate: updateImages,
+      queueStats,
+      isConnected,
+    });
 
-  // Memoized update function to prevent unnecessary re-renders
-  const memoizedUpdateImages = useCallback(updateImages, [updateImages]);
+  // Store reconciliation function in ref to avoid dependency issues
+  const reconcileRef = useRef(reconcileImageStatuses);
+  reconcileRef.current = reconcileImageStatuses;
+
+  // Store updateImages function in ref to avoid dependency issues
+  const updateImagesRef = useRef(updateImages);
+  updateImagesRef.current = updateImages;
+
+  // Store refreshImageSegmentation function in ref to avoid dependency issues
+  const refreshImageSegmentationRef = useRef(refreshImageSegmentation);
+  refreshImageSegmentationRef.current = refreshImageSegmentation;
 
   // Real-time image status updates with optimized dependencies
   useEffect(() => {
-    if (lastUpdate?.projectId === id) {
-      // Real-time update processing
+    if (!lastUpdate || lastUpdate.projectId !== id) {
+      return;
+    }
 
-      // Normalize status to match frontend expectations
-      const normalizedStatus =
-        lastUpdate.status === 'segmented' ? 'completed' : lastUpdate.status;
+    // Real-time update processing
 
-      // Update the specific image status in the images array
-      memoizedUpdateImages(prevImages =>
-        prevImages.map(img =>
-          img.id === lastUpdate.imageId
-            ? { ...img, segmentationStatus: normalizedStatus }
-            : img
-        )
-      );
+    // Normalize status to match frontend expectations
+    const normalizedStatus =
+      lastUpdate.status === 'segmented' ? 'completed' : lastUpdate.status;
 
-      // Use debounced refresh for completed segmentation
-      if (
-        lastUpdate.status === 'segmented' ||
-        lastUpdate.status === 'completed'
-      ) {
-        debouncedRefreshSegmentation(lastUpdate.imageId, normalizedStatus);
-      }
+    // Update the specific image status in the images array immediately
+    updateImagesRef.current(prevImages =>
+      prevImages.map(img =>
+        img.id === lastUpdate.imageId
+          ? { 
+              ...img, 
+              segmentationStatus: normalizedStatus,
+              updatedAt: new Date() // Update timestamp for tracking and reconciliation
+            }
+          : img
+      )
+    );
 
-      // Reset batch submitted state when processing starts or completes
-      if (['processing', 'segmented', 'failed'].includes(lastUpdate.status)) {
-        setBatchSubmitted(false);
-      }
+    // For completed segmentation, refresh immediately to get polygon data
+    if (
+      lastUpdate.status === 'segmented' ||
+      lastUpdate.status === 'completed'
+    ) {
+      // Immediate refresh for completed status - no debounce
+      refreshImageSegmentationRef.current(lastUpdate.imageId);
+    }
+
+    // Reset batch submitted state when queue becomes empty
+    if (lastUpdate.status === 'segmented' || lastUpdate.status === 'failed') {
+      // Trigger status reconciliation after a short delay
+      const timeoutId = setTimeout(() => {
+        const currentQueueStats = queueStats;
+        if (currentQueueStats && currentQueueStats.processing <= 1 && currentQueueStats.queued === 0) {
+          setBatchSubmitted(false);
+          // Force reconciliation to catch any missed updates
+          reconcileRef.current();
+        }
+      }, 2000);
+
+      // Cleanup timeout if component unmounts
+      return () => clearTimeout(timeoutId);
     }
   }, [
-    lastUpdate?.imageId,
-    lastUpdate?.status,
-    lastUpdate?.projectId,
+    lastUpdate,
     id,
-    memoizedUpdateImages,
-    debouncedRefreshSegmentation,
+    queueStats,
+    setBatchSubmitted,
   ]);
 
   // Cleanup debounce timeouts on unmount
   useEffect(() => {
+    const timeouts = debounceTimeoutRef.current;
     return () => {
-      if (debounceTimeoutRef.current) {
-        for (const timeout of Object.values(debounceTimeoutRef.current)) {
+      if (timeouts) {
+        for (const timeout of Object.values(timeouts)) {
           clearTimeout(timeout);
         }
       }
@@ -318,9 +370,10 @@ const ProjectDetail = () => {
               stats={queueStats}
               isConnected={isConnected}
               onSegmentAll={handleSegmentAll}
-              batchSubmitted={batchSubmitted}
+              batchSubmitted={batchSubmitted || hasActiveQueue}
               imagesToSegmentCount={imagesToSegmentCount}
             />
+
 
             {loading ? (
               <motion.div

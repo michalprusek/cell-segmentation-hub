@@ -8,12 +8,8 @@ import { Link } from 'react-router-dom';
 import {
   Clock,
   Edit,
-  ExternalLink,
-  FileText,
-  Github,
   Mail,
   MapPin,
-  User,
   Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,9 +26,7 @@ interface ProfileData {
   email: string;
   location: string;
   joined: string;
-  publications: number;
   projects: number;
-  collaborators: number;
   analyses: number;
   avatar: string;
 }
@@ -276,9 +270,7 @@ const Profile = () => {
           email: user.email || '',
           location: profile?.location || 'Not specified',
           joined: `${month} ${year}`,
-          publications: 0,
           projects: projectCount,
-          collaborators: 0,
           analyses: imageCount,
           avatar: profile?.avatarUrl || '/placeholder.svg',
         });
@@ -354,7 +346,7 @@ const Profile = () => {
                       {profileData.organization}
                     </p>
 
-                    <div className="mt-4 w-full grid grid-cols-3 gap-2 text-center">
+                    <div className="mt-4 w-full grid grid-cols-2 gap-2 text-center">
                       <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
                         <p className="text-lg font-semibold dark:text-white">
                           {projectCountError ? '—' : profileData.projects}
@@ -370,14 +362,6 @@ const Profile = () => {
                             Error
                           </p>
                         )}
-                      </div>
-                      <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
-                        <p className="text-lg font-semibold dark:text-white">
-                          {profileData.publications}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {t('profile.papers')}
-                        </p>
                       </div>
                       <div className="border border-gray-100 dark:border-gray-700 rounded-md p-2">
                         <p className="text-lg font-semibold dark:text-white">
@@ -416,89 +400,10 @@ const Profile = () => {
                       </div>
                     </div>
 
-                    <Separator className="my-4 dark:bg-gray-700" />
-
-                    <Button
-                      variant="outline"
-                      className="w-full dark:border-gray-700 dark:text-gray-300"
-                      onClick={() =>
-                        toast.success('API key copied to clipboard!')
-                      }
-                    >
-                      <FileText className="h-4 w-4 mr-2" />
-                      {t('profile.copyApiKey')}
-                    </Button>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card className="dark:bg-gray-800 dark:border-gray-700">
-                <CardContent className="pt-6">
-                  <h3 className="font-medium mb-3 dark:text-white">
-                    {t('profile.collaborators')} (0)
-                  </h3>
-                  <div className="flex flex-wrap gap-2">
-                    {profileData.collaborators === 0 && (
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {t('profile.noCollaborators')}
-                      </p>
-                    )}
-                    {[...Array(Math.min(6, profileData.collaborators))].map(
-                      (_, i) => (
-                        <div
-                          key={i}
-                          className="w-9 h-9 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center"
-                        >
-                          <User className="h-5 w-5 text-gray-500 dark:text-gray-400" />
-                        </div>
-                      )
-                    )}
-                    {profileData.collaborators > 6 && (
-                      <div className="w-9 h-9 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-xs text-gray-500 dark:text-gray-400">
-                        +{profileData.collaborators - 6}
-                      </div>
-                    )}
-                  </div>
-
-                  <Separator className="my-4 dark:bg-gray-700" />
-
-                  <h3 className="font-medium mb-3 dark:text-white">
-                    {t('profile.connectedAccounts')}
-                  </h3>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <Github className="h-5 w-5 mr-2 dark:text-gray-300" />
-                        <span className="text-sm dark:text-gray-300">
-                          GitHub
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="dark:text-gray-300"
-                      >
-                        {t('profile.connect')}
-                      </Button>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center">
-                        <ExternalLink className="h-5 w-5 mr-2 dark:text-gray-300" />
-                        <span className="text-sm dark:text-gray-300">
-                          ORCID
-                        </span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="dark:text-gray-300"
-                      >
-                        {t('profile.connect')}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
 
             {/* Main Content */}
@@ -640,47 +545,6 @@ const Profile = () => {
                 </CardContent>
               </Card>
 
-              <Card className="dark:bg-gray-800 dark:border-gray-700">
-                <CardContent className="pt-6">
-                  <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-lg font-semibold dark:text-white">
-                      {t('profile.recentPublications')}
-                    </h2>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="dark:text-gray-300"
-                    >
-                      {t('profile.viewAll')}
-                    </Button>
-                  </div>
-                  {profileData.publications === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400">
-                      {t('profile.noPublications')}
-                    </p>
-                  ) : (
-                    <div className="space-y-4">
-                      {[
-                        '3D tumor spheroid models for in vitro therapeutic screening: a systematic approach to enhance the biological relevance of data obtained',
-                        'Advanced imaging and visualization of spheroids: a review of methods and applications',
-                        'Machine learning approaches for automated segmentation of cell spheroids in 3D culture',
-                      ].map((title, i) => (
-                        <div
-                          key={i}
-                          className="p-3 border border-gray-100 dark:border-gray-700 rounded-md hover:border-gray-300 dark:hover:border-gray-600 transition duration-200"
-                        >
-                          <h3 className="font-medium text-blue-600 dark:text-blue-400">
-                            {title}
-                          </h3>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Journal of Cell Biology • {2023 - i}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
             </div>
           </div>
         )}

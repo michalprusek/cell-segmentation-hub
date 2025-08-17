@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
 import { EditMode } from './types';
@@ -39,6 +40,7 @@ const SegmentationEditor = () => {
     imageId: string;
   }>();
   const { user } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
 
   // Project data
@@ -199,6 +201,7 @@ const SegmentationEditor = () => {
     imageHeight: imageDimensions?.height || 768,
     canvasWidth,
     canvasHeight,
+    imageId, // Pass imageId to track image changes
     onSave: async polygons => {
       if (!projectId || !imageId) return;
 
@@ -219,10 +222,10 @@ const SegmentationEditor = () => {
           polygonData
         );
         setSegmentationPolygons(updatedPolygons);
-        toast.success('Segmentation saved successfully');
+        toast.success(t('toast.dataSaved'));
       } catch (error) {
         logger.error('Failed to save segmentation:', error);
-        toast.error('Failed to save segmentation data');
+        toast.error(t('toast.operationFailed'));
       }
     },
     // Removed onPolygonsChange to prevent circular updates
@@ -244,13 +247,17 @@ const SegmentationEditor = () => {
       }
       editor.setSelectedPolygonId(polygonId);
     },
-    [editor, editor.editMode, editor.setEditMode, editor.setSelectedPolygonId]
+    [editor]
   );
 
   // Load segmentation data
   useEffect(() => {
     const loadSegmentation = async () => {
       if (!projectId || !imageId) return;
+
+      // Immediately clear polygons when switching images to prevent showing old data
+      setSegmentationPolygons(null);
+      logger.debug('🧹 Cleared polygons for new image:', imageId);
 
       try {
         const polygons = await apiClient.getSegmentationResults(imageId);
@@ -285,14 +292,14 @@ const SegmentationEditor = () => {
           logger.debug('No segmentation found for image (404):', imageId);
           setSegmentationPolygons(null);
         } else {
-          toast.error('Failed to load segmentation data');
+          toast.error(t('toast.operationFailed'));
           setSegmentationPolygons(null);
         }
       }
     };
 
     loadSegmentation();
-  }, [projectId, imageId]);
+  }, [projectId, imageId, t]);
 
   // Debug logging for polygon rendering (only when polygons change)
   useEffect(() => {
@@ -407,7 +414,7 @@ const SegmentationEditor = () => {
   if (projectLoading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        Loading...
+        {t('common.loading')}
       </div>
     );
   }
@@ -415,7 +422,7 @@ const SegmentationEditor = () => {
   if (!selectedImage) {
     return (
       <div className="flex items-center justify-center h-screen">
-        Image not found
+        {t('common.no_preview')}
       </div>
     );
   }
@@ -429,7 +436,7 @@ const SegmentationEditor = () => {
       {/* Header */}
       <EditorHeader
         projectId={projectId || ''}
-        projectTitle={project?.name || 'Unknown Project'}
+        projectTitle={project?.name || t('projects.noProjects')}
         imageName={selectedImage.name}
         currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
         totalImages={projectImages?.length || 0}
@@ -485,7 +492,7 @@ const SegmentationEditor = () => {
                       src={selectedImage.url}
                       width={imageDimensions?.width || canvasWidth}
                       height={imageDimensions?.height || canvasHeight}
-                      alt="Segmentation target"
+                      alt={t('common.image')}
                       onLoad={handleImageLoad}
                     />
                   )}

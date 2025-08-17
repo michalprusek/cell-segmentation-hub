@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, Edit3, Trash2, MoreVertical } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -35,12 +36,13 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   onRenamePolygon,
   onDeletePolygon,
 }) => {
+  const { t } = useLanguage();
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
 
   const handleStartRename = (polygon: Polygon) => {
     setEditingPolygonId(polygon.id);
-    setEditingName(polygon.name || `Polygon ${polygon.id.substring(0, 8)}`);
+    setEditingName(polygon.name || `${t('common.polygon')} ${polygon.id.substring(0, 8)}`);
   };
 
   const handleSaveRename = () => {
@@ -63,7 +65,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   if (loading) {
     return (
       <div className="w-72 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
-        <div className="text-gray-500">Načítání...</div>
+        <div className="text-gray-500">{t('common.loading')}</div>
       </div>
     );
   }
@@ -73,13 +75,13 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
       <div className="w-72 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-            Seznam polygonů
+            {t('segmentation.status.polygons')}
           </h3>
         </div>
         <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
           <div className="text-center">
-            <div className="text-sm">Žádné polygony</div>
-            <div className="text-xs mt-1">Začněte vytvářením polygonu</div>
+            <div className="text-sm">{t('segmentation.status.noPolygons')}</div>
+            <div className="text-xs mt-1">{t('segmentation.status.startCreating')}</div>
           </div>
         </div>
       </div>
@@ -91,7 +93,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-          Seznam polygonů ({polygons.length})
+          {t('segmentation.status.polygonList')} ({polygons.length})
         </h3>
       </div>
 
@@ -102,7 +104,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
             const isSelected = selectedPolygonId === polygon.id;
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;
-            const polygonName = polygon.name || `Polygon ${index + 1}`;
+            const polygonName = polygon.name || `${t('common.polygon')} ${index + 1}`;
 
             return (
               <motion.div

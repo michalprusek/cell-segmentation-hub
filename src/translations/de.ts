@@ -19,6 +19,7 @@ export default {
     dashboard: 'Dashboard',
     project: 'Projekt',
     projects: 'Projekte',
+    polygon: 'Polygon',
     newProject: 'Neues Projekt',
     upload: 'Hochladen',
     uploadImages: 'Bilder hochladen',
@@ -55,6 +56,14 @@ export default {
     signInToAccount: 'Bei Ihrem Konto anmelden',
     sort: 'Sortieren',
     no_preview: 'Keine Vorschau',
+    // Navigation and UI
+    openMenu: 'Menü öffnen',
+    logOut: 'Abmelden',
+    // Error pages
+    pageNotFound: 'Ups! Seite nicht gefunden',
+    returnToHome: 'Zurück zur Startseite',
+    // Navigation
+    next: 'Weiter',
   },
   dashboard: {
     manageProjects: 'Verwalten Sie Ihre Forschungsprojekte und Analysen',
@@ -115,6 +124,16 @@ export default {
     segmentationStarted: 'Segmentierung hat begonnen',
     segmentationCompleteWithCount:
       'Segmentierung abgeschlossen! {{count}} Objekte gefunden',
+    // Project management errors and messages
+    failedToLoadProjects: 'Laden der Projekte fehlgeschlagen',
+    projectNameRequired: 'Bitte geben Sie einen Projektnamen ein',
+    mustBeLoggedIn: 'Sie müssen angemeldet sein, um ein Projekt zu erstellen',
+    failedToCreateProject: 'Projekterstellung fehlgeschlagen',
+    serverResponseInvalid: 'Serverantwort war ungültig',
+    projectCreatedDesc: '"{{name}}" ist bereit für Bilder',
+    descriptionOptional: 'Beschreibung (Optional)',
+    noDescriptionProvided: 'Keine Beschreibung angegeben',
+    selectProjectHeader: 'Projekt Auswählen',
   },
   errors: {
     noProjectOrUser: 'Fehler: Kein Projekt oder Benutzer ausgewählt',
@@ -229,6 +248,34 @@ export default {
     checkingAuthentication: 'Authentifizierung prüfen...',
     loadingAccount: 'Ihr Konto wird geladen...',
     processingRequest: 'Ihre Anfrage wird bearbeitet...',
+    // SignIn page specific
+    signInToAccount: 'Bei Ihrem Konto anmelden',
+    accessPlatform: 'Zugang zur Sphäroid-Segmentierungsplattform',
+    emailAddress: 'E-Mail-Adresse',
+    emailPlaceholder: 'sie@beispiel.com',
+    password: 'Passwort',
+    passwordPlaceholder: '••••••••',
+    signingIn: 'Anmeldung läuft...',
+    redirectingToDashboard: 'Weiterleitung zum Dashboard...',
+    fillAllFields: 'Bitte füllen Sie alle Felder aus',
+    agreeToTerms: 'Durch die Anmeldung stimmen Sie unseren',
+    termsOfService: 'Nutzungsbedingungen',
+    and: 'und',
+    privacyPolicy: 'Datenschutzrichtlinie',
+    // SignUp page specific
+    createAccount: 'Erstellen Sie Ihr Konto',
+    signUpPlatform: 'Registrieren Sie sich, um die Sphäroid-Segmentierungsplattform zu nutzen',
+    confirmPassword: 'Passwort bestätigen',
+    passwordsMatch: 'Passwörter stimmen überein',
+    passwordsDoNotMatch: 'Passwörter stimmen nicht überein',
+    agreeToTermsCheckbox: 'Ich stimme den',
+    mustAgreeToTerms: 'Sie müssen den Allgemeinen Geschäftsbedingungen zustimmen',
+    creatingAccount: 'Konto wird erstellt...',
+    alreadyLoggedIn: 'Sie sind bereits angemeldet',
+    alreadySignedUp: 'Sie sind bereits registriert und angemeldet.',
+    goToDashboard: 'Zum Dashboard gehen',
+    signUpFailed: 'Registrierung fehlgeschlagen',
+    signInFailed: 'Anmeldung fehlgeschlagen',
   },
   profile: {
     title: 'Profil',
@@ -316,6 +363,7 @@ export default {
       save: 'Speichern',
       keyboardShortcuts:
         'V: Anzeigen • E: Bearbeiten • A: Hinzufügen • N: Neu • S: Schneiden • D: Löschen',
+      nothingToSave: 'Alle Änderungen gespeichert',
     },
     status: {
       polygons: 'Polygone',
@@ -325,16 +373,113 @@ export default {
       selected: 'ausgewählt',
       saved: 'Gespeichert',
       unsaved: 'Nicht gespeichert',
+      noPolygons: 'Keine Polygone',
+      startCreating: 'Beginnen Sie mit der Erstellung eines Polygons',
+      polygonList: 'Polygon-Liste',
     },
   },
   status: {
     segmented: 'Segmentiert',
-    processing: 'Verarbeitung von {{count}} Bildern',
+    processing: 'Verarbeitung',
     queued: 'In Warteschlange',
     failed: 'Fehlgeschlagen',
     no_segmentation: 'Keine Segmentierung',
     disconnected: 'Vom Server getrennt',
     error: 'ML-Service-Fehler',
     ready: 'Bereit für Segmentierung',
+  },
+  toast: {
+    // Generic messages
+    error: 'Ein Fehler ist aufgetreten',
+    success: 'Operation erfolgreich',
+    info: 'Information',
+    warning: 'Warnung',
+    loading: 'Lädt...',
+    // Common errors
+    failedToUpdate: 'Aktualisierung der Daten fehlgeschlagen. Bitte erneut versuchen.',
+    fillAllFields: 'Bitte füllen Sie alle Felder aus',
+    operationFailed: 'Operation fehlgeschlagen. Bitte erneut versuchen.',
+    // Success messages
+    operationCompleted: 'Operation erfolgreich abgeschlossen',
+    dataSaved: 'Daten erfolgreich gespeichert',
+    dataUpdated: 'Daten erfolgreich aktualisiert',
+    // Connection messages
+    reconnecting: 'Verbinde erneut mit Server...',
+    reconnected: 'Verbindung zum Server wiederhergestellt',
+    connectionFailed: 'Wiederherstellung der Serververbindung fehlgeschlagen',
+    // Segmentation messages
+    segmentationRequested: 'Segmentierungsanfrage übermittelt',
+    segmentationCompleted: 'Bildsegmentierung abgeschlossen',
+    segmentationFailed: 'Segmentierung fehlgeschlagen',
+    segmentationResultFailed: 'Abrufen des Segmentierungsergebnisses fehlgeschlagen',
+    segmentationStatusFailed: 'Überprüfung des Segmentierungsstatus fehlgeschlagen',
+    // Export messages
+    exportCompleted: 'Export erfolgreich abgeschlossen!',
+    exportFailed: 'Export fehlgeschlagen. Bitte erneut versuchen.',
+  },
+  export: {
+    // Dialog headers
+    advancedOptions: 'Erweiterte Export-Optionen',
+    configureSettings: 'Konfigurieren Sie Ihre Export-Einstellungen, um ein umfassendes Datenpaket zu erstellen',
+    // Tabs
+    general: 'Allgemein',
+    visualization: 'Visualisierung',
+    formats: 'Formate',
+    // Content selection
+    exportContents: 'Export-Inhalte',
+    selectContent: 'Wählen Sie aus, welche Inhaltstypen in Ihren Export einbezogen werden sollen',
+    includeOriginal: 'Originalbilder einschließen',
+    includeVisualizations: 'Visualisierungen mit nummerierten Polygonen einschließen',
+    includeDocumentation: 'Dokumentation und Metadaten einschließen',
+    // Image selection
+    selectedImages: 'Ausgewählte Bilder',
+    imagesSelected: '{{count}} von {{total}} Bildern ausgewählt',
+    selectAll: 'Alle Auswählen',
+    selectNone: 'Nichts Auswählen',
+    imageSelection: 'Bildauswahl',
+    chooseImages: 'Wählen Sie aus, welche Bilder in den Export einbezogen werden sollen',
+    // Quality settings
+    qualitySettings: 'Qualitätseinstellungen',
+    imageQuality: 'Bildqualität',
+    compressionLevel: 'Komprimierungsgrad',
+    outputResolution: 'Ausgabeauflösung',
+    // Visualization settings
+    colorSettings: 'Farbeinstellungen',
+    backgroundColor: 'Hintergrundfarbe',
+    strokeColor: 'Strichfarbe',
+    strokeWidth: 'Strichbreite',
+    fontSize: 'Schriftgröße',
+    showNumbers: 'Polygon-Nummern anzeigen',
+    showLabels: 'Beschriftungen anzeigen',
+    // Format options
+    outputSettings: 'Ausgabeeinstellungen',
+    exportFormats: 'Export-Formate',
+    exportToZip: 'Als ZIP-Archiv exportieren',
+    generateExcel: 'Excel-Metriken generieren',
+    includeCocoFormat: 'COCO-Format-Annotationen einschließen',
+    includeJsonMetadata: 'JSON-Metadaten einschließen',
+    // Progress and status
+    preparing: 'Export wird vorbereitet...',
+    processing: 'Verarbeitung {{current}} von {{total}}',
+    packaging: 'Paket wird erstellt...',
+    completed: 'Export abgeschlossen',
+    downloading: 'Herunterladen...',
+    cancelled: 'Export abgebrochen',
+    // Connection status
+    connected: 'Verbunden',
+    disconnected: 'Getrennt',
+    reconnecting: 'Verbinde neu...',
+    // Buttons
+    startExport: 'Export Starten',
+    cancel: 'Abbrechen',
+    download: 'Herunterladen',
+    retry: 'Wiederholen',
+    close: 'Schließen',
+    // Error messages
+    exportError: 'Export fehlgeschlagen',
+    connectionError: 'Verbindung während Export verloren',
+    serverError: 'Server-Fehler aufgetreten',
+    invalidSelection: 'Bitte wählen Sie mindestens ein Bild aus',
+    noData: 'Keine Daten für Export verfügbar',
   },
 };

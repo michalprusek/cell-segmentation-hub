@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { logger } from '@/lib/logger';
 
@@ -17,6 +18,7 @@ const SignIn = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { signIn, user, isAuthenticated } = useAuth();
+  const { t } = useLanguage();
   // Validate and sanitize returnTo param to prevent open redirects
   const validateReturnTo = (returnTo: string | null): string => {
     if (!returnTo) return '/dashboard';
@@ -48,7 +50,7 @@ const SignIn = () => {
     e.preventDefault();
 
     if (!email || !password) {
-      toast.error('Please fill in all fields');
+      toast.error(t('auth.fillAllFields'));
       return;
     }
 
@@ -74,7 +76,7 @@ const SignIn = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-          <p className="mt-4 text-gray-600">Redirecting to dashboard...</p>
+          <p className="mt-4 text-gray-600">{t('auth.redirectingToDashboard')}</p>
         </div>
       </div>
     );
@@ -111,20 +113,20 @@ const SignIn = () => {
               <img src="/logo.svg" alt="SpheroSeg Logo" className="w-12 h-12" />
             </Link>
             <h2 className="mt-4 text-3xl font-bold text-gray-900">
-              Sign in to your account
+              {t('auth.signInToAccount')}
             </h2>
             <p className="mt-2 text-gray-600">
-              Access the spheroid segmentation platform
+              {t('auth.accessPlatform')}
             </p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <Label htmlFor="email">Email address</Label>
+              <Label htmlFor="email">{t('auth.emailAddress')}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 className="h-11"
@@ -133,11 +135,11 @@ const SignIn = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('auth.password')}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder={t('auth.passwordPlaceholder')}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 className="h-11"
@@ -155,7 +157,7 @@ const SignIn = () => {
                 htmlFor="remember"
                 className="ml-2 block text-sm text-gray-700"
               >
-                Remember me
+                {t('auth.rememberMe')}
               </label>
             </div>
 
@@ -167,10 +169,10 @@ const SignIn = () => {
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in...
+                  {t('auth.signingIn')}
                 </>
               ) : (
-                'Sign in'
+                t('auth.signIn')
               )}
             </Button>
           </form>
@@ -182,7 +184,7 @@ const SignIn = () => {
               </div>
               <div className="relative flex justify-center text-sm">
                 <span className="px-4 bg-white text-gray-500">
-                  Don't have an account?
+                  {t('auth.dontHaveAccount')}
                 </span>
               </div>
             </div>
@@ -193,23 +195,23 @@ const SignIn = () => {
                   variant="outline"
                   className="w-full h-11 text-base rounded-md"
                 >
-                  Sign Up
+                  {t('auth.signUp')}
                 </Button>
               </Link>
               <p className="text-center text-sm text-gray-600 mt-3">
-                By signing in, you agree to our{' '}
+                {t('auth.agreeToTerms')}{' '}
                 <Link
                   to="/terms-of-service"
                   className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
                 >
-                  Terms of Service
+                  {t('auth.termsOfService')}
                 </Link>{' '}
-                and{' '}
+                {t('auth.and')}{' '}
                 <Link
                   to="/privacy-policy"
                   className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
                 >
-                  Privacy Policy
+                  {t('auth.privacyPolicy')}
                 </Link>
               </p>
             </div>

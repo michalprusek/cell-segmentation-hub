@@ -136,10 +136,6 @@ const ModelSettingsSection = () => {
             className="w-full"
           />
 
-          <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-            {t('settings.currentThreshold')}:{' '}
-            {Math.round(confidenceThreshold * 100)}%
-          </div>
         </div>
       </div>
     </div>

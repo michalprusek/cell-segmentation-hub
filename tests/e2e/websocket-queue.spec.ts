@@ -78,7 +78,7 @@ test.describe('WebSocket Queue Processing E2E Tests', () => {
       .click();
 
     // Listen for network WebSocket connections
-    const wsPromise = page.waitForWebSocket({ timeout: 30000 });
+    const wsPromise = page.waitForEvent('websocket', { timeout: 30000 });
 
     await page.getByRole('button', { name: /start|process|segment/i }).click();
 

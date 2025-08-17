@@ -49,7 +49,7 @@ const ProjectCard = ({
       </CardHeader>
       <CardContent className="p-5">
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="font-medium text-lg">{title}</h3>
+          <h3 className="font-medium text-lg truncate pr-2" title={title}>{title}</h3>
         </div>
         <p className="text-sm text-gray-500 line-clamp-2 mb-3">{description}</p>
         <ProjectMetadata date={date} imageCount={imageCount} />

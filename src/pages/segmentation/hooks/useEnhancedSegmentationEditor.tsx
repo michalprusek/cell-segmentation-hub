@@ -26,6 +26,7 @@ interface UseEnhancedSegmentationEditorProps {
   canvasHeight: number;
   onSave?: (polygons: Polygon[]) => Promise<void>;
   onPolygonsChange?: (polygons: Polygon[]) => void;
+  imageId?: string; // Add imageId to detect image changes
 }
 
 /**
@@ -40,6 +41,7 @@ export const useEnhancedSegmentationEditor = ({
   canvasHeight,
   onSave,
   onPolygonsChange,
+  imageId,
 }: UseEnhancedSegmentationEditorProps) => {
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
@@ -109,38 +111,69 @@ export const useEnhancedSegmentationEditor = ({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Only update polygons from initialPolygons on first mount or when image changes
+  // Track image changes and polygon data
   const initialPolygonsRef = useRef<Polygon[]>([]);
+  const currentImageIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
 
   useEffect(() => {
-    // Check if this is truly new data (different length or first load)
-    const isNewData =
-      !hasInitialized.current ||
-      initialPolygons.length !== initialPolygonsRef.current.length;
+    // Check if this is truly new data (different imageId, different length, or first load)
+    const imageChanged = currentImageIdRef.current !== imageId;
+    const lengthChanged = initialPolygons.length !== initialPolygonsRef.current.length;
+    const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
 
     if (isNewData) {
       if (process.env.NODE_ENV === 'development') {
         logger.debug(
           '🔄 Loading new polygon data:',
           initialPolygons.length,
-          'polygons'
+          'polygons for image:',
+          imageId,
+          { imageChanged, lengthChanged, isFirstLoad: !hasInitialized.current }
         );
       }
+
+      // Reset all editor state when switching images
       setPolygons(initialPolygons);
+      setSelectedPolygonId(null); // Clear selection
+      setEditMode(EditMode.View); // Reset to view mode
+      setTempPoints([]); // Clear temp points
+      setHoveredVertex(null); // Clear hover state
+      setCursorPosition(null); // Clear cursor
+      setVertexDragState({
+        isDragging: false,
+        polygonId: null,
+        vertexIndex: null,
+      }); // Reset drag state
+      
+      // Reset interaction state
+      setInteractionState({
+        isDraggingVertex: false,
+        isPanning: false,
+        panStart: null,
+        draggedVertexInfo: null,
+        originalVertexPosition: null,
+        sliceStartPoint: null,
+        addPointStartVertex: null,
+        addPointEndVertex: null,
+        isAddingPoints: false,
+      });
+      
       // Reset history with new initial state
       setHistory([initialPolygons]);
       setHistoryIndex(0);
       setHasUnsavedChanges(false);
 
+      // Update refs
       initialPolygonsRef.current = initialPolygons;
+      currentImageIdRef.current = imageId;
       hasInitialized.current = true;
 
       if (process.env.NODE_ENV === 'development') {
-        logger.debug('✅ Loaded', initialPolygons.length, 'polygons');
+        logger.debug('✅ Loaded', initialPolygons.length, 'polygons for image:', imageId);
       }
     }
-  }, [initialPolygons]);
+  }, [initialPolygons, imageId]);
 
   // Update polygons with history tracking
   const updatePolygons = useCallback(

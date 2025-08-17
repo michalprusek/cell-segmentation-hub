@@ -15,6 +15,7 @@ import {
 import { PlusCircle } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 
@@ -28,17 +29,18 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
   const [isCreating, setIsCreating] = useState(false);
   const [open, setOpen] = useState(false);
   const { user } = useAuth();
+  const { t } = useLanguage();
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!projectName.trim()) {
-      toast.error('Please enter a project name');
+      toast.error(t('projects.projectNameRequired'));
       return;
     }
 
     if (!user) {
-      toast.error('You must be logged in to create a project');
+      toast.error(t('projects.mustBeLoggedIn'));
       return;
     }
 
@@ -47,20 +49,20 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
     try {
       const projectData = await apiClient.createProject({
         name: projectName,
-        description: projectDescription || 'No description provided',
+        description: projectDescription || t('projects.noDescriptionProvided'),
       });
 
       // Validate response
       if (!projectData || !projectData.id) {
         logger.error('Invalid project creation response:', projectData);
-        toast.error('Failed to create project', {
-          description: 'Server response was invalid',
+        toast.error(t('projects.failedToCreateProject'), {
+          description: t('projects.serverResponseInvalid'),
         });
         return;
       }
 
-      toast.success('Project created successfully', {
-        description: `"${projectName}" is ready for images`,
+      toast.success(t('projects.projectCreated'), {
+        description: t('projects.projectCreatedDesc', { name: projectName }),
       });
 
       setOpen(false);
@@ -79,8 +81,8 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
       window.dispatchEvent(event);
     } catch (error: unknown) {
       logger.error('Error creating project:', error);
-      const errorMessage = getErrorMessage(error) || 'Failed to create project';
-      toast.error('Failed to create project: ' + errorMessage);
+      const errorMessage = getErrorMessage(error) || t('projects.failedToCreateProject');
+      toast.error(t('projects.failedToCreateProject') + ': ' + errorMessage);
     } finally {
       setIsCreating(false);
     }
@@ -91,25 +93,25 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
       <DialogTrigger asChild>
         <Button className="rounded-md">
           <PlusCircle size={18} className="mr-2" />
-          New Project
+          {t('common.newProject')}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Create New Project</DialogTitle>
+          <DialogTitle>{t('projects.createProject')}</DialogTitle>
           <DialogDescription>
-            Add a new project to organize your spheroid images and analyses.
+            {t('projects.createProjectDesc')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleCreateProject}>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="projectName" className="text-right">
-                Project Name
+                {t('common.projectName')}
               </Label>
               <Input
                 id="projectName"
-                placeholder="e.g., HeLa Cell Spheroids"
+                placeholder={t('projects.projectNamePlaceholder')}
                 value={projectName}
                 onChange={e => setProjectName(e.target.value)}
                 required
@@ -117,11 +119,11 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="projectDescription" className="text-right">
-                Description (Optional)
+                {t('projects.descriptionOptional')}
               </Label>
               <Input
                 id="projectDescription"
-                placeholder="e.g., Analysis of tumor spheroids for drug resistance studies"
+                placeholder={t('projects.projectDescPlaceholder')}
                 value={projectDescription}
                 onChange={e => setProjectDescription(e.target.value)}
               />
@@ -129,7 +131,7 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
           </div>
           <DialogFooter>
             <Button type="submit" disabled={isCreating}>
-              {isCreating ? 'Creating...' : 'Create Project'}
+              {isCreating ? t('projects.creatingProject') : t('projects.createProject')}
             </Button>
           </DialogFooter>
         </form>

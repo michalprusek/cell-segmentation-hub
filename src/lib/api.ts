@@ -604,6 +604,39 @@ class ApiClient {
   }
 
   // Image methods
+  /**
+   * Get project images with optimized thumbnail data
+   */
+  async getProjectImagesWithThumbnails(
+    projectId: string,
+    params?: { 
+      page?: number; 
+      limit?: number; 
+      lod?: 'low' | 'medium' | 'high' 
+    }
+  ): Promise<{
+    images: ProjectImage[];
+    pagination: {
+      page: number;
+      limit: number;
+      total: number;
+      pages: number;
+    };
+    metadata: {
+      levelOfDetail: 'low' | 'medium' | 'high';
+      totalImages: number;
+      imagesWithThumbnails: number;
+    };
+  }> {
+    const response = await this.instance.get(`/projects/${projectId}/images-with-thumbnails`, {
+      params: {
+        lod: 'low',
+        ...params
+      }
+    });
+    return response.data.data;
+  }
+
   async getProjectImages(
     projectId: string,
     params?: { page?: number; limit?: number }

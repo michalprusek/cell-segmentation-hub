@@ -1,14 +1,17 @@
 import { Request, Response } from 'express';
 import { ImageService } from '../../services/imageService';
+import { ThumbnailService } from '../../services/thumbnailService';
 import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/index';
 
 export class ImageController {
   private imageService: ImageService;
+  private thumbnailService: ThumbnailService;
 
   constructor() {
     this.imageService = new ImageService(prisma);
+    this.thumbnailService = new ThumbnailService(prisma);
   }
 
   /**
@@ -387,6 +390,176 @@ export class ImageController {
         userId: req.user?.id,
         projectId: req.params.id
       });
+
+      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
+      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
+        ResponseHelper.notFound(res, errorMessage);
+      } else {
+        ResponseHelper.internalError(res, error as Error);
+      }
+    }
+  };
+
+  /**
+   * Get project images with optimized thumbnail data for cards
+   * GET /api/projects/:projectId/images-with-thumbnails
+   */
+  getProjectImagesWithThumbnails = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
+
+      const { projectId } = req.params;
+      const { 
+        lod = 'low',  // level of detail: low, medium, high
+        page = '1',
+        limit = '50'
+      } = req.query;
+
+      if (!projectId) {
+        ResponseHelper.badRequest(res, 'Project ID is required');
+        return;
+      }
+
+      const pageNum = parseInt(page as string, 10);
+      const limitNum = parseInt(limit as string, 10);
+      const levelOfDetail = (lod as string) as 'low' | 'medium' | 'high';
+
+      logger.info('Getting project images with thumbnails', 'ImageController', {
+        projectId,
+        userId,
+        levelOfDetail,
+        page: pageNum,
+        limit: limitNum
+      });
+
+      // Verify project ownership
+      const project = await prisma.project.findFirst({
+        where: {
+          id: projectId,
+          userId
+        }
+      });
+
+      if (!project) {
+        ResponseHelper.notFound(res, 'Projekt nenalezen nebo nemáte oprávnění');
+        return;
+      }
+
+      // Get images with segmentation data in a single optimized query
+      const images = await prisma.image.findMany({
+        where: {
+          projectId
+        },
+        include: {
+          segmentation: {
+            include: {
+              segmentationThumbnails: {
+                where: {
+                  levelOfDetail
+                }
+              }
+            }
+          }
+        },
+        orderBy: {
+          updatedAt: 'desc'
+        },
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum
+      });
+
+      // Get total count for pagination
+      const totalCount = await prisma.image.count({
+        where: { projectId }
+      });
+
+      // Transform data for frontend
+      const transformedImages = images.map(image => {
+        let thumbnailData = null;
+
+        if (image.segmentation && image.segmentation.segmentationThumbnails.length > 0) {
+          const thumbnail = image.segmentation.segmentationThumbnails[0];
+          if (thumbnail) {
+            try {
+              const parsedPolygons = JSON.parse(thumbnail.simplifiedData);
+              thumbnailData = {
+                polygons: parsedPolygons,
+                imageWidth: image.segmentation.imageWidth,
+                imageHeight: image.segmentation.imageHeight,
+                levelOfDetail: thumbnail.levelOfDetail,
+                polygonCount: thumbnail.polygonCount,
+                pointCount: thumbnail.pointCount,
+                compressionRatio: thumbnail.compressionRatio
+              };
+            } catch (error) {
+              logger.error(
+                `Failed to parse thumbnail data for image ${image.id}`,
+                error instanceof Error ? error : new Error(String(error)),
+                'ImageController'
+              );
+            }
+          }
+        }
+
+        return {
+          id: image.id,
+          name: image.name,
+          thumbnail_url: `/api/images/${image.id}/thumbnail`,
+          url: `/api/images/${image.id}`,
+          image_url: `/api/images/${image.id}`,
+          projectId: image.projectId,
+          segmentationStatus: image.segmentationStatus,
+          fileSize: image.fileSize,
+          width: image.width,
+          height: image.height,
+          mimeType: image.mimeType,
+          createdAt: image.createdAt,
+          updatedAt: image.updatedAt,
+          segmentationResult: thumbnailData
+        };
+      });
+
+      const response = {
+        images: transformedImages,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: totalCount,
+          pages: Math.ceil(totalCount / limitNum)
+        },
+        metadata: {
+          levelOfDetail,
+          totalImages: totalCount,
+          imagesWithThumbnails: transformedImages.filter(img => img.segmentationResult).length
+        }
+      };
+
+      logger.debug(
+        `✅ Retrieved ${transformedImages.length} images with thumbnails (${response.metadata.imagesWithThumbnails} with segmentation)`,
+        'ImageController',
+        {
+          projectId,
+          levelOfDetail,
+          totalImages: totalCount
+        }
+      );
+
+      ResponseHelper.success(res, response, 'Obrázky s náhledy úspěšně načteny');
+
+    } catch (error) {
+      logger.error(
+        'Failed to get project images with thumbnails',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          projectId: req.params.projectId
+        }
+      );
 
       const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
       if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
