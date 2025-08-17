@@ -2,7 +2,7 @@
 
 /**
  * i18n Translation Key Validator
- * 
+ *
  * This script validates the completeness and consistency of translation keys
  * across all language files and detects potential issues.
  */
@@ -22,19 +22,19 @@ function loadTranslations(langCode) {
   try {
     const filePath = path.join(TRANSLATIONS_DIR, `${langCode}.ts`);
     const content = fs.readFileSync(filePath, 'utf8');
-    
+
     // Extract the export default object content
     const match = content.match(/export default (\{[\s\S]*\});?\s*$/);
     if (!match) {
       throw new Error(`Cannot parse ${langCode}.ts - invalid format`);
     }
-    
+
     // Use eval to parse the TypeScript object (safe in Node.js build context)
     const objectStr = match[1];
-    
+
     // Create a safe evaluation context
     const evalResult = eval(`(${objectStr})`);
-    
+
     return evalResult;
   } catch (error) {
     console.error(`Error loading ${langCode} translations:`, error.message);
@@ -47,19 +47,23 @@ function loadTranslations(langCode) {
  */
 function flattenKeys(obj, prefix = '') {
   const flattened = {};
-  
+
   for (const key in obj) {
     if (obj.hasOwnProperty(key)) {
       const newKey = prefix ? `${prefix}.${key}` : key;
-      
-      if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+
+      if (
+        typeof obj[key] === 'object' &&
+        obj[key] !== null &&
+        !Array.isArray(obj[key])
+      ) {
         Object.assign(flattened, flattenKeys(obj[key], newKey));
       } else {
         flattened[newKey] = obj[key];
       }
     }
   }
-  
+
   return flattened;
 }
 
@@ -68,29 +72,33 @@ function flattenKeys(obj, prefix = '') {
  */
 function extractUsedKeys() {
   const usedKeys = new Set();
-  
+
   function scanDirectory(dir) {
     const files = fs.readdirSync(dir);
-    
+
     for (const file of files) {
       const filePath = path.join(dir, file);
       const stat = fs.statSync(filePath);
-      
-      if (stat.isDirectory() && !file.startsWith('.') && file !== 'node_modules') {
+
+      if (
+        stat.isDirectory() &&
+        !file.startsWith('.') &&
+        file !== 'node_modules'
+      ) {
         scanDirectory(filePath);
       } else if (file.match(/\.(tsx?|jsx?)$/)) {
         scanFile(filePath);
       }
     }
   }
-  
+
   function scanFile(filePath) {
     try {
       const content = fs.readFileSync(filePath, 'utf8');
-      
+
       // Match t('key') and t("key") patterns
       const matches = content.match(/\bt\(\s*['"`]([^'"`]+)['"`]\s*\)/g);
-      
+
       if (matches) {
         matches.forEach(match => {
           const keyMatch = match.match(/\bt\(\s*['"`]([^'"`]+)['"`]\s*\)/);
@@ -103,7 +111,7 @@ function extractUsedKeys() {
       console.error(`Error scanning ${filePath}:`, error.message);
     }
   }
-  
+
   scanDirectory(SRC_DIR);
   return Array.from(usedKeys);
 }
@@ -113,33 +121,37 @@ function extractUsedKeys() {
  */
 function validateTranslations() {
   console.log('🔍 Validating translation keys...\n');
-  
+
   // Load all translations
   const translations = {};
   const flatTranslations = {};
-  
+
   for (const lang of LANGUAGES) {
     translations[lang] = loadTranslations(lang);
     flatTranslations[lang] = flattenKeys(translations[lang]);
   }
-  
+
   // Get used keys from source code
   const usedKeys = extractUsedKeys();
-  console.log(`📊 Found ${usedKeys.length} translation keys used in source code\n`);
-  
+  console.log(
+    `📊 Found ${usedKeys.length} translation keys used in source code\n`
+  );
+
   // Get all available keys (from English as reference)
   const availableKeys = Object.keys(flatTranslations.en || {});
-  console.log(`📚 Found ${availableKeys.length} keys in English translation file\n`);
-  
+  console.log(
+    `📚 Found ${availableKeys.length} keys in English translation file\n`
+  );
+
   let hasErrors = false;
-  
+
   // Check for missing keys in source code
   console.log('🔍 Checking for missing translations in source code:');
   // Filter out template strings (dynamic keys with ${})
-  const missingInCode = usedKeys.filter(key => 
-    !availableKeys.includes(key) && !key.includes('${')
+  const missingInCode = usedKeys.filter(
+    key => !availableKeys.includes(key) && !key.includes('${')
   );
-  
+
   if (missingInCode.length > 0) {
     hasErrors = true;
     console.log('❌ Missing translation keys:');
@@ -147,19 +159,21 @@ function validateTranslations() {
   } else {
     console.log('✅ All used keys have translations defined');
   }
-  
+
   // Report template strings separately (not as errors)
   const templateKeys = usedKeys.filter(key => key.includes('${'));
   if (templateKeys.length > 0) {
-    console.log('ℹ️  Template string keys (dynamic, cannot be validated statically):');
+    console.log(
+      'ℹ️  Template string keys (dynamic, cannot be validated statically):'
+    );
     templateKeys.forEach(key => console.log(`   - ${key}`));
   }
   console.log();
-  
+
   // Check for unused keys
   console.log('🔍 Checking for unused translation keys:');
   const unusedKeys = availableKeys.filter(key => !usedKeys.includes(key));
-  
+
   if (unusedKeys.length > 0) {
     console.log(`⚠️  Found ${unusedKeys.length} unused translation keys:`);
     unusedKeys.slice(0, 10).forEach(key => console.log(`   - ${key}`));
@@ -170,21 +184,21 @@ function validateTranslations() {
     console.log('✅ All translation keys are being used');
   }
   console.log();
-  
+
   // Check consistency across languages
   console.log('🔍 Checking translation completeness across languages:');
-  
+
   for (const lang of LANGUAGES) {
     if (lang === 'en') continue; // Skip English (reference)
-    
+
     const langKeys = Object.keys(flatTranslations[lang] || {});
     const missingKeys = availableKeys.filter(key => !langKeys.includes(key));
     const extraKeys = langKeys.filter(key => !availableKeys.includes(key));
-    
+
     if (missingKeys.length > 0 || extraKeys.length > 0) {
       hasErrors = true;
       console.log(`❌ ${lang.toUpperCase()}: Issues found`);
-      
+
       if (missingKeys.length > 0) {
         console.log(`   Missing ${missingKeys.length} keys:`);
         missingKeys.slice(0, 5).forEach(key => console.log(`     - ${key}`));
@@ -192,7 +206,7 @@ function validateTranslations() {
           console.log(`     ... and ${missingKeys.length - 5} more`);
         }
       }
-      
+
       if (extraKeys.length > 0) {
         console.log(`   Extra ${extraKeys.length} keys:`);
         extraKeys.slice(0, 5).forEach(key => console.log(`     - ${key}`));
@@ -201,10 +215,12 @@ function validateTranslations() {
         }
       }
     } else {
-      console.log(`✅ ${lang.toUpperCase()}: Complete (${langKeys.length} keys)`);
+      console.log(
+        `✅ ${lang.toUpperCase()}: Complete (${langKeys.length} keys)`
+      );
     }
   }
-  
+
   console.log('\n📋 Summary:');
   console.log(`   - Languages: ${LANGUAGES.length}`);
   console.log(`   - Total keys (EN): ${availableKeys.length}`);
@@ -212,7 +228,7 @@ function validateTranslations() {
   console.log(`   - Missing from code: ${missingInCode.length}`);
   console.log(`   - Template keys: ${templateKeys.length}`);
   console.log(`   - Unused: ${unusedKeys.length}`);
-  
+
   if (hasErrors) {
     console.log('\n❌ Validation failed! Please fix the issues above.');
     process.exit(1);

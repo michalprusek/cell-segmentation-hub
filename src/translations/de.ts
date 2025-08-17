@@ -232,11 +232,13 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet',
-          description: 'Schnelles und effizientes Modell für Echzeit-Segmentierung',
+          description:
+            'Schnelles und effizientes Modell für Echzeit-Segmentierung',
         },
         cbam: {
           name: 'CBAM-ResUNet',
-          description: 'Ausgewogene Geschwindigkeit und Genauigkeit für die meisten Anwendungsfälle',
+          description:
+            'Ausgewogene Geschwindigkeit und Genauigkeit für die meisten Anwendungsfälle',
         },
         ma: {
           name: 'MA-ResUNet',
@@ -276,7 +278,8 @@ export default {
     deleteAccountError: 'Fehler beim Löschen des Kontos',
     deleteAccountDialog: {
       title: 'Konto löschen',
-      description: 'Diese Aktion kann nicht rückgängig gemacht werden. Dies wird Ihr Konto dauerhaft löschen und alle Ihre Daten von unseren Servern entfernen.',
+      description:
+        'Diese Aktion kann nicht rückgängig gemacht werden. Dies wird Ihr Konto dauerhaft löschen und alle Ihre Daten von unseren Servern entfernen.',
       whatWillBeDeleted: 'Was wird gelöscht:',
       deleteItems: {
         account: 'Ihr Benutzerkonto und Profil',
@@ -350,25 +353,27 @@ export default {
     logoutFailed: 'Abmeldung fehlgeschlagen',
     profileUpdateFailed: 'Profilaktualisierung fehlgeschlagen',
     welcomeMessage: 'Willkommen bei der Sphäroid-Segmentierungsplattform',
-    confirmationRequired: 'Bestätigungstext ist erforderlich und muss Ihrer E-Mail-Adresse entsprechen',
+    confirmationRequired:
+      'Bestätigungstext ist erforderlich und muss Ihrer E-Mail-Adresse entsprechen',
     agreeToTerms: 'Durch die Anmeldung stimmen Sie unseren',
     termsOfService: 'Nutzungsbedingungen',
     and: 'und',
     privacyPolicy: 'Datenschutzrichtlinie',
     // SignUp page specific
     createAccount: 'Erstellen Sie Ihr Konto',
-    signUpPlatform: 'Registrieren Sie sich, um die Sphäroid-Segmentierungsplattform zu nutzen',
+    signUpPlatform:
+      'Registrieren Sie sich, um die Sphäroid-Segmentierungsplattform zu nutzen',
     confirmPassword: 'Passwort bestätigen',
     passwordsMatch: 'Passwörter stimmen überein',
     passwordsDoNotMatch: 'Passwörter stimmen nicht überein',
     agreeToTermsCheckbox: 'Ich stimme den',
-    mustAgreeToTerms: 'Sie müssen den Allgemeinen Geschäftsbedingungen zustimmen',
+    mustAgreeToTerms:
+      'Sie müssen den Allgemeinen Geschäftsbedingungen zustimmen',
     creatingAccount: 'Konto wird erstellt...',
     alreadyLoggedIn: 'Sie sind bereits angemeldet',
     alreadySignedUp: 'Sie sind bereits registriert und angemeldet.',
     goToDashboard: 'Zum Dashboard gehen',
     signUpFailed: 'Registrierung fehlgeschlagen',
-    signInFailed: 'Anmeldung fehlgeschlagen',
   },
   profile: {
     title: 'Profil',
@@ -473,7 +478,8 @@ export default {
     shortcuts: {
       buttonText: 'Tastenkürzel',
       dialogTitle: 'Tastenkürzel',
-      footerNote: 'Diese Tastenkürzel funktionieren im Segmentierungseditor für schnelleres und bequemeres Arbeiten.',
+      footerNote:
+        'Diese Tastenkürzel funktionieren im Segmentierungseditor für schnelleres und bequemeres Arbeiten.',
       v: 'Ansichtsmodus',
       e: 'Eckpunkte bearbeiten-Modus',
       a: 'Punkte hinzufügen-Modus',
@@ -493,7 +499,8 @@ export default {
       header: 'Tipps:',
       edit: {
         createPoint: 'Klicken, um einen neuen Punkt zu erstellen',
-        holdShift: 'Shift halten, um automatisch eine Punktsequenz zu erstellen',
+        holdShift:
+          'Shift halten, um automatisch eine Punktsequenz zu erstellen',
         closePolygon: 'Polygon durch Klicken auf den ersten Punkt schließen',
       },
       slice: {
@@ -532,28 +539,38 @@ export default {
     sliceFailed: 'Polygon-Schnitt fehlgeschlagen',
     instructions: {
       slice: {
-        selectPolygon: '1. Klicken Sie auf ein Polygon, um es zum Schneiden auszuwählen',
-        placeFirstPoint: '2. Klicken Sie, um den ersten Schnittpunkt zu platzieren',
-        placeSecondPoint: '3. Klicken Sie, um den zweiten Schnittpunkt zu platzieren und den Schnitt durchzuführen',
+        selectPolygon:
+          '1. Klicken Sie auf ein Polygon, um es zum Schneiden auszuwählen',
+        placeFirstPoint:
+          '2. Klicken Sie, um den ersten Schnittpunkt zu platzieren',
+        placeSecondPoint:
+          '3. Klicken Sie, um den zweiten Schnittpunkt zu platzieren und den Schnitt durchzuführen',
         cancel: 'Drücken Sie ESC zum Abbrechen',
       },
       create: {
-        startPolygon: '1. Klicken Sie, um mit der Polygon-Erstellung zu beginnen',
-        continuePoints: '2. Klicken Sie weiter, um mehr Punkte hinzuzufügen (mindestens 3 benötigt)',
-        finishPolygon: '3. Fügen Sie weiter Punkte hinzu oder klicken Sie nahe dem ersten Punkt, um das Polygon zu schließen',
+        startPolygon:
+          '1. Klicken Sie, um mit der Polygon-Erstellung zu beginnen',
+        continuePoints:
+          '2. Klicken Sie weiter, um mehr Punkte hinzuzufügen (mindestens 3 benötigt)',
+        finishPolygon:
+          '3. Fügen Sie weiter Punkte hinzu oder klicken Sie nahe dem ersten Punkt, um das Polygon zu schließen',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
       },
       addPoints: {
-        clickVertex: 'Klicken Sie auf einen beliebigen Eckpunkt, um mit dem Hinzufügen von Punkten zu beginnen',
-        addPoints: 'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen',
+        clickVertex:
+          'Klicken Sie auf einen beliebigen Eckpunkt, um mit dem Hinzufügen von Punkten zu beginnen',
+        addPoints:
+          'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
       },
       editVertices: {
-        selectPolygon: 'Klicken Sie auf ein Polygon, um es zur Bearbeitung auszuwählen',
+        selectPolygon:
+          'Klicken Sie auf ein Polygon, um es zur Bearbeitung auszuwählen',
         dragVertices: 'Klicken und ziehen Sie Eckpunkte, um sie zu bewegen',
-        addPoints: 'SHIFT halten und auf einen Eckpunkt klicken, um Punkte hinzuzufügen',
+        addPoints:
+          'SHIFT halten und auf einen Eckpunkt klicken, um Punkte hinzuzufügen',
         deleteVertex: 'Doppelklick auf einen Eckpunkt, um ihn zu löschen',
       },
       deletePolygon: {
@@ -608,13 +625,16 @@ export default {
     warning: 'Warnung',
     loading: 'Lädt...',
     // Common errors
-    failedToUpdate: 'Aktualisierung der Daten fehlgeschlagen. Bitte erneut versuchen.',
+    failedToUpdate:
+      'Aktualisierung der Daten fehlgeschlagen. Bitte erneut versuchen.',
     fillAllFields: 'Bitte füllen Sie alle Felder aus',
     operationFailed: 'Operation fehlgeschlagen. Bitte erneut versuchen.',
     // Error boundary
     unexpectedError: 'Unerwarteter Fehler',
-    somethingWentWrong: 'Etwas ist schiefgelaufen. Bitte versuchen Sie es später erneut.',
-    somethingWentWrongPage: 'Beim Laden dieser Seite ist ein Fehler aufgetreten.',
+    somethingWentWrong:
+      'Etwas ist schiefgelaufen. Bitte versuchen Sie es später erneut.',
+    somethingWentWrongPage:
+      'Beim Laden dieser Seite ist ein Fehler aufgetreten.',
     returnToHome: 'Zurück zur Startseite',
     // Success messages
     operationCompleted: 'Operation erfolgreich abgeschlossen',
@@ -628,8 +648,10 @@ export default {
     segmentationRequested: 'Segmentierungsanfrage übermittelt',
     segmentationCompleted: 'Bildsegmentierung abgeschlossen',
     segmentationFailed: 'Segmentierung fehlgeschlagen',
-    segmentationResultFailed: 'Abrufen des Segmentierungsergebnisses fehlgeschlagen',
-    segmentationStatusFailed: 'Überprüfung des Segmentierungsstatus fehlgeschlagen',
+    segmentationResultFailed:
+      'Abrufen des Segmentierungsergebnisses fehlgeschlagen',
+    segmentationStatusFailed:
+      'Überprüfung des Segmentierungsstatus fehlgeschlagen',
     // Export messages
     exportCompleted: 'Export erfolgreich abgeschlossen!',
     exportFailed: 'Export fehlgeschlagen. Bitte erneut versuchen.',
@@ -663,16 +685,19 @@ export default {
   export: {
     // Dialog headers
     advancedOptions: 'Erweiterte Export-Optionen',
-    configureSettings: 'Konfigurieren Sie Ihre Export-Einstellungen, um ein umfassendes Datenpaket zu erstellen',
+    configureSettings:
+      'Konfigurieren Sie Ihre Export-Einstellungen, um ein umfassendes Datenpaket zu erstellen',
     // Tabs
     general: 'Allgemein',
     visualization: 'Visualisierung',
     formats: 'Formate',
     // Content selection
     exportContents: 'Export-Inhalte',
-    selectContent: 'Wählen Sie aus, welche Inhaltstypen in Ihren Export einbezogen werden sollen',
+    selectContent:
+      'Wählen Sie aus, welche Inhaltstypen in Ihren Export einbezogen werden sollen',
     includeOriginal: 'Originalbilder einschließen',
-    includeVisualizations: 'Visualisierungen mit nummerierten Polygonen einschließen',
+    includeVisualizations:
+      'Visualisierungen mit nummerierten Polygonen einschließen',
     includeDocumentation: 'Dokumentation und Metadaten einschließen',
     // Image selection
     selectedImages: 'Ausgewählte Bilder',
@@ -680,7 +705,8 @@ export default {
     selectAll: 'Alle Auswählen',
     selectNone: 'Nichts Auswählen',
     imageSelection: 'Bildauswahl',
-    chooseImages: 'Wählen Sie aus, welche Bilder in den Export einbezogen werden sollen',
+    chooseImages:
+      'Wählen Sie aus, welche Bilder in den Export einbezogen werden sollen',
     // Quality settings
     qualitySettings: 'Qualitätseinstellungen',
     imageQuality: 'Bildqualität',
@@ -734,7 +760,7 @@ export default {
   deleteImageError: 'Fehler beim Löschen des Bildes',
   imageAlreadyProcessing: 'Bild wird bereits verarbeitet',
   processImageFailed: 'Bildverarbeitung fehlgeschlagen',
-  
+
   exportDialog: {
     title: 'Export-Optionen',
     includeMetadata: 'Metadaten einschließen',
@@ -749,7 +775,8 @@ export default {
   docs: {
     badge: 'Dokumentation',
     title: 'SpheroSeg Dokumentation',
-    subtitle: 'Umfassender Leitfaden für unsere Sphäroid-Segmentierungsplattform',
+    subtitle:
+      'Umfassender Leitfaden für unsere Sphäroid-Segmentierungsplattform',
     navigation: 'Navigation',
     nav: {
       introduction: 'Einführung',
@@ -763,14 +790,17 @@ export default {
     introduction: {
       title: 'Einführung',
       whatIs: 'Was ist SpheroSeg?',
-      description: 'SpheroSeg ist eine fortschrittliche Plattform für die Segmentierung und Analyse zellulärer Sphäroide in mikroskopischen Bildern.',
+      description:
+        'SpheroSeg ist eine fortschrittliche Plattform für die Segmentierung und Analyse zellulärer Sphäroide in mikroskopischen Bildern.',
       developedBy: 'Diese Plattform wurde von Bc. Michal Průšek entwickelt.',
-      addresses: 'SpheroSeg adressiert die herausfordernde Aufgabe der präzisen Identifikation und Segmentierung.',
+      addresses:
+        'SpheroSeg adressiert die herausfordernde Aufgabe der präzisen Identifikation und Segmentierung.',
     },
     gettingStarted: {
       title: 'Erste Schritte',
       accountCreation: 'Konto Erstellen',
-      accountDescription: 'Um SpheroSeg zu verwenden, müssen Sie ein Konto erstellen.',
+      accountDescription:
+        'Um SpheroSeg zu verwenden, müssen Sie ein Konto erstellen.',
       accountSteps: {
         step1: 'Zur Registrierungsseite navigieren',
         step2: 'E-Mail-Adresse eingeben',
@@ -813,7 +843,8 @@ export default {
           name: 'CBAM-ResUNet (Mittel)',
           inferenceTime: 'Inferenzzeit: ~6,9 Sekunden',
           bestFor: 'Optimal für: Ausgewogene Geschwindigkeit',
-          description: 'Optimale Balance zwischen Geschwindigkeit und Qualität.',
+          description:
+            'Optimale Balance zwischen Geschwindigkeit und Qualität.',
         },
         ma: {
           name: 'MA-ResUNet (Groß)',
@@ -1002,36 +1033,43 @@ export default {
     terms: {
       title: 'Nutzungsbedingungen',
       lastUpdated: 'Zuletzt aktualisiert: Januar 2025',
-      disclaimer: 'Durch die Nutzung von SpheroSeg stimmen Sie diesen Bedingungen zu. Bitte lesen Sie sie sorgfältig.',
+      disclaimer:
+        'Durch die Nutzung von SpheroSeg stimmen Sie diesen Bedingungen zu. Bitte lesen Sie sie sorgfältig.',
       sections: {
         acceptance: {
           title: '1. Annahme der Bedingungen',
-          content: 'Durch den Zugriff auf oder die Nutzung von SpheroSeg ("der Dienst") stimmen Sie zu, an diese Nutzungsbedingungen ("Bedingungen") und alle anwendbaren Gesetze und Vorschriften gebunden zu sein. Wenn Sie mit diesen Bedingungen nicht einverstanden sind, ist Ihnen die Nutzung dieses Dienstes untersagt. Diese Bedingungen stellen eine rechtlich bindende Vereinbarung zwischen Ihnen und SpheroSeg dar.',
+          content:
+            'Durch den Zugriff auf oder die Nutzung von SpheroSeg ("der Dienst") stimmen Sie zu, an diese Nutzungsbedingungen ("Bedingungen") und alle anwendbaren Gesetze und Vorschriften gebunden zu sein. Wenn Sie mit diesen Bedingungen nicht einverstanden sind, ist Ihnen die Nutzung dieses Dienstes untersagt. Diese Bedingungen stellen eine rechtlich bindende Vereinbarung zwischen Ihnen und SpheroSeg dar.',
         },
         useLicense: {
           title: '2. Nutzungslizenz und Erlaubte Nutzung',
-          content: 'Die Berechtigung zur Nutzung von SpheroSeg wird gewährt für:',
+          content:
+            'Die Berechtigung zur Nutzung von SpheroSeg wird gewährt für:',
           permittedUses: [
             'Persönliche, nicht-kommerzielle Forschungszwecke',
             'Akademische und Bildungsforschung',
             'Wissenschaftliche Publikationen und Studien',
             'Biomedizinische Forschung und Analyse',
           ],
-          licenseNote: 'Dies ist die Gewährung einer Lizenz, nicht eine Eigentumsübertragung. Sie dürfen den Dienst nicht für kommerzielle Zwecke ohne ausdrückliche schriftliche Zustimmung nutzen.',
+          licenseNote:
+            'Dies ist die Gewährung einer Lizenz, nicht eine Eigentumsübertragung. Sie dürfen den Dienst nicht für kommerzielle Zwecke ohne ausdrückliche schriftliche Zustimmung nutzen.',
         },
         dataUsage: {
           title: '3. Datennutzung und Maschinelles Lernen',
           importantTitle: 'Wichtig: Verwendung Ihrer Daten',
-          importantContent: 'Durch das Hochladen von Bildern und Daten zu SpheroSeg stimmen Sie zu, dass wir diese Daten verwenden, um unsere maschinellen Lernmodelle für bessere Segmentierungsgenauigkeit zu verbessern und zu trainieren.',
+          importantContent:
+            'Durch das Hochladen von Bildern und Daten zu SpheroSeg stimmen Sie zu, dass wir diese Daten verwenden, um unsere maschinellen Lernmodelle für bessere Segmentierungsgenauigkeit zu verbessern und zu trainieren.',
           ownershipTitle: 'Dateneigentum:',
-          ownershipContent: 'Sie behalten das Eigentum an allen Daten, die Sie zu SpheroSeg hochladen. Durch die Nutzung unseres Dienstes gewähren Sie uns jedoch die Berechtigung zu:',
+          ownershipContent:
+            'Sie behalten das Eigentum an allen Daten, die Sie zu SpheroSeg hochladen. Durch die Nutzung unseres Dienstes gewähren Sie uns jedoch die Berechtigung zu:',
           permissions: [
             'Verarbeitung Ihrer Bilder für Segmentierungsanalyse',
             'Verwendung hochgeladener Daten (in anonymisierter Form) zur Verbesserung unserer ML-Algorithmen',
             'Verbesserung der Modellgenauigkeit durch kontinuierliches Lernen',
             'Entwicklung neuer Funktionen und Segmentierungsfähigkeiten',
           ],
-          protectionNote: 'Alle für ML-Training verwendeten Daten werden anonymisiert und von identifizierenden Informationen befreit. Wir teilen Ihre Rohdaten nicht ohne ausdrückliche Zustimmung mit Dritten.',
+          protectionNote:
+            'Alle für ML-Training verwendeten Daten werden anonymisiert und von identifizierenden Informationen befreit. Wir teilen Ihre Rohdaten nicht ohne ausdrückliche Zustimmung mit Dritten.',
         },
         userResponsibilities: {
           title: '4. Benutzerpflichten',
@@ -1046,32 +1084,39 @@ export default {
         },
         serviceAvailability: {
           title: '5. Dienstverfügbarkeit und Einschränkungen',
-          content: 'Obwohl wir uns bemühen, kontinuierliche Dienstverfügbarkeit aufrechtzuerhalten, wird SpheroSeg "wie besehen" ohne Garantien jeglicher Art bereitgestellt. Wir garantieren keinen ununterbrochenen Zugang, und der Dienst kann Wartung, Updates oder vorübergehender Nichtverfügbarkeit unterliegen.',
+          content:
+            'Obwohl wir uns bemühen, kontinuierliche Dienstverfügbarkeit aufrechtzuerhalten, wird SpheroSeg "wie besehen" ohne Garantien jeglicher Art bereitgestellt. Wir garantieren keinen ununterbrochenen Zugang, und der Dienst kann Wartung, Updates oder vorübergehender Nichtverfügbarkeit unterliegen.',
         },
         limitationLiability: {
           title: '6. Haftungsbeschränkung',
-          content: 'In keinem Fall haften SpheroSeg, seine Entwickler oder verbundene Unternehmen für indirekte, zufällige, besondere, Folge- oder Strafschäden, einschließlich, aber nicht beschränkt auf Datenverlust, Gewinne oder Geschäftsmöglichkeiten, die aus Ihrer Nutzung des Dienstes entstehen.',
+          content:
+            'In keinem Fall haften SpheroSeg, seine Entwickler oder verbundene Unternehmen für indirekte, zufällige, besondere, Folge- oder Strafschäden, einschließlich, aber nicht beschränkt auf Datenverlust, Gewinne oder Geschäftsmöglichkeiten, die aus Ihrer Nutzung des Dienstes entstehen.',
         },
         privacy: {
           title: '7. Datenschutz und Datenschutz',
-          content: 'Ihre Privatsphäre ist uns wichtig. Bitte lesen Sie unsere Datenschutzrichtlinie, die regelt, wie wir Ihre persönlichen Informationen und Forschungsdaten sammeln, verwenden und schützen.',
+          content:
+            'Ihre Privatsphäre ist uns wichtig. Bitte lesen Sie unsere Datenschutzrichtlinie, die regelt, wie wir Ihre persönlichen Informationen und Forschungsdaten sammeln, verwenden und schützen.',
         },
         changes: {
           title: '8. Änderungen der Bedingungen',
-          content: 'Wir behalten uns das Recht vor, diese Bedingungen jederzeit zu ändern. Änderungen werden sofort nach Veröffentlichung wirksam. Ihre weitere Nutzung des Dienstes stellt die Annahme der geänderten Bedingungen dar.',
+          content:
+            'Wir behalten uns das Recht vor, diese Bedingungen jederzeit zu ändern. Änderungen werden sofort nach Veröffentlichung wirksam. Ihre weitere Nutzung des Dienstes stellt die Annahme der geänderten Bedingungen dar.',
         },
         termination: {
           title: '9. Kündigung',
-          content: 'Jede Partei kann diese Vereinbarung jederzeit kündigen. Nach Kündigung erlischt Ihr Recht auf Zugang zum Dienst sofort, obwohl diese Bedingungen bezüglich der vorherigen Nutzung in Kraft bleiben.',
+          content:
+            'Jede Partei kann diese Vereinbarung jederzeit kündigen. Nach Kündigung erlischt Ihr Recht auf Zugang zum Dienst sofort, obwohl diese Bedingungen bezüglich der vorherigen Nutzung in Kraft bleiben.',
         },
         governingLaw: {
           title: '10. Anwendbares Recht',
-          content: 'Diese Bedingungen unterliegen und werden in Übereinstimmung mit geltendem Recht ausgelegt. Alle Streitigkeiten werden durch bindende Schiedsgerichtsbarkeit oder vor zuständigen Gerichten beigelegt.',
+          content:
+            'Diese Bedingungen unterliegen und werden in Übereinstimmung mit geltendem Recht ausgelegt. Alle Streitigkeiten werden durch bindende Schiedsgerichtsbarkeit oder vor zuständigen Gerichten beigelegt.',
         },
       },
       contact: {
         title: 'Kontaktinformationen:',
-        content: 'Wenn Sie Fragen zu diesen Bedingungen haben, kontaktieren Sie uns bitte unter spheroseg@utia.cas.cz',
+        content:
+          'Wenn Sie Fragen zu diesen Bedingungen haben, kontaktieren Sie uns bitte unter spheroseg@utia.cas.cz',
       },
       navigation: {
         backToHome: 'Zurück zur Startseite',
@@ -1081,15 +1126,18 @@ export default {
     privacy: {
       title: 'Datenschutzrichtlinie',
       lastUpdated: 'Zuletzt aktualisiert: Januar 2025',
-      disclaimer: 'Ihre Privatsphäre ist uns wichtig. Diese Richtlinie erklärt, wie wir Ihre Daten sammeln, verwenden und schützen.',
+      disclaimer:
+        'Ihre Privatsphäre ist uns wichtig. Diese Richtlinie erklärt, wie wir Ihre Daten sammeln, verwenden und schützen.',
       sections: {
         introduction: {
           title: '1. Einführung',
-          content: 'Diese Datenschutzrichtlinie erklärt, wie SpheroSeg ("wir", "uns", "unser") Ihre Informationen sammelt, verwendet, schützt und teilt, wenn Sie unsere Plattform für Sphäroid-Segmentierung und -Analyse nutzen. Durch die Nutzung unseres Dienstes stimmen Sie den in dieser Richtlinie beschriebenen Datenpraktiken zu.',
+          content:
+            'Diese Datenschutzrichtlinie erklärt, wie SpheroSeg ("wir", "uns", "unser") Ihre Informationen sammelt, verwendet, schützt und teilt, wenn Sie unsere Plattform für Sphäroid-Segmentierung und -Analyse nutzen. Durch die Nutzung unseres Dienstes stimmen Sie den in dieser Richtlinie beschriebenen Datenpraktiken zu.',
         },
         informationCollected: {
           title: '2. Informationen, die Wir Sammeln',
-          content: 'Wir sammeln Informationen, die Sie uns direkt bereitstellen, wenn Sie ein Konto erstellen, Bilder hochladen, Projekte erstellen und mit unseren Diensten interagieren.',
+          content:
+            'Wir sammeln Informationen, die Sie uns direkt bereitstellen, wenn Sie ein Konto erstellen, Bilder hochladen, Projekte erstellen und mit unseren Diensten interagieren.',
           personalInfo: {
             title: '2.1 Persönliche Informationen',
             items: [
@@ -1102,7 +1150,8 @@ export default {
           researchData: {
             title: '2.2 Forschungsdaten und Bilder',
             ownershipTitle: 'Ihre Forschungsdaten',
-            ownershipContent: 'Sie behalten das vollständige Eigentum an allen Bildern und Forschungsdaten, die Sie zu SpheroSeg hochladen. Wir beanspruchen niemals das Eigentum an Ihren Inhalten.',
+            ownershipContent:
+              'Sie behalten das vollständige Eigentum an allen Bildern und Forschungsdaten, die Sie zu SpheroSeg hochladen. Wir beanspruchen niemals das Eigentum an Ihren Inhalten.',
             items: [
               'Bilder, die Sie zur Analyse hochladen',
               'Projekt-Metadaten und Einstellungen',
@@ -1123,11 +1172,14 @@ export default {
         mlTraining: {
           title: '3. Maschinelles Lernen und Datenverbesserung',
           importantTitle: 'Wichtig: Verwendung Ihrer Daten für KI-Training',
-          importantIntro: 'Um unsere Segmentierungsalgorithmen kontinuierlich zu verbessern, können wir hochgeladene Bilder und Daten verwenden, um unsere maschinellen Lernmodelle zu trainieren und zu verbessern.',
+          importantIntro:
+            'Um unsere Segmentierungsalgorithmen kontinuierlich zu verbessern, können wir hochgeladene Bilder und Daten verwenden, um unsere maschinellen Lernmodelle zu trainieren und zu verbessern.',
           controlTitle: 'Sie haben vollständige Kontrolle über Ihre Daten:',
-          controlContent: 'Bei der Kontoerstellung können Sie wählen, ob Sie die Verwendung Ihrer Daten für ML-Training zulassen. Sie können diese Präferenzen jederzeit ändern.',
+          controlContent:
+            'Bei der Kontoerstellung können Sie wählen, ob Sie die Verwendung Ihrer Daten für ML-Training zulassen. Sie können diese Präferenzen jederzeit ändern.',
           manageTitle: 'Um Ihre Zustimmung zu verwalten:',
-          manageContent: 'Gehen Sie zu Einstellungen → Datenschutz-Tab in Ihrem Dashboard. Dort können Sie die ML-Training-Zustimmung aktivieren oder deaktivieren und spezifische Zwecke (Algorithmusverbesserung, Feature-Entwicklung) wählen, für die Ihre Daten verwendet werden können.',
+          manageContent:
+            'Gehen Sie zu Einstellungen → Datenschutz-Tab in Ihrem Dashboard. Dort können Sie die ML-Training-Zustimmung aktivieren oder deaktivieren und spezifische Zwecke (Algorithmusverbesserung, Feature-Entwicklung) wählen, für die Ihre Daten verwendet werden können.',
           howWeUse: {
             title: 'Wie Wir Ihre Daten für ML Verwenden:',
             items: [
@@ -1161,7 +1213,8 @@ export default {
         },
         dataSecurity: {
           title: '5. Datensicherheit und -schutz',
-          content: 'Wir implementieren robuste Sicherheitsmaßnahmen einschließlich:',
+          content:
+            'Wir implementieren robuste Sicherheitsmaßnahmen einschließlich:',
           measures: [
             'Verschlüsselung von Daten in Transit und Ruhe',
             'Regelmäßige Sicherheitsaudits und Schwachstellenbewertungen',
@@ -1172,8 +1225,10 @@ export default {
         },
         dataSharing: {
           title: '6. Datenaustausch und Dritte',
-          noSaleStatement: 'Wir verkaufen Ihre persönlichen Informationen oder Forschungsdaten nicht.',
-          sharingContent: 'Wir können Informationen nur unter diesen begrenzten Umständen teilen:',
+          noSaleStatement:
+            'Wir verkaufen Ihre persönlichen Informationen oder Forschungsdaten nicht.',
+          sharingContent:
+            'Wir können Informationen nur unter diesen begrenzten Umständen teilen:',
           circumstances: [
             'Mit Ihrer ausdrücklichen Zustimmung',
             'Zur Erfüllung rechtlicher Verpflichtungen oder Gerichtsbeschlüsse',
@@ -1193,11 +1248,13 @@ export default {
             'Opt-out: Ausschluss vom ML-Training anfordern. Hinweis: Dies kann folgende Funktionen einschränken: automatische Segmentierungsgenauigkeit, personalisierte Modellempfehlungen, adaptive Schwellenwertvorschläge, Batch-Verarbeitungsoptimierungen und zukünftige KI-gestützte Verbesserungen. Kontaktieren Sie den Support für spezifische Auswirkungen auf Ihr Konto.',
             'Einschränkung: Begrenzen, wie wir Ihre Informationen verarbeiten',
           ],
-          contactNote: 'Um diese Rechte auszuüben, kontaktieren Sie uns unter spheroseg@utia.cas.cz. Wir werden innerhalb von 30 Tagen antworten.',
+          contactNote:
+            'Um diese Rechte auszuüben, kontaktieren Sie uns unter spheroseg@utia.cas.cz. Wir werden innerhalb von 30 Tagen antworten.',
         },
         dataRetention: {
           title: '8. Datenspeicherung',
-          content: 'Wir unterscheiden zwischen persönlichen Daten und ML-Trainingsdaten:',
+          content:
+            'Wir unterscheiden zwischen persönlichen Daten und ML-Trainingsdaten:',
           categories: [
             'Persönliche/Kontodaten: Alle persönlichen Identifikatoren, Profilinformationen, Kontoeinstellungen und Transaktionshistorie werden innerhalb von 90 Tagen nach Kontoschluss dauerhaft gelöscht.',
             'Forschungsdaten: Ursprüngliche Bilder und Projektdaten, die mit Ihrem Konto verknüpft sind, werden innerhalb von 90 Tagen nach Kontoschluss gelöscht.',
@@ -1207,15 +1264,18 @@ export default {
         },
         internationalTransfers: {
           title: '9. Internationale Datenübertragungen',
-          content: 'Ihre Daten können in anderen Ländern als Ihrem eigenen verarbeitet werden. Wir sorgen für angemessene Schutzmaßnahmen und Schutz für internationale Übertragungen, einschließlich standardisierter Vertragsklauseln und Angemessenheitsentscheidungen.',
+          content:
+            'Ihre Daten können in anderen Ländern als Ihrem eigenen verarbeitet werden. Wir sorgen für angemessene Schutzmaßnahmen und Schutz für internationale Übertragungen, einschließlich standardisierter Vertragsklauseln und Angemessenheitsentscheidungen.',
         },
         childrensPrivacy: {
           title: '10. Kinderdatenschutz',
-          content: 'Unser Dienst ist für Forscher bestimmt und richtet sich nicht an Kinder unter 16 Jahren. Wir sammeln wissentlich keine persönlichen Informationen von Kindern unter 16 Jahren. Wenn wir eine solche Sammlung entdecken, werden wir die Informationen umgehend löschen.',
+          content:
+            'Unser Dienst ist für Forscher bestimmt und richtet sich nicht an Kinder unter 16 Jahren. Wir sammeln wissentlich keine persönlichen Informationen von Kindern unter 16 Jahren. Wenn wir eine solche Sammlung entdecken, werden wir die Informationen umgehend löschen.',
         },
         policyChanges: {
           title: '11. Änderungen an Dieser Richtlinie',
-          content: 'Wir können diese Datenschutzrichtlinie aktualisieren, um Änderungen in unseren Praktiken oder rechtlichen Anforderungen widerzuspiegeln. Wir werden Sie über wesentliche Änderungen per E-Mail oder prominenten Hinweis auf unserer Website informieren. Fortgesetzte Nutzung stellt Annahme aktualisierter Bedingungen dar.',
+          content:
+            'Wir können diese Datenschutzrichtlinie aktualisieren, um Änderungen in unseren Praktiken oder rechtlichen Anforderungen widerzuspiegeln. Wir werden Sie über wesentliche Änderungen per E-Mail oder prominenten Hinweis auf unserer Website informieren. Fortgesetzte Nutzung stellt Annahme aktualisierter Bedingungen dar.',
         },
         contact: {
           title: '12. Kontaktinformationen',
@@ -1236,7 +1296,7 @@ export default {
       },
     },
   },
-  
+
   // WebSocket messages
   websocket: {
     reconnecting: 'Verbinde erneut mit Server...',

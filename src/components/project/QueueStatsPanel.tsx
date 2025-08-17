@@ -132,7 +132,6 @@ export const QueueStatsPanel = ({
               {t('queue.connectingMessage')}
             </div>
           )}
-
         </CardContent>
       </Card>
     </motion.div>

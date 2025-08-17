@@ -25,7 +25,7 @@ const DashboardHeader = () => {
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   // Check if we're on a project detail page to avoid conflicts
   const isProjectDetailPage = location.pathname.includes('/project/');
   const { isConnected, queueStats } = useSegmentationQueue(
@@ -121,7 +121,7 @@ const DashboardHeader = () => {
             <BookOpen className="h-4 w-4 mr-2" />
             {t('common.documentation', 'Documentation')}
           </Button>
-          
+
           {/* Current Model Badge - Clickable */}
           <Badge
             variant="secondary"

@@ -31,16 +31,19 @@ export const useStatusReconciliation = ({
   const hasStaleProcessingImages = useCallback(() => {
     return images.some(img => {
       // If image is marked as processing but queue has no processing items
-      if (img.segmentationStatus === 'processing' && queueStats?.processing === 0) {
+      if (
+        img.segmentationStatus === 'processing' &&
+        queueStats?.processing === 0
+      ) {
         return true;
       }
-      
+
       // If image has been processing for too long (over 5 minutes) without updates
       if (img.segmentationStatus === 'processing' && img.updatedAt) {
         const timeSinceUpdate = Date.now() - new Date(img.updatedAt).getTime();
         return timeSinceUpdate > 300000; // 5 minutes
       }
-      
+
       return false;
     });
   }, [images, queueStats]);
@@ -67,7 +70,8 @@ export const useStatusReconciliation = ({
         if (!backendImg) return currentImg;
 
         // Normalize backend status
-        let backendStatus = backendImg.segmentationStatus || backendImg.segmentation_status;
+        let backendStatus =
+          backendImg.segmentationStatus || backendImg.segmentation_status;
         if (backendStatus === 'segmented') {
           backendStatus = 'completed';
         }
@@ -75,18 +79,23 @@ export const useStatusReconciliation = ({
         // Check if status changed and if it's safe to update
         if (currentImg.segmentationStatus !== backendStatus) {
           // Don't override recently completed or segmented images back to processing
-          // If frontend shows 'completed'/'segmented' and backend shows 'processing', 
+          // If frontend shows 'completed'/'segmented' and backend shows 'processing',
           // and the image was updated recently (within 30 seconds), trust frontend
-          const timeSinceUpdate = Date.now() - new Date(currentImg.updatedAt || 0).getTime();
-          const isRecentlyCompleted = (currentImg.segmentationStatus === 'completed' || currentImg.segmentationStatus === 'segmented') && 
-                                     backendStatus === 'processing' && 
-                                     timeSinceUpdate < 30000; // Reduced to 30 seconds
+          const timeSinceUpdate =
+            Date.now() - new Date(currentImg.updatedAt || 0).getTime();
+          const isRecentlyCompleted =
+            (currentImg.segmentationStatus === 'completed' ||
+              currentImg.segmentationStatus === 'segmented') &&
+            backendStatus === 'processing' &&
+            timeSinceUpdate < 30000; // Reduced to 30 seconds
 
           // Don't revert from completed to processing recently, but allow correction for no_segmentation
           // This allows fixing premature "segmented" status when no polygons exist
-          const isStatusDowngrade = (currentImg.segmentationStatus === 'completed' || currentImg.segmentationStatus === 'segmented') &&
-                                   (backendStatus === 'processing' || backendStatus === 'queued') &&
-                                   timeSinceUpdate < 30000; // Reduced to 30 seconds, removed no_segmentation
+          const isStatusDowngrade =
+            (currentImg.segmentationStatus === 'completed' ||
+              currentImg.segmentationStatus === 'segmented') &&
+            (backendStatus === 'processing' || backendStatus === 'queued') &&
+            timeSinceUpdate < 30000; // Reduced to 30 seconds, removed no_segmentation
 
           if (isRecentlyCompleted || isStatusDowngrade) {
             logger.debug(
@@ -110,17 +119,19 @@ export const useStatusReconciliation = ({
       });
 
       // Update images if any changes were found
-      const hasChanges = reconciledImages.some((img, index) => 
-        img.segmentationStatus !== images[index].segmentationStatus
+      const hasChanges = reconciledImages.some(
+        (img, index) =>
+          img.segmentationStatus !== images[index].segmentationStatus
       );
 
       if (hasChanges) {
-        logger.debug('✅ Status reconciliation found updates, applying changes');
+        logger.debug(
+          '✅ Status reconciliation found updates, applying changes'
+        );
         onImagesUpdate(reconciledImages);
       } else {
         logger.debug('ℹ️ Status reconciliation: No changes needed');
       }
-
     } catch (error) {
       logger.error('❌ Status reconciliation failed:', error);
     }
@@ -141,11 +152,15 @@ export const useStatusReconciliation = ({
       return;
     }
 
-    const hasActiveQueue = queueStats && (queueStats.processing > 0 || queueStats.queued > 0);
-    
+    const hasActiveQueue =
+      queueStats && (queueStats.processing > 0 || queueStats.queued > 0);
+
     // Check for stale images inline to avoid dependency issues
     const hasStaleImages = images.some(img => {
-      if (img.segmentationStatus === 'processing' && queueStats?.processing === 0) {
+      if (
+        img.segmentationStatus === 'processing' &&
+        queueStats?.processing === 0
+      ) {
         return true;
       }
       if (img.segmentationStatus === 'processing' && img.updatedAt) {
@@ -157,7 +172,7 @@ export const useStatusReconciliation = ({
 
     if (hasActiveQueue || hasStaleImages) {
       logger.debug('⏰ Scheduling status reconciliation check');
-      
+
       reconciliationTimeoutRef.current = setTimeout(() => {
         reconcileImageStatuses();
       }, RECONCILIATION_INTERVAL);
@@ -173,18 +188,20 @@ export const useStatusReconciliation = ({
   // Trigger reconciliation when queue becomes empty (but with longer delay)
   useEffect(() => {
     if (!queueStats) return;
-    
+
     const isNowEmpty = queueStats.processing === 0 && queueStats.queued === 0;
 
     // If queue just became empty, do reconciliation with longer delay
     if (isNowEmpty) {
-      logger.debug('🎯 Queue became empty, scheduling delayed status reconciliation');
-      
+      logger.debug(
+        '🎯 Queue became empty, scheduling delayed status reconciliation'
+      );
+
       // Clear any existing timeout before setting a new one
       if (reconciliationTimeoutRef.current) {
         clearTimeout(reconciliationTimeoutRef.current);
       }
-      
+
       reconciliationTimeoutRef.current = setTimeout(() => {
         reconcileImageStatuses();
       }, 5000); // Longer delay to let all WebSocket updates arrive and settle

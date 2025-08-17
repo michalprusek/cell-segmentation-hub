@@ -5,6 +5,7 @@ This guide explains how to use and maintain the internationalization system in S
 ## Overview
 
 SpheroSeg supports 6 languages:
+
 - **English (en)** - Default/fallback language
 - **Czech (cs)** - Primary language for Prague-based development
 - **Spanish (es)** - International accessibility
@@ -21,7 +22,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 const MyComponent = () => {
   const { t } = useLanguage();
-  
+
   return (
     <div>
       <h1>{t('common.appName')}</h1>
@@ -43,7 +44,7 @@ const count = t('dashboard.imagesSelected', { count: 5, total: 10 });
 ```tsx
 const { language, setLanguage } = useLanguage();
 
-const handleLanguageChange = (newLang) => {
+const handleLanguageChange = newLang => {
   setLanguage(newLang); // Automatically saves to localStorage and user profile
 };
 ```
@@ -59,35 +60,35 @@ export default {
     appName: 'SpheroSeg',
     loading: 'Loading...',
     save: 'Save',
-    cancel: 'Cancel'
+    cancel: 'Cancel',
   },
-  
+
   // Dashboard specific
   dashboard: {
     title: 'Dashboard',
-    projectGallery: 'Project Gallery'
+    projectGallery: 'Project Gallery',
   },
-  
+
   // Toast messages
   toast: {
     auth: {
-      signOutSuccess: 'Signed out successfully'
+      signOutSuccess: 'Signed out successfully',
     },
     project: {
       created: 'Project created successfully',
-      deleted: 'Project deleted successfully'
-    }
+      deleted: 'Project deleted successfully',
+    },
   },
-  
+
   // Error messages
   errors: {
     validation: {
-      projectNameRequired: 'Please enter a project name'
+      projectNameRequired: 'Please enter a project name',
     },
     network: {
-      connectionLost: 'Connection lost'
-    }
-  }
+      connectionLost: 'Connection lost',
+    },
+  },
 };
 ```
 
@@ -103,15 +104,16 @@ export default {
     description: 'This is a new feature',
     buttons: {
       start: 'Start Process',
-      cancel: 'Cancel Process'
-    }
-  }
+      cancel: 'Cancel Process',
+    },
+  },
 };
 ```
 
 ### 2. Add to All Other Language Files
 
 Use the same structure in all language files:
+
 - `cs.ts` - Czech translation
 - `es.ts` - Spanish translation
 - `fr.ts` - French translation
@@ -123,7 +125,7 @@ Use the same structure in all language files:
 ```tsx
 const MyNewComponent = () => {
   const { t } = useLanguage();
-  
+
   return (
     <div>
       <h2>{t('myNewFeature.title')}</h2>
@@ -165,6 +167,7 @@ window.i18nLogger.exportMissingKeys();
 ### Pre-commit Validation
 
 The validation runs automatically before commits to ensure:
+
 - All used translation keys exist
 - All language files have consistent keys
 - No hardcoded strings in new code
@@ -209,18 +212,21 @@ The validation runs automatically before commits to ensure:
 ## Common Translation Keys
 
 ### UI Elements
+
 - `common.loading` - Loading indicators
-- `common.save` / `common.cancel` - Form buttons  
+- `common.save` / `common.cancel` - Form buttons
 - `common.delete` / `common.edit` - Action buttons
 - `common.back` / `common.next` - Navigation
 
 ### Status Messages
+
 - `toast.*.success` - Success notifications
 - `toast.*.failed` - Error notifications
 - `errors.validation.*` - Form validation
 - `errors.network.*` - Network errors
 
 ### Navigation
+
 - `nav.*` - Menu items
 - `pages.*.title` - Page titles
 - `pages.*.description` - Page descriptions

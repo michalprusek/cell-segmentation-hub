@@ -3,7 +3,7 @@ import {
   slicePolygon,
   validateSliceLine,
   findSliceHints,
-  findBalancedSlice
+  findBalancedSlice,
 } from '@/lib/polygonSlicing';
 import { calculatePolygonArea } from '@/lib/polygonGeometry';
 import {
@@ -11,7 +11,7 @@ import {
   createTestPolygonObjects,
   expectPointsEqual,
   expectPointArraysEqual,
-  measurePerformance
+  measurePerformance,
 } from '@/test-utils/polygonTestUtils';
 import type { Point, Polygon } from '@/lib/segmentation';
 
@@ -160,17 +160,24 @@ describe('Polygon Slicing', () => {
       const emptyPolygon: Polygon = {
         id: 'empty',
         points: [],
-        type: 'external'
+        type: 'external',
       };
-      expect(slicePolygon(emptyPolygon, { x: 0, y: 0 }, { x: 1, y: 1 })).toBeNull();
+      expect(
+        slicePolygon(emptyPolygon, { x: 0, y: 0 }, { x: 1, y: 1 })
+      ).toBeNull();
 
       // Polygon with insufficient points
       const linePolygon: Polygon = {
         id: 'line',
-        points: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
-        type: 'external'
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+        type: 'external',
       };
-      expect(slicePolygon(linePolygon, { x: 0, y: 0 }, { x: 1, y: 1 })).toBeNull();
+      expect(
+        slicePolygon(linePolygon, { x: 0, y: 0 }, { x: 1, y: 1 })
+      ).toBeNull();
     });
 
     it('should handle slices that pass through vertices', () => {
@@ -179,7 +186,7 @@ describe('Polygon Slicing', () => {
       const sliceEnd: Point = { x: 100, y: 100 }; // Ends at vertex
 
       const result = slicePolygon(square, sliceStart, sliceEnd);
-      
+
       // Should either work or fail gracefully
       if (result) {
         const [polygon1, polygon2] = result;
@@ -196,7 +203,7 @@ describe('Polygon Slicing', () => {
       const sliceEnd: Point = { x: 110, y: 50 };
 
       const validation = validateSliceLine(square, sliceStart, sliceEnd);
-      
+
       expect(validation.isValid).toBe(true);
       expect(validation.intersectionCount).toBe(2);
       expect(validation.reason).toBeUndefined();
@@ -213,7 +220,9 @@ describe('Polygon Slicing', () => {
       );
       expect(noIntersectValidation.isValid).toBe(false);
       expect(noIntersectValidation.intersectionCount).toBe(0);
-      expect(noIntersectValidation.reason).toContain('Expected 2 intersections, found 0');
+      expect(noIntersectValidation.reason).toContain(
+        'Expected 2 intersections, found 0'
+      );
 
       // One intersection (tangent)
       const oneIntersectValidation = validateSliceLine(
@@ -240,8 +249,11 @@ describe('Polygon Slicing', () => {
     it('should reject invalid polygons', () => {
       const invalidPolygon: Polygon = {
         id: 'invalid',
-        points: [{ x: 0, y: 0 }, { x: 1, y: 1 }],
-        type: 'external'
+        points: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
+        type: 'external',
       };
 
       const validation = validateSliceLine(
@@ -270,7 +282,7 @@ describe('Polygon Slicing', () => {
           expect(validation.isValid).toBe(true);
         });
       }
-      
+
       // Test is successful if no hints are found (depends on polygon geometry)
       expect(hints).toBeInstanceOf(Array);
     });
@@ -288,10 +300,13 @@ describe('Polygon Slicing', () => {
       const startPoint: Point = { x: 1, y: 1 }; // Very close to (0,0) vertex
 
       const hints = findSliceHints(square, startPoint);
-      
+
       // Should not include the (0,0) vertex due to minimum distance
-      const hasClosePoint = hints.some(hint => 
-        Math.sqrt((hint.x - startPoint.x) ** 2 + (hint.y - startPoint.y) ** 2) < 10
+      const hasClosePoint = hints.some(
+        hint =>
+          Math.sqrt(
+            (hint.x - startPoint.x) ** 2 + (hint.y - startPoint.y) ** 2
+          ) < 10
       );
       expect(hasClosePoint).toBe(false);
     });
@@ -311,14 +326,18 @@ describe('Polygon Slicing', () => {
       expect(balancedSlice).not.toBeNull();
 
       if (balancedSlice) {
-        const result = slicePolygon(square, balancedSlice.start, balancedSlice.end);
+        const result = slicePolygon(
+          square,
+          balancedSlice.start,
+          balancedSlice.end
+        );
         expect(result).not.toBeNull();
 
         if (result) {
           const [polygon1, polygon2] = result;
           const area1 = calculatePolygonArea(polygon1.points);
           const area2 = calculatePolygonArea(polygon2.points);
-          
+
           // Areas should be relatively balanced
           const areaDifference = Math.abs(area1 - area2);
           const totalArea = area1 + area2;
@@ -338,7 +357,11 @@ describe('Polygon Slicing', () => {
       const balancedSlice = findBalancedSlice(complex, 3);
 
       if (balancedSlice) {
-        const result = slicePolygon(complex, balancedSlice.start, balancedSlice.end);
+        const result = slicePolygon(
+          complex,
+          balancedSlice.start,
+          balancedSlice.end
+        );
         expect(result).not.toBeNull();
 
         if (result) {
@@ -351,7 +374,7 @@ describe('Polygon Slicing', () => {
 
     it('should work with different precision levels', () => {
       const square = testPolygonObjects.squarePolygon;
-      
+
       const lowPrecision = findBalancedSlice(square, 20);
       const highPrecision = findBalancedSlice(square, 5);
 
@@ -368,15 +391,11 @@ describe('Polygon Slicing', () => {
       const largePolygon: Polygon = {
         id: 'large',
         points: testPolygons.large,
-        type: 'external'
+        type: 'external',
       };
 
       const performance = await measurePerformance(() => {
-        slicePolygon(
-          largePolygon,
-          { x: -500, y: 0 },
-          { x: 500, y: 0 }
-        );
+        slicePolygon(largePolygon, { x: -500, y: 0 }, { x: 500, y: 0 });
       }, 50);
 
       expect(performance.averageTime).toBeLessThan(10); // Should be reasonably fast
@@ -386,15 +405,11 @@ describe('Polygon Slicing', () => {
       const largePolygon: Polygon = {
         id: 'large',
         points: testPolygons.large,
-        type: 'external'
+        type: 'external',
       };
 
       const performance = await measurePerformance(() => {
-        validateSliceLine(
-          largePolygon,
-          { x: -500, y: 0 },
-          { x: 500, y: 0 }
-        );
+        validateSliceLine(largePolygon, { x: -500, y: 0 }, { x: 500, y: 0 });
       }, 100);
 
       expect(performance.averageTime).toBeLessThan(5); // Should be fast
@@ -414,29 +429,21 @@ describe('Polygon Slicing', () => {
   describe('Edge Cases and Error Handling', () => {
     it('should handle NaN coordinates in slice points', () => {
       const square = testPolygonObjects.squarePolygon;
-      
-      expect(() => slicePolygon(
-        square,
-        { x: NaN, y: 50 },
-        { x: 110, y: 50 }
-      )).not.toThrow();
-      
-      const result = slicePolygon(
-        square,
-        { x: NaN, y: 50 },
-        { x: 110, y: 50 }
-      );
+
+      expect(() =>
+        slicePolygon(square, { x: NaN, y: 50 }, { x: 110, y: 50 })
+      ).not.toThrow();
+
+      const result = slicePolygon(square, { x: NaN, y: 50 }, { x: 110, y: 50 });
       expect(result).toBeNull();
     });
 
     it('should handle Infinity coordinates in slice points', () => {
       const square = testPolygonObjects.squarePolygon;
-      
-      expect(() => slicePolygon(
-        square,
-        { x: Infinity, y: 50 },
-        { x: 110, y: 50 }
-      )).not.toThrow();
+
+      expect(() =>
+        slicePolygon(square, { x: Infinity, y: 50 }, { x: 110, y: 50 })
+      ).not.toThrow();
     });
 
     it('should handle very small polygons', () => {
@@ -445,9 +452,9 @@ describe('Polygon Slicing', () => {
         points: [
           { x: 0, y: 0 },
           { x: 0.01, y: 0 },
-          { x: 0.005, y: 0.01 }
+          { x: 0.005, y: 0.01 },
         ],
-        type: 'external'
+        type: 'external',
       };
 
       const result = slicePolygon(
@@ -469,7 +476,7 @@ describe('Polygon Slicing', () => {
       const problematicPolygon: Polygon = {
         id: 'problematic',
         points: testPolygons.square,
-        type: 'external'
+        type: 'external',
       };
 
       // This should complete without hanging
@@ -482,7 +489,7 @@ describe('Polygon Slicing', () => {
       const endTime = Date.now();
 
       expect(endTime - startTime).toBeLessThan(1000); // Should complete within 1 second
-      
+
       if (result) {
         const [polygon1, polygon2] = result;
         expect(polygon1.points.length).toBeGreaterThanOrEqual(3);
@@ -509,7 +516,11 @@ describe('Polygon Slicing', () => {
       const originalArea = calculatePolygonArea(square.points);
 
       // First slice
-      const firstSlice = slicePolygon(square, { x: -10, y: 33 }, { x: 110, y: 33 });
+      const firstSlice = slicePolygon(
+        square,
+        { x: -10, y: 33 },
+        { x: 110, y: 33 }
+      );
       expect(firstSlice).not.toBeNull();
 
       const [part1, part2] = firstSlice!;
@@ -519,8 +530,12 @@ describe('Polygon Slicing', () => {
       expect(area1 + area2).toBeCloseTo(originalArea, 1);
 
       // Second slice on one of the parts
-      const secondSlice = slicePolygon(part1, { x: -10, y: 16.5 }, { x: 110, y: 16.5 });
-      
+      const secondSlice = slicePolygon(
+        part1,
+        { x: -10, y: 16.5 },
+        { x: 110, y: 16.5 }
+      );
+
       if (secondSlice) {
         const [subpart1, subpart2] = secondSlice;
         const subarea1 = calculatePolygonArea(subpart1.points);

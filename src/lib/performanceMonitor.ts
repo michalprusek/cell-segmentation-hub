@@ -26,7 +26,7 @@ class PerformanceMonitor {
   startTiming(name: string, metadata?: Record<string, any>): string {
     const id = `${name}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     this.startTimes.set(id, performance.now());
-    
+
     if (metadata) {
       // Store metadata for later use
       this.startTimes.set(`${id}-metadata`, metadata as any);
@@ -46,20 +46,22 @@ class PerformanceMonitor {
     }
 
     const duration = performance.now() - startTime;
-    const metadata = this.startTimes.get(`${id}-metadata`) as Record<string, any> | undefined;
-    
+    const metadata = this.startTimes.get(`${id}-metadata`) as
+      | Record<string, any>
+      | undefined;
+
     // Extract metric name from ID
     const name = id.split('-')[0];
-    
+
     const metric: PerformanceMetric = {
       name,
       duration,
       timestamp: Date.now(),
-      metadata
+      metadata,
     };
 
     this.recordMetric(metric);
-    
+
     // Cleanup
     this.startTimes.delete(id);
     if (metadata) {
@@ -86,11 +88,12 @@ class PerformanceMonitor {
     }
 
     // Log slow operations
-    if (metric.duration > 1000) { // > 1 second
+    if (metric.duration > 1000) {
+      // > 1 second
       logger.warn('Slow operation detected', {
         name: metric.name,
         duration: `${metric.duration.toFixed(2)}ms`,
-        metadata: metric.metadata
+        metadata: metric.metadata,
       });
     }
 
@@ -98,7 +101,7 @@ class PerformanceMonitor {
     if (process.env.NODE_ENV === 'development') {
       logger.debug(`⏱️ Performance: ${metric.name}`, {
         duration: `${metric.duration.toFixed(2)}ms`,
-        metadata: metric.metadata
+        metadata: metric.metadata,
       });
     }
   }
@@ -120,7 +123,7 @@ class PerformanceMonitor {
       min: Math.min(...durations),
       max: Math.max(...durations),
       count: durations.length,
-      total
+      total,
     };
   }
 
@@ -129,7 +132,7 @@ class PerformanceMonitor {
    */
   getAllStats(): Record<string, PerformanceStats> {
     const stats: Record<string, PerformanceStats> = {};
-    
+
     for (const [name] of this.metrics) {
       const stat = this.getStats(name);
       if (stat) {
@@ -149,7 +152,7 @@ class PerformanceMonitor {
     metadata?: Record<string, any>
   ): Promise<T> {
     const id = this.startTiming(name, metadata);
-    
+
     try {
       const result = await fn();
       this.endTiming(id);
@@ -181,18 +184,22 @@ class PerformanceMonitor {
   /**
    * Monitor rendering performance
    */
-  measureRender(componentName: string, metadata?: Record<string, any>): () => void {
+  measureRender(
+    componentName: string,
+    metadata?: Record<string, any>
+  ): () => void {
     const id = this.startTiming(`render-${componentName}`, metadata);
-    
+
     return () => {
       const duration = this.endTiming(id);
-      
+
       // Warn about slow renders
-      if (duration > 16.67) { // > 1 frame at 60fps
+      if (duration > 16.67) {
+        // > 1 frame at 60fps
         logger.warn('Slow render detected', {
           component: componentName,
           duration: `${duration.toFixed(2)}ms`,
-          metadata
+          metadata,
         });
       }
     };
@@ -201,9 +208,12 @@ class PerformanceMonitor {
   /**
    * Monitor canvas drawing performance
    */
-  measureCanvasDraw(operationName: string, metadata?: Record<string, any>): () => void {
+  measureCanvasDraw(
+    operationName: string,
+    metadata?: Record<string, any>
+  ): () => void {
     const id = this.startTiming(`canvas-${operationName}`, metadata);
-    
+
     return () => {
       this.endTiming(id);
     };
@@ -214,7 +224,7 @@ class PerformanceMonitor {
    */
   measureApiCall(endpoint: string, metadata?: Record<string, any>): () => void {
     const id = this.startTiming(`api-${endpoint}`, metadata);
-    
+
     return () => {
       this.endTiming(id);
     };
@@ -226,7 +236,7 @@ class PerformanceMonitor {
   getPerformanceReport(): string {
     const stats = this.getAllStats();
     const lines: string[] = ['Performance Report:'];
-    
+
     for (const [name, stat] of Object.entries(stats)) {
       lines.push(
         `  ${name}: avg=${stat.average.toFixed(2)}ms, min=${stat.min.toFixed(2)}ms, max=${stat.max.toFixed(2)}ms, count=${stat.count}`
@@ -245,7 +255,7 @@ class PerformanceMonitor {
       return {
         usedJSHeapSize: memory.usedJSHeapSize,
         totalJSHeapSize: memory.totalJSHeapSize,
-        jsHeapSizeLimit: memory.jsHeapSizeLimit
+        jsHeapSizeLimit: memory.jsHeapSizeLimit,
       };
     }
     return null;
@@ -256,32 +266,45 @@ class PerformanceMonitor {
 export const performanceMonitor = new PerformanceMonitor();
 
 // Helper functions for common use cases
-export const measureThumbnailRender = (polygonCount: number, pointCount: number) => {
+export const measureThumbnailRender = (
+  polygonCount: number,
+  pointCount: number
+) => {
   return performanceMonitor.measureRender('thumbnail', {
     polygonCount,
-    pointCount
+    pointCount,
   });
 };
 
-export const measureApiCall = (endpoint: string, metadata?: Record<string, any>) => {
+export const measureApiCall = (
+  endpoint: string,
+  metadata?: Record<string, any>
+) => {
   return performanceMonitor.measureApiCall(endpoint, metadata);
 };
 
-export const measureCanvasOperation = (operation: string, metadata?: Record<string, any>) => {
+export const measureCanvasOperation = (
+  operation: string,
+  metadata?: Record<string, any>
+) => {
   return performanceMonitor.measureCanvasDraw(operation, metadata);
 };
 
 // Automatic performance reporting (every 5 minutes in development)
 if (process.env.NODE_ENV === 'development') {
-  setInterval(() => {
-    const report = performanceMonitor.getPerformanceReport();
-    const memory = performanceMonitor.getMemoryUsage();
-    
-    if (report.includes('avg=')) { // Only log if we have data
-      logger.debug('📊 Performance Report', {
-        report,
-        memory
-      });
-    }
-  }, 5 * 60 * 1000);
+  setInterval(
+    () => {
+      const report = performanceMonitor.getPerformanceReport();
+      const memory = performanceMonitor.getMemoryUsage();
+
+      if (report.includes('avg=')) {
+        // Only log if we have data
+        logger.debug('📊 Performance Report', {
+          report,
+          memory,
+        });
+      }
+    },
+    5 * 60 * 1000
+  );
 }

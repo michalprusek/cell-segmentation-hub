@@ -264,7 +264,8 @@ export default {
     deleteAccountError: '删除账户失败',
     deleteAccountDialog: {
       title: '删除账户',
-      description: '此操作无法撤销。这将永久删除您的账户并从我们的服务器中移除您的所有数据。',
+      description:
+        '此操作无法撤销。这将永久删除您的账户并从我们的服务器中移除您的所有数据。',
       whatWillBeDeleted: '将被删除的内容：',
       deleteItems: {
         account: '您的用户账户和个人资料',
@@ -356,7 +357,6 @@ export default {
     alreadySignedUp: '您已经注册并登录了。',
     goToDashboard: '前往仪表板',
     signUpFailed: '注册失败',
-    signInFailed: '登录失败',
   },
   profile: {
     title: '个人资料',
@@ -501,11 +501,7 @@ export default {
         '按住Shift自动创建点序列',
         '点击第一个点关闭多边形',
       ],
-      slicingMode: [
-        '点击开始切割',
-        '再次点击完成切割',
-        'Esc取消切割',
-      ],
+      slicingMode: ['点击开始切割', '再次点击完成切割', 'Esc取消切割'],
       pointAddingMode: [
         '将鼠标悬停在多边形线上',
         '点击向选中的多边形添加点',
@@ -720,7 +716,7 @@ export default {
   deleteImageError: '删除图像时出错',
   imageAlreadyProcessing: '图像正在处理中',
   processImageFailed: '图像处理失败',
-  
+
   exportDialog: {
     title: '导出选项',
     includeMetadata: '包含元数据',
@@ -749,9 +745,12 @@ export default {
     introduction: {
       title: '介绍',
       whatIs: '什么是 SpheroSeg？',
-      description: 'SpheroSeg 是专门为显微镜图像中细胞球状体的分割和分析而设计的先进平台。',
-      developedBy: '该平台由布拉格捷克技术大学核科学与物理工程学院的学生 Bc. Michal Průšek 开发。',
-      addresses: 'SpheroSeg 解决了在显微镜图像中准确识别和分割球状体边界的挑战性任务。',
+      description:
+        'SpheroSeg 是专门为显微镜图像中细胞球状体的分割和分析而设计的先进平台。',
+      developedBy:
+        '该平台由布拉格捷克技术大学核科学与物理工程学院的学生 Bc. Michal Průšek 开发。',
+      addresses:
+        'SpheroSeg 解决了在显微镜图像中准确识别和分割球状体边界的挑战性任务。',
     },
     gettingStarted: {
       title: '入门指南',
@@ -846,7 +845,8 @@ export default {
         internal: '内部多边形（红色）',
       },
       processingNote: '处理时间因模型而异：',
-      processingTimes: 'HRNet（约3秒），CBAM-ResUNet（约7秒），MA-ResUNet（约18秒）。',
+      processingTimes:
+        'HRNet（约3秒），CBAM-ResUNet（约7秒），MA-ResUNet（约18秒）。',
     },
     segmentationEditor: {
       title: '分割编辑器',
@@ -992,7 +992,8 @@ export default {
       sections: {
         acceptance: {
           title: '1. 条款接受',
-          content: '通过访问或使用SpheroSeg（"服务"），您同意受这些服务条款（"条款"）以及所有适用法律法规的约束。如果您不同意这些条款中的任何一项，您被禁止使用此服务。这些条款构成您与SpheroSeg之间具有法律约束力的协议。',
+          content:
+            '通过访问或使用SpheroSeg（"服务"），您同意受这些服务条款（"条款"）以及所有适用法律法规的约束。如果您不同意这些条款中的任何一项，您被禁止使用此服务。这些条款构成您与SpheroSeg之间具有法律约束力的协议。',
         },
         useLicense: {
           title: '2. 使用许可和允许用途',
@@ -1003,21 +1004,25 @@ export default {
             '科学出版物和研究',
             '生物医学研究和分析',
           ],
-          licenseNote: '这是许可的授予，而不是所有权的转让。未经明确书面同意，您不得将服务用于商业目的。',
+          licenseNote:
+            '这是许可的授予，而不是所有权的转让。未经明确书面同意，您不得将服务用于商业目的。',
         },
         dataUsage: {
           title: '3. 数据使用和机器学习',
           importantTitle: '重要：您的数据使用',
-          importantContent: '通过将图像和数据上传到SpheroSeg，您同意我们使用这些数据来改进和训练我们的机器学习模型，以获得更好的分割准确性。',
+          importantContent:
+            '通过将图像和数据上传到SpheroSeg，您同意我们使用这些数据来改进和训练我们的机器学习模型，以获得更好的分割准确性。',
           ownershipTitle: '数据所有权：',
-          ownershipContent: '您保留对上传到SpheroSeg的所有数据的所有权。但是，通过使用我们的服务，您授予我们以下权限：',
+          ownershipContent:
+            '您保留对上传到SpheroSeg的所有数据的所有权。但是，通过使用我们的服务，您授予我们以下权限：',
           permissions: [
             '处理您的图像进行分割分析',
             '使用上传的数据（匿名形式）来改进我们的ML算法',
             '通过持续学习提高模型准确性',
             '开发新功能和分割能力',
           ],
-          protectionNote: '用于ML训练的所有数据都经过匿名处理，并剥离识别信息。未经明确同意，我们不会与第三方共享您的原始数据。',
+          protectionNote:
+            '用于ML训练的所有数据都经过匿名处理，并剥离识别信息。未经明确同意，我们不会与第三方共享您的原始数据。',
         },
         userResponsibilities: {
           title: '4. 用户责任',
@@ -1032,27 +1037,33 @@ export default {
         },
         serviceAvailability: {
           title: '5. 服务可用性和限制',
-          content: '虽然我们努力维持服务的持续可用性，但SpheroSeg按"原样"提供，不提供任何类型的保证。我们不保证不间断的访问，服务可能会受到维护、更新或临时不可用的影响。',
+          content:
+            '虽然我们努力维持服务的持续可用性，但SpheroSeg按"原样"提供，不提供任何类型的保证。我们不保证不间断的访问，服务可能会受到维护、更新或临时不可用的影响。',
         },
         limitationLiability: {
           title: '6. 责任限制',
-          content: '在任何情况下，SpheroSeg、其开发人员或关联公司都不对任何间接、偶然、特殊、后果性或惩罚性损害负责，包括但不限于数据丢失、利润或商业机会损失，这些损害源于您对服务的使用。',
+          content:
+            '在任何情况下，SpheroSeg、其开发人员或关联公司都不对任何间接、偶然、特殊、后果性或惩罚性损害负责，包括但不限于数据丢失、利润或商业机会损失，这些损害源于您对服务的使用。',
         },
         privacy: {
           title: '7. 隐私和数据保护',
-          content: '您的隐私对我们很重要。请查看我们的隐私政策，该政策规定了我们如何收集、使用和保护您的个人信息和研究数据。',
+          content:
+            '您的隐私对我们很重要。请查看我们的隐私政策，该政策规定了我们如何收集、使用和保护您的个人信息和研究数据。',
         },
         changes: {
           title: '8. 条款变更',
-          content: '我们保留随时修改这些条款的权利。变更将在发布后立即生效。您继续使用服务即表示接受修改后的条款。',
+          content:
+            '我们保留随时修改这些条款的权利。变更将在发布后立即生效。您继续使用服务即表示接受修改后的条款。',
         },
         termination: {
           title: '9. 终止',
-          content: '任何一方都可以随时终止本协议。终止后，您访问服务的权利将立即停止，尽管这些条款在先前使用方面仍然有效。',
+          content:
+            '任何一方都可以随时终止本协议。终止后，您访问服务的权利将立即停止，尽管这些条款在先前使用方面仍然有效。',
         },
         governingLaw: {
           title: '10. 适用法律',
-          content: '这些条款受适用法律管辖和解释。任何争议将通过有约束力的仲裁或在有管辖权的法院解决。',
+          content:
+            '这些条款受适用法律管辖和解释。任何争议将通过有约束力的仲裁或在有管辖权的法院解决。',
         },
       },
       contact: {
@@ -1067,15 +1078,18 @@ export default {
     privacy: {
       title: '隐私政策',
       lastUpdated: '最后更新：2025年1月',
-      disclaimer: '您的隐私对我们很重要。本政策解释了我们如何收集、使用和保护您的数据。',
+      disclaimer:
+        '您的隐私对我们很重要。本政策解释了我们如何收集、使用和保护您的数据。',
       sections: {
         introduction: {
           title: '1. 介绍',
-          content: '本隐私政策解释了SpheroSeg（"我们"、"我们的"）在您使用我们的球状体分割和分析平台时如何收集、使用、保护和共享您的信息。通过使用我们的服务，您同意本政策中描述的数据实践。',
+          content:
+            '本隐私政策解释了SpheroSeg（"我们"、"我们的"）在您使用我们的球状体分割和分析平台时如何收集、使用、保护和共享您的信息。通过使用我们的服务，您同意本政策中描述的数据实践。',
         },
         informationCollected: {
           title: '2. 我们收集的信息',
-          content: '当您创建账户、上传图像、创建项目并与我们的服务互动时，我们收集您直接提供给我们的信息。',
+          content:
+            '当您创建账户、上传图像、创建项目并与我们的服务互动时，我们收集您直接提供给我们的信息。',
           personalInfo: {
             title: '2.1 个人信息',
             items: [
@@ -1088,7 +1102,8 @@ export default {
           researchData: {
             title: '2.2 研究数据和图像',
             ownershipTitle: '您的研究数据',
-            ownershipContent: '您保留对上传到SpheroSeg的所有图像和研究数据的完全所有权。我们从不声称拥有您内容的所有权。',
+            ownershipContent:
+              '您保留对上传到SpheroSeg的所有图像和研究数据的完全所有权。我们从不声称拥有您内容的所有权。',
             items: [
               '您上传用于分析的图像',
               '项目元数据和设置',
@@ -1109,11 +1124,14 @@ export default {
         mlTraining: {
           title: '3. 机器学习和数据改进',
           importantTitle: '重要：您的数据用于AI训练',
-          importantIntro: '为了持续改进我们的分割算法，我们可能使用上传的图像和数据来训练和增强我们的机器学习模型。',
+          importantIntro:
+            '为了持续改进我们的分割算法，我们可能使用上传的图像和数据来训练和增强我们的机器学习模型。',
           controlTitle: '您完全控制您的数据：',
-          controlContent: '在创建账户时，您可以选择是否允许您的数据用于ML训练。您可以随时更改这些偏好设置。',
+          controlContent:
+            '在创建账户时，您可以选择是否允许您的数据用于ML训练。您可以随时更改这些偏好设置。',
           manageTitle: '管理您的同意：',
-          manageContent: '转到设置→仪表板中的隐私选项卡。在那里您可以启用或禁用ML训练同意，并选择可以使用您数据的特定目的（算法改进、功能开发）。',
+          manageContent:
+            '转到设置→仪表板中的隐私选项卡。在那里您可以启用或禁用ML训练同意，并选择可以使用您数据的特定目的（算法改进、功能开发）。',
           howWeUse: {
             title: '我们如何使用您的数据进行ML：',
             items: [
@@ -1179,7 +1197,8 @@ export default {
             '选择退出：请求排除在ML训练之外。注意：这可能限制以下功能：自动分割准确性、个性化模型推荐、自适应阈值建议、批处理优化以及未来的AI驱动改进。请联系支持以了解对您账户的具体影响。',
             '限制：限制我们如何处理您的信息',
           ],
-          contactNote: '要行使这些权利，请通过spheroseg@utia.cas.cz联系我们。我们将在30天内回复。',
+          contactNote:
+            '要行使这些权利，请通过spheroseg@utia.cas.cz联系我们。我们将在30天内回复。',
         },
         dataRetention: {
           title: '8. 数据保留',
@@ -1193,15 +1212,18 @@ export default {
         },
         internationalTransfers: {
           title: '9. 国际数据传输',
-          content: '您的数据可能在您所在国家以外的国家进行处理。我们确保为国际传输提供适当的保障和保护，包括标准合同条款和充分性决定。',
+          content:
+            '您的数据可能在您所在国家以外的国家进行处理。我们确保为国际传输提供适当的保障和保护，包括标准合同条款和充分性决定。',
         },
         childrensPrivacy: {
           title: '10. 儿童隐私',
-          content: '我们的服务面向研究人员，不针对16岁以下的儿童。我们不会故意收集16岁以下儿童的个人信息。如果我们发现此类收集，我们将及时删除信息。',
+          content:
+            '我们的服务面向研究人员，不针对16岁以下的儿童。我们不会故意收集16岁以下儿童的个人信息。如果我们发现此类收集，我们将及时删除信息。',
         },
         policyChanges: {
           title: '11. 本政策的变更',
-          content: '我们可能会更新本隐私政策以反映我们实践或法律要求的变化。我们将通过电子邮件或我们网站上的显著通知告知您重大变更。继续使用即表示接受更新的条款。',
+          content:
+            '我们可能会更新本隐私政策以反映我们实践或法律要求的变化。我们将通过电子邮件或我们网站上的显著通知告知您重大变更。继续使用即表示接受更新的条款。',
         },
         contact: {
           title: '12. 联系信息',
@@ -1222,7 +1244,7 @@ export default {
       },
     },
   },
-  
+
   // WebSocket messages
   websocket: {
     reconnecting: '正在重新连接服务器...',

@@ -65,7 +65,7 @@ Before starting work, query the knowledge system for:
 
 ### Service URLs (Docker only)
 
-- **Frontend**: http://localhost:3000 
+- **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3001
 - **ML Service**: http://localhost:8000
 - **API Documentation**: http://localhost:3001/api-docs
@@ -201,7 +201,7 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 
 ### Testing and Quality
 
-- **Linting**: Run `npm run lint` for code quality checks  
+- **Linting**: Run `npm run lint` for code quality checks
 - **Lint fix**: Run `npm run lint:fix` to auto-fix ESLint issues
 - **Type checking**: Run `npm run type-check` to verify TypeScript types
 - **Unit tests**: Run `npm run test` for Vitest unit tests
@@ -228,6 +228,7 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 The project uses Husky for comprehensive pre-commit validation:
 
 **Automated Checks (Cannot be bypassed):**
+
 - **ESLint**: Code quality with 0 warnings allowed
 - **Prettier**: Code formatting verification
 - **TypeScript**: Type checking for both frontend and backend
@@ -290,25 +291,16 @@ The project uses Husky for comprehensive pre-commit validation:
 ### Development Workflow Best Practices
 
 **Before making changes:**
+
 1. Always use Docker environment (`make up` to start)
 2. Query knowledge system for existing patterns and solutions
 3. Check if translations need updates for UI changes
 
-**During development:**
-4. Run `npm run dev` for frontend development with hot reload
-5. Use `make logs-f` to monitor all services
-6. Test changes with `npm run test` and `npm run test:e2e` 
-7. Validate translations with `npm run i18n:validate` if applicable
+**During development:** 4. Run `npm run dev` for frontend development with hot reload 5. Use `make logs-f` to monitor all services 6. Test changes with `npm run test` and `npm run test:e2e` 7. Validate translations with `npm run i18n:validate` if applicable
 
-**Before committing:**
-8. The pre-commit hook automatically runs comprehensive checks
-9. All checks must pass (ESLint, Prettier, TypeScript, security)
-10. Use conventional commit format (feat:, fix:, chore:, etc.)
+**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.)
 
-**Quality assurance:**
-11. Always run `npm run type-check` and `npm run lint` before major changes
-12. Use `make health` to verify all services are running correctly
-13. Store learnings and solutions in the knowledge system for future reference
+**Quality assurance:** 11. Always run `npm run type-check` and `npm run lint` before major changes 12. Use `make health` to verify all services are running correctly 13. Store learnings and solutions in the knowledge system for future reference
 
 ## Recent Implementations & Important Notes
 

@@ -68,10 +68,10 @@ const SignUp = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full glass-morphism rounded-2xl overflow-hidden shadow-glass-lg p-10 text-center">
-          <h2 className="text-2xl font-bold mb-4">{t('auth.alreadyLoggedIn')}</h2>
-          <p className="mb-6 text-gray-600">
-            {t('auth.alreadySignedUp')}
-          </p>
+          <h2 className="text-2xl font-bold mb-4">
+            {t('auth.alreadyLoggedIn')}
+          </h2>
+          <p className="mb-6 text-gray-600">{t('auth.alreadySignedUp')}</p>
           <Button asChild className="w-full">
             <Link to="/dashboard">{t('auth.goToDashboard')}</Link>
           </Button>
@@ -113,9 +113,7 @@ const SignUp = () => {
             <h2 className="mt-4 text-3xl font-bold text-gray-900">
               {t('auth.createAccount')}
             </h2>
-            <p className="mt-2 text-gray-600">
-              {t('auth.signUpPlatform')}
-            </p>
+            <p className="mt-2 text-gray-600">{t('auth.signUpPlatform')}</p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>
@@ -146,7 +144,9 @@ const SignUp = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">{t('auth.confirmPassword')}</Label>
+              <Label htmlFor="confirmPassword">
+                {t('auth.confirmPassword')}
+              </Label>
               <Input
                 id="confirmPassword"
                 type="password"

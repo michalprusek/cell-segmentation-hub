@@ -25,39 +25,40 @@ interface UseThumbnailUpdatesProps {
 export const useThumbnailUpdates = ({
   projectId,
   onThumbnailUpdate,
-  enabled = true
+  enabled = true,
 }: UseThumbnailUpdatesProps) => {
   const { socket, isConnected } = useWebSocket();
 
   // Handle thumbnail update from WebSocket
-  const handleThumbnailUpdate = useCallback((data: ThumbnailUpdateData) => {
-    if (!enabled) return;
+  const handleThumbnailUpdate = useCallback(
+    (data: ThumbnailUpdateData) => {
+      if (!enabled) return;
 
-    logger.debug('🔄 Received thumbnail update via WebSocket', {
-      imageId: data.imageId,
-      projectId: data.projectId,
-      levelOfDetail: data.thumbnailData.levelOfDetail,
-      polygonCount: data.thumbnailData.polygonCount
-    });
+      logger.debug('🔄 Received thumbnail update via WebSocket', {
+        imageId: data.imageId,
+        projectId: data.projectId,
+        levelOfDetail: data.thumbnailData.levelOfDetail,
+        polygonCount: data.thumbnailData.polygonCount,
+      });
 
-    // Update cache with new thumbnail data
-    thumbnailCache.set(
-      data.imageId,
-      data.thumbnailData.levelOfDetail,
-      data.thumbnailData
-    ).catch(error => {
-      logger.error(
-        'Failed to cache thumbnail update',
-        error instanceof Error ? error : new Error(String(error)),
-        'useThumbnailUpdates'
-      );
-    });
+      // Update cache with new thumbnail data
+      thumbnailCache
+        .set(data.imageId, data.thumbnailData.levelOfDetail, data.thumbnailData)
+        .catch(error => {
+          logger.error(
+            'Failed to cache thumbnail update',
+            error instanceof Error ? error : new Error(String(error)),
+            'useThumbnailUpdates'
+          );
+        });
 
-    // Trigger callback if provided
-    if (onThumbnailUpdate) {
-      onThumbnailUpdate(data);
-    }
-  }, [enabled, onThumbnailUpdate]);
+      // Trigger callback if provided
+      if (onThumbnailUpdate) {
+        onThumbnailUpdate(data);
+      }
+    },
+    [enabled, onThumbnailUpdate]
+  );
 
   // Set up WebSocket listeners
   useEffect(() => {
@@ -66,7 +67,9 @@ export const useThumbnailUpdates = ({
     // Join project room if projectId is provided
     if (projectId) {
       socket.emit('join-project', projectId);
-      logger.debug('🏠 Joined project room for thumbnail updates', { projectId });
+      logger.debug('🏠 Joined project room for thumbnail updates', {
+        projectId,
+      });
     }
 
     // Listen for thumbnail updates
@@ -74,7 +77,7 @@ export const useThumbnailUpdates = ({
 
     return () => {
       socket.off('thumbnail:updated', handleThumbnailUpdate);
-      
+
       if (projectId) {
         socket.emit('leave-project', projectId);
         logger.debug('🚪 Left project room', { projectId });
@@ -84,7 +87,7 @@ export const useThumbnailUpdates = ({
 
   return {
     isConnected,
-    isEnabled: enabled
+    isEnabled: enabled,
   };
 };
 

@@ -1,6 +1,6 @@
 /**
  * i18n Runtime Logger
- * 
+ *
  * Logs missing translation keys during development for easy detection
  */
 
@@ -28,7 +28,7 @@ class I18nLogger {
     if (!this.isEnabled) return;
 
     const existing = this.missingKeys.get(key);
-    
+
     if (existing) {
       existing.count++;
       existing.timestamp = Date.now();
@@ -37,13 +37,13 @@ class I18nLogger {
         key,
         component,
         timestamp: Date.now(),
-        count: 1
+        count: 1,
       });
-      
+
       // Log to console in development
       logger.warn(`[i18n] Missing translation key: "${key}"`, {
         component,
-        suggestion: this.generateSuggestion(key)
+        suggestion: this.generateSuggestion(key),
       });
     }
   }
@@ -53,11 +53,12 @@ class I18nLogger {
    */
   private generateSuggestion(key: string): string {
     const parts = key.split('.');
-    if (parts.length < 2) return `Add "${key}: 'Your translation'" to translation files`;
-    
+    if (parts.length < 2)
+      return `Add "${key}: 'Your translation'" to translation files`;
+
     const [section, ...rest] = parts;
     const nestedKey = rest.join('.');
-    
+
     return `Add to ${section} section: "${nestedKey}: 'Your translation'"`;
   }
 
@@ -65,8 +66,9 @@ class I18nLogger {
    * Get all missing keys report
    */
   getMissingKeysReport(): MissingKeyLog[] {
-    return Array.from(this.missingKeys.values())
-      .sort((a, b) => b.count - a.count); // Sort by frequency
+    return Array.from(this.missingKeys.values()).sort(
+      (a, b) => b.count - a.count
+    ); // Sort by frequency
   }
 
   /**
@@ -74,14 +76,14 @@ class I18nLogger {
    */
   exportMissingKeys(): Record<string, any> {
     const structure: Record<string, any> = {};
-    
+
     for (const { key } of this.missingKeys.values()) {
       const parts = key.split('.');
       let current = structure;
-      
+
       for (let i = 0; i < parts.length; i++) {
         const part = parts[i];
-        
+
         if (i === parts.length - 1) {
           // Last part - set the value
           current[part] = `TODO: Translate "${key}"`;
@@ -94,7 +96,7 @@ class I18nLogger {
         }
       }
     }
-    
+
     return structure;
   }
 

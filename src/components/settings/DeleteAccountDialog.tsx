@@ -77,15 +77,24 @@ const DeleteAccountDialog: React.FC<DeleteAccountDialogProps> = ({
             </h4>
             <ul className="text-sm text-red-700 space-y-1">
               <li>• {t('settings.deleteAccountDialog.deleteItems.account')}</li>
-              <li>• {t('settings.deleteAccountDialog.deleteItems.projects')}</li>
-              <li>• {t('settings.deleteAccountDialog.deleteItems.segmentation')}</li>
-              <li>• {t('settings.deleteAccountDialog.deleteItems.settings')}</li>
+              <li>
+                • {t('settings.deleteAccountDialog.deleteItems.projects')}
+              </li>
+              <li>
+                • {t('settings.deleteAccountDialog.deleteItems.segmentation')}
+              </li>
+              <li>
+                • {t('settings.deleteAccountDialog.deleteItems.settings')}
+              </li>
             </ul>
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="confirmation" className="text-sm font-medium">
-              {t('settings.deleteAccountDialog.confirmationLabel').replace('{0}', userEmail)}
+              {t('settings.deleteAccountDialog.confirmationLabel').replace(
+                '{0}',
+                userEmail
+              )}
             </Label>
             <Input
               id="confirmation"

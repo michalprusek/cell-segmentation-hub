@@ -5,13 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
-import {
-  Clock,
-  Edit,
-  Mail,
-  MapPin,
-  Loader2,
-} from 'lucide-react';
+import { Clock, Edit, Mail, MapPin, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 // Note: Profile functionality now handled by AuthContext and Settings page
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -399,11 +393,9 @@ const Profile = () => {
                         </span>
                       </div>
                     </div>
-
                   </div>
                 </CardContent>
               </Card>
-
             </div>
 
             {/* Main Content */}
@@ -544,7 +536,6 @@ const Profile = () => {
                   </div>
                 </CardContent>
               </Card>
-
             </div>
           </div>
         )}

@@ -55,7 +55,7 @@ export const useKeyboardShortcuts = ({
       isShiftPressed.current = event.shiftKey;
       isCtrlPressed.current = event.ctrlKey || event.metaKey;
       isAltPressed.current = event.altKey;
-      
+
       // Update Space key state - only when not in input fields
       if (event.code === 'Space') {
         // Don't process Space when typing in inputs
@@ -260,7 +260,7 @@ export const useKeyboardShortcuts = ({
     isShiftPressed.current = event.shiftKey;
     isCtrlPressed.current = event.ctrlKey || event.metaKey;
     isAltPressed.current = event.altKey;
-    
+
     // Update Space key state - always reset on keyup regardless of target
     if (event.code === 'Space') {
       isSpacePressed.current = false;

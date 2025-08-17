@@ -252,7 +252,7 @@ const SegmentationEditor = () => {
         // When selecting a polygon, automatically enable EditVertices mode (purple frame)
         editor.setEditMode(EditMode.EditVertices);
       }
-      
+
       editor.setSelectedPolygonId(polygonId);
     },
     [editor]
@@ -266,59 +266,70 @@ const SegmentationEditor = () => {
       // Immediately clear polygons when switching images to prevent showing old data
       setSegmentationPolygons(null);
       setImageDimensions(null); // Also clear image dimensions
-      logger.debug('🧹 Cleared polygons and dimensions for new image:', imageId);
+      logger.debug(
+        '🧹 Cleared polygons and dimensions for new image:',
+        imageId
+      );
 
       try {
-        const segmentationData = await apiClient.getSegmentationResults(imageId);
+        const segmentationData =
+          await apiClient.getSegmentationResults(imageId);
         // Handle empty or null segmentation gracefully
         if (!segmentationData || !segmentationData.polygons) {
           logger.debug('No segmentation data found for image:', imageId);
           setSegmentationPolygons(null);
-          
+
           // Still try to set image dimensions from project data if available
           if (selectedImage?.width && selectedImage?.height) {
-            logger.debug('📐 Setting image dimensions from project data (no segmentation):', {
-              width: selectedImage.width,
-              height: selectedImage.height
-            });
+            logger.debug(
+              '📐 Setting image dimensions from project data (no segmentation):',
+              {
+                width: selectedImage.width,
+                height: selectedImage.height,
+              }
+            );
             setImageDimensions({
               width: selectedImage.width,
-              height: selectedImage.height
+              height: selectedImage.height,
             });
           }
           return;
         }
-        
+
         const polygons = segmentationData.polygons;
-        
+
         // Extract image dimensions from segmentation data if available
         if (segmentationData.imageWidth && segmentationData.imageHeight) {
           logger.debug('📐 Setting image dimensions from segmentation data:', {
             width: segmentationData.imageWidth,
-            height: segmentationData.imageHeight
+            height: segmentationData.imageHeight,
           });
           setImageDimensions({
             width: segmentationData.imageWidth,
-            height: segmentationData.imageHeight
+            height: segmentationData.imageHeight,
           });
         } else if (selectedImage?.width && selectedImage?.height) {
           // Fallback to image dimensions from project data (database)
-          logger.debug('📐 Setting image dimensions from project data (fallback):', {
-            width: selectedImage.width,
-            height: selectedImage.height
-          });
+          logger.debug(
+            '📐 Setting image dimensions from project data (fallback):',
+            {
+              width: selectedImage.width,
+              height: selectedImage.height,
+            }
+          );
           setImageDimensions({
             width: selectedImage.width,
-            height: selectedImage.height
+            height: selectedImage.height,
           });
         }
-        
+
         logger.debug('📥 Loaded segmentation polygons from API:', {
           imageId,
           polygonCount: polygons.length,
-          imageDimensions: segmentationData.imageWidth && segmentationData.imageHeight 
-            ? `${segmentationData.imageWidth}x${segmentationData.imageHeight}`
-            : 'not available',
+          imageDimensions:
+            segmentationData.imageWidth && segmentationData.imageHeight
+              ? `${segmentationData.imageWidth}x${segmentationData.imageHeight}`
+              : 'not available',
           firstPolygon: polygons[0]
             ? {
                 id: polygons[0].id,
@@ -393,21 +404,24 @@ const SegmentationEditor = () => {
     setImageDimensions(current => {
       // Only update if dimensions are not already set from segmentation data
       if (!current) {
-        logger.debug('📐 Setting image dimensions from image load:', { width, height });
+        logger.debug('📐 Setting image dimensions from image load:', {
+          width,
+          height,
+        });
         return { width, height };
       }
-      
+
       // Log if dimensions differ between image and segmentation data
       if (current.width !== width || current.height !== height) {
         logger.warn('⚠️ Image dimensions mismatch:', {
           fromSegmentation: current,
           fromImage: { width, height },
-          imageId
+          imageId,
         });
         // Keep segmentation data dimensions (they're more reliable)
         return current;
       }
-      
+
       return current;
     });
   };
@@ -582,7 +596,10 @@ const SegmentationEditor = () => {
                     onClick={e => {
                       // Unselect polygon when clicking on empty canvas area
                       // BUT skip deselection when in AddPoints mode to allow point placement
-                      if (e.target === e.currentTarget && editor.editMode !== EditMode.AddPoints) {
+                      if (
+                        e.target === e.currentTarget &&
+                        editor.editMode !== EditMode.AddPoints
+                      ) {
                         handlePolygonSelection(null);
                       }
                     }}

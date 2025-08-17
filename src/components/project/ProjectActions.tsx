@@ -42,7 +42,10 @@ const ProjectActions = ({ projectId }: ProjectActionsProps) => {
     } catch (error: unknown) {
       logger.error('Error deleting project:', error);
       const errorMessage = getErrorMessage(error) || 'Failed to delete project';
-      toast.error(t('toast.project.deleteFailed') || 'Failed to delete project: ' + errorMessage);
+      toast.error(
+        t('toast.project.deleteFailed') ||
+          'Failed to delete project: ' + errorMessage
+      );
     } finally {
       setLoading(false);
     }

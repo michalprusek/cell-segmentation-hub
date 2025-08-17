@@ -45,7 +45,7 @@ export const useEnhancedSegmentationEditor = ({
   imageId,
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
-  
+
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
   const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(
@@ -122,7 +122,8 @@ export const useEnhancedSegmentationEditor = ({
   useEffect(() => {
     // Check if this is truly new data (different imageId, different length, or first load)
     const imageChanged = currentImageIdRef.current !== imageId;
-    const lengthChanged = initialPolygons.length !== initialPolygonsRef.current.length;
+    const lengthChanged =
+      initialPolygons.length !== initialPolygonsRef.current.length;
     const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
 
     if (isNewData) {
@@ -148,7 +149,7 @@ export const useEnhancedSegmentationEditor = ({
         polygonId: null,
         vertexIndex: null,
       }); // Reset drag state
-      
+
       // Reset interaction state
       setInteractionState({
         isDraggingVertex: false,
@@ -161,7 +162,7 @@ export const useEnhancedSegmentationEditor = ({
         addPointEndVertex: null,
         isAddingPoints: false,
       });
-      
+
       // Reset history with new initial state
       setHistory([initialPolygons]);
       setHistoryIndex(0);
@@ -173,7 +174,12 @@ export const useEnhancedSegmentationEditor = ({
       hasInitialized.current = true;
 
       if (process.env.NODE_ENV === 'development') {
-        logger.debug('✅ Loaded', initialPolygons.length, 'polygons for image:', imageId);
+        logger.debug(
+          '✅ Loaded',
+          initialPolygons.length,
+          'polygons for image:',
+          imageId
+        );
       }
     }
   }, [initialPolygons, imageId]);

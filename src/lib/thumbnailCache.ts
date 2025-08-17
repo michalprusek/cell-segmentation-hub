@@ -21,22 +21,22 @@ class ThumbnailCache {
   private dbVersion = 1;
   private storeName = 'thumbnails';
   private db: IDBDatabase | null = null;
-  
+
   // Memory cache for frequently accessed thumbnails
   private memoryCache = new Map<string, ThumbnailCacheEntry>();
   private maxMemoryEntries = 100;
-  
+
   // Cache statistics
   private stats = {
     hits: 0,
     misses: 0,
     memoryHits: 0,
-    dbHits: 0
+    dbHits: 0,
   };
-  
+
   // Cache TTL: 24 hours for thumbnails
   private readonly TTL = 24 * 60 * 60 * 1000;
-  
+
   // Store the initialization promise
   private ready: Promise<void>;
 
@@ -52,27 +52,39 @@ class ThumbnailCache {
       const request = indexedDB.open(this.dbName, this.dbVersion);
 
       request.onerror = () => {
-        logger.error('Failed to open IndexedDB for thumbnail cache', request.error, 'ThumbnailCache');
+        logger.error(
+          'Failed to open IndexedDB for thumbnail cache',
+          request.error,
+          'ThumbnailCache'
+        );
         reject(request.error);
       };
 
       request.onsuccess = () => {
         this.db = request.result;
-        logger.debug('📦 Thumbnail cache IndexedDB initialized', 'ThumbnailCache');
+        logger.debug(
+          '📦 Thumbnail cache IndexedDB initialized',
+          'ThumbnailCache'
+        );
         resolve();
       };
 
-      request.onupgradeneeded = (event) => {
+      request.onupgradeneeded = event => {
         const db = (event.target as IDBOpenDBRequest).result;
-        
+
         // Create object store for thumbnails
         if (!db.objectStoreNames.contains(this.storeName)) {
           const store = db.createObjectStore(this.storeName, { keyPath: 'id' });
           store.createIndex('imageId', 'imageId', { unique: false });
-          store.createIndex('levelOfDetail', 'levelOfDetail', { unique: false });
+          store.createIndex('levelOfDetail', 'levelOfDetail', {
+            unique: false,
+          });
           store.createIndex('expiresAt', 'expiresAt', { unique: false });
-          
-          logger.debug('📦 Created thumbnail cache object store', 'ThumbnailCache');
+
+          logger.debug(
+            '📦 Created thumbnail cache object store',
+            'ThumbnailCache'
+          );
         }
       };
     });
@@ -81,29 +93,35 @@ class ThumbnailCache {
   /**
    * Generate cache key
    */
-  private getCacheKey(imageId: string, levelOfDetail: 'low' | 'medium' | 'high'): string {
+  private getCacheKey(
+    imageId: string,
+    levelOfDetail: 'low' | 'medium' | 'high'
+  ): string {
     return `${imageId}:${levelOfDetail}`;
   }
 
   /**
    * Get thumbnail from cache
    */
-  async get(imageId: string, levelOfDetail: 'low' | 'medium' | 'high' = 'low'): Promise<any | null> {
+  async get(
+    imageId: string,
+    levelOfDetail: 'low' | 'medium' | 'high' = 'low'
+  ): Promise<any | null> {
     await this.ready;
     const cacheKey = this.getCacheKey(imageId, levelOfDetail);
-    
+
     // Check memory cache first
     const memoryEntry = this.memoryCache.get(cacheKey);
     if (memoryEntry && memoryEntry.expiresAt > Date.now()) {
       this.stats.hits++;
       this.stats.memoryHits++;
-      
+
       logger.debug('🎯 Thumbnail cache hit (memory)', 'ThumbnailCache', {
         imageId,
         levelOfDetail,
-        cacheKey
+        cacheKey,
       });
-      
+
       return memoryEntry.thumbnailData;
     }
 
@@ -114,21 +132,25 @@ class ThumbnailCache {
         if (dbEntry && dbEntry.expiresAt > Date.now()) {
           this.stats.hits++;
           this.stats.dbHits++;
-          
+
           // Store in memory cache for next time
           this.memoryCache.set(cacheKey, dbEntry);
           this.evictMemoryCache();
-          
+
           logger.debug('🎯 Thumbnail cache hit (IndexedDB)', 'ThumbnailCache', {
             imageId,
             levelOfDetail,
-            cacheKey
+            cacheKey,
           });
-          
+
           return dbEntry.thumbnailData;
         }
       } catch (error) {
-        logger.error('Failed to get thumbnail from IndexedDB', error instanceof Error ? error : new Error(String(error)), 'ThumbnailCache');
+        logger.error(
+          'Failed to get thumbnail from IndexedDB',
+          error instanceof Error ? error : new Error(String(error)),
+          'ThumbnailCache'
+        );
       }
     }
 
@@ -136,27 +158,31 @@ class ThumbnailCache {
     logger.debug('❌ Thumbnail cache miss', 'ThumbnailCache', {
       imageId,
       levelOfDetail,
-      cacheKey
+      cacheKey,
     });
-    
+
     return null;
   }
 
   /**
    * Store thumbnail in cache
    */
-  async set(imageId: string, levelOfDetail: 'low' | 'medium' | 'high', thumbnailData: any): Promise<void> {
+  async set(
+    imageId: string,
+    levelOfDetail: 'low' | 'medium' | 'high',
+    thumbnailData: any
+  ): Promise<void> {
     await this.ready;
     const cacheKey = this.getCacheKey(imageId, levelOfDetail);
     const now = Date.now();
-    
+
     const entry: ThumbnailCacheEntry = {
       id: cacheKey,
       imageId,
       levelOfDetail,
       thumbnailData,
       cachedAt: now,
-      expiresAt: now + this.TTL
+      expiresAt: now + this.TTL,
     };
 
     // Store in memory cache
@@ -167,15 +193,19 @@ class ThumbnailCache {
     if (this.db) {
       try {
         await this.storeInDB(entry);
-        
+
         logger.debug('💾 Thumbnail cached successfully', 'ThumbnailCache', {
           imageId,
           levelOfDetail,
           cacheKey,
-          dataSize: JSON.stringify(thumbnailData).length
+          dataSize: JSON.stringify(thumbnailData).length,
         });
       } catch (error) {
-        logger.error('Failed to store thumbnail in IndexedDB', error instanceof Error ? error : new Error(String(error)), 'ThumbnailCache');
+        logger.error(
+          'Failed to store thumbnail in IndexedDB',
+          error instanceof Error ? error : new Error(String(error)),
+          'ThumbnailCache'
+        );
       }
     }
   }
@@ -186,7 +216,7 @@ class ThumbnailCache {
   async invalidate(imageId: string): Promise<void> {
     await this.ready;
     const levels: Array<'low' | 'medium' | 'high'> = ['low', 'medium', 'high'];
-    
+
     // Remove from memory cache
     for (const level of levels) {
       const cacheKey = this.getCacheKey(imageId, level);
@@ -199,19 +229,27 @@ class ThumbnailCache {
         const transaction = this.db.transaction([this.storeName], 'readwrite');
         const store = transaction.objectStore(this.storeName);
         const index = store.index('imageId');
-        
+
         const request = index.openCursor(IDBKeyRange.only(imageId));
-        request.onsuccess = (event) => {
+        request.onsuccess = event => {
           const cursor = (event.target as IDBRequest).result;
           if (cursor) {
             cursor.delete();
             cursor.continue();
           }
         };
-        
-        logger.debug('🗑️ Invalidated thumbnail cache for image', 'ThumbnailCache', { imageId });
+
+        logger.debug(
+          '🗑️ Invalidated thumbnail cache for image',
+          'ThumbnailCache',
+          { imageId }
+        );
       } catch (error) {
-        logger.error('Failed to invalidate thumbnail cache', error instanceof Error ? error : new Error(String(error)), 'ThumbnailCache');
+        logger.error(
+          'Failed to invalidate thumbnail cache',
+          error instanceof Error ? error : new Error(String(error)),
+          'ThumbnailCache'
+        );
       }
     }
   }
@@ -219,7 +257,9 @@ class ThumbnailCache {
   /**
    * Get thumbnail from IndexedDB
    */
-  private async getFromDB(cacheKey: string): Promise<ThumbnailCacheEntry | null> {
+  private async getFromDB(
+    cacheKey: string
+  ): Promise<ThumbnailCacheEntry | null> {
     if (!this.db) return null;
 
     return new Promise((resolve, reject) => {
@@ -276,7 +316,7 @@ class ThumbnailCache {
 
     logger.debug('🧹 Evicted old entries from memory cache', 'ThumbnailCache', {
       removed: toRemove.length,
-      remaining: this.memoryCache.size
+      remaining: this.memoryCache.size,
     });
   }
 
@@ -290,25 +330,33 @@ class ThumbnailCache {
       const transaction = this.db.transaction([this.storeName], 'readwrite');
       const store = transaction.objectStore(this.storeName);
       const index = store.index('expiresAt');
-      
+
       const now = Date.now();
       const request = index.openCursor(IDBKeyRange.upperBound(now));
-      
+
       let deletedCount = 0;
-      request.onsuccess = (event) => {
+      request.onsuccess = event => {
         const cursor = (event.target as IDBRequest).result;
         if (cursor) {
           cursor.delete();
           deletedCount++;
           cursor.continue();
         } else {
-          logger.debug('🧹 Cleaned expired thumbnails from cache', 'ThumbnailCache', {
-            deletedCount
-          });
+          logger.debug(
+            '🧹 Cleaned expired thumbnails from cache',
+            'ThumbnailCache',
+            {
+              deletedCount,
+            }
+          );
         }
       };
     } catch (error) {
-      logger.error('Failed to clean expired thumbnails', error instanceof Error ? error : new Error(String(error)), 'ThumbnailCache');
+      logger.error(
+        'Failed to clean expired thumbnails',
+        error instanceof Error ? error : new Error(String(error)),
+        'ThumbnailCache'
+      );
     }
   }
 
@@ -317,12 +365,12 @@ class ThumbnailCache {
    */
   getStats(): CacheStats {
     const hitRate = this.stats.hits / (this.stats.hits + this.stats.misses);
-    
+
     return {
       totalSize: this.memoryCache.size,
       entryCount: this.memoryCache.size,
       hitRate: isNaN(hitRate) ? 0 : hitRate,
-      memoryUsage: this.estimateMemoryUsage()
+      memoryUsage: this.estimateMemoryUsage(),
     };
   }
 
@@ -351,10 +399,14 @@ class ThumbnailCache {
         const transaction = this.db.transaction([this.storeName], 'readwrite');
         const store = transaction.objectStore(this.storeName);
         await store.clear();
-        
+
         logger.debug('🧹 Cleared all thumbnail cache data', 'ThumbnailCache');
       } catch (error) {
-        logger.error('Failed to clear thumbnail cache', error instanceof Error ? error : new Error(String(error)), 'ThumbnailCache');
+        logger.error(
+          'Failed to clear thumbnail cache',
+          error instanceof Error ? error : new Error(String(error)),
+          'ThumbnailCache'
+        );
       }
     }
 
@@ -363,7 +415,7 @@ class ThumbnailCache {
       hits: 0,
       misses: 0,
       memoryHits: 0,
-      dbHits: 0
+      dbHits: 0,
     };
   }
 }
@@ -372,8 +424,15 @@ class ThumbnailCache {
 export const thumbnailCache = new ThumbnailCache();
 
 // Auto-cleanup every hour
-setInterval(() => {
-  thumbnailCache.cleanExpired().catch(error => {
-    logger.error('Failed to clean expired thumbnails during scheduled cleanup', error instanceof Error ? error : new Error(String(error)), 'ThumbnailCache');
-  });
-}, 60 * 60 * 1000);
+setInterval(
+  () => {
+    thumbnailCache.cleanExpired().catch(error => {
+      logger.error(
+        'Failed to clean expired thumbnails during scheduled cleanup',
+        error instanceof Error ? error : new Error(String(error)),
+        'ThumbnailCache'
+      );
+    });
+  },
+  60 * 60 * 1000
+);

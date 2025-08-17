@@ -43,7 +43,9 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
               checked={includeMetadata}
               onCheckedChange={() => setIncludeMetadata(!includeMetadata)}
             />
-            <Label htmlFor="include-metadata">{t('exportDialog.includeMetadata')}</Label>
+            <Label htmlFor="include-metadata">
+              {t('exportDialog.includeMetadata')}
+            </Label>
           </div>
           <div className="flex items-center space-x-2">
             <Checkbox
@@ -53,7 +55,9 @@ const ExportOptionsCard: React.FC<ExportOptionsCardProps> = ({
                 setIncludeSegmentation(!includeSegmentation)
               }
             />
-            <Label htmlFor="include-segmentation">{t('exportDialog.includeSegmentation')}</Label>
+            <Label htmlFor="include-segmentation">
+              {t('exportDialog.includeSegmentation')}
+            </Label>
           </div>
           <div className="flex items-center space-x-2">
             <Checkbox

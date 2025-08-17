@@ -1,10 +1,13 @@
 import { toast as sonnerToast } from 'sonner';
 
-export type ToastFunction = (message: string, options?: Parameters<typeof sonnerToast.error>[1]) => void;
+export type ToastFunction = (
+  message: string,
+  options?: Parameters<typeof sonnerToast.error>[1]
+) => void;
 
 /**
  * Centralized toast utility for consistent localized messaging
- * 
+ *
  * This utility provides a single interface for toast notifications that:
  * - Ensures consistent error handling
  * - Provides fallback messages for missing translations
@@ -14,14 +17,20 @@ export const toast = {
   /**
    * Show success toast message
    */
-  success: (message: string, options?: Parameters<typeof sonnerToast.success>[1]) => {
+  success: (
+    message: string,
+    options?: Parameters<typeof sonnerToast.success>[1]
+  ) => {
     sonnerToast.success(message, options);
   },
 
   /**
    * Show error toast message
    */
-  error: (message: string, options?: Parameters<typeof sonnerToast.error>[1]) => {
+  error: (
+    message: string,
+    options?: Parameters<typeof sonnerToast.error>[1]
+  ) => {
     sonnerToast.error(message, options);
   },
 
@@ -35,14 +44,20 @@ export const toast = {
   /**
    * Show warning toast message
    */
-  warning: (message: string, options?: Parameters<typeof sonnerToast.warning>[1]) => {
+  warning: (
+    message: string,
+    options?: Parameters<typeof sonnerToast.warning>[1]
+  ) => {
     sonnerToast.warning(message, options);
   },
 
   /**
    * Show loading toast message
    */
-  loading: (message: string, options?: Parameters<typeof sonnerToast.loading>[1]) => {
+  loading: (
+    message: string,
+    options?: Parameters<typeof sonnerToast.loading>[1]
+  ) => {
     return sonnerToast.loading(message, options);
   },
 
@@ -61,7 +76,7 @@ export const toast = {
 
 /**
  * Helper to create localized toast messages with fallbacks
- * 
+ *
  * @param translationFunction - The t() function from useLanguage
  * @param key - Translation key
  * @param fallback - Fallback message if translation is missing
@@ -76,7 +91,10 @@ export const createLocalizedToast = (
     warning?: string;
   }
 ) => ({
-  success: (key: string, options?: Parameters<typeof sonnerToast.success>[1]) => {
+  success: (
+    key: string,
+    options?: Parameters<typeof sonnerToast.success>[1]
+  ) => {
     const message = translationFunction(key) || fallback?.success || key;
     toast.success(message, options);
   },
@@ -91,12 +109,18 @@ export const createLocalizedToast = (
     toast.info(message, options);
   },
 
-  warning: (key: string, options?: Parameters<typeof sonnerToast.warning>[1]) => {
+  warning: (
+    key: string,
+    options?: Parameters<typeof sonnerToast.warning>[1]
+  ) => {
     const message = translationFunction(key) || fallback?.warning || key;
     toast.warning(message, options);
   },
 
-  loading: (key: string, options?: Parameters<typeof sonnerToast.loading>[1]) => {
+  loading: (
+    key: string,
+    options?: Parameters<typeof sonnerToast.loading>[1]
+  ) => {
     const message = translationFunction(key) || fallback?.info || key;
     return toast.loading(message, options);
   },
@@ -106,9 +130,11 @@ export const createLocalizedToast = (
  * Hook for localized toasts
  * Use this in React components that need localized toast messages
  */
-export const useLocalizedToast = (useLanguageHook: () => { t: (key: string) => string }) => {
+export const useLocalizedToast = (
+  useLanguageHook: () => { t: (key: string) => string }
+) => {
   const { t } = useLanguageHook();
-  
+
   return createLocalizedToast(t, {
     error: 'An error occurred',
     success: 'Operation successful',

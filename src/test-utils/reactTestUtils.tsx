@@ -9,25 +9,31 @@ import { vi } from 'vitest';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { AuthContext } from '@/contexts/AuthContext';
-import type { EditMode, TransformState, InteractionState } from '@/pages/segmentation/types';
+import type {
+  EditMode,
+  TransformState,
+  InteractionState,
+} from '@/pages/segmentation/types';
 
 // Mock contexts for testing
 // eslint-disable-next-line react-refresh/only-export-components
-const MockLanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <LanguageProvider>{children}</LanguageProvider>
-);
+const MockLanguageProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => <LanguageProvider>{children}</LanguageProvider>;
 
 // eslint-disable-next-line react-refresh/only-export-components
-const MockThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <ThemeProvider>{children}</ThemeProvider>
-);
+const MockThemeProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => <ThemeProvider>{children}</ThemeProvider>;
 
 // eslint-disable-next-line react-refresh/only-export-components
-const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const mockUser = {
     id: 'test-user-id',
     email: 'test@example.com',
-    username: 'testuser'
+    username: 'testuser',
   };
 
   const mockProfile = {
@@ -37,7 +43,7 @@ const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children })
     consentToAlgorithmImprovement: true,
     consentToFeatureDevelopment: true,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
   };
 
   const mockContextValue = {
@@ -49,7 +55,7 @@ const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children })
     signIn: vi.fn(),
     signUp: vi.fn(),
     signOut: vi.fn(),
-    deleteAccount: vi.fn()
+    deleteAccount: vi.fn(),
   };
 
   return (
@@ -61,12 +67,12 @@ const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({ children })
 
 // All providers wrapper for testing
 // eslint-disable-next-line react-refresh/only-export-components
-const AllProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+const AllProviders: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => (
   <MockLanguageProvider>
     <MockThemeProvider>
-      <MockAuthProvider>
-        {children}
-      </MockAuthProvider>
+      <MockAuthProvider>{children}</MockAuthProvider>
     </MockThemeProvider>
   </MockLanguageProvider>
 );
@@ -91,7 +97,7 @@ export const createMockTransform = (
 ): TransformState => ({
   zoom,
   translateX,
-  translateY
+  translateY,
 });
 
 export const createMockInteractionState = (
@@ -106,7 +112,7 @@ export const createMockInteractionState = (
   addPointStartVertex: null,
   addPointEndVertex: null,
   isAddingPoints: false,
-  ...overrides
+  ...overrides,
 });
 
 // Mock canvas element for testing
@@ -121,14 +127,14 @@ export const createMockCanvas = (): HTMLDivElement => {
     bottom: 600,
     x: 0,
     y: 0,
-    toJSON: vi.fn()
+    toJSON: vi.fn(),
   });
   return mockCanvas;
 };
 
 // Mock ref object for testing
 export const createMockRef = <T,>(value: T): React.RefObject<T> => ({
-  current: value
+  current: value,
 });
 
 // Performance testing utility for React components
@@ -159,7 +165,7 @@ export const measureComponentPerformance = async (
     averageTime,
     minTime,
     maxTime,
-    totalTime
+    totalTime,
   };
 };
 
@@ -169,14 +175,14 @@ export const mockBrowserAPIs = () => {
   Object.defineProperty(window, 'devicePixelRatio', {
     writable: true,
     configurable: true,
-    value: 1
+    value: 1,
   });
 
   // Mock requestAnimationFrame with proper ID generation and cancellation
   let rafIdCounter = 1;
   const rafTimeouts = new Map<number, NodeJS.Timeout>();
-  
-  global.requestAnimationFrame = vi.fn((cb) => {
+
+  global.requestAnimationFrame = vi.fn(cb => {
     const id = rafIdCounter++;
     const timeoutHandle = setTimeout(cb, 16);
     rafTimeouts.set(id, timeoutHandle);
@@ -196,14 +202,14 @@ export const mockBrowserAPIs = () => {
   global.ResizeObserver = vi.fn().mockImplementation(() => ({
     observe: vi.fn(),
     unobserve: vi.fn(),
-    disconnect: vi.fn()
+    disconnect: vi.fn(),
   }));
 
   // Mock IntersectionObserver
   global.IntersectionObserver = vi.fn().mockImplementation(() => ({
     observe: vi.fn(),
     unobserve: vi.fn(),
-    disconnect: vi.fn()
+    disconnect: vi.fn(),
   }));
 };
 
@@ -214,7 +220,7 @@ export const mockToast = {
   info: vi.fn(),
   warning: vi.fn(),
   loading: vi.fn(),
-  dismiss: vi.fn()
+  dismiss: vi.fn(),
 };
 
 // Mock keyboard events
@@ -235,7 +241,7 @@ export const createMockKeyboardEvent = (
     altKey: options.altKey || false,
     metaKey: options.metaKey || false,
     bubbles: true,
-    cancelable: true
+    cancelable: true,
   });
 
   if (options.preventDefault) {
@@ -269,7 +275,7 @@ export const createMockPointerEvent = (
     bubbles: true,
     cancelable: true,
     pointerId: 1,
-    pointerType: 'mouse'
+    pointerType: 'mouse',
   });
 };
 
@@ -294,12 +300,12 @@ export const createMockWheelEvent = (
     altKey: options.altKey || false,
     metaKey: options.metaKey || false,
     bubbles: true,
-    cancelable: true
+    cancelable: true,
   });
 };
 
 // Utility to wait for async operations in tests
-export const waitForAsync = (ms = 0): Promise<void> => 
+export const waitForAsync = (ms = 0): Promise<void> =>
   new Promise(resolve => setTimeout(resolve, ms));
 
 // Utility to trigger multiple renders
@@ -336,15 +342,12 @@ export const createMockFile = (
   const file = new File(['test content'], name, { type });
   Object.defineProperty(file, 'size', {
     value: size,
-    writable: false
+    writable: false,
   });
   return file;
 };
 
-export {
-  customRender as render,
-  customRenderHook as renderHook
-};
+export { customRender as render, customRenderHook as renderHook };
 
 // eslint-disable-next-line react-refresh/only-export-components
 export * from '@testing-library/react';

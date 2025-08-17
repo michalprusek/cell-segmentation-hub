@@ -11,7 +11,8 @@ export interface WebSocketEvent {
 }
 
 class WebSocketEventEmitter {
-  private listeners: Map<string, ((event: WebSocketEvent) => void)[]> = new Map();
+  private listeners: Map<string, ((event: WebSocketEvent) => void)[]> =
+    new Map();
 
   emit(event: WebSocketEvent) {
     const eventListeners = this.listeners.get(event.type) || [];

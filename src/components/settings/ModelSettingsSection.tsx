@@ -136,7 +136,6 @@ const ModelSettingsSection = () => {
             onValueCommit={handleThresholdCommit}
             className="w-full"
           />
-
         </div>
       </div>
     </div>

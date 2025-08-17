@@ -47,9 +47,7 @@ const Documentation = () => {
             <h1 className="text-3xl md:text-4xl font-bold mb-4">
               {t('docs.title')}
             </h1>
-            <p className="text-xl text-gray-600">
-              {t('docs.subtitle')}
-            </p>
+            <p className="text-xl text-gray-600">{t('docs.subtitle')}</p>
           </div>
 
           {/* Main Content */}
@@ -57,7 +55,9 @@ const Documentation = () => {
             {/* Sidebar */}
             <aside className="lg:col-span-1">
               <div className="sticky top-24 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="font-semibold text-lg mb-4">{t('docs.navigation')}</h3>
+                <h3 className="font-semibold text-lg mb-4">
+                  {t('docs.navigation')}
+                </h3>
                 <nav className="space-y-2">
                   <button
                     onClick={() => scrollToSection('introduction')}
@@ -167,13 +167,9 @@ const Documentation = () => {
                     </div>
                   </div>
 
-                  <p className="mb-4">
-                    {t('docs.introduction.developedBy')}
-                  </p>
+                  <p className="mb-4">{t('docs.introduction.developedBy')}</p>
 
-                  <p className="mb-4">
-                    {t('docs.introduction.addresses')}
-                  </p>
+                  <p className="mb-4">{t('docs.introduction.addresses')}</p>
                 </section>
 
                 <section id="getting-started" className="mb-12">
@@ -196,15 +192,9 @@ const Documentation = () => {
                         {t('docs.gettingStarted.accountSteps.step1')}
                       </Link>
                     </li>
-                    <li>
-                      {t('docs.gettingStarted.accountSteps.step2')}
-                    </li>
-                    <li>
-                      {t('docs.gettingStarted.accountSteps.step3')}
-                    </li>
-                    <li>
-                      {t('docs.gettingStarted.accountSteps.step4')}
-                    </li>
+                    <li>{t('docs.gettingStarted.accountSteps.step2')}</li>
+                    <li>{t('docs.gettingStarted.accountSteps.step3')}</li>
+                    <li>{t('docs.gettingStarted.accountSteps.step4')}</li>
                   </ol>
 
                   <h3 className="text-xl font-semibold mb-3">
@@ -216,9 +206,7 @@ const Documentation = () => {
                   <ol className="list-decimal pl-6 mb-6 space-y-2">
                     <li>{t('docs.gettingStarted.projectSteps.step1')}</li>
                     <li>{t('docs.gettingStarted.projectSteps.step2')}</li>
-                    <li>
-                      {t('docs.gettingStarted.projectSteps.step3')}
-                    </li>
+                    <li>{t('docs.gettingStarted.projectSteps.step3')}</li>
                     <li>{t('docs.gettingStarted.projectSteps.step4')}</li>
                   </ol>
                 </section>
@@ -228,19 +216,17 @@ const Documentation = () => {
                     {t('docs.uploadImages.title')}
                   </h2>
 
-                  <p className="mb-4">
-                    {t('docs.uploadImages.description')}
-                  </p>
+                  <p className="mb-4">{t('docs.uploadImages.description')}</p>
 
-                  <h3 className="text-xl font-semibold mb-3">{t('docs.uploadImages.methods')}</h3>
+                  <h3 className="text-xl font-semibold mb-3">
+                    {t('docs.uploadImages.methods')}
+                  </h3>
                   <p className="mb-4">
                     {t('docs.uploadImages.methodsDescription')}
                   </p>
                   <ul className="list-disc pl-6 mb-6 space-y-2">
                     <li>{t('docs.uploadImages.methodsList.dragDrop')}</li>
-                    <li>
-                      {t('docs.uploadImages.methodsList.browse')}
-                    </li>
+                    <li>{t('docs.uploadImages.methodsList.browse')}</li>
                     <li>{t('docs.uploadImages.methodsList.batch')}</li>
                   </ul>
 
@@ -262,7 +248,8 @@ const Documentation = () => {
                       </div>
                       <div className="ml-3">
                         <p className="text-sm text-yellow-700">
-                          <strong>{t('docs.uploadImages.note')}</strong> {t('docs.uploadImages.noteText')}
+                          <strong>{t('docs.uploadImages.note')}</strong>{' '}
+                          {t('docs.uploadImages.noteText')}
                         </p>
                       </div>
                     </div>
@@ -274,9 +261,7 @@ const Documentation = () => {
                     {t('docs.modelSelection.title')}
                   </h2>
 
-                  <p className="mb-4">
-                    {t('docs.modelSelection.description')}
-                  </p>
+                  <p className="mb-4">{t('docs.modelSelection.description')}</p>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -287,10 +272,14 @@ const Documentation = () => {
                         </h3>
                       </div>
                       <p className="text-sm text-green-700 mb-2">
-                        <strong>{t('docs.modelSelection.models.hrnet.inferenceTime')}</strong>
+                        <strong>
+                          {t('docs.modelSelection.models.hrnet.inferenceTime')}
+                        </strong>
                       </p>
                       <p className="text-sm text-green-700 mb-2">
-                        <strong>{t('docs.modelSelection.models.hrnet.bestFor')}</strong>
+                        <strong>
+                          {t('docs.modelSelection.models.hrnet.bestFor')}
+                        </strong>
                       </p>
                       <p className="text-sm text-green-700">
                         {t('docs.modelSelection.models.hrnet.description')}
@@ -305,10 +294,14 @@ const Documentation = () => {
                         </h3>
                       </div>
                       <p className="text-sm text-blue-700 mb-2">
-                        <strong>{t('docs.modelSelection.models.cbam.inferenceTime')}</strong>
+                        <strong>
+                          {t('docs.modelSelection.models.cbam.inferenceTime')}
+                        </strong>
                       </p>
                       <p className="text-sm text-blue-700 mb-2">
-                        <strong>{t('docs.modelSelection.models.cbam.bestFor')}</strong>
+                        <strong>
+                          {t('docs.modelSelection.models.cbam.bestFor')}
+                        </strong>
                       </p>
                       <p className="text-sm text-blue-700">
                         {t('docs.modelSelection.models.cbam.description')}
@@ -323,10 +316,14 @@ const Documentation = () => {
                         </h3>
                       </div>
                       <p className="text-sm text-purple-700 mb-2">
-                        <strong>{t('docs.modelSelection.models.ma.inferenceTime')}</strong>
+                        <strong>
+                          {t('docs.modelSelection.models.ma.inferenceTime')}
+                        </strong>
                       </p>
                       <p className="text-sm text-purple-700 mb-2">
-                        <strong>{t('docs.modelSelection.models.ma.bestFor')}</strong>
+                        <strong>
+                          {t('docs.modelSelection.models.ma.bestFor')}
+                        </strong>
                       </p>
                       <p className="text-sm text-purple-700">
                         {t('docs.modelSelection.models.ma.description')}
@@ -339,16 +336,10 @@ const Documentation = () => {
                   </h3>
                   <ol className="list-decimal pl-6 mb-6 space-y-2">
                     <li>{t('docs.modelSelection.selectionSteps.step1')}</li>
-                    <li>
-                      {t('docs.modelSelection.selectionSteps.step2')}
-                    </li>
+                    <li>{t('docs.modelSelection.selectionSteps.step2')}</li>
                     <li>{t('docs.modelSelection.selectionSteps.step3')}</li>
-                    <li>
-                      {t('docs.modelSelection.selectionSteps.step4')}
-                    </li>
-                    <li>
-                      {t('docs.modelSelection.selectionSteps.step5')}
-                    </li>
+                    <li>{t('docs.modelSelection.selectionSteps.step4')}</li>
+                    <li>{t('docs.modelSelection.selectionSteps.step5')}</li>
                   </ol>
 
                   <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
@@ -358,7 +349,8 @@ const Documentation = () => {
                       </div>
                       <div className="ml-3">
                         <p className="text-sm text-blue-700">
-                          <strong>{t('docs.modelSelection.tip')}</strong> {t('docs.modelSelection.tipText')}
+                          <strong>{t('docs.modelSelection.tip')}</strong>{' '}
+                          {t('docs.modelSelection.tipText')}
                         </p>
                       </div>
                     </div>
@@ -384,9 +376,7 @@ const Documentation = () => {
                     <li>
                       {t('docs.segmentationProcess.queueFeatures.realTime')}
                     </li>
-                    <li>
-                      {t('docs.segmentationProcess.queueFeatures.batch')}
-                    </li>
+                    <li>{t('docs.segmentationProcess.queueFeatures.batch')}</li>
                     <li>
                       {t('docs.segmentationProcess.queueFeatures.priority')}
                     </li>
@@ -400,24 +390,16 @@ const Documentation = () => {
                   </h3>
                   <ol className="list-decimal pl-6 mb-6 space-y-2">
                     <li>{t('docs.segmentationProcess.workflowSteps.step1')}</li>
-                    <li>
-                      {t('docs.segmentationProcess.workflowSteps.step2')}
-                    </li>
-                    <li>
-                      {t('docs.segmentationProcess.workflowSteps.step3')}
-                    </li>
-                    <li>
-                      {t('docs.segmentationProcess.workflowSteps.step4')}
-                    </li>
-                    <li>
-                      {t('docs.segmentationProcess.workflowSteps.step5')}
-                    </li>
-                    <li>
-                      {t('docs.segmentationProcess.workflowSteps.step6')}
-                    </li>
+                    <li>{t('docs.segmentationProcess.workflowSteps.step2')}</li>
+                    <li>{t('docs.segmentationProcess.workflowSteps.step3')}</li>
+                    <li>{t('docs.segmentationProcess.workflowSteps.step4')}</li>
+                    <li>{t('docs.segmentationProcess.workflowSteps.step5')}</li>
+                    <li>{t('docs.segmentationProcess.workflowSteps.step6')}</li>
                   </ol>
 
-                  <h3 className="text-xl font-semibold mb-3">{t('docs.segmentationProcess.polygonTypes')}</h3>
+                  <h3 className="text-xl font-semibold mb-3">
+                    {t('docs.segmentationProcess.polygonTypes')}
+                  </h3>
                   <p className="mb-4">
                     {t('docs.segmentationProcess.polygonDescription')}
                   </p>
@@ -437,7 +419,10 @@ const Documentation = () => {
                       </div>
                       <div className="ml-3">
                         <p className="text-sm text-yellow-700">
-                          <strong>{t('docs.segmentationProcess.processingNote')}</strong> {t('docs.segmentationProcess.processingTimes')}
+                          <strong>
+                            {t('docs.segmentationProcess.processingNote')}
+                          </strong>{' '}
+                          {t('docs.segmentationProcess.processingTimes')}
                         </p>
                       </div>
                     </div>
@@ -453,7 +438,9 @@ const Documentation = () => {
                     {t('docs.segmentationEditor.description')}
                   </p>
 
-                  <h3 className="text-xl font-semibold mb-3">{t('docs.segmentationEditor.editingModes')}</h3>
+                  <h3 className="text-xl font-semibold mb-3">
+                    {t('docs.segmentationEditor.editingModes')}
+                  </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="bg-gray-50 border rounded-lg p-4">
                       <h4 className="font-semibold text-gray-800 mb-2">
@@ -468,7 +455,9 @@ const Documentation = () => {
                         {t('docs.segmentationEditor.modes.editVertices.title')}
                       </h4>
                       <p className="text-sm text-blue-600">
-                        {t('docs.segmentationEditor.modes.editVertices.description')}
+                        {t(
+                          'docs.segmentationEditor.modes.editVertices.description'
+                        )}
                       </p>
                     </div>
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -476,7 +465,9 @@ const Documentation = () => {
                         {t('docs.segmentationEditor.modes.addPoints.title')}
                       </h4>
                       <p className="text-sm text-green-600">
-                        {t('docs.segmentationEditor.modes.addPoints.description')}
+                        {t(
+                          'docs.segmentationEditor.modes.addPoints.description'
+                        )}
                       </p>
                     </div>
                     <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
@@ -484,7 +475,9 @@ const Documentation = () => {
                         {t('docs.segmentationEditor.modes.createPolygon.title')}
                       </h4>
                       <p className="text-sm text-purple-600">
-                        {t('docs.segmentationEditor.modes.createPolygon.description')}
+                        {t(
+                          'docs.segmentationEditor.modes.createPolygon.description'
+                        )}
                       </p>
                     </div>
                     <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
@@ -492,7 +485,9 @@ const Documentation = () => {
                         {t('docs.segmentationEditor.modes.sliceMode.title')}
                       </h4>
                       <p className="text-sm text-orange-600">
-                        {t('docs.segmentationEditor.modes.sliceMode.description')}
+                        {t(
+                          'docs.segmentationEditor.modes.sliceMode.description'
+                        )}
                       </p>
                     </div>
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4">
@@ -500,7 +495,9 @@ const Documentation = () => {
                         {t('docs.segmentationEditor.modes.deletePolygon.title')}
                       </h4>
                       <p className="text-sm text-red-600">
-                        {t('docs.segmentationEditor.modes.deletePolygon.description')}
+                        {t(
+                          'docs.segmentationEditor.modes.deletePolygon.description'
+                        )}
                       </p>
                     </div>
                   </div>
@@ -624,9 +621,7 @@ const Documentation = () => {
                     {t('docs.exportFeatures.title')}
                   </h2>
 
-                  <p className="mb-4">
-                    {t('docs.exportFeatures.description')}
-                  </p>
+                  <p className="mb-4">{t('docs.exportFeatures.description')}</p>
 
                   <h3 className="text-xl font-semibold mb-3">
                     Export Package Contents

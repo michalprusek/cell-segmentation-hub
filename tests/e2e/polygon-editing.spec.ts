@@ -488,11 +488,11 @@ test.describe('Polygon Editing E2E Tests', () => {
           try {
             // Wait for the confirm button to appear with a short timeout
             await confirmButton.waitFor({ state: 'visible', timeout: 3000 });
-            
+
             // Start waiting for download before clicking
             const downloadPromise = page.waitForDownload({ timeout: 10000 });
             await confirmButton.click();
-            
+
             // Wait for the download and verify filename
             const download = await downloadPromise;
             expect(download.suggestedFilename()).toMatch(format.extension);

@@ -66,8 +66,11 @@ const ProjectDetail = () => {
 
       // For completed segmentation, refresh immediately for real-time updates
       // For other statuses, use minimal debounce
-      const delay = currentStatus === 'completed' || currentStatus === 'segmented' ? 100 : 300;
-      
+      const delay =
+        currentStatus === 'completed' || currentStatus === 'segmented'
+          ? 100
+          : 300;
+
       debounceTimeoutRef.current[imageId] = setTimeout(() => {
         refreshImageSegmentationRef.current(imageId);
         delete debounceTimeoutRef.current[imageId];
@@ -162,10 +165,10 @@ const ProjectDetail = () => {
     updateImagesRef.current(prevImages =>
       prevImages.map(img =>
         img.id === lastUpdate.imageId
-          ? { 
-              ...img, 
+          ? {
+              ...img,
               segmentationStatus: normalizedStatus,
-              updatedAt: new Date() // Update timestamp for tracking and reconciliation
+              updatedAt: new Date(), // Update timestamp for tracking and reconciliation
             }
           : img
       )
@@ -177,35 +180,45 @@ const ProjectDetail = () => {
       lastUpdate.status === 'completed'
     ) {
       // Immediate refresh for completed status - this will also validate if polygons exist
-      refreshImageSegmentationRef.current(lastUpdate.imageId).then(() => {
-        // After refresh, check if we actually have segmentation data
-        updateImagesRef.current(prevImages =>
-          prevImages.map(img => {
-            if (img.id === lastUpdate.imageId) {
-              // Only mark as completed if we have actual polygon data
-              const hasPolygons = img.segmentationResult && 
-                                img.segmentationResult.polygons && 
-                                img.segmentationResult.polygons.length > 0;
-              
-              return {
-                ...img,
-                segmentationStatus: hasPolygons ? 'completed' : 'no_segmentation',
-                updatedAt: new Date()
-              };
-            }
-            return img;
-          })
-        );
-      }).catch(() => {
-        // If refresh fails, mark as no_segmentation
-        updateImagesRef.current(prevImages =>
-          prevImages.map(img =>
-            img.id === lastUpdate.imageId
-              ? { ...img, segmentationStatus: 'no_segmentation', updatedAt: new Date() }
-              : img
-          )
-        );
-      });
+      refreshImageSegmentationRef
+        .current(lastUpdate.imageId)
+        .then(() => {
+          // After refresh, check if we actually have segmentation data
+          updateImagesRef.current(prevImages =>
+            prevImages.map(img => {
+              if (img.id === lastUpdate.imageId) {
+                // Only mark as completed if we have actual polygon data
+                const hasPolygons =
+                  img.segmentationResult &&
+                  img.segmentationResult.polygons &&
+                  img.segmentationResult.polygons.length > 0;
+
+                return {
+                  ...img,
+                  segmentationStatus: hasPolygons
+                    ? 'completed'
+                    : 'no_segmentation',
+                  updatedAt: new Date(),
+                };
+              }
+              return img;
+            })
+          );
+        })
+        .catch(() => {
+          // If refresh fails, mark as no_segmentation
+          updateImagesRef.current(prevImages =>
+            prevImages.map(img =>
+              img.id === lastUpdate.imageId
+                ? {
+                    ...img,
+                    segmentationStatus: 'no_segmentation',
+                    updatedAt: new Date(),
+                  }
+                : img
+            )
+          );
+        });
     }
 
     // Reset batch submitted state when queue becomes empty
@@ -213,7 +226,11 @@ const ProjectDetail = () => {
       // Trigger status reconciliation after a short delay
       const timeoutId = setTimeout(() => {
         const currentQueueStats = queueStats;
-        if (currentQueueStats && currentQueueStats.processing <= 1 && currentQueueStats.queued === 0) {
+        if (
+          currentQueueStats &&
+          currentQueueStats.processing <= 1 &&
+          currentQueueStats.queued === 0
+        ) {
           setBatchSubmitted(false);
           // Force reconciliation to catch any missed updates
           reconcileRef.current();
@@ -223,12 +240,7 @@ const ProjectDetail = () => {
       // Cleanup timeout if component unmounts
       return () => clearTimeout(timeoutId);
     }
-  }, [
-    lastUpdate,
-    id,
-    queueStats,
-    setBatchSubmitted,
-  ]);
+  }, [lastUpdate, id, queueStats, setBatchSubmitted]);
 
   // Cleanup debounce timeouts on unmount
   useEffect(() => {
@@ -406,7 +418,6 @@ const ProjectDetail = () => {
               batchSubmitted={batchSubmitted || hasActiveQueue}
               imagesToSegmentCount={imagesToSegmentCount}
             />
-
 
             {loading ? (
               <motion.div

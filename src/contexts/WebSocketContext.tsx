@@ -31,7 +31,9 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 }) => {
   const { user, token } = useAuth();
   const [isConnected, setIsConnected] = React.useState(false);
-  const [socketInstance, setSocketInstance] = React.useState<Socket | null>(null);
+  const [socketInstance, setSocketInstance] = React.useState<Socket | null>(
+    null
+  );
   const managerRef = useRef<WebSocketManager | null>(null);
   const isInitializedRef = useRef(false);
 

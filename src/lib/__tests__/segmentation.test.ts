@@ -4,12 +4,12 @@ import {
   findContours,
   segmentImage,
   calculatePolygonArea,
-  calculatePerimeter
+  calculatePerimeter,
 } from '@/lib/segmentation';
 import {
   createTestPolygons,
   createMockImageData,
-  measurePerformance
+  measurePerformance,
 } from '@/test-utils/polygonTestUtils';
 import type { Point } from '@/lib/segmentation';
 
@@ -27,7 +27,9 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
 let crossOriginValue: string | null = null;
 Object.defineProperty(HTMLImageElement.prototype, 'crossOrigin', {
   get: () => crossOriginValue,
-  set: (v: string | null) => { crossOriginValue = v; },
+  set: (v: string | null) => {
+    crossOriginValue = v;
+  },
   configurable: true,
   enumerable: true,
 });
@@ -49,13 +51,15 @@ describe('Segmentation Algorithms', () => {
         height: 100,
         onload: null as any,
         onerror: null as any,
-        src: ''
+        src: '',
       };
 
       const mockCanvas = document.createElement('canvas');
       const mockCtx = {
         drawImage: vi.fn(),
-        getImageData: vi.fn().mockReturnValue(createMockImageData(100, 100, 'gradient'))
+        getImageData: vi
+          .fn()
+          .mockReturnValue(createMockImageData(100, 100, 'gradient')),
       };
 
       vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
@@ -87,14 +91,14 @@ describe('Segmentation Algorithms', () => {
         height: 10,
         onload: null as any,
         onerror: null as any,
-        src: ''
+        src: '',
       };
 
       const mockCanvas = document.createElement('canvas');
       const imageData = createMockImageData(10, 10, 'gradient');
       const mockCtx = {
         drawImage: vi.fn(),
-        getImageData: vi.fn().mockReturnValue(imageData)
+        getImageData: vi.fn().mockReturnValue(imageData),
       };
 
       vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
@@ -128,7 +132,7 @@ describe('Segmentation Algorithms', () => {
         height: 100,
         onload: null as any,
         onerror: null as any,
-        src: ''
+        src: '',
       };
 
       global.Image = vi.fn().mockImplementation(() => mockImg);
@@ -152,7 +156,7 @@ describe('Segmentation Algorithms', () => {
         height: 100,
         onload: null as any,
         onerror: null as any,
-        src: ''
+        src: '',
       };
 
       const mockCanvas = document.createElement('canvas');
@@ -169,7 +173,9 @@ describe('Segmentation Algorithms', () => {
         }
       }, 0);
 
-      await expect(thresholdPromise).rejects.toThrow('Failed to get canvas context');
+      await expect(thresholdPromise).rejects.toThrow(
+        'Failed to get canvas context'
+      );
     });
 
     it('should apply correct grayscale conversion', async () => {
@@ -179,11 +185,11 @@ describe('Segmentation Algorithms', () => {
         height: 2,
         onload: null as any,
         onerror: null as any,
-        src: ''
+        src: '',
       };
 
       const mockCanvas = document.createElement('canvas');
-      
+
       // Create specific test image data
       const testImageData = createMockImageData(2, 2);
       // Set first pixel to white (255, 255, 255, 255)
@@ -191,16 +197,16 @@ describe('Segmentation Algorithms', () => {
       testImageData.data[1] = 255; // G
       testImageData.data[2] = 255; // B
       testImageData.data[3] = 255; // A
-      
+
       // Set second pixel to black (0, 0, 0, 255)
-      testImageData.data[4] = 0;   // R
-      testImageData.data[5] = 0;   // G
-      testImageData.data[6] = 0;   // B
+      testImageData.data[4] = 0; // R
+      testImageData.data[5] = 0; // G
+      testImageData.data[6] = 0; // B
       testImageData.data[7] = 255; // A
 
       const mockCtx = {
         drawImage: vi.fn(),
-        getImageData: vi.fn().mockReturnValue(testImageData)
+        getImageData: vi.fn().mockReturnValue(testImageData),
       };
 
       vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
@@ -221,7 +227,7 @@ describe('Segmentation Algorithms', () => {
       expect(result.data[0]).toBe(255);
       expect(result.data[1]).toBe(255);
       expect(result.data[2]).toBe(255);
-      
+
       // Second pixel (black) should become black (0)
       expect(result.data[4]).toBe(0);
       expect(result.data[5]).toBe(0);
@@ -233,7 +239,7 @@ describe('Segmentation Algorithms', () => {
     it('should return empty array as documented', () => {
       const mockImageData = createMockImageData(100, 100);
       const contours = findContours(mockImageData);
-      
+
       expect(contours).toEqual([]);
       expect(Array.isArray(contours)).toBe(true);
     });
@@ -241,7 +247,7 @@ describe('Segmentation Algorithms', () => {
     it('should handle different image sizes', () => {
       const smallImage = createMockImageData(10, 10);
       const largeImage = createMockImageData(1000, 1000);
-      
+
       expect(findContours(smallImage)).toEqual([]);
       expect(findContours(largeImage)).toEqual([]);
     });
@@ -249,7 +255,7 @@ describe('Segmentation Algorithms', () => {
     it('should handle edge cases gracefully', () => {
       const tinyImage = createMockImageData(1, 1);
       const emptyImage = createMockImageData(0, 0);
-      
+
       expect(() => findContours(tinyImage)).not.toThrow();
       expect(() => findContours(emptyImage)).not.toThrow();
       expect(findContours(tinyImage)).toEqual([]);
@@ -260,7 +266,7 @@ describe('Segmentation Algorithms', () => {
   describe('segmentImage', () => {
     it('should return empty segmentation result', async () => {
       const result = await segmentImage('test-image.jpg');
-      
+
       expect(result).toBeDefined();
       expect(result.imageSrc).toBe('test-image.jpg');
       expect(result.polygons).toEqual([]);
@@ -273,7 +279,7 @@ describe('Segmentation Algorithms', () => {
       const sources = [
         'image1.png',
         'path/to/image2.jpg',
-        'https://example.com/image3.gif'
+        'https://example.com/image3.gif',
       ];
 
       for (const src of sources) {
@@ -287,8 +293,10 @@ describe('Segmentation Algorithms', () => {
       const before = new Date();
       const result = await segmentImage('test.jpg');
       const after = new Date();
-      
-      expect(result.timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
+
+      expect(result.timestamp.getTime()).toBeGreaterThanOrEqual(
+        before.getTime()
+      );
       expect(result.timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
     });
   });
@@ -317,7 +325,7 @@ describe('Segmentation Algorithms', () => {
     it('should handle line (two points)', () => {
       const area = calculatePolygonArea([
         { x: 0, y: 0 },
-        { x: 100, y: 0 }
+        { x: 100, y: 0 },
       ]);
       expect(area).toBe(0);
     });
@@ -325,10 +333,10 @@ describe('Segmentation Algorithms', () => {
     it('should be consistent regardless of winding order', () => {
       const clockwise = testPolygons.square;
       const counterClockwise = [...clockwise].reverse();
-      
+
       const area1 = calculatePolygonArea(clockwise);
       const area2 = calculatePolygonArea(counterClockwise);
-      
+
       expect(area1).toBeCloseTo(area2, 5);
     });
 
@@ -344,9 +352,9 @@ describe('Segmentation Algorithms', () => {
         { x: 0, y: 0 },
         { x: 10, y: 0 },
         { x: 10, y: 10 },
-        { x: 0, y: 10 }
+        { x: 0, y: 10 },
       ];
-      
+
       const area = calculatePolygonArea(perfectSquare);
       expect(area).toBeCloseTo(100, 10); // Should be exactly 100
     });
@@ -363,7 +371,7 @@ describe('Segmentation Algorithms', () => {
       // Triangle: (0,0) to (100,0) = 100
       //          (100,0) to (50,100) = sqrt(50^2 + 100^2) ≈ 111.8
       //          (50,100) to (0,0) = sqrt(50^2 + 100^2) ≈ 111.8
-      const expected = 100 + 2 * Math.sqrt(50*50 + 100*100);
+      const expected = 100 + 2 * Math.sqrt(50 * 50 + 100 * 100);
       expect(perimeter).toBeCloseTo(expected, 1);
     });
 
@@ -380,7 +388,7 @@ describe('Segmentation Algorithms', () => {
     it('should handle line (two points)', () => {
       const line: Point[] = [
         { x: 0, y: 0 },
-        { x: 100, y: 0 }
+        { x: 100, y: 0 },
       ];
       const perimeter = calculatePerimeter(line);
       expect(perimeter).toBeCloseTo(200, 1); // 100 + 100 (back and forth)
@@ -389,7 +397,9 @@ describe('Segmentation Algorithms', () => {
     it('should handle complex polygons', () => {
       const perimeter = calculatePerimeter(testPolygons.complex);
       expect(perimeter).toBeGreaterThan(0);
-      expect(perimeter).toBeGreaterThanOrEqual(calculatePerimeter(testPolygons.square));
+      expect(perimeter).toBeGreaterThanOrEqual(
+        calculatePerimeter(testPolygons.square)
+      );
     });
 
     it('should be accurate for known shapes', () => {
@@ -398,9 +408,9 @@ describe('Segmentation Algorithms', () => {
         { x: 0, y: 0 },
         { x: 10, y: 0 },
         { x: 10, y: 10 },
-        { x: 0, y: 10 }
+        { x: 0, y: 10 },
       ];
-      
+
       const perimeter = calculatePerimeter(square);
       expect(perimeter).toBeCloseTo(40, 10); // Should be exactly 40
     });
@@ -409,9 +419,9 @@ describe('Segmentation Algorithms', () => {
       const tiny: Point[] = [
         { x: 0, y: 0 },
         { x: 0.001, y: 0 },
-        { x: 0.0005, y: 0.001 }
+        { x: 0.0005, y: 0.001 },
       ];
-      
+
       const perimeter = calculatePerimeter(tiny);
       expect(perimeter).toBeGreaterThan(0);
       expect(perimeter).toBeLessThan(0.01);
@@ -427,13 +437,13 @@ describe('Segmentation Algorithms', () => {
         height: 500,
         onload: null as any,
         onerror: null as any,
-        src: ''
+        src: '',
       };
 
       const mockCanvas = document.createElement('canvas');
       const mockCtx = {
         drawImage: vi.fn(),
-        getImageData: vi.fn().mockReturnValue(createMockImageData(500, 500))
+        getImageData: vi.fn().mockReturnValue(createMockImageData(500, 500)),
       };
 
       vi.spyOn(document, 'createElement').mockReturnValue(mockCanvas);
@@ -475,7 +485,7 @@ describe('Segmentation Algorithms', () => {
         { x: 0, y: 0 },
         { x: 1e6, y: 0 },
         { x: 1e6, y: 1e6 },
-        { x: 0, y: 1e6 }
+        { x: 0, y: 1e6 },
       ];
 
       const area = calculatePolygonArea(largePolygon);
@@ -490,7 +500,7 @@ describe('Segmentation Algorithms', () => {
         { x: -100, y: -100 },
         { x: 0, y: -100 },
         { x: 0, y: 0 },
-        { x: -100, y: 0 }
+        { x: -100, y: 0 },
       ];
 
       const area = calculatePolygonArea(negativePolygon);
@@ -505,7 +515,7 @@ describe('Segmentation Algorithms', () => {
         { x: 0.1, y: 0.1 },
         { x: 0.2, y: 0.1 },
         { x: 0.2, y: 0.2 },
-        { x: 0.1, y: 0.2 }
+        { x: 0.1, y: 0.2 },
       ];
 
       const area = calculatePolygonArea(precisionPolygon);
@@ -518,7 +528,7 @@ describe('Segmentation Algorithms', () => {
         { x: 0, y: 0 }, // Duplicate
         { x: 100, y: 0 },
         { x: 100, y: 100 },
-        { x: 0, y: 100 }
+        { x: 0, y: 100 },
       ];
 
       const area = calculatePolygonArea(duplicatePolygon);
@@ -534,7 +544,7 @@ describe('Segmentation Algorithms', () => {
         { x: 50, y: 0 }, // Collinear with first and next
         { x: 100, y: 0 },
         { x: 100, y: 100 },
-        { x: 0, y: 100 }
+        { x: 0, y: 100 },
       ];
 
       const area = calculatePolygonArea(collinearPolygon);
@@ -545,7 +555,7 @@ describe('Segmentation Algorithms', () => {
   describe('Type Safety and API Consistency', () => {
     it('should maintain consistent return types', async () => {
       const result = await segmentImage('test.jpg');
-      
+
       expect(typeof result.imageSrc).toBe('string');
       expect(Array.isArray(result.polygons)).toBe(true);
       expect(typeof result.imageWidth).toBe('number');
@@ -567,7 +577,7 @@ describe('Segmentation Algorithms', () => {
         { y: 0 }, // Missing x
         { x: 0, y: 0, z: 0 }, // Extra property (should still work)
         null,
-        undefined
+        undefined,
       ] as any;
 
       // These functions will throw when encountering invalid point structures

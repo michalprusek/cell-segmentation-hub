@@ -18,29 +18,29 @@ export function useAuthToasts() {
             description: t('auth.welcomeMessage'),
           });
           break;
-        
+
         case 'signup_success':
           toast.success(t('auth.registrationSuccess'), {
             description: t('auth.welcomeMessage'),
           });
           break;
-        
+
         case 'signin_error':
           toast.error(event.data?.error || t('auth.signInFailed'));
           break;
-        
+
         case 'signup_error':
           toast.error(event.data?.error || t('auth.registrationFailed'));
           break;
-        
+
         case 'logout_error':
           toast.error(event.data?.error || t('auth.logoutFailed'));
           break;
-        
+
         case 'profile_error':
           toast.error(event.data?.error || t('auth.profileUpdateFailed'));
           break;
-        
+
         default:
           break;
       }

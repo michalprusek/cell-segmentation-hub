@@ -106,15 +106,15 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
             <Package className="h-5 w-5" />
             {t('export.advancedOptions')}
           </DialogTitle>
-          <DialogDescription>
-            {t('export.configureSettings')}
-          </DialogDescription>
+          <DialogDescription>{t('export.configureSettings')}</DialogDescription>
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="general">{t('export.general')}</TabsTrigger>
-            <TabsTrigger value="visualization">{t('export.visualization')}</TabsTrigger>
+            <TabsTrigger value="visualization">
+              {t('export.visualization')}
+            </TabsTrigger>
             <TabsTrigger value="formats">{t('export.formats')}</TabsTrigger>
           </TabsList>
 
@@ -125,9 +125,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                   <FileImage className="h-4 w-4" />
                   {t('export.exportContents')}
                 </CardTitle>
-                <CardDescription>
-                  {t('export.selectContent')}
-                </CardDescription>
+                <CardDescription>{t('export.selectContent')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
@@ -176,8 +174,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                 <CardTitle>{t('export.selectedImages')}</CardTitle>
                 <CardDescription>
                   {t('export.imagesSelected', {
-                    count: exportOptions.selectedImageIds?.length || images.length,
-                    total: images.length
+                    count:
+                      exportOptions.selectedImageIds?.length || images.length,
+                    total: images.length,
                   })}
                 </CardDescription>
               </CardHeader>
@@ -199,9 +198,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                   <Palette className="h-4 w-4" />
                   {t('export.colorSettings')}
                 </CardTitle>
-                <CardDescription>
-                  {t('export.colorSettings')}
-                </CardDescription>
+                <CardDescription>{t('export.colorSettings')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex items-center space-x-2">
@@ -217,7 +214,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       })
                     }
                   />
-                  <Label htmlFor="show-numbers">{t('export.showNumbers')}</Label>
+                  <Label htmlFor="show-numbers">
+                    {t('export.showNumbers')}
+                  </Label>
                 </div>
 
                 <div className="space-y-2">
@@ -392,9 +391,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                   <FileJson className="h-4 w-4" />
                   {t('export.exportFormats')}
                 </CardTitle>
-                <CardDescription>
-                  {t('export.exportFormats')}
-                </CardDescription>
+                <CardDescription>{t('export.exportFormats')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">
@@ -428,9 +425,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="yolo-format">
-                    YOLO format
-                  </Label>
+                  <Label htmlFor="yolo-format">YOLO format</Label>
                 </div>
 
                 <div className="flex items-center space-x-2">
@@ -446,7 +441,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                       });
                     }}
                   />
-                  <Label htmlFor="json-format">{t('export.includeJsonMetadata')}</Label>
+                  <Label htmlFor="json-format">
+                    {t('export.includeJsonMetadata')}
+                  </Label>
                 </div>
               </CardContent>
             </Card>
@@ -457,9 +454,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                   <FileSpreadsheet className="h-4 w-4" />
                   {t('export.outputSettings')}
                 </CardTitle>
-                <CardDescription>
-                  {t('export.generateExcel')}
-                </CardDescription>
+                <CardDescription>{t('export.generateExcel')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center space-x-2">

@@ -4,11 +4,11 @@ import { usePolygonSlicing } from '../usePolygonSlicing';
 import { EditMode } from '../../types';
 import {
   renderHook,
-  createMockInteractionState
+  createMockInteractionState,
 } from '@/test-utils/reactTestUtils';
 import {
   createTestPolygons,
-  createTestPolygonObjects
+  createTestPolygonObjects,
 } from '@/test-utils/polygonTestUtils';
 import type { Polygon, Point } from '@/lib/segmentation';
 
@@ -17,19 +17,19 @@ vi.mock('sonner', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),
-    info: vi.fn()
-  }
+    info: vi.fn(),
+  },
 }));
 
 vi.mock('@/contexts/LanguageContext', () => ({
   useLanguage: () => ({
-    t: (key: string) => key // Return the key for testing
-  })
+    t: (key: string) => key, // Return the key for testing
+  }),
 }));
 
 vi.mock('@/lib/polygonSlicing', () => ({
   slicePolygon: vi.fn(),
-  validateSliceLine: vi.fn()
+  validateSliceLine: vi.fn(),
 }));
 
 import { slicePolygon, validateSliceLine } from '@/lib/polygonSlicing';
@@ -52,7 +52,7 @@ describe('usePolygonSlicing', () => {
   beforeEach(() => {
     testPolygons = createTestPolygons();
     testPolygonObjects = createTestPolygonObjects();
-    
+
     mockProps = {
       polygons: [testPolygonObjects.squarePolygon],
       selectedPolygonId: testPolygonObjects.squarePolygon.id,
@@ -62,7 +62,7 @@ describe('usePolygonSlicing', () => {
       setTempPoints: vi.fn(),
       setInteractionState: vi.fn(),
       setEditMode: vi.fn(),
-      updatePolygons: vi.fn()
+      updatePolygons: vi.fn(),
     };
 
     vi.clearAllMocks();
@@ -76,7 +76,7 @@ describe('usePolygonSlicing', () => {
     it('should successfully slice a polygon with valid slice line', () => {
       const mockSlicedPolygons = [
         { ...testPolygonObjects.squarePolygon, id: 'slice-1' },
-        { ...testPolygonObjects.squarePolygon, id: 'slice-2' }
+        { ...testPolygonObjects.squarePolygon, id: 'slice-2' },
       ];
 
       // Mock successful validation and slicing
@@ -85,15 +85,17 @@ describe('usePolygonSlicing', () => {
 
       const slicePoints: Point[] = [
         { x: -10, y: 50 },
-        { x: 110, y: 50 }
+        { x: 110, y: 50 },
       ];
 
       const propsWithTempPoints = {
         ...mockProps,
-        tempPoints: slicePoints
+        tempPoints: slicePoints,
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithTempPoints));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithTempPoints)
+      );
 
       let sliceResult: boolean;
       act(() => {
@@ -121,10 +123,15 @@ describe('usePolygonSlicing', () => {
       const propsWithoutSelection = {
         ...mockProps,
         selectedPolygonId: null,
-        tempPoints: [{ x: 0, y: 0 }, { x: 100, y: 100 }]
+        tempPoints: [
+          { x: 0, y: 0 },
+          { x: 100, y: 100 },
+        ],
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithoutSelection));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithoutSelection)
+      );
 
       let sliceResult: boolean;
       act(() => {
@@ -139,7 +146,7 @@ describe('usePolygonSlicing', () => {
     it('should fail when insufficient temp points provided', () => {
       const propsWithOnePoint = {
         ...mockProps,
-        tempPoints: [{ x: 50, y: 50 }]
+        tempPoints: [{ x: 50, y: 50 }],
       };
 
       const { result } = renderHook(() => usePolygonSlicing(propsWithOnePoint));
@@ -157,10 +164,15 @@ describe('usePolygonSlicing', () => {
       const propsWithInvalidId = {
         ...mockProps,
         selectedPolygonId: 'nonexistent-polygon',
-        tempPoints: [{ x: 0, y: 0 }, { x: 100, y: 100 }]
+        tempPoints: [
+          { x: 0, y: 0 },
+          { x: 100, y: 100 },
+        ],
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithInvalidId));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithInvalidId)
+      );
 
       let sliceResult: boolean;
       act(() => {
@@ -172,17 +184,22 @@ describe('usePolygonSlicing', () => {
     });
 
     it('should fail when slice line validation fails', () => {
-      (validateSliceLine as any).mockReturnValue({ 
-        isValid: false, 
-        reason: 'Invalid slice line' 
+      (validateSliceLine as any).mockReturnValue({
+        isValid: false,
+        reason: 'Invalid slice line',
       });
 
       const propsWithTempPoints = {
         ...mockProps,
-        tempPoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }] // Too short
+        tempPoints: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ], // Too short
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithTempPoints));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithTempPoints)
+      );
 
       let sliceResult: boolean;
       act(() => {
@@ -200,10 +217,15 @@ describe('usePolygonSlicing', () => {
 
       const propsWithTempPoints = {
         ...mockProps,
-        tempPoints: [{ x: -10, y: 50 }, { x: 110, y: 50 }]
+        tempPoints: [
+          { x: -10, y: 50 },
+          { x: 110, y: 50 },
+        ],
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithTempPoints));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithTempPoints)
+      );
 
       let sliceResult: boolean;
       act(() => {
@@ -218,7 +240,7 @@ describe('usePolygonSlicing', () => {
     it('should handle provided temp points parameter', () => {
       const mockSlicedPolygons = [
         { ...testPolygonObjects.squarePolygon, id: 'slice-1' },
-        { ...testPolygonObjects.squarePolygon, id: 'slice-2' }
+        { ...testPolygonObjects.squarePolygon, id: 'slice-2' },
       ];
 
       (validateSliceLine as any).mockReturnValue({ isValid: true });
@@ -226,7 +248,7 @@ describe('usePolygonSlicing', () => {
 
       const providedPoints: Point[] = [
         { x: -10, y: 25 },
-        { x: 110, y: 75 }
+        { x: 110, y: 75 },
       ];
 
       const { result } = renderHook(() => usePolygonSlicing(mockProps));
@@ -249,18 +271,23 @@ describe('usePolygonSlicing', () => {
       const propsWithMultiplePolygons = {
         ...mockProps,
         polygons: [testPolygonObjects.squarePolygon, secondPolygon],
-        tempPoints: [{ x: -10, y: 50 }, { x: 110, y: 50 }]
+        tempPoints: [
+          { x: -10, y: 50 },
+          { x: 110, y: 50 },
+        ],
       };
 
       const mockSlicedPolygons = [
         { ...testPolygonObjects.squarePolygon, id: 'slice-1' },
-        { ...testPolygonObjects.squarePolygon, id: 'slice-2' }
+        { ...testPolygonObjects.squarePolygon, id: 'slice-2' },
       ];
 
       (validateSliceLine as any).mockReturnValue({ isValid: true });
       (slicePolygon as any).mockReturnValue(mockSlicedPolygons);
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithMultiplePolygons));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithMultiplePolygons)
+      );
 
       act(() => {
         result.current.handleSliceAction();
@@ -268,7 +295,7 @@ describe('usePolygonSlicing', () => {
 
       expect(mockProps.updatePolygons).toHaveBeenCalledWith([
         secondPolygon, // Original triangle preserved
-        ...mockSlicedPolygons // New sliced polygons
+        ...mockSlicedPolygons, // New sliced polygons
       ]);
     });
   });
@@ -287,7 +314,7 @@ describe('usePolygonSlicing', () => {
       expect(mockProps.setTempPoints).toHaveBeenCalledWith([startPoint]);
       expect(mockProps.setInteractionState).toHaveBeenCalledWith(
         expect.objectContaining({
-          sliceStartPoint: startPoint
+          sliceStartPoint: startPoint,
         })
       );
     });
@@ -310,7 +337,7 @@ describe('usePolygonSlicing', () => {
       expect(mockProps.setTempPoints).toHaveBeenLastCalledWith([secondPoint]);
       expect(mockProps.setInteractionState).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          sliceStartPoint: secondPoint
+          sliceStartPoint: secondPoint,
         })
       );
     });
@@ -320,7 +347,7 @@ describe('usePolygonSlicing', () => {
     it('should complete slicing with valid end point', () => {
       const mockSlicedPolygons = [
         { ...testPolygonObjects.squarePolygon, id: 'slice-1' },
-        { ...testPolygonObjects.squarePolygon, id: 'slice-2' }
+        { ...testPolygonObjects.squarePolygon, id: 'slice-2' },
       ];
 
       (validateSliceLine as any).mockReturnValue({ isValid: true });
@@ -330,11 +357,13 @@ describe('usePolygonSlicing', () => {
         ...mockProps,
         tempPoints: [{ x: 0, y: 50 }], // Start point
         interactionState: createMockInteractionState({
-          sliceStartPoint: { x: 0, y: 50 }
-        })
+          sliceStartPoint: { x: 0, y: 50 },
+        }),
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithSliceStart));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithSliceStart)
+      );
 
       const endPoint: Point = { x: 100, y: 50 };
 
@@ -356,11 +385,13 @@ describe('usePolygonSlicing', () => {
       const propsWithoutSliceStart = {
         ...mockProps,
         interactionState: createMockInteractionState({
-          sliceStartPoint: null
-        })
+          sliceStartPoint: null,
+        }),
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithoutSliceStart));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithoutSliceStart)
+      );
 
       let completeResult: boolean;
       act(() => {
@@ -379,17 +410,22 @@ describe('usePolygonSlicing', () => {
         ...mockProps,
         tempPoints: [startPoint],
         interactionState: createMockInteractionState({
-          sliceStartPoint: startPoint
-        })
+          sliceStartPoint: startPoint,
+        }),
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithSliceStart));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithSliceStart)
+      );
 
       act(() => {
         result.current.updateSlicing(endPoint);
       });
 
-      expect(mockProps.setTempPoints).toHaveBeenCalledWith([startPoint, endPoint]);
+      expect(mockProps.setTempPoints).toHaveBeenCalledWith([
+        startPoint,
+        endPoint,
+      ]);
     });
   });
 
@@ -397,10 +433,13 @@ describe('usePolygonSlicing', () => {
     it('should cancel slicing and reset state', () => {
       const propsInSliceMode = {
         ...mockProps,
-        tempPoints: [{ x: 0, y: 50 }, { x: 50, y: 50 }],
+        tempPoints: [
+          { x: 0, y: 50 },
+          { x: 50, y: 50 },
+        ],
         interactionState: createMockInteractionState({
-          sliceStartPoint: { x: 0, y: 50 }
-        })
+          sliceStartPoint: { x: 0, y: 50 },
+        }),
       };
 
       const { result } = renderHook(() => usePolygonSlicing(propsInSliceMode));
@@ -413,7 +452,7 @@ describe('usePolygonSlicing', () => {
       expect(mockProps.setTempPoints).toHaveBeenCalledWith([]);
       expect(mockProps.setInteractionState).toHaveBeenCalledWith(
         expect.objectContaining({
-          sliceStartPoint: null
+          sliceStartPoint: null,
         })
       );
     });
@@ -435,15 +474,20 @@ describe('usePolygonSlicing', () => {
     it('should handle missing language translations gracefully', () => {
       const propsWithTempPoints = {
         ...mockProps,
-        tempPoints: [{ x: 0, y: 0 }, { x: 1, y: 1 }]
+        tempPoints: [
+          { x: 0, y: 0 },
+          { x: 1, y: 1 },
+        ],
       };
 
-      (validateSliceLine as any).mockReturnValue({ 
-        isValid: false, 
-        reason: 'Test reason' 
+      (validateSliceLine as any).mockReturnValue({
+        isValid: false,
+        reason: 'Test reason',
       });
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithTempPoints));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithTempPoints)
+      );
 
       expect(() => {
         act(() => {
@@ -457,13 +501,18 @@ describe('usePolygonSlicing', () => {
         ...mockProps,
         polygons: [{ id: 'invalid', points: [], type: 'external' } as Polygon],
         selectedPolygonId: 'invalid',
-        tempPoints: [{ x: 0, y: 0 }, { x: 100, y: 100 }]
+        tempPoints: [
+          { x: 0, y: 0 },
+          { x: 100, y: 100 },
+        ],
       };
 
       (validateSliceLine as any).mockReturnValue({ isValid: true });
       (slicePolygon as any).mockReturnValue(null);
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithInvalidPolygon));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithInvalidPolygon)
+      );
 
       let sliceResult: boolean;
       act(() => {
@@ -476,20 +525,22 @@ describe('usePolygonSlicing', () => {
     it('should handle extreme coordinate values', () => {
       const extremePoints: Point[] = [
         { x: -Infinity, y: 0 },
-        { x: Infinity, y: 0 }
+        { x: Infinity, y: 0 },
       ];
 
-      (validateSliceLine as any).mockReturnValue({ 
-        isValid: false, 
-        reason: 'Invalid coordinates' 
+      (validateSliceLine as any).mockReturnValue({
+        isValid: false,
+        reason: 'Invalid coordinates',
       });
 
       const propsWithExtremePoints = {
         ...mockProps,
-        tempPoints: extremePoints
+        tempPoints: extremePoints,
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithExtremePoints));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithExtremePoints)
+      );
 
       let sliceResult: boolean;
       act(() => {
@@ -507,20 +558,22 @@ describe('usePolygonSlicing', () => {
     it('should handle NaN coordinates', () => {
       const invalidPoints: Point[] = [
         { x: NaN, y: 50 },
-        { x: 100, y: NaN }
+        { x: 100, y: NaN },
       ];
 
-      (validateSliceLine as any).mockReturnValue({ 
-        isValid: false, 
-        reason: 'NaN coordinates' 
+      (validateSliceLine as any).mockReturnValue({
+        isValid: false,
+        reason: 'NaN coordinates',
       });
 
       const propsWithNaNPoints = {
         ...mockProps,
-        tempPoints: invalidPoints
+        tempPoints: invalidPoints,
       };
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithNaNPoints));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithNaNPoints)
+      );
 
       expect(() => {
         act(() => {
@@ -544,7 +597,7 @@ describe('usePolygonSlicing', () => {
       expect(mockProps.setInteractionState).toHaveBeenCalledWith(
         expect.objectContaining({
           ...mockProps.interactionState,
-          sliceStartPoint: startPoint
+          sliceStartPoint: startPoint,
         })
       );
     });
@@ -558,18 +611,23 @@ describe('usePolygonSlicing', () => {
         ...mockProps,
         polygons: [polygonA, polygonB, polygonC],
         selectedPolygonId: 'B', // Select middle polygon
-        tempPoints: [{ x: 0, y: 0 }, { x: 100, y: 100 }]
+        tempPoints: [
+          { x: 0, y: 0 },
+          { x: 100, y: 100 },
+        ],
       };
 
       const mockSlicedPolygons = [
         { ...polygonB, id: 'B1' },
-        { ...polygonB, id: 'B2' }
+        { ...polygonB, id: 'B2' },
       ];
 
       (validateSliceLine as any).mockReturnValue({ isValid: true });
       (slicePolygon as any).mockReturnValue(mockSlicedPolygons);
 
-      const { result } = renderHook(() => usePolygonSlicing(propsWithOrderedPolygons));
+      const { result } = renderHook(() =>
+        usePolygonSlicing(propsWithOrderedPolygons)
+      );
 
       act(() => {
         result.current.handleSliceAction();
@@ -579,7 +637,7 @@ describe('usePolygonSlicing', () => {
       expect(mockProps.updatePolygons).toHaveBeenCalledWith([
         polygonA,
         polygonC,
-        ...mockSlicedPolygons
+        ...mockSlicedPolygons,
       ]);
     });
   });
@@ -588,9 +646,9 @@ describe('usePolygonSlicing', () => {
     it('should handle rapid slice attempts efficiently', () => {
       const { result } = renderHook(() => usePolygonSlicing(mockProps));
 
-      (validateSliceLine as any).mockReturnValue({ 
-        isValid: false, 
-        reason: 'Too fast' 
+      (validateSliceLine as any).mockReturnValue({
+        isValid: false,
+        reason: 'Too fast',
       });
 
       const startTime = performance.now();
@@ -608,7 +666,9 @@ describe('usePolygonSlicing', () => {
     });
 
     it('should not leak memory during repeated operations', () => {
-      const { result, unmount } = renderHook(() => usePolygonSlicing(mockProps));
+      const { result, unmount } = renderHook(() =>
+        usePolygonSlicing(mockProps)
+      );
 
       // Perform operations that might create closures or listeners
       for (let i = 0; i < 50; i++) {

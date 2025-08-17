@@ -7,7 +7,10 @@ export function getLocalizedModelInfo(
   modelId: ModelType,
   t: (key: string) => string
 ): ModelInfo {
-  const baseModels: Record<ModelType, Omit<ModelInfo, 'name' | 'displayName' | 'description'>> = {
+  const baseModels: Record<
+    ModelType,
+    Omit<ModelInfo, 'name' | 'displayName' | 'description'>
+  > = {
     hrnet: {
       id: 'hrnet',
       size: 'small',
@@ -53,11 +56,14 @@ export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
 /**
  * Get basic model info without localization (for contexts that can't use t())
  */
-export const BASIC_MODEL_INFO: Record<ModelType, Omit<ModelInfo, 'name' | 'displayName' | 'description'> & {
-  name: string;
-  displayName: string;
-  description: string;
-}> = {
+export const BASIC_MODEL_INFO: Record<
+  ModelType,
+  Omit<ModelInfo, 'name' | 'displayName' | 'description'> & {
+    name: string;
+    displayName: string;
+    description: string;
+  }
+> = {
   hrnet: {
     id: 'hrnet',
     name: 'HRNet',

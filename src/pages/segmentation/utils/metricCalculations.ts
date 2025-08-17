@@ -19,18 +19,21 @@ export interface PolygonMetrics {
 }
 
 // Validate polygon points
-const validatePolygonPoints = (points: Array<{ x: number; y: number }>): boolean => {
+const validatePolygonPoints = (
+  points: Array<{ x: number; y: number }>
+): boolean => {
   if (!points || points.length < 3) return false;
-  
-  return points.every(point => 
-    point !== null && 
-    point !== undefined && 
-    typeof point.x === 'number' && 
-    typeof point.y === 'number' && 
-    !isNaN(point.x) && 
-    !isNaN(point.y) &&
-    isFinite(point.x) &&
-    isFinite(point.y)
+
+  return points.every(
+    point =>
+      point !== null &&
+      point !== undefined &&
+      typeof point.x === 'number' &&
+      typeof point.y === 'number' &&
+      !isNaN(point.x) &&
+      !isNaN(point.y) &&
+      isFinite(point.x) &&
+      isFinite(point.y)
   );
 };
 
@@ -42,7 +45,7 @@ const calculateBoundingBox = (points: Array<{ x: number; y: number }>) => {
     minX: Math.min(...xs),
     maxX: Math.max(...xs),
     minY: Math.min(...ys),
-    maxY: Math.max(...ys)
+    maxY: Math.max(...ys),
   };
 };
 
@@ -83,13 +86,14 @@ export const calculateMetrics = (
   const perimeter = calculatePerimeter(polygon.points);
 
   // Calculate circularity: 4π × area / perimeter²
-  const circularity = perimeter > 0 ? (4 * Math.PI * area) / (perimeter * perimeter) : 0;
+  const circularity =
+    perimeter > 0 ? (4 * Math.PI * area) / (perimeter * perimeter) : 0;
 
   // Calculate bounding box for Feret measurements
   const bbox = calculateBoundingBox(polygon.points);
   const width = bbox.maxX - bbox.minX;
   const height = bbox.maxY - bbox.minY;
-  
+
   // Feret diameters (approximated using bounding box)
   const feretMax = Math.sqrt(width * width + height * height);
   const feretMin = Math.min(width, height);

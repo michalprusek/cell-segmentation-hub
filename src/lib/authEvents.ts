@@ -3,7 +3,13 @@
  */
 
 export interface AuthEvent {
-  type: 'signin_success' | 'signup_success' | 'signin_error' | 'signup_error' | 'logout_error' | 'profile_error';
+  type:
+    | 'signin_success'
+    | 'signup_success'
+    | 'signin_error'
+    | 'signup_error'
+    | 'logout_error'
+    | 'profile_error';
   data?: {
     message?: string;
     description?: string;

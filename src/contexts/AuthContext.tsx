@@ -33,7 +33,9 @@ interface AuthContextType {
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(
+  undefined
+);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -147,7 +149,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Don't fetch profile immediately - let it happen naturally later
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error) || 'Sign in failed';
-      authEventEmitter.emit({ type: 'signin_error', data: { error: errorMessage } });
+      authEventEmitter.emit({
+        type: 'signin_error',
+        data: { error: errorMessage },
+      });
       throw error;
     } finally {
       setLoading(false);
@@ -184,7 +189,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Don't fetch profile immediately - let it happen naturally later
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error) || 'Registration failed';
-      authEventEmitter.emit({ type: 'signup_error', data: { error: errorMessage } });
+      authEventEmitter.emit({
+        type: 'signup_error',
+        data: { error: errorMessage },
+      });
       throw error;
     } finally {
       setLoading(false);
@@ -212,7 +220,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthenticated(false);
 
       const errorMessage = getErrorMessage(error) || 'Sign out failed';
-      authEventEmitter.emit({ type: 'logout_error', data: { error: errorMessage } });
+      authEventEmitter.emit({
+        type: 'logout_error',
+        data: { error: errorMessage },
+      });
       navigate('/sign-in');
     } finally {
       setLoading(false);
@@ -241,7 +252,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: unknown) {
       logger.error('Error deleting account:', error);
       const errorMessage = getErrorMessage(error) || 'Failed to delete account';
-      authEventEmitter.emit({ type: 'profile_error', data: { error: errorMessage } });
+      authEventEmitter.emit({
+        type: 'profile_error',
+        data: { error: errorMessage },
+      });
       throw error;
     } finally {
       setLoading(false);

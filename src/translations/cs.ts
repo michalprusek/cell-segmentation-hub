@@ -187,8 +187,6 @@ export default {
     deleteImageError: 'Chyba při mazání obrázku',
     imageAlreadyProcessing: 'Obrázek se již zpracovává',
     processImageFailed: 'Zpracování obrázku selhalo',
-    selectProjectFirst: 'Nejprve vyberte projekt',
-    projectRequired: 'Před nahráním obrázků musíte vybrat projekt',
   },
   settings: {
     manageSettings: 'Spravujte své nastavení účtu',
@@ -224,7 +222,8 @@ export default {
         },
         cbam: {
           name: 'CBAM-ResUNet',
-          description: 'Vyvážená rychlost a přesnost pro většinu případů použití',
+          description:
+            'Vyvážená rychlost a přesnost pro většinu případů použití',
         },
         ma: {
           name: 'MA-ResUNet',
@@ -263,7 +262,8 @@ export default {
     deleteAccountError: 'Nepodařilo se smazat účet',
     deleteAccountDialog: {
       title: 'Smazat účet',
-      description: 'Tuto akci nelze vrátit zpět. Tímto trvale smažete svůj účet a odstraníte všechna svá data z našich serverů.',
+      description:
+        'Tuto akci nelze vrátit zpět. Tímto trvale smažete svůj účet a odstraníte všechna svá data z našich serverů.',
       whatWillBeDeleted: 'Co bude smazáno:',
       deleteItems: {
         account: 'Váš uživatelský účet a profil',
@@ -274,9 +274,6 @@ export default {
       confirmationLabel: 'Pro potvrzení prosím napište {email}:',
       confirmationPlaceholder: '{email}',
     },
-    pageTitle: 'Nastavení',
-    profile: 'Profil',
-    account: 'Účet',
     personal: 'Osobní informace',
     fullName: 'Celé jméno',
     organization: 'Organizace',
@@ -367,7 +364,8 @@ export default {
     shortcuts: {
       buttonText: 'Zkratky',
       dialogTitle: 'Klávesové zkratky',
-      footerNote: 'Tyto zkratky fungují v editoru segmentace pro rychlejší a pohodlnější práci.',
+      footerNote:
+        'Tyto zkratky fungují v editoru segmentace pro rychlejší a pohodlnější práci.',
       v: 'Režim zobrazení',
       e: 'Režim úpravy vrcholů',
       a: 'Režim přidávání bodů',
@@ -428,19 +426,23 @@ export default {
       slice: {
         selectPolygon: '1. Klikněte na polygon pro jeho výběr k řezání',
         placeFirstPoint: '2. Klikněte pro umístění prvního bodu řezání',
-        placeSecondPoint: '3. Klikněte pro umístění druhého bodu řezání a provedení řezu',
+        placeSecondPoint:
+          '3. Klikněte pro umístění druhého bodu řezání a provedení řezu',
         cancel: 'Stiskněte ESC pro zrušení',
       },
       create: {
         startPolygon: '1. Klikněte pro zahájení vytváření polygonu',
-        continuePoints: '2. Pokračujte klikáním pro přidání dalších bodů (potřeba minimálně 3)',
-        finishPolygon: '3. Pokračujte v přidávání bodů nebo klikněte blízko prvního bodu pro uzavření polygonu',
+        continuePoints:
+          '2. Pokračujte klikáním pro přidání dalších bodů (potřeba minimálně 3)',
+        finishPolygon:
+          '3. Pokračujte v přidávání bodů nebo klikněte blízko prvního bodu pro uzavření polygonu',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
       },
       addPoints: {
         clickVertex: 'Klikněte na jakýkoli vrchol pro zahájení přidávání bodů',
-        addPoints: 'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení',
+        addPoints:
+          'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
       },
@@ -510,14 +512,16 @@ export default {
     logoutFailed: 'Odhlášení selhalo',
     profileUpdateFailed: 'Aktualizace profilu selhala',
     welcomeMessage: 'Vítejte na platformě pro segmentaci sféroidů',
-    confirmationRequired: 'Potvrzovací text je povinný a musí se shodovat s vaší e-mailovou adresou',
+    confirmationRequired:
+      'Potvrzovací text je povinný a musí se shodovat s vaší e-mailovou adresou',
     agreeToTerms: 'Přihlášením souhlasíte s našimi',
     termsOfService: 'Podmínkami služby',
     and: 'a',
     privacyPolicy: 'Zásadami ochrany osobních údajů',
     // SignUp page specific
     createAccount: 'Vytvořte svůj účet',
-    signUpPlatform: 'Zaregistrujte se pro použití platformy pro segmentaci sféroidů',
+    signUpPlatform:
+      'Zaregistrujte se pro použití platformy pro segmentaci sféroidů',
     confirmPassword: 'Potvrdit heslo',
     passwordsMatch: 'Hesla se shodují',
     passwordsDoNotMatch: 'Hesla se neshodují',
@@ -528,7 +532,6 @@ export default {
     alreadySignedUp: 'Již jste zaregistrováni a přihlášeni.',
     goToDashboard: 'Přejít na Dashboard',
     signUpFailed: 'Registrace selhala',
-    signInFailed: 'Přihlášení selhalo',
   },
   profile: {
     title: 'Profil',
@@ -666,7 +669,7 @@ export default {
   deleteImageError: 'Chyba při mazání obrázku',
   imageAlreadyProcessing: 'Obrázek se již zpracovává',
   processImageFailed: 'Zpracování obrázku selhalo',
-  
+
   exportDialog: {
     title: 'Možnosti exportu',
     includeMetadata: 'Zahrnout metadata',
@@ -681,7 +684,8 @@ export default {
   export: {
     // Dialog headers
     advancedOptions: 'Pokročilé možnosti exportu',
-    configureSettings: 'Nakonfigurujte nastavení exportu pro vytvoření komplexního balíčku dat',
+    configureSettings:
+      'Nakonfigurujte nastavení exportu pro vytvoření komplexního balíčku dat',
     // Tabs
     general: 'Obecné',
     visualization: 'Vizualizace',
@@ -746,27 +750,16 @@ export default {
     invalidSelection: 'Vyberte prosím alespoň jeden obrázek',
     noData: 'Žádná data k exportu nejsou k dispozici',
   },
-  // Export dialog
-  exportDialog: {
-    title: 'Možnosti exportu',
-    includeMetadata: 'Zahrnout metadata',
-    includeSegmentation: 'Zahrnout segmentaci',
-    includeObjectMetrics: 'Zahrnout metriky objektů',
-    exportMetricsOnly: 'Exportovat pouze metriky (XLSX)',
-    selectImages: 'Vyberte obrázky k exportu',
-    selectAll: 'Vybrat vše',
-    selectNone: 'Odznačit vše',
-    noImagesAvailable: 'Žádné obrázky nejsou k dispozici',
-  },
   docs: {
     // Header section
     badge: 'Dokumentace',
     title: 'Dokumentace SpheroSeg',
-    subtitle: 'Komplexní průvodce používáním naší platformy pro segmentaci sféroidů',
-    
+    subtitle:
+      'Komplexní průvodce používáním naší platformy pro segmentaci sféroidů',
+
     // Navigation
     navigation: 'Navigace',
-    
+
     // Navigation items
     nav: {
       introduction: 'Úvod',
@@ -777,29 +770,36 @@ export default {
       segmentationEditor: 'Editor segmentace',
       exportFeatures: 'Funkce exportu',
     },
-    
+
     // Introduction section
     introduction: {
       title: 'Úvod',
       whatIs: 'Co je SpheroSeg?',
-      description: 'SpheroSeg je pokročilá platforma navržená speciálně pro segmentaci a analýzu buněčných sféroidů v mikroskopických snímcích. Náš nástroj kombinuje špičkové AI algoritmy s intuitivním rozhraním a poskytuje výzkumníkům přesnou detekci a analýzu hranic sféroidů.',
-      developedBy: 'Tato platforma byla vyvinuta Bc. Michalem Průškem, studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D. Projekt je spolupracující s výzkumníky z Ústavu biochemie a mikrobiologie UCT Praha.',
-      addresses: 'SpheroSeg řeší náročný úkol přesné identifikace a segmentace hranic sféroidů v mikroskopických snímcích, což je kritický krok v mnoha biomedicínských výzkumných pracovních postupech zahrnujících 3D kultury buněk.',
+      description:
+        'SpheroSeg je pokročilá platforma navržená speciálně pro segmentaci a analýzu buněčných sféroidů v mikroskopických snímcích. Náš nástroj kombinuje špičkové AI algoritmy s intuitivním rozhraním a poskytuje výzkumníkům přesnou detekci a analýzu hranic sféroidů.',
+      developedBy:
+        'Tato platforma byla vyvinuta Bc. Michalem Průškem, studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D. Projekt je spolupracující s výzkumníky z Ústavu biochemie a mikrobiologie UCT Praha.',
+      addresses:
+        'SpheroSeg řeší náročný úkol přesné identifikace a segmentace hranic sféroidů v mikroskopických snímcích, což je kritický krok v mnoha biomedicínských výzkumných pracovních postupech zahrnujících 3D kultury buněk.',
     },
-    
+
     // Getting Started section
     gettingStarted: {
       title: 'Začínáme',
       accountCreation: 'Vytvoření účtu',
-      accountDescription: 'K používání SpheroSeg budete potřebovat vytvořit účet. To nám umožní bezpečně ukládat vaše projekty a obrázky.',
+      accountDescription:
+        'K používání SpheroSeg budete potřebovat vytvořit účet. To nám umožní bezpečně ukládat vaše projekty a obrázky.',
       accountSteps: {
         step1: 'Přejděte na stránku registrace',
-        step2: 'Zadejte svou institucionální e-mailovou adresu a vytvořte heslo',
+        step2:
+          'Zadejte svou institucionální e-mailovou adresu a vytvořte heslo',
         step3: 'Vyplňte svůj profil jménem a institucí',
-        step4: 'Ověřte svou e-mailovou adresu prostřednictvím odkazu zaslaného do vaší schránky',
+        step4:
+          'Ověřte svou e-mailovou adresu prostřednictvím odkazu zaslaného do vaší schránky',
       },
       firstProject: 'Vytvoření vašeho prvního projektu',
-      projectDescription: 'Projekty vám pomáhají organizovat vaši práci. Každý projekt může obsahovat více obrázků a jejich odpovídající výsledky segmentace.',
+      projectDescription:
+        'Projekty vám pomáhají organizovat vaši práci. Každý projekt může obsahovat více obrázků a jejich odpovídající výsledky segmentace.',
       projectSteps: {
         step1: 'Z vašeho přehledu klikněte na "Nový projekt"',
         step2: 'Zadejte název a popis projektu',
@@ -807,110 +807,137 @@ export default {
         step4: 'Klikněte na "Vytvořit projekt" pro pokračování',
       },
     },
-    
+
     // Upload Images section
     uploadImages: {
       title: 'Nahrávání obrázků',
-      description: 'SpheroSeg podporuje různé formáty obrázků běžně používané v mikroskopii, včetně TIFF, PNG a JPEG.',
+      description:
+        'SpheroSeg podporuje různé formáty obrázků běžně používané v mikroskopii, včetně TIFF, PNG a JPEG.',
       methods: 'Metody nahrávání',
       methodsDescription: 'Existuje několik způsobů, jak nahrát vaše obrázky:',
       methodsList: {
         dragDrop: 'Přetáhněte soubory přímo do oblasti nahrávání',
-        browse: 'Klikněte na oblast nahrávání pro procházení a výběr souborů z vašeho počítače',
+        browse:
+          'Klikněte na oblast nahrávání pro procházení a výběr souborů z vašeho počítače',
         batch: 'Hromadné nahrání více obrázků najednou',
       },
       note: 'Poznámka:',
-      noteText: 'Pro optimální výsledky zajistěte, aby vaše mikroskopické snímky měly dobrý kontrast mezi sféroidem a pozadím.',
+      noteText:
+        'Pro optimální výsledky zajistěte, aby vaše mikroskopické snímky měly dobrý kontrast mezi sféroidem a pozadím.',
     },
-    
+
     // Model Selection section
     modelSelection: {
       title: 'Výběr modelu',
-      description: 'SpheroSeg nabízí tři různé AI modely optimalizované pro různé případy použití. Vyberte model, který nejlépe vyhovuje vašim požadavkům na rychlost versus přesnost.',
+      description:
+        'SpheroSeg nabízí tři různé AI modely optimalizované pro různé případy použití. Vyberte model, který nejlépe vyhovuje vašim požadavkům na rychlost versus přesnost.',
       models: {
         hrnet: {
           name: 'HRNet (Malý)',
           inferenceTime: 'Doba inference: ~3,1 sekundy',
           bestFor: 'Nejlepší pro: Zpracování v reálném čase a rychlé výsledky',
-          description: 'Rychlý a efektivní model ideální pro rychlou segmentaci, když je rychlost upřednostňována před maximální přesností.',
+          description:
+            'Rychlý a efektivní model ideální pro rychlou segmentaci, když je rychlost upřednostňována před maximální přesností.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Střední)',
           inferenceTime: 'Doba inference: ~6,9 sekundy',
           bestFor: 'Nejlepší pro: Vyvážená rychlost a přesnost',
-          description: 'Optimální rovnováha mezi rychlostí zpracování a kvalitou segmentace pro většinu případů použití.',
+          description:
+            'Optimální rovnováha mezi rychlostí zpracování a kvalitou segmentace pro většinu případů použití.',
         },
         ma: {
           name: 'MA-ResUNet (Velký)',
           inferenceTime: 'Doba inference: ~18,1 sekundy',
           bestFor: 'Nejlepší pro: Maximální přesnost',
-          description: 'Nejpřesnější model s mechanismy pozornosti pro nejpřesnější detekci hranic sféroidů.',
+          description:
+            'Nejpřesnější model s mechanismy pozornosti pro nejpřesnější detekci hranic sféroidů.',
         },
       },
       howToSelect: 'Jak vybrat model',
       selectionSteps: {
         step1: 'Otevřete svůj projekt a přejděte na jakýkoli obrázek',
-        step2: 'V nástrojové liště projektu najděte rozbalovací nabídku výběru modelu',
+        step2:
+          'V nástrojové liště projektu najděte rozbalovací nabídku výběru modelu',
         step3: 'Vyberte z HRNet, CBAM-ResUNet nebo MA-ResUNet',
-        step4: 'Upravte práh spolehlivosti (0,0-1,0) pro jemné doladění citlivosti detekce',
+        step4:
+          'Upravte práh spolehlivosti (0,0-1,0) pro jemné doladění citlivosti detekce',
         step5: 'Váš výběr se automaticky uloží pro budoucí zpracování',
       },
       tip: 'Tip:',
-      tipText: 'Začněte s CBAM-ResUNet pro většinu případů. Použijte HRNet pro rychlé prototypování a MA-ResUNet, když potřebujete nejvyšší možnou přesnost pro výzkum nebo publikaci.',
+      tipText:
+        'Začněte s CBAM-ResUNet pro většinu případů. Použijte HRNet pro rychlé prototypování a MA-ResUNet, když potřebujete nejvyšší možnou přesnost pro výzkum nebo publikaci.',
     },
-    
+
     // Segmentation Process section
     segmentationProcess: {
       title: 'Proces segmentace',
-      description: 'Proces segmentace používá pokročilé AI modely k automatické detekci hranic sféroidů ve vašich mikroskopických snímcích. Systém podporuje jak automatické zpracování, tak manuální vylepšení.',
+      description:
+        'Proces segmentace používá pokročilé AI modely k automatické detekci hranic sféroidů ve vašich mikroskopických snímcích. Systém podporuje jak automatické zpracování, tak manuální vylepšení.',
       queueBased: 'Zpracování založené na frontě',
-      queueDescription: 'SpheroSeg používá systém zpracovací fronty pro efektivní zpracování více úloh segmentace:',
+      queueDescription:
+        'SpheroSeg používá systém zpracovací fronty pro efektivní zpracování více úloh segmentace:',
       queueFeatures: {
-        realTime: 'Stav v reálném čase: WebSocket oznámení poskytují živé aktualizace o průběhu zpracování',
+        realTime:
+          'Stav v reálném čase: WebSocket oznámení poskytují živé aktualizace o průběhu zpracování',
         batch: 'Hromadné zpracování: Zpracování více obrázků současně',
-        priority: 'Zpracování priority: Novější požadavky jsou zpracovány jako první',
-        recovery: 'Obnova po chybě: Neúspěšné úlohy jsou automaticky opakovány s podrobným hlášením chyb',
+        priority:
+          'Zpracování priority: Novější požadavky jsou zpracovány jako první',
+        recovery:
+          'Obnova po chybě: Neúspěšné úlohy jsou automaticky opakovány s podrobným hlášením chyb',
       },
       workflow: 'Pracovní postup automatické segmentace',
       workflowSteps: {
         step1: 'Nahrajte své mikroskopické snímky do projektu',
-        step2: 'Vyberte svůj preferovaný AI model (HRNet, CBAM-ResUNet nebo MA-ResUNet)',
+        step2:
+          'Vyberte svůj preferovaný AI model (HRNet, CBAM-ResUNet nebo MA-ResUNet)',
         step3: 'V případě potřeby upravte práh spolehlivosti (výchozí: 0,5)',
-        step4: 'Klikněte na "Auto-segmentace" nebo použijte hromadné zpracování pro více obrázků',
-        step5: 'Sledujte průběh v reálném čase prostřednictvím stavových indikátorů',
-        step6: 'Zkontrolujte výsledky v editoru segmentace po dokončení zpracování',
+        step4:
+          'Klikněte na "Auto-segmentace" nebo použijte hromadné zpracování pro více obrázků',
+        step5:
+          'Sledujte průběh v reálném čase prostřednictvím stavových indikátorů',
+        step6:
+          'Zkontrolujte výsledky v editoru segmentace po dokončení zpracování',
       },
       polygonTypes: 'Typy polygonů',
       polygonDescription: 'Systém detekuje dva typy polygonů:',
       polygonTypesList: {
-        external: 'Externí polygony: Hlavní hranice sféroidů (zobrazeny ve výchozím stavu zeleně)',
-        internal: 'Interní polygony: Díry nebo vnitřní struktury v sféroidech (zobrazeny ve výchozím stavu červeně)',
+        external:
+          'Externí polygony: Hlavní hranice sféroidů (zobrazeny ve výchozím stavu zeleně)',
+        internal:
+          'Interní polygony: Díry nebo vnitřní struktury v sféroidech (zobrazeny ve výchozím stavu červeně)',
       },
       processingNote: 'Doby zpracování se liší podle modelu:',
-      processingTimes: 'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Vyberte podle vašich požadavků na přesnost a časová omezení.',
+      processingTimes:
+        'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Vyberte podle vašich požadavků na přesnost a časová omezení.',
     },
-    
+
     // Segmentation Editor section
     segmentationEditor: {
       title: 'Editor segmentace',
-      description: 'Editor segmentace je mocný nástroj pro vylepšování AI-generovaných segmentací a vytváření manuálních anotací. Obsahuje více režimů úprav, klávesové zkratky a pokročilé nástroje pro manipulaci s polygony.',
+      description:
+        'Editor segmentace je mocný nástroj pro vylepšování AI-generovaných segmentací a vytváření manuálních anotací. Obsahuje více režimů úprav, klávesové zkratky a pokročilé nástroje pro manipulaci s polygony.',
       editingModes: 'Režimy úprav',
       modes: {
         view: {
           title: 'Režim zobrazení',
-          description: 'Navigujte a prohlížejte polygony bez provádění změn. Klikněte na polygony pro jejich výběr a zobrazení detailů.',
+          description:
+            'Navigujte a prohlížejte polygony bez provádění změn. Klikněte na polygony pro jejich výběr a zobrazení detailů.',
         },
         editVertices: {
           title: 'Úprava vrcholů',
-          description: 'Přetáhněte jednotlivé vrcholy pro vylepšení hranic polygonů. Přesná kontrola pro úpravy hranic.',
+          description:
+            'Přetáhněte jednotlivé vrcholy pro vylepšení hranic polygonů. Přesná kontrola pro úpravy hranic.',
         },
         addPoints: {
           title: 'Přidání bodů',
-          description: 'Vložte nové vrcholy mezi existující. Shift+klik pro automatické umístění bodu.',
+          description:
+            'Vložte nové vrcholy mezi existující. Shift+klik pro automatické umístění bodu.',
         },
         createPolygon: {
           title: 'Vytvoření polygonu',
-          description: 'Nakreslete nové polygony od začátku. Klikněte pro přidání bodů, dvojklik pro dokončení.',
+          description:
+            'Nakreslete nové polygony od začátku. Klikněte pro přidání bodů, dvojklik pro dokončení.',
         },
         sliceMode: {
           title: 'Režim řezání',
@@ -918,17 +945,24 @@ export default {
         },
         deletePolygon: {
           title: 'Smazání polygonu',
-          description: 'Odstraňte nechtěné polygony kliknutím na ně. Užitečné pro eliminaci falešných detekcí.',
+          description:
+            'Odstraňte nechtěné polygony kliknutím na ně. Užitečné pro eliminaci falešných detekcí.',
         },
       },
       keyFeatures: 'Klíčové funkce',
       features: {
-        undoRedo: 'Systém zpět/vpřed: Kompletní sledování historie s podporou Ctrl+Z/Ctrl+Y',
-        autoSave: 'Automatické ukládání: Periodické ukládání s vizuálními indikátory zobrazujícími neuložené změny',
-        zoomPan: 'Přiblížení a posouvání: Přiblížení kolečkem myši a navigace tažením',
-        polygonManagement: 'Správa polygonů: Zobrazit/skrýt, přejmenovat a hromadné operace',
-        keyboardShortcuts: 'Klávesové zkratky: Komplexní klávesové zkratky pro efektivní úpravy',
-        realTimeFeedback: 'Zpětná vazba v reálném čase: Živý náhled úprav a aktualizace stavu',
+        undoRedo:
+          'Systém zpět/vpřed: Kompletní sledování historie s podporou Ctrl+Z/Ctrl+Y',
+        autoSave:
+          'Automatické ukládání: Periodické ukládání s vizuálními indikátory zobrazujícími neuložené změny',
+        zoomPan:
+          'Přiblížení a posouvání: Přiblížení kolečkem myši a navigace tažením',
+        polygonManagement:
+          'Správa polygonů: Zobrazit/skrýt, přejmenovat a hromadné operace',
+        keyboardShortcuts:
+          'Klávesové zkratky: Komplexní klávesové zkratky pro efektivní úpravy',
+        realTimeFeedback:
+          'Zpětná vazba v reálném čase: Živý náhled úprav a aktualizace stavu',
       },
       shortcuts: 'Základní klávesové zkratky',
       shortcutCategories: {
@@ -950,24 +984,29 @@ export default {
         step1: 'Vyberte polygon kliknutím na něj (zvýrazněn modře při výběru)',
         step2: 'Přepněte na příslušný režim úprav pro váš úkol',
         step3: 'Proveďte své úpravy pomocí interakcí myši',
-        step4: 'Použijte panel polygonů napravo pro správu viditelnosti a vlastností',
-        step5: 'Uložte své změny periodicky nebo spoléhejte na automatické ukládání',
+        step4:
+          'Použijte panel polygonů napravo pro správu viditelnosti a vlastností',
+        step5:
+          'Uložte své změny periodicky nebo spoléhejte na automatické ukládání',
       },
     },
-    
+
     // Export Features section
     exportFeatures: {
       title: 'Funkce exportu',
-      description: 'SpheroSeg poskytuje komplexní možnosti exportu pro integraci s vaším výzkumným pracovním postupem. Exportujte data segmentace v několika formátech vhodných pro frameworky strojového učení a analytické nástroje.',
+      description:
+        'SpheroSeg poskytuje komplexní možnosti exportu pro integraci s vaším výzkumným pracovním postupem. Exportujte data segmentace v několika formátech vhodných pro frameworky strojového učení a analytické nástroje.',
       packageContents: 'Obsah exportního balíčku',
       contents: {
         originalImages: {
           title: 'Původní obrázky',
-          description: 'Vysoce kvalitní původní mikroskopické snímky v jejich nativním formátu.',
+          description:
+            'Vysoce kvalitní původní mikroskopické snímky v jejich nativním formátu.',
         },
         visualizations: {
           title: 'Vizualizace',
-          description: 'Anotované obrázky s číslovanými polygony a přizpůsobitelnými barvami.',
+          description:
+            'Anotované obrázky s číslovanými polygony a přizpůsobitelnými barvami.',
         },
       },
       annotationFormats: 'Formáty anotací',
@@ -977,7 +1016,8 @@ export default {
         json: 'Vlastní JSON: Strukturovaný JSON formát s podrobnými souřadnicemi polygonů a metadaty',
       },
       calculatedMetrics: 'Vypočítané metriky',
-      metricsDescription: 'SpheroSeg automaticky počítá komplexní morfologické metriky pro každý detekovaný sféroid:',
+      metricsDescription:
+        'SpheroSeg automaticky počítá komplexní morfologické metriky pro každý detekovaný sféroid:',
       metricsCategories: {
         basic: {
           title: 'Základní měření:',
@@ -1000,31 +1040,39 @@ export default {
       },
       exportFormats: 'Formáty exportu metrik',
       exportFormatsList: {
-        excel: 'Excel (.xlsx): Formátovaná tabulka se samostatnými listy pro souhrn a podrobná data',
+        excel:
+          'Excel (.xlsx): Formátovaná tabulka se samostatnými listy pro souhrn a podrobná data',
         csv: 'CSV: Hodnoty oddělené čárkami pro snadný import do statistického softwaru',
         jsonExport: 'JSON: Strukturovaný datový formát pro programovou analýzu',
       },
       visualizationCustomization: 'Přizpůsobení vizualizace',
       customizationOptions: {
-        colors: 'Barvy polygonů: Přizpůsobte externí (zelené) a interní (červené) barvy polygonů',
+        colors:
+          'Barvy polygonů: Přizpůsobte externí (zelené) a interní (červené) barvy polygonů',
         numbering: 'Číslování: Zobrazit/skrýt čísla polygonů pro identifikaci',
         strokeWidth: 'Šířka čáry: Upravte tloušťku čáry (1-10px)',
-        fontSize: 'Velikost písma: Kontrolujte velikost textu pro čísla polygonů (10-30px)',
-        transparency: 'Průhlednost: Nastavte průhlednost výplně polygonů (0-100%)',
+        fontSize:
+          'Velikost písma: Kontrolujte velikost textu pro čísla polygonů (10-30px)',
+        transparency:
+          'Průhlednost: Nastavte průhlednost výplně polygonů (0-100%)',
       },
       howToExport: 'Jak exportovat',
       exportSteps: {
         step1: 'Přejděte na přehled vašeho projektu',
-        step2: 'Vyberte obrázky, které chcete exportovat (nebo exportujte všechny)',
+        step2:
+          'Vyberte obrázky, které chcete exportovat (nebo exportujte všechny)',
         step3: 'Klikněte na "Pokročilý export" pro otevření dialogu exportu',
-        step4: 'Nakonfigurujte nastavení exportu ve třech záložkách: Obecné, Vizualizace a Formáty',
+        step4:
+          'Nakonfigurujte nastavení exportu ve třech záložkách: Obecné, Vizualizace a Formáty',
         step5: 'Zkontrolujte souhrn exportu',
-        step6: 'Klikněte na "Spustit export" pro vygenerování a stažení vašeho balíčku',
+        step6:
+          'Klikněte na "Spustit export" pro vygenerování a stažení vašeho balíčku',
       },
       exportNote: 'Exportní balíčky jsou komplexní:',
-      exportNoteText: 'Každý export obsahuje dokumentaci, metadata a všechny vybrané typy obsahu organizované v přehledné struktuře složek pro snadné použití.',
+      exportNoteText:
+        'Každý export obsahuje dokumentaci, metadata a všechny vybrané typy obsahu organizované v přehledné struktuře složek pro snadné použití.',
     },
-    
+
     // Footer navigation
     footer: {
       backToHome: 'Zpět domů',
@@ -1035,11 +1083,13 @@ export default {
     terms: {
       title: 'Podmínky použití',
       lastUpdated: 'Naposledy aktualizováno: leden 2025',
-      disclaimer: 'Používáním SpheroSeg souhlasíte s těmito podmínkami. Pečlivě si je prosím přečtěte.',
+      disclaimer:
+        'Používáním SpheroSeg souhlasíte s těmito podmínkami. Pečlivě si je prosím přečtěte.',
       sections: {
         acceptance: {
           title: '1. Přijetí podmínek',
-          content: 'Přístupem nebo používáním SpheroSeg ("Služba") souhlasíte, že budete vázáni těmito Podmínkami použití ("Podmínky") a všemi platnými zákony a předpisy. Pokud nesouhlasíte s některou z těchto podmínek, je vám zakázáno používat tuto službu. Tyto Podmínky představují právně závaznou smlouvu mezi vámi a SpheroSeg.',
+          content:
+            'Přístupem nebo používáním SpheroSeg ("Služba") souhlasíte, že budete vázáni těmito Podmínkami použití ("Podmínky") a všemi platnými zákony a předpisy. Pokud nesouhlasíte s některou z těchto podmínek, je vám zakázáno používat tuto službu. Tyto Podmínky představují právně závaznou smlouvu mezi vámi a SpheroSeg.',
         },
         useLicense: {
           title: '2. Licence k používání a povolené použití',
@@ -1050,21 +1100,25 @@ export default {
             'Vědecké publikace a studie',
             'Biomedicínský výzkum a analýzu',
           ],
-          licenseNote: 'Jedná se o udělení licence, nikoli převod vlastnictví. Službu nesmíte používat pro komerční účely bez výslovného písemného souhlasu.',
+          licenseNote:
+            'Jedná se o udělení licence, nikoli převod vlastnictví. Službu nesmíte používat pro komerční účely bez výslovného písemného souhlasu.',
         },
         dataUsage: {
           title: '3. Používání dat a strojové učení',
           importantTitle: 'Důležité: Použití vašich dat',
-          importantContent: 'Nahráváním obrázků a dat do SpheroSeg souhlasíte s tím, že tato data použijeme ke zlepšení a trénování našich modelů strojového učení pro lepší přesnost segmentace.',
+          importantContent:
+            'Nahráváním obrázků a dat do SpheroSeg souhlasíte s tím, že tato data použijeme ke zlepšení a trénování našich modelů strojového učení pro lepší přesnost segmentace.',
           ownershipTitle: 'Vlastnictví dat:',
-          ownershipContent: 'Zachováváte si vlastnictví všech dat, která do SpheroSeg nahrajete. Nicméně používáním naší služby nám udělujete povolení k:',
+          ownershipContent:
+            'Zachováváte si vlastnictví všech dat, která do SpheroSeg nahrajete. Nicméně používáním naší služby nám udělujete povolení k:',
           permissions: [
             'Zpracování vašich obrázků pro analýzu segmentace',
             'Používání nahraných dat (v anonymizované formě) ke zlepšení našich ML algoritmů',
             'Zvyšování přesnosti modelů prostřednictvím kontinuálního učení',
             'Vývoji nových funkcí a schopností segmentace',
           ],
-          protectionNote: 'Všechna data používaná pro trénování ML jsou anonymizována a zbavena identifikačních informací. Vaše surová data nesdílíme s třetími stranami bez výslovného souhlasu.',
+          protectionNote:
+            'Všechna data používaná pro trénování ML jsou anonymizována a zbavena identifikačních informací. Vaše surová data nesdílíme s třetími stranami bez výslovného souhlasu.',
         },
         userResponsibilities: {
           title: '4. Povinnosti uživatele',
@@ -1079,32 +1133,39 @@ export default {
         },
         serviceAvailability: {
           title: '5. Dostupnost služby a omezení',
-          content: 'Ačkoli se snažíme udržovat kontinuální dostupnost služby, SpheroSeg je poskytována "tak jak je" bez jakýchkoli záruk. Nezaručujeme nepřerušený přístup a služba může podléhat údržbě, aktualizacím nebo dočasné nedostupnosti.',
+          content:
+            'Ačkoli se snažíme udržovat kontinuální dostupnost služby, SpheroSeg je poskytována "tak jak je" bez jakýchkoli záruk. Nezaručujeme nepřerušený přístup a služba může podléhat údržbě, aktualizacím nebo dočasné nedostupnosti.',
         },
         limitationLiability: {
           title: '6. Omezení odpovědnosti',
-          content: 'SpheroSeg, její vývojáři nebo přidružené společnosti nenesou v žádném případě odpovědnost za jakékoli nepřímé, náhodné, zvláštní, následné nebo trestní škody, včetně, ale nejen, ztráty dat, zisků nebo obchodních příležitostí vyplývajících z vašeho používání služby.',
+          content:
+            'SpheroSeg, její vývojáři nebo přidružené společnosti nenesou v žádném případě odpovědnost za jakékoli nepřímé, náhodné, zvláštní, následné nebo trestní škody, včetně, ale nejen, ztráty dat, zisků nebo obchodních příležitostí vyplývajících z vašeho používání služby.',
         },
         privacy: {
           title: '7. Ochrana soukromí a dat',
-          content: 'Vaše soukromí je pro nás důležité. Prosím, prostudujte si naše Zásady ochrany osobních údajů, které upravují způsob, jakým shromažďujeme, používáme a chráníme vaše osobní informace a výzkumná data.',
+          content:
+            'Vaše soukromí je pro nás důležité. Prosím, prostudujte si naše Zásady ochrany osobních údajů, které upravují způsob, jakým shromažďujeme, používáme a chráníme vaše osobní informace a výzkumná data.',
         },
         changes: {
           title: '8. Změny podmínek',
-          content: 'Vyhrazujeme si právo kdykoli tyto Podmínky upravit. Změny nabydou účinnosti okamžitě po zveřejnění. Vaše pokračující používání služby představuje přijetí upravených Podmínek.',
+          content:
+            'Vyhrazujeme si právo kdykoli tyto Podmínky upravit. Změny nabydou účinnosti okamžitě po zveřejnění. Vaše pokračující používání služby představuje přijetí upravených Podmínek.',
         },
         termination: {
           title: '9. Ukončení',
-          content: 'Kterákoli strana může tuto smlouvu kdykoli ukončit. Po ukončení okamžitě zanikne vaše právo na přístup ke službě, ačkoli tyto Podmínky zůstávají v platnosti ohledně předchozího použití.',
+          content:
+            'Kterákoli strana může tuto smlouvu kdykoli ukončit. Po ukončení okamžitě zanikne vaše právo na přístup ke službě, ačkoli tyto Podmínky zůstávají v platnosti ohledně předchozího použití.',
         },
         governingLaw: {
           title: '10. Rozhodné právo',
-          content: 'Tyto Podmínky se řídí a vykládají v souladu s platnými zákony. Všechny spory budou řešeny prostřednictvím závazného arbitráže nebo u příslušných soudů.',
+          content:
+            'Tyto Podmínky se řídí a vykládají v souladu s platnými zákony. Všechny spory budou řešeny prostřednictvím závazného arbitráže nebo u příslušných soudů.',
         },
       },
       contact: {
         title: 'Kontaktní informace:',
-        content: 'Pokud máte otázky ohledně těchto Podmínek, kontaktujte nás na spheroseg@utia.cas.cz',
+        content:
+          'Pokud máte otázky ohledně těchto Podmínek, kontaktujte nás na spheroseg@utia.cas.cz',
       },
       navigation: {
         backToHome: 'Zpět domů',
@@ -1114,15 +1175,18 @@ export default {
     privacy: {
       title: 'Zásady ochrany osobních údajů',
       lastUpdated: 'Naposledy aktualizováno: leden 2025',
-      disclaimer: 'Vaše soukromí je pro nás důležité. Tyto zásady vysvětlují, jak shromažďujeme, používáme a chráníme vaše data.',
+      disclaimer:
+        'Vaše soukromí je pro nás důležité. Tyto zásady vysvětlují, jak shromažďujeme, používáme a chráníme vaše data.',
       sections: {
         introduction: {
           title: '1. Úvod',
-          content: 'Tyto Zásady ochrany osobních údajů vysvětlují, jak SpheroSeg ("my", "nás", "naše") shromažďuje, používá, chrání a sdílí vaše informace při používání naší platformy pro segmentaci a analýzu sféroidů. Používáním naší služby souhlasíte s praktikami týkajícími se dat popsanými v těchto zásadách.',
+          content:
+            'Tyto Zásady ochrany osobních údajů vysvětlují, jak SpheroSeg ("my", "nás", "naše") shromažďuje, používá, chrání a sdílí vaše informace při používání naší platformy pro segmentaci a analýzu sféroidů. Používáním naší služby souhlasíte s praktikami týkajícími se dat popsanými v těchto zásadách.',
         },
         informationCollected: {
           title: '2. Informace, které shromažďujeme',
-          content: 'Shromažďujeme informace, které nám přímo poskytujete při vytváření účtu, nahrávání obrázků, vytváření projektů a interakci s našimi službami.',
+          content:
+            'Shromažďujeme informace, které nám přímo poskytujete při vytváření účtu, nahrávání obrázků, vytváření projektů a interakci s našimi službami.',
           personalInfo: {
             title: '2.1 Osobní informace',
             items: [
@@ -1135,7 +1199,8 @@ export default {
           researchData: {
             title: '2.2 Výzkumná data a obrázky',
             ownershipTitle: 'Vaše výzkumná data',
-            ownershipContent: 'Zachováváte si plné vlastnictví všech obrázků a výzkumných dat, která do SpheroSeg nahrajete. Nikdy si nenárokujeme vlastnictví vašeho obsahu.',
+            ownershipContent:
+              'Zachováváte si plné vlastnictví všech obrázků a výzkumných dat, která do SpheroSeg nahrajete. Nikdy si nenárokujeme vlastnictví vašeho obsahu.',
             items: [
               'Obrázky, které nahrajete k analýze',
               'Metadata projektů a nastavení',
@@ -1156,11 +1221,14 @@ export default {
         mlTraining: {
           title: '3. Strojové učení a zlepšování dat',
           importantTitle: 'Důležité: Použití vašich dat pro trénování AI',
-          importantIntro: 'Pro kontinuální zlepšování našich algoritmů segmentace můžeme používat nahrané obrázky a data k trénování a vylepšování našich modelů strojového učení.',
+          importantIntro:
+            'Pro kontinuální zlepšování našich algoritmů segmentace můžeme používat nahrané obrázky a data k trénování a vylepšování našich modelů strojového učení.',
           controlTitle: 'Máte plnou kontrolu nad svými daty:',
-          controlContent: 'Při vytváření účtu si můžete vybrat, zda povolíte použití vašich dat pro trénování ML. Tyto preference můžete kdykoli změnit.',
+          controlContent:
+            'Při vytváření účtu si můžete vybrat, zda povolíte použití vašich dat pro trénování ML. Tyto preference můžete kdykoli změnit.',
           manageTitle: 'Pro správu vašeho souhlasu:',
-          manageContent: 'Přejděte do Nastavení → záložka Soukromí ve vašem přehledu. Tam můžete povolit nebo zakázat souhlas s trénovánímML a vybrat konkrétní účely (zlepšení algoritmů, vývoj funkcí), pro které mohou být vaše data použita.',
+          manageContent:
+            'Přejděte do Nastavení → záložka Soukromí ve vašem přehledu. Tam můžete povolit nebo zakázat souhlas s trénovánímML a vybrat konkrétní účely (zlepšení algoritmů, vývoj funkcí), pro které mohou být vaše data použita.',
           howWeUse: {
             title: 'Jak používáme vaše data pro ML:',
             items: [
@@ -1205,8 +1273,10 @@ export default {
         },
         dataSharing: {
           title: '6. Sdílení dat a třetí strany',
-          noSaleStatement: 'Neprodáváme vaše osobní informace ani výzkumná data.',
-          sharingContent: 'Informace můžeme sdílet pouze v těchto omezených případech:',
+          noSaleStatement:
+            'Neprodáváme vaše osobní informace ani výzkumná data.',
+          sharingContent:
+            'Informace můžeme sdílet pouze v těchto omezených případech:',
           circumstances: [
             'S vaším výslovným souhlasem',
             'Pro dodržení právních povinností nebo soudních příkazů',
@@ -1226,7 +1296,8 @@ export default {
             'Odhlášení: Požádat o vyloučení z trénování ML. Poznámka: To může omezit následující funkce: přesnost automatické segmentace, personalizovaná doporučení modelů, adaptivní návrhy prahu, optimalizace dávkového zpracování a budoucí vylepšení poháněná AI. Kontaktujte podporu pro konkrétní dopady na váš účet.',
             'Omezení: Omezit způsob, jakým zpracováváme vaše informace',
           ],
-          contactNote: 'Pro uplatnění těchto práv nás kontaktujte na spheroseg@utia.cas.cz. Odpovíme do 30 dnů.',
+          contactNote:
+            'Pro uplatnění těchto práv nás kontaktujte na spheroseg@utia.cas.cz. Odpovíme do 30 dnů.',
         },
         dataRetention: {
           title: '8. Uchovávání dat',
@@ -1240,15 +1311,18 @@ export default {
         },
         internationalTransfers: {
           title: '9. Mezinárodní přenosy dat',
-          content: 'Vaše data mohou být zpracovávána v jiných zemích než ve vaší vlastní. Zajišťujeme odpovídající záruky a ochranu pro mezinárodní přenosy, včetně standardních smluvních doložek a rozhodnutí o přiměřenosti.',
+          content:
+            'Vaše data mohou být zpracovávána v jiných zemích než ve vaší vlastní. Zajišťujeme odpovídající záruky a ochranu pro mezinárodní přenosy, včetně standardních smluvních doložek a rozhodnutí o přiměřenosti.',
         },
         childrensPrivacy: {
           title: '10. Soukromí dětí',
-          content: 'Naše služba je určena pro výzkumníky a není zaměřena na děti mladší 16 let. Vědomě neshromažďujeme osobní informace od dětí mladších 16 let. Pokud takové shromažďování objevíme, informace okamžitě vymažeme.',
+          content:
+            'Naše služba je určena pro výzkumníky a není zaměřena na děti mladší 16 let. Vědomě neshromažďujeme osobní informace od dětí mladších 16 let. Pokud takové shromažďování objevíme, informace okamžitě vymažeme.',
         },
         policyChanges: {
           title: '11. Změny těchto zásad',
-          content: 'Můžeme aktualizovat tyto Zásady ochrany osobních údajů, aby odrážely změny v našich postupech nebo právních požadavcích. O podstatných změnách vás budeme informovat prostřednictvím e-mailu nebo výrazného oznámení na naší webové stránce. Pokračující používání představuje přijetí aktualizovaných podmínek.',
+          content:
+            'Můžeme aktualizovat tyto Zásady ochrany osobních údajů, aby odrážely změny v našich postupech nebo právních požadavcích. O podstatných změnách vás budeme informovat prostřednictvím e-mailu nebo výrazného oznámení na naší webové stránce. Pokračující používání představuje přijetí aktualizovaných podmínek.',
         },
         contact: {
           title: '12. Kontaktní informace',
@@ -1269,7 +1343,7 @@ export default {
       },
     },
   },
-  
+
   // WebSocket messages
   websocket: {
     reconnecting: 'Znovu se připojuji k serveru...',

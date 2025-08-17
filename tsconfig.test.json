@@ -5,7 +5,12 @@
     "allowImportingTsExtensions": false,
     "noEmit": true,
     "composite": true,
-    "types": ["vitest/globals", "@testing-library/jest-dom", "node", "vite/client"],
+    "types": [
+      "vitest/globals",
+      "@testing-library/jest-dom",
+      "node",
+      "vite/client"
+    ],
     "lib": ["ES2020", "DOM", "DOM.Iterable"]
   },
   "include": [

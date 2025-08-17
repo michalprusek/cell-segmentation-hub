@@ -41,19 +41,24 @@ export const updateImageProcessingStatus = async ({
       if (cancelled) return;
 
       try {
-        const segmentationData = await apiClient.getSegmentationResults(imageId);
+        const segmentationData =
+          await apiClient.getSegmentationResults(imageId);
 
         if (cancelled) return;
 
         // Validate that segmentation data exists and has polygons
-        if (!segmentationData || !Array.isArray(segmentationData.polygons) || segmentationData.polygons.length === 0) {
+        if (
+          !segmentationData ||
+          !Array.isArray(segmentationData.polygons) ||
+          segmentationData.polygons.length === 0
+        ) {
           // No results yet, continue polling
           if (!cancelled) {
             timeoutId = setTimeout(pollForCompletion, 2000); // Poll every 2 seconds
           }
           return;
         }
-        
+
         const results = segmentationData.polygons;
 
         const latestResult = results[0]; // Now safe to access after validation

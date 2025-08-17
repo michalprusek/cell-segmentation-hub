@@ -76,7 +76,9 @@ const SignIn = () => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-          <p className="mt-4 text-gray-600">{t('auth.redirectingToDashboard')}</p>
+          <p className="mt-4 text-gray-600">
+            {t('auth.redirectingToDashboard')}
+          </p>
         </div>
       </div>
     );
@@ -115,9 +117,7 @@ const SignIn = () => {
             <h2 className="mt-4 text-3xl font-bold text-gray-900">
               {t('auth.signInToAccount')}
             </h2>
-            <p className="mt-2 text-gray-600">
-              {t('auth.accessPlatform')}
-            </p>
+            <p className="mt-2 text-gray-600">{t('auth.accessPlatform')}</p>
           </div>
 
           <form className="space-y-6" onSubmit={handleSubmit}>

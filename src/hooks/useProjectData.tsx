@@ -55,18 +55,24 @@ const enrichImagesWithSegmentation = async (
 
         return {
           imageId: img.id,
-          result: segmentationData ? {
-            polygons: segmentationData.polygons || [],
-            imageWidth: segmentationData.imageWidth || img.width || null,
-            imageHeight: segmentationData.imageHeight || img.height || null,
-            modelUsed: segmentationData.modelUsed,
-            confidence: segmentationData.confidence,
-            processingTime: segmentationData.processingTime,
-            levelOfDetail: 'medium', // Default level of detail for thumbnails
-            polygonCount: segmentationData.polygons?.length || 0,
-            pointCount: segmentationData.polygons?.reduce((sum, p) => sum + p.points.length, 0) || 0,
-            compressionRatio: 1.0 // Default compression ratio
-          } : null,
+          result: segmentationData
+            ? {
+                polygons: segmentationData.polygons || [],
+                imageWidth: segmentationData.imageWidth || img.width || null,
+                imageHeight: segmentationData.imageHeight || img.height || null,
+                modelUsed: segmentationData.modelUsed,
+                confidence: segmentationData.confidence,
+                processingTime: segmentationData.processingTime,
+                levelOfDetail: 'medium', // Default level of detail for thumbnails
+                polygonCount: segmentationData.polygons?.length || 0,
+                pointCount:
+                  segmentationData.polygons?.reduce(
+                    (sum, p) => sum + p.points.length,
+                    0
+                  ) || 0,
+                compressionRatio: 1.0, // Default compression ratio
+              }
+            : null,
         };
       } catch (error) {
         logger.error(
@@ -127,7 +133,7 @@ export const useProjectData = (
 
   // Track pending requests to prevent duplicates
   const pendingRequestsRef = useRef<Set<string>>(new Set());
-  
+
   // Store navigate function in ref to avoid dependency issues
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;

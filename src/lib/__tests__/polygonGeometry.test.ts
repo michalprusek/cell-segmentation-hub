@@ -11,13 +11,13 @@ import {
   findClosestVertex,
   findClosestSegment,
   calculateBoundingBox,
-  getPolygonCentroid
+  getPolygonCentroid,
 } from '@/lib/polygonGeometry';
 import {
   createTestPolygons,
   expectPointsEqual,
   expectPointArraysEqual,
-  measurePerformance
+  measurePerformance,
 } from '@/test-utils/polygonTestUtils';
 import type { Point } from '@/lib/segmentation';
 
@@ -95,10 +95,10 @@ describe('Polygon Geometry Utilities', () => {
     it('should be consistent regardless of winding order', () => {
       const clockwise = testPolygons.square;
       const counterClockwise = [...clockwise].reverse();
-      
+
       const areaClockwise = calculatePolygonArea(clockwise);
       const areaCounterClockwise = calculatePolygonArea(counterClockwise);
-      
+
       expect(areaClockwise).toBeCloseTo(areaCounterClockwise, 5);
     });
   });
@@ -107,7 +107,8 @@ describe('Polygon Geometry Utilities', () => {
     it('should calculate triangle perimeter correctly', () => {
       const perimeter = calculatePolygonPerimeter(testPolygons.triangle);
       // Triangle with sides: 100, 100*sqrt(2)/2 ≈ 111.8, 111.8
-      const expected = 100 + Math.sqrt(50*50 + 100*100) + Math.sqrt(50*50 + 100*100);
+      const expected =
+        100 + Math.sqrt(50 * 50 + 100 * 100) + Math.sqrt(50 * 50 + 100 * 100);
       expect(perimeter).toBeCloseTo(expected, 1);
     });
 
@@ -133,7 +134,7 @@ describe('Polygon Geometry Utilities', () => {
         { x: 0, y: 0 },
         { x: 0, y: 100 },
         { x: 100, y: 100 },
-        { x: 100, y: 0 }
+        { x: 100, y: 0 },
       ];
       expect(isPolygonClockwise(clockwiseSquare)).toBe(true);
     });
@@ -177,7 +178,7 @@ describe('Polygon Geometry Utilities', () => {
     it('should work with complex polygons', () => {
       const insidePoint: Point = { x: 25, y: 25 };
       const outsidePoint: Point = { x: 75, y: 75 };
-      
+
       expect(isPointInPolygon(insidePoint, testPolygons.complex)).toBe(true);
       expect(isPointInPolygon(outsidePoint, testPolygons.complex)).toBe(false);
     });
@@ -187,7 +188,7 @@ describe('Polygon Geometry Utilities', () => {
     it('should create polygon with unique ID', () => {
       const polygon1 = createPolygon(testPolygons.triangle);
       const polygon2 = createPolygon(testPolygons.triangle);
-      
+
       expect(polygon1.id).not.toBe(polygon2.id);
       expect(polygon1.id).toMatch(/^polygon_\d+_[a-z0-9]+$/);
     });
@@ -195,14 +196,14 @@ describe('Polygon Geometry Utilities', () => {
     it('should copy points array', () => {
       const originalPoints = testPolygons.triangle;
       const polygon = createPolygon(originalPoints);
-      
+
       expect(polygon.points).not.toBe(originalPoints);
       expectPointArraysEqual(polygon.points, originalPoints);
     });
 
     it('should set default properties', () => {
       const polygon = createPolygon(testPolygons.triangle);
-      
+
       expect(polygon.confidence).toBe(1.0);
       expect(polygon.color).toBe('#ff0000');
     });
@@ -381,7 +382,7 @@ describe('Polygon Geometry Utilities', () => {
 
     it('should calculate centroid of triangle', () => {
       const centroid = getPolygonCentroid(testPolygons.triangle);
-      expectPointsEqual(centroid, { x: 50, y: 100/3 }, 0.01);
+      expectPointsEqual(centroid, { x: 50, y: 100 / 3 }, 0.01);
     });
 
     it('should handle empty polygon', () => {
@@ -408,7 +409,7 @@ describe('Polygon Geometry Utilities', () => {
 
     it('should handle point-in-polygon tests efficiently', async () => {
       const testPoint: Point = { x: 500, y: 500 };
-      
+
       const performance = await measurePerformance(() => {
         isPointInPolygon(testPoint, testPolygons.large);
       }, 1000);
@@ -422,7 +423,7 @@ describe('Polygon Geometry Utilities', () => {
       const invalidPoints: Point[] = [
         { x: NaN, y: 0 },
         { x: 0, y: NaN },
-        { x: 1, y: 1 }
+        { x: 1, y: 1 },
       ];
 
       expect(() => calculatePolygonArea(invalidPoints)).not.toThrow();
@@ -433,7 +434,7 @@ describe('Polygon Geometry Utilities', () => {
       const invalidPoints: Point[] = [
         { x: Infinity, y: 0 },
         { x: 0, y: -Infinity },
-        { x: 1, y: 1 }
+        { x: 1, y: 1 },
       ];
 
       expect(() => calculatePolygonArea(invalidPoints)).not.toThrow();
@@ -444,7 +445,7 @@ describe('Polygon Geometry Utilities', () => {
       const tinyPolygon: Point[] = [
         { x: 0, y: 0 },
         { x: 0.001, y: 0 },
-        { x: 0.0005, y: 0.001 }
+        { x: 0.0005, y: 0.001 },
       ];
 
       const area = calculatePolygonArea(tinyPolygon);
@@ -457,7 +458,7 @@ describe('Polygon Geometry Utilities', () => {
         { x: 0, y: 0 },
         { x: 1e6, y: 0 },
         { x: 1e6, y: 1e6 },
-        { x: 0, y: 1e6 }
+        { x: 0, y: 1e6 },
       ];
 
       const area = calculatePolygonArea(largePolygon);

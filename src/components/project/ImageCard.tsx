@@ -145,7 +145,7 @@ export const ImageCard = ({
           width: '250px',
           height: '167px', // Proportional height (250/280 * 192 = 171, rounded to 167)
           minWidth: '250px',
-          minHeight: '167px'
+          minHeight: '167px',
         }}
         onClick={() => onOpen(image.id)}
       >
@@ -198,9 +198,17 @@ export const ImageCard = ({
                 imageWidth: image.segmentationResult.imageWidth,
                 imageHeight: image.segmentationResult.imageHeight,
                 levelOfDetail: image.segmentationResult.levelOfDetail || 'low',
-                polygonCount: image.segmentationResult.polygonCount || image.segmentationResult.polygons.length,
-                pointCount: image.segmentationResult.pointCount || image.segmentationResult.polygons.reduce((sum, p) => sum + p.points.length, 0),
-                compressionRatio: image.segmentationResult.compressionRatio || 1
+                polygonCount:
+                  image.segmentationResult.polygonCount ||
+                  image.segmentationResult.polygons.length,
+                pointCount:
+                  image.segmentationResult.pointCount ||
+                  image.segmentationResult.polygons.reduce(
+                    (sum, p) => sum + p.points.length,
+                    0
+                  ),
+                compressionRatio:
+                  image.segmentationResult.compressionRatio || 1,
               }}
             />
           ) : null;
@@ -234,7 +242,10 @@ export const ImageCard = ({
         </div>
 
         {/* Bottom info overlay */}
-        <div className="absolute bottom-0 left-0 right-0 p-3 text-white" style={{ zIndex: 15 }}>
+        <div
+          className="absolute bottom-0 left-0 right-0 p-3 text-white"
+          style={{ zIndex: 15 }}
+        >
           {/* File name */}
           <h3
             className="font-semibold text-sm truncate mb-1"

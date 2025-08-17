@@ -43,7 +43,9 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   const handleStartRename = (polygon: Polygon) => {
     setEditingPolygonId(polygon.id);
-    setEditingName(polygon.name || `${t('common.polygon')} ${polygon.id.substring(0, 8)}`);
+    setEditingName(
+      polygon.name || `${t('common.polygon')} ${polygon.id.substring(0, 8)}`
+    );
   };
 
   const handleSaveRename = () => {
@@ -71,17 +73,17 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
     const handleWheel = (e: WheelEvent) => {
       const element = scrollArea;
       const { scrollTop, scrollHeight, clientHeight } = element;
-      
+
       // Check if we're at the top or bottom of the scroll area
       const atTop = scrollTop === 0;
       const atBottom = scrollTop + clientHeight >= scrollHeight;
-      
-      // If scrolling up and at top, or scrolling down and at bottom, 
+
+      // If scrolling up and at top, or scrolling down and at bottom,
       // let the event bubble up (which will be handled by zoom)
       if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom)) {
         return;
       }
-      
+
       // Otherwise, stop the event from bubbling to prevent zoom/page scroll
       e.stopPropagation();
     };
@@ -112,7 +114,9 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
         <div className="flex-1 flex items-center justify-center text-gray-500 dark:text-gray-400">
           <div className="text-center">
             <div className="text-sm">{t('segmentation.status.noPolygons')}</div>
-            <div className="text-xs mt-1">{t('segmentation.status.startCreating')}</div>
+            <div className="text-xs mt-1">
+              {t('segmentation.status.startCreating')}
+            </div>
           </div>
         </div>
       </div>
@@ -129,13 +133,18 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
       </div>
 
       {/* Polygon List */}
-      <div ref={scrollAreaRef} className="flex-1 overflow-y-auto min-h-0" data-scroll-area="true">
+      <div
+        ref={scrollAreaRef}
+        className="flex-1 overflow-y-auto min-h-0"
+        data-scroll-area="true"
+      >
         <div className="p-2 space-y-1">
           {polygons.map((polygon, index) => {
             const isSelected = selectedPolygonId === polygon.id;
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;
-            const polygonName = polygon.name || `${t('common.polygon')} ${index + 1}`;
+            const polygonName =
+              polygon.name || `${t('common.polygon')} ${index + 1}`;
 
             return (
               <motion.div

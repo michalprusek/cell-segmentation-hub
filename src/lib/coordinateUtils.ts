@@ -213,15 +213,17 @@ export const constrainTransform = (
 
     // For X axis - allow very generous panning
     const maxTranslateX = veryGenerousMargin - scaledWidth / 2;
-    const minTranslateX = -scaledWidth / 2 - veryGenerousMargin + minVisibleSize;
+    const minTranslateX =
+      -scaledWidth / 2 - veryGenerousMargin + minVisibleSize;
     translateX = Math.max(
       minTranslateX,
       Math.min(maxTranslateX, transform.translateX)
     );
 
-    // For Y axis - allow very generous panning  
+    // For Y axis - allow very generous panning
     const maxTranslateY = veryGenerousMargin - scaledHeight / 2;
-    const minTranslateY = -scaledHeight / 2 - veryGenerousMargin + minVisibleSize;
+    const minTranslateY =
+      -scaledHeight / 2 - veryGenerousMargin + minVisibleSize;
     translateY = Math.max(
       minTranslateY,
       Math.min(maxTranslateY, transform.translateY)

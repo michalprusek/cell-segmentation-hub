@@ -47,7 +47,9 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium">{t('projects.selectProject')}</label>
+      <label className="text-sm font-medium">
+        {t('projects.selectProject')}
+      </label>
       <Select
         value={value?.toString() || ''}
         onValueChange={onChange}

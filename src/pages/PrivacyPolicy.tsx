@@ -7,7 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 const PrivacyPolicy = () => {
   const { t } = useLanguage();
-  
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -17,7 +17,9 @@ const PrivacyPolicy = () => {
             <h1 className="text-4xl font-bold text-gray-900 mb-4">
               {t('legal.privacy.title')}
             </h1>
-            <p className="text-lg text-gray-600">{t('legal.privacy.lastUpdated')}</p>
+            <p className="text-lg text-gray-600">
+              {t('legal.privacy.lastUpdated')}
+            </p>
           </div>
 
           <div className="prose prose-lg prose-blue max-w-none">
@@ -42,27 +44,39 @@ const PrivacyPolicy = () => {
             </p>
 
             <h3 className="text-xl font-semibold text-gray-900 mt-8 mb-3">
-              {t('legal.privacy.sections.informationCollected.personalInfo.title')}
+              {t(
+                'legal.privacy.sections.informationCollected.personalInfo.title'
+              )}
             </h3>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.informationCollected.personalInfo.items').map((item: string, index: number) => (
+              {t(
+                'legal.privacy.sections.informationCollected.personalInfo.items'
+              ).map((item: string, index: number) => (
                 <li key={index}>{item}</li>
               ))}
             </ul>
 
             <h3 className="text-xl font-semibold text-gray-900 mt-8 mb-3">
-              {t('legal.privacy.sections.informationCollected.researchData.title')}
+              {t(
+                'legal.privacy.sections.informationCollected.researchData.title'
+              )}
             </h3>
             <div className="bg-green-50 border-l-4 border-green-400 p-6 mb-6">
               <p className="text-green-800 font-semibold mb-2">
-                {t('legal.privacy.sections.informationCollected.researchData.ownershipTitle')}
+                {t(
+                  'legal.privacy.sections.informationCollected.researchData.ownershipTitle'
+                )}
               </p>
               <p className="text-green-700 mb-0">
-                {t('legal.privacy.sections.informationCollected.researchData.ownershipContent')}
+                {t(
+                  'legal.privacy.sections.informationCollected.researchData.ownershipContent'
+                )}
               </p>
             </div>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.informationCollected.researchData.items').map((item: string, index: number) => (
+              {t(
+                'legal.privacy.sections.informationCollected.researchData.items'
+              ).map((item: string, index: number) => (
                 <li key={index}>{item}</li>
               ))}
             </ul>
@@ -71,7 +85,9 @@ const PrivacyPolicy = () => {
               {t('legal.privacy.sections.informationCollected.usageInfo.title')}
             </h3>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.informationCollected.usageInfo.items').map((item: string, index: number) => (
+              {t(
+                'legal.privacy.sections.informationCollected.usageInfo.items'
+              ).map((item: string, index: number) => (
                 <li key={index}>{item}</li>
               ))}
             </ul>
@@ -87,10 +103,16 @@ const PrivacyPolicy = () => {
                 {t('legal.privacy.sections.mlTraining.importantIntro')}
               </p>
               <p className="text-amber-700 mb-4">
-                <strong>{t('legal.privacy.sections.mlTraining.controlTitle')}</strong> {t('legal.privacy.sections.mlTraining.controlContent')}
+                <strong>
+                  {t('legal.privacy.sections.mlTraining.controlTitle')}
+                </strong>{' '}
+                {t('legal.privacy.sections.mlTraining.controlContent')}
               </p>
               <p className="text-amber-700 mb-0">
-                <strong>{t('legal.privacy.sections.mlTraining.manageTitle')}</strong> {t('legal.privacy.sections.mlTraining.manageContent')}
+                <strong>
+                  {t('legal.privacy.sections.mlTraining.manageTitle')}
+                </strong>{' '}
+                {t('legal.privacy.sections.mlTraining.manageContent')}
               </p>
             </div>
 
@@ -98,18 +120,22 @@ const PrivacyPolicy = () => {
               {t('legal.privacy.sections.mlTraining.howWeUse.title')}
             </h3>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.mlTraining.howWeUse.items').map((item: string, index: number) => (
-                <li key={index}>{item}</li>
-              ))}
+              {t('legal.privacy.sections.mlTraining.howWeUse.items').map(
+                (item: string, index: number) => (
+                  <li key={index}>{item}</li>
+                )
+              )}
             </ul>
 
             <h3 className="text-xl font-semibold text-gray-900 mt-6 mb-3">
               {t('legal.privacy.sections.mlTraining.protection.title')}
             </h3>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.mlTraining.protection.items').map((item: string, index: number) => (
-                <li key={index}>{item}</li>
-              ))}
+              {t('legal.privacy.sections.mlTraining.protection.items').map(
+                (item: string, index: number) => (
+                  <li key={index}>{item}</li>
+                )
+              )}
             </ul>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
@@ -119,9 +145,11 @@ const PrivacyPolicy = () => {
               {t('legal.privacy.sections.howWeUse.content')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.howWeUse.purposes').map((purpose: string, index: number) => (
-                <li key={index}>{purpose}</li>
-              ))}
+              {t('legal.privacy.sections.howWeUse.purposes').map(
+                (purpose: string, index: number) => (
+                  <li key={index}>{purpose}</li>
+                )
+              )}
             </ul>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
@@ -131,9 +159,11 @@ const PrivacyPolicy = () => {
               {t('legal.privacy.sections.dataSecurity.content')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.dataSecurity.measures').map((measure: string, index: number) => (
-                <li key={index}>{measure}</li>
-              ))}
+              {t('legal.privacy.sections.dataSecurity.measures').map(
+                (measure: string, index: number) => (
+                  <li key={index}>{measure}</li>
+                )
+              )}
             </ul>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
@@ -146,9 +176,11 @@ const PrivacyPolicy = () => {
               {t('legal.privacy.sections.dataSharing.sharingContent')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.dataSharing.circumstances').map((circumstance: string, index: number) => (
-                <li key={index}>{circumstance}</li>
-              ))}
+              {t('legal.privacy.sections.dataSharing.circumstances').map(
+                (circumstance: string, index: number) => (
+                  <li key={index}>{circumstance}</li>
+                )
+              )}
             </ul>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
@@ -158,9 +190,11 @@ const PrivacyPolicy = () => {
               {t('legal.privacy.sections.privacyRights.content')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.privacyRights.rights').map((right: string, index: number) => (
-                <li key={index}>{right}</li>
-              ))}
+              {t('legal.privacy.sections.privacyRights.rights').map(
+                (right: string, index: number) => (
+                  <li key={index}>{right}</li>
+                )
+              )}
             </ul>
 
             <p className="text-gray-700 leading-relaxed mb-6">
@@ -174,9 +208,11 @@ const PrivacyPolicy = () => {
               {t('legal.privacy.sections.dataRetention.content')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.privacy.sections.dataRetention.categories').map((category: string, index: number) => (
-                <li key={index}>{category}</li>
-              ))}
+              {t('legal.privacy.sections.dataRetention.categories').map(
+                (category: string, index: number) => (
+                  <li key={index}>{category}</li>
+                )
+              )}
             </ul>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
@@ -215,8 +251,10 @@ const PrivacyPolicy = () => {
                 <br />
                 {t('legal.privacy.sections.contact.address.line1')}
                 <br />
-                {t('legal.privacy.sections.contact.address.line2')}<br />
-                {t('legal.privacy.sections.contact.address.line3')}<br />
+                {t('legal.privacy.sections.contact.address.line2')}
+                <br />
+                {t('legal.privacy.sections.contact.address.line3')}
+                <br />
                 {t('legal.privacy.sections.contact.address.line4')}
               </p>
             </div>
@@ -227,7 +265,9 @@ const PrivacyPolicy = () => {
               <Link to="/">{t('legal.privacy.navigation.backToHome')}</Link>
             </Button>
             <Button asChild>
-              <Link to="/terms-of-service">{t('legal.privacy.navigation.termsOfService')}</Link>
+              <Link to="/terms-of-service">
+                {t('legal.privacy.navigation.termsOfService')}
+              </Link>
             </Button>
           </div>
         </div>

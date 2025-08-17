@@ -500,18 +500,24 @@ test.describe('Segmentation Performance Benchmarks', () => {
         );
         expect(download.suggestedFilename()).toMatch(/\.(json|zip)$/);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         console.log(
           `Export download test failed: ${errorMessage}. Stack: ${error instanceof Error ? error.stack : 'No stack trace'}`
         );
-        
+
         // Check if this is a known test environment limitation
-        if (errorMessage.includes('Download not supported') || errorMessage.includes('Browser not available')) {
-          console.log('Skipping download test due to test environment limitations');
+        if (
+          errorMessage.includes('Download not supported') ||
+          errorMessage.includes('Browser not available')
+        ) {
+          console.log(
+            'Skipping download test due to test environment limitations'
+          );
           test.skip();
           return;
         }
-        
+
         // For other errors, fail the test with detailed information
         throw new Error(`Export download failed: ${errorMessage}`);
       }
@@ -529,12 +535,16 @@ test.describe('Segmentation Performance Benchmarks', () => {
         peakMemory: 0,
       };
 
-      const perfWithMemory = performance as Performance & { 
-        memory?: { usedJSHeapSize?: number } 
+      const perfWithMemory = performance as Performance & {
+        memory?: { usedJSHeapSize?: number };
       };
-      
-      if (perfWithMemory.memory?.usedJSHeapSize && typeof perfWithMemory.memory.usedJSHeapSize === 'number') {
-        window.performanceMetrics.startMemory = perfWithMemory.memory.usedJSHeapSize;
+
+      if (
+        perfWithMemory.memory?.usedJSHeapSize &&
+        typeof perfWithMemory.memory.usedJSHeapSize === 'number'
+      ) {
+        window.performanceMetrics.startMemory =
+          perfWithMemory.memory.usedJSHeapSize;
 
         setInterval(() => {
           const currentMemory = perfWithMemory.memory?.usedJSHeapSize;
@@ -663,13 +673,13 @@ test.describe('Segmentation Performance Benchmarks', () => {
     // Perform rapid operations to test responsiveness
     const rapidOperations = async () => {
       const startTime = Date.now();
-      
+
       for (let i = 0; i < 10; i++) {
         await canvas.click({ position: { x: 100 + i * 20, y: 100 + i * 20 } });
         await page.mouse.wheel(0, -20);
         await page.mouse.wheel(0, 20);
       }
-      
+
       return Date.now() - startTime;
     };
 

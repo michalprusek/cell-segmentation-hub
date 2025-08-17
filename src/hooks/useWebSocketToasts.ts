@@ -16,19 +16,19 @@ export function useWebSocketToasts() {
         case 'reconnecting':
           toast.error(t('websocket.reconnecting'));
           break;
-        
+
         case 'reconnected':
           toast.success(t('websocket.reconnected'));
           break;
-        
+
         case 'reconnect_failed':
           toast.error(t('websocket.reconnectFailed'));
           break;
-        
+
         case 'connection_lost':
           toast.error(t('websocket.connectionLost'));
           break;
-        
+
         default:
           break;
       }

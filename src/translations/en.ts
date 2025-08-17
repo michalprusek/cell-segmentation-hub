@@ -146,7 +146,6 @@ export default {
     projectCreatedDesc: '"{{name}}" is ready for images',
     descriptionOptional: 'Description (Optional)',
     noDescriptionProvided: 'No description provided',
-    selectProjectHeader: 'Select Project',
   },
   errors: {
     noProjectOrUser: 'Error: No project or user selected',
@@ -240,7 +239,7 @@ export default {
           description: 'Balanced speed and accuracy for most use cases',
         },
         ma: {
-          name: 'MA-ResUNet', 
+          name: 'MA-ResUNet',
           description: 'Highest accuracy with attention mechanisms',
         },
       },
@@ -276,7 +275,8 @@ export default {
     deleteAccountError: 'Failed to delete account',
     deleteAccountDialog: {
       title: 'Delete Account',
-      description: 'This action cannot be undone. This will permanently delete your account and remove all of your data from our servers.',
+      description:
+        'This action cannot be undone. This will permanently delete your account and remove all of your data from our servers.',
       whatWillBeDeleted: 'What will be deleted:',
       deleteItems: {
         account: 'Your user account and profile',
@@ -287,9 +287,6 @@ export default {
       confirmationLabel: 'Please type {0} to confirm:',
       confirmationPlaceholder: 'Enter email to confirm',
     },
-    pageTitle: 'Settings',
-    profile: 'Profile',
-    account: 'Account',
     fillAllFields: 'Please fill in all required fields',
     passwordsDoNotMatch: 'Passwords do not match',
     passwordTooShort: 'Password must be at least 6 characters',
@@ -324,7 +321,8 @@ export default {
     shortcuts: {
       buttonText: 'Shortcuts',
       dialogTitle: 'Keyboard Shortcuts',
-      footerNote: 'These shortcuts work within the segmentation editor for faster and more convenient work.',
+      footerNote:
+        'These shortcuts work within the segmentation editor for faster and more convenient work.',
       v: 'View mode',
       e: 'Edit vertices mode',
       a: 'Add points mode',
@@ -428,19 +426,23 @@ export default {
       slice: {
         selectPolygon: '1. Click on a polygon to select it for slicing',
         placeFirstPoint: '2. Click to place the first slice point',
-        placeSecondPoint: '3. Click to place the second slice point and perform slice',
+        placeSecondPoint:
+          '3. Click to place the second slice point and perform slice',
         cancel: 'Press ESC to cancel',
       },
       create: {
         startPolygon: '1. Click to start creating a polygon',
-        continuePoints: '2. Continue clicking to add more points (at least 3 needed)',
-        finishPolygon: '3. Continue adding points or click near the first point to close the polygon',
+        continuePoints:
+          '2. Continue clicking to add more points (at least 3 needed)',
+        finishPolygon:
+          '3. Continue adding points or click near the first point to close the polygon',
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
       },
       addPoints: {
         clickVertex: 'Click on any vertex to start adding points',
-        addPoints: 'Click to add points, then click on another vertex to complete',
+        addPoints:
+          'Click to add points, then click on another vertex to complete',
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
       },
@@ -510,7 +512,8 @@ export default {
     logoutFailed: 'Logout failed',
     profileUpdateFailed: 'Profile update failed',
     welcomeMessage: 'Welcome to the Spheroid Segmentation Platform',
-    confirmationRequired: 'Confirmation text is required and must match your email address',
+    confirmationRequired:
+      'Confirmation text is required and must match your email address',
     agreeToTerms: 'By signing in, you agree to our',
     termsOfService: 'Terms of Service',
     and: 'and',
@@ -528,7 +531,6 @@ export default {
     alreadySignedUp: "You're already signed up and logged in.",
     goToDashboard: 'Go to Dashboard',
     signUpFailed: 'Sign up failed',
-    signInFailed: 'Sign in failed',
   },
   profile: {
     title: 'Profile',
@@ -663,7 +665,8 @@ export default {
   export: {
     // Dialog headers
     advancedOptions: 'Advanced Export Options',
-    configureSettings: 'Configure your export settings to create a comprehensive dataset package',
+    configureSettings:
+      'Configure your export settings to create a comprehensive dataset package',
     // Tabs
     general: 'General',
     visualization: 'Visualization',
@@ -735,7 +738,7 @@ export default {
   deleteImageError: 'Error deleting image',
   imageAlreadyProcessing: 'Image is already being processed',
   processImageFailed: 'Failed to process image',
-  
+
   exportDialog: {
     title: 'Export Options',
     includeMetadata: 'Include metadata',
@@ -752,10 +755,10 @@ export default {
     badge: 'Documentation',
     title: 'SpheroSeg Documentation',
     subtitle: 'Comprehensive guide to using our spheroid segmentation platform',
-    
+
     // Navigation
     navigation: 'Navigation',
-    
+
     // Navigation items
     nav: {
       introduction: 'Introduction',
@@ -766,21 +769,25 @@ export default {
       segmentationEditor: 'Segmentation Editor',
       exportFeatures: 'Export Features',
     },
-    
+
     // Introduction section
     introduction: {
       title: 'Introduction',
       whatIs: 'What is SpheroSeg?',
-      description: 'SpheroSeg is an advanced platform designed specifically for the segmentation and analysis of cellular spheroids in microscopic images. Our tool combines cutting-edge AI algorithms with an intuitive interface to provide researchers with precise spheroid boundary detection and analysis capabilities.',
-      developedBy: 'This platform was developed by Bc. Michal Průšek, a student at the Faculty of Nuclear Sciences and Physical Engineering at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D. The project is a collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
-      addresses: 'SpheroSeg addresses the challenging task of accurately identifying and segmenting spheroid boundaries in microscopic images, a critical step in many biomedical research workflows involving 3D cell culture models.',
+      description:
+        'SpheroSeg is an advanced platform designed specifically for the segmentation and analysis of cellular spheroids in microscopic images. Our tool combines cutting-edge AI algorithms with an intuitive interface to provide researchers with precise spheroid boundary detection and analysis capabilities.',
+      developedBy:
+        'This platform was developed by Bc. Michal Průšek, a student at the Faculty of Nuclear Sciences and Physical Engineering at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D. The project is a collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague.',
+      addresses:
+        'SpheroSeg addresses the challenging task of accurately identifying and segmenting spheroid boundaries in microscopic images, a critical step in many biomedical research workflows involving 3D cell culture models.',
     },
-    
+
     // Getting Started section
     gettingStarted: {
       title: 'Getting Started',
       accountCreation: 'Account Creation',
-      accountDescription: 'To use SpheroSeg, you\'ll need to create an account. This allows us to store your projects and images securely.',
+      accountDescription:
+        "To use SpheroSeg, you'll need to create an account. This allows us to store your projects and images securely.",
       accountSteps: {
         step1: 'Navigate to the sign-up page',
         step2: 'Enter your institutional email address and create a password',
@@ -788,7 +795,8 @@ export default {
         step4: 'Verify your email address through the link sent to your inbox',
       },
       firstProject: 'Creating Your First Project',
-      projectDescription: 'Projects help you organize your work. Each project can contain multiple images and their corresponding segmentation results.',
+      projectDescription:
+        'Projects help you organize your work. Each project can contain multiple images and their corresponding segmentation results.',
       projectSteps: {
         step1: 'From your dashboard, click "New Project"',
         step2: 'Enter a project name and description',
@@ -796,44 +804,51 @@ export default {
         step4: 'Click "Create Project" to proceed',
       },
     },
-    
+
     // Upload Images section
     uploadImages: {
       title: 'Uploading Images',
-      description: 'SpheroSeg supports various image formats commonly used in microscopy, including TIFF, PNG, and JPEG.',
+      description:
+        'SpheroSeg supports various image formats commonly used in microscopy, including TIFF, PNG, and JPEG.',
       methods: 'Upload Methods',
       methodsDescription: 'There are multiple ways to upload your images:',
       methodsList: {
         dragDrop: 'Drag and drop files directly onto the upload area',
-        browse: 'Click the upload area to browse and select files from your computer',
+        browse:
+          'Click the upload area to browse and select files from your computer',
         batch: 'Batch upload multiple images at once',
       },
       note: 'Note:',
-      noteText: 'For optimal results, ensure your microscopic images have good contrast between the spheroid and background.',
+      noteText:
+        'For optimal results, ensure your microscopic images have good contrast between the spheroid and background.',
     },
-    
+
     // Model Selection section
     modelSelection: {
       title: 'Model Selection',
-      description: 'SpheroSeg offers three different AI models optimized for different use cases. Choose the model that best fits your requirements for speed vs accuracy.',
+      description:
+        'SpheroSeg offers three different AI models optimized for different use cases. Choose the model that best fits your requirements for speed vs accuracy.',
       models: {
         hrnet: {
           name: 'HRNet (Small)',
           inferenceTime: 'Inference time: ~3.1 seconds',
           bestFor: 'Best for: Real-time processing and quick results',
-          description: 'Fast and efficient model ideal for rapid segmentation when speed is prioritized over maximum accuracy.',
+          description:
+            'Fast and efficient model ideal for rapid segmentation when speed is prioritized over maximum accuracy.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Medium)',
           inferenceTime: 'Inference time: ~6.9 seconds',
           bestFor: 'Best for: Balanced speed and accuracy',
-          description: 'Optimal balance between processing speed and segmentation quality for most use cases.',
+          description:
+            'Optimal balance between processing speed and segmentation quality for most use cases.',
         },
         ma: {
           name: 'MA-ResUNet (Large)',
           inferenceTime: 'Inference time: ~18.1 seconds',
           bestFor: 'Best for: Maximum precision',
-          description: 'Highest accuracy model with attention mechanisms for the most precise spheroid boundary detection.',
+          description:
+            'Highest accuracy model with attention mechanisms for the most precise spheroid boundary detection.',
         },
       },
       howToSelect: 'How to Select a Model',
@@ -841,83 +856,107 @@ export default {
         step1: 'Open your project and navigate to any image',
         step2: 'In the project toolbar, find the model selection dropdown',
         step3: 'Choose from HRNet, CBAM-ResUNet, or MA-ResUNet',
-        step4: 'Adjust the confidence threshold (0.0-1.0) to fine-tune detection sensitivity',
+        step4:
+          'Adjust the confidence threshold (0.0-1.0) to fine-tune detection sensitivity',
         step5: 'Your selection is automatically saved for future processing',
       },
       tip: 'Tip:',
-      tipText: 'Start with CBAM-ResUNet for most cases. Use HRNet for rapid prototyping and MA-ResUNet when you need the highest possible accuracy for research or publication.',
+      tipText:
+        'Start with CBAM-ResUNet for most cases. Use HRNet for rapid prototyping and MA-ResUNet when you need the highest possible accuracy for research or publication.',
     },
-    
+
     // Segmentation Process section
     segmentationProcess: {
       title: 'Segmentation Process',
-      description: 'The segmentation process uses advanced AI models to automatically detect spheroid boundaries in your microscopic images. The system supports both automatic processing and manual refinement.',
+      description:
+        'The segmentation process uses advanced AI models to automatically detect spheroid boundaries in your microscopic images. The system supports both automatic processing and manual refinement.',
       queueBased: 'Queue-based Processing',
-      queueDescription: 'SpheroSeg uses a processing queue system to handle multiple segmentation tasks efficiently:',
+      queueDescription:
+        'SpheroSeg uses a processing queue system to handle multiple segmentation tasks efficiently:',
       queueFeatures: {
-        realTime: 'Real-time status: WebSocket notifications provide live updates on processing progress',
+        realTime:
+          'Real-time status: WebSocket notifications provide live updates on processing progress',
         batch: 'Batch processing: Process multiple images simultaneously',
         priority: 'Priority handling: More recent requests are processed first',
-        recovery: 'Error recovery: Failed jobs are automatically retried with detailed error reporting',
+        recovery:
+          'Error recovery: Failed jobs are automatically retried with detailed error reporting',
       },
       workflow: 'Automatic Segmentation Workflow',
       workflowSteps: {
         step1: 'Upload your microscopic images to a project',
-        step2: 'Select your preferred AI model (HRNet, CBAM-ResUNet, or MA-ResUNet)',
+        step2:
+          'Select your preferred AI model (HRNet, CBAM-ResUNet, or MA-ResUNet)',
         step3: 'Adjust the confidence threshold if needed (default: 0.5)',
-        step4: 'Click "Auto-Segment" or use batch processing for multiple images',
+        step4:
+          'Click "Auto-Segment" or use batch processing for multiple images',
         step5: 'Monitor real-time progress through the status indicators',
-        step6: 'Review results in the segmentation editor once processing completes',
+        step6:
+          'Review results in the segmentation editor once processing completes',
       },
       polygonTypes: 'Polygon Types',
       polygonDescription: 'The system detects two types of polygons:',
       polygonTypesList: {
-        external: 'External polygons: Main spheroid boundaries (shown in green by default)',
-        internal: 'Internal polygons: Holes or internal structures within spheroids (shown in red by default)',
+        external:
+          'External polygons: Main spheroid boundaries (shown in green by default)',
+        internal:
+          'Internal polygons: Holes or internal structures within spheroids (shown in red by default)',
       },
       processingNote: 'Processing times vary by model:',
-      processingTimes: 'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Choose based on your accuracy requirements and time constraints.',
+      processingTimes:
+        'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Choose based on your accuracy requirements and time constraints.',
     },
-    
+
     // Segmentation Editor section
     segmentationEditor: {
       title: 'Segmentation Editor',
-      description: 'The segmentation editor is a powerful tool for refining AI-generated segmentations and creating manual annotations. It features multiple editing modes, keyboard shortcuts, and advanced polygon manipulation tools.',
+      description:
+        'The segmentation editor is a powerful tool for refining AI-generated segmentations and creating manual annotations. It features multiple editing modes, keyboard shortcuts, and advanced polygon manipulation tools.',
       editingModes: 'Editing Modes',
       modes: {
         view: {
           title: 'View Mode',
-          description: 'Navigate and inspect polygons without making changes. Click polygons to select them and view details.',
+          description:
+            'Navigate and inspect polygons without making changes. Click polygons to select them and view details.',
         },
         editVertices: {
           title: 'Edit Vertices',
-          description: 'Drag individual vertices to refine polygon boundaries. Precise control for boundary adjustments.',
+          description:
+            'Drag individual vertices to refine polygon boundaries. Precise control for boundary adjustments.',
         },
         addPoints: {
           title: 'Add Points',
-          description: 'Insert new vertices between existing ones. Shift+click for automatic point placement.',
+          description:
+            'Insert new vertices between existing ones. Shift+click for automatic point placement.',
         },
         createPolygon: {
           title: 'Create Polygon',
-          description: 'Draw new polygons from scratch. Click to add points, double-click to complete.',
+          description:
+            'Draw new polygons from scratch. Click to add points, double-click to complete.',
         },
         sliceMode: {
           title: 'Slice Mode',
-          description: 'Cut polygons into multiple parts by drawing lines through them.',
+          description:
+            'Cut polygons into multiple parts by drawing lines through them.',
         },
         deletePolygon: {
           title: 'Delete Polygon',
-          description: 'Remove unwanted polygons by clicking on them. Useful for eliminating false detections.',
+          description:
+            'Remove unwanted polygons by clicking on them. Useful for eliminating false detections.',
         },
       },
       keyFeatures: 'Key Features',
       features: {
-        undoRedo: 'Undo/Redo System: Full history tracking with Ctrl+Z/Ctrl+Y support',
-        autoSave: 'Auto-save: Periodic saving with visual indicators showing unsaved changes',
+        undoRedo:
+          'Undo/Redo System: Full history tracking with Ctrl+Z/Ctrl+Y support',
+        autoSave:
+          'Auto-save: Periodic saving with visual indicators showing unsaved changes',
         zoomPan: 'Zoom & Pan: Mouse wheel zooming and drag-to-pan navigation',
-        polygonManagement: 'Polygon Management: Show/hide, rename, and batch operations',
-        keyboardShortcuts: 'Keyboard Shortcuts: Comprehensive hotkeys for efficient editing',
-        realTimeFeedback: 'Real-time Feedback: Live preview of edits and status updates',
+        polygonManagement:
+          'Polygon Management: Show/hide, rename, and batch operations',
+        keyboardShortcuts:
+          'Keyboard Shortcuts: Comprehensive hotkeys for efficient editing',
+        realTimeFeedback:
+          'Real-time Feedback: Live preview of edits and status updates',
       },
       shortcuts: 'Essential Keyboard Shortcuts',
       shortcutCategories: {
@@ -936,27 +975,32 @@ export default {
       },
       workingWithPolygons: 'Working with Polygons',
       polygonSteps: {
-        step1: 'Select a polygon by clicking on it (highlighted in blue when selected)',
+        step1:
+          'Select a polygon by clicking on it (highlighted in blue when selected)',
         step2: 'Switch to the appropriate editing mode for your task',
         step3: 'Make your modifications using mouse interactions',
-        step4: 'Use the polygon panel on the right to manage visibility and properties',
+        step4:
+          'Use the polygon panel on the right to manage visibility and properties',
         step5: 'Save your changes periodically or rely on auto-save',
       },
     },
-    
+
     // Export Features section
     exportFeatures: {
       title: 'Export Features',
-      description: 'SpheroSeg provides comprehensive export capabilities to integrate with your research workflow. Export segmentation data in multiple formats suitable for machine learning frameworks and analysis tools.',
+      description:
+        'SpheroSeg provides comprehensive export capabilities to integrate with your research workflow. Export segmentation data in multiple formats suitable for machine learning frameworks and analysis tools.',
       packageContents: 'Export Package Contents',
       contents: {
         originalImages: {
           title: 'Original Images',
-          description: 'High-quality original microscopic images in their native format.',
+          description:
+            'High-quality original microscopic images in their native format.',
         },
         visualizations: {
           title: 'Visualizations',
-          description: 'Annotated images with numbered polygons and customizable colors.',
+          description:
+            'Annotated images with numbered polygons and customizable colors.',
         },
       },
       annotationFormats: 'Annotation Formats',
@@ -966,7 +1010,8 @@ export default {
         json: 'Custom JSON: Structured JSON format with detailed polygon coordinates and metadata',
       },
       calculatedMetrics: 'Calculated Metrics',
-      metricsDescription: 'SpheroSeg automatically calculates comprehensive morphological metrics for each detected spheroid:',
+      metricsDescription:
+        'SpheroSeg automatically calculates comprehensive morphological metrics for each detected spheroid:',
       metricsCategories: {
         basic: {
           title: 'Basic Measurements:',
@@ -989,13 +1034,15 @@ export default {
       },
       exportFormats: 'Metrics Export Formats',
       exportFormatsList: {
-        excel: 'Excel (.xlsx): Formatted spreadsheet with separate sheets for summary and detailed data',
+        excel:
+          'Excel (.xlsx): Formatted spreadsheet with separate sheets for summary and detailed data',
         csv: 'CSV: Comma-separated values for easy import into statistical software',
         jsonExport: 'JSON: Structured data format for programmatic analysis',
       },
       visualizationCustomization: 'Visualization Customization',
       customizationOptions: {
-        colors: 'Polygon colors: Customize external (green) and internal (red) polygon colors',
+        colors:
+          'Polygon colors: Customize external (green) and internal (red) polygon colors',
         numbering: 'Numbering: Show/hide polygon numbers for identification',
         strokeWidth: 'Stroke width: Adjust line thickness (1-10px)',
         fontSize: 'Font size: Control text size for polygon numbers (10-30px)',
@@ -1006,14 +1053,16 @@ export default {
         step1: 'Navigate to your project dashboard',
         step2: 'Select the images you want to export (or export all)',
         step3: 'Click "Advanced Export" to open the export dialog',
-        step4: 'Configure your export settings across the three tabs: General, Visualization, and Formats',
+        step4:
+          'Configure your export settings across the three tabs: General, Visualization, and Formats',
         step5: 'Review the export summary',
         step6: 'Click "Start Export" to generate and download your package',
       },
       exportNote: 'Export packages are comprehensive:',
-      exportNoteText: 'Each export includes documentation, metadata, and all selected content types organized in a clear folder structure for easy use.',
+      exportNoteText:
+        'Each export includes documentation, metadata, and all selected content types organized in a clear folder structure for easy use.',
     },
-    
+
     // Footer navigation
     footer: {
       backToHome: 'Back to Home',
@@ -1024,11 +1073,13 @@ export default {
     terms: {
       title: 'Terms of Service',
       lastUpdated: 'Last updated: January 2025',
-      disclaimer: 'By using SpheroSeg, you agree to these terms. Please read them carefully.',
+      disclaimer:
+        'By using SpheroSeg, you agree to these terms. Please read them carefully.',
       sections: {
         acceptance: {
           title: '1. Acceptance of Terms',
-          content: 'By accessing or using SpheroSeg ("the Service"), you agree to be bound by these Terms of Service ("Terms") and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using this service. These Terms constitute a legally binding agreement between you and SpheroSeg.',
+          content:
+            'By accessing or using SpheroSeg ("the Service"), you agree to be bound by these Terms of Service ("Terms") and all applicable laws and regulations. If you do not agree with any of these terms, you are prohibited from using this service. These Terms constitute a legally binding agreement between you and SpheroSeg.',
         },
         useLicense: {
           title: '2. Use License and Permitted Use',
@@ -1039,21 +1090,25 @@ export default {
             'Scientific publications and studies',
             'Biomedical research and analysis',
           ],
-          licenseNote: 'This is the grant of a license, not a transfer of title. You may not use the service for commercial purposes without explicit written consent.',
+          licenseNote:
+            'This is the grant of a license, not a transfer of title. You may not use the service for commercial purposes without explicit written consent.',
         },
         dataUsage: {
           title: '3. Data Usage and Machine Learning',
           importantTitle: 'Important: Use of Your Data',
-          importantContent: 'By uploading images and data to SpheroSeg, you consent to us using this data to improve and train our machine learning models for better segmentation accuracy.',
+          importantContent:
+            'By uploading images and data to SpheroSeg, you consent to us using this data to improve and train our machine learning models for better segmentation accuracy.',
           ownershipTitle: 'Data ownership:',
-          ownershipContent: 'You retain ownership of all data you upload to SpheroSeg. However, by using our service, you grant us permission to:',
+          ownershipContent:
+            'You retain ownership of all data you upload to SpheroSeg. However, by using our service, you grant us permission to:',
           permissions: [
             'Process your images for segmentation analysis',
             'Use uploaded data (in anonymized form) to improve our ML algorithms',
             'Enhance model accuracy through continuous learning',
             'Develop new features and segmentation capabilities',
           ],
-          protectionNote: 'All data used for ML training is anonymized and stripped of identifying information. We do not share your raw data with third parties without explicit consent.',
+          protectionNote:
+            'All data used for ML training is anonymized and stripped of identifying information. We do not share your raw data with third parties without explicit consent.',
         },
         userResponsibilities: {
           title: '4. User Responsibilities',
@@ -1068,32 +1123,39 @@ export default {
         },
         serviceAvailability: {
           title: '5. Service Availability and Limitations',
-          content: 'While we strive to maintain continuous service availability, SpheroSeg is provided "as is" without warranties of any kind. We do not guarantee uninterrupted access, and the service may be subject to maintenance, updates, or temporary unavailability.',
+          content:
+            'While we strive to maintain continuous service availability, SpheroSeg is provided "as is" without warranties of any kind. We do not guarantee uninterrupted access, and the service may be subject to maintenance, updates, or temporary unavailability.',
         },
         limitationLiability: {
           title: '6. Limitation of Liability',
-          content: 'In no event shall SpheroSeg, its developers, or affiliates be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of data, profits, or business opportunities, arising out of your use of the service.',
+          content:
+            'In no event shall SpheroSeg, its developers, or affiliates be liable for any indirect, incidental, special, consequential, or punitive damages, including but not limited to loss of data, profits, or business opportunities, arising out of your use of the service.',
         },
         privacy: {
           title: '7. Privacy and Data Protection',
-          content: 'Your privacy is important to us. Please review our Privacy Policy, which governs how we collect, use, and protect your personal information and research data.',
+          content:
+            'Your privacy is important to us. Please review our Privacy Policy, which governs how we collect, use, and protect your personal information and research data.',
         },
         changes: {
           title: '8. Changes to Terms',
-          content: 'We reserve the right to modify these Terms at any time. Changes will be effective immediately upon posting. Your continued use of the service constitutes acceptance of modified Terms.',
+          content:
+            'We reserve the right to modify these Terms at any time. Changes will be effective immediately upon posting. Your continued use of the service constitutes acceptance of modified Terms.',
         },
         termination: {
           title: '9. Termination',
-          content: 'Either party may terminate this agreement at any time. Upon termination, your right to access the service will cease immediately, though these Terms will remain in effect regarding prior use.',
+          content:
+            'Either party may terminate this agreement at any time. Upon termination, your right to access the service will cease immediately, though these Terms will remain in effect regarding prior use.',
         },
         governingLaw: {
           title: '10. Governing Law',
-          content: 'These Terms are governed by and construed in accordance with applicable laws. Any disputes shall be resolved through binding arbitration or in courts of competent jurisdiction.',
+          content:
+            'These Terms are governed by and construed in accordance with applicable laws. Any disputes shall be resolved through binding arbitration or in courts of competent jurisdiction.',
         },
       },
       contact: {
         title: 'Contact Information:',
-        content: 'If you have questions about these Terms, please contact us at spheroseg@utia.cas.cz',
+        content:
+          'If you have questions about these Terms, please contact us at spheroseg@utia.cas.cz',
       },
       navigation: {
         backToHome: 'Back to Home',
@@ -1103,15 +1165,18 @@ export default {
     privacy: {
       title: 'Privacy Policy',
       lastUpdated: 'Last updated: January 2025',
-      disclaimer: 'Your privacy is important to us. This policy explains how we collect, use, and protect your data.',
+      disclaimer:
+        'Your privacy is important to us. This policy explains how we collect, use, and protect your data.',
       sections: {
         introduction: {
           title: '1. Introduction',
-          content: 'This Privacy Policy explains how SpheroSeg ("we", "us", "our") collects, uses, protects, and shares your information when you use our platform for spheroid segmentation and analysis. By using our service, you consent to the data practices described in this policy.',
+          content:
+            'This Privacy Policy explains how SpheroSeg ("we", "us", "our") collects, uses, protects, and shares your information when you use our platform for spheroid segmentation and analysis. By using our service, you consent to the data practices described in this policy.',
         },
         informationCollected: {
           title: '2. Information We Collect',
-          content: 'We collect information you provide directly to us when you create an account, upload images, create projects, and interact with our services.',
+          content:
+            'We collect information you provide directly to us when you create an account, upload images, create projects, and interact with our services.',
           personalInfo: {
             title: '2.1 Personal Information',
             items: [
@@ -1124,7 +1189,8 @@ export default {
           researchData: {
             title: '2.2 Research Data and Images',
             ownershipTitle: 'Your Research Data',
-            ownershipContent: 'You retain full ownership of all images and research data you upload to SpheroSeg. We never claim ownership of your content.',
+            ownershipContent:
+              'You retain full ownership of all images and research data you upload to SpheroSeg. We never claim ownership of your content.',
             items: [
               'Images you upload for analysis',
               'Project metadata and settings',
@@ -1145,11 +1211,14 @@ export default {
         mlTraining: {
           title: '3. Machine Learning and Data Improvement',
           importantTitle: 'Important: Use of Your Data for AI Training',
-          importantIntro: 'To continuously improve our segmentation algorithms, we may use uploaded images and data to train and enhance our machine learning models.',
+          importantIntro:
+            'To continuously improve our segmentation algorithms, we may use uploaded images and data to train and enhance our machine learning models.',
           controlTitle: 'You have full control over your data:',
-          controlContent: 'During account creation, you can choose whether to allow your data to be used for ML training. You can change these preferences at any time.',
+          controlContent:
+            'During account creation, you can choose whether to allow your data to be used for ML training. You can change these preferences at any time.',
           manageTitle: 'To manage your consent:',
-          manageContent: 'Go to Settings → Privacy tab in your dashboard. There you can enable or disable ML training consent and choose specific purposes (algorithm improvement, feature development) for which your data may be used.',
+          manageContent:
+            'Go to Settings → Privacy tab in your dashboard. There you can enable or disable ML training consent and choose specific purposes (algorithm improvement, feature development) for which your data may be used.',
           howWeUse: {
             title: 'How We Use Your Data for ML:',
             items: [
@@ -1194,8 +1263,10 @@ export default {
         },
         dataSharing: {
           title: '6. Data Sharing and Third Parties',
-          noSaleStatement: 'We do not sell your personal information or research data.',
-          sharingContent: 'We may share information only in these limited circumstances:',
+          noSaleStatement:
+            'We do not sell your personal information or research data.',
+          sharingContent:
+            'We may share information only in these limited circumstances:',
           circumstances: [
             'With your explicit consent',
             'To comply with legal obligations or court orders',
@@ -1215,7 +1286,8 @@ export default {
             'Opt-out: Request exclusion from ML training. Note: This may limit the following features: automated segmentation accuracy, personalized model recommendations, adaptive threshold suggestions, batch processing optimizations, and future AI-powered enhancements. Contact support for specific impacts on your account.',
             'Restriction: Limit how we process your information',
           ],
-          contactNote: 'To exercise these rights, contact us at spheroseg@utia.cas.cz. We will respond within 30 days.',
+          contactNote:
+            'To exercise these rights, contact us at spheroseg@utia.cas.cz. We will respond within 30 days.',
         },
         dataRetention: {
           title: '8. Data Retention',
@@ -1229,15 +1301,18 @@ export default {
         },
         internationalTransfers: {
           title: '9. International Data Transfers',
-          content: 'Your data may be processed in countries other than your own. We ensure appropriate safeguards and protections are in place for international transfers, including standard contractual clauses and adequacy decisions.',
+          content:
+            'Your data may be processed in countries other than your own. We ensure appropriate safeguards and protections are in place for international transfers, including standard contractual clauses and adequacy decisions.',
         },
         childrensPrivacy: {
-          title: '10. Children\'s Privacy',
-          content: 'Our service is intended for researchers and is not directed at children under 16. We do not knowingly collect personal information from children under 16. If we discover such collection, we will delete the information promptly.',
+          title: "10. Children's Privacy",
+          content:
+            'Our service is intended for researchers and is not directed at children under 16. We do not knowingly collect personal information from children under 16. If we discover such collection, we will delete the information promptly.',
         },
         policyChanges: {
           title: '11. Changes to This Policy',
-          content: 'We may update this Privacy Policy to reflect changes in our practices or legal requirements. We will notify you of material changes via email or prominent notice on our website. Continued use constitutes acceptance of updated terms.',
+          content:
+            'We may update this Privacy Policy to reflect changes in our practices or legal requirements. We will notify you of material changes via email or prominent notice on our website. Continued use constitutes acceptance of updated terms.',
         },
         contact: {
           title: '12. Contact Information',

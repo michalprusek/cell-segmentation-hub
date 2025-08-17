@@ -92,7 +92,7 @@ export default {
       totalProjectsDesc: 'Études actives de sphéroïdes',
       processedImages: 'Images traitées',
       processedImagesDesc: 'Segmentées avec succès',
-      uploadedToday: 'Téléchargées aujourd\'hui',
+      uploadedToday: "Téléchargées aujourd'hui",
       uploadedTodayDesc: 'Images de sphéroïdes',
       storageUsed: 'Stockage utilisé',
       totalSpaceUsed: 'Espace total utilisé',
@@ -184,10 +184,10 @@ export default {
     complete: 'Terminé',
     error: 'Erreur',
     imageDeleted: 'Image supprimée avec succès',
-    deleteImageFailed: 'Échec de la suppression de l\'image',
-    deleteImageError: 'Erreur lors de la suppression de l\'image',
-    imageAlreadyProcessing: 'L\'image est déjà en cours de traitement',
-    processImageFailed: 'Échec du traitement de l\'image',
+    deleteImageFailed: "Échec de la suppression de l'image",
+    deleteImageError: "Erreur lors de la suppression de l'image",
+    imageAlreadyProcessing: "L'image est déjà en cours de traitement",
+    processImageFailed: "Échec du traitement de l'image",
   },
   settings: {
     manageSettings: 'Gérer vos préférences de compte',
@@ -228,19 +228,22 @@ export default {
     models: 'Modèles',
     modelSelection: {
       title: 'Sélection de modèle',
-      description: 'Choisissez le modèle IA à utiliser pour la segmentation cellulaire',
+      description:
+        'Choisissez le modèle IA à utiliser pour la segmentation cellulaire',
       models: {
         hrnet: {
           name: 'HRNet',
-          description: 'Modèle rapide et efficace pour la segmentation en temps réel',
+          description:
+            'Modèle rapide et efficace pour la segmentation en temps réel',
         },
         cbam: {
           name: 'CBAM-ResUNet',
-          description: 'Vitesse et précision équilibrées pour la plupart des cas d\'usage',
+          description:
+            "Vitesse et précision équilibrées pour la plupart des cas d'usage",
         },
         ma: {
           name: 'MA-ResUNet',
-          description: 'Précision maximale avec mécanismes d\'attention',
+          description: "Précision maximale avec mécanismes d'attention",
         },
       },
     },
@@ -276,7 +279,8 @@ export default {
     deleteAccountError: 'Échec de la suppression du compte',
     deleteAccountDialog: {
       title: 'Supprimer le compte',
-      description: 'Cette action ne peut pas être annulée. Cela supprimera définitivement votre compte et retirera toutes vos données de nos serveurs.',
+      description:
+        'Cette action ne peut pas être annulée. Cela supprimera définitivement votre compte et retirera toutes vos données de nos serveurs.',
       whatWillBeDeleted: 'Ce qui sera supprimé :',
       deleteItems: {
         account: 'Votre compte utilisateur et profil',
@@ -299,7 +303,7 @@ export default {
     changePassword: 'Changer le Mot de Passe',
     languageUpdated: 'Langue mise à jour avec succès',
     themeUpdated: 'Thème mis à jour avec succès',
-    appearanceDescription: 'Personnalisez l\'apparence de l\'application',
+    appearanceDescription: "Personnalisez l'apparence de l'application",
     language: 'Langue',
     languageDescription: 'Sélectionnez votre langue préférée',
     theme: 'Thème',
@@ -346,18 +350,20 @@ export default {
     signInSuccess: 'Connexion réussie',
     signInFailed: 'Échec de la connexion',
     registrationSuccess: 'Inscription réussie',
-    registrationFailed: 'Échec de l\'inscription',
+    registrationFailed: "Échec de l'inscription",
     logoutFailed: 'Échec de la déconnexion',
     profileUpdateFailed: 'Échec de la mise à jour du profil',
     welcomeMessage: 'Bienvenue sur la plateforme de segmentation de sphéroïdes',
-    confirmationRequired: 'Le texte de confirmation est requis et doit correspondre à votre adresse e-mail',
+    confirmationRequired:
+      'Le texte de confirmation est requis et doit correspondre à votre adresse e-mail',
     agreeToTerms: 'En vous connectant, vous acceptez nos',
     termsOfService: 'Conditions de service',
     and: 'et',
     privacyPolicy: 'Politique de confidentialité',
     // SignUp page specific
     createAccount: 'Créez votre compte',
-    signUpPlatform: 'Inscrivez-vous pour utiliser la plateforme de segmentation de sphéroïdes',
+    signUpPlatform:
+      'Inscrivez-vous pour utiliser la plateforme de segmentation de sphéroïdes',
     confirmPassword: 'Confirmer le mot de passe',
     passwordsMatch: 'Les mots de passe correspondent',
     passwordsDoNotMatch: 'Les mots de passe ne correspondent pas',
@@ -368,7 +374,6 @@ export default {
     alreadySignedUp: 'Vous êtes déjà inscrit et connecté.',
     goToDashboard: 'Aller au tableau de bord',
     signUpFailed: "Échec de l'inscription",
-    signInFailed: 'Échec de la connexion',
   },
   profile: {
     title: 'Profil',
@@ -473,7 +478,8 @@ export default {
     shortcuts: {
       buttonText: 'Raccourcis',
       dialogTitle: 'Raccourcis clavier',
-      footerNote: 'Ces raccourcis fonctionnent dans l\'éditeur de segmentation pour un travail plus rapide et pratique.',
+      footerNote:
+        "Ces raccourcis fonctionnent dans l'éditeur de segmentation pour un travail plus rapide et pratique.",
       v: 'Mode visualisation',
       e: 'Mode édition des sommets',
       a: 'Mode ajout de points',
@@ -484,7 +490,7 @@ export default {
       ctrlZ: 'Annuler',
       ctrlY: 'Rétablir',
       delete: 'Supprimer le polygone sélectionné',
-      esc: 'Annuler l\'opération en cours',
+      esc: "Annuler l'opération en cours",
       plus: 'Zoomer',
       minus: 'Dézoomer',
       r: 'Réinitialiser la vue',
@@ -493,7 +499,8 @@ export default {
       header: 'Conseils :',
       edit: {
         createPoint: 'Cliquez pour créer un nouveau point',
-        holdShift: 'Maintenez Shift pour créer automatiquement une séquence de points',
+        holdShift:
+          'Maintenez Shift pour créer automatiquement une séquence de points',
         closePolygon: 'Fermez le polygone en cliquant sur le premier point',
       },
       slice: {
@@ -532,28 +539,36 @@ export default {
     sliceFailed: 'Échec de la découpe du polygone',
     instructions: {
       slice: {
-        selectPolygon: '1. Cliquez sur un polygone pour le sélectionner pour la découpe',
+        selectPolygon:
+          '1. Cliquez sur un polygone pour le sélectionner pour la découpe',
         placeFirstPoint: '2. Cliquez pour placer le premier point de découpe',
-        placeSecondPoint: '3. Cliquez pour placer le deuxième point de découpe et effectuer la découpe',
+        placeSecondPoint:
+          '3. Cliquez pour placer le deuxième point de découpe et effectuer la découpe',
         cancel: 'Appuyez sur ESC pour annuler',
       },
       create: {
         startPolygon: '1. Cliquez pour commencer à créer un polygone',
-        continuePoints: '2. Continuez à cliquer pour ajouter plus de points (au moins 3 nécessaires)',
-        finishPolygon: '3. Continuez à ajouter des points ou cliquez près du premier point pour fermer le polygone',
+        continuePoints:
+          '2. Continuez à cliquer pour ajouter plus de points (au moins 3 nécessaires)',
+        finishPolygon:
+          '3. Continuez à ajouter des points ou cliquez près du premier point pour fermer le polygone',
         holdShift: 'Maintenez SHIFT pour ajouter automatiquement des points',
         cancel: 'Appuyez sur ESC pour annuler',
       },
       addPoints: {
-        clickVertex: 'Cliquez sur n\'importe quel sommet pour commencer à ajouter des points',
-        addPoints: 'Cliquez pour ajouter des points, puis cliquez sur un autre sommet pour terminer',
+        clickVertex:
+          "Cliquez sur n'importe quel sommet pour commencer à ajouter des points",
+        addPoints:
+          'Cliquez pour ajouter des points, puis cliquez sur un autre sommet pour terminer',
         holdShift: 'Maintenez SHIFT pour ajouter automatiquement des points',
         cancel: 'Appuyez sur ESC pour annuler',
       },
       editVertices: {
-        selectPolygon: 'Cliquez sur un polygone pour le sélectionner pour l\'édition',
+        selectPolygon:
+          "Cliquez sur un polygone pour le sélectionner pour l'édition",
         dragVertices: 'Cliquez et faites glisser les sommets pour les déplacer',
-        addPoints: 'Maintenez SHIFT et cliquez sur un sommet pour ajouter des points',
+        addPoints:
+          'Maintenez SHIFT et cliquez sur un sommet pour ajouter des points',
         deleteVertex: 'Double-cliquez sur un sommet pour le supprimer',
       },
       deletePolygon: {
@@ -602,7 +617,7 @@ export default {
   },
   toast: {
     // Generic messages
-    error: 'Une erreur s\'est produite',
+    error: "Une erreur s'est produite",
     success: 'Opération réussie',
     info: 'Information',
     warning: 'Avertissement',
@@ -610,12 +625,14 @@ export default {
     // Common errors
     failedToUpdate: 'Échec de la mise à jour des données. Veuillez réessayer.',
     fillAllFields: 'Veuillez remplir tous les champs',
-    operationFailed: 'L\'opération a échoué. Veuillez réessayer.',
+    operationFailed: "L'opération a échoué. Veuillez réessayer.",
     // Error boundary
     unexpectedError: 'Erreur Inattendue',
-    somethingWentWrong: 'Quelque chose s\'est mal passé. Veuillez réessayer plus tard.',
-    somethingWentWrongPage: 'Quelque chose s\'est mal passé lors du chargement de cette page.',
-    returnToHome: 'Retour à l\'Accueil',
+    somethingWentWrong:
+      "Quelque chose s'est mal passé. Veuillez réessayer plus tard.",
+    somethingWentWrongPage:
+      "Quelque chose s'est mal passé lors du chargement de cette page.",
+    returnToHome: "Retour à l'Accueil",
     // Success messages
     operationCompleted: 'Opération terminée avec succès',
     dataSaved: 'Données sauvegardées avec succès',
@@ -626,13 +643,15 @@ export default {
     connectionFailed: 'Échec du rétablissement de la connexion au serveur',
     // Segmentation messages
     segmentationRequested: 'Demande de segmentation soumise',
-    segmentationCompleted: 'Segmentation d\'image terminée',
+    segmentationCompleted: "Segmentation d'image terminée",
     segmentationFailed: 'La segmentation a échoué',
-    segmentationResultFailed: 'Échec de l\'obtention du résultat de segmentation',
-    segmentationStatusFailed: 'Échec de la vérification du statut de segmentation',
+    segmentationResultFailed:
+      "Échec de l'obtention du résultat de segmentation",
+    segmentationStatusFailed:
+      'Échec de la vérification du statut de segmentation',
     // Export messages
     exportCompleted: 'Exportation terminée avec succès !',
-    exportFailed: 'L\'exportation a échoué. Veuillez réessayer.',
+    exportFailed: "L'exportation a échoué. Veuillez réessayer.",
     // Project actions
     project: {
       created: 'Projet créé avec succès',
@@ -651,7 +670,7 @@ export default {
     },
     // Upload actions
     upload: {
-      failed: 'Échec de l\'actualisation des images après téléchargement',
+      failed: "Échec de l'actualisation des images après téléchargement",
     },
     // Segmentation actions
     segmentation: {
@@ -662,33 +681,36 @@ export default {
   },
   export: {
     // Dialog headers
-    advancedOptions: 'Options d\'Exportation Avancées',
-    configureSettings: 'Configurez vos paramètres d\'exportation pour créer un package de données complet',
+    advancedOptions: "Options d'Exportation Avancées",
+    configureSettings:
+      "Configurez vos paramètres d'exportation pour créer un package de données complet",
     // Tabs
     general: 'Général',
     visualization: 'Visualisation',
     formats: 'Formats',
     // Content selection
-    exportContents: 'Contenu d\'Exportation',
-    selectContent: 'Sélectionnez les types de contenu à inclure dans votre exportation',
+    exportContents: "Contenu d'Exportation",
+    selectContent:
+      'Sélectionnez les types de contenu à inclure dans votre exportation',
     includeOriginal: 'Inclure les images originales',
-    includeVisualizations: 'Inclure les visualisations avec polygones numérotés',
+    includeVisualizations:
+      'Inclure les visualisations avec polygones numérotés',
     includeDocumentation: 'Inclure la documentation et les métadonnées',
     // Image selection
     selectedImages: 'Images Sélectionnées',
     imagesSelected: '{{count}} sur {{total}} images sélectionnées',
     selectAll: 'Tout Sélectionner',
     selectNone: 'Ne Rien Sélectionner',
-    imageSelection: 'Sélection d\'Images',
-    chooseImages: 'Choisissez quelles images inclure dans l\'exportation',
+    imageSelection: "Sélection d'Images",
+    chooseImages: "Choisissez quelles images inclure dans l'exportation",
     // Quality settings
     qualitySettings: 'Paramètres de Qualité',
-    imageQuality: 'Qualité d\'Image',
+    imageQuality: "Qualité d'Image",
     compressionLevel: 'Niveau de Compression',
     outputResolution: 'Résolution de Sortie',
     // Visualization settings
     colorSettings: 'Paramètres de Couleur',
-    backgroundColor: 'Couleur d\'Arrière-plan',
+    backgroundColor: "Couleur d'Arrière-plan",
     strokeColor: 'Couleur de Trait',
     strokeWidth: 'Épaisseur de Trait',
     fontSize: 'Taille de Police',
@@ -696,13 +718,13 @@ export default {
     showLabels: 'Afficher les étiquettes',
     // Format options
     outputSettings: 'Paramètres de Sortie',
-    exportFormats: 'Formats d\'Exportation',
+    exportFormats: "Formats d'Exportation",
     exportToZip: 'Exporter vers archive ZIP',
     generateExcel: 'Générer les métriques Excel',
     includeCocoFormat: 'Inclure les annotations au format COCO',
     includeJsonMetadata: 'Inclure les métadonnées JSON',
     // Progress and status
-    preparing: 'Préparation de l\'exportation...',
+    preparing: "Préparation de l'exportation...",
     processing: 'Traitement {{current}} sur {{total}}',
     packaging: 'Création du package...',
     completed: 'Exportation terminée',
@@ -713,33 +735,33 @@ export default {
     disconnected: 'Déconnecté',
     reconnecting: 'Reconnexion...',
     // Buttons
-    startExport: 'Démarrer l\'Exportation',
+    startExport: "Démarrer l'Exportation",
     cancel: 'Annuler',
     download: 'Télécharger',
     retry: 'Réessayer',
     close: 'Fermer',
     // Error messages
-    exportError: 'L\'exportation a échoué',
+    exportError: "L'exportation a échoué",
     exportFailed: 'Exportation échouée',
     exportComplete: 'Exportation terminée',
     metricsExportComplete: 'Exportation des métriques terminée',
-    connectionError: 'Connexion perdue pendant l\'exportation',
+    connectionError: "Connexion perdue pendant l'exportation",
     serverError: 'Erreur serveur survenue',
     invalidSelection: 'Veuillez sélectionner au moins une image',
-    noData: 'Aucune donnée disponible pour l\'exportation',
+    noData: "Aucune donnée disponible pour l'exportation",
   },
   // Standalone image action messages (used without prefix)
   imageDeleted: 'Image supprimée avec succès',
-  deleteImageFailed: 'Échec de la suppression de l\'image',
-  deleteImageError: 'Erreur lors de la suppression de l\'image',
-  imageAlreadyProcessing: 'L\'image est déjà en cours de traitement',
-  processImageFailed: 'Échec du traitement de l\'image',
-  
+  deleteImageFailed: "Échec de la suppression de l'image",
+  deleteImageError: "Erreur lors de la suppression de l'image",
+  imageAlreadyProcessing: "L'image est déjà en cours de traitement",
+  processImageFailed: "Échec du traitement de l'image",
+
   exportDialog: {
-    title: 'Options d\'Exportation',
+    title: "Options d'Exportation",
     includeMetadata: 'Inclure les métadonnées',
     includeSegmentation: 'Inclure la segmentation',
-    includeObjectMetrics: 'Inclure les métriques d\'objets',
+    includeObjectMetrics: "Inclure les métriques d'objets",
     exportMetricsOnly: 'Exporter uniquement les métriques (XLSX)',
     selectImages: 'Sélectionner les images à exporter',
     selectAll: 'Sélectionner Tout',
@@ -749,7 +771,8 @@ export default {
   docs: {
     badge: 'Documentation',
     title: 'Documentation SpheroSeg',
-    subtitle: 'Guide complet d\'utilisation de notre plateforme de segmentation de sphéroïdes',
+    subtitle:
+      "Guide complet d'utilisation de notre plateforme de segmentation de sphéroïdes",
     navigation: 'Navigation',
     nav: {
       introduction: 'Introduction',
@@ -762,17 +785,21 @@ export default {
     },
     introduction: {
       title: 'Introduction',
-      whatIs: 'Qu\'est-ce que SpheroSeg ?',
-      description: 'SpheroSeg est une plateforme avancée conçue spécifiquement pour la segmentation et l\'analyse de sphéroïdes cellulaires dans les images microscopiques.',
-      developedBy: 'Cette plateforme a été développée par Bc. Michal Průšek, étudiant à la Faculté des Sciences Nucléaires et d\'Ingénierie Physique de l\'Université Technique Tchèque de Prague.',
-      addresses: 'SpheroSeg aborde la tâche difficile d\'identifier et de segmenter avec précision les limites des sphéroïdes dans les images microscopiques.',
+      whatIs: "Qu'est-ce que SpheroSeg ?",
+      description:
+        "SpheroSeg est une plateforme avancée conçue spécifiquement pour la segmentation et l'analyse de sphéroïdes cellulaires dans les images microscopiques.",
+      developedBy:
+        "Cette plateforme a été développée par Bc. Michal Průšek, étudiant à la Faculté des Sciences Nucléaires et d'Ingénierie Physique de l'Université Technique Tchèque de Prague.",
+      addresses:
+        "SpheroSeg aborde la tâche difficile d'identifier et de segmenter avec précision les limites des sphéroïdes dans les images microscopiques.",
     },
     gettingStarted: {
       title: 'Commencer',
       accountCreation: 'Création de Compte',
-      accountDescription: 'Pour utiliser SpheroSeg, vous devez créer un compte.',
+      accountDescription:
+        'Pour utiliser SpheroSeg, vous devez créer un compte.',
       accountSteps: {
-        step1: 'Accédez à la page d\'inscription',
+        step1: "Accédez à la page d'inscription",
         step2: 'Entrez votre adresse e-mail institutionnelle',
         step3: 'Complétez votre profil',
         step4: 'Vérifiez votre adresse e-mail',
@@ -788,7 +815,7 @@ export default {
     },
     uploadImages: {
       title: 'Télécharger Images',
-      description: 'SpheroSeg prend en charge divers formats d\'image.',
+      description: "SpheroSeg prend en charge divers formats d'image.",
       methods: 'Méthodes de Téléchargement',
       methodsDescription: 'Plusieurs façons de télécharger vos images :',
       methodsList: {
@@ -805,21 +832,21 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet (Petit)',
-          inferenceTime: 'Temps d\'inférence : ~3,1 secondes',
+          inferenceTime: "Temps d'inférence : ~3,1 secondes",
           bestFor: 'Optimal pour : Traitement en temps réel',
           description: 'Modèle rapide et efficace.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Moyen)',
-          inferenceTime: 'Temps d\'inférence : ~6,9 secondes',
+          inferenceTime: "Temps d'inférence : ~6,9 secondes",
           bestFor: 'Optimal pour : Équilibre vitesse/précision',
           description: 'Équilibre optimal entre vitesse et qualité.',
         },
         ma: {
           name: 'MA-ResUNet (Grand)',
-          inferenceTime: 'Temps d\'inférence : ~18,1 secondes',
+          inferenceTime: "Temps d'inférence : ~18,1 secondes",
           bestFor: 'Optimal pour : Précision maximale',
-          description: 'Modèle le plus précis avec mécanismes d\'attention.',
+          description: "Modèle le plus précis avec mécanismes d'attention.",
         },
       },
       howToSelect: 'Comment Sélectionner un Modèle',
@@ -842,7 +869,7 @@ export default {
         realTime: 'État en temps réel avec WebSocket',
         batch: 'Traitement par lots',
         priority: 'Gestion des priorités',
-        recovery: 'Récupération d\'erreurs automatique',
+        recovery: "Récupération d'erreurs automatique",
       },
       workflow: 'Flux de Travail Automatique',
       workflowSteps: {
@@ -865,7 +892,7 @@ export default {
     segmentationEditor: {
       title: 'Éditeur de Segmentation',
       description: 'Outil puissant pour affiner les segmentations.',
-      editingModes: 'Modes d\'Édition',
+      editingModes: "Modes d'Édition",
       modes: {
         view: {
           title: 'Mode Visualisation',
@@ -926,8 +953,8 @@ export default {
       },
     },
     exportFeatures: {
-      title: 'Fonctions d\'Export',
-      description: 'Capacités d\'export complètes.',
+      title: "Fonctions d'Export",
+      description: "Capacités d'export complètes.",
       packageContents: 'Contenu du Package',
       contents: {
         originalImages: {
@@ -939,7 +966,7 @@ export default {
           description: 'Images annotées avec polygones numérotés.',
         },
       },
-      annotationFormats: 'Formats d\'Annotation',
+      annotationFormats: "Formats d'Annotation",
       formats: {
         coco: 'Format COCO : Standard pour PyTorch et TensorFlow',
         yolo: 'Format YOLO : Optimisé pour modèles YOLO',
@@ -967,7 +994,7 @@ export default {
           },
         },
       },
-      exportFormats: 'Formats d\'Export des Métriques',
+      exportFormats: "Formats d'Export des Métriques",
       exportFormatsList: {
         excel: 'Excel (.xlsx) : Feuille de calcul formatée',
         csv: 'CSV : Valeurs séparées par virgules',
@@ -1000,96 +1027,112 @@ export default {
   },
   legal: {
     terms: {
-      title: 'Conditions d\'Utilisation',
+      title: "Conditions d'Utilisation",
       lastUpdated: 'Dernière mise à jour : janvier 2025',
-      disclaimer: 'En utilisant SpheroSeg, vous acceptez ces conditions. Veuillez les lire attentivement.',
+      disclaimer:
+        'En utilisant SpheroSeg, vous acceptez ces conditions. Veuillez les lire attentivement.',
       sections: {
         acceptance: {
           title: '1. Acceptation des Conditions',
-          content: 'En accédant ou en utilisant SpheroSeg ("le Service"), vous acceptez d\'être lié par ces Conditions d\'Utilisation ("Conditions") et toutes les lois et règlements applicables. Si vous n\'acceptez pas ces conditions, il vous est interdit d\'utiliser ce service. Ces Conditions constituent un accord juridiquement contraignant entre vous et SpheroSeg.',
+          content:
+            'En accédant ou en utilisant SpheroSeg ("le Service"), vous acceptez d\'être lié par ces Conditions d\'Utilisation ("Conditions") et toutes les lois et règlements applicables. Si vous n\'acceptez pas ces conditions, il vous est interdit d\'utiliser ce service. Ces Conditions constituent un accord juridiquement contraignant entre vous et SpheroSeg.',
         },
         useLicense: {
-          title: '2. Licence d\'Utilisation et Usage Autorisé',
-          content: 'L\'autorisation d\'utiliser SpheroSeg est accordée pour :',
+          title: "2. Licence d'Utilisation et Usage Autorisé",
+          content: "L'autorisation d'utiliser SpheroSeg est accordée pour :",
           permittedUses: [
             'Fins de recherche personnelle et non commerciale',
             'Recherche académique et éducative',
             'Publications et études scientifiques',
             'Recherche et analyse biomédicale',
           ],
-          licenseNote: 'Il s\'agit de l\'octroi d\'une licence, non d\'un transfert de propriété. Vous ne pouvez pas utiliser le service à des fins commerciales sans consentement écrit explicite.',
+          licenseNote:
+            "Il s'agit de l'octroi d'une licence, non d'un transfert de propriété. Vous ne pouvez pas utiliser le service à des fins commerciales sans consentement écrit explicite.",
         },
         dataUsage: {
           title: '3. Utilisation des Données et Apprentissage Automatique',
           importantTitle: 'Important : Utilisation de Vos Données',
-          importantContent: 'En téléchargeant des images et des données vers SpheroSeg, vous consentez à ce que nous utilisions ces données pour améliorer et entraîner nos modèles d\'apprentissage automatique pour une meilleure précision de segmentation.',
+          importantContent:
+            "En téléchargeant des images et des données vers SpheroSeg, vous consentez à ce que nous utilisions ces données pour améliorer et entraîner nos modèles d'apprentissage automatique pour une meilleure précision de segmentation.",
           ownershipTitle: 'Propriété des données :',
-          ownershipContent: 'Vous conservez la propriété de toutes les données que vous téléchargez vers SpheroSeg. Cependant, en utilisant notre service, vous nous accordez l\'autorisation de :',
+          ownershipContent:
+            "Vous conservez la propriété de toutes les données que vous téléchargez vers SpheroSeg. Cependant, en utilisant notre service, vous nous accordez l'autorisation de :",
           permissions: [
-            'Traiter vos images pour l\'analyse de segmentation',
+            "Traiter vos images pour l'analyse de segmentation",
             'Utiliser les données téléchargées (sous forme anonymisée) pour améliorer nos algorithmes ML',
-            'Améliorer la précision du modèle grâce à l\'apprentissage continu',
+            "Améliorer la précision du modèle grâce à l'apprentissage continu",
             'Développer de nouvelles fonctionnalités et capacités de segmentation',
           ],
-          protectionNote: 'Toutes les données utilisées pour l\'entraînement ML sont anonymisées et dépouillées d\'informations d\'identification. Nous ne partageons pas vos données brutes avec des tiers sans consentement explicite.',
+          protectionNote:
+            "Toutes les données utilisées pour l'entraînement ML sont anonymisées et dépouillées d'informations d'identification. Nous ne partageons pas vos données brutes avec des tiers sans consentement explicite.",
         },
         userResponsibilities: {
-          title: '4. Responsabilités de l\'Utilisateur',
+          title: "4. Responsabilités de l'Utilisateur",
           content: 'Vous acceptez de :',
           responsibilities: [
             'Utiliser le service uniquement à des fins légales',
             'Respecter les droits de propriété intellectuelle',
-            'Ne pas tenter de faire de l\'ingénierie inverse ou de compromettre le service',
-            'Fournir des informations exactes lors de la création d\'un compte',
+            "Ne pas tenter de faire de l'ingénierie inverse ou de compromettre le service",
+            "Fournir des informations exactes lors de la création d'un compte",
             'Maintenir la sécurité de vos identifiants de compte',
           ],
         },
         serviceAvailability: {
           title: '5. Disponibilité du Service et Limitations',
-          content: 'Bien que nous nous efforcions de maintenir la disponibilité continue du service, SpheroSeg est fourni "tel quel" sans garanties d\'aucune sorte. Nous ne garantissons pas un accès ininterrompu, et le service peut faire l\'objet de maintenance, de mises à jour ou d\'indisponibilité temporaire.',
+          content:
+            "Bien que nous nous efforcions de maintenir la disponibilité continue du service, SpheroSeg est fourni \"tel quel\" sans garanties d'aucune sorte. Nous ne garantissons pas un accès ininterrompu, et le service peut faire l'objet de maintenance, de mises à jour ou d'indisponibilité temporaire.",
         },
         limitationLiability: {
           title: '6. Limitation de Responsabilité',
-          content: 'En aucun cas SpheroSeg, ses développeurs ou affiliés ne seront responsables de dommages indirects, accessoires, spéciaux, consécutifs ou punitifs, y compris mais sans s\'y limiter à la perte de données, de profits ou d\'opportunités commerciales, découlant de votre utilisation du service.',
+          content:
+            "En aucun cas SpheroSeg, ses développeurs ou affiliés ne seront responsables de dommages indirects, accessoires, spéciaux, consécutifs ou punitifs, y compris mais sans s'y limiter à la perte de données, de profits ou d'opportunités commerciales, découlant de votre utilisation du service.",
         },
         privacy: {
           title: '7. Confidentialité et Protection des Données',
-          content: 'Votre vie privée est importante pour nous. Veuillez consulter notre Politique de Confidentialité, qui régit la façon dont nous collectons, utilisons et protégeons vos informations personnelles et données de recherche.',
+          content:
+            'Votre vie privée est importante pour nous. Veuillez consulter notre Politique de Confidentialité, qui régit la façon dont nous collectons, utilisons et protégeons vos informations personnelles et données de recherche.',
         },
         changes: {
           title: '8. Modifications des Conditions',
-          content: 'Nous nous réservons le droit de modifier ces Conditions à tout moment. Les modifications prendront effet immédiatement après publication. Votre utilisation continue du service constitue l\'acceptation des Conditions modifiées.',
+          content:
+            "Nous nous réservons le droit de modifier ces Conditions à tout moment. Les modifications prendront effet immédiatement après publication. Votre utilisation continue du service constitue l'acceptation des Conditions modifiées.",
         },
         termination: {
           title: '9. Résiliation',
-          content: 'Chaque partie peut résilier cet accord à tout moment. Après résiliation, votre droit d\'accéder au service cessera immédiatement, bien que ces Conditions restent en vigueur concernant l\'utilisation antérieure.',
+          content:
+            "Chaque partie peut résilier cet accord à tout moment. Après résiliation, votre droit d'accéder au service cessera immédiatement, bien que ces Conditions restent en vigueur concernant l'utilisation antérieure.",
         },
         governingLaw: {
           title: '10. Loi Applicable',
-          content: 'Ces Conditions sont régies et interprétées conformément aux lois applicables. Tout litige sera résolu par arbitrage contraignant ou devant les tribunaux de juridiction compétente.',
+          content:
+            'Ces Conditions sont régies et interprétées conformément aux lois applicables. Tout litige sera résolu par arbitrage contraignant ou devant les tribunaux de juridiction compétente.',
         },
       },
       contact: {
         title: 'Informations de Contact :',
-        content: 'Si vous avez des questions concernant ces Conditions, veuillez nous contacter à spheroseg@utia.cas.cz',
+        content:
+          'Si vous avez des questions concernant ces Conditions, veuillez nous contacter à spheroseg@utia.cas.cz',
       },
       navigation: {
-        backToHome: 'Retour à l\'Accueil',
+        backToHome: "Retour à l'Accueil",
         privacyPolicy: 'Politique de Confidentialité',
       },
     },
     privacy: {
       title: 'Politique de Confidentialité',
       lastUpdated: 'Dernière mise à jour : janvier 2025',
-      disclaimer: 'Votre vie privée est importante pour nous. Cette politique explique comment nous collectons, utilisons et protégeons vos données.',
+      disclaimer:
+        'Votre vie privée est importante pour nous. Cette politique explique comment nous collectons, utilisons et protégeons vos données.',
       sections: {
         introduction: {
           title: '1. Introduction',
-          content: 'Cette Politique de Confidentialité explique comment SpheroSeg ("nous", "notre") collecte, utilise, protège et partage vos informations lorsque vous utilisez notre plateforme pour la segmentation et l\'analyse de sphéroïdes. En utilisant notre service, vous consentez aux pratiques de données décrites dans cette politique.',
+          content:
+            'Cette Politique de Confidentialité explique comment SpheroSeg ("nous", "notre") collecte, utilise, protège et partage vos informations lorsque vous utilisez notre plateforme pour la segmentation et l\'analyse de sphéroïdes. En utilisant notre service, vous consentez aux pratiques de données décrites dans cette politique.',
         },
         informationCollected: {
           title: '2. Informations que Nous Collectons',
-          content: 'Nous collectons les informations que vous nous fournissez directement lorsque vous créez un compte, téléchargez des images, créez des projets et interagissez avec nos services.',
+          content:
+            'Nous collectons les informations que vous nous fournissez directement lorsque vous créez un compte, téléchargez des images, créez des projets et interagissez avec nos services.',
           personalInfo: {
             title: '2.1 Informations Personnelles',
             items: [
@@ -1102,47 +1145,52 @@ export default {
           researchData: {
             title: '2.2 Données de Recherche et Images',
             ownershipTitle: 'Vos Données de Recherche',
-            ownershipContent: 'Vous conservez la propriété complète de toutes les images et données de recherche que vous téléchargez vers SpheroSeg. Nous ne revendiquons jamais la propriété de votre contenu.',
+            ownershipContent:
+              'Vous conservez la propriété complète de toutes les images et données de recherche que vous téléchargez vers SpheroSeg. Nous ne revendiquons jamais la propriété de votre contenu.',
             items: [
               'Images que vous téléchargez pour analyse',
               'Métadonnées de projets et paramètres',
               'Résultats de segmentation et annotations',
-              'Paramètres d\'analyse et configurations personnalisées',
+              "Paramètres d'analyse et configurations personnalisées",
             ],
           },
           usageInfo: {
-            title: '2.3 Informations d\'Utilisation',
+            title: "2.3 Informations d'Utilisation",
             items: [
-              'Données de journal et horodatages d\'accès',
-              'Informations sur l\'appareil et type de navigateur',
-              'Modèles d\'utilisation et interactions avec les fonctionnalités',
-              'Métriques de performance et rapports d\'erreur',
+              "Données de journal et horodatages d'accès",
+              "Informations sur l'appareil et type de navigateur",
+              "Modèles d'utilisation et interactions avec les fonctionnalités",
+              "Métriques de performance et rapports d'erreur",
             ],
           },
         },
         mlTraining: {
           title: '3. Apprentissage Automatique et Amélioration des Données',
-          importantTitle: 'Important : Utilisation de Vos Données pour l\'Entraînement IA',
-          importantIntro: 'Pour améliorer continuellement nos algorithmes de segmentation, nous pouvons utiliser les images téléchargées et les données pour entraîner et améliorer nos modèles d\'apprentissage automatique.',
+          importantTitle:
+            "Important : Utilisation de Vos Données pour l'Entraînement IA",
+          importantIntro:
+            "Pour améliorer continuellement nos algorithmes de segmentation, nous pouvons utiliser les images téléchargées et les données pour entraîner et améliorer nos modèles d'apprentissage automatique.",
           controlTitle: 'Vous avez un contrôle total sur vos données :',
-          controlContent: 'Lors de la création de compte, vous pouvez choisir d\'autoriser l\'utilisation de vos données pour l\'entraînement ML. Vous pouvez modifier ces préférences à tout moment.',
+          controlContent:
+            "Lors de la création de compte, vous pouvez choisir d'autoriser l'utilisation de vos données pour l'entraînement ML. Vous pouvez modifier ces préférences à tout moment.",
           manageTitle: 'Pour gérer votre consentement :',
-          manageContent: 'Allez dans Paramètres → onglet Confidentialité dans votre tableau de bord. Là, vous pouvez activer ou désactiver le consentement d\'entraînement ML et choisir des objectifs spécifiques (amélioration d\'algorithme, développement de fonctionnalités) pour lesquels vos données peuvent être utilisées.',
+          manageContent:
+            "Allez dans Paramètres → onglet Confidentialité dans votre tableau de bord. Là, vous pouvez activer ou désactiver le consentement d'entraînement ML et choisir des objectifs spécifiques (amélioration d'algorithme, développement de fonctionnalités) pour lesquels vos données peuvent être utilisées.",
           howWeUse: {
             title: 'Comment Nous Utilisons Vos Données pour ML :',
             items: [
               'Entraînement de Modèle : Les images sont utilisées pour entraîner les algorithmes de segmentation pour une meilleure précision',
-              'Amélioration d\'Algorithmes : Vos corrections de segmentation aident à améliorer la détection automatique',
-              'Développement de Fonctionnalités : Les modèles d\'utilisation guident le développement de nouveaux outils d\'analyse',
+              "Amélioration d'Algorithmes : Vos corrections de segmentation aident à améliorer la détection automatique",
+              "Développement de Fonctionnalités : Les modèles d'utilisation guident le développement de nouveaux outils d'analyse",
               'Assurance Qualité : Les données aident à valider et tester de nouvelles versions de modèles',
             ],
           },
           protection: {
-            title: 'Protection des Données dans l\'Entraînement ML :',
+            title: "Protection des Données dans l'Entraînement ML :",
             items: [
-              'Anonymisation : Toutes les données sont anonymisées avant utilisation dans l\'entraînement ML',
-              'Suppression de Métadonnées : Les informations d\'identification personnelles et institutionnelles sont supprimées',
-              'Traitement Sécurisé : L\'entraînement se déroule dans des environnements sécurisés et isolés',
+              "Anonymisation : Toutes les données sont anonymisées avant utilisation dans l'entraînement ML",
+              "Suppression de Métadonnées : Les informations d'identification personnelles et institutionnelles sont supprimées",
+              "Traitement Sécurisé : L'entraînement se déroule dans des environnements sécurisés et isolés",
               'Aucune Distribution de Données Brutes : Vos images originales ne sont jamais partagées avec des tiers',
             ],
           },
@@ -1152,7 +1200,7 @@ export default {
           content: 'Nous utilisons les informations collectées pour :',
           purposes: [
             'Fournir et maintenir les services de segmentation',
-            'Traiter vos images et générer des résultats d\'analyse',
+            "Traiter vos images et générer des résultats d'analyse",
             'Améliorer nos algorithmes et développer de nouvelles fonctionnalités',
             'Communiquer avec vous concernant votre compte et les mises à jour',
             'Fournir un support technique et un dépannage',
@@ -1161,19 +1209,22 @@ export default {
         },
         dataSecurity: {
           title: '5. Sécurité et Protection des Données',
-          content: 'Nous mettons en œuvre des mesures de sécurité robustes incluant :',
+          content:
+            'Nous mettons en œuvre des mesures de sécurité robustes incluant :',
           measures: [
             'Chiffrement des données en transit et au repos',
             'Audits de sécurité réguliers et évaluations de vulnérabilité',
-            'Contrôles d\'accès et systèmes d\'authentification',
+            "Contrôles d'accès et systèmes d'authentification",
             'Procédures de sauvegarde sécurisée et de récupération après sinistre',
-            'Formation à la sécurité des employés et limitations d\'accès',
+            "Formation à la sécurité des employés et limitations d'accès",
           ],
         },
         dataSharing: {
           title: '6. Partage de Données et Tiers',
-          noSaleStatement: 'Nous ne vendons pas vos informations personnelles ou données de recherche.',
-          sharingContent: 'Nous ne pouvons partager des informations que dans ces circonstances limitées :',
+          noSaleStatement:
+            'Nous ne vendons pas vos informations personnelles ou données de recherche.',
+          sharingContent:
+            'Nous ne pouvons partager des informations que dans ces circonstances limitées :',
           circumstances: [
             'Avec votre consentement explicite',
             'Pour se conformer aux obligations légales ou ordonnances judiciaires',
@@ -1190,32 +1241,37 @@ export default {
             'Rectification : Mettre à jour ou corriger des informations inexactes',
             'Suppression : Demander la suppression de votre compte et données associées',
             'Portabilité : Exporter vos données dans un format lisible par machine',
-            'Exclusion : Demander l\'exclusion de l\'entraînement ML. Note : Cela peut limiter les fonctionnalités suivantes : précision de segmentation automatique, recommandations de modèle personnalisées, suggestions de seuil adaptatif, optimisations de traitement par lots et futures améliorations alimentées par IA. Contactez le support pour les impacts spécifiques sur votre compte.',
+            "Exclusion : Demander l'exclusion de l'entraînement ML. Note : Cela peut limiter les fonctionnalités suivantes : précision de segmentation automatique, recommandations de modèle personnalisées, suggestions de seuil adaptatif, optimisations de traitement par lots et futures améliorations alimentées par IA. Contactez le support pour les impacts spécifiques sur votre compte.",
             'Restriction : Limiter comment nous traitons vos informations',
           ],
-          contactNote: 'Pour exercer ces droits, contactez-nous à spheroseg@utia.cas.cz. Nous répondrons dans les 30 jours.',
+          contactNote:
+            'Pour exercer ces droits, contactez-nous à spheroseg@utia.cas.cz. Nous répondrons dans les 30 jours.',
         },
         dataRetention: {
           title: '8. Conservation des Données',
-          content: 'Nous distinguons entre les données personnelles et les données d\'entraînement ML :',
+          content:
+            "Nous distinguons entre les données personnelles et les données d'entraînement ML :",
           categories: [
             'Données Personnelles/de Compte : Tous les identifiants personnels, informations de profil, paramètres de compte et historique de transaction seront définitivement supprimés dans les 90 jours de la fermeture du compte.',
             'Données de Recherche : Les images originales et données de projet liées à votre compte seront supprimées dans les 90 jours de la fermeture du compte.',
-            'Données d\'Entraînement ML : Les données utilisées pour l\'entraînement ML sont d\'abord anonymisées/pseudonymisées pour supprimer tous les identifiants personnels. Ces données anonymisées peuvent être conservées indéfiniment pour préserver les améliorations du modèle, sauf si vous vous excluez spécifiquement de l\'entraînement ML ou demandez une suppression complète.',
-            'Options d\'Exclusion : Vous pouvez demander la suppression complète de toutes les données, y compris les données anonymisées d\'entraînement ML, en contactant spheroseg@utia.cas.cz. Le temps de traitement est typiquement de 30 jours.',
+            "Données d'Entraînement ML : Les données utilisées pour l'entraînement ML sont d'abord anonymisées/pseudonymisées pour supprimer tous les identifiants personnels. Ces données anonymisées peuvent être conservées indéfiniment pour préserver les améliorations du modèle, sauf si vous vous excluez spécifiquement de l'entraînement ML ou demandez une suppression complète.",
+            "Options d'Exclusion : Vous pouvez demander la suppression complète de toutes les données, y compris les données anonymisées d'entraînement ML, en contactant spheroseg@utia.cas.cz. Le temps de traitement est typiquement de 30 jours.",
           ],
         },
         internationalTransfers: {
           title: '9. Transferts Internationaux de Données',
-          content: 'Vos données peuvent être traitées dans des pays autres que le vôtre. Nous assurons des protections et garanties appropriées pour les transferts internationaux, y compris des clauses contractuelles standard et des décisions d\'adéquation.',
+          content:
+            "Vos données peuvent être traitées dans des pays autres que le vôtre. Nous assurons des protections et garanties appropriées pour les transferts internationaux, y compris des clauses contractuelles standard et des décisions d'adéquation.",
         },
         childrensPrivacy: {
           title: '10. Confidentialité des Enfants',
-          content: 'Notre service est destiné aux chercheurs et ne s\'adresse pas aux enfants de moins de 16 ans. Nous ne collectons pas sciemment d\'informations personnelles auprès d\'enfants de moins de 16 ans. Si nous découvrons une telle collecte, nous supprimerons promptement les informations.',
+          content:
+            "Notre service est destiné aux chercheurs et ne s'adresse pas aux enfants de moins de 16 ans. Nous ne collectons pas sciemment d'informations personnelles auprès d'enfants de moins de 16 ans. Si nous découvrons une telle collecte, nous supprimerons promptement les informations.",
         },
         policyChanges: {
           title: '11. Modifications de Cette Politique',
-          content: 'Nous pouvons mettre à jour cette Politique de Confidentialité pour refléter les changements dans nos pratiques ou exigences légales. Nous vous informerons des changements importants par e-mail ou avis proéminent sur notre site web. L\'utilisation continue constitue l\'acceptation des conditions mises à jour.',
+          content:
+            "Nous pouvons mettre à jour cette Politique de Confidentialité pour refléter les changements dans nos pratiques ou exigences légales. Nous vous informerons des changements importants par e-mail ou avis proéminent sur notre site web. L'utilisation continue constitue l'acceptation des conditions mises à jour.",
         },
         contact: {
           title: '12. Informations de Contact',
@@ -1231,12 +1287,12 @@ export default {
         },
       },
       navigation: {
-        backToHome: 'Retour à l\'Accueil',
-        termsOfService: 'Conditions d\'Utilisation',
+        backToHome: "Retour à l'Accueil",
+        termsOfService: "Conditions d'Utilisation",
       },
     },
   },
-  
+
   // WebSocket messages
   websocket: {
     reconnecting: 'Reconnexion au serveur...',

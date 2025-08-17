@@ -25,7 +25,7 @@ const ProjectImages = ({
           // Use auto-fill for constant gaps - doesn't stretch items to fill width
           gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 250px))',
           maxWidth: '100%',
-          gap: '16px' // Constant gap between all items
+          gap: '16px', // Constant gap between all items
         }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

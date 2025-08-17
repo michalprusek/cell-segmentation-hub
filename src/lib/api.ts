@@ -500,8 +500,7 @@ class ApiClient {
       (image.originalUrl as string) || (image.image_url as string) || '';
     let thumbnailUrl =
       (image.thumbnailUrl as string) || (image.thumbnail_url as string);
-    let displayUrl = 
-      (image.displayUrl as string) || imageUrl; // Fallback to original URL
+    let displayUrl = (image.displayUrl as string) || imageUrl; // Fallback to original URL
 
     // Ensure URLs are absolute for Docker environment
     const ensureAbsoluteUrl = (url: string): string => {
@@ -628,10 +627,10 @@ class ApiClient {
    */
   async getProjectImagesWithThumbnails(
     projectId: string,
-    params?: { 
-      page?: number; 
-      limit?: number; 
-      lod?: 'low' | 'medium' | 'high' 
+    params?: {
+      page?: number;
+      limit?: number;
+      lod?: 'low' | 'medium' | 'high';
     }
   ): Promise<{
     images: ProjectImage[];
@@ -647,12 +646,15 @@ class ApiClient {
       imagesWithThumbnails: number;
     };
   }> {
-    const response = await this.instance.get(`/projects/${projectId}/images-with-thumbnails`, {
-      params: {
-        lod: 'low',
-        ...params
+    const response = await this.instance.get(
+      `/projects/${projectId}/images-with-thumbnails`,
+      {
+        params: {
+          lod: 'low',
+          ...params,
+        },
       }
-    });
+    );
     return response.data.data;
   }
 
@@ -767,14 +769,11 @@ class ApiClient {
     model?: string,
     threshold?: number
   ): Promise<SegmentationResult> {
-    const response = await this.instance.post(
-      `/segmentation/batch`,
-      {
-        imageIds,
-        model: model || 'hrnet',
-        threshold: threshold || 0.5,
-      }
-    );
+    const response = await this.instance.post(`/segmentation/batch`, {
+      imageIds,
+      model: model || 'hrnet',
+      threshold: threshold || 0.5,
+    });
     return this.extractData(response);
   }
 
@@ -786,7 +785,7 @@ class ApiClient {
         `/segmentation/images/${imageId}/results`
       );
       const data = this.extractData(response);
-      
+
       // Return the full segmentation result data as received from backend
       if (data && typeof data === 'object') {
         // Ensure we have the required structure
@@ -799,18 +798,18 @@ class ApiClient {
           confidence: data.confidence,
           processingTime: data.processingTime,
           createdAt: data.createdAt,
-          updatedAt: data.updatedAt
+          updatedAt: data.updatedAt,
         };
         return result;
       }
-      
+
       // If it's just an array of polygons (backward compatibility)
       if (Array.isArray(data)) {
         return {
           polygons: data,
         };
       }
-      
+
       return null;
     } catch (error) {
       if (
@@ -829,19 +828,19 @@ class ApiClient {
     imageHeight?: number
   ): Promise<SegmentationResultData> {
     const payload: any = { polygons };
-    
+
     // Include image dimensions if provided
     if (imageWidth && imageHeight) {
       payload.imageWidth = imageWidth;
       payload.imageHeight = imageHeight;
     }
-    
+
     const response = await this.instance.put(
       `/segmentation/images/${imageId}/results`,
       payload
     );
     const data = this.extractData(response);
-    
+
     // Return the full segmentation result data
     if (data && typeof data === 'object') {
       const result: SegmentationResultData = {
@@ -853,18 +852,18 @@ class ApiClient {
         confidence: data.confidence,
         processingTime: data.processingTime,
         createdAt: data.createdAt,
-        updatedAt: data.updatedAt
+        updatedAt: data.updatedAt,
       };
       return result;
     }
-    
+
     // If it's just an array of polygons (backward compatibility)
     if (Array.isArray(data)) {
       return {
         polygons: data,
       };
     }
-    
+
     // Return what was sent if response is unexpected
     return {
       polygons,

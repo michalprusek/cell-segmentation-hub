@@ -7,7 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 const TermsOfService = () => {
   const { t } = useLanguage();
-  
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
@@ -17,7 +17,9 @@ const TermsOfService = () => {
             <h1 className="text-4xl font-bold text-gray-900 mb-4">
               {t('legal.terms.title')}
             </h1>
-            <p className="text-lg text-gray-600">{t('legal.terms.lastUpdated')}</p>
+            <p className="text-lg text-gray-600">
+              {t('legal.terms.lastUpdated')}
+            </p>
           </div>
 
           <div className="prose prose-lg prose-blue max-w-none">
@@ -41,9 +43,11 @@ const TermsOfService = () => {
               {t('legal.terms.sections.useLicense.content')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.terms.sections.useLicense.permittedUses').map((use: string, index: number) => (
-                <li key={index}>{use}</li>
-              ))}
+              {t('legal.terms.sections.useLicense.permittedUses').map(
+                (use: string, index: number) => (
+                  <li key={index}>{use}</li>
+                )
+              )}
             </ul>
             <p className="text-gray-700 leading-relaxed mb-6">
               {t('legal.terms.sections.useLicense.licenseNote')}
@@ -61,12 +65,17 @@ const TermsOfService = () => {
               </p>
             </div>
             <p className="text-gray-700 leading-relaxed mb-4">
-              <strong>{t('legal.terms.sections.dataUsage.ownershipTitle')}</strong> {t('legal.terms.sections.dataUsage.ownershipContent')}
+              <strong>
+                {t('legal.terms.sections.dataUsage.ownershipTitle')}
+              </strong>{' '}
+              {t('legal.terms.sections.dataUsage.ownershipContent')}
             </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.terms.sections.dataUsage.permissions').map((permission: string, index: number) => (
-                <li key={index}>{permission}</li>
-              ))}
+              {t('legal.terms.sections.dataUsage.permissions').map(
+                (permission: string, index: number) => (
+                  <li key={index}>{permission}</li>
+                )
+              )}
             </ul>
             <p className="text-gray-700 leading-relaxed mb-6">
               {t('legal.terms.sections.dataUsage.protectionNote')}
@@ -75,9 +84,13 @@ const TermsOfService = () => {
             <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-4">
               {t('legal.terms.sections.userResponsibilities.title')}
             </h2>
-            <p className="text-gray-700 leading-relaxed mb-4">{t('legal.terms.sections.userResponsibilities.content')}</p>
+            <p className="text-gray-700 leading-relaxed mb-4">
+              {t('legal.terms.sections.userResponsibilities.content')}
+            </p>
             <ul className="list-disc ml-6 mb-6 text-gray-700">
-              {t('legal.terms.sections.userResponsibilities.responsibilities').map((responsibility: string, index: number) => (
+              {t(
+                'legal.terms.sections.userResponsibilities.responsibilities'
+              ).map((responsibility: string, index: number) => (
                 <li key={index}>{responsibility}</li>
               ))}
             </ul>
@@ -139,7 +152,9 @@ const TermsOfService = () => {
               <Link to="/">{t('legal.terms.navigation.backToHome')}</Link>
             </Button>
             <Button asChild>
-              <Link to="/privacy-policy">{t('legal.terms.navigation.privacyPolicy')}</Link>
+              <Link to="/privacy-policy">
+                {t('legal.terms.navigation.privacyPolicy')}
+              </Link>
             </Button>
           </div>
         </div>

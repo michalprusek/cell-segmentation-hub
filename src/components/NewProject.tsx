@@ -82,7 +82,8 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
       window.dispatchEvent(event);
     } catch (error: unknown) {
       logger.error('Error creating project:', error);
-      const errorMessage = getErrorMessage(error) || t('projects.failedToCreateProject');
+      const errorMessage =
+        getErrorMessage(error) || t('projects.failedToCreateProject');
       toast.error(t('projects.failedToCreateProject') + ': ' + errorMessage);
     } finally {
       setIsCreating(false);
@@ -132,7 +133,9 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
           </div>
           <DialogFooter>
             <Button type="submit" disabled={isCreating}>
-              {isCreating ? t('projects.creatingProject') : t('projects.createProject')}
+              {isCreating
+                ? t('projects.creatingProject')
+                : t('projects.createProject')}
             </Button>
           </DialogFooter>
         </form>

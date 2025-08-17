@@ -103,30 +103,30 @@ const parseConfig = (): ConfigType => {
   try {
     return configSchema.parse(process.env);
   } catch (error) {
-    // eslint-disable-next-line no-console
+     
     console.error('❌ Invalid environment configuration:');
     if (error instanceof z.ZodError) {
-      // eslint-disable-next-line no-console
+       
       console.error('Zod validation errors:');
       error.errors.forEach((err) => {
-        // eslint-disable-next-line no-console
+         
         console.error(`  ${err.path.join('.')}: ${err.message}`);
-        // eslint-disable-next-line no-console
+         
         console.error(`    Code: ${err.code}`);
       });
     } else {
-      // eslint-disable-next-line no-console
+       
       console.error('Non-Zod error:', error);
     }
-    // eslint-disable-next-line no-console
+     
     console.error('Environment variables:');
-    // eslint-disable-next-line no-console
+     
     console.error('NODE_ENV:', process.env.NODE_ENV);
-    // eslint-disable-next-line no-console
+     
     console.error('FROM_EMAIL:', process.env.FROM_EMAIL);
-    // eslint-disable-next-line no-console
+     
     console.error('JWT_ACCESS_SECRET length:', process.env.JWT_ACCESS_SECRET?.length);
-    // eslint-disable-next-line no-console
+     
     console.error('JWT_REFRESH_SECRET length:', process.env.JWT_REFRESH_SECRET?.length);
     process.exit(1);
   }

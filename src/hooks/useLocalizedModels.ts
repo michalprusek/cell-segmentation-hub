@@ -7,7 +7,12 @@ import { ModelType, ModelInfo } from '@/contexts/ModelContext';
  * Hook that provides localized model information
  */
 export function useLocalizedModels() {
-  const { selectedModel, confidenceThreshold, setSelectedModel, setConfidenceThreshold } = useModel();
+  const {
+    selectedModel,
+    confidenceThreshold,
+    setSelectedModel,
+    setConfidenceThreshold,
+  } = useModel();
   const { t } = useLanguage();
 
   const getLocalizedModel = (modelId: ModelType): ModelInfo => {

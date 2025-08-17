@@ -68,7 +68,9 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
                     />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center">
-                      <span className="text-xs text-gray-400">{t('common.no_preview')}</span>
+                      <span className="text-xs text-gray-400">
+                        {t('common.no_preview')}
+                      </span>
                     </div>
                   )}
                 </div>

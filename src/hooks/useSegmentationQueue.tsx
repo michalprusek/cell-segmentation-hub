@@ -29,13 +29,15 @@ export type { QueueStats, SegmentationUpdate };
 export const useSegmentationQueue = (projectId?: string) => {
   // Check if this hook should be disabled to avoid conflicts
   const isDisabled = projectId === 'DISABLE_GLOBAL';
-  
+
   const { user, token } = useAuth();
   const { manager: contextManager, isConnected: contextIsConnected } =
     useWebSocket();
   const { t } = useLanguage();
   const wsManagerRef = useRef<WebSocketManager | null>(null);
-  const currentProjectRef = useRef<string | undefined>(isDisabled ? undefined : projectId);
+  const currentProjectRef = useRef<string | undefined>(
+    isDisabled ? undefined : projectId
+  );
   const isInitializedRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
@@ -46,23 +48,20 @@ export const useSegmentationQueue = (projectId?: string) => {
   tRef.current = t;
 
   // Create stable callback that has access to current t function
-  const handleSegmentationUpdate = useCallback(
-    (update: SegmentationUpdate) => {
-      setLastUpdate(update);
+  const handleSegmentationUpdate = useCallback((update: SegmentationUpdate) => {
+    setLastUpdate(update);
 
-      // Show toast notifications for status changes
-      if (update.status === 'segmented') {
-        toast.success(tRef.current('segmentationCompleted'));
-      } else if (update.status === 'failed') {
-        toast.error(
-          `${tRef.current('segmentationFailed')}: ${update.error || tRef.current('errors.unknown')}`
-        );
-      } else if (update.status === 'processing') {
-        toast.info(tRef.current('segmentationStarted'));
-      }
-    },
-    []
-  ); // No dependencies
+    // Show toast notifications for status changes
+    if (update.status === 'segmented') {
+      toast.success(tRef.current('segmentationCompleted'));
+    } else if (update.status === 'failed') {
+      toast.error(
+        `${tRef.current('segmentationFailed')}: ${update.error || tRef.current('errors.unknown')}`
+      );
+    } else if (update.status === 'processing') {
+      toast.info(tRef.current('segmentationStarted'));
+    }
+  }, []); // No dependencies
 
   const handleQueueStatsUpdate = useCallback((stats: QueueStats) => {
     if (
@@ -73,19 +72,16 @@ export const useSegmentationQueue = (projectId?: string) => {
     }
   }, []);
 
-  const handleNotification = useCallback(
-    (notification: Notification) => {
-      if (notification.type === 'segmentation-complete') {
-        toast.success(
-          tRef.current('segmentationCompleteWithCount', {
-            count: notification.polygonCount,
-          }),
-          { duration: 5000 }
-        );
-      }
-    },
-    []
-  ); // No dependencies
+  const handleNotification = useCallback((notification: Notification) => {
+    if (notification.type === 'segmentation-complete') {
+      toast.success(
+        tRef.current('segmentationCompleteWithCount', {
+          count: notification.polygonCount,
+        }),
+        { duration: 5000 }
+      );
+    }
+  }, []); // No dependencies
 
   const handleSystemMessage = useCallback((message: SystemMessage) => {
     if (message.type === 'warning') {
@@ -178,7 +174,7 @@ export const useSegmentationQueue = (projectId?: string) => {
     if (isDisabled || !wsManagerRef.current || !isConnected || !projectId) {
       return;
     }
-    
+
     if (process.env.NODE_ENV === 'development') {
       logger.debug('Joining project room:', projectId);
     }

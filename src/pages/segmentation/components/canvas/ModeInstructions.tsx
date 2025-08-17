@@ -135,7 +135,9 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
           return {
             title: t('segmentation.instructions.modes.editVertices'),
             color: '#a855f7', // purple-500 to match border
-            instructions: [t('segmentation.instructions.editVertices.selectPolygon')],
+            instructions: [
+              t('segmentation.instructions.editVertices.selectPolygon'),
+            ],
           };
         }
 
@@ -143,7 +145,9 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
         return {
           title: t('segmentation.instructions.modes.deletePolygon'),
           color: '#f97316', // orange-500 to match border
-          instructions: [t('segmentation.instructions.deletePolygon.clickToDelete')],
+          instructions: [
+            t('segmentation.instructions.deletePolygon.clickToDelete'),
+          ],
         };
 
       case EditMode.View:
@@ -240,7 +244,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
               color: '#3b82f6', // blue-500 to match border
             }}
           >
-{t('segmentation.instructions.shiftIndicator')}
+            {t('segmentation.instructions.shiftIndicator')}
           </div>
         )}
     </div>

@@ -193,7 +193,8 @@ const StatsOverview = () => {
     {
       title: t('dashboard.storageUsed') || 'Storage Used',
       value: loading ? '...' : storageUsed,
-      description: storageGrowth !== '0 MB' ? storageGrowth : 'Total space used',
+      description:
+        storageGrowth !== '0 MB' ? storageGrowth : 'Total space used',
       icon: <HardDrive size={16} />,
     },
   ];

@@ -14,7 +14,7 @@ export const createTestPolygons = () => {
     triangle: [
       { x: 0, y: 0 },
       { x: 100, y: 0 },
-      { x: 50, y: 100 }
+      { x: 50, y: 100 },
     ] as Point[],
 
     // Simple square
@@ -22,7 +22,7 @@ export const createTestPolygons = () => {
       { x: 0, y: 0 },
       { x: 100, y: 0 },
       { x: 100, y: 100 },
-      { x: 0, y: 100 }
+      { x: 0, y: 100 },
     ] as Point[],
 
     // Complex polygon with concave sections
@@ -32,32 +32,30 @@ export const createTestPolygons = () => {
       { x: 100, y: 50 },
       { x: 50, y: 50 },
       { x: 50, y: 100 },
-      { x: 0, y: 100 }
+      { x: 0, y: 100 },
     ] as Point[],
 
     // Very small polygon for edge cases
     tiny: [
       { x: 0, y: 0 },
       { x: 1, y: 0 },
-      { x: 0.5, y: 1 }
+      { x: 0.5, y: 1 },
     ] as Point[],
 
     // Large polygon
     large: Array.from({ length: 20 }, (_, i) => ({
       x: Math.cos((i / 20) * 2 * Math.PI) * 1000,
-      y: Math.sin((i / 20) * 2 * Math.PI) * 1000
+      y: Math.sin((i / 20) * 2 * Math.PI) * 1000,
     })) as Point[],
 
     // Degenerate polygon (line)
     line: [
       { x: 0, y: 0 },
-      { x: 100, y: 0 }
+      { x: 100, y: 0 },
     ] as Point[],
 
     // Single point
-    point: [
-      { x: 50, y: 50 }
-    ] as Point[]
+    point: [{ x: 50, y: 50 }] as Point[],
   };
 };
 
@@ -66,29 +64,29 @@ export const createTestPolygons = () => {
  */
 export const createTestPolygonObjects = (): Record<string, Polygon> => {
   const shapes = createTestPolygons();
-  
+
   return {
     trianglePolygon: {
       id: 'test-triangle',
       points: shapes.triangle,
       type: 'external',
       confidence: 0.95,
-      area: 5000
+      area: 5000,
     },
     squarePolygon: {
       id: 'test-square',
       points: shapes.square,
       type: 'external',
       confidence: 0.98,
-      area: 10000
+      area: 10000,
     },
     complexPolygon: {
       id: 'test-complex',
       points: shapes.complex,
       type: 'external',
       confidence: 0.85,
-      area: 7500
-    }
+      area: 7500,
+    },
   };
 };
 
@@ -131,7 +129,7 @@ export const createMockImageData = (
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const index = (y * width + x) * 4;
-      
+
       let value: number;
       switch (pattern) {
         case 'checkerboard':
@@ -146,10 +144,10 @@ export const createMockImageData = (
           break;
       }
 
-      data[index] = value;     // R
+      data[index] = value; // R
       data[index + 1] = value; // G
       data[index + 2] = value; // B
-      data[index + 3] = 255;   // A
+      data[index + 3] = 255; // A
     }
   }
 
@@ -182,7 +180,7 @@ export const createMockPointerEvent = (
     bubbles: true,
     cancelable: true,
     pointerId: 1,
-    pointerType: type
+    pointerType: type,
   });
 };
 
@@ -205,7 +203,7 @@ export const createMockKeyboardEvent = (
     altKey: modifiers.alt || false,
     metaKey: modifiers.meta || false,
     bubbles: true,
-    cancelable: true
+    cancelable: true,
   });
 };
 
@@ -219,7 +217,7 @@ export const createMockTransform = (
 ) => ({
   zoom,
   translateX,
-  translateY
+  translateY,
 });
 
 /**
@@ -252,7 +250,7 @@ export const measurePerformance = async (
     averageTime,
     minTime,
     maxTime,
-    totalTime
+    totalTime,
   };
 };
 
@@ -269,13 +267,13 @@ export const getMemoryUsage = (): {
     return {
       usedJSHeapSize: memory.usedJSHeapSize,
       totalJSHeapSize: memory.totalJSHeapSize,
-      jsHeapSizeLimit: memory.jsHeapSizeLimit
+      jsHeapSizeLimit: memory.jsHeapSizeLimit,
     };
   }
-  
+
   return {
     usedJSHeapSize: 0,
     totalJSHeapSize: 0,
-    jsHeapSizeLimit: 0
+    jsHeapSizeLimit: 0,
   };
 };
