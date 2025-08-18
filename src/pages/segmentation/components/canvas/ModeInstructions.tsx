@@ -128,7 +128,7 @@ const ModeInstructions: React.FC<ModeInstructionsProps> = ({
             color: '#a855f7', // purple-500 to match border
             instructions: [
               t('segmentation.instructions.editVertices.dragVertices'),
-              `${t('segmentation.instructions.editVertices.addPoints')} • ${t('segmentation.instructions.editVertices.deleteVertex')}`,
+              t('segmentation.instructions.editVertices.addPoints'),
             ],
           };
         } else {

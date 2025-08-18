@@ -501,7 +501,15 @@ export class ImageController {
 
       // Transform data for frontend with proper URLs
       const transformedImages = await Promise.all(images.map(async (image) => {
-        let thumbnailData = null;
+        let thumbnailData: {
+          polygons: any[];
+          imageWidth: number | null;
+          imageHeight: number | null;
+          levelOfDetail: string;
+          polygonCount: number;
+          pointCount: number;
+          compressionRatio: number;
+        } | null = null;
 
         if (image.segmentation && image.segmentation.segmentationThumbnails.length > 0) {
           const thumbnail = image.segmentation.segmentationThumbnails[0];

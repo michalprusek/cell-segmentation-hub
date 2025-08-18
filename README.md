@@ -4,19 +4,54 @@ Advanced cell segmentation platform powered by deep learning models. Complete sy
 
 ## 🚀 Quick Start
 
-### Using Docker (Recommended)
+### Development Environment
 
 ```bash
 git clone https://github.com/your-org/cell-segmentation-hub.git
 cd cell-segmentation-hub
-npm run docker:dev
+
+# Start development environment
+docker compose up -d
 ```
 
-Services will be available at:
+Development services will be available at:
 
-- **Frontend**: http://localhost:8082
+- **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:3001
 - **ML Service**: http://localhost:8000
+- **Grafana**: http://localhost:3030
+
+### Production & Staging Deployment
+
+This project supports parallel production and staging environments:
+
+#### Staging Environment
+
+```bash
+# Deploy staging environment
+./scripts/deploy-staging.sh
+
+# Manage staging environment
+./scripts/staging-manager.sh start
+./scripts/staging-manager.sh status
+./scripts/staging-manager.sh logs -f
+```
+
+Staging URL: https://staging.spherosegapp.utia.cas.cz
+
+#### Production Environment
+
+```bash
+# Setup SSL certificates (run once)
+./scripts/init-letsencrypt-staging.sh
+
+# Deploy production environment
+./scripts/deploy-production.sh
+```
+
+Production URL: https://spherosegapp.utia.cas.cz
+
+📖 **Detailed staging setup**: See [STAGING.md](./STAGING.md)
 
 ### Manual Setup
 

@@ -34,7 +34,7 @@ function loadTranslations(langCode) {
 
     // Find the export default statement
     let exportObject = null;
-    
+
     function visit(node) {
       if (ts.isExportAssignment(node) && node.isExportEquals === false) {
         // Found export default
@@ -44,11 +44,13 @@ function loadTranslations(langCode) {
       }
       ts.forEachChild(node, visit);
     }
-    
+
     visit(sourceFile);
 
     if (!exportObject) {
-      throw new Error(`Cannot parse ${langCode}.ts - no export default object found`);
+      throw new Error(
+        `Cannot parse ${langCode}.ts - no export default object found`
+      );
     }
 
     return exportObject;
@@ -63,11 +65,11 @@ function loadTranslations(langCode) {
  */
 function parseObjectLiteral(node) {
   const result = {};
-  
+
   for (const property of node.properties) {
     if (ts.isPropertyAssignment(property)) {
       let key;
-      
+
       // Get property name
       if (ts.isIdentifier(property.name)) {
         key = property.name.text;
@@ -76,7 +78,7 @@ function parseObjectLiteral(node) {
       } else {
         continue; // Skip computed properties
       }
-      
+
       // Get property value
       if (ts.isStringLiteral(property.initializer)) {
         result[key] = property.initializer.text;
@@ -88,7 +90,7 @@ function parseObjectLiteral(node) {
       // Skip other types (functions, computed values, etc.)
     }
   }
-  
+
   return result;
 }
 

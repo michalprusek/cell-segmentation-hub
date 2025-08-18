@@ -561,7 +561,7 @@ export default {
         clickVertex:
           'Klicken Sie auf einen beliebigen Eckpunkt, um mit dem Hinzufügen von Punkten zu beginnen',
         addPoints:
-          'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen',
+          'Klicken Sie, um Punkte hinzuzufügen, dann klicken Sie auf einen anderen Eckpunkt zum Abschließen. Klicken Sie direkt auf einen anderen Eckpunkt ohne Punkte hinzuzufügen, um alle Punkte dazwischen zu entfernen.',
         holdShift: 'SHIFT halten für automatisches Hinzufügen von Punkten',
         cancel: 'Drücken Sie ESC zum Abbrechen',
       },

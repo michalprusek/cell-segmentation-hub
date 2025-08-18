@@ -1,7 +1,7 @@
 import { PrismaClient, SegmentationQueue } from '@prisma/client';
 import { logger } from '../utils/logger';
 import { SegmentationService } from './segmentationService';
-import { ImageService } from './imageService';
+import { ImageService, ImageWithUrls } from './imageService';
 import { WebSocketService } from './websocketService';
 
 export interface QueueStats {
@@ -440,7 +440,7 @@ export class QueueService {
 
     try {
       // Prepare images for batch processing
-      const imageData = [];
+      const imageData: ImageWithUrls[] = [];
       for (const item of batch) {
         const image = await this.imageService.getImageById(item.imageId, item.userId);
         if (!image) {
