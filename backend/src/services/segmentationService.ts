@@ -950,7 +950,12 @@ export class SegmentationService {
     threshold = 0.5,
     userId: string
   ): Promise<{ successful: number; failed: number; results: any[] }> {
-    const results = [];
+    const results: Array<{
+      imageId: string;
+      success: boolean;
+      result?: SegmentationResponse;
+      error?: string;
+    }> = [];
     let successful = 0;
     let failed = 0;
 

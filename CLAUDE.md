@@ -10,6 +10,54 @@ VERY IMPORTANT: Always read relevant docs and fetch relevant documentation using
 
 VERY IMPORTANT: Use subagents often to save context. They dont have shared context with main agent, so give them comprehensive and clear instructions, also recommend them to use available knowledge systems.
 
+## Test-Driven Development (TDD) - MANDATORY
+
+**CRITICAL: Always follow Test-Driven Development principles!**
+
+### TDD Workflow Requirements
+
+**BEFORE implementing any feature or fixing any bug:**
+
+1. **Check for existing tests**: Look for test files related to the component/feature you're modifying
+2. **Write/update tests FIRST**: If no tests exist, create them. If tests exist, update them for new requirements
+3. **Verify test failure**: Run the test to ensure it fails (red phase)
+4. **Implement the feature**: Write minimal code to make the test pass (green phase)
+5. **Refactor if needed**: Improve the code while keeping tests passing (refactor phase)
+6. **Add to test suites**: Ensure new tests are included in the appropriate test suite
+
+### Test Locations
+
+- **Frontend unit tests**: `/src/**/*.test.ts(x)` - Run with `docker exec -it spheroseg-frontend npm run test`
+- **Frontend E2E tests**: `/e2e/*.spec.ts` - Run with `docker exec -it spheroseg-frontend npm run test:e2e`
+- **Backend unit tests**: `/backend/src/**/*.test.ts` - Run with `docker exec -it spheroseg-backend npm run test`
+- **API integration tests**: `/backend/src/api/**/*.test.ts`
+
+### Test Implementation Guidelines
+
+- **Component tests**: Test user interactions, state changes, and rendered output
+- **Hook tests**: Test custom hooks in isolation using `@testing-library/react-hooks`
+- **API tests**: Test endpoints with different scenarios (success, validation errors, auth failures)
+- **Integration tests**: Test complete user flows with Playwright
+- **ML service tests**: Verify model loading, inference, and postprocessing
+
+### Running Tests
+
+```bash
+# Frontend unit tests
+docker exec -it spheroseg-frontend npm run test
+
+# Frontend E2E tests
+docker exec -it spheroseg-frontend npm run test:e2e
+
+# Backend tests
+docker exec -it spheroseg-backend npm run test
+
+# Test with coverage
+docker exec -it spheroseg-frontend npm run test:coverage
+```
+
+**REMEMBER**: No feature is complete without tests. This is not optional - it's mandatory for maintaining code quality and preventing regressions.
+
 ## Knowledge Management System
 
 **Knowledge storage and retrieval** is available through the connected MCP servers for storing and retrieving application knowledge, best practices, and implementation details.
@@ -58,21 +106,62 @@ Before starting work, query the knowledge system for:
 
 **CRITICAL: This project uses Docker exclusively. NEVER use npm/node/make commands directly - always use Docker!**
 
-**Production Environment:**
+## 🚨 DEPLOYMENT STRATEGY - MANDATORY TO FOLLOW
 
-- **Start services**: `docker compose -f docker-compose.prod.yml up -d`
-- **Stop services**: `docker compose -f docker-compose.prod.yml down`
-- **Build services**: `docker compose -f docker-compose.prod.yml build [--no-cache]`
-- **View logs**: `docker compose -f docker-compose.prod.yml logs -f [service]`
-- **Restart service**: `docker compose -f docker-compose.prod.yml restart [service]`
+**CRITICAL RULE: Work ONLY in staging environment. Production deployments are AUTOMATED via GitHub Actions.**
 
-**Development Environment:**
+### Development & Staging Workflow
 
-- **Start services**: `docker compose up -d`
-- **Stop services**: `docker compose down`
-- **Build services**: `docker compose build [--no-cache]`
-- **View logs**: `docker compose logs -f [service]`
+1. **ALL development work happens in STAGING**:
+
+   ```bash
+   # Work in staging environment ONLY
+   docker compose -f docker-compose.staging.yml up -d
+   docker compose -f docker-compose.staging.yml build
+   docker compose -f docker-compose.staging.yml logs -f
+   ```
+
+2. **AUTOMATED STAGING DEPLOYMENT**:
+   - **Auto-deploy script is running**: `/home/cvat/cell-segmentation-hub/scripts/auto-deploy-staging.sh`
+   - Automatically pulls and deploys changes every 30 seconds
+   - Just push to `staging` branch - deployment is automatic!
+   - No manual intervention needed
+
+3. **NEVER directly modify production**:
+   - ❌ DO NOT use `docker-compose.prod.yml` for development
+   - ❌ DO NOT manually deploy to production
+   - ❌ DO NOT make changes directly on production server
+
+4. **Production deployment via GitHub Actions ONLY**:
+   - Push changes to `staging` branch → Auto-deploy to local staging
+   - After testing on staging → Merge to `main` branch
+   - GitHub Actions automatically deploys to production
+   - This ensures all production deployments have:
+     - ✅ Passed all tests
+     - ✅ Built successfully in Docker
+     - ✅ Been tested on staging first
+     - ✅ Proper rollback capability
+
+### Staging Environment Commands:
+
+- **Start services**: `docker compose -f docker-compose.staging.yml up -d`
+- **Stop services**: `docker compose -f docker-compose.staging.yml down`
+- **Build services**: `docker compose -f docker-compose.staging.yml build [--no-cache]`
+- **View logs**: `docker compose -f docker-compose.staging.yml logs -f [service]`
 - **Shell access**: `docker exec -it [container-name] /bin/bash`
+
+### Production Deployment (AUTOMATED ONLY):
+
+**Production is deployed ONLY through GitHub Actions workflow:**
+
+1. Push to `staging` branch and test thoroughly
+2. Create PR from `staging` to `main`
+3. Merge PR triggers automatic production deployment
+4. GitHub Actions handles:
+   - Database backup
+   - Blue-green deployment
+   - Health checks
+   - Automatic rollback on failure
 
 **Container Names:**
 
@@ -86,14 +175,26 @@ Before starting work, query the knowledge system for:
 
 ### Service URLs (Docker only)
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:3001
-- **ML Service**: http://localhost:8000
-- **API Documentation**: http://localhost:3001/api-docs
-- **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3030
+**Staging Environment (PRIMARY WORKING ENVIRONMENT):**
 
-**Note**: Some documentation may reference port 8082 for frontend - this is legacy. Always use port 3000 for Docker development.
+- **Frontend**: http://localhost:4000 ✅ **USE THIS FOR ALL DEVELOPMENT**
+- **Backend API**: http://localhost:4001/api
+- **ML Service**: http://localhost:4008
+- **API Documentation**: http://localhost:4001/api-docs
+- **Grafana**: http://localhost:3031
+
+**Production Environment (READ-ONLY - DEPLOYED VIA GITHUB ONLY):**
+
+- **Frontend**: https://spherosegapp.utia.cas.cz (DO NOT MODIFY DIRECTLY)
+- **Backend API**: https://spherosegapp.utia.cas.cz/api
+- **ML Service**: Internal only
+- **Monitoring**: Internal Grafana
+
+**IMPORTANT**:
+
+- 🟢 Always work in STAGING (port 4000)
+- 🔴 NEVER modify production directly
+- 🔵 Production updates happen ONLY through GitHub Actions
 
 ### DISABLED Commands (Do NOT use)
 
@@ -217,7 +318,8 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 ### Important Reminders
 
 - **Docker-first development**: Always use Docker Compose commands, never direct npm/node/make commands on host
-- **CRITICAL FOR PRODUCTION**: Kdykoliv je potřeba v production deployment změnit něco v aplikaci, je NUTNÝ ZNOVU BUILD kontejneru! Změny v source kódu se nepropíšou do běžícího kontejneru bez rebuild. Vždy použij `docker compose -f docker-compose.prod.yml build --no-cache backend` před restartem.
+- **STAGING ONLY**: All development and testing happens in staging environment (`docker-compose.staging.yml`)
+- **PRODUCTION VIA GITHUB**: Production deployments happen ONLY through GitHub Actions - NEVER manually
 - **File editing**: Always prefer editing existing files over creating new ones
 - **Documentation**: Only create docs when explicitly requested by the user
 - **Terminal safety**: Never use KillBash tool as it terminates the user's session
@@ -316,17 +418,63 @@ The project uses Husky for comprehensive pre-commit validation:
 
 **Before making changes:**
 
-1. Always use Docker environment (`docker compose up -d` to start)
+1. Always use STAGING Docker environment (`docker compose -f docker-compose.staging.yml up -d`)
 2. Query knowledge system for existing patterns and solutions
 3. Check if translations need updates for UI changes
 
-**During development:** 4. Services start automatically with hot reload 5. Use `docker compose logs -f` to monitor all services 6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test` and `docker exec -it spheroseg-frontend npm run test:e2e` 7. Validate translations inside container: `docker exec -it spheroseg-frontend npm run i18n:validate` if applicable
+**During development:** 4. Work ONLY in staging environment (port 4000) 5. Use `docker compose -f docker-compose.staging.yml logs -f` to monitor services 6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test` 7. Validate translations: `docker exec -it spheroseg-frontend npm run i18n:validate`
 
-**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.)
+**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.) 11. Push to `staging` branch - **AUTO-DEPLOY HANDLES THE REST!**
 
-**Quality assurance:** 11. Always run inside containers: `docker exec -it spheroseg-frontend npm run type-check` and `docker exec -it spheroseg-frontend npm run lint` before major changes 12. Use `docker compose ps` to verify all services are running correctly 13. Store learnings and solutions in the knowledge system for future reference
+**Automated deployment process:** 12. **Push to staging** → GitHub Actions runs tests 13. **Auto-deploy script** (running locally) detects changes within 30s 14. **Automatic rebuild** and restart of Docker containers 15. **No manual steps needed** - just commit and push!
+
+**Production deployment:** 16. Create PR from `staging` to `main` branch 17. Merge PR triggers automatic production deployment via GitHub Actions 18. Store learnings and solutions in the knowledge system for future reference
 
 ## Recent Implementations & Important Notes
+
+### Automated Staging Deployment
+
+**IMPLEMENTED: Auto-deploy script for seamless staging updates**
+
+- **Script location**: `/home/cvat/cell-segmentation-hub/scripts/auto-deploy-staging.sh`
+- **Status**: Must be started manually or via systemd/Docker
+- **Check interval**: Every 30 seconds
+- **Process**: Automatically pulls, builds, and restarts staging when changes detected
+
+**Three ways to run auto-deploy:**
+
+1. **Manual (temporary)**:
+
+   ```bash
+   ./scripts/auto-deploy-staging.sh &
+   ```
+
+2. **Systemd service (permanent, recommended for Linux)**:
+
+   ```bash
+   sudo ./scripts/install-auto-deploy.sh
+   ```
+
+3. **Docker container (portable, auto-restart)**:
+   ```bash
+   docker compose -f docker-compose.auto-deploy.yml up -d
+   ```
+
+**How it works:**
+
+1. Script monitors `staging` branch for new commits
+2. When changes detected, automatically:
+   - Pulls latest code
+   - Rebuilds Docker images
+   - Restarts services with zero downtime
+   - Runs health checks
+
+**GitHub Actions Integration:**
+
+- **Repository**: PUBLIC (unlimited free Actions minutes)
+- **Workflow**: `.github/workflows/staging.yml`
+- **Triggers on**: Push to `staging` branch
+- **Tests**: TypeScript, ESLint, unit tests (with continue-on-error for known mock issues)
 
 ### SSL Automation with Let's Encrypt
 
@@ -414,3 +562,5 @@ docker compose -f docker-compose.prod.yml up -d certbot
 - **Solution**: Enable Socket.io auto-reconnection, add keep-alive pings, fix disconnect handling
 - **Key settings**: `reconnection: true`, ping interval every 25s, proper reconnect event handlers
 - **Location**: `/src/services/webSocketManager.ts`
+
+- nikdy neobcházej husky commit!

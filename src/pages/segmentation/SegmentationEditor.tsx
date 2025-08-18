@@ -1,8 +1,18 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, {
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useProjectData } from '@/hooks/useProjectData';
+import {
+  sortImagesBySettings,
+  getImageSortSettings,
+} from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
 import { EditMode } from './types';
 import { Polygon } from '@/lib/segmentation';
@@ -43,6 +53,9 @@ const SegmentationEditor = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
+  // Track if we're coming from gallery (for auto-reset functionality)
+  const [isFromGallery, setIsFromGallery] = useState(true); // Default to true for first load
+
   // Project data
   const {
     projectTitle,
@@ -50,8 +63,11 @@ const SegmentationEditor = () => {
     loading: projectLoading,
   } = useProjectData(projectId, user?.id);
 
-  // Create compatibility objects for existing code
-  const projectImages = images || [];
+  // Create compatibility objects for existing code with proper sorting
+  const sortSettings = getImageSortSettings();
+  const projectImages = useMemo(() => {
+    return sortImagesBySettings(images || [], sortSettings);
+  }, [images, sortSettings]);
   const selectedImage = projectImages.find(img => img.id === imageId);
   const project = { name: projectTitle || 'Unknown Project' };
 
@@ -207,6 +223,7 @@ const SegmentationEditor = () => {
     canvasWidth,
     canvasHeight,
     imageId, // Pass imageId to track image changes
+    isFromGallery, // Pass flag to trigger auto-reset
     onSave: async polygons => {
       if (!projectId || !imageId) return;
 
@@ -365,6 +382,19 @@ const SegmentationEditor = () => {
     loadSegmentation();
   }, [projectId, imageId, t, selectedImage?.width, selectedImage?.height]);
 
+  // Reset isFromGallery flag when imageId changes
+  // We use a ref to track navigation state more accurately
+  const isNavigatingRef = useRef(false);
+
+  useEffect(() => {
+    // If we're not in the middle of navigation, it must be from gallery
+    if (!isNavigatingRef.current) {
+      setIsFromGallery(true);
+    }
+    // Reset navigation flag after imageId change
+    isNavigatingRef.current = false;
+  }, [imageId]);
+
   // Debug logging for polygon rendering (only when polygons change)
   useEffect(() => {
     const filteredPolygons = editor.polygons.filter(
@@ -449,6 +479,9 @@ const SegmentationEditor = () => {
 
     const nextImage = projectImages[nextIndex];
     if (nextImage) {
+      // Mark as navigation (not from gallery) so view doesn't reset
+      isNavigatingRef.current = true;
+      setIsFromGallery(false);
       navigate(`/segmentation/${projectId}/${nextImage.id}`);
     }
   };

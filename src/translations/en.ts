@@ -442,7 +442,7 @@ export default {
       addPoints: {
         clickVertex: 'Click on any vertex to start adding points',
         addPoints:
-          'Click to add points, then click on another vertex to complete',
+          'Click to add points, then click on another vertex to complete. Click directly on another vertex without adding points to remove all points between them.',
         holdShift: 'Hold SHIFT to automatically add points',
         cancel: 'Press ESC to cancel',
       },
