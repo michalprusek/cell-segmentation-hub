@@ -328,6 +328,74 @@ The project uses Husky for comprehensive pre-commit validation:
 
 ## Recent Implementations & Important Notes
 
+### SSL Automation with Let's Encrypt
+
+**CRITICAL: Automated SSL certificate management is now implemented for production deployments.**
+
+#### SSL Setup Scripts:
+
+- **Initial Setup**: `./scripts/init-letsencrypt.sh` - Run ONCE after production deployment
+- **Automatic Renewal**: `./scripts/certbot-renew.sh` - Automated renewal script
+- **Certificate Status**: `./scripts/check-ssl-expiry.sh` - Check certificate health
+
+#### Production SSL Configuration:
+
+- **Certbot Service**: Integrated into `docker-compose.prod.yml`
+- **Automatic Renewal**: Runs every 12 hours via Docker container
+- **Nginx Integration**: ACME challenge support at `/.well-known/acme-challenge/`
+- **Certificate Location**: `/etc/letsencrypt/live/spherosegapp.utia.cas.cz/`
+
+#### SSL Management Commands:
+
+```bash
+# Initial SSL setup (run once)
+./scripts/init-letsencrypt.sh
+
+# Check certificate status
+./scripts/check-ssl-expiry.sh
+
+# Manual renewal (if needed)
+./scripts/certbot-renew.sh
+
+# Start automatic renewal service
+docker compose -f docker-compose.prod.yml up -d certbot
+```
+
+### Business Metrics & Advanced Monitoring
+
+**MAJOR: Comprehensive business metrics system implemented alongside infrastructure monitoring.**
+
+#### Custom Business Metrics Available:
+
+- **User Activity**: Registrations, logins, active users (daily/weekly/monthly)
+- **Project Metrics**: Projects created, active projects, images uploaded, average images per project
+- **Segmentation Analytics**: Request counts, processing times, queue lengths, model usage distribution
+- **Storage Tracking**: Storage used by type, per-user storage usage
+- **Export Statistics**: Export counts by format, processing times
+- **Error Tracking**: Business-level errors by type and operation
+
+#### Metrics Endpoints:
+
+- **Combined Metrics**: `GET /metrics` - Infrastructure + business metrics (Prometheus format)
+- **Business Only**: `GET /api/metrics/business` - Business metrics only
+- **Infrastructure Only**: `GET /api/metrics` - Infrastructure metrics only
+- **Health Check**: `GET /api/metrics/health` - Metrics system health status
+- **Admin Stats**: `GET /api/metrics/stats` - JSON summary for admin dashboard (requires auth)
+- **Refresh**: `POST /api/metrics/refresh` - Manual metrics refresh (admin only)
+
+#### Grafana Dashboard:
+
+- **Configuration**: See `/monitoring/business-dashboard-config.md`
+- **Access**: http://localhost:3030 (use GRAFANA_ADMIN_PASSWORD)
+- **Dashboards**: Infrastructure + Business metrics with alerts
+- **Data Collection**: Automatic every 5 minutes + real-time tracking
+
+#### Prometheus Scraping:
+
+- **Combined Metrics**: `backend:3001/metrics` (30s interval)
+- **Business Metrics**: `backend:3001/api/metrics/business` (60s interval)
+- **Data Retention**: 30 days (configurable in prometheus.yml)
+
 ### Storage Space Indicator (Dashboard)
 
 - **Backend Endpoint**: `GET /api/auth/storage-stats` - Returns user's total storage usage

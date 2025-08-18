@@ -10,7 +10,7 @@ import { ResponseHelper } from './utils/response';
 import { initializeDatabase, disconnectDatabase, checkDatabaseHealth } from './db';
 import { setupSwagger } from './middleware/swagger';
 import { setupRoutes, createEndpointTracker } from './api/routes';
-import { createMonitoringMiddleware, getMetricsEndpoint, getMonitoringHealth } from './middleware/monitoring';
+import { createMonitoringMiddleware, getCombinedMetricsEndpoint, getMonitoringHealth } from './middleware/monitoring';
 import { WebSocketService } from './services/websocketService';
 import { prisma } from './db';
 
@@ -123,8 +123,8 @@ app.get('/health', async (req, res) => {
   }, dbHealth.healthy ? 'Server is healthy' : 'Server has issues');
 });
 
-// Prometheus metrics endpoint
-app.get('/metrics', getMetricsEndpoint());
+// Prometheus metrics endpoint (combined infrastructure + business metrics)
+app.get('/metrics', getCombinedMetricsEndpoint());
 
 // Setup all API routes
 setupRoutes(app);

@@ -9,10 +9,17 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:9090']
 
-  - job_name: 'backend'
+  - job_name: 'backend-combined'
     static_configs:
       - targets: ['backend:3001']
     metrics_path: '/metrics'
+    scrape_interval: 30s
+
+  - job_name: 'backend-business'
+    static_configs:
+      - targets: ['backend:3001']
+    metrics_path: '/api/metrics/business'
+    scrape_interval: 60s
 
   - job_name: 'ml-service'
     static_configs:

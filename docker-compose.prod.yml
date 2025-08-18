@@ -217,6 +217,22 @@ services:
       - prometheus
     restart: always
 
+  # Certbot for Let's Encrypt SSL automation
+  certbot:
+    image: certbot/certbot:latest
+    container_name: spheroseg-certbot
+    volumes:
+      - /etc/letsencrypt:/etc/letsencrypt
+      - /var/lib/letsencrypt:/var/lib/letsencrypt
+      - ./docker/nginx/certbot:/var/www/certbot
+      - ./scripts/certbot-logs:/var/log/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot --webroot-path=/var/www/certbot; done;'"
+    networks:
+      - spheroseg-network
+    depends_on:
+      - nginx
+    restart: unless-stopped
+
 networks:
   spheroseg-network:
     driver: bridge
@@ -237,4 +253,6 @@ volumes:
   prometheus-data:
     driver: local
   grafana-data:
+    driver: local
+  certbot-logs:
     driver: local
