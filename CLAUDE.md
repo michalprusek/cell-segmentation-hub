@@ -73,13 +73,19 @@ Before starting work, query the knowledge system for:
    docker compose -f docker-compose.staging.yml logs -f
    ```
 
-2. **NEVER directly modify production**:
+2. **AUTOMATED STAGING DEPLOYMENT**:
+   - **Auto-deploy script is running**: `/home/cvat/cell-segmentation-hub/scripts/auto-deploy-staging.sh`
+   - Automatically pulls and deploys changes every 30 seconds
+   - Just push to `staging` branch - deployment is automatic!
+   - No manual intervention needed
+
+3. **NEVER directly modify production**:
    - ❌ DO NOT use `docker-compose.prod.yml` for development
    - ❌ DO NOT manually deploy to production
    - ❌ DO NOT make changes directly on production server
 
-3. **Production deployment via GitHub Actions ONLY**:
-   - Push changes to `staging` branch → Auto-deploy to staging
+4. **Production deployment via GitHub Actions ONLY**:
+   - Push changes to `staging` branch → Auto-deploy to local staging
    - After testing on staging → Merge to `main` branch
    - GitHub Actions automatically deploys to production
    - This ensures all production deployments have:
@@ -368,13 +374,70 @@ The project uses Husky for comprehensive pre-commit validation:
 2. Query knowledge system for existing patterns and solutions
 3. Check if translations need updates for UI changes
 
-**During development:** 4. Work ONLY in staging environment (port 4000) 5. Use `docker compose -f docker-compose.staging.yml logs -f` to monitor services 6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test` 7. Validate translations: `docker exec -it spheroseg-frontend npm run i18n:validate`
+**During development:** 
+4. Work ONLY in staging environment (port 4000)
+5. Use `docker compose -f docker-compose.staging.yml logs -f` to monitor services
+6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test`
+7. Validate translations: `docker exec -it spheroseg-frontend npm run i18n:validate`
 
-**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.) 11. Push to `staging` branch first, test thoroughly
+**Before committing:** 
+8. The pre-commit hook automatically runs comprehensive checks
+9. All checks must pass (ESLint, Prettier, TypeScript, security)
+10. Use conventional commit format (feat:, fix:, chore:, etc.)
+11. Push to `staging` branch - **AUTO-DEPLOY HANDLES THE REST!**
 
-**Deployment to production:** 12. Create PR from `staging` to `main` branch 13. Merge PR triggers automatic production deployment via GitHub Actions 14. GitHub Actions ensures all tests pass and Docker builds succeed 15. Store learnings and solutions in the knowledge system for future reference
+**Automated deployment process:**
+12. **Push to staging** → GitHub Actions runs tests
+13. **Auto-deploy script** (running locally) detects changes within 30s
+14. **Automatic rebuild** and restart of Docker containers
+15. **No manual steps needed** - just commit and push!
+
+**Production deployment:**
+16. Create PR from `staging` to `main` branch
+17. Merge PR triggers automatic production deployment via GitHub Actions
+18. Store learnings and solutions in the knowledge system for future reference
 
 ## Recent Implementations & Important Notes
+
+### Automated Staging Deployment
+
+**IMPLEMENTED: Auto-deploy script for seamless staging updates**
+
+- **Script location**: `/home/cvat/cell-segmentation-hub/scripts/auto-deploy-staging.sh`
+- **Status**: Must be started manually or via systemd/Docker
+- **Check interval**: Every 30 seconds
+- **Process**: Automatically pulls, builds, and restarts staging when changes detected
+
+**Three ways to run auto-deploy:**
+
+1. **Manual (temporary)**:
+   ```bash
+   ./scripts/auto-deploy-staging.sh &
+   ```
+
+2. **Systemd service (permanent, recommended for Linux)**:
+   ```bash
+   sudo ./scripts/install-auto-deploy.sh
+   ```
+
+3. **Docker container (portable, auto-restart)**:
+   ```bash
+   docker compose -f docker-compose.auto-deploy.yml up -d
+   ```
+
+**How it works:**
+1. Script monitors `staging` branch for new commits
+2. When changes detected, automatically:
+   - Pulls latest code
+   - Rebuilds Docker images
+   - Restarts services with zero downtime
+   - Runs health checks
+
+**GitHub Actions Integration:**
+- **Repository**: PUBLIC (unlimited free Actions minutes)
+- **Workflow**: `.github/workflows/staging.yml`
+- **Triggers on**: Push to `staging` branch
+- **Tests**: TypeScript, ESLint, unit tests (with continue-on-error for known mock issues)
 
 ### SSL Automation with Let's Encrypt
 
