@@ -1,60 +1,41 @@
 services:
-  # Frontend Builder
+  # Frontend Builder - Hot reload for development
   frontend:
     build:
       context: .
-      dockerfile: docker/frontend.prod.Dockerfile
-      args:
-        VITE_API_BASE_URL: http://localhost:4001/api
-        VITE_ML_SERVICE_URL: http://localhost:4008
-        VITE_WS_URL: http://localhost:4001
-    image: staging-frontend-localhost
+      dockerfile: docker/frontend.Dockerfile  # Development Dockerfile with hot reload
     container_name: staging-frontend
-    security_opt:
-      - no-new-privileges:true
-    read_only: false
+    ports:
+      - "4000:5173"  # Direct port access for hot reload
     volumes:
-      - staging-frontend-static:/app/dist
+      # Hot reload volumes - mount source code
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.ts:/app/vite.config.ts
+      - ./tailwind.config.ts:/app/tailwind.config.ts
+      - ./postcss.config.js:/app/postcss.config.js
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./tsconfig.app.json:/app/tsconfig.app.json
+    environment:
+      - VITE_API_BASE_URL=http://localhost:4001/api
+      - VITE_ML_SERVICE_URL=http://localhost:4008
+      - VITE_WS_URL=http://localhost:4001
     networks:
       - staging-network
     restart: always
-
-  # Nginx Frontend Server
-  nginx:
-    image: nginx:alpine
-    container_name: staging-nginx
-    ports:
-      - "4000:80"  # Staging frontend port
-    security_opt:
-      - no-new-privileges:true
-    read_only: false
-    networks:
-      - staging-network
-    volumes:
-      - ./docker/nginx/staging.conf:/etc/nginx/nginx.conf:ro
-      - staging-frontend-static:/usr/share/nginx/html:ro
-      - staging-nginx-cache:/var/cache/nginx
     depends_on:
       - backend
-      - frontend
-    restart: always
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
 
-  # Backend API
+
+  # Backend API - Hot reload for development
   backend:
     build:
       context: ./backend
-      dockerfile: backend.prod.Dockerfile
+      dockerfile: ../docker/backend.Dockerfile  # Development Dockerfile with hot reload
     container_name: staging-backend
     ports:
       - "4001:3001"  # Staging backend port
-    security_opt:
-      - no-new-privileges:true
-    read_only: false
     networks:
       - staging-network
     depends_on:
@@ -64,10 +45,13 @@ services:
         condition: service_healthy
     env_file: .env.staging
     volumes:
+      # Hot reload volumes - mount source code
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
       - ./backend/uploads/staging:/app/uploads
       - staging-backend-logs:/app/logs
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development  # Development mode for hot reload
       - PORT=3001
       - HOST=0.0.0.0
       - DATABASE_URL=postgresql://spheroseg:${STAGING_DB_PASSWORD:-password}@staging-db:5432/spheroseg_staging
@@ -228,8 +212,6 @@ networks:
     external: true
 
 volumes:
-  staging-frontend-static:
-    driver: local
   staging-postgres-data:
     driver: local
   staging-redis-data:
@@ -237,8 +219,6 @@ volumes:
   staging-backend-logs:
     driver: local
   staging-ml-cache:
-    driver: local
-  staging-nginx-cache:
     driver: local
   staging-prometheus-data:
     driver: local

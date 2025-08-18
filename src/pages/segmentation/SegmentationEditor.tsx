@@ -1,9 +1,18 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, {
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+} from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useProjectData } from '@/hooks/useProjectData';
-import { sortImagesBySettings, getImageSortSettings } from '@/hooks/useImageFilter';
+import {
+  sortImagesBySettings,
+  getImageSortSettings,
+} from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
 import { EditMode } from './types';
 import { Polygon } from '@/lib/segmentation';
@@ -43,7 +52,7 @@ const SegmentationEditor = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
-  
+
   // Track if we're coming from gallery (for auto-reset functionality)
   const [isFromGallery, setIsFromGallery] = useState(true); // Default to true for first load
 
@@ -376,7 +385,7 @@ const SegmentationEditor = () => {
   // Reset isFromGallery flag when imageId changes
   // We use a ref to track navigation state more accurately
   const isNavigatingRef = useRef(false);
-  
+
   useEffect(() => {
     // If we're not in the middle of navigation, it must be from gallery
     if (!isNavigatingRef.current) {

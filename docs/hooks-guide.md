@@ -11,6 +11,7 @@ This project uses comprehensive Git hooks to ensure code quality and prevent iss
 **Purpose**: Validates code quality before each commit
 
 **Checks performed:**
+
 - ✅ Git status (merge conflicts, large files, sensitive files)
 - ✅ Code formatting (Prettier)
 - ✅ Linting (ESLint)
@@ -22,6 +23,7 @@ This project uses comprehensive Git hooks to ensure code quality and prevent iss
 - ✅ Dependencies validation
 
 **Configuration:**
+
 ```bash
 # Run with strict mode (blocks commit on errors)
 STRICT_MODE=true git commit -m "your message"
@@ -41,6 +43,7 @@ DOCKER_CHECKS=false git commit -m "your message"
 **Purpose**: Comprehensive validation before merging to main/production branches
 
 **Test suites:**
+
 1. **Branch Protection** - Ensures branch is up-to-date
 2. **Code Compilation** - Builds frontend and backend
 3. **Unit Tests** - Runs all unit test suites
@@ -53,6 +56,7 @@ DOCKER_CHECKS=false git commit -m "your message"
 10. **Dependencies** - Outdated and unused dependencies
 
 **Usage:**
+
 ```bash
 # Run locally before creating PR
 ./scripts/pre-merge-check.sh
@@ -66,6 +70,7 @@ DOCKER_CHECKS=false git commit -m "your message"
 **Purpose**: Ensures commit messages follow conventional commits format
 
 **Valid formats:**
+
 - `feat:` - New feature
 - `fix:` - Bug fix
 - `docs:` - Documentation changes
@@ -77,6 +82,7 @@ DOCKER_CHECKS=false git commit -m "your message"
 - `ci:` - CI/CD changes
 
 **Examples:**
+
 ```bash
 git commit -m "feat: add user authentication"
 git commit -m "fix: resolve memory leak in image processing"
@@ -90,6 +96,7 @@ Pull requests to protected branches trigger automatic validation:
 ### Workflow: `.github/workflows/pre-merge-checks.yml`
 
 **Jobs:**
+
 1. **code-quality** - Formatting, linting, TypeScript
 2. **unit-tests** - Frontend and backend tests with coverage
 3. **build** - Build validation and bundle size check
@@ -103,6 +110,7 @@ Pull requests to protected branches trigger automatic validation:
 ## Installation & Setup
 
 ### Initial Setup
+
 ```bash
 # Install Husky
 npm install
@@ -117,6 +125,7 @@ chmod +x .husky/*
 ### Troubleshooting
 
 #### Hook not running
+
 ```bash
 # Reinstall Husky
 rm -rf .husky
@@ -125,6 +134,7 @@ npx husky init
 ```
 
 #### ESLint/Prettier issues
+
 ```bash
 # Reinstall dependencies
 rm -rf node_modules package-lock.json
@@ -132,6 +142,7 @@ npm install
 ```
 
 #### Docker tests failing
+
 ```bash
 # Ensure Docker services are running
 docker compose -f docker-compose.staging.yml up -d
@@ -158,6 +169,7 @@ SKIP_TESTS=true DOCKER_CHECKS=false git commit -m "quick fix"
 ## Best Practices
 
 1. **Always run pre-merge check before creating PR**
+
    ```bash
    ./scripts/pre-merge-check.sh
    ```
@@ -167,6 +179,7 @@ SKIP_TESTS=true DOCKER_CHECKS=false git commit -m "quick fix"
    - Address security vulnerabilities promptly
 
 3. **Keep dependencies updated**
+
    ```bash
    npm update
    npm audit fix
@@ -200,6 +213,7 @@ SKIP_TESTS=false       # Never skip tests
 ```
 
 Load in your shell:
+
 ```bash
 source .env.hooks
 ```
@@ -234,6 +248,7 @@ grep "fail\|error" commit.log
 ## Support
 
 For issues or questions:
+
 1. Check this documentation
 2. Review hook output carefully
 3. Run `./scripts/pre-merge-check.sh` for detailed validation

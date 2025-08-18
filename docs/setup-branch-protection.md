@@ -14,10 +14,10 @@ Jděte do nastavení repozitáře na GitHubu:
 ✅ Require a pull request before merging
   ✅ Require approvals (alespoň 1)
   ✅ Dismiss stale pull request approvals when new commits are pushed
-  
+
 ✅ Require status checks to pass before merging
   ✅ Require branches to be up to date before merging
-  
+
   Vyberte tyto status checks (z našeho workflow):
   ✅ code-quality
   ✅ unit-tests (frontend)
@@ -52,6 +52,7 @@ Vytvořte skutečný merge hook pomocí Git aliasu:
 ```
 
 Použití:
+
 ```bash
 git safe-merge feature-branch
 ```
@@ -65,14 +66,14 @@ git safe-merge feature-branch
 repository:
   has_wiki: false
   has_projects: false
-  
+
 branches:
   - name: main
     protection:
       required_status_checks:
         strict: true
         contexts:
-          - "merge-ready"  # Náš finální check
+          - 'merge-ready' # Náš finální check
       enforce_admins: true
       required_pull_request_reviews:
         required_approving_review_count: 1
@@ -109,10 +110,11 @@ curl -X PUT \
    - ✅ Nejsou vyřešeny všechny komentáře
 
 2. **GitHub zobrazí:**
+
    ```
    ❌ Merging is blocked
    The base branch requires all status checks to pass before merging.
-   
+
    Required checks:
    ❌ merge-ready - failing
    ✅ code-quality - passed
@@ -142,6 +144,7 @@ Po nastavení můžete sledovat:
 ## 🔧 Troubleshooting
 
 Pokud se checks nezobrazují:
+
 1. Zkontrolujte, že workflow běží (Actions tab)
 2. Ověřte názvy jobs v workflow
 3. Počkejte 1-2 minuty na synchronizaci

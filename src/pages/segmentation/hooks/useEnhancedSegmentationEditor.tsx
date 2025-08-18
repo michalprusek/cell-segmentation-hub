@@ -197,12 +197,22 @@ export const useEnhancedSegmentationEditor = ({
         canvasHeight
       );
       setTransform(newTransform);
-      
+
       if (process.env.NODE_ENV === 'development') {
-        logger.debug('🔄 Auto-reset view for image opened from gallery:', imageId);
+        logger.debug(
+          '🔄 Auto-reset view for image opened from gallery:',
+          imageId
+        );
       }
     }
-  }, [isFromGallery, imageId, imageWidth, imageHeight, canvasWidth, canvasHeight]);
+  }, [
+    isFromGallery,
+    imageId,
+    imageWidth,
+    imageHeight,
+    canvasWidth,
+    canvasHeight,
+  ]);
 
   // Update polygons with history tracking
   const updatePolygons = useCallback(
