@@ -9,6 +9,9 @@ services:
         - VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/api/ml
         - VITE_WS_URL=wss://spherosegapp.utia.cas.cz
     container_name: spheroseg-frontend
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
     volumes:
       - frontend-static:/app/dist
     networks:
@@ -19,6 +22,9 @@ services:
   nginx:
     image: nginx:alpine
     container_name: spheroseg-nginx
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
     ports:
       - "80:80"
       - "443:443"
@@ -45,8 +51,11 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: ../docker/backend.prod.Dockerfile
+      dockerfile: backend.prod.Dockerfile
     container_name: spheroseg-backend
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
     networks:
       - spheroseg-network
     depends_on:
@@ -73,7 +82,7 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - RATE_LIMIT_ENABLED=true
       - RATE_LIMIT_WINDOW_MS=60000
-      - RATE_LIMIT_MAX=10000
+      - RATE_LIMIT_MAX=1000
       - LOG_LEVEL=info
       - ENABLE_METRICS=true
     restart: always
@@ -90,6 +99,10 @@ services:
       context: ./backend/segmentation
       dockerfile: ../../docker/ml.prod.Dockerfile
     container_name: spheroseg-ml
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
     networks:
       - spheroseg-network
     volumes:
@@ -124,6 +137,10 @@ services:
     image: postgres:15-alpine
     container_name: spheroseg-db
     hostname: postgres
+    user: "postgres:postgres"
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
     networks:
       - spheroseg-network
     environment:
@@ -147,6 +164,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: spheroseg-redis
+    user: "redis:redis"
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
     networks:
       - spheroseg-network
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru --port 6379

@@ -19,8 +19,11 @@ if [ -f "/app/scripts/wait-for-db.sh" ]; then
 else
   # Extract database connection details from DATABASE_URL
   if [ -n "${DATABASE_URL}" ]; then
+    # Extract connection info from DATABASE_URL
+    DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
+    DB_USER=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
     # Wait for PostgreSQL to be ready
-    until pg_isready -h postgres -U spheroseg 2>/dev/null; do
+    until pg_isready -h "${DB_HOST:-postgres}" -U "${DB_USER:-spheroseg}" 2>/dev/null; do
       echo "Database not ready, waiting..."
       sleep 5
     done

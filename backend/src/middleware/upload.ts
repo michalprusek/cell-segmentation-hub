@@ -118,7 +118,7 @@ export const validateUploadedFiles = (
   next: NextFunction
 ): void => {
   try {
-    const files = req.files as multer.File[];
+    const files = req.files as Express.Multer.File[];
     
     if (!files || files.length === 0) {
       ResponseHelper.validationError(res, 'Je nutné vybrat alespoň jeden soubor');

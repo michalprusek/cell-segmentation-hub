@@ -55,7 +55,8 @@ export const initializeDatabase = async (): Promise<PrismaClient> => {
     }
   }
   
-  throw new Error('Failed to connect to database');
+  // This should never be reached due to the logic above, but TypeScript requires it
+  throw new Error('Failed to initialize database: maximum retries exceeded');
 };
 
 // Graceful shutdown

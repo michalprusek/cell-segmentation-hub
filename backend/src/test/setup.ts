@@ -1,22 +1,5 @@
-// Type declarations for Jest globals since @types/jest might not be fully loaded during tsc check
-declare global {
-  const jest: {
-    fn(): jest.Mock;
-    clearAllMocks(): void;
-    mock(moduleName: string, factory?: () => any): void;
-  };
-  const beforeEach: (fn: () => void) => void;
-  const afterEach: (fn: () => void) => void;
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace jest {
-    interface Mock {
-      mockReturnValue(value: any): Mock;
-      mockResolvedValue(value: any): Mock;
-      mockRejectedValue(error: any): Mock;
-      mockImplementation(fn: (...args: any[]) => any): Mock;
-    }
-  }
-}
+// Jest types are provided by @types/jest package
+/// <reference types="jest" />
 
 // Mock Prisma client  
 // export const prismaMock = mockDeep<PrismaClient>() as unknown as DeepMockProxy<PrismaClient>

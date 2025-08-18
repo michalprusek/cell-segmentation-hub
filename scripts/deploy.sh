@@ -18,7 +18,12 @@ if [ "$EUID" -eq 0 ]; then
 fi
 
 # Change to project directory
-cd /home/cvat/cell-segmentation-hub
+DEPLOY_DIR="${DEPLOY_DIR:-/home/cvat/cell-segmentation-hub}"
+if [ ! -d "$DEPLOY_DIR" ]; then
+    echo -e "${RED}Deployment directory does not exist: $DEPLOY_DIR${NC}"
+    exit 1
+fi
+cd "$DEPLOY_DIR"
 
 # Check for required files
 echo "📋 Checking required files..."
@@ -62,10 +67,33 @@ services=("nginx" "frontend" "backend" "ml-service" "postgres" "redis")
 all_healthy=true
 
 for service in "${services[@]}"; do
-    if docker compose -f docker-compose.prod.yml ps | grep -q "$service.*healthy"; then
-        echo -e "${GREEN}✅ $service is healthy${NC}"
+    container_id=$(docker compose -f docker-compose.prod.yml ps -q "$service" 2>/dev/null)
+    if [ -n "$container_id" ]; then
+        health_status=$(docker inspect --format '{{.State.Health.Status}}' "$container_id" 2>/dev/null || echo "no-health-check")
+        case "$health_status" in
+            "healthy")
+                echo -e "${GREEN}✅ $service is healthy${NC}"
+                ;;
+            "no-health-check")
+                # Check if container is running for services without health check
+                if docker inspect --format '{{.State.Running}}' "$container_id" 2>/dev/null | grep -q "true"; then
+                    echo -e "${GREEN}✅ $service is running${NC}"
+                else
+                    echo -e "${RED}❌ $service is not running${NC}"
+                    all_healthy=false
+                fi
+                ;;
+            "unhealthy"|"starting")
+                echo -e "${YELLOW}⚠️  $service is $health_status${NC}"
+                all_healthy=false
+                ;;
+            *)
+                echo -e "${RED}❌ $service health check failed${NC}"
+                all_healthy=false
+                ;;
+        esac
     else
-        echo -e "${RED}❌ $service is not healthy${NC}"
+        echo -e "${RED}❌ $service container not found${NC}"
         all_healthy=false
     fi
 done

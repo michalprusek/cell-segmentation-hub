@@ -36,10 +36,13 @@ const RegionPanel = ({
 
   // Organize polygons by hierarchy (external with internal polygons under them)
   const organizedPolygons = useMemo(() => {
-    if (!polygons) return [];
+    // Ensure polygons is always an array to prevent "f.filter is not a function" errors
+    const safePolygons = Array.isArray(polygons) ? polygons : [];
 
-    const externals = polygons.filter(p => p.type === 'external');
-    const internals = polygons.filter(p => p.type === 'internal');
+    if (safePolygons.length === 0) return [];
+
+    const externals = safePolygons.filter(p => p.type === 'external');
+    const internals = safePolygons.filter(p => p.type === 'internal');
 
     return externals.map(external => ({
       ...external,

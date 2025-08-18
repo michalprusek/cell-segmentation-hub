@@ -1,8 +1,40 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 
 // Load environment variables
 dotenv.config();
+
+// Helper function to read secrets from Docker secret files
+const readSecretFile = (secretPath: string): string | undefined => {
+  try {
+    if (fs.existsSync(secretPath)) {
+      return fs.readFileSync(secretPath, 'utf8').trim();
+    }
+    return undefined;
+  } catch (error) {
+    console.warn(`Failed to read secret file ${secretPath}:`, error);
+    return undefined;
+  }
+};
+
+// Helper function to get value from environment or secret file
+const getSecretValue = (envKey: string, secretFileKey?: string): string | undefined => {
+  // First try environment variable
+  const envValue = process.env[envKey];
+  if (envValue) return envValue;
+  
+  // Then try secret file if specified
+  if (secretFileKey) {
+    const secretFilePath = process.env[secretFileKey];
+    if (secretFilePath) {
+      return readSecretFile(secretFilePath);
+    }
+  }
+  
+  return undefined;
+};
 
 // Configuration schema for validation
 const configSchema = z.object({
@@ -11,11 +43,33 @@ const configSchema = z.object({
   HOST: z.string().default('localhost'),
   
   // Database
-  DATABASE_URL: z.string().default('file:./dev.db'),
+  DATABASE_URL: z.string().default('file:./dev.db').transform((url) => {
+    // Support DATABASE_URL template with secret substitution for production
+    const urlTemplate = process.env.DATABASE_URL_TEMPLATE;
+    if (urlTemplate && urlTemplate.includes('{{DB_PASSWORD}}')) {
+      const dbPassword = getSecretValue('DB_PASSWORD', 'DB_PASSWORD_FILE');
+      if (dbPassword) {
+        return urlTemplate.replace('{{DB_PASSWORD}}', dbPassword);
+      }
+    }
+    return url;
+  }),
   
   // JWT
-  JWT_ACCESS_SECRET: z.string().min(32, 'JWT Access Secret must be at least 32 characters'),
-  JWT_REFRESH_SECRET: z.string().min(32, 'JWT Refresh Secret must be at least 32 characters'),
+  JWT_ACCESS_SECRET: z.string().min(32, 'JWT Access Secret must be at least 32 characters').transform(() => {
+    const secret = getSecretValue('JWT_ACCESS_SECRET', 'JWT_ACCESS_SECRET_FILE');
+    if (!secret || secret.length < 32) {
+      throw new Error('JWT Access Secret must be at least 32 characters');
+    }
+    return secret;
+  }),
+  JWT_REFRESH_SECRET: z.string().min(32, 'JWT Refresh Secret must be at least 32 characters').transform(() => {
+    const secret = getSecretValue('JWT_REFRESH_SECRET', 'JWT_REFRESH_SECRET_FILE');
+    if (!secret || secret.length < 32) {
+      throw new Error('JWT Refresh Secret must be at least 32 characters');
+    }
+    return secret;
+  }),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
   
@@ -56,8 +110,8 @@ const configSchema = z.object({
   
   // Rate Limiting
   RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
-  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000), // 1 minute
-  RATE_LIMIT_MAX: z.coerce.number().default(10000) // 10000 requests per minute for production (increased from 5000)
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60000), // 1 minute
+  RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10000) // 10000 requests per minute for production (increased from 5000)
 }).refine((data) => {
   // S3 storage validation
   if (data.STORAGE_TYPE === 's3') {

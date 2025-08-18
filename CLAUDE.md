@@ -101,9 +101,9 @@ Before starting work, query the knowledge system for:
 
 - ~~`make up/down/logs`~~ - Use Docker commands directly
 - ~~`npm run build/lint/test`~~ - All tasks must run inside Docker containers
-- ~~Direct Node.js/npm commands`~~ - Everything runs in containerized environment
+- ~~Direct Node.js/npm commands~~ - Everything runs in containerized environment
 
-**For any task, always use appropriate Docker commands listed above.**
+**Compose-only — do not run make or npm on the host; run npm inside containers via docker exec/docker-compose run.**
 
 ### Docker Build Commands (Use Desktop Commander MCP)
 
@@ -216,7 +216,7 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 
 ### Important Reminders
 
-- **Docker-first development**: Always use `make` commands, never direct npm/node commands
+- **Docker-first development**: Always use Docker Compose commands, never direct npm/node/make commands on host
 - **CRITICAL FOR PRODUCTION**: Kdykoliv je potřeba v production deployment změnit něco v aplikaci, je NUTNÝ ZNOVU BUILD kontejneru! Změny v source kódu se nepropíšou do běžícího kontejneru bez rebuild. Vždy použij `docker compose -f docker-compose.prod.yml build --no-cache backend` před restartem.
 - **File editing**: Always prefer editing existing files over creating new ones
 - **Documentation**: Only create docs when explicitly requested by the user
@@ -225,25 +225,25 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 
 ### Testing and Quality
 
-- **Linting**: Run `npm run lint` for code quality checks
-- **Lint fix**: Run `npm run lint:fix` to auto-fix ESLint issues
-- **Type checking**: Run `npm run type-check` to verify TypeScript types
-- **Unit tests**: Run `npm run test` for Vitest unit tests
-- **Test UI**: Run `npm run test:ui` for interactive Vitest interface
-- **E2E tests**: Run `npm run test:e2e` for Playwright end-to-end tests (requires services running)
-- **E2E UI**: Run `npm run test:e2e:ui` for interactive Playwright interface
-- **Test coverage**: Run `npm run test:coverage` to generate coverage report
-- **Formatting**: Run `npm run format` to format code with Prettier
-- **Format check**: Run `npm run format:check` to check formatting without changes
+- **Linting**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run lint`
+- **Lint fix**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run lint:fix`
+- **Type checking**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run type-check`
+- **Unit tests**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test`
+- **Test UI**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test:ui`
+- **E2E tests**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test:e2e`
+- **E2E UI**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test:e2e:ui`
+- **Test coverage**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test:coverage`
+- **Formatting**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run format`
+- **Format check**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run format:check`
 - **API testing**: Use Swagger UI at http://localhost:3001/api-docs
-- **Health checks**: Use `make health` to verify all services are running
-- **Service logs**: Use `make logs-f` to monitor all services in real-time
+- **Health checks**: Use `docker compose ps` to verify all services are running
+- **Service logs**: Use `docker compose logs -f` to monitor all services in real-time
 
 ### Internationalization (i18n)
 
-- **Translation validation**: Run `npm run i18n:validate` to check translation completeness and consistency
-- **Translation check**: Run `npm run i18n:check` to verify all translation keys exist
-- **Translation lint**: Run `npm run i18n:lint` to lint i18n-specific rules
+- **Translation validation**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run i18n:validate`
+- **Translation check**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run i18n:check`
+- **Translation lint**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run i18n:lint`
 - **Supported languages**: English (en), Czech (cs), Spanish (es), German (de), French (fr), Chinese (zh)
 - **Translation files**: Located in `/src/translations/`
 
@@ -270,15 +270,15 @@ The project uses Husky for comprehensive pre-commit validation:
 - **Adding new API endpoints**: Add routes in `/backend/src/api/routes/`, controllers in `/backend/src/api/controllers/`, and update OpenAPI spec
 - **Frontend components**: Create in `/src/components/` following existing patterns, use shadcn/ui primitives
 - **ML model changes**: Modify `/backend/segmentation/models/` and update model loading in `/backend/segmentation/services/`
-- **Adding translations**: Add new keys to all language files in `/src/translations/`, run `npm run i18n:validate` to verify
+- **Adding translations**: Add new keys to all language files in `/src/translations/`, run inside frontend container: `docker exec -it spheroseg-frontend npm run i18n:validate`
 - **Database changes**:
   - Update `/backend/prisma/schema.prisma`
-  - Shell into backend container: `make shell-be`
+  - Shell into backend container: `docker exec -it spheroseg-backend /bin/bash`
   - Run migration: `npx prisma migrate dev --name your_migration_name`
   - Generate client: `npx prisma generate`
-- **Viewing database**: Run `cd backend && npm run db:studio` (opens Prisma Studio)
-- **Docker operations**: All docker commands available via `make` targets (see `make help`)
-- **Running single tests**: Use Vitest filtering: `npm run test -- --run specific-test-name`
+- **Viewing database**: Run inside backend container: `docker exec -it spheroseg-backend npm run db:studio`
+- **Docker operations**: Use docker compose commands directly (see `docker compose --help`)
+- **Running single tests**: Use Vitest filtering inside frontend container: `docker exec -it spheroseg-frontend npm run test -- --run specific-test-name`
 - **Frontend debugging**: Use browser dev tools with source maps enabled in development
 
 ## Current System Status
@@ -316,15 +316,15 @@ The project uses Husky for comprehensive pre-commit validation:
 
 **Before making changes:**
 
-1. Always use Docker environment (`make up` to start)
+1. Always use Docker environment (`docker compose up -d` to start)
 2. Query knowledge system for existing patterns and solutions
 3. Check if translations need updates for UI changes
 
-**During development:** 4. Run `npm run dev` for frontend development with hot reload 5. Use `make logs-f` to monitor all services 6. Test changes with `npm run test` and `npm run test:e2e` 7. Validate translations with `npm run i18n:validate` if applicable
+**During development:** 4. Services start automatically with hot reload 5. Use `docker compose logs -f` to monitor all services 6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test` and `docker exec -it spheroseg-frontend npm run test:e2e` 7. Validate translations inside container: `docker exec -it spheroseg-frontend npm run i18n:validate` if applicable
 
 **Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.)
 
-**Quality assurance:** 11. Always run `npm run type-check` and `npm run lint` before major changes 12. Use `make health` to verify all services are running correctly 13. Store learnings and solutions in the knowledge system for future reference
+**Quality assurance:** 11. Always run inside containers: `docker exec -it spheroseg-frontend npm run type-check` and `docker exec -it spheroseg-frontend npm run lint` before major changes 12. Use `docker compose ps` to verify all services are running correctly 13. Store learnings and solutions in the knowledge system for future reference
 
 ## Recent Implementations & Important Notes
 

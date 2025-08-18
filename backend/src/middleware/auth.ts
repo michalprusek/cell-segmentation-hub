@@ -129,12 +129,20 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
     }
 
     try {
-      // Validate that the provided resource model exists in Prisma
-      if (!(resourceModel in prisma)) {
+      // Whitelist of allowed resource models for security
+      const allowedModels = ['project', 'projectImage', 'segmentationResult', 'user', 'userProfile', 'queueItem'];
+      
+      if (!allowedModels.includes(resourceModel)) {
+        logger.warn(`Attempted access to unauthorized model: ${resourceModel}`, 'Auth');
         throw new Error(`Invalid resource model: ${resourceModel}`);
       }
 
-      // Dynamic access to Prisma model
+      // Validate that the provided resource model exists in Prisma
+      if (!(resourceModel in prisma)) {
+        throw new Error(`Resource model does not exist: ${resourceModel}`);
+      }
+
+      // Safe dynamic access to Prisma model after whitelist validation
       const model = (prisma as Record<string, any>)[resourceModel];
       
       const resource = await model.findUnique({

@@ -21,13 +21,13 @@ scrape_configs:
 
   - job_name: 'postgres'
     static_configs:
-      - targets: ['postgres:5432']
+      - targets: ['postgres_exporter:9187']
 
   - job_name: 'redis'
     static_configs:
-      - targets: ['redis:6379']
+      - targets: ['redis_exporter:9121']
 
   - job_name: 'nginx'
     static_configs:
-      - targets: ['nginx:80']
+      - targets: ['nginx-prometheus-exporter:9113']
     metrics_path: '/metrics'

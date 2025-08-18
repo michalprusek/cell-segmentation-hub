@@ -49,14 +49,21 @@ fi
 
 print_status "Environment variables check passed ✓"
 
+# Set up compose command
+COMPOSE="$COMPOSE"
+
 # Step 1: Stop running containers
 print_status "Stopping production containers..."
-docker-compose -f docker-compose.prod-simple.yml down
+$COMPOSE down
 
 # Step 2: Remove outdated frontend static volume
 print_status "Removing outdated frontend static volume..."
-if docker volume ls | grep -q "cell-segmentation-hub_frontend-static"; then
-    docker volume rm cell-segmentation-hub_frontend-static || true
+# Determine project prefix from COMPOSE_PROJECT_NAME or current directory name
+PROJECT_PREFIX="${COMPOSE_PROJECT_NAME:-$(basename "$(pwd)")}"
+FRONTEND_VOLUME="${PROJECT_PREFIX}_frontend-static"
+
+if docker volume ls | grep -q "${FRONTEND_VOLUME}"; then
+    docker volume rm "${FRONTEND_VOLUME}" || true
     print_success "Outdated frontend volume removed"
 else
     print_warning "Frontend volume not found (this is expected if first deployment)"
@@ -68,36 +75,36 @@ docker image prune -f || true
 
 # Step 4: Build frontend with fresh dependencies
 print_status "Building frontend container (this may take a few minutes)..."
-docker-compose -f docker-compose.prod-simple.yml build --no-cache frontend
+$COMPOSE build --no-cache frontend
 print_success "Frontend container built successfully"
 
 # Step 5: Build other services
 print_status "Building backend and other services..."
-docker-compose -f docker-compose.prod-simple.yml build backend
-docker-compose -f docker-compose.prod-simple.yml build ml
+$COMPOSE build backend
+$COMPOSE build ml-service
 print_success "All containers built successfully"
 
 # Step 6: Start services in correct order
 print_status "Starting database and Redis..."
-docker-compose -f docker-compose.prod-simple.yml up -d db redis
+$COMPOSE up -d postgres redis
 
 print_status "Waiting for database to be ready..."
 sleep 10
 
 print_status "Starting ML service..."
-docker-compose -f docker-compose.prod-simple.yml up -d ml
+$COMPOSE up -d ml-service
 
 print_status "Starting backend API..."
-docker-compose -f docker-compose.prod-simple.yml up -d backend
+$COMPOSE up -d backend
 
 print_status "Starting frontend service to populate volume..."
-docker-compose -f docker-compose.prod-simple.yml up -d frontend
+$COMPOSE up -d frontend
 
 print_status "Waiting for frontend files to copy..."
 sleep 5
 
 print_status "Starting nginx reverse proxy..."
-docker-compose -f docker-compose.prod-simple.yml up -d nginx
+$COMPOSE up -d nginx
 
 # Step 7: Health checks
 print_status "Running health checks..."
@@ -110,11 +117,16 @@ else
     print_error "Nginx health check failed ✗"
 fi
 
-# Check backend
-if curl -f -s http://localhost:3001/health > /dev/null; then
-    print_success "Backend API is responding ✓"  
+# Check backend - run health check inside container
+BACKEND_POD=$(docker ps --filter "name=spheroseg-backend" --format "{{.Names}}" | head -1)
+if [ -n "$BACKEND_POD" ]; then
+    if docker exec "$BACKEND_POD" curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
+        print_success "Backend API is responding ✓"
+    else
+        print_error "Backend API health check failed ✗"
+    fi
 else
-    print_error "Backend API health check failed ✗"
+    print_error "Backend container not found ✗"
 fi
 
 # Check ML service - run health check inside container since port is not exposed
@@ -141,7 +153,7 @@ fi
 
 # Step 9: Show final status
 print_status "Checking container status..."
-docker-compose -f docker-compose.prod-simple.yml ps
+$COMPOSE ps
 
 print_success "🎉 Production deployment fixes completed!"
 print_status "Your application should now be accessible at https://spherosegapp.utia.cas.cz"
@@ -151,5 +163,5 @@ print_status "✓ Frontend rebuilt without Google Fonts and gptengineer.js"
 print_status "✓ WebSocket CORS configuration added (WS_ALLOWED_ORIGINS)"
 print_status "✓ All services restarted with fresh configuration"
 print_status ""
-print_status "To monitor logs: docker-compose -f docker-compose.prod-simple.yml logs -f"
-print_status "To check status: docker-compose -f docker-compose.prod-simple.yml ps"
+print_status "To monitor logs: $COMPOSE logs -f"
+print_status "To check status: $COMPOSE ps"

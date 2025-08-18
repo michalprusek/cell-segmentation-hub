@@ -400,7 +400,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="coco-format"
                     checked={exportOptions.annotationFormats?.includes('coco')}
                     onCheckedChange={checked => {
-                      const formats = exportOptions.annotationFormats || [];
+                      const formats = Array.isArray(
+                        exportOptions.annotationFormats
+                      )
+                        ? exportOptions.annotationFormats
+                        : [];
                       updateExportOptions({
                         annotationFormats: checked
                           ? [...formats, 'coco']
@@ -418,7 +422,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="yolo-format"
                     checked={exportOptions.annotationFormats?.includes('yolo')}
                     onCheckedChange={checked => {
-                      const formats = exportOptions.annotationFormats || [];
+                      const formats = Array.isArray(
+                        exportOptions.annotationFormats
+                      )
+                        ? exportOptions.annotationFormats
+                        : [];
                       updateExportOptions({
                         annotationFormats: checked
                           ? [...formats, 'yolo']
@@ -436,7 +444,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="json-format"
                     checked={exportOptions.annotationFormats?.includes('json')}
                     onCheckedChange={checked => {
-                      const formats = exportOptions.annotationFormats || [];
+                      const formats = Array.isArray(
+                        exportOptions.annotationFormats
+                      )
+                        ? exportOptions.annotationFormats
+                        : [];
                       updateExportOptions({
                         annotationFormats: checked
                           ? [...formats, 'json']
@@ -465,7 +477,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="excel-metrics"
                     checked={exportOptions.metricsFormats?.includes('excel')}
                     onCheckedChange={checked => {
-                      const formats = exportOptions.metricsFormats || [];
+                      const formats = Array.isArray(
+                        exportOptions.metricsFormats
+                      )
+                        ? exportOptions.metricsFormats
+                        : [];
                       updateExportOptions({
                         metricsFormats: checked
                           ? [...formats, 'excel']
@@ -483,7 +499,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="csv-metrics"
                     checked={exportOptions.metricsFormats?.includes('csv')}
                     onCheckedChange={checked => {
-                      const formats = exportOptions.metricsFormats || [];
+                      const formats = Array.isArray(
+                        exportOptions.metricsFormats
+                      )
+                        ? exportOptions.metricsFormats
+                        : [];
                       updateExportOptions({
                         metricsFormats: checked
                           ? [...formats, 'csv']
@@ -501,7 +521,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="json-metrics"
                     checked={exportOptions.metricsFormats?.includes('json')}
                     onCheckedChange={checked => {
-                      const formats = exportOptions.metricsFormats || [];
+                      const formats = Array.isArray(
+                        exportOptions.metricsFormats
+                      )
+                        ? exportOptions.metricsFormats
+                        : [];
                       updateExportOptions({
                         metricsFormats: checked
                           ? [...formats, 'json']
