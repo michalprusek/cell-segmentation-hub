@@ -117,11 +117,16 @@ else
     print_error "Backend API health check failed ✗"
 fi
 
-# Check ML service
-if curl -f -s http://localhost:8000/health > /dev/null; then
-    print_success "ML service is responding ✓"
+# Check ML service - run health check inside container since port is not exposed
+ML_POD=$(docker ps --filter "name=spheroseg-ml" --format "{{.Names}}" | head -1)
+if [ -n "$ML_POD" ]; then
+    if docker exec "$ML_POD" curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
+        print_success "ML service is responding ✓"
+    else
+        print_error "ML service health check failed ✗"
+    fi
 else
-    print_error "ML service health check failed ✗"
+    print_error "ML service container not found ✗"
 fi
 
 # Step 8: Verify frontend files are clean

@@ -37,8 +37,8 @@ services:
     networks:
       spheroseg-network:
         aliases:
-          - spheroseg-db
-          - db
+          - spheroseg-redis
+          - redis
     restart: always
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -52,8 +52,8 @@ services:
       context: ./backend/segmentation
       dockerfile: ../../docker/ml.prod.Dockerfile
     container_name: spheroseg-ml
-    ports:
-      - "8000:8000"
+    expose:
+      - "8000"
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ml-cache:/app/cache
@@ -109,8 +109,8 @@ services:
       - RATE_LIMIT_MAX=100
       - LOG_LEVEL=info
       - ENABLE_METRICS=true
-    ports:
-      - "3001:3001"
+    expose:
+      - "3001"
     networks:
       - spheroseg-network
     depends_on:
@@ -142,15 +142,19 @@ services:
     networks:
       spheroseg-network:
         aliases:
-          - spheroseg-db
-          - db
+          - spheroseg-frontend
+          - frontend
     restart: always
 
   # Nginx Reverse Proxy with SSL
   nginx:
     image: nginx:alpine
     container_name: spheroseg-nginx
-    network_mode: "host"
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - spheroseg-network
     volumes:
       - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/sites:/etc/nginx/sites-enabled:ro
@@ -182,8 +186,7 @@ services:
     networks:
       spheroseg-network:
         aliases:
-          - spheroseg-db
-          - db
+          - prometheus
     restart: always
 
   # Grafana Visualization
