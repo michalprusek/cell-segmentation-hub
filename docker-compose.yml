@@ -53,9 +53,9 @@ services:
       - FROM_EMAIL=noreply@spheroseg.local
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - RATE_LIMIT_ENABLED=false
+      - RATE_LIMIT_ENABLED=true
       - RATE_LIMIT_WINDOW_MS=60000
-      - RATE_LIMIT_MAX=5000
+      - RATE_LIMIT_MAX=50000
     depends_on:
       - ml-service
     networks:

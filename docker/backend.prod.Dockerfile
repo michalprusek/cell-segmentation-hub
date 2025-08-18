@@ -40,7 +40,7 @@ RUN npx prisma generate
 COPY . .
 
 # Copy entrypoint script and make it executable
-COPY docker/backend-entrypoint.sh /entrypoint.sh
+COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # Create necessary directories

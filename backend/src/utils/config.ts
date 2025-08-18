@@ -57,7 +57,7 @@ const configSchema = z.object({
   // Rate Limiting
   RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000), // 1 minute
-  RATE_LIMIT_MAX: z.coerce.number().default(5000) // 5000 requests per minute for development
+  RATE_LIMIT_MAX: z.coerce.number().default(10000) // 10000 requests per minute for production (increased from 5000)
 }).refine((data) => {
   // S3 storage validation
   if (data.STORAGE_TYPE === 's3') {

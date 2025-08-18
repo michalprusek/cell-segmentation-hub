@@ -73,7 +73,7 @@ services:
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - RATE_LIMIT_ENABLED=true
       - RATE_LIMIT_WINDOW_MS=60000
-      - RATE_LIMIT_MAX=100
+      - RATE_LIMIT_MAX=10000
       - LOG_LEVEL=info
       - ENABLE_METRICS=true
     restart: always

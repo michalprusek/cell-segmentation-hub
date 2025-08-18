@@ -217,6 +217,7 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 ### Important Reminders
 
 - **Docker-first development**: Always use `make` commands, never direct npm/node commands
+- **CRITICAL FOR PRODUCTION**: Kdykoliv je potřeba v production deployment změnit něco v aplikaci, je NUTNÝ ZNOVU BUILD kontejneru! Změny v source kódu se nepropíšou do běžícího kontejneru bez rebuild. Vždy použij `docker compose -f docker-compose.prod.yml build --no-cache backend` před restartem.
 - **File editing**: Always prefer editing existing files over creating new ones
 - **Documentation**: Only create docs when explicitly requested by the user
 - **Terminal safety**: Never use KillBash tool as it terminates the user's session
