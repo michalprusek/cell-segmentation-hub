@@ -1375,5 +1375,9 @@ export default {
     reconnected: 'Conexión al servidor restaurada',
     reconnectFailed: 'Error al restaurar la conexión al servidor',
     connectionLost: 'Conexión al servidor perdida',
+    pollingMode: 'Usando modo de conexión de respaldo',
+    upgradedToWebSocket: 'Actualizado a conexión en tiempo real',
+    connectionError: 'No se puede conectar al servidor',
+    authError: 'Error de autenticación',
   },
 };

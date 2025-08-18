@@ -56,12 +56,33 @@ Before starting work, query the knowledge system for:
 
 ### Docker Environment (Required)
 
-- **Start all services**: `make up` or `make dev-setup`
-- **View logs**: `make logs-f` (all services) or `make logs-fe`/`make logs-be`/`make logs-ml`
-- **Stop services**: `make down`
-- **Health check**: `make health` or `make test`
-- **Reset environment**: `make reset` (clean + rebuild)
-- **Shell access**: `make shell-fe`/`make shell-be`/`make shell-ml`
+**CRITICAL: This project uses Docker exclusively. NEVER use npm/node/make commands directly - always use Docker!**
+
+**Production Environment:**
+
+- **Start services**: `docker compose -f docker-compose.prod.yml up -d`
+- **Stop services**: `docker compose -f docker-compose.prod.yml down`
+- **Build services**: `docker compose -f docker-compose.prod.yml build [--no-cache]`
+- **View logs**: `docker compose -f docker-compose.prod.yml logs -f [service]`
+- **Restart service**: `docker compose -f docker-compose.prod.yml restart [service]`
+
+**Development Environment:**
+
+- **Start services**: `docker compose up -d`
+- **Stop services**: `docker compose down`
+- **Build services**: `docker compose build [--no-cache]`
+- **View logs**: `docker compose logs -f [service]`
+- **Shell access**: `docker exec -it [container-name] /bin/bash`
+
+**Container Names:**
+
+- `spheroseg-nginx` - Web server (nginx)
+- `spheroseg-backend` - API server (Node.js)
+- `spheroseg-ml` - ML service (Python)
+- `spheroseg-db` - Database (PostgreSQL)
+- `spheroseg-redis` - Cache (Redis)
+- `spheroseg-prometheus` - Metrics
+- `spheroseg-grafana` - Dashboard
 
 ### Service URLs (Docker only)
 
@@ -74,13 +95,15 @@ Before starting work, query the knowledge system for:
 
 **Note**: Some documentation may reference port 8082 for frontend - this is legacy. Always use port 3000 for Docker development.
 
-### Legacy Frontend Commands (Do NOT use in development)
+### DISABLED Commands (Do NOT use)
 
-These only work for building static assets, but the app must run in Docker:
+**These commands are DISABLED and should NEVER be used:**
 
-- `npm run build` - Production build
-- `npm run lint` - Code linting
-- `npm run preview` - Preview build (but use Docker for development)
+- ~~`make up/down/logs`~~ - Use Docker commands directly
+- ~~`npm run build/lint/test`~~ - All tasks must run inside Docker containers
+- ~~Direct Node.js/npm commands`~~ - Everything runs in containerized environment
+
+**For any task, always use appropriate Docker commands listed above.**
 
 ### Docker Build Commands (Use Desktop Commander MCP)
 

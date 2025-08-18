@@ -42,40 +42,25 @@ RUN echo '{ \
 # Build arguments for environment variables
 ARG VITE_API_BASE_URL
 ARG VITE_ML_SERVICE_URL
+ARG VITE_WS_URL
 
-# Build the application
+# Build the application with environment variables
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_ML_SERVICE_URL=${VITE_ML_SERVICE_URL}  
+ENV VITE_WS_URL=${VITE_WS_URL}
 RUN NODE_ENV=production npm run build
 
-# Production stage - serve with nginx
-FROM nginx:alpine
+# Copy built assets to volume and keep container running
+FROM alpine:latest
 
-# Install curl for health checks
-RUN apk add --no-cache curl
+# Install bash for script
+RUN apk add --no-cache bash
 
 # Copy built assets from builder
-COPY --from=builder /app/dist /usr/share/nginx/html
+COPY --from=builder /app/dist /dist
 
-# Copy nginx configuration (from correct context)
-COPY ./docker/nginx/frontend.nginx.conf /etc/nginx/conf.d/default.conf
+# Create a script to copy files and keep running
+RUN printf '#!/bin/bash\ncp -r /dist/* /app/dist/ 2>/dev/null || true\necho "Frontend files copied to volume"\nsleep infinity\n' > /copy.sh && \
+    chmod +x /copy.sh
 
-# Create non-root user (handle existing nginx user)
-RUN if ! getent group nginx >/dev/null 2>&1; then \
-        addgroup -g 1001 -S nginx; \
-    fi && \
-    if ! getent passwd nginx >/dev/null 2>&1; then \
-        adduser -S nginx -u 1001 -G nginx; \
-    fi && \
-    chown -R nginx:nginx /usr/share/nginx/html && \
-    chown -R nginx:nginx /var/cache/nginx && \
-    chown -R nginx:nginx /var/log/nginx && \
-    touch /var/run/nginx.pid && \
-    chown nginx:nginx /var/run/nginx.pid
-
-USER nginx
-
-EXPOSE 80
-
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -fS http://localhost/ || exit 1
-
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["/bin/bash", "/copy.sh"]
