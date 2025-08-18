@@ -4,7 +4,8 @@
 set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-AUTO_DEPLOY_SCRIPT="$SCRIPT_DIR/auto-deploy-staging.sh"
+# Use safe version that preserves database
+AUTO_DEPLOY_SCRIPT="$SCRIPT_DIR/auto-deploy-staging-safe.sh"
 LOG_FILE="/home/cvat/cell-segmentation-hub/auto-deploy.log"
 PID_FILE="/home/cvat/cell-segmentation-hub/auto-deploy.pid"
 

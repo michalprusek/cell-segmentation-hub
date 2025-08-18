@@ -72,6 +72,7 @@ services:
       - HOST=0.0.0.0
       - DATABASE_URL=postgresql://spheroseg:${STAGING_DB_PASSWORD:-password}@staging-db:5432/spheroseg_staging
       - REDIS_URL=redis://staging-redis:6379
+      - API_BASE_URL=http://localhost:4001
       - ALLOWED_ORIGINS=https://staging.spherosegapp.utia.cas.cz,http://localhost:4000,http://localhost:4001
       - WS_ALLOWED_ORIGINS=https://staging.spherosegapp.utia.cas.cz,ws://localhost:4001,http://localhost:4000,http://localhost:4001
       - SEGMENTATION_SERVICE_URL=http://staging-ml:8000

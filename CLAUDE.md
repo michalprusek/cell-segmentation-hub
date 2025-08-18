@@ -562,3 +562,5 @@ docker compose -f docker-compose.prod.yml up -d certbot
 - **Solution**: Enable Socket.io auto-reconnection, add keep-alive pings, fix disconnect handling
 - **Key settings**: `reconnection: true`, ping interval every 25s, proper reconnect event handlers
 - **Location**: `/src/services/webSocketManager.ts`
+
+- nikdy neobcházej husky commit!
