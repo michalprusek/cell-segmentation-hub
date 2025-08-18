@@ -75,7 +75,9 @@ export const useImageFilter = (images: ProjectImage[]) => {
 
   // Use useMemo to prevent infinite loops and unnecessary recalculations
   const filteredImages = useMemo(() => {
-    let result = [...images];
+    // Ensure images is always an array to prevent "f.filter is not a function" errors
+    const safeImages = Array.isArray(images) ? images : [];
+    let result = [...safeImages];
 
     if (searchTerm) {
       result = result.filter(img =>

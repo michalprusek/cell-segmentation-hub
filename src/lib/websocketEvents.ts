@@ -3,11 +3,20 @@
  */
 
 export interface WebSocketEvent {
-  type: 'reconnecting' | 'reconnected' | 'reconnect_failed' | 'connection_lost';
+  type:
+    | 'reconnecting'
+    | 'reconnected'
+    | 'reconnect_failed'
+    | 'connection_lost'
+    | 'polling_mode'
+    | 'websocket_upgrade'
+    | 'connection_error'
+    | 'auth_error';
   data?: {
     message?: string;
     attempts?: number;
   };
+  message?: string;
 }
 
 class WebSocketEventEmitter {

@@ -10,7 +10,7 @@ import { ResponseHelper } from './utils/response';
 import { initializeDatabase, disconnectDatabase, checkDatabaseHealth } from './db';
 import { setupSwagger } from './middleware/swagger';
 import { setupRoutes, createEndpointTracker } from './api/routes';
-import { createMonitoringMiddleware, getMetricsEndpoint, getMonitoringHealth } from './middleware/monitoring';
+import { createMonitoringMiddleware, getCombinedMetricsEndpoint, getMonitoringHealth } from './middleware/monitoring';
 import { WebSocketService } from './services/websocketService';
 import { prisma } from './db';
 
@@ -46,18 +46,39 @@ app.use(cors({
 if (config.RATE_LIMIT_ENABLED) {
   const limiter = rateLimit({
     windowMs: config.NODE_ENV === 'development' ? 60000 : config.RATE_LIMIT_WINDOW_MS, // 1 minute in dev
-    max: config.NODE_ENV === 'development' ? 10000 : config.RATE_LIMIT_MAX, // 10000 requests per minute in dev
+    max: config.NODE_ENV === 'development' ? 50000 : config.RATE_LIMIT_MAX, // 50000 requests per minute in dev (much higher)
     message: {
       success: false,
       error: 'Příliš mnoho požadavků, zkuste to později'
     },
     standardHeaders: true,
     legacyHeaders: false,
+    // Skip rate limiting for data loading operations (both dev and prod)
     skip: (req) => {
-      // Skip rate limiting for health checks and metrics in development
-      if (config.NODE_ENV === 'development') {
-        return req.path === '/health' || req.path === '/metrics' || req.path === '/api/health';
+      // Always skip health checks and metrics
+      if (req.path === '/health' || req.path === '/metrics' || req.path === '/api/health') {
+        return true;
       }
+      
+      // Skip GET requests for data loading (thumbnails, images, segmentation results)
+      if (req.method === 'GET') {
+        return req.path.includes('/thumbnails/') ||     // Thumbnail loading
+               req.path.includes('/images/') ||         // Image data loading
+               req.path.includes('/results') ||         // Segmentation results
+               req.path.startsWith('/api/projects/') ||  // Project data loading
+               req.path.startsWith('/api/segmentation/'); // Segmentation data
+      }
+      
+      // Skip OPTIONS requests (CORS preflight)
+      if (req.method === 'OPTIONS') {
+        return true;
+      }
+      
+      // In development, also skip auth endpoints
+      if (config.NODE_ENV === 'development' && req.path.startsWith('/api/auth')) {
+        return true;
+      }
+      
       return false;
     },
     handler: (req, res) => {
@@ -102,8 +123,8 @@ app.get('/health', async (req, res) => {
   }, dbHealth.healthy ? 'Server is healthy' : 'Server has issues');
 });
 
-// Prometheus metrics endpoint
-app.get('/metrics', getMetricsEndpoint());
+// Prometheus metrics endpoint (combined infrastructure + business metrics)
+app.get('/metrics', getCombinedMetricsEndpoint());
 
 // Setup all API routes
 setupRoutes(app);

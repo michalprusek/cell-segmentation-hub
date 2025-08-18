@@ -126,6 +126,7 @@ const SignIn = () => {
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -139,6 +140,7 @@ const SignIn = () => {
               <Input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 placeholder={t('auth.passwordPlaceholder')}
                 value={password}
                 onChange={e => setPassword(e.target.value)}

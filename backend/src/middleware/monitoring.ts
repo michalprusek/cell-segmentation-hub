@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import client from 'prom-client';
 import { logger } from '../utils/logger';
+import { BusinessMetricsService } from '../services/businessMetrics';
 
 // Vytvoření registru pro metriky
 const register = new client.Registry();
@@ -101,7 +102,7 @@ export function createMonitoringMiddleware(): (req: Request, res: Response, next
   };
 }
 
-// Endpoint pro Prometheus scraping
+// Endpoint pro Prometheus scraping (infrastructure metrics only)
 export function getMetricsEndpoint(): (req: Request, res: Response) => Promise<void> {
   return async (req: Request, res: Response) => {
     try {
@@ -111,6 +112,43 @@ export function getMetricsEndpoint(): (req: Request, res: Response) => Promise<v
     } catch (error) {
       logger.error('Error generating metrics:', error as Error);
       res.status(500).end('Error generating metrics');
+    }
+  };
+}
+
+// Combined metrics endpoint (infrastructure + business metrics)
+export function getCombinedMetricsEndpoint(): (req: Request, res: Response) => Promise<void> {
+  return async (req: Request, res: Response) => {
+    try {
+      res.set('Content-Type', register.contentType);
+      
+      // Get infrastructure metrics
+      const infraMetrics = await register.metrics();
+      
+      // Get business metrics
+      const businessMetrics = await BusinessMetricsService.getBusinessMetrics();
+      
+      // Combine metrics
+      const combinedMetrics = infraMetrics + '\n' + businessMetrics;
+      
+      res.end(combinedMetrics);
+    } catch (error) {
+      logger.error('Error generating combined metrics:', error as Error);
+      res.status(500).end('Error generating metrics');
+    }
+  };
+}
+
+// Business metrics only endpoint
+export function getBusinessMetricsEndpoint(): (req: Request, res: Response) => Promise<void> {
+  return async (req: Request, res: Response) => {
+    try {
+      res.set('Content-Type', register.contentType);
+      const businessMetrics = await BusinessMetricsService.getBusinessMetrics();
+      res.end(businessMetrics);
+    } catch (error) {
+      logger.error('Error generating business metrics:', error as Error);
+      res.status(500).end('Error generating business metrics');
     }
   };
 }

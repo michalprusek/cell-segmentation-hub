@@ -29,23 +29,54 @@ export function useWebSocketToasts() {
           toast.error(t('websocket.connectionLost'));
           break;
 
+        case 'polling_mode':
+          toast.info(t('websocket.pollingMode'), { duration: 3000 });
+          break;
+
+        case 'websocket_upgrade':
+          toast.success(t('websocket.upgradedToWebSocket'), { duration: 2000 });
+          break;
+
+        case 'connection_error':
+          toast.error(
+            t('websocket.connectionError') +
+              (event.message ? `: ${event.message}` : '')
+          );
+          break;
+
+        case 'auth_error':
+          toast.error(
+            t('websocket.authError') +
+              (event.message ? `: ${event.message}` : '')
+          );
+          break;
+
         default:
           break;
       }
     };
 
     // Subscribe to all websocket events
-    webSocketEventEmitter.on('reconnecting', handleWebSocketEvent);
-    webSocketEventEmitter.on('reconnected', handleWebSocketEvent);
-    webSocketEventEmitter.on('reconnect_failed', handleWebSocketEvent);
-    webSocketEventEmitter.on('connection_lost', handleWebSocketEvent);
+    const eventTypes = [
+      'reconnecting',
+      'reconnected',
+      'reconnect_failed',
+      'connection_lost',
+      'polling_mode',
+      'websocket_upgrade',
+      'connection_error',
+      'auth_error',
+    ];
+
+    eventTypes.forEach(eventType => {
+      webSocketEventEmitter.on(eventType, handleWebSocketEvent);
+    });
 
     return () => {
-      // Cleanup
-      webSocketEventEmitter.off('reconnecting', handleWebSocketEvent);
-      webSocketEventEmitter.off('reconnected', handleWebSocketEvent);
-      webSocketEventEmitter.off('reconnect_failed', handleWebSocketEvent);
-      webSocketEventEmitter.off('connection_lost', handleWebSocketEvent);
+      // Cleanup all event listeners
+      eventTypes.forEach(eventType => {
+        webSocketEventEmitter.off(eventType, handleWebSocketEvent);
+      });
     };
   }, [t]);
 }

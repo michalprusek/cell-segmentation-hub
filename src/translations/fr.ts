@@ -1299,5 +1299,9 @@ export default {
     reconnected: 'Connexion au serveur rétablie',
     reconnectFailed: 'Échec du rétablissement de la connexion au serveur',
     connectionLost: 'Connexion au serveur perdue',
+    pollingMode: 'Utilisation du mode de connexion de secours',
+    upgradedToWebSocket: 'Mis à niveau vers une connexion en temps réel',
+    connectionError: 'Impossible de se connecter au serveur',
+    authError: "Erreur d'authentification",
   },
 };

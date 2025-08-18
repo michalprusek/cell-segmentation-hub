@@ -1,4 +1,25 @@
 services:
+  # Database service
+  postgres:
+    image: postgres:15-alpine
+    container_name: spheroseg-db
+    environment:
+      - POSTGRES_DB=spheroseg
+      - POSTGRES_USER=spheroseg
+      - POSTGRES_PASSWORD=spheroseg_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spheroseg -d spheroseg"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Frontend service
   frontend:
     build:
@@ -43,7 +64,7 @@ services:
       - NODE_ENV=development
       - PORT=3001
       - HOST=0.0.0.0
-      - DATABASE_URL=file:./data/dev.db
+      - DATABASE_URL=postgresql://spheroseg:spheroseg_dev@postgres:5432/spheroseg
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5173
       - SEGMENTATION_SERVICE_URL=http://ml-service:8000
       - UPLOAD_DIR=/app/uploads
@@ -53,11 +74,14 @@ services:
       - FROM_EMAIL=noreply@spheroseg.local
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - RATE_LIMIT_ENABLED=false
+      - RATE_LIMIT_ENABLED=true
       - RATE_LIMIT_WINDOW_MS=60000
-      - RATE_LIMIT_MAX=5000
+      - RATE_LIMIT_MAX=50000
     depends_on:
-      - ml-service
+      postgres:
+        condition: service_healthy
+      ml-service:
+        condition: service_started
     networks:
       - spheroseg-network
     restart: unless-stopped
@@ -140,6 +164,8 @@ volumes:
   ml-models:
     driver: local
   backend-db:
+    driver: local
+  postgres-data:
     driver: local
   prometheus-data:
     driver: local

@@ -34,12 +34,17 @@ const RegionPanel = ({
   const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState<string>('');
 
+  // Normalize polygons to ensure it's always an array
+  const normalizedPolygons = useMemo(() => {
+    return Array.isArray(polygons) ? polygons : [];
+  }, [polygons]);
+
   // Organize polygons by hierarchy (external with internal polygons under them)
   const organizedPolygons = useMemo(() => {
-    if (!polygons) return [];
+    if (normalizedPolygons.length === 0) return [];
 
-    const externals = polygons.filter(p => p.type === 'external');
-    const internals = polygons.filter(p => p.type === 'internal');
+    const externals = normalizedPolygons.filter(p => p.type === 'external');
+    const internals = normalizedPolygons.filter(p => p.type === 'internal');
 
     return externals.map(external => ({
       ...external,
@@ -49,7 +54,7 @@ const RegionPanel = ({
         return isPointInPolygon(centroid, external.points);
       }),
     }));
-  }, [polygons]);
+  }, [normalizedPolygons]);
 
   const handlePolygonSelect = (id: string) => {
     setSelectedPolygonId(id === selectedPolygonId ? null : id);
@@ -99,7 +104,7 @@ const RegionPanel = ({
     onDeletePolygon?.(id);
   };
 
-  if (!polygons) return null;
+  if (!normalizedPolygons) return null;
 
   return (
     <motion.div
@@ -114,7 +119,7 @@ const RegionPanel = ({
           Polygons
         </h3>
         <div className="text-sm text-gray-600 dark:text-gray-400">
-          {polygons.length} total polygons
+          {normalizedPolygons.length} total polygons
         </div>
       </div>
 

@@ -1340,5 +1340,9 @@ export default {
     reconnected: 'Connection to server restored',
     reconnectFailed: 'Failed to restore connection to server',
     connectionLost: 'Connection to server lost',
+    pollingMode: 'Connected to server (polling mode)',
+    upgradedToWebSocket: 'Upgraded to real-time connection',
+    connectionError: 'Unable to connect to server',
+    authError: 'Authentication error',
   },
 };

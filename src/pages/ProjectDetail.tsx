@@ -96,7 +96,7 @@ const ProjectDetail = () => {
   // Memoized calculations for heavy operations
   const imagesToSegmentCount = useMemo(
     () =>
-      images.filter(img =>
+      (Array.isArray(images) ? images : []).filter(img =>
         ['pending', 'failed', 'no_segmentation'].includes(
           img.segmentationStatus
         )
@@ -106,7 +106,10 @@ const ProjectDetail = () => {
 
   // Check if there are any images currently processing
   const hasProcessingImages = useMemo(
-    () => images.some(img => img.segmentationStatus === 'processing'),
+    () =>
+      (Array.isArray(images) ? images : []).some(
+        img => img.segmentationStatus === 'processing'
+      ),
     [images]
   );
 

@@ -1350,5 +1350,9 @@ export default {
     reconnected: 'Připojení k serveru obnoveno',
     reconnectFailed: 'Nepodařilo se obnovit připojení k serveru',
     connectionLost: 'Spojení se serverem ztraceno',
+    pollingMode: 'Připojeno k serveru (polling režim)',
+    upgradedToWebSocket: 'Přepnuto na real-time připojení',
+    connectionError: 'Nelze se připojit k serveru',
+    authError: 'Chyba autentizace',
   },
 };
