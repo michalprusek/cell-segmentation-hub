@@ -1251,5 +1251,9 @@ export default {
     reconnected: '服务器连接已恢复',
     reconnectFailed: '恢复服务器连接失败',
     connectionLost: '与服务器的连接丢失',
+    pollingMode: '正在使用备用连接模式',
+    upgradedToWebSocket: '已升级到实时连接',
+    connectionError: '无法连接到服务器',
+    authError: '认证错误',
   },
 };

@@ -22,27 +22,41 @@ if (config.NODE_ENV === 'development') {
 // Set up basic logging
 // Note: Commenting out detailed Prisma logging to avoid TypeScript conflicts
 
-// Initialize database connection
+// Initialize database connection with retry logic
 export const initializeDatabase = async (): Promise<PrismaClient> => {
-  try {
-    logger.info('Initializing database connection...', 'Database');
-    
-    // Test the connection
-    await prisma.$connect();
-    
-    // Run any startup queries if needed
-    const userCount = await prisma.user.count();
-    
-    logger.info('Database connection established', 'Database', {
-      userCount,
-      databaseUrl: config.DATABASE_URL
-    });
-    
-    return prisma;
-  } catch (error) {
-    logger.error('Failed to initialize database:', error as Error, 'Database');
-    throw error;
+  let retries = 10;
+  const delay = 3000; // 3 seconds
+  
+  while (retries > 0) {
+    try {
+      logger.info(`Initializing database connection... (attempt ${11 - retries}/10)`, 'Database');
+      logger.info(`DATABASE_URL: ${config.DATABASE_URL?.replace(/:[^@]+@/, ':****@')}`, 'Database');
+      
+      // Test the connection
+      await prisma.$connect();
+      
+      // Run any startup queries if needed
+      const userCount = await prisma.user.count();
+      
+      logger.info('Database connection established', 'Database', {
+        userCount,
+        databaseUrl: config.DATABASE_URL?.replace(/:[^@]+@/, ':****@')
+      });
+      
+      return prisma;
+    } catch (error) {
+      retries--;
+      if (retries === 0) {
+        logger.error('Failed to initialize database after 10 attempts:', error as Error, 'Database');
+        throw error;
+      }
+      logger.warn(`Database connection failed, retrying in ${delay/1000}s... (${retries} attempts left)`, 'Database');
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
   }
+  
+  // This should never be reached due to the logic above, but TypeScript requires it
+  throw new Error('Failed to initialize database: maximum retries exceeded');
 };
 
 // Graceful shutdown

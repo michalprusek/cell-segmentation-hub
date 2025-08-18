@@ -115,13 +115,18 @@ const SegmentationEditor = () => {
 
   // Get initial polygons from segmentation data
   const initialPolygons = useMemo(() => {
+    // Ensure segmentationPolygons is always an array to prevent "f.filter is not a function" errors
+    const safePolygons = Array.isArray(segmentationPolygons)
+      ? segmentationPolygons
+      : [];
+
     // Return empty array if no segmentation data exists
-    if (!segmentationPolygons || segmentationPolygons.length === 0) {
+    if (safePolygons.length === 0) {
       return [];
     }
 
     // Transform SegmentationPolygon[] to Polygon[] and filter out invalid polygons
-    const polygons: Polygon[] = segmentationPolygons
+    const polygons: Polygon[] = safePolygons
       .filter(segPoly => segPoly.points && segPoly.points.length >= 3)
       .map(segPoly => {
         const validPoints = segPoly.points
@@ -217,13 +222,12 @@ const SegmentationEditor = () => {
           area: polygon.area,
         }));
 
-        const updatedPolygons = await apiClient.updateSegmentationResults(
+        await apiClient.updateSegmentationResults(
           imageId,
           polygonData,
           imageDimensions?.width,
           imageDimensions?.height
         );
-        setSegmentationPolygons(updatedPolygons);
         toast.success(t('toast.dataSaved'));
       } catch (error) {
         logger.error('Failed to save segmentation:', error);

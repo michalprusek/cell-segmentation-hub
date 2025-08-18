@@ -1303,5 +1303,9 @@ export default {
     reconnected: 'Verbindung zum Server wiederhergestellt',
     reconnectFailed: 'Wiederherstellung der Serververbindung fehlgeschlagen',
     connectionLost: 'Verbindung zum Server verloren',
+    pollingMode: 'Fallback-Verbindungsmodus wird verwendet',
+    upgradedToWebSocket: 'Auf Echtzeit-Verbindung aktualisiert',
+    connectionError: 'Kann nicht mit Server verbinden',
+    authError: 'Authentifizierungsfehler',
   },
 };

@@ -175,7 +175,8 @@ class WebSocketManager {
       auth: {
         token: this.currentUser.token,
       },
-      transports: ['websocket', 'polling'],
+      transports: ['polling'], // Use only polling transport
+      upgrade: false, // Disable WebSocket upgrade
       reconnection: true, // Enable automatic reconnection
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
@@ -209,11 +210,18 @@ class WebSocketManager {
 
     // Connection events
     this.socket.on('connect', () => {
-      logger.info('WebSocket CONNECTED! Socket ID:', this.socket?.id);
+      logger.info(
+        'Socket.io CONNECTED! Socket ID:',
+        this.socket?.id,
+        'Transport: polling (WebSocket disabled)'
+      );
       this.reconnectAttempts = 0;
       this.reconnectDelay = 1000;
       this.flushMessageQueue();
       this.emitToListeners('connect');
+
+      // Always using polling mode
+      webSocketEventEmitter.emit({ type: 'polling_mode' });
 
       // Start ping interval to keep connection alive
       this.startPingInterval();
@@ -242,13 +250,17 @@ class WebSocketManager {
       // Show toast only occasionally to avoid spam and not during auto-reconnect
       const now = Date.now();
       if (now - this.lastToastTime > this.toastCooldown) {
-        if (
-          !error.message.includes('Authentication') &&
-          this.reconnectAttempts > 2
-        ) {
+        if (error.message.includes('Authentication')) {
+          webSocketEventEmitter.emit({
+            type: 'auth_error',
+            message: error.message,
+          });
+        } else if (this.reconnectAttempts > 2) {
           // Only show toast after a few failed attempts
-          // Emit event for localized toast (handled by useWebSocketToasts hook)
-          webSocketEventEmitter.emit({ type: 'reconnecting' });
+          webSocketEventEmitter.emit({
+            type: 'connection_error',
+            message: error.message,
+          });
         }
         this.lastToastTime = now;
       }
@@ -260,6 +272,8 @@ class WebSocketManager {
     this.socket.on('error', error => {
       logger.error('WebSocket ERROR:', error);
     });
+
+    // Note: WebSocket upgrade disabled - using polling only
 
     // Add reconnection event handlers for better debugging
     this.socket.io.on('reconnect', (attempt: number) => {

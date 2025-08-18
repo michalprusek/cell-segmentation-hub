@@ -1,7 +1,6 @@
 import multer from 'multer';
 import path from 'path';
 import { Request, Response, NextFunction } from 'express';
-import type { Express } from 'express-serve-static-core';
 import { SUPPORTED_MIME_TYPES, SUPPORTED_EXTENSIONS, MAX_FILE_SIZE } from '../storage/interface';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
@@ -66,13 +65,14 @@ export const handleUploadError = (
   next: NextFunction
 ): void => {
   if (error instanceof multer.MulterError) {
-    logger.error('Multer upload error', error, 'UploadMiddleware', {
-      code: error.code,
+    const multerError = error as multer.MulterError;
+    logger.error('Multer upload error', multerError, 'UploadMiddleware', {
+      code: multerError.code,
       userId: req.user?.id,
-      field: error.field
+      field: multerError.field
     });
 
-    switch (error.code) {
+    switch (multerError.code) {
       case 'LIMIT_FILE_SIZE':
         ResponseHelper.validationError(res, `Soubor je příliš velký. Maximální velikost: ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
         return;
@@ -80,7 +80,7 @@ export const handleUploadError = (
         ResponseHelper.validationError(res, 'Příliš mnoho souborů. Maximálně lze nahrát 20 souborů najednou');
         return;
       case 'LIMIT_UNEXPECTED_FILE':
-        ResponseHelper.validationError(res, `Neočekávané pole souboru: ${error.field}`);
+        ResponseHelper.validationError(res, `Neočekávané pole souboru: ${multerError.field}`);
         return;
       case 'LIMIT_FIELD_COUNT':
         ResponseHelper.validationError(res, 'Příliš mnoho polí v požadavku');
@@ -92,7 +92,7 @@ export const handleUploadError = (
         ResponseHelper.validationError(res, 'Hodnota pole je příliš dlouhá');
         return;
       default:
-        ResponseHelper.validationError(res, `Chyba při nahrávání souboru: ${error.message}`);
+        ResponseHelper.validationError(res, `Chyba při nahrávání souboru: ${multerError.message}`);
         return;
     }
   }

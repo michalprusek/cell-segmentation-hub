@@ -5,25 +5,28 @@ import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
 
 // Extend Express Request interface to include user
-declare module 'express-serve-static-core' {
-  interface Request {
-    user?: {
-      id: string;
-      email: string;
-      emailVerified: boolean;
-      profile?: {
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      user?: {
         id: string;
-        firstName?: string | null;
-        lastName?: string | null;
-        organizationName?: string | null;
-        role?: string | null;
-        bio?: string | null;
-        avatarUrl?: string | null;
-        userId: string;
-        createdAt: Date;
-        updatedAt: Date;
-      } | null;
-    };
+        email: string;
+        emailVerified: boolean;
+        profile?: {
+          id: string;
+          firstName?: string | null;
+          lastName?: string | null;
+          organizationName?: string | null;
+          role?: string | null;
+          bio?: string | null;
+          avatarUrl?: string | null;
+          userId: string;
+          createdAt: Date;
+          updatedAt: Date;
+        } | null;
+      };
+    }
   }
 }
 
@@ -126,12 +129,20 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
     }
 
     try {
-      // Validate that the provided resource model exists in Prisma
-      if (!(resourceModel in prisma)) {
+      // Whitelist of allowed resource models for security
+      const allowedModels = ['project', 'projectImage', 'segmentationResult', 'user', 'userProfile', 'queueItem'];
+      
+      if (!allowedModels.includes(resourceModel)) {
+        logger.warn(`Attempted access to unauthorized model: ${resourceModel}`, 'Auth');
         throw new Error(`Invalid resource model: ${resourceModel}`);
       }
 
-      // Dynamic access to Prisma model
+      // Validate that the provided resource model exists in Prisma
+      if (!(resourceModel in prisma)) {
+        throw new Error(`Resource model does not exist: ${resourceModel}`);
+      }
+
+      // Safe dynamic access to Prisma model after whitelist validation
       const model = (prisma as Record<string, any>)[resourceModel];
       
       const resource = await model.findUnique({

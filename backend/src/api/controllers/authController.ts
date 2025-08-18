@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { AuthService } from '../../services/authService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import { prisma } from '../../db';
+import { BusinessMetricsService } from '../../services/businessMetrics';
 import {
   loginSchema,
   registerSchema,
@@ -95,14 +96,20 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       message: 'Validation failed',
       details: { errors }
     };
+    BusinessMetricsService.trackUserRegistration('email', false);
     return ResponseHelper.error(res, apiError, 400);
   }
   
   const data: RegisterData = validationResult.data;
   
-  const result = await AuthService.register(data);
-  
-  return ResponseHelper.success(res, result, result.message, 201);
+  try {
+    const result = await AuthService.register(data);
+    BusinessMetricsService.trackUserRegistration('email', true);
+    return ResponseHelper.success(res, result, result.message, 201);
+  } catch (error) {
+    BusinessMetricsService.trackUserRegistration('email', false);
+    throw error;
+  }
 });
 
 /**
@@ -171,14 +178,20 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       message: 'Validation failed',
       details: { errors }
     };
+    BusinessMetricsService.trackUserLogin('email', false);
     return ResponseHelper.error(res, apiError, 400);
   }
   
   const data: LoginData = validationResult.data;
   
-  const result = await AuthService.login(data);
-  
-  return ResponseHelper.success(res, result, 'Přihlášení bylo úspěšné');
+  try {
+    const result = await AuthService.login(data);
+    BusinessMetricsService.trackUserLogin('email', true);
+    return ResponseHelper.success(res, result, 'Přihlášení bylo úspěšné');
+  } catch (error) {
+    BusinessMetricsService.trackUserLogin('email', false);
+    throw error;
+  }
 });
 
 /**

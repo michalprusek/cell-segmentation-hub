@@ -53,9 +53,9 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const exponentialBackoff = async <T>(
   fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000,
-  maxDelay: number = 10000
+  maxRetries: number = 1, // Reduced from 3 to 1 to prevent retry loops
+  baseDelay: number = 2000, // Increased base delay to 2s
+  maxDelay: number = 5000 // Reduced max delay to 5s
 ): Promise<T> => {
   let lastError: Error;
 
@@ -76,7 +76,7 @@ const exponentialBackoff = async <T>(
 
       // Calculate delay with exponential backoff
       const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-      const jitter = Math.random() * 0.1 * delay; // Add 10% jitter
+      const jitter = Math.random() * 0.2 * delay; // Increased jitter to 20%
       const finalDelay = delay + jitter;
 
       logger.warn(

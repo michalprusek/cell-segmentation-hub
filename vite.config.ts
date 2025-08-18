@@ -21,7 +21,22 @@ export default defineConfig({
     commonjsOptions: {
       include: [/xlsx/, /node_modules/],
     },
+    rollupOptions: {
+      output: {
+        assetFileNames: assetInfo => {
+          // Keep fonts in fonts directory
+          if (
+            assetInfo.name &&
+            assetInfo.name.match(/\.(woff|woff2|ttf|otf)$/)
+          ) {
+            return 'fonts/[name][extname]';
+          }
+          return 'assets/[name]-[hash][extname]';
+        },
+      },
+    },
   },
+  publicDir: 'public',
   test: {
     globals: true,
     environment: 'jsdom',

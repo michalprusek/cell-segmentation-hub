@@ -1,5 +1,5 @@
-import { jest } from '@jest/globals'
-// import { mockDeep, mockReset, DeepMockProxy } from 'jest-mock-extended'
+// Jest types are provided by @types/jest package
+/// <reference types="jest" />
 
 // Mock Prisma client  
 // export const prismaMock = mockDeep<PrismaClient>() as unknown as DeepMockProxy<PrismaClient>
@@ -36,29 +36,16 @@ jest.mock('jsonwebtoken')
 jest.mock('bcryptjs')
 
 // Mock Prisma client
-jest.mock('../db', () => ({
-  __esModule: true,
-  prisma: prismaMock,
-}))
+jest.mock('../db')
 
 // Mock Redis client
-jest.mock('../redis/client', () => ({
-  __esModule: true,
-  default: redisMock,
-}))
+jest.mock('../redis/client')
 
 // Mock Bull queue
 jest.mock('bull')
 
 // Mock file system operations
-jest.mock('fs/promises', () => ({
-  readFile: jest.fn(),
-  writeFile: jest.fn(),
-  unlink: jest.fn(),
-  mkdir: jest.fn(),
-  access: jest.fn(),
-  stat: jest.fn(),
-}))
+jest.mock('fs/promises')
 
 // Mock sharp for image processing
 jest.mock('sharp')
@@ -70,7 +57,7 @@ jest.mock('nodemailer')
 jest.mock('axios')
 
 // Setup and teardown
-import { beforeEach, afterEach } from '@jest/globals'
+// beforeEach and afterEach are available globally in jest environment
 
 beforeEach(() => {
   // mockReset(prismaMock)
@@ -92,7 +79,7 @@ process.env.ML_SERVICE_URL = 'http://localhost:8000'
 // Suppress console logs during tests
 global.console = {
   ...console,
-  log: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
+  log: jest.fn() as any,
+  warn: jest.fn() as any,
+  error: jest.fn() as any,
 }

@@ -90,6 +90,20 @@ router.post(
 );
 
 /**
+ * @route GET /api/queue/status/:projectId
+ * @description Get queue status for a project (polling endpoint)
+ * @access Private
+ */
+router.get(
+  '/status/:projectId',
+  [
+    param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')
+  ],
+  handleValidation,
+  queueController.getQueueStats
+);
+
+/**
  * @route GET /api/queue/projects/:projectId/stats
  * @description Get queue statistics for a project
  * @access Private
