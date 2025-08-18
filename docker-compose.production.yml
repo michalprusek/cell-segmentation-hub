@@ -1,0 +1,234 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:15-alpine
+    container_name: spheroseg-db
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=spheroseg
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=spheroseg_prod
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/db-backup:/backup
+    networks:
+      spheroseg-network:
+        aliases:
+          - spheroseg-db
+          - db
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spheroseg -d spheroseg_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: spheroseg-redis
+    expose:
+      - "6379"
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    networks:
+      spheroseg-network:
+        aliases:
+          - spheroseg-db
+          - db
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ML Service
+  ml:
+    build:
+      context: ./backend/segmentation
+      dockerfile: ../../docker/ml.prod.Dockerfile
+    container_name: spheroseg-ml
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/segmentation/weights:/app/weights:ro
+      - ml-cache:/app/cache
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - WORKERS=2
+      - MAX_REQUESTS=100
+      - TIMEOUT=300
+      - LOG_LEVEL=info
+    networks:
+      - spheroseg-network
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.production.Dockerfile
+    container_name: spheroseg-backend
+    env_file: .env.production
+    expose:
+      - "3001"
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - backend-logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - PORT=3001
+      - HOST=0.0.0.0
+      - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@spheroseg-db:5432/spheroseg_prod?sslmode=disable
+      - REDIS_URL=redis://spheroseg-redis:6379
+      - ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz
+      - SEGMENTATION_SERVICE_URL=http://spheroseg-ml:8000
+      - UPLOAD_DIR=/app/uploads
+      - STORAGE_TYPE=local
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX=100
+      - LOG_LEVEL=info
+      - ENABLE_METRICS=true
+    ports:
+      - "3001:3001"
+    networks:
+      - spheroseg-network
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      ml:
+        condition: service_healthy
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend - Production build copied to volume
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend-copy.Dockerfile
+      args:
+        - VITE_API_BASE_URL=https://spherosegapp.utia.cas.cz/api
+        - VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/api/ml
+    container_name: spheroseg-frontend
+    volumes:
+      - frontend-static:/app/dist
+    networks:
+      spheroseg-network:
+        aliases:
+          - spheroseg-db
+          - db
+    restart: always
+
+  # Nginx Reverse Proxy with SSL
+  nginx:
+    image: nginx:alpine
+    container_name: spheroseg-nginx
+    network_mode: "host"
+    volumes:
+      - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/sites:/etc/nginx/sites-enabled:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - nginx-cache:/var/cache/nginx
+      - frontend-static:/usr/share/nginx/html:ro
+    depends_on:
+      - frontend
+      - backend
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus Monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: spheroseg-prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    networks:
+      spheroseg-network:
+        aliases:
+          - spheroseg-db
+          - db
+    restart: always
+
+  # Grafana Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: spheroseg-grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://spherosegapp.utia.cas.cz/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+    networks:
+      - spheroseg-network
+    depends_on:
+      - prometheus
+    restart: always
+
+networks:
+  spheroseg-network:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.enable_icc: "true"
+      com.docker.network.bridge.enable_ip_masquerade: "true"
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
+
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  frontend-static:
+    driver: local
+  backend-logs:
+    driver: local
+  ml-cache:
+    driver: local
+  nginx-cache:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local

@@ -22,6 +22,8 @@ interface AuthRequest extends Request {
       updatedAt: Date;
     } | null;
   };
+  params: Record<string, string>;
+  body: Record<string, any>;
 }
 
 export class ExportController {

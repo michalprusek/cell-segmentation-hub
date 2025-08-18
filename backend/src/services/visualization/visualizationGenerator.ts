@@ -137,11 +137,35 @@ export class VisualizationGenerator {
     // Calculate centroid
     const centroid = this.calculateCentroid(polygon.points);
 
-    // Set text style with larger, more visible font
+    // Calculate polygon bounding box for adaptive font sizing
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const point of polygon.points) {
+      minX = Math.min(minX, point.x);
+      maxX = Math.max(maxX, point.x);
+      minY = Math.min(minY, point.y);
+      maxY = Math.max(maxY, point.y);
+    }
+    
+    // Calculate polygon dimensions
+    const polygonWidth = maxX - minX;
+    const polygonHeight = maxY - minY;
+    const polygonSize = Math.min(polygonWidth, polygonHeight);
+    
+    // Get canvas dimensions for scaling
+    const canvasSize = Math.min(ctx.canvas.width, ctx.canvas.height);
+    
+    // Calculate adaptive font size
+    // Use user-provided fontSize as base, but scale it based on polygon and canvas size
+    const baseFontSize = options.fontSize ?? 32;
+    const scaleFactor = Math.max(1, canvasSize / 1000); // Scale based on canvas size
+    const polygonScaleFactor = Math.max(0.3, Math.min(2, polygonSize / 50)); // Scale based on polygon size
+    const adaptiveFontSize = Math.max(16, Math.min(200, baseFontSize * scaleFactor * polygonScaleFactor));
+
+    // Set text style with adaptive font
     ctx.fillStyle = '#FFFFFF';
     ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 5;
-    ctx.font = `bold ${options.fontSize ?? 32}px Arial`;
+    ctx.lineWidth = Math.max(3, adaptiveFontSize / 10); // Scale stroke with font size
+    ctx.font = `bold ${adaptiveFontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 

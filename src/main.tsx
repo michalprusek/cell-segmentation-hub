@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App.tsx';
+import './fonts.css';
 import './index.css';
 import './styles/tailwind.css';
 import { Toaster } from 'sonner';

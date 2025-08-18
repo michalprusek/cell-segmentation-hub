@@ -5,25 +5,28 @@ import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
 
 // Extend Express Request interface to include user
-declare module 'express-serve-static-core' {
-  interface Request {
-    user?: {
-      id: string;
-      email: string;
-      emailVerified: boolean;
-      profile?: {
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      user?: {
         id: string;
-        firstName?: string | null;
-        lastName?: string | null;
-        organizationName?: string | null;
-        role?: string | null;
-        bio?: string | null;
-        avatarUrl?: string | null;
-        userId: string;
-        createdAt: Date;
-        updatedAt: Date;
-      } | null;
-    };
+        email: string;
+        emailVerified: boolean;
+        profile?: {
+          id: string;
+          firstName?: string | null;
+          lastName?: string | null;
+          organizationName?: string | null;
+          role?: string | null;
+          bio?: string | null;
+          avatarUrl?: string | null;
+          userId: string;
+          createdAt: Date;
+          updatedAt: Date;
+        } | null;
+      };
+    }
   }
 }
 

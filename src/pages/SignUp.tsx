@@ -122,6 +122,7 @@ const SignUp = () => {
               <Input
                 id="email"
                 type="email"
+                autoComplete="email"
                 placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -135,6 +136,7 @@ const SignUp = () => {
               <Input
                 id="password"
                 type="password"
+                autoComplete="new-password"
                 placeholder={t('auth.passwordPlaceholder')}
                 value={password}
                 onChange={e => setPassword(e.target.value)}
@@ -150,6 +152,7 @@ const SignUp = () => {
               <Input
                 id="confirmPassword"
                 type="password"
+                autoComplete="new-password"
                 placeholder={t('auth.passwordPlaceholder')}
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}

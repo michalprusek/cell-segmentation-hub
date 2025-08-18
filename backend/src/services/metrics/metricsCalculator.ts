@@ -48,6 +48,7 @@ export interface SegmentationData {
 export interface ImageWithSegmentation {
   id: string;
   name: string;
+  filename?: string;
   width?: number;
   height?: number;
   segmentation?: SegmentationData;
@@ -107,7 +108,7 @@ export class MetricsCalculator {
             const imageMetrics = await this.calculateImageMetrics(
               polygons,
               image.id,
-              `image_${String(imageIdx + 1).padStart(3, '0')}.jpg`
+              image.filename ?? image.name ?? `image_${String(imageIdx + 1).padStart(3, '0')}.jpg`
             );
             allMetrics.push(...imageMetrics);
           } catch (parseError) {

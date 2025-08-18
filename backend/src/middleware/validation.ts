@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import type { Express } from 'express-serve-static-core';
 import { ZodSchema, ZodError } from 'zod';
+import multer from 'multer';
 import { ResponseHelper } from '../utils/response';
 
 export type ValidationTarget = 'body' | 'query' | 'params';
@@ -132,7 +132,7 @@ export const validateFiles = (
   } = options;
 
   return (req: Request, res: Response, next: NextFunction) => {
-    const files = req.files as Express.Multer.File[] | undefined;
+    const files = req.files as multer.File[] | undefined;
 
     if (!files || files.length === 0) {
       return ResponseHelper.validationError(res, 'Alespoň jeden soubor je vyžadován', 'FileValidation');
