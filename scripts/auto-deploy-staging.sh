@@ -39,12 +39,17 @@ while true; do
         echo "🔨 Building Docker images..."
         docker compose -f docker-compose.staging.yml build
         
-        echo "🔄 Restarting services..."
-        docker compose -f docker-compose.staging.yml down
-        docker compose -f docker-compose.staging.yml up -d
+        echo "🔄 Restarting services (preserving database)..."
+        # Stop and remove containers but KEEP volumes (database data)
+        docker compose -f docker-compose.staging.yml stop
+        docker compose -f docker-compose.staging.yml up -d --remove-orphans
         
         # Wait for services to start
         sleep 10
+        
+        # Run migrations if needed
+        echo "🗄️ Checking database migrations..."
+        docker exec staging-backend npx prisma migrate deploy || echo "⚠️ Migration check failed (may be normal on first run)"
         
         # Health check
         echo "🏥 Running health checks..."
