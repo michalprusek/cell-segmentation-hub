@@ -50,7 +50,7 @@ fi
 print_status "Environment variables check passed ✓"
 
 # Set up compose command
-COMPOSE="$COMPOSE"
+COMPOSE="${COMPOSE:-docker-compose}"
 
 # Step 1: Stop running containers
 print_status "Stopping production containers..."
@@ -89,7 +89,48 @@ print_status "Starting database and Redis..."
 $COMPOSE up -d postgres redis
 
 print_status "Waiting for database to be ready..."
-sleep 10
+
+# Detect database type from environment or compose file
+DB_TYPE="postgresql"  # Default assumption
+if [ -n "$DATABASE_URL" ]; then
+    case "$DATABASE_URL" in
+        postgres*|postgresql*) DB_TYPE="postgresql" ;;
+        mysql*|mariadb*) DB_TYPE="mysql" ;;
+        *) DB_TYPE="postgresql" ;;  # Default fallback
+    esac
+fi
+
+# Database readiness check with timeout
+DB_WAIT_TIMEOUT=300  # 5 minutes
+start_time=$(date +%s)
+
+while true; do
+    if [ "$DB_TYPE" = "postgresql" ]; then
+        if docker exec spheroseg-db pg_isready -U spheroseg 2>/dev/null; then
+            break
+        fi
+    elif [ "$DB_TYPE" = "mysql" ]; then
+        if docker exec spheroseg-db mysqladmin ping -u spheroseg 2>/dev/null; then
+            break
+        fi
+    else
+        # Generic TCP port check as fallback
+        if docker exec spheroseg-db nc -z localhost 5432 2>/dev/null; then
+            break
+        fi
+    fi
+    
+    current_time=$(date +%s)
+    elapsed=$((current_time - start_time))
+    
+    if [ $elapsed -ge $DB_WAIT_TIMEOUT ]; then
+        print_error "Database not ready after ${DB_WAIT_TIMEOUT} seconds, giving up"
+        exit 1
+    fi
+    
+    echo "Database not ready, waiting... (${elapsed}/${DB_WAIT_TIMEOUT}s)"
+    sleep 2
+done
 
 print_status "Starting ML service..."
 $COMPOSE up -d ml-service
@@ -101,7 +142,41 @@ print_status "Starting frontend service to populate volume..."
 $COMPOSE up -d frontend
 
 print_status "Waiting for frontend files to copy..."
-sleep 5
+
+# Poll for frontend files with timeout
+FILE_WAIT_TIMEOUT=300  # 5 minutes
+start_time=$(date +%s)
+EXPECTED_FILES="/usr/share/nginx/html/index.html /usr/share/nginx/html/assets"
+
+while true; do
+    files_ready=true
+    
+    # Check for expected files in the nginx container
+    for file in $EXPECTED_FILES; do
+        if ! docker exec spheroseg-nginx test -e "$file" 2>/dev/null; then
+            files_ready=false
+            break
+        fi
+    done
+    
+    if [ "$files_ready" = "true" ]; then
+        # Additional check: ensure index.html has content
+        if docker exec spheroseg-nginx test -s "/usr/share/nginx/html/index.html" 2>/dev/null; then
+            break
+        fi
+    fi
+    
+    current_time=$(date +%s)
+    elapsed=$((current_time - start_time))
+    
+    if [ $elapsed -ge $FILE_WAIT_TIMEOUT ]; then
+        print_error "Frontend files not ready after ${FILE_WAIT_TIMEOUT} seconds, giving up"
+        exit 1
+    fi
+    
+    echo "Frontend files not ready, waiting... (${elapsed}/${FILE_WAIT_TIMEOUT}s)"
+    sleep 2
+done
 
 print_status "Starting nginx reverse proxy..."
 $COMPOSE up -d nginx
@@ -118,7 +193,12 @@ else
 fi
 
 # Check backend - run health check inside container
-BACKEND_POD=$(docker ps --filter "name=spheroseg-backend" --format "{{.Names}}" | head -1)
+BACKEND_POD=$(docker ps --filter "name=backend" --format "{{.Names}}" | head -1)
+if [ -z "$BACKEND_POD" ]; then
+    # Fallback to project name prefix if no match
+    BACKEND_POD=$(docker ps --filter "name=spheroseg-backend" --format "{{.Names}}" | head -1)
+fi
+
 if [ -n "$BACKEND_POD" ]; then
     if docker exec "$BACKEND_POD" curl -f -s http://localhost:3001/health > /dev/null 2>&1; then
         print_success "Backend API is responding ✓"
@@ -130,7 +210,12 @@ else
 fi
 
 # Check ML service - run health check inside container since port is not exposed
-ML_POD=$(docker ps --filter "name=spheroseg-ml" --format "{{.Names}}" | head -1)
+ML_POD=$(docker ps --filter "name=ml-service" --format "{{.Names}}" | head -1)
+if [ -z "$ML_POD" ]; then
+    # Fallback to project name prefix if no match
+    ML_POD=$(docker ps --filter "name=spheroseg-ml" --format "{{.Names}}" | head -1)
+fi
+
 if [ -n "$ML_POD" ]; then
     if docker exec "$ML_POD" curl -f -s http://localhost:8000/health > /dev/null 2>&1; then
         print_success "ML service is responding ✓"
@@ -143,12 +228,23 @@ fi
 
 # Step 8: Verify frontend files are clean
 print_status "Verifying frontend build doesn't contain external dependencies..."
-if docker exec spheroseg-nginx grep -q "fonts.googleapis.com\|gpteng" /usr/share/nginx/html/index.html 2>/dev/null; then
-    print_error "Frontend still contains external dependencies! Build may have failed."
-    print_error "Check the frontend container logs:"
-    print_error "docker logs spheroseg-frontend"
+# Discover nginx container name dynamically
+NGINX_POD=$(docker ps --filter "name=nginx" --format "{{.Names}}" | head -1)
+if [ -z "$NGINX_POD" ]; then
+    # Fallback to project name prefix if no match
+    NGINX_POD=$(docker ps --filter "name=spheroseg-nginx" --format "{{.Names}}" | head -1)
+fi
+
+if [ -z "$NGINX_POD" ]; then
+    print_error "Nginx container not found for frontend verification ✗"
 else
-    print_success "Frontend build is clean - no external dependencies found ✓"
+    if docker exec "$NGINX_POD" grep -q "fonts.googleapis.com\|gpteng" /usr/share/nginx/html/index.html 2>/dev/null; then
+        print_error "Frontend still contains external dependencies! Build may have failed."
+        print_error "Check the frontend container logs:"
+        print_error "docker logs spheroseg-frontend"
+    else
+        print_success "Frontend build is clean - no external dependencies found ✓"
+    fi
 fi
 
 # Step 9: Show final status

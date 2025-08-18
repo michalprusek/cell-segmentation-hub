@@ -22,9 +22,19 @@ else
     # Extract connection info from DATABASE_URL
     DB_HOST=$(echo "$DATABASE_URL" | sed -n 's/.*@\([^:]*\):.*/\1/p')
     DB_USER=$(echo "$DATABASE_URL" | sed -n 's/.*:\/\/\([^:]*\):.*/\1/p')
-    # Wait for PostgreSQL to be ready
+    # Wait for PostgreSQL to be ready with timeout
+    DB_WAIT_TIMEOUT="${DB_WAIT_TIMEOUT:-300}"  # Default 5 minutes
+    start_time=$(date +%s)
     until pg_isready -h "${DB_HOST:-postgres}" -U "${DB_USER:-spheroseg}" 2>/dev/null; do
-      echo "Database not ready, waiting..."
+      current_time=$(date +%s)
+      elapsed=$((current_time - start_time))
+      
+      if [ $elapsed -ge $DB_WAIT_TIMEOUT ]; then
+        echo "Error: Database not ready after ${DB_WAIT_TIMEOUT} seconds, giving up" >&2
+        exit 1
+      fi
+      
+      echo "Database not ready, waiting... (${elapsed}/${DB_WAIT_TIMEOUT}s)"
       sleep 5
     done
   fi

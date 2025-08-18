@@ -5,7 +5,11 @@
 
 set -e
 
-DOMAIN="spherosegapp.utia.cas.cz"
+# Get repository root directory (relative to script location)
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+DOMAIN="${LETSENCRYPT_DOMAIN:-spherosegapp.utia.cas.cz}"
 EMAIL="${LETSENCRYPT_EMAIL:-admin@utia.cas.cz}"  # Use env var or fallback
 STAGING="${LETSENCRYPT_STAGING:-0}"  # Set to 1 for testing
 
@@ -81,28 +85,41 @@ fi
 echo -e "${BLUE}🚀 Starting production services...${NC}"
 docker compose -f docker-compose.prod.yml up -d
 
-# Wait for nginx to be ready
+# Wait for nginx to be ready with active polling
 echo -e "${BLUE}⏳ Waiting for nginx to be ready...${NC}"
-sleep 10
 
-# Test nginx is accessible
-if ! curl -f -s http://localhost/health >/dev/null 2>&1; then
-    echo -e "${RED}❌ Nginx is not responding. Check logs:${NC}"
-    echo -e "${YELLOW}docker compose -f docker-compose.prod.yml logs nginx${NC}"
-    exit 1
-fi
+NGINX_WAIT_TIMEOUT=60  # 1 minute
+start_time=$(date +%s)
+
+while true; do
+    if curl -f -s http://localhost/health >/dev/null 2>&1; then
+        break
+    fi
+    
+    current_time=$(date +%s)
+    elapsed=$((current_time - start_time))
+    
+    if [ $elapsed -ge $NGINX_WAIT_TIMEOUT ]; then
+        echo -e "${RED}❌ Nginx not ready after ${NGINX_WAIT_TIMEOUT} seconds. Check logs:${NC}"
+        echo -e "${YELLOW}docker compose -f docker-compose.prod.yml logs nginx${NC}"
+        exit 1
+    fi
+    
+    echo "Nginx not ready, waiting... (${elapsed}/${NGINX_WAIT_TIMEOUT}s)"
+    sleep 2
+done
 
 echo -e "${GREEN}✅ Nginx is running${NC}"
 
 # Only generate real certificates if we don't have valid ones
-if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ] || [ $DAYS_LEFT -le 30 ]; then
+if [ ! -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ] || [ "${DAYS_LEFT:-0}" -le 30 ]; then
     echo -e "${BLUE}🔐 Requesting SSL certificate from Let's Encrypt...${NC}"
     
     # Request the certificate
     docker run --rm \
         -v /etc/letsencrypt:/etc/letsencrypt \
         -v /var/lib/letsencrypt:/var/lib/letsencrypt \
-        -v $(pwd)/docker/nginx/certbot:/var/www/certbot \
+        -v "${REPO_ROOT}/docker/nginx/certbot":/var/www/certbot \
         certbot/certbot certonly \
         --webroot \
         --webroot-path=/var/www/certbot \

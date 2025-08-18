@@ -104,13 +104,13 @@ upstream ml_upstream {
 1. **Start the stack**:
 
    ```bash
-   docker-compose -f docker-compose.production.yml up -d
+   docker-compose -f docker-compose.prod.yml up -d
    ```
 
 2. **Check service health**:
 
    ```bash
-   docker-compose -f docker-compose.production.yml ps
+   docker-compose -f docker-compose.prod.yml ps
    ```
 
 3. **Test external access**:
@@ -121,13 +121,13 @@ upstream ml_upstream {
 
 4. **Verify inter-service communication**:
    ```bash
-   docker exec spheroseg-backend curl -f http://ml:8000/health
-   docker exec spheroseg-backend nc -z db 5432
+   docker compose exec backend curl -f http://spheroseg-ml:8000/health
+   docker compose exec backend nc -z spheroseg-db 5432
    ```
 
 ## Files Modified
 
-1. `/docker-compose.production.yml` - Network mode and service configuration changes
+1. `/docker-compose.prod.yml` - Network mode and service configuration changes
 2. `/docker/nginx/nginx.prod.conf` - Upstream service endpoints updated
 
 The application should now be fully accessible externally via https://spherosegapp.utia.cas.cz while maintaining proper inter-service communication.

@@ -2,6 +2,8 @@
 
 This document contains the configuration for creating a comprehensive business metrics dashboard for SpheroSeg.
 
+**Tags**: spheroseg, business, metrics
+
 ## Dashboard Configuration
 
 ### Data Source
@@ -95,9 +97,9 @@ Legend: "{{model_name}}"
 
 ```
 Metrics:
-- histogram_quantile(0.50, spheroseg_segmentation_duration_seconds_bucket)
-- histogram_quantile(0.90, spheroseg_segmentation_duration_seconds_bucket)
-- histogram_quantile(0.95, spheroseg_segmentation_duration_seconds_bucket)
+- histogram_quantile(0.50, sum(rate(spheroseg_segmentation_duration_seconds_bucket[5m])) by (le))
+- histogram_quantile(0.90, sum(rate(spheroseg_segmentation_duration_seconds_bucket[5m])) by (le))
+- histogram_quantile(0.95, sum(rate(spheroseg_segmentation_duration_seconds_bucket[5m])) by (le))
 
 Legend: "50th/90th/95th percentile"
 Unit: seconds

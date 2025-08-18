@@ -345,15 +345,49 @@ export const businessMetrics = {
   register: businessRegister
 };
 
-// Start periodic collection (every 5 minutes)
-const COLLECTION_INTERVAL = 5 * 60 * 1000; // 5 minutes
-setInterval(() => {
-  BusinessMetricsService.collectDatabaseMetrics().catch(error => {
-    logger.error('Periodic business metrics collection failed:', error as Error);
-  });
-}, COLLECTION_INTERVAL);
+// Business Metrics Collection Manager
+class BusinessMetricsCollector {
+  private intervalId: NodeJS.Timeout | null = null;
+  private readonly COLLECTION_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
-// Initial collection
-BusinessMetricsService.collectDatabaseMetrics().catch(error => {
-  logger.error('Initial business metrics collection failed:', error as Error);
-});
+  startCollection(): void {
+    if (this.intervalId) {
+      logger.warn('Business metrics collection is already running');
+      return;
+    }
+
+    // Initial collection
+    BusinessMetricsService.collectDatabaseMetrics().catch(error => {
+      logger.error('Initial business metrics collection failed:', error as Error);
+    });
+
+    // Start periodic collection
+    this.intervalId = setInterval(() => {
+      BusinessMetricsService.collectDatabaseMetrics().catch(error => {
+        logger.error('Periodic business metrics collection failed:', error as Error);
+      });
+    }, this.COLLECTION_INTERVAL);
+
+    logger.info('Business metrics collection started');
+  }
+
+  stopCollection(): void {
+    if (this.intervalId) {
+      clearInterval(this.intervalId);
+      this.intervalId = null;
+      logger.info('Business metrics collection stopped');
+    }
+  }
+
+  dispose(): void {
+    this.stopCollection();
+  }
+}
+
+const businessMetricsCollector = new BusinessMetricsCollector();
+
+// Start collection automatically
+businessMetricsCollector.startCollection();
+
+// Export the collector for cleanup during shutdown
+export { businessMetricsCollector };

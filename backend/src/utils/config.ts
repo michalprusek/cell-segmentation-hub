@@ -46,24 +46,49 @@ const configSchema = z.object({
   DATABASE_URL: z.string().default('file:./dev.db').transform((url) => {
     // Support DATABASE_URL template with secret substitution for production
     const urlTemplate = process.env.DATABASE_URL_TEMPLATE;
-    if (urlTemplate && urlTemplate.includes('{{DB_PASSWORD}}')) {
-      const dbPassword = getSecretValue('DB_PASSWORD', 'DB_PASSWORD_FILE');
-      if (dbPassword) {
-        return urlTemplate.replace('{{DB_PASSWORD}}', dbPassword);
+    if (urlTemplate) {
+      // Validate template contains required placeholder
+      if (!urlTemplate.includes('{{DB_PASSWORD}}')) {
+        throw new Error('DATABASE_URL_TEMPLATE must contain {{DB_PASSWORD}} placeholder');
       }
+      
+      // Check for multiple occurrences (should be exactly one)
+      const occurrences = (urlTemplate.match(/\{\{DB_PASSWORD\}\}/g) || []).length;
+      if (occurrences !== 1) {
+        throw new Error('DATABASE_URL_TEMPLATE must contain exactly one {{DB_PASSWORD}} placeholder');
+      }
+      
+      const dbPassword = getSecretValue('DB_PASSWORD', 'DB_PASSWORD_FILE');
+      if (!dbPassword) {
+        throw new Error('DB_PASSWORD or DB_PASSWORD_FILE must be provided when using DATABASE_URL_TEMPLATE');
+      }
+      
+      const resultUrl = urlTemplate.replace('{{DB_PASSWORD}}', dbPassword);
+      
+      // Validate the resulting URL is well-formed
+      try {
+        new URL(resultUrl);
+      } catch {
+        // If URL constructor fails, try basic database URL pattern validation
+        if (!/^(postgres|postgresql|mysql|sqlite):\/\/.+/.test(resultUrl)) {
+          throw new Error('DATABASE_URL_TEMPLATE substitution resulted in invalid database URL format');
+        }
+      }
+      
+      return resultUrl;
     }
     return url;
   }),
   
   // JWT
-  JWT_ACCESS_SECRET: z.string().min(32, 'JWT Access Secret must be at least 32 characters').transform(() => {
+  JWT_ACCESS_SECRET: z.string().transform(() => {
     const secret = getSecretValue('JWT_ACCESS_SECRET', 'JWT_ACCESS_SECRET_FILE');
     if (!secret || secret.length < 32) {
       throw new Error('JWT Access Secret must be at least 32 characters');
     }
     return secret;
   }),
-  JWT_REFRESH_SECRET: z.string().min(32, 'JWT Refresh Secret must be at least 32 characters').transform(() => {
+  JWT_REFRESH_SECRET: z.string().transform(() => {
     const secret = getSecretValue('JWT_REFRESH_SECRET', 'JWT_REFRESH_SECRET_FILE');
     if (!secret || secret.length < 32) {
       throw new Error('JWT Refresh Secret must be at least 32 characters');

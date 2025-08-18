@@ -13,7 +13,13 @@ echo "Running database migrations..."
 if npx prisma migrate deploy; then
   echo "Database migrations completed successfully"
 else
-  echo "Warning: Database migrations failed, continuing anyway..."
+  echo "Error: Database migrations failed" >&2
+  if [ "${FAIL_ON_MIGRATION_ERROR:-false}" = "true" ]; then
+    echo "FAIL_ON_MIGRATION_ERROR is set, exiting..." >&2
+    exit 1
+  else
+    echo "Warning: Continuing despite migration failure (set FAIL_ON_MIGRATION_ERROR=true to exit on failure)" >&2
+  fi
 fi
 
 echo "Starting server..."

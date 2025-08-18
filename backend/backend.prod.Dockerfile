@@ -21,10 +21,8 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     netcat-openbsd \
     curl \
+    dumb-init \
     && rm -rf /var/lib/apt/lists/*
-
-# Install dumb-init for proper signal handling
-RUN apt-get update && apt-get install -y dumb-init && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./
