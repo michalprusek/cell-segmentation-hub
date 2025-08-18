@@ -58,21 +58,56 @@ Before starting work, query the knowledge system for:
 
 **CRITICAL: This project uses Docker exclusively. NEVER use npm/node/make commands directly - always use Docker!**
 
-**Production Environment:**
+## 🚨 DEPLOYMENT STRATEGY - MANDATORY TO FOLLOW
 
-- **Start services**: `docker compose -f docker-compose.prod.yml up -d`
-- **Stop services**: `docker compose -f docker-compose.prod.yml down`
-- **Build services**: `docker compose -f docker-compose.prod.yml build [--no-cache]`
-- **View logs**: `docker compose -f docker-compose.prod.yml logs -f [service]`
-- **Restart service**: `docker compose -f docker-compose.prod.yml restart [service]`
+**CRITICAL RULE: Work ONLY in staging environment. Production deployments are AUTOMATED via GitHub Actions.**
 
-**Development Environment:**
+### Development & Staging Workflow
 
-- **Start services**: `docker compose up -d`
-- **Stop services**: `docker compose down`
-- **Build services**: `docker compose build [--no-cache]`
-- **View logs**: `docker compose logs -f [service]`
+1. **ALL development work happens in STAGING**:
+
+   ```bash
+   # Work in staging environment ONLY
+   docker compose -f docker-compose.staging.yml up -d
+   docker compose -f docker-compose.staging.yml build
+   docker compose -f docker-compose.staging.yml logs -f
+   ```
+
+2. **NEVER directly modify production**:
+   - ❌ DO NOT use `docker-compose.prod.yml` for development
+   - ❌ DO NOT manually deploy to production
+   - ❌ DO NOT make changes directly on production server
+
+3. **Production deployment via GitHub Actions ONLY**:
+   - Push changes to `staging` branch → Auto-deploy to staging
+   - After testing on staging → Merge to `main` branch
+   - GitHub Actions automatically deploys to production
+   - This ensures all production deployments have:
+     - ✅ Passed all tests
+     - ✅ Built successfully in Docker
+     - ✅ Been tested on staging first
+     - ✅ Proper rollback capability
+
+### Staging Environment Commands:
+
+- **Start services**: `docker compose -f docker-compose.staging.yml up -d`
+- **Stop services**: `docker compose -f docker-compose.staging.yml down`
+- **Build services**: `docker compose -f docker-compose.staging.yml build [--no-cache]`
+- **View logs**: `docker compose -f docker-compose.staging.yml logs -f [service]`
 - **Shell access**: `docker exec -it [container-name] /bin/bash`
+
+### Production Deployment (AUTOMATED ONLY):
+
+**Production is deployed ONLY through GitHub Actions workflow:**
+
+1. Push to `staging` branch and test thoroughly
+2. Create PR from `staging` to `main`
+3. Merge PR triggers automatic production deployment
+4. GitHub Actions handles:
+   - Database backup
+   - Blue-green deployment
+   - Health checks
+   - Automatic rollback on failure
 
 **Container Names:**
 
@@ -86,14 +121,26 @@ Before starting work, query the knowledge system for:
 
 ### Service URLs (Docker only)
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:3001
-- **ML Service**: http://localhost:8000
-- **API Documentation**: http://localhost:3001/api-docs
-- **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3030
+**Staging Environment (PRIMARY WORKING ENVIRONMENT):**
 
-**Note**: Some documentation may reference port 8082 for frontend - this is legacy. Always use port 3000 for Docker development.
+- **Frontend**: http://localhost:4000 ✅ **USE THIS FOR ALL DEVELOPMENT**
+- **Backend API**: http://localhost:4001/api
+- **ML Service**: http://localhost:4008
+- **API Documentation**: http://localhost:4001/api-docs
+- **Grafana**: http://localhost:3031
+
+**Production Environment (READ-ONLY - DEPLOYED VIA GITHUB ONLY):**
+
+- **Frontend**: https://spherosegapp.utia.cas.cz (DO NOT MODIFY DIRECTLY)
+- **Backend API**: https://spherosegapp.utia.cas.cz/api
+- **ML Service**: Internal only
+- **Monitoring**: Internal Grafana
+
+**IMPORTANT**:
+
+- 🟢 Always work in STAGING (port 4000)
+- 🔴 NEVER modify production directly
+- 🔵 Production updates happen ONLY through GitHub Actions
 
 ### DISABLED Commands (Do NOT use)
 
@@ -217,7 +264,8 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 ### Important Reminders
 
 - **Docker-first development**: Always use Docker Compose commands, never direct npm/node/make commands on host
-- **CRITICAL FOR PRODUCTION**: Kdykoliv je potřeba v production deployment změnit něco v aplikaci, je NUTNÝ ZNOVU BUILD kontejneru! Změny v source kódu se nepropíšou do běžícího kontejneru bez rebuild. Vždy použij `docker compose -f docker-compose.prod.yml build --no-cache backend` před restartem.
+- **STAGING ONLY**: All development and testing happens in staging environment (`docker-compose.staging.yml`)
+- **PRODUCTION VIA GITHUB**: Production deployments happen ONLY through GitHub Actions - NEVER manually
 - **File editing**: Always prefer editing existing files over creating new ones
 - **Documentation**: Only create docs when explicitly requested by the user
 - **Terminal safety**: Never use KillBash tool as it terminates the user's session
@@ -316,15 +364,15 @@ The project uses Husky for comprehensive pre-commit validation:
 
 **Before making changes:**
 
-1. Always use Docker environment (`docker compose up -d` to start)
+1. Always use STAGING Docker environment (`docker compose -f docker-compose.staging.yml up -d`)
 2. Query knowledge system for existing patterns and solutions
 3. Check if translations need updates for UI changes
 
-**During development:** 4. Services start automatically with hot reload 5. Use `docker compose logs -f` to monitor all services 6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test` and `docker exec -it spheroseg-frontend npm run test:e2e` 7. Validate translations inside container: `docker exec -it spheroseg-frontend npm run i18n:validate` if applicable
+**During development:** 4. Work ONLY in staging environment (port 4000) 5. Use `docker compose -f docker-compose.staging.yml logs -f` to monitor services 6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test` 7. Validate translations: `docker exec -it spheroseg-frontend npm run i18n:validate`
 
-**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.)
+**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.) 11. Push to `staging` branch first, test thoroughly
 
-**Quality assurance:** 11. Always run inside containers: `docker exec -it spheroseg-frontend npm run type-check` and `docker exec -it spheroseg-frontend npm run lint` before major changes 12. Use `docker compose ps` to verify all services are running correctly 13. Store learnings and solutions in the knowledge system for future reference
+**Deployment to production:** 12. Create PR from `staging` to `main` branch 13. Merge PR triggers automatic production deployment via GitHub Actions 14. GitHub Actions ensures all tests pass and Docker builds succeed 15. Store learnings and solutions in the knowledge system for future reference
 
 ## Recent Implementations & Important Notes
 

@@ -1,0 +1,182 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [staging]
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run type check
+        run: npm run type-check
+
+      - name: Run linter
+        run: npm run lint
+
+      - name: Run tests
+        run: npm run test -- --run
+
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service: [frontend, backend, ml-service]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=staging-
+            type=raw,value=staging-latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/${{ matrix.service }}/Dockerfile.prod
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=staging-${{ github.run_number }}
+
+  deploy:
+    name: Deploy to Staging Server
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment:
+      name: staging
+      url: https://staging.spherosegapp.utia.cas.cz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create deployment package
+        run: |
+          tar -czf deploy.tar.gz \
+            docker-compose.staging.yml \
+            docker/nginx/staging.conf \
+            scripts/deploy-staging.sh \
+            .env.staging.example
+
+      - name: Copy deployment package
+        run: |
+          scp deploy.tar.gz ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }}:/tmp/
+
+      - name: Deploy to staging
+        run: |
+          ssh ${{ secrets.STAGING_USER }}@${{ secrets.STAGING_HOST }} << 'EOF'
+            # Extract deployment package
+            cd /home/cvat/cell-segmentation-hub
+            tar -xzf /tmp/deploy.tar.gz
+            
+            # Update images
+            export REGISTRY=${{ env.REGISTRY }}
+            export IMAGE_TAG=staging-latest
+            
+            # Pull new images
+            docker compose -f docker-compose.staging.yml pull
+            
+            # Run database migrations
+            docker compose -f docker-compose.staging.yml run --rm backend npx prisma migrate deploy
+            
+            # Restart services with zero downtime
+            docker compose -f docker-compose.staging.yml up -d --no-deps --build backend
+            docker compose -f docker-compose.staging.yml up -d --no-deps --build frontend
+            docker compose -f docker-compose.staging.yml up -d --no-deps --build ml-service
+            
+            # Health check
+            sleep 10
+            curl -f http://localhost:4000 || exit 1
+            curl -f http://localhost:4001/api/health || exit 1
+            
+            # Cleanup
+            rm /tmp/deploy.tar.gz
+            docker image prune -f
+          EOF
+
+      - name: Notify deployment status
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: 'Staging deployment ${{ job.status }}'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+
+  smoke-test:
+    name: Run Smoke Tests
+    runs-on: ubuntu-latest
+    needs: deploy
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for services
+        run: sleep 30
+
+      - name: Run E2E tests against staging
+        run: |
+          npm ci
+          PLAYWRIGHT_BASE_URL=https://staging.spherosegapp.utia.cas.cz \
+          npm run test:e2e -- --grep "@smoke"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

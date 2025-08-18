@@ -1,0 +1,312 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  approval:
+    name: Deployment Approval
+    runs-on: ubuntu-latest
+    environment: production-approval
+    steps:
+      - name: Request deployment approval
+        run: echo "Deployment to production requested for ${{ github.ref }}"
+
+  backup:
+    name: Backup Production Database
+    runs-on: ubuntu-latest
+    needs: approval
+
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+
+      - name: Backup database
+        run: |
+          ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+            # Create backup directory
+            BACKUP_DIR="/backup/postgres/$(date +%Y%m%d-%H%M%S)"
+            mkdir -p $BACKUP_DIR
+            
+            # Backup database
+            docker exec spheroseg-db pg_dump -U postgres spheroseg > $BACKUP_DIR/spheroseg.sql
+            
+            # Compress backup
+            gzip $BACKUP_DIR/spheroseg.sql
+            
+            # Keep only last 30 backups
+            find /backup/postgres -type d -mtime +30 -exec rm -rf {} \; 2>/dev/null || true
+            
+            echo "Backup created: $BACKUP_DIR/spheroseg.sql.gz"
+          EOF
+
+  build-and-push:
+    name: Build Production Images
+    runs-on: ubuntu-latest
+    needs: approval
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service: [frontend, backend, ml-service]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          tags: |
+            type=ref,event=tag
+            type=ref,event=branch
+            type=sha,prefix=prod-
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./docker/${{ matrix.service }}/Dockerfile.prod
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ github.ref_name }}
+
+  deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [backup, build-and-push]
+    environment:
+      name: production
+      url: https://spherosegapp.utia.cas.cz
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.PRODUCTION_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create deployment package
+        run: |
+          tar -czf deploy.tar.gz \
+            docker-compose.prod.yml \
+            docker/nginx/nginx.conf \
+            docker/nginx/sites/ \
+            scripts/deploy-production.sh \
+            scripts/init-letsencrypt.sh \
+            scripts/certbot-renew.sh \
+            .env.production.example
+
+      - name: Copy deployment package
+        run: |
+          scp deploy.tar.gz ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }}:/tmp/
+
+      - name: Deploy to production (Blue-Green)
+        run: |
+          ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+            set -e
+            
+            # Variables
+            DEPLOY_DIR="/home/cvat/cell-segmentation-hub"
+            REGISTRY=${{ env.REGISTRY }}
+            IMAGE_TAG=${{ inputs.version || 'latest' }}
+            
+            cd $DEPLOY_DIR
+            
+            # Extract deployment package
+            tar -xzf /tmp/deploy.tar.gz
+            
+            # Update environment variables
+            export REGISTRY=$REGISTRY
+            export IMAGE_TAG=$IMAGE_TAG
+            
+            # Pull new images
+            docker compose -f docker-compose.prod.yml pull
+            
+            # Blue-Green Deployment
+            echo "Starting Blue-Green deployment..."
+            
+            # 1. Start new containers with different names (blue)
+            docker compose -f docker-compose.prod.yml up -d \
+              --no-deps \
+              --scale backend=2 \
+              --scale frontend=2 \
+              --scale ml-service=2
+            
+            # 2. Wait for new containers to be healthy
+            echo "Waiting for new containers to be healthy..."
+            sleep 30
+            
+            # 3. Health check new containers
+            docker exec spheroseg-backend-2 curl -f http://localhost:3001/api/health || exit 1
+            
+            # 4. Run database migrations
+            docker compose -f docker-compose.prod.yml run --rm backend npx prisma migrate deploy
+            
+            # 5. Switch nginx to new containers
+            docker compose -f docker-compose.prod.yml up -d nginx
+            
+            # 6. Remove old containers
+            docker compose -f docker-compose.prod.yml up -d \
+              --no-deps \
+              --scale backend=1 \
+              --scale frontend=1 \
+              --scale ml-service=1
+            
+            # 7. Final health check
+            sleep 10
+            curl -f https://spherosegapp.utia.cas.cz || exit 1
+            curl -f https://spherosegapp.utia.cas.cz/api/health || exit 1
+            
+            # Cleanup
+            rm /tmp/deploy.tar.gz
+            docker image prune -f
+            
+            echo "Deployment completed successfully!"
+          EOF
+
+      - name: Verify deployment
+        run: |
+          # Test main site
+          curl -f https://spherosegapp.utia.cas.cz || exit 1
+
+          # Test API
+          curl -f https://spherosegapp.utia.cas.cz/api/health || exit 1
+
+          # Test ML service
+          curl -f https://spherosegapp.utia.cas.cz/api/ml/health || exit 1
+
+  rollback:
+    name: Rollback if Failed
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: failure()
+
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.PRODUCTION_SSH_KEY }}
+
+      - name: Rollback to previous version
+        run: |
+          ssh ${{ secrets.PRODUCTION_USER }}@${{ secrets.PRODUCTION_HOST }} << 'EOF'
+            cd /home/cvat/cell-segmentation-hub
+            
+            # Get previous image tags
+            PREVIOUS_TAG=$(docker images --format "{{.Tag}}" | grep -E "^prod-" | head -2 | tail -1)
+            
+            # Rollback to previous version
+            export IMAGE_TAG=$PREVIOUS_TAG
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+            
+            echo "Rolled back to version: $PREVIOUS_TAG"
+          EOF
+
+      - name: Notify rollback
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: '⚠️ Production deployment failed! Rolled back to previous version.'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s" HEAD)
+          else
+            CHANGELOG=$(git log --pretty=format:"- %s" $PREVIOUS_TAG..HEAD)
+          fi
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: |
+            ## What's Changed
+            ${{ steps.changelog.outputs.changelog }}
+
+            ## Docker Images
+            - Frontend: `ghcr.io/${{ env.IMAGE_NAME }}-frontend:${{ github.ref_name }}`
+            - Backend: `ghcr.io/${{ env.IMAGE_NAME }}-backend:${{ github.ref_name }}`
+            - ML Service: `ghcr.io/${{ env.IMAGE_NAME }}-ml-service:${{ github.ref_name }}`
+
+            ## Deployment
+            This version has been automatically deployed to production.
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+  notify:
+    name: Notify Team
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: always()
+
+    steps:
+      - name: Send notification
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ needs.deploy.result }}
+          text: |
+            Production deployment ${{ needs.deploy.result }}
+            Version: ${{ github.ref_name }}
+            Deployed by: ${{ github.actor }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author
