@@ -10,6 +10,54 @@ VERY IMPORTANT: Always read relevant docs and fetch relevant documentation using
 
 VERY IMPORTANT: Use subagents often to save context. They dont have shared context with main agent, so give them comprehensive and clear instructions, also recommend them to use available knowledge systems.
 
+## Test-Driven Development (TDD) - MANDATORY
+
+**CRITICAL: Always follow Test-Driven Development principles!**
+
+### TDD Workflow Requirements
+
+**BEFORE implementing any feature or fixing any bug:**
+
+1. **Check for existing tests**: Look for test files related to the component/feature you're modifying
+2. **Write/update tests FIRST**: If no tests exist, create them. If tests exist, update them for new requirements
+3. **Verify test failure**: Run the test to ensure it fails (red phase)
+4. **Implement the feature**: Write minimal code to make the test pass (green phase)
+5. **Refactor if needed**: Improve the code while keeping tests passing (refactor phase)
+6. **Add to test suites**: Ensure new tests are included in the appropriate test suite
+
+### Test Locations
+
+- **Frontend unit tests**: `/src/**/*.test.ts(x)` - Run with `docker exec -it spheroseg-frontend npm run test`
+- **Frontend E2E tests**: `/e2e/*.spec.ts` - Run with `docker exec -it spheroseg-frontend npm run test:e2e`
+- **Backend unit tests**: `/backend/src/**/*.test.ts` - Run with `docker exec -it spheroseg-backend npm run test`
+- **API integration tests**: `/backend/src/api/**/*.test.ts`
+
+### Test Implementation Guidelines
+
+- **Component tests**: Test user interactions, state changes, and rendered output
+- **Hook tests**: Test custom hooks in isolation using `@testing-library/react-hooks`
+- **API tests**: Test endpoints with different scenarios (success, validation errors, auth failures)
+- **Integration tests**: Test complete user flows with Playwright
+- **ML service tests**: Verify model loading, inference, and postprocessing
+
+### Running Tests
+
+```bash
+# Frontend unit tests
+docker exec -it spheroseg-frontend npm run test
+
+# Frontend E2E tests
+docker exec -it spheroseg-frontend npm run test:e2e
+
+# Backend tests
+docker exec -it spheroseg-backend npm run test
+
+# Test with coverage
+docker exec -it spheroseg-frontend npm run test:coverage
+```
+
+**REMEMBER**: No feature is complete without tests. This is not optional - it's mandatory for maintaining code quality and preventing regressions.
+
 ## Knowledge Management System
 
 **Knowledge storage and retrieval** is available through the connected MCP servers for storing and retrieving application knowledge, best practices, and implementation details.
@@ -374,28 +422,13 @@ The project uses Husky for comprehensive pre-commit validation:
 2. Query knowledge system for existing patterns and solutions
 3. Check if translations need updates for UI changes
 
-**During development:** 
-4. Work ONLY in staging environment (port 4000)
-5. Use `docker compose -f docker-compose.staging.yml logs -f` to monitor services
-6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test`
-7. Validate translations: `docker exec -it spheroseg-frontend npm run i18n:validate`
+**During development:** 4. Work ONLY in staging environment (port 4000) 5. Use `docker compose -f docker-compose.staging.yml logs -f` to monitor services 6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test` 7. Validate translations: `docker exec -it spheroseg-frontend npm run i18n:validate`
 
-**Before committing:** 
-8. The pre-commit hook automatically runs comprehensive checks
-9. All checks must pass (ESLint, Prettier, TypeScript, security)
-10. Use conventional commit format (feat:, fix:, chore:, etc.)
-11. Push to `staging` branch - **AUTO-DEPLOY HANDLES THE REST!**
+**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.) 11. Push to `staging` branch - **AUTO-DEPLOY HANDLES THE REST!**
 
-**Automated deployment process:**
-12. **Push to staging** → GitHub Actions runs tests
-13. **Auto-deploy script** (running locally) detects changes within 30s
-14. **Automatic rebuild** and restart of Docker containers
-15. **No manual steps needed** - just commit and push!
+**Automated deployment process:** 12. **Push to staging** → GitHub Actions runs tests 13. **Auto-deploy script** (running locally) detects changes within 30s 14. **Automatic rebuild** and restart of Docker containers 15. **No manual steps needed** - just commit and push!
 
-**Production deployment:**
-16. Create PR from `staging` to `main` branch
-17. Merge PR triggers automatic production deployment via GitHub Actions
-18. Store learnings and solutions in the knowledge system for future reference
+**Production deployment:** 16. Create PR from `staging` to `main` branch 17. Merge PR triggers automatic production deployment via GitHub Actions 18. Store learnings and solutions in the knowledge system for future reference
 
 ## Recent Implementations & Important Notes
 
@@ -411,11 +444,13 @@ The project uses Husky for comprehensive pre-commit validation:
 **Three ways to run auto-deploy:**
 
 1. **Manual (temporary)**:
+
    ```bash
    ./scripts/auto-deploy-staging.sh &
    ```
 
 2. **Systemd service (permanent, recommended for Linux)**:
+
    ```bash
    sudo ./scripts/install-auto-deploy.sh
    ```
@@ -426,6 +461,7 @@ The project uses Husky for comprehensive pre-commit validation:
    ```
 
 **How it works:**
+
 1. Script monitors `staging` branch for new commits
 2. When changes detected, automatically:
    - Pulls latest code
@@ -434,6 +470,7 @@ The project uses Husky for comprehensive pre-commit validation:
    - Runs health checks
 
 **GitHub Actions Integration:**
+
 - **Repository**: PUBLIC (unlimited free Actions minutes)
 - **Workflow**: `.github/workflows/staging.yml`
 - **Triggers on**: Push to `staging` branch
