@@ -442,7 +442,7 @@ export default {
       addPoints: {
         clickVertex: 'Klikněte na jakýkoli vrchol pro zahájení přidávání bodů',
         addPoints:
-          'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení',
+          'Klikněte pro přidání bodů, poté klikněte na jiný vrchol pro dokončení. Klikněte přímo na jiný vrchol bez přidávání bodů pro odstranění všech bodů mezi nimi.',
         holdShift: 'Držte SHIFT pro automatické přidávání bodů',
         cancel: 'Stiskněte ESC pro zrušení',
       },
