@@ -1,0 +1,226 @@
+services:
+  # Frontend Builder - Hot reload for development
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile  # Development Dockerfile with hot reload
+    container_name: staging-frontend
+    ports:
+      - "4000:5173"  # Direct port access for hot reload
+    volumes:
+      # Hot reload volumes - mount source code
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./index.html:/app/index.html
+      - ./vite.config.ts:/app/vite.config.ts
+      - ./tailwind.config.ts:/app/tailwind.config.ts
+      - ./postcss.config.js:/app/postcss.config.js
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./tsconfig.app.json:/app/tsconfig.app.json
+    environment:
+      - VITE_API_BASE_URL=http://localhost:4001/api
+      - VITE_ML_SERVICE_URL=http://localhost:4008
+      - VITE_WS_URL=http://localhost:4001
+    networks:
+      - staging-network
+    restart: always
+    depends_on:
+      - backend
+
+
+  # Backend API - Hot reload for development
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile  # Development Dockerfile with hot reload
+    container_name: staging-backend
+    ports:
+      - "4001:3001"  # Staging backend port
+    networks:
+      - staging-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file: .env.staging
+    volumes:
+      # Hot reload volumes - mount source code
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+      - ./backend/uploads/staging:/app/uploads
+      - staging-backend-logs:/app/logs
+    environment:
+      - NODE_ENV=development  # Development mode for hot reload
+      - PORT=3001
+      - HOST=0.0.0.0
+      - DATABASE_URL=postgresql://spheroseg:${STAGING_DB_PASSWORD:-password}@staging-db:5432/spheroseg_staging
+      - REDIS_URL=redis://staging-redis:6379
+      - API_BASE_URL=http://localhost:4001
+      - ALLOWED_ORIGINS=https://staging.spherosegapp.utia.cas.cz,http://localhost:4000,http://localhost:4001
+      - WS_ALLOWED_ORIGINS=https://staging.spherosegapp.utia.cas.cz,ws://localhost:4001,http://localhost:4000,http://localhost:4001
+      - SEGMENTATION_SERVICE_URL=http://staging-ml:8000
+      - UPLOAD_DIR=/app/uploads
+      - STORAGE_TYPE=local
+      - JWT_ACCESS_SECRET=1c4fb341de6e2812f81b0cd5287652d38518287b64289fb21346305bba6fe87d
+      - JWT_REFRESH_SECRET=fb5a22af8446e7ac670ea277715ec4bdf9e233efd55f5ddac749edd8f2e9562b
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_WINDOW_MS=60000
+      - RATE_LIMIT_MAX=1000
+      - LOG_LEVEL=debug
+      - ENABLE_METRICS=true
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # ML Service
+  ml-service:
+    build:
+      context: ./backend/segmentation
+      dockerfile: ../../docker/ml.prod.Dockerfile
+    container_name: staging-ml
+    ports:
+      - "4008:8000"  # Staging ML service port
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    networks:
+      - staging-network
+    volumes:
+      - ./backend/segmentation:/app:rw  # Hot reload - mount source code
+      - staging-ml-cache:/app/cache
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - WORKERS=1  # Reduced for staging
+      - MAX_REQUESTS=50  # Reduced for staging
+      - MAX_REQUESTS_JITTER=5
+      - TIMEOUT=300
+      - GRACEFUL_TIMEOUT=30
+      - KEEP_ALIVE=5
+      - LOG_LEVEL=debug
+    command: ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    deploy:
+      resources:
+        limits:
+          memory: 4G  # Reduced for staging
+        reservations:
+          memory: 2G
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PostgreSQL Database - Staging
+  postgres:
+    image: postgres:15-alpine
+    container_name: staging-db
+    hostname: postgres
+    user: "postgres:postgres"
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    networks:
+      - staging-network
+    environment:
+      - POSTGRES_USER=spheroseg
+      - POSTGRES_PASSWORD=${STAGING_DB_PASSWORD:-password}
+      - POSTGRES_DB=spheroseg_staging
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8 --lc-collate=C --lc-ctype=C
+      - POSTGRES_HOST_AUTH_METHOD=md5
+      - PGPORT=5432
+    volumes:
+      - staging-postgres-data:/var/lib/postgresql/data
+      - ./scripts/db-backup/staging:/backup
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spheroseg -d spheroseg_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache - Staging
+  redis:
+    image: redis:7-alpine
+    container_name: staging-redis
+    user: "redis:redis"
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    networks:
+      - staging-network
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru --port 6379
+    volumes:
+      - staging-redis-data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Prometheus Monitoring - Staging
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: staging-prometheus
+    volumes:
+      - ./monitoring/staging-prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - staging-prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'  # Shorter retention for staging
+      - '--web.enable-lifecycle'
+    networks:
+      - staging-network
+    restart: always
+
+  # Grafana Visualization - Staging
+  grafana:
+    image: grafana/grafana:latest
+    container_name: staging-grafana
+    ports:
+      - "3031:3000"  # Different port for staging
+    environment:
+      - GF_SECURITY_ADMIN_USER=${STAGING_GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${STAGING_GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=https://staging.spherosegapp.utia.cas.cz/grafana
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - staging-grafana-data:/var/lib/grafana
+      - ./monitoring/grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+    networks:
+      - staging-network
+    depends_on:
+      - prometheus
+    restart: always
+
+networks:
+  staging-network:
+    driver: bridge
+  # Connect to main network for nginx routing
+  spheroseg-network:
+    external: true
+
+volumes:
+  staging-postgres-data:
+    driver: local
+  staging-redis-data:
+    driver: local
+  staging-backend-logs:
+    driver: local
+  staging-ml-cache:
+    driver: local
+  staging-prometheus-data:
+    driver: local
+  staging-grafana-data:
+    driver: local

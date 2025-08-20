@@ -1,0 +1,456 @@
+#!/bin/bash
+
+# =============================================================================
+# PRE-MERGE HOOK FOR SPHEROSEG PROJECT
+# =============================================================================
+# This hook runs comprehensive tests before allowing merge to main branch
+# It ensures production code quality and prevents breaking changes
+# =============================================================================
+
+set -euo pipefail
+
+# -----------------------------------------------------------------------------
+# CONFIGURATION
+# -----------------------------------------------------------------------------
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+MAGENTA='\033[0;35m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Test results
+TOTAL_TESTS=0
+PASSED_TESTS=0
+FAILED_TESTS=0
+SKIPPED_TESTS=0
+
+# Configuration
+TARGET_BRANCH="${1:-main}"
+CURRENT_BRANCH=$(git branch --show-current)
+DOCKER_TIMEOUT=300  # 5 minutes timeout for Docker operations
+
+# -----------------------------------------------------------------------------
+# HELPER FUNCTIONS
+# -----------------------------------------------------------------------------
+
+print_header() {
+    echo ""
+    echo -e "${BOLD}${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${MAGENTA}🚀 SPHEROSEG PRE-MERGE VALIDATION${NC}"
+    echo -e "${BOLD}${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${CYAN}Merging: ${BOLD}$CURRENT_BRANCH${NC} ${CYAN}→ ${BOLD}$TARGET_BRANCH${NC}"
+    echo ""
+}
+
+print_section() {
+    local title="$1"
+    echo ""
+    echo -e "${BOLD}${CYAN}═══ $title ═══${NC}"
+    ((TOTAL_TESTS++))
+}
+
+print_test() {
+    local status="$1"
+    local test_name="$2"
+    local detail="$3"
+    
+    case "$status" in
+        "pass")
+            echo -e "  ${GREEN}✓${NC} $test_name"
+            ((PASSED_TESTS++))
+            ;;
+        "fail")
+            echo -e "  ${RED}✗${NC} $test_name"
+            if [ -n "$detail" ]; then
+                echo -e "    ${RED}↳ $detail${NC}"
+            fi
+            ((FAILED_TESTS++))
+            ;;
+        "skip")
+            echo -e "  ${YELLOW}○${NC} $test_name ${YELLOW}(skipped)${NC}"
+            ((SKIPPED_TESTS++))
+            ;;
+        "running")
+            echo -e "  ${CYAN}⟳${NC} $test_name..."
+            ;;
+    esac
+}
+
+check_command() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# -----------------------------------------------------------------------------
+# TEST SUITES
+# -----------------------------------------------------------------------------
+
+# 1. BRANCH PROTECTION CHECK
+check_branch_protection() {
+    print_section "BRANCH PROTECTION"
+    
+    # Check if we're merging to protected branch
+    if [ "$TARGET_BRANCH" = "main" ] || [ "$TARGET_BRANCH" = "master" ] || [ "$TARGET_BRANCH" = "production" ]; then
+        print_test "pass" "Target branch '$TARGET_BRANCH' is protected"
+    else
+        print_test "skip" "Target branch '$TARGET_BRANCH' is not protected"
+        return 0
+    fi
+    
+    # Check if current branch is up to date with target
+    print_test "running" "Checking if branch is up to date with $TARGET_BRANCH"
+    git fetch origin "$TARGET_BRANCH" >/dev/null 2>&1
+    
+    local behind_count=$(git rev-list --count HEAD..origin/"$TARGET_BRANCH")
+    if [ "$behind_count" -eq 0 ]; then
+        print_test "pass" "Branch is up to date with $TARGET_BRANCH"
+    else
+        print_test "fail" "Branch is $behind_count commits behind $TARGET_BRANCH" "Pull latest changes first"
+    fi
+}
+
+# 2. CODE COMPILATION
+check_compilation() {
+    print_section "CODE COMPILATION"
+    
+    # Frontend build
+    print_test "running" "Building frontend application"
+    if npm run build >/dev/null 2>&1; then
+        print_test "pass" "Frontend build successful"
+    else
+        print_test "fail" "Frontend build failed" "Run: npm run build"
+    fi
+    
+    # Backend build
+    print_test "running" "Building backend application"
+    if cd backend && npm run build >/dev/null 2>&1; then
+        print_test "pass" "Backend build successful"
+        cd ..
+    else
+        print_test "fail" "Backend build failed" "Check backend/dist folder"
+        cd ..
+    fi
+}
+
+# 3. UNIT TESTS
+run_unit_tests() {
+    print_section "UNIT TESTS"
+    
+    # Frontend unit tests
+    print_test "running" "Running frontend unit tests"
+    if npx vitest run --reporter=json >/dev/null 2>&1; then
+        print_test "pass" "Frontend unit tests passed"
+    else
+        # Try to get test count
+        local test_output=$(npx vitest run 2>&1 | tail -5)
+        print_test "fail" "Frontend unit tests failed" "$test_output"
+    fi
+    
+    # Backend unit tests
+    print_test "running" "Running backend unit tests"
+    if cd backend && npm test -- --passWithNoTests >/dev/null 2>&1; then
+        print_test "pass" "Backend unit tests passed"
+        cd ..
+    else
+        print_test "fail" "Backend unit tests failed"
+        cd ..
+    fi
+}
+
+# 4. INTEGRATION TESTS (Docker)
+run_integration_tests() {
+    print_section "INTEGRATION TESTS"
+    
+    if ! check_command "docker"; then
+        print_test "skip" "Docker not available - skipping integration tests"
+        return 0
+    fi
+    
+    # Check if Docker services are running
+    print_test "running" "Checking Docker services"
+    
+    local required_services=("staging-backend" "staging-db" "staging-redis" "staging-ml")
+    local all_running=true
+    
+    for service in "${required_services[@]}"; do
+        if docker ps | grep -q "$service"; then
+            print_test "pass" "Service $service is running"
+        else
+            print_test "fail" "Service $service is not running"
+            all_running=false
+        fi
+    done
+    
+    if [ "$all_running" = false ]; then
+        print_test "fail" "Not all required services are running" "Run: docker compose -f docker-compose.staging.yml up -d"
+        return 1
+    fi
+    
+    # Test API endpoints
+    print_test "running" "Testing API health endpoint"
+    if curl -s http://localhost:4001/api/health | grep -q "ok"; then
+        print_test "pass" "API health check passed"
+    else
+        print_test "fail" "API health check failed"
+    fi
+    
+    # Test database connection
+    print_test "running" "Testing database connection"
+    if docker exec staging-backend npm run db:test >/dev/null 2>&1; then
+        print_test "pass" "Database connection successful"
+    else
+        print_test "fail" "Database connection failed"
+    fi
+}
+
+# 5. E2E TESTS
+run_e2e_tests() {
+    print_section "END-TO-END TESTS"
+    
+    if [ ! -f "playwright.config.ts" ]; then
+        print_test "skip" "Playwright not configured"
+        return 0
+    fi
+    
+    print_test "running" "Running E2E tests with Playwright"
+    
+    # Check if services are available
+    if ! curl -s http://localhost:4000 >/dev/null 2>&1; then
+        print_test "skip" "Frontend not accessible at localhost:4000"
+        return 0
+    fi
+    
+    # Run Playwright tests
+    if npx playwright test --reporter=list >/dev/null 2>&1; then
+        print_test "pass" "E2E tests passed"
+    else
+        local failed_tests=$(npx playwright test --reporter=list 2>&1 | grep "failed" | head -3)
+        print_test "fail" "E2E tests failed" "$failed_tests"
+    fi
+}
+
+# 6. PERFORMANCE TESTS
+run_performance_tests() {
+    print_section "PERFORMANCE TESTS"
+    
+    # Check bundle size
+    print_test "running" "Checking frontend bundle size"
+    if [ -d "dist" ]; then
+        local bundle_size=$(du -sh dist | awk '{print $1}')
+        print_test "pass" "Bundle size: $bundle_size"
+        
+        # Check if bundle is too large (>10MB)
+        local size_in_mb=$(du -sm dist | awk '{print $1}')
+        if [ "$size_in_mb" -gt 10 ]; then
+            print_test "fail" "Bundle size exceeds 10MB" "Consider code splitting"
+        fi
+    else
+        print_test "skip" "No build output found"
+    fi
+    
+    # Check for memory leaks (basic check)
+    print_test "running" "Checking for obvious memory leaks"
+    local leak_patterns=$(grep -r "setInterval\|addEventListener" src/ --include="*.tsx" --include="*.ts" | \
+                         grep -v "clearInterval\|removeEventListener" | wc -l)
+    if [ "$leak_patterns" -eq 0 ]; then
+        print_test "pass" "No obvious memory leak patterns"
+    else
+        print_test "fail" "Found $leak_patterns potential memory leaks" "Check event listeners and intervals"
+    fi
+}
+
+# 7. SECURITY SCAN
+run_security_scan() {
+    print_section "SECURITY SCAN"
+    
+    # npm audit for critical vulnerabilities
+    print_test "running" "Scanning for critical vulnerabilities"
+    local audit_output=$(npm audit --audit-level=critical 2>&1)
+    
+    if echo "$audit_output" | grep -q "found 0 vulnerabilities"; then
+        print_test "pass" "No critical vulnerabilities"
+    elif echo "$audit_output" | grep -q "critical"; then
+        local critical_count=$(echo "$audit_output" | grep -o "[0-9]* critical" | head -1)
+        print_test "fail" "Found $critical_count" "Run: npm audit fix --force"
+    else
+        print_test "pass" "No critical vulnerabilities found"
+    fi
+    
+    # Check for exposed secrets
+    print_test "running" "Scanning for exposed secrets"
+    local secret_patterns=("api_key" "secret_key" "password" "token" "private_key")
+    local secrets_found=false
+    
+    for pattern in "${secret_patterns[@]}"; do
+        if git diff "$TARGET_BRANCH"..."$CURRENT_BRANCH" | grep -i "$pattern" | \
+           grep -v "test\|spec\|mock\|example\|.md" | head -1 | grep -q .; then
+            secrets_found=true
+            break
+        fi
+    done
+    
+    if [ "$secrets_found" = false ]; then
+        print_test "pass" "No exposed secrets detected"
+    else
+        print_test "fail" "Potential secrets exposed in code"
+    fi
+}
+
+# 8. DATABASE MIGRATIONS
+check_database_migrations() {
+    print_section "DATABASE MIGRATIONS"
+    
+    if [ ! -f "backend/prisma/schema.prisma" ]; then
+        print_test "skip" "Prisma not configured"
+        return 0
+    fi
+    
+    # Check for pending migrations
+    print_test "running" "Checking for pending database migrations"
+    
+    if cd backend && npx prisma migrate status >/dev/null 2>&1; then
+        print_test "pass" "Database migrations are up to date"
+        cd ..
+    else
+        print_test "fail" "Pending database migrations detected" "Run: npx prisma migrate dev"
+        cd ..
+    fi
+    
+    # Validate schema
+    print_test "running" "Validating Prisma schema"
+    if cd backend && npx prisma validate >/dev/null 2>&1; then
+        print_test "pass" "Prisma schema is valid"
+        cd ..
+    else
+        print_test "fail" "Prisma schema validation failed"
+        cd ..
+    fi
+}
+
+# 9. DOCUMENTATION CHECK
+check_documentation() {
+    print_section "DOCUMENTATION"
+    
+    # Check if README is updated
+    print_test "running" "Checking README.md"
+    if [ -f "README.md" ]; then
+        local readme_changed=$(git diff "$TARGET_BRANCH"..."$CURRENT_BRANCH" --name-only | grep -c "README.md")
+        if [ "$readme_changed" -gt 0 ]; then
+            print_test "pass" "README.md has been updated"
+        else
+            print_test "skip" "README.md not changed"
+        fi
+    fi
+    
+    # Check for API documentation
+    print_test "running" "Checking API documentation"
+    if [ -f "backend/swagger.json" ] || [ -f "backend/openapi.yaml" ]; then
+        print_test "pass" "API documentation exists"
+    else
+        print_test "skip" "No API documentation found"
+    fi
+}
+
+# 10. DEPENDENCY AUDIT
+check_dependencies() {
+    print_section "DEPENDENCY AUDIT"
+    
+    # Check for outdated dependencies
+    print_test "running" "Checking for outdated dependencies"
+    local outdated=$(npm outdated --json 2>/dev/null | grep -c "wanted" || echo "0")
+    
+    if [ "$outdated" -eq 0 ]; then
+        print_test "pass" "All dependencies are up to date"
+    else
+        print_test "fail" "Found $outdated outdated dependencies" "Run: npm update"
+    fi
+    
+    # Check for unused dependencies
+    if check_command "depcheck"; then
+        print_test "running" "Checking for unused dependencies"
+        local unused=$(npx depcheck --json 2>/dev/null | grep -c '"dependencies"' || echo "0")
+        
+        if [ "$unused" -eq 0 ]; then
+            print_test "pass" "No unused dependencies"
+        else
+            print_test "fail" "Found unused dependencies" "Run: npx depcheck"
+        fi
+    else
+        print_test "skip" "depcheck not available"
+    fi
+}
+
+# -----------------------------------------------------------------------------
+# MAIN EXECUTION
+# -----------------------------------------------------------------------------
+
+main() {
+    print_header
+    
+    # Pre-flight checks
+    echo -e "${CYAN}Running comprehensive test suite before merge...${NC}"
+    echo -e "${YELLOW}This may take several minutes.${NC}"
+    echo ""
+    
+    # Run all test suites
+    check_branch_protection
+    check_compilation
+    run_unit_tests
+    run_integration_tests
+    run_e2e_tests
+    run_performance_tests
+    run_security_scan
+    check_database_migrations
+    check_documentation
+    check_dependencies
+    
+    # Print summary
+    echo ""
+    echo -e "${BOLD}${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${BOLD}${CYAN}TEST RESULTS SUMMARY${NC}"
+    echo -e "${BOLD}${MAGENTA}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    echo -e "  Total tests:   ${BOLD}$TOTAL_TESTS${NC}"
+    echo -e "  Passed:        ${GREEN}${BOLD}$PASSED_TESTS${NC}"
+    echo -e "  Failed:        ${RED}${BOLD}$FAILED_TESTS${NC}"
+    echo -e "  Skipped:       ${YELLOW}${BOLD}$SKIPPED_TESTS${NC}"
+    
+    echo ""
+    
+    # Calculate pass percentage
+    if [ $TOTAL_TESTS -gt 0 ]; then
+        local pass_percentage=$((PASSED_TESTS * 100 / TOTAL_TESTS))
+        echo -e "  Pass rate:     ${BOLD}$pass_percentage%${NC}"
+    fi
+    
+    echo ""
+    
+    # Final decision
+    if [ $FAILED_TESTS -eq 0 ]; then
+        echo -e "${GREEN}${BOLD}✓ ALL TESTS PASSED!${NC}"
+        echo -e "${GREEN}Safe to merge to $TARGET_BRANCH${NC}"
+        echo ""
+        exit 0
+    else
+        echo -e "${RED}${BOLD}✗ MERGE BLOCKED!${NC}"
+        echo -e "${RED}$FAILED_TESTS test(s) failed and must be fixed before merging.${NC}"
+        echo ""
+        echo -e "${YELLOW}To bypass (NOT RECOMMENDED):${NC}"
+        echo -e "  git merge --no-verify"
+        echo ""
+        exit 1
+    fi
+}
+
+# Check if we're actually in a merge context
+if [ -z "$GIT_MERGE_HEAD" ] && [ "$1" != "--test" ]; then
+    echo -e "${YELLOW}Note: This hook is designed to run during merge operations.${NC}"
+    echo -e "${YELLOW}Running in test mode...${NC}"
+fi
+
+# Run main function
+main "$@"

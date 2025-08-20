@@ -38,7 +38,7 @@ function loadTranslations(langCode) {
     function visit(node) {
       // Debug: Log node types to understand the AST structure
       // console.log(`Node kind: ${ts.SyntaxKind[node.kind]}`);
-      
+
       // Handle export default syntax: export default { ... }
       if (ts.isExportAssignment(node) && !node.isExportEquals) {
         if (ts.isObjectLiteralExpression(node.expression)) {
@@ -57,7 +57,7 @@ function loadTranslations(langCode) {
           parent = parent.parent;
         }
       }
-      
+
       ts.forEachChild(node, visit);
     }
 
@@ -104,14 +104,16 @@ function parseObjectLiteral(node) {
         result[key] = property.initializer.text;
       } else if (ts.isArrayLiteralExpression(property.initializer)) {
         // Handle array literals
-        result[key] = property.initializer.elements.map(element => {
-          if (ts.isStringLiteral(element)) {
-            return element.text;
-          } else if (ts.isNoSubstitutionTemplateLiteral(element)) {
-            return element.text;
-          }
-          return null;
-        }).filter(item => item !== null);
+        result[key] = property.initializer.elements
+          .map(element => {
+            if (ts.isStringLiteral(element)) {
+              return element.text;
+            } else if (ts.isNoSubstitutionTemplateLiteral(element)) {
+              return element.text;
+            }
+            return null;
+          })
+          .filter(item => item !== null);
       }
       // Skip other types (functions, computed values, etc.)
     }

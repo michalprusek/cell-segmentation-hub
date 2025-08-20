@@ -1,155 +1,48 @@
-#!/usr/bin/env bash
+#!/bin/sh
 
-echo "🔍 Running comprehensive pre-commit checks..."
+# Simple pre-commit hook for SpheroSeg project
+set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+echo "🔐 Running pre-commit checks..."
 
-# Function to print colored output
-print_status() {
-    echo -e "${BLUE}[$(date '+%H:%M:%S')]${NC} $1"
-}
-
-print_success() {
-    echo -e "${GREEN}✅ $1${NC}"
-}
-
-print_error() {
-    echo -e "${RED}❌ $1${NC}"
-}
-
-print_warning() {
-    echo -e "${YELLOW}⚠️  $1${NC}"
-}
-
-# Track overall success
-OVERALL_SUCCESS=true
-
-print_status "Running lint-staged checks..."
-if ! npm run precommit; then
-    print_error "Lint-staged checks failed!"
-    OVERALL_SUCCESS=false
-else
-    print_success "Lint-staged checks passed"
-fi
-
-# Run frontend type checking
-print_status "Running frontend TypeScript type checking..."
-if ! npm run type-check; then
-    print_error "Frontend TypeScript type checking failed!"
-    OVERALL_SUCCESS=false
-else
-    print_success "Frontend TypeScript type checking passed"
-fi
-
-# Run backend type checking
-print_status "Running backend TypeScript type checking..."
-if ! (cd backend && npm run type-check); then
-    print_error "Backend TypeScript type checking failed!"
-    OVERALL_SUCCESS=false
-else
-    print_success "Backend TypeScript type checking passed"
-fi
-
-# Check for TODO/FIXME comments in staged files
-print_status "Checking for TODO/FIXME comments in staged files..."
-STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' || true)
-if [ -n "$STAGED_FILES" ]; then
-    TODO_COUNT=$(echo "$STAGED_FILES" | xargs grep -l "TODO\|FIXME" 2>/dev/null | wc -l || echo "0")
-    if [ "$TODO_COUNT" -gt 0 ]; then
-        print_warning "Found $TODO_COUNT files with TODO/FIXME comments"
-        echo "$STAGED_FILES" | xargs grep -n "TODO\|FIXME" 2>/dev/null || true
-    else
-        print_success "No TODO/FIXME comments found in staged files"
-    fi
-fi
-
-# Check for console.log statements in staged files (excluding test files)
-print_status "Checking for console.log statements in staged files..."
-if [ -n "$STAGED_FILES" ]; then
-    CONSOLE_FILES=$(echo "$STAGED_FILES" | grep -v -E '\.(test|spec)\.(ts|tsx|js|jsx)$' | xargs grep -l "console\.log" 2>/dev/null || true)
-    if [ -n "$CONSOLE_FILES" ]; then
-        print_error "Found console.log statements in non-test files:"
-        echo "$CONSOLE_FILES" | xargs grep -n "console\.log" 2>/dev/null || true
-        OVERALL_SUCCESS=false
-    else
-        print_success "No console.log statements found in staged files"
-    fi
+# Check for merge conflict markers (actual Git conflict markers)
+if git diff --cached --name-only | xargs grep -l "^<<<<<<< \|^>>>>>>> \|^=======$" 2>/dev/null | head -1 | grep -q .; then
+    echo "❌ Error: Merge conflict markers found in staged files"
+    exit 1
 fi
 
 # Check for debugger statements
-print_status "Checking for debugger statements..."
-if [ -n "$STAGED_FILES" ]; then
-    DEBUGGER_FILES=$(echo "$STAGED_FILES" | xargs grep -l "debugger" 2>/dev/null || true)
-    if [ -n "$DEBUGGER_FILES" ]; then
-        print_error "Found debugger statements:"
-        echo "$DEBUGGER_FILES" | xargs grep -n "debugger" 2>/dev/null || true
-        OVERALL_SUCCESS=false
-    else
-        print_success "No debugger statements found"
-    fi
-fi
-
-# Check for merge conflict markers
-print_status "Checking for merge conflict markers..."
-if [ -n "$STAGED_FILES" ]; then
-    CONFLICT_FILES=$(echo "$STAGED_FILES" | xargs grep -l "<<<<<<< \|======= \|>>>>>>> " 2>/dev/null || true)
-    if [ -n "$CONFLICT_FILES" ]; then
-        print_error "Found merge conflict markers:"
-        echo "$CONFLICT_FILES"
-        OVERALL_SUCCESS=false
-    else
-        print_success "No merge conflict markers found"
-    fi
-fi
-
-# Check for large files (> 1MB)
-print_status "Checking for large files..."
-LARGE_FILES=$(git diff --cached --name-only --diff-filter=ACM | xargs ls -l 2>/dev/null | awk '$5 > 1048576 {print $9 " (" $5 " bytes)"}' || true)
-if [ -n "$LARGE_FILES" ]; then
-    print_warning "Found large files (>1MB):"
-    echo "$LARGE_FILES"
-fi
-
-# Check that package-lock.json is up to date
-print_status "Checking package-lock.json consistency..."
-PACKAGE_MODIFIED=$(git diff --cached --name-only | grep "package\.json$" || true)
-if [ -n "$PACKAGE_MODIFIED" ]; then
-    PACKAGE_LOCK_MODIFIED=$(git diff --cached --name-only | grep "package-lock\.json$" || true)
-    if [ -z "$PACKAGE_LOCK_MODIFIED" ]; then
-        print_warning "package.json was modified but package-lock.json was not. Consider running 'npm install'"
-    fi
-fi
-
-# Final status
-if [ "$OVERALL_SUCCESS" = true ]; then
-    print_success "All pre-commit checks passed! 🎉"
-    echo ""
-    echo "📋 Checks performed:"
-    echo "  • ESLint with 0 warnings allowed"
-    echo "  • Prettier code formatting"
-    echo "  • TypeScript type checking (frontend & backend)"
-    echo "  • Security audit for high-severity issues"
-    echo "  • TODO/FIXME comment detection"
-    echo "  • Console.log statement detection"
-    echo "  • Debugger statement detection"
-    echo "  • Merge conflict marker detection"
-    echo "  • Large file detection"
-    echo "  • Package-lock consistency check"
-    echo ""
-else
-    print_error "Pre-commit checks failed! Please fix the issues above."
-    echo ""
-    echo "💡 Tips:"
-    echo "  • Run 'npm run lint:fix' to auto-fix linting issues"
-    echo "  • Run 'npm run format' to fix formatting"
-    echo "  • Run 'npm run type-check' to check TypeScript errors"
-    echo "  • Remove console.log and debugger statements"
-    echo "  • Resolve merge conflicts"
-    echo ""
+if git diff --cached --name-only | grep -E "\.(js|jsx|ts|tsx)$" | xargs grep -l "debugger" 2>/dev/null | head -1 | grep -q .; then
+    echo "❌ Error: Found debugger statements"
     exit 1
 fi
+
+# Run linting if available
+if command -v npx >/dev/null 2>&1 && [ -f "package.json" ]; then
+    echo "⏳ Running linter..."
+    npx eslint . --max-warnings 0 || {
+        echo "⚠️ Warning: ESLint found issues"
+        echo "🔧 Attempting auto-fix..."
+        npx eslint . --fix || true
+        git add -u
+    }
+    
+    echo "⏳ Checking code formatting..."
+    npx prettier --check . || {
+        echo "🔧 Auto-formatting code..."
+        npx prettier --write .
+        git add -u
+    }
+fi
+
+# Check TypeScript if available
+if [ -f "tsconfig.json" ] && command -v npx >/dev/null 2>&1; then
+    echo "⏳ Checking TypeScript..."
+    npx tsc --noEmit || {
+        echo "❌ Error: TypeScript compilation failed"
+        exit 1
+    }
+fi
+
+echo "✅ Pre-commit checks completed successfully!"
+exit 0

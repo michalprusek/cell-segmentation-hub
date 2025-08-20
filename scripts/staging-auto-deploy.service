@@ -1,0 +1,18 @@
+[Unit]
+Description=Auto-deploy staging for cell-segmentation-hub
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=cvat
+Group=cvat
+WorkingDirectory=/home/cvat/cell-segmentation-hub
+ExecStart=/home/cvat/cell-segmentation-hub/scripts/auto-deploy-staging.sh
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/staging-auto-deploy.log
+StandardError=append:/var/log/staging-auto-deploy.log
+
+[Install]
+WantedBy=multi-user.target

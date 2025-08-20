@@ -28,6 +28,7 @@ interface UseEnhancedSegmentationEditorProps {
   onSave?: (polygons: Polygon[]) => Promise<void>;
   onPolygonsChange?: (polygons: Polygon[]) => void;
   imageId?: string; // Add imageId to detect image changes
+  isFromGallery?: boolean; // Add flag to trigger auto-reset
 }
 
 /**
@@ -43,6 +44,7 @@ export const useEnhancedSegmentationEditor = ({
   onSave,
   onPolygonsChange,
   imageId,
+  isFromGallery = false,
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
 
@@ -186,6 +188,34 @@ export const useEnhancedSegmentationEditor = ({
       }
     }
   }, [initialPolygons, imageId]);
+
+  // Auto-reset view when opening image from gallery
+  useEffect(() => {
+    if (isFromGallery && imageId && hasInitialized.current) {
+      // Calculate and apply reset transform
+      const newTransform = calculateCenteringTransform(
+        imageWidth,
+        imageHeight,
+        canvasWidth,
+        canvasHeight
+      );
+      setTransform(newTransform);
+
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug(
+          '🔄 Auto-reset view for image opened from gallery:',
+          imageId
+        );
+      }
+    }
+  }, [
+    isFromGallery,
+    imageId,
+    imageWidth,
+    imageHeight,
+    canvasWidth,
+    canvasHeight,
+  ]);
 
   // Update polygons with history tracking
   const updatePolygons = useCallback(
