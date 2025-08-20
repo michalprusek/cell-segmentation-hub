@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # Green Frontend (port 5000)
+  frontend-green:
+    build:
+      context: .
+      dockerfile: docker/frontend.prod.Dockerfile
+      args:
+        - VITE_API_BASE_URL=https://spherosegapp.utia.cas.cz/api
+        - VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/api/ml
+        - VITE_WS_URL=wss://spherosegapp.utia.cas.cz
+    container_name: green-frontend
+    ports:
+      - "5000:80"
+    networks:
+      - green-network
+    environment:
+      - NODE_ENV=production
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Green Backend API (port 5001)
+  backend-green:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.prod.Dockerfile
+    container_name: green-backend
+    ports:
+      - "5001:3001"
+    networks:
+      - green-network
+    depends_on:
+      postgres-green:
+        condition: service_healthy
+      redis-green:
+        condition: service_healthy
+    env_file: .env.production
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://spheroseg:spheroseg@green-db:5432/spheroseg_green
+      - REDIS_URL=redis://green-redis:6379
+    volumes:
+      - ./backend/uploads/green:/app/uploads
+      - green-backend-logs:/app/logs
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Green PostgreSQL Database
+  postgres-green:
+    image: postgres:15-alpine
+    container_name: green-db
+    networks:
+      - green-network
+    environment:
+      - POSTGRES_USER=spheroseg
+      - POSTGRES_PASSWORD=spheroseg
+      - POSTGRES_DB=spheroseg_green
+    volumes:
+      - green-postgres-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spheroseg"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Green Redis Cache
+  redis-green:
+    image: redis:7-alpine
+    container_name: green-redis
+    networks:
+      - green-network
+    volumes:
+      - green-redis-data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Green ML Service (port 5008)
+  ml-green:
+    build:
+      context: ./backend/segmentation
+      dockerfile: ../../docker/ml.Dockerfile
+    container_name: green-ml
+    ports:
+      - "5008:8000"
+    networks:
+      - green-network
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=production
+    volumes:
+      - ./backend/segmentation/weights:/app/weights
+      - ./backend/uploads/green:/app/uploads
+      - green-ml-logs:/app/logs
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  green-network:
+    driver: bridge
+
+volumes:
+  green-postgres-data:
+  green-redis-data:
+  green-backend-logs:
+  green-ml-logs:

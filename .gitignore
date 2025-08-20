@@ -20,6 +20,10 @@ dist-ssr
 .env.production
 .env.production.local
 .env.test.local
+.env.blue
+.env.green
+.env.staging
+.env.test
 
 # SSL certificates and keys
 **/docker/nginx/ssl/*.key
