@@ -6,9 +6,9 @@ services:
   test-db:
     image: postgres:15-alpine
     environment:
-      POSTGRES_USER: test_user
-      POSTGRES_PASSWORD: test_password
-      POSTGRES_DB: spheroseg_test
+      POSTGRES_USER: ${TEST_DB_USER:-test_user}
+      POSTGRES_PASSWORD: ${TEST_DB_PASSWORD:-test_password_change_me}
+      POSTGRES_DB: ${TEST_DB_NAME:-spheroseg_test}
     ports:
       - "5433:5432"
     volumes:
@@ -39,10 +39,10 @@ services:
       - "3001:3001"
     environment:
       - NODE_ENV=test
-      - DATABASE_URL=postgresql://test_user:test_password@test-db:5432/spheroseg_test
+      - DATABASE_URL=postgresql://${TEST_DB_USER:-test_user}:${TEST_DB_PASSWORD:-test_password_change_me}@test-db:5432/${TEST_DB_NAME:-spheroseg_test}
       - REDIS_URL=redis://test-redis:6379
-      - JWT_SECRET=test-jwt-secret-key-for-testing-only
-      - JWT_REFRESH_SECRET=test-jwt-refresh-secret-key-for-testing-only
+      - JWT_ACCESS_SECRET=${TEST_JWT_ACCESS_SECRET:-$(openssl rand -hex 32 2>/dev/null || echo 'a1b2c3d4e5f6789012345678901234567890123456789012345678901234567')}
+      - JWT_REFRESH_SECRET=${TEST_JWT_REFRESH_SECRET:-$(openssl rand -hex 32 2>/dev/null || echo 'b2c3d4e5f67890123456789012345678901234567890123456789012345678a')}
       - ML_SERVICE_URL=http://ml-service-test:8000
       - PORT=3001
       - LOG_LEVEL=info
