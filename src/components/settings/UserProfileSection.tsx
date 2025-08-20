@@ -38,8 +38,9 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
       toast.success(t('settings.profileUpdated'));
     } catch (error: unknown) {
       logger.error('Error saving profile:', error);
-      const errorMessage = getErrorMessage(error) || 'Failed to update profile';
-      toast.error(t('settings.profileUpdateFailed') + ': ' + errorMessage);
+      const errorMessage =
+        getErrorMessage(error, t) || t('errors.operations.updateProfile');
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

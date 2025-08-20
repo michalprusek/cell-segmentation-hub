@@ -3,6 +3,11 @@ import { hashPassword, verifyPassword, generateSecureToken } from '../auth/passw
 import { generateTokenPair, JwtPayload } from '../auth/jwt';
 import { logger } from '../utils/logger';
 import { ApiError } from '../middleware/error';
+import * as EmailService from './emailService';
+import { generateFriendlyPassword } from '../utils/passwordGenerator';
+import { getStorageProvider } from '../storage/index';
+import { v4 as uuidv4 } from 'uuid';
+import sharp from 'sharp';
 import type { 
   LoginData, 
   RegisterData, 
@@ -11,7 +16,8 @@ import type {
   ChangePasswordData,
   RefreshTokenData
 } from '../auth/validation';
-import type { User, Profile } from '@prisma/client';
+import type { Profile } from '@prisma/client';
+import type { Express } from 'express';
 
 export interface ProfileUpdateData {
   username?: string;
@@ -42,11 +48,11 @@ export interface AuthResult {
   refreshToken: string;
 }
 
-export class AuthService {
+/* AuthService functions */
   /**
    * Register a new user
    */
-  static async register(data: RegisterData): Promise<{ message: string; user: { id: string; email: string; username?: string; emailVerified: boolean }; accessToken: string; refreshToken: string }> {
+export async function register(data: RegisterData): Promise<{ message: string; user: { id: string; email: string; username?: string; emailVerified: boolean }; accessToken: string; refreshToken: string }> {
     try {
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
@@ -112,21 +118,22 @@ export class AuthService {
         throw ApiError.internalError('Chyba při vytváření uživatele');
       }
 
-      // Generate tokens for immediate login
+      // Generate tokens for immediate login (default rememberMe=true for registration)
       const tokenPayload: JwtPayload = {
         userId: newUser.id,
         email: newUser.email,
         emailVerified: newUser.emailVerified
       };
 
-      const { accessToken, refreshToken } = generateTokenPair(tokenPayload);
+      const { accessToken, refreshToken } = generateTokenPair(tokenPayload, true);
 
-      // Create session
+      // Create session with rememberMe=true for new registrations
       await prisma.session.create({
         data: {
           userId: newUser.id,
           refreshToken,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+          rememberMe: true,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days for new registrations
           isValid: true
         }
       });
@@ -154,7 +161,7 @@ export class AuthService {
   /**
    * Login user
    */
-  static async login(data: LoginData): Promise<AuthResult> {
+export async function login(data: LoginData & { rememberMe?: boolean }): Promise<AuthResult> {
     try {
       // Find user by email
       const user = await prisma.user.findUnique({
@@ -172,21 +179,24 @@ export class AuthService {
         throw ApiError.unauthorized('Neplatné přihlašovací údaje');
       }
 
-      // Generate tokens
+      // Generate tokens with rememberMe option
       const tokenPayload: JwtPayload = {
         userId: user.id,
         email: user.email,
         emailVerified: user.emailVerified
       };
 
-      const { accessToken, refreshToken } = generateTokenPair(tokenPayload);
+      const rememberMe = data.rememberMe ?? false;
+      const { accessToken, refreshToken } = generateTokenPair(tokenPayload, rememberMe);
 
-      // Store refresh token in database
+      // Store refresh token in database with appropriate expiry
+      const expiryDays = rememberMe ? 30 : 7; // 30 days for remember me, 7 days for normal login
       await prisma.session.create({
         data: {
           userId: user.id,
           refreshToken,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+          rememberMe,
+          expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
           isValid: true
         }
       });
@@ -218,7 +228,7 @@ export class AuthService {
   /**
    * Refresh access token
    */
-  static async refreshToken(data: RefreshTokenData): Promise<{ accessToken: string; refreshToken: string }> {
+export async function refreshToken(data: RefreshTokenData): Promise<{ accessToken: string; refreshToken: string }> {
     try {
       // Find session with refresh token
       const session = await prisma.session.findUnique({
@@ -238,21 +248,22 @@ export class AuthService {
         throw ApiError.unauthorized('Uživatel nenalezen');
       }
 
-      // Generate new tokens
+      // Generate new tokens with same rememberMe setting
       const tokenPayload: JwtPayload = {
         userId: session.userId,
         email: user.email,
         emailVerified: user.emailVerified
       };
 
-      const { accessToken, refreshToken: newRefreshToken } = generateTokenPair(tokenPayload);
+      const { accessToken, refreshToken: newRefreshToken } = generateTokenPair(tokenPayload, session.rememberMe);
 
-      // Update session with new refresh token
+      // Update session with new refresh token and preserve expiry based on rememberMe
+      const expiryDays = session.rememberMe ? 30 : 7;
       await prisma.session.update({
         where: { id: session.id },
         data: {
           refreshToken: newRefreshToken,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+          expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
         }
       });
 
@@ -274,7 +285,7 @@ export class AuthService {
   /**
    * Logout user (invalidate refresh token)
    */
-  static async logout(refreshToken: string): Promise<void> {
+export async function logout(refreshToken: string): Promise<void> {
     try {
       await prisma.session.updateMany({
         where: { refreshToken },
@@ -289,9 +300,9 @@ export class AuthService {
   }
 
   /**
-   * Request password reset
+   * Request password reset - generates secure token and sends reset link via email
    */
-  static async requestPasswordReset(data: ResetPasswordRequestData): Promise<{ message: string; resetToken?: string }> {
+export async function requestPasswordReset(data: ResetPasswordRequestData): Promise<{ message: string; resetToken?: string }> {
     try {
       const user = await prisma.user.findUnique({
         where: { email: data.email }
@@ -302,28 +313,38 @@ export class AuthService {
         return { message: 'Pokud email existuje, byl odeslán odkaz pro reset hesla.' };
       }
 
-      // Generate reset token
+      // Generate secure reset token
       const resetToken = generateSecureToken();
+      const tokenHash = await hashPassword(resetToken); // Hash the token before storing
+      
+      // Set token expiry to 1 hour from now
       const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
+      // Store hashed token and expiry
       await prisma.user.update({
         where: { id: user.id },
         data: {
-          resetToken,
+          resetToken: tokenHash,
           resetTokenExpiry
         }
       });
 
-      logger.info('Password reset requested', 'AuthService', { email: data.email });
+      logger.info('Password reset token generated', 'AuthService', { email: data.email });
 
-      // TODO: Send reset email
-      // await EmailService.sendPasswordResetEmail(data.email, resetToken);
+      // Send email with reset link
+      try {
+        await EmailService.sendPasswordResetEmail(data.email, resetToken, resetTokenExpiry);
+        logger.info('Password reset email sent successfully', 'AuthService', { email: data.email });
+      } catch (emailError) {
+        logger.error('Failed to send password reset email:', emailError as Error, 'AuthService', { email: data.email });
+        // Continue without throwing error - token has already been generated
+      }
 
       const response: { message: string; resetToken?: string } = {
         message: 'Pokud email existuje, byl odeslán odkaz pro reset hesla.'
       };
       
-      // Only include token in non-production environments
+      // Only include token in non-production environments for testing
       if (process.env.NODE_ENV !== 'production') {
         response.resetToken = resetToken;
       }
@@ -335,26 +356,36 @@ export class AuthService {
     }
   }
 
+
   /**
-   * Confirm password reset
+   * Confirm password reset with token - allows user to set new password
    */
-  static async confirmPasswordReset(data: ResetPasswordConfirmData): Promise<{ message: string }> {
+export async function resetPasswordWithToken(data: ResetPasswordConfirmData): Promise<{ message: string }> {
     try {
+      // Find user with non-expired reset token
       const user = await prisma.user.findFirst({
         where: {
-          resetToken: data.token,
           resetTokenExpiry: {
-            gt: new Date()
+            gte: new Date() // Token must not be expired
+          },
+          resetToken: {
+            not: null // Token must exist
           }
         }
       });
 
-      if (!user) {
-        throw ApiError.badRequest('Neplatný nebo vypršený token');
+      if (!user || !user.resetToken) {
+        throw ApiError.badRequest('Neplatný nebo vypršený reset token');
       }
 
-      // Hash new password
-      const hashedPassword = await hashPassword(data.password);
+      // Verify the token matches (compare against hashed version)
+      const isTokenValid = await verifyPassword(data.token, user.resetToken);
+      if (!isTokenValid) {
+        throw ApiError.badRequest('Neplatný nebo vypršený reset token');
+      }
+
+      // Hash the new password
+      const hashedPassword = await hashPassword(data.newPassword);
 
       // Update password and clear reset token
       await prisma.user.update({
@@ -366,15 +397,15 @@ export class AuthService {
         }
       });
 
-      // Invalidate all sessions for this user
+      // Invalidate all existing sessions to force re-login
       await prisma.session.updateMany({
         where: { userId: user.id },
         data: { isValid: false }
       });
 
-      logger.info('Password reset completed', 'AuthService', { userId: user.id });
+      logger.info('Password reset completed successfully', 'AuthService', { userId: user.id });
 
-      return { message: 'Heslo bylo úspěšně změněno.' };
+      return { message: 'Heslo bylo úspěšně změněno. Nyní se můžete přihlásit s novým heslem.' };
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;
@@ -387,7 +418,7 @@ export class AuthService {
   /**
    * Change password (authenticated user)
    */
-  static async changePassword(userId: string, data: ChangePasswordData): Promise<{ message: string }> {
+export async function changePassword(userId: string, data: ChangePasswordData): Promise<{ message: string }> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId }
@@ -434,7 +465,7 @@ export class AuthService {
   /**
    * Update user profile
    */
-  static async updateProfile(userId: string, profileData: ProfileUpdateData): Promise<{ user: { id: string; email: string; emailVerified: boolean; profile: Profile } }> {
+export async function updateProfile(userId: string, profileData: ProfileUpdateData): Promise<{ user: { id: string; email: string; emailVerified: boolean; profile: Profile } }> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId },
@@ -509,7 +540,7 @@ export class AuthService {
   /**
    * Delete user account
    */
-  static async deleteAccount(userId: string): Promise<void> {
+export async function deleteAccount(userId: string): Promise<void> {
     try {
       const user = await prisma.user.findUnique({
         where: { id: userId }
@@ -537,7 +568,7 @@ export class AuthService {
   /**
    * Verify email
    */
-  static async verifyEmail(token: string): Promise<{ message: string }> {
+export async function verifyEmail(token: string): Promise<{ message: string }> {
     try {
       const user = await prisma.user.findFirst({
         where: { verificationToken: token }
@@ -570,7 +601,7 @@ export class AuthService {
   /**
    * Resend verification email
    */
-  static async resendVerificationEmail(email: string): Promise<{ message: string; verificationToken?: string }> {
+export async function resendVerificationEmail(email: string): Promise<{ message: string; verificationToken?: string }> {
     try {
       const user = await prisma.user.findUnique({
         where: { email }
@@ -613,4 +644,178 @@ export class AuthService {
       throw ApiError.internalError('Odeslání ověřovacího emailu se nezdařilo');
     }
   }
-}
+
+  /**
+   * Upload user avatar
+   */
+export async function uploadAvatar(
+    userId: string, 
+    imageFile: Express.Multer.File, 
+    _cropData?: { x: number; y: number; width: number; height: number }
+  ): Promise<{ avatarUrl: string; message: string }> {
+    try {
+      // Validate file size first (max 5MB for avatars)
+      const maxFileSize = 5 * 1024 * 1024; // 5MB
+      if (imageFile.size > maxFileSize || imageFile.buffer.length > maxFileSize) {
+        throw ApiError.validationError(
+          `File is too large. Maximum allowed size: ${maxFileSize / (1024 * 1024)}MB`
+        );
+      }
+
+      // Validate file type by reading actual file signature
+      const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/bmp', 'image/tiff', 'image/tif'];
+      try {
+        const metadata = await sharp(imageFile.buffer).metadata();
+        const detectedFormat = metadata.format;
+        
+        // Map Sharp format to MIME type for validation
+        const formatToMimeMap: { [key: string]: string } = {
+          'jpeg': 'image/jpeg',
+          'png': 'image/png',
+          'webp': 'image/webp',
+          'tiff': 'image/tiff',
+          'bmp': 'image/bmp'
+        };
+        
+        const detectedMimeType = detectedFormat ? formatToMimeMap[detectedFormat] : null;
+        
+        if (!detectedMimeType || !allowedMimeTypes.includes(detectedMimeType)) {
+          throw ApiError.validationError(
+            `Unsupported file format. Allowed formats: ${allowedMimeTypes.join(', ')}`
+          );
+        }
+        
+        // Additional check: ensure detected format matches claimed mimetype (prevent spoofing)
+        if (!imageFile.mimetype.includes(detectedFormat || '')) {
+          logger.warn(`File format mismatch: claimed ${imageFile.mimetype}, detected ${detectedFormat}`);
+        }
+      } catch (sharpError) {
+        // Fallback to mimetype check if Sharp detection fails
+        logger.warn(`Sharp image detection failed: ${(sharpError as Error).message}. Falling back to mimetype check.`);
+        if (!allowedMimeTypes.includes(imageFile.mimetype)) {
+          throw ApiError.validationError(
+            `Unsupported file format. Allowed formats: ${allowedMimeTypes.join(', ')}`
+          );
+        }
+      }
+
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { profile: true }
+      });
+
+      if (!user) {
+        throw ApiError.notFound('User not found');
+      }
+
+      // Generate unique filename for avatar - always use .jpg since we convert to JPEG
+      const avatarFilename = `avatar-${userId}-${uuidv4()}.jpg`;
+      const storageKey = `avatars/${userId}/${avatarFilename}`;
+
+      // Process image with Sharp - resize and optimize
+      let processedBuffer: Buffer;
+      try {
+        processedBuffer = await sharp(imageFile.buffer)
+          .resize(300, 300, {
+            fit: 'cover',
+            position: 'center'
+          })
+          .jpeg({
+            quality: 85,
+            progressive: true
+          })
+          .toBuffer();
+      } catch (sharpError) {
+        logger.error('Image processing failed:', sharpError as Error, 'AuthService', {
+          userId,
+          originalMimeType: imageFile.mimetype
+        });
+        throw ApiError.validationError('Failed to process image. Please ensure you uploaded a valid image file.');
+      }
+
+      // Upload processed image to storage
+      const storage = getStorageProvider();
+      const processedFile = {
+        ...imageFile,
+        buffer: processedBuffer,
+        mimetype: 'image/jpeg', // Always convert to JPEG
+        size: processedBuffer.length
+      };
+      // Store old avatar path for cleanup after successful upload
+      const oldAvatarPath = user.profile?.avatarPath;
+      
+      // Upload processed image to storage
+      let uploadResult;
+      let avatarUrl;
+      try {
+        uploadResult = await storage.upload(processedFile.buffer, storageKey, {
+          mimeType: processedFile.mimetype,
+          originalName: imageFile.originalname,
+          maxSize: maxFileSize
+        });
+        
+        // Get public URL for the avatar
+        avatarUrl = await storage.getUrl(uploadResult.originalPath);
+      } catch (uploadError) {
+        logger.error('Avatar upload failed:', uploadError as Error, 'AuthService', {
+          userId,
+          storageKey
+        });
+        throw ApiError.internalError('Failed to upload avatar. Please try again.');
+      }
+
+      // Update profile with new avatar information
+      await prisma.profile.upsert({
+        where: { userId },
+        update: {
+          avatarUrl,
+          avatarPath: uploadResult.originalPath,
+          avatarMimeType: 'image/jpeg', // Always JPEG after processing
+          avatarSize: processedBuffer.length
+        },
+        create: {
+          userId,
+          avatarUrl,
+          avatarPath: uploadResult.originalPath,
+          avatarMimeType: 'image/jpeg', // Always JPEG after processing
+          avatarSize: processedBuffer.length
+        }
+      });
+
+      // Delete old avatar after successful database update
+      if (oldAvatarPath) {
+        try {
+          await storage.delete(oldAvatarPath);
+        } catch (error) {
+          // Log but don't fail if old avatar deletion fails
+          logger.warn('Failed to delete old avatar after successful upload', 'AuthService', {
+            userId,
+            oldPath: oldAvatarPath,
+            error: error as Error
+          });
+        }
+      }
+
+      logger.info('Avatar uploaded successfully', 'AuthService', { 
+        userId,
+        fileSize: imageFile.size,
+        mimeType: imageFile.mimetype,
+        storagePath: uploadResult.originalPath
+      });
+
+      return {
+        avatarUrl,
+        message: 'Avatar uploaded successfully'
+      };
+    } catch (error) {
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      logger.error('Avatar upload failed:', error as Error, 'AuthService', {
+        userId,
+        fileSize: imageFile.size,
+        mimeType: imageFile.mimetype
+      });
+      throw ApiError.internalError('Avatar upload failed');
+    }
+  }

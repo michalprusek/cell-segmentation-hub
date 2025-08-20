@@ -1,0 +1,202 @@
+apiVersion: 1
+
+groups:
+  - name: spheroseg_alerts
+    folder: SpheroSeg Alerts
+    interval: 1m
+    rules:
+      # High CPU Usage Alert
+      - uid: cpu_usage_alert
+        title: High CPU Usage
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasource:
+              type: prometheus
+              uid: prometheus
+            model:
+              expr: '(100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          description: 'CPU usage is above 80% for more than 2 minutes on {{ $labels.instance }}'
+          summary: 'High CPU usage detected'
+        labels:
+          severity: warning
+          service: infrastructure
+
+      # High Memory Usage Alert
+      - uid: memory_usage_alert
+        title: High Memory Usage
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasource:
+              type: prometheus
+              uid: prometheus
+            model:
+              expr: '((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100) > 90'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 2m
+        annotations:
+          description: 'Memory usage is above 90% for more than 2 minutes on {{ $labels.instance }}'
+          summary: 'High memory usage detected'
+        labels:
+          severity: critical
+          service: infrastructure
+
+      # API Response Time Alert
+      - uid: api_response_time_alert
+        title: High API Response Time
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasource:
+              type: prometheus
+              uid: prometheus
+            model:
+              expr: 'histogram_quantile(0.95, sum by (le, job) (rate(http_request_duration_seconds_bucket{job="spheroseg-backend"}[5m]))) > 2'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: '95th percentile API response time is above 2 seconds for {{ $labels.instance }}'
+          summary: 'High API response time detected'
+        labels:
+          severity: warning
+          service: backend
+          
+      # Error Rate Alert
+      - uid: error_rate_alert
+        title: High Error Rate
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasource:
+              type: prometheus
+              uid: prometheus
+            model:
+              expr: '(rate(http_requests_total{job="spheroseg-backend",status=~"5.."}[5m]) / clamp_min(rate(http_requests_total{job="spheroseg-backend"}[5m]), 0.000001)) * 100 > 5'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: 'Error rate is above 5% for {{ $labels.instance }}'
+          summary: 'High error rate detected'
+        labels:
+          severity: critical
+          service: backend
+
+      # Service Down Alert
+      - uid: service_down_alert
+        title: Service Down/Unhealthy
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 60
+              to: 0
+            datasource:
+              type: prometheus
+              uid: prometheus
+            model:
+              expr: 'up{job=~"spheroseg-backend|spheroseg-ml"} == 0'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: Alerting
+        execErrState: Alerting
+        for: 30s
+        annotations:
+          description: 'Service {{ $labels.job }} on {{ $labels.instance }} is down'
+          summary: 'Service is not responding'
+        labels:
+          severity: critical
+          service: backend
+          
+      # Disk Space Low Alert
+      - uid: disk_space_alert
+        title: Low Disk Space
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasource:
+              type: prometheus
+              uid: prometheus
+            model:
+              expr: '((node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_free_bytes{fstype!="tmpfs"}) / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 > 90'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: 'Disk usage is above 90% on {{ $labels.instance }} at {{ $labels.mountpoint }}'
+          summary: 'Low disk space detected'
+        labels:
+          severity: warning
+          service: infrastructure
+
+      # Database Connection Failures Alert
+      - uid: db_connection_alert
+        title: Database Connection Failures
+        condition: A
+        data:
+          - refId: A
+            queryType: ''
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasource:
+              type: prometheus
+              uid: prometheus
+            model:
+              expr: 'increase(database_connection_errors_total{job="spheroseg-backend"}[5m]) > 5'
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+        noDataState: NoData
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          description: 'Database connection errors detected on {{ $labels.instance }}'
+          summary: 'Database connectivity issues'
+        labels:
+          severity: critical
+          service: database

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User as UserIcon,
@@ -17,6 +17,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
+import api from '@/lib/api';
 
 interface UserProfileDropdownProps {
   username: string;
@@ -24,8 +25,11 @@ interface UserProfileDropdownProps {
 
 const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
   const navigate = useNavigate();
-  const { signOut } = useAuth();
+  const { signOut, user, profile } = useAuth();
   const { t } = useLanguage();
+
+  // Use avatar from AuthContext profile (updated by refreshProfile)
+  const avatarUrl = profile?.avatarUrl || null;
 
   const handleSignOut = async () => {
     try {
@@ -40,8 +44,16 @@ const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2 dark:text-gray-300">
-          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
-            <UserIcon className="h-3 w-3 text-gray-600" />
+          <div className="w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+            {avatarUrl ? (
+              <img
+                src={avatarUrl}
+                alt={username}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <UserIcon className="h-3 w-3 text-gray-600" />
+            )}
           </div>
           <span className="text-sm">{username}</span>
         </Button>

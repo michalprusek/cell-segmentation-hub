@@ -18,6 +18,7 @@ interface PolygonVerticesProps {
   vertexDragState: VertexDragState;
   zoom: number;
   viewportBounds?: { x: number; y: number; width: number; height: number };
+  isUndoRedoInProgress?: boolean;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
 }
@@ -33,6 +34,7 @@ const PolygonVertices = React.memo(
     vertexDragState,
     zoom,
     viewportBounds,
+    isUndoRedoInProgress = false,
     onDeleteVertex,
     onDuplicateVertex,
   }: PolygonVerticesProps) => {
@@ -110,6 +112,7 @@ const PolygonVertices = React.memo(
                   zoom={zoom}
                   type={polygonType}
                   isStartPoint={originalIndex === 0}
+                  isUndoRedoInProgress={isUndoRedoInProgress}
                 />
               </g>
             </VertexContextMenu>
@@ -119,69 +122,97 @@ const PolygonVertices = React.memo(
     );
   },
   (prevProps, nextProps) => {
-    // Custom comparison for performance
-    const shouldShowPrev = shouldRenderVertices(
-      prevProps.zoom,
-      prevProps.isSelected,
-      prevProps.isHovered
-    );
-    const shouldShowNext = shouldRenderVertices(
-      nextProps.zoom,
-      nextProps.isSelected,
-      nextProps.isHovered
-    );
+    // Return true if props are the same (don't re-render)
+    // Return false if props are different (need to re-render)
 
-    // If visibility changed, re-render
-    if (shouldShowPrev !== shouldShowNext) {
+    // Quick checks for basic props that change frequently
+    if (
+      prevProps.polygonId !== nextProps.polygonId ||
+      prevProps.polygonType !== nextProps.polygonType ||
+      prevProps.isSelected !== nextProps.isSelected ||
+      prevProps.isHovered !== nextProps.isHovered ||
+      prevProps.zoom !== nextProps.zoom ||
+      prevProps.isUndoRedoInProgress !== nextProps.isUndoRedoInProgress
+    ) {
       return false;
     }
 
-    // If not visible, skip detailed comparison
-    if (!shouldShowNext) {
-      return true;
+    // Compare points array (deep comparison)
+    if (prevProps.points !== nextProps.points) {
+      if (prevProps.points.length !== nextProps.points.length) {
+        return false;
+      }
+      for (let i = 0; i < prevProps.points.length; i++) {
+        const prevPoint = prevProps.points[i];
+        const nextPoint = nextProps.points[i];
+        if (prevPoint.x !== nextPoint.x || prevPoint.y !== nextPoint.y) {
+          return false;
+        }
+      }
     }
 
     // Compare viewport bounds
-    const sameViewport =
-      (!prevProps.viewportBounds && !nextProps.viewportBounds) ||
-      (prevProps.viewportBounds &&
-        nextProps.viewportBounds &&
-        prevProps.viewportBounds.x === nextProps.viewportBounds.x &&
-        prevProps.viewportBounds.y === nextProps.viewportBounds.y &&
-        prevProps.viewportBounds.width === nextProps.viewportBounds.width &&
-        prevProps.viewportBounds.height === nextProps.viewportBounds.height);
+    const prevBounds = prevProps.viewportBounds;
+    const nextBounds = nextProps.viewportBounds;
+    if (prevBounds !== nextBounds) {
+      if (!prevBounds || !nextBounds) {
+        return false;
+      }
+      if (
+        prevBounds.x !== nextBounds.x ||
+        prevBounds.y !== nextBounds.y ||
+        prevBounds.width !== nextBounds.width ||
+        prevBounds.height !== nextBounds.height
+      ) {
+        return false;
+      }
+    }
 
-    // Check if drag offset changed
-    const sameDragOffset =
-      (!prevProps.vertexDragState?.dragOffset &&
-        !nextProps.vertexDragState?.dragOffset) ||
-      (prevProps.vertexDragState?.dragOffset &&
-        nextProps.vertexDragState?.dragOffset &&
-        prevProps.vertexDragState.dragOffset.x ===
-          nextProps.vertexDragState.dragOffset.x &&
-        prevProps.vertexDragState.dragOffset.y ===
-          nextProps.vertexDragState.dragOffset.y);
+    // Compare hovered vertex
+    const prevHovered = prevProps.hoveredVertex;
+    const nextHovered = nextProps.hoveredVertex;
+    if (prevHovered !== nextHovered) {
+      if (!prevHovered || !nextHovered) {
+        return false;
+      }
+      if (
+        prevHovered.polygonId !== nextHovered.polygonId ||
+        prevHovered.vertexIndex !== nextHovered.vertexIndex
+      ) {
+        return false;
+      }
+    }
 
-    return (
-      prevProps.polygonId === nextProps.polygonId &&
-      prevProps.points.length === nextProps.points.length &&
-      prevProps.polygonType === nextProps.polygonType &&
-      prevProps.isSelected === nextProps.isSelected &&
-      prevProps.isHovered === nextProps.isHovered &&
-      prevProps.zoom === nextProps.zoom &&
-      sameViewport &&
-      prevProps.hoveredVertex?.polygonId ===
-        nextProps.hoveredVertex?.polygonId &&
-      prevProps.hoveredVertex?.vertexIndex ===
-        nextProps.hoveredVertex?.vertexIndex &&
-      prevProps.vertexDragState?.isDragging ===
-        nextProps.vertexDragState?.isDragging &&
-      prevProps.vertexDragState?.polygonId ===
-        nextProps.vertexDragState?.polygonId &&
-      prevProps.vertexDragState?.vertexIndex ===
-        nextProps.vertexDragState?.vertexIndex &&
-      sameDragOffset
-    );
+    // Compare vertex drag state
+    const prevDrag = prevProps.vertexDragState;
+    const nextDrag = nextProps.vertexDragState;
+    if (prevDrag !== nextDrag) {
+      if (!prevDrag || !nextDrag) {
+        return false;
+      }
+      if (
+        prevDrag.isDragging !== nextDrag.isDragging ||
+        prevDrag.polygonId !== nextDrag.polygonId ||
+        prevDrag.vertexIndex !== nextDrag.vertexIndex
+      ) {
+        return false;
+      }
+
+      // Compare drag offset
+      const prevOffset = prevDrag.dragOffset;
+      const nextOffset = nextDrag.dragOffset;
+      if (prevOffset !== nextOffset) {
+        if (!prevOffset || !nextOffset) {
+          return false;
+        }
+        if (prevOffset.x !== nextOffset.x || prevOffset.y !== nextOffset.y) {
+          return false;
+        }
+      }
+    }
+
+    // All props are the same
+    return true;
   }
 );
 

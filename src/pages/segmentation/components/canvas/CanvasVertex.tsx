@@ -12,6 +12,7 @@ interface CanvasVertexProps {
   zoom: number;
   type?: 'external' | 'internal';
   isStartPoint?: boolean;
+  isUndoRedoInProgress?: boolean;
 }
 
 const CanvasVertex = React.memo<CanvasVertexProps>(
@@ -26,6 +27,7 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
     zoom,
     type = 'external',
     isStartPoint = false,
+    isUndoRedoInProgress = false,
   }) => {
     // Simple radius calculation
     const baseRadius = 4;
@@ -69,7 +71,8 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
         data-vertex-index={vertexIndex}
         style={{
           cursor: isDragging ? 'grabbing' : 'grab',
-          transition: isDragging ? 'none' : 'all 0.15s ease-out',
+          transition:
+            isDragging || isUndoRedoInProgress ? 'none' : 'all 0.15s ease-out',
           pointerEvents: 'all',
         }}
       />
@@ -92,6 +95,7 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isDragging === nextProps.isDragging &&
+      prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
       prevProps.zoom === nextProps.zoom &&
       prevProps.type === nextProps.type &&
       prevProps.isStartPoint === nextProps.isStartPoint &&

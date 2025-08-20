@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useProjectData } from '@/hooks/useProjectData';
+import { sortImagesBySettings } from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
 import { EditMode } from './types';
 import { Polygon } from '@/lib/segmentation';
@@ -43,15 +44,20 @@ const SegmentationEditor = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
-  // Project data
+  // Project data - fetch all images for segmentation editor
   const {
     projectTitle,
     images,
     loading: projectLoading,
-  } = useProjectData(projectId, user?.id);
+  } = useProjectData(projectId, user?.id, { fetchAll: true });
 
   // Create compatibility objects for existing code
-  const projectImages = images || [];
+  // Apply the same sorting as in ProjectDetail page
+  const projectImages = useMemo(() => {
+    if (!images) return [];
+    return sortImagesBySettings(images);
+  }, [images]);
+
   const selectedImage = projectImages.find(img => img.id === imageId);
   const project = { name: projectTitle || 'Unknown Project' };
 
@@ -115,18 +121,17 @@ const SegmentationEditor = () => {
 
   // Get initial polygons from segmentation data
   const initialPolygons = useMemo(() => {
-    // Ensure segmentationPolygons is always an array to prevent "f.filter is not a function" errors
-    const safePolygons = Array.isArray(segmentationPolygons)
-      ? segmentationPolygons
-      : [];
-
-    // Return empty array if no segmentation data exists
-    if (safePolygons.length === 0) {
+    // Return empty array if no segmentation data exists or if it's not an array
+    if (
+      !segmentationPolygons ||
+      !Array.isArray(segmentationPolygons) ||
+      segmentationPolygons.length === 0
+    ) {
       return [];
     }
 
     // Transform SegmentationPolygon[] to Polygon[] and filter out invalid polygons
-    const polygons: Polygon[] = safePolygons
+    const polygons: Polygon[] = segmentationPolygons
       .filter(segPoly => segPoly.points && segPoly.points.length >= 3)
       .map(segPoly => {
         const validPoints = segPoly.points
@@ -222,12 +227,14 @@ const SegmentationEditor = () => {
           area: polygon.area,
         }));
 
-        await apiClient.updateSegmentationResults(
+        const updatedResult = await apiClient.updateSegmentationResults(
           imageId,
           polygonData,
           imageDimensions?.width,
           imageDimensions?.height
         );
+        // Extract polygons array from the result object
+        setSegmentationPolygons(updatedResult.polygons || []);
         toast.success(t('toast.dataSaved'));
       } catch (error) {
         logger.error('Failed to save segmentation:', error);
@@ -274,6 +281,37 @@ const SegmentationEditor = () => {
         '🧹 Cleared polygons and dimensions for new image:',
         imageId
       );
+
+      // Check if the image has completed segmentation before trying to fetch results
+      const hasSegmentation =
+        selectedImage?.segmentationStatus === 'completed' ||
+        selectedImage?.segmentationStatus === 'segmented';
+
+      if (!hasSegmentation) {
+        logger.debug(
+          'Image does not have completed segmentation, skipping fetch:',
+          {
+            imageId,
+            status: selectedImage?.segmentationStatus,
+          }
+        );
+
+        // Set image dimensions from project data if available
+        if (selectedImage?.width && selectedImage?.height) {
+          logger.debug(
+            '📐 Setting image dimensions from project data (no segmentation):',
+            {
+              width: selectedImage.width,
+              height: selectedImage.height,
+            }
+          );
+          setImageDimensions({
+            width: selectedImage.width,
+            height: selectedImage.height,
+          });
+        }
+        return;
+      }
 
       try {
         const segmentationData =
@@ -363,7 +401,14 @@ const SegmentationEditor = () => {
     };
 
     loadSegmentation();
-  }, [projectId, imageId, t, selectedImage?.width, selectedImage?.height]);
+  }, [
+    projectId,
+    imageId,
+    t,
+    selectedImage?.width,
+    selectedImage?.height,
+    selectedImage?.segmentationStatus,
+  ]);
 
   // Debug logging for polygon rendering (only when polygons change)
   useEffect(() => {
@@ -629,7 +674,7 @@ const SegmentationEditor = () => {
                           {/* Actual polygons */}
                           {visiblePolygons.map(polygon => (
                             <CanvasPolygon
-                              key={polygon.id}
+                              key={`${polygon.id}-${editor.isUndoRedoInProgress ? 'undo' : 'normal'}`}
                               polygon={polygon}
                               isSelected={
                                 polygon.id === editor.selectedPolygonId
@@ -642,6 +687,7 @@ const SegmentationEditor = () => {
                               }
                               vertexDragState={editor.vertexDragState}
                               zoom={editor.transform.zoom}
+                              isUndoRedoInProgress={editor.isUndoRedoInProgress}
                               onSelectPolygon={() =>
                                 handlePolygonSelection(polygon.id)
                               }

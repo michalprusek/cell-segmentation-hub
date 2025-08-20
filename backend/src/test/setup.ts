@@ -1,5 +1,5 @@
-// Jest types are provided by @types/jest package
-/// <reference types="jest" />
+import { jest } from '@jest/globals'
+// import { mockDeep, mockReset, DeepMockProxy } from 'jest-mock-extended'
 
 // Mock Prisma client  
 // export const prismaMock = mockDeep<PrismaClient>() as unknown as DeepMockProxy<PrismaClient>
@@ -36,16 +36,29 @@ jest.mock('jsonwebtoken')
 jest.mock('bcryptjs')
 
 // Mock Prisma client
-jest.mock('../db')
+jest.mock('../db', () => ({
+  __esModule: true,
+  prisma: prismaMock,
+}))
 
 // Mock Redis client
-jest.mock('../redis/client')
+jest.mock('../redis/client', () => ({
+  __esModule: true,
+  default: redisMock,
+}))
 
 // Mock Bull queue
 jest.mock('bull')
 
 // Mock file system operations
-jest.mock('fs/promises')
+jest.mock('fs/promises', () => ({
+  readFile: jest.fn(),
+  writeFile: jest.fn(),
+  unlink: jest.fn(),
+  mkdir: jest.fn(),
+  access: jest.fn(),
+  stat: jest.fn(),
+}))
 
 // Mock sharp for image processing
 jest.mock('sharp')
@@ -57,7 +70,7 @@ jest.mock('nodemailer')
 jest.mock('axios')
 
 // Setup and teardown
-// beforeEach and afterEach are available globally in jest environment
+import { beforeEach, afterEach } from '@jest/globals'
 
 beforeEach(() => {
   // mockReset(prismaMock)
@@ -70,16 +83,25 @@ afterEach(() => {
 
 // Set test environment variables
 process.env.NODE_ENV = 'test'
-process.env.JWT_SECRET = 'test-jwt-secret'
-process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret'
+process.env.PORT = '3001'
+process.env.HOST = 'localhost'
+process.env.JWT_ACCESS_SECRET = 'test-jwt-access-secret-that-is-at-least-32-characters-long'
+process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-that-is-at-least-32-characters-long'
 process.env.DATABASE_URL = 'file:./test.db'
 process.env.REDIS_URL = 'redis://localhost:6379'
 process.env.ML_SERVICE_URL = 'http://localhost:8000'
+process.env.FROM_EMAIL = 'test@example.com'
+process.env.UPLOAD_DIR = './uploads'
+process.env.EMAIL_SERVICE = 'smtp'
+process.env.SMTP_HOST = 'localhost'
+process.env.SMTP_PORT = '587'
+process.env.SMTP_USER = 'test'
+process.env.SMTP_PASS = 'test'
 
 // Suppress console logs during tests
 global.console = {
   ...console,
-  log: jest.fn() as any,
-  warn: jest.fn() as any,
-  error: jest.fn() as any,
+  log: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
 }

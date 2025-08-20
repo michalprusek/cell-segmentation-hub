@@ -1,8 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Microscope } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Footer = () => {
+  const { t } = useLanguage();
+
   return (
     <footer className="bg-gray-50 border-t border-gray-200">
       <div className="container mx-auto px-4 py-12 md:py-16">
@@ -12,16 +15,16 @@ const Footer = () => {
               <div className="w-10 h-10 rounded-md bg-blue-500 flex items-center justify-center">
                 <Microscope className="text-white w-6 h-6" />
               </div>
-              <span className="font-semibold text-lg">SpheroSeg</span>
+              <span className="font-semibold text-lg">
+                {t('footer.appName')}
+              </span>
             </Link>
             <p className="text-gray-600 mb-6 max-w-md">
-              Advanced spheroid segmentation and analysis platform for
-              biomedical researchers, providing AI-powered tools for microscopic
-              cell image analysis.
+              {t('footer.description')}
             </p>
             <div className="space-y-2">
               <p className="text-gray-600">
-                <strong>Contact:</strong>{' '}
+                <strong>{t('footer.contact')}:</strong>{' '}
                 <a
                   href="mailto:spheroseg@utia.cas.cz"
                   className="text-blue-600 hover:underline"
@@ -30,18 +33,19 @@ const Footer = () => {
                 </a>
               </p>
               <p className="text-gray-600">
-                <strong>Institution:</strong> ÚTIA AV ČR
+                <strong>{t('footer.institution')}:</strong>{' '}
+                {t('footer.institutionName')}
               </p>
               <p className="text-gray-600">
-                <strong>Address:</strong> Pod Vodárenskou věží 4, 182 08 Prague
-                8
+                <strong>{t('footer.address')}:</strong>{' '}
+                {t('footer.addressText')}
               </p>
             </div>
           </div>
 
           <div>
             <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase mb-4">
-              Resources
+              {t('footer.resources')}
             </h3>
             <ul className="space-y-3">
               <li>
@@ -49,7 +53,7 @@ const Footer = () => {
                   to="/documentation"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
                 >
-                  Documentation
+                  {t('footer.documentation')}
                 </Link>
               </li>
               <li>
@@ -57,7 +61,7 @@ const Footer = () => {
                   href="#features"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
                 >
-                  Features
+                  {t('footer.features')}
                 </a>
               </li>
               <li>
@@ -65,7 +69,7 @@ const Footer = () => {
                   to="#"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
                 >
-                  Tutorials
+                  {t('footer.tutorials')}
                 </Link>
               </li>
               <li>
@@ -73,7 +77,7 @@ const Footer = () => {
                   to="#"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
                 >
-                  Research
+                  {t('footer.research')}
                 </Link>
               </li>
             </ul>
@@ -81,7 +85,7 @@ const Footer = () => {
 
           <div>
             <h3 className="text-sm font-semibold text-gray-900 tracking-wider uppercase mb-4">
-              Legal
+              {t('footer.legal')}
             </h3>
             <ul className="space-y-3">
               <li>
@@ -89,7 +93,7 @@ const Footer = () => {
                   to="/terms-of-service"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
                 >
-                  Terms of Service
+                  {t('footer.termsOfService')}
                 </Link>
               </li>
               <li>
@@ -97,7 +101,7 @@ const Footer = () => {
                   to="/privacy-policy"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
                 >
-                  Privacy Policy
+                  {t('footer.privacyPolicy')}
                 </Link>
               </li>
               <li>
@@ -105,7 +109,7 @@ const Footer = () => {
                   href="mailto:spheroseg@utia.cas.cz"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
                 >
-                  Contact Us
+                  {t('footer.contactUs')}
                 </a>
               </li>
             </ul>
@@ -114,9 +118,7 @@ const Footer = () => {
 
         <div className="mt-12 pt-8 border-t border-gray-200">
           <p className="text-gray-500 text-center">
-            &copy; {new Date().getFullYear()} SpheroSeg. Developed at ÚTIA AV ČR
-            (Institute of Information Theory and Automation, Czech Academy of
-            Sciences).
+            {t('footer.copyright', { year: new Date().getFullYear() })}
           </p>
         </div>
       </div>

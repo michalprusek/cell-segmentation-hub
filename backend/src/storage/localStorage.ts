@@ -11,6 +11,7 @@ import {
 } from './interface';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
+import { getBaseUrl } from '../utils/getBaseUrl';
 
 /**
  * Local file system storage provider
@@ -130,12 +131,22 @@ export class LocalStorageProvider implements StorageProvider {
         await fs.unlink(filePath);
       }
 
-      // Delete thumbnail if exists
-      const thumbnailKey = this.getThumbnailKey(key);
-      const thumbnailPath = path.join(this.uploadDir, thumbnailKey);
-      
-      if (existsSync(thumbnailPath)) {
-        await fs.unlink(thumbnailPath);
+      // Delete thumbnail if exists (skip for avatars since they don't have thumbnails)
+      if (!key.startsWith('avatars/')) {
+        try {
+          const thumbnailKey = this.getThumbnailKey(key);
+          const thumbnailPath = path.join(this.uploadDir, thumbnailKey);
+          
+          if (existsSync(thumbnailPath)) {
+            await fs.unlink(thumbnailPath);
+          }
+        } catch (error) {
+          // If thumbnail key generation fails, continue with main file deletion
+          logger.warn('Failed to delete thumbnail (may not exist)', 'LocalStorage', { 
+            key, 
+            error: (error as Error).message 
+          });
+        }
       }
 
       logger.info('File deleted successfully', 'LocalStorage', { key });
@@ -154,14 +165,8 @@ export class LocalStorageProvider implements StorageProvider {
    * Get URL for accessing file
    */
   async getUrl(key: string): Promise<string> {
-    // For local storage, we return an absolute URL with proper host/port
-    const port = process.env.PORT || '3001';
-    
-    // In Docker, we need to use localhost for frontend access
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? '' // In production, use relative URLs
-      : `http://localhost:${port}`; // In development/Docker, use absolute URL
-    
+    // Use shared utility for consistent base URL across services
+    const baseUrl = getBaseUrl();
     return `${baseUrl}/uploads/${key}`;
   }
 

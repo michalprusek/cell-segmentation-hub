@@ -7,6 +7,7 @@ import {
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import { Trash, Copy } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface VertexContextMenuProps {
   children: React.ReactNode;
@@ -23,13 +24,14 @@ const VertexContextMenu = ({
   vertexIndex,
   polygonId,
 }: VertexContextMenuProps) => {
+  const { t } = useLanguage();
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent className="w-64">
         <ContextMenuItem onClick={onDuplicate} className="cursor-pointer">
           <Copy className="mr-2 h-4 w-4" />
-          <span>Duplikovat bod</span>
+          <span>{t('contextMenu.duplicateVertex')}</span>
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
@@ -37,7 +39,7 @@ const VertexContextMenu = ({
           className="cursor-pointer text-red-600"
         >
           <Trash className="mr-2 h-4 w-4" />
-          <span>Smazat bod</span>
+          <span>{t('contextMenu.deleteVertex')}</span>
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

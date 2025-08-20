@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import apiClient from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 
@@ -10,6 +11,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
   const { user, loading, isAuthenticated } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const location = useLocation();
   const [isRedirecting, setIsRedirecting] = useState(false);
@@ -59,7 +61,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-          <p className="mt-4 text-gray-600">Loading your account...</p>
+          <p className="mt-4 text-gray-600">{t('auth.loadingAccount')}</p>
         </div>
       </div>
     );
@@ -75,7 +77,7 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <Loader2 className="h-12 w-12 animate-spin text-blue-500 mx-auto" />
-        <p className="mt-4 text-gray-600">Redirecting to sign-in...</p>
+        <p className="mt-4 text-gray-600">{t('auth.redirectingToSignIn')}</p>
       </div>
     </div>
   );

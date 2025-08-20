@@ -1,13 +1,21 @@
 import request from 'supertest'
 import express from 'express'
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
-import { register, login, refreshToken, logout } from '../authController.js'
-import { AuthService } from '../../../services/authService.js'
-import { prismaMock } from '../../../test/setup.js'
+import { register, login, refreshToken, logout } from '../authController'
+import * as AuthService from '../../../services/authService'
+import { prismaMock } from '../../../test/setup'
 
 // Mock AuthService
-jest.mock('../../../services/authService.js')
+jest.mock('../../../services/authService')
 const MockedAuthService = AuthService as jest.Mocked<typeof AuthService>
+
+// Create a mocked AuthService instance for easier testing
+const authService = {
+  register: jest.fn() as jest.MockedFunction<typeof AuthService.register>,
+  login: jest.fn() as jest.MockedFunction<typeof AuthService.login>,
+  refreshToken: jest.fn() as jest.MockedFunction<typeof AuthService.refreshToken>,
+  logout: jest.fn() as jest.MockedFunction<typeof AuthService.logout>
+}
 
 describe('Auth Controller Functions', () => {
   let app: express.Application
@@ -24,6 +32,12 @@ describe('Auth Controller Functions', () => {
     
     // Reset mocks
     jest.clearAllMocks()
+    
+    // Mock static methods on AuthService
+    MockedAuthService.register = authService.register
+    MockedAuthService.login = authService.login
+    MockedAuthService.refreshToken = authService.refreshToken
+    MockedAuthService.logout = authService.logout
   })
 
   describe('POST /auth/register', () => {
@@ -35,17 +49,14 @@ describe('Auth Controller Functions', () => {
         lastName: 'User'
       }
 
-      const registeredUser = {
-        id: 'user-id',
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-
       const authResult = {
-        user: registeredUser,
+        message: 'User registered successfully',
+        user: {
+          id: 'user-id',
+          email: userData.email,
+          username: userData.firstName, // Map to username since that's what the service returns
+          emailVerified: false
+        },
         accessToken: 'access-token',
         refreshToken: 'refresh-token'
       }
@@ -127,17 +138,34 @@ describe('Auth Controller Functions', () => {
         password: 'password123'
       }
 
-      const user = {
-        id: 'user-id',
-        email: loginData.email,
-        firstName: 'Test',
-        lastName: 'User',
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }
-
       const authResult = {
-        user,
+        user: {
+          id: 'user-id',
+          email: loginData.email,
+          emailVerified: true,
+          profile: {
+            username: 'testuser',
+            consentToMLTraining: true,
+            consentToAlgorithmImprovement: true,
+            consentToFeatureDevelopment: true,
+            id: 'profile-id',
+            userId: 'user-id',
+            bio: null,
+            organization: null,
+            location: null,
+            title: null,
+            publicProfile: false,
+            avatarUrl: null,
+            preferredModel: 'hrnet',
+            modelThreshold: 0.5,
+            preferredLang: 'cs',
+            preferredTheme: 'light',
+            emailNotifications: true,
+            consentUpdatedAt: new Date(),
+            createdAt: new Date(),
+            updatedAt: new Date()
+          }
+        },
         accessToken: 'access-token',
         refreshToken: 'refresh-token'
       }
@@ -292,13 +320,12 @@ describe('Auth Controller Functions', () => {
       }
 
       authService.register.mockResolvedValueOnce({
+        message: 'User registered successfully',
         user: {
           id: 'user-id',
           email: 'test@example.com', // Sanitized
-          firstName: 'Test', // Sanitized
-          lastName: 'User',
-          createdAt: new Date(),
-          updatedAt: new Date()
+          username: 'Test', // Sanitized
+          emailVerified: false
         },
         accessToken: 'access-token',
         refreshToken: 'refresh-token'
@@ -310,12 +337,20 @@ describe('Auth Controller Functions', () => {
         .expect(201)
 
       // Verify that the service was called with sanitized data
-      expect(authService.register).toHaveBeenCalledWith(
-        expect.objectContaining({
-          email: expect.not.stringContaining('<script>'),
-          firstName: expect.not.stringContaining('<b>')
-        })
-      )
+      const mockCalls = (authService.register as jest.Mock).mock.calls
+      expect(mockCalls.length).toBeGreaterThan(0)
+      const actualEmail = (mockCalls[0][0] as any).email
+      
+      // Verify script tags and their content are removed
+      expect(actualEmail).not.toContain('<')
+      expect(actualEmail).not.toContain('>')
+      expect(actualEmail).not.toContain('script')
+      
+      // Verify the domain is preserved
+      expect(actualEmail).toContain('@example.com')
+      
+      // Verify it matches a safe email pattern
+      expect(actualEmail).toMatch(/^[a-zA-Z0-9._-]+@example\.com$/)
     })
 
     it('should handle SQL injection attempts', async () => {

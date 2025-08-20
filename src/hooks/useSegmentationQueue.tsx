@@ -5,7 +5,6 @@ import { useWebSocket } from '@/contexts/WebSocketContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { toast } from 'sonner';
 import WebSocketManager from '@/services/webSocketManager';
-import { useQueueStatusPolling } from './useQueueStatusPolling';
 import type {
   QueueStats,
   SegmentationUpdate,
@@ -44,16 +43,6 @@ export const useSegmentationQueue = (projectId?: string) => {
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
   const [lastUpdate, setLastUpdate] = useState<SegmentationUpdate | null>(null);
 
-  // Use polling as fallback when WebSocket is not connected
-  const {
-    data: pollingQueueStats,
-    isLoading: isPolling,
-    error: pollingError,
-  } = useQueueStatusPolling(
-    isDisabled ? undefined : projectId,
-    !isDisabled && !isConnected // Only poll when not disabled and WebSocket disconnected
-  );
-
   // Store t function in ref to avoid dependency issues
   const tRef = useRef(t);
   tRef.current = t;
@@ -64,7 +53,15 @@ export const useSegmentationQueue = (projectId?: string) => {
 
     // Show toast notifications for status changes
     if (update.status === 'segmented') {
-      toast.success(tRef.current('segmentationCompleted'));
+      toast.success(
+        tRef.current('notifications.segmentationCompleted') ||
+          tRef.current('segmentationCompleted')
+      );
+    } else if (update.status === 'no_segmentation') {
+      toast.warning(
+        tRef.current('segmentationNoPolygons') ||
+          'No segmentation polygons detected'
+      );
     } else if (update.status === 'failed') {
       toast.error(
         `${tRef.current('segmentationFailed')}: ${update.error || tRef.current('errors.unknown')}`
@@ -227,33 +224,12 @@ export const useSegmentationQueue = (projectId?: string) => {
     }
   }, [isConnected]);
 
-  // Merge WebSocket and polling data - prefer WebSocket when connected
-  const effectiveQueueStats = isConnected ? queueStats : pollingQueueStats;
-
-  // Log polling activity for debugging
-  useEffect(() => {
-    if (isPolling && !isConnected) {
-      logger.debug(
-        'Using polling fallback for queue status, project:',
-        projectId
-      );
-    }
-  }, [isPolling, isConnected, projectId]);
-
-  // Handle polling errors
-  useEffect(() => {
-    if (pollingError && !isConnected) {
-      logger.error('Queue status polling error:', pollingError);
-    }
-  }, [pollingError, isConnected]);
-
   return {
     isConnected,
-    queueStats: effectiveQueueStats,
+    queueStats,
     lastUpdate,
     requestQueueStats,
     joinProject,
     leaveProject,
-    isPolling: !isConnected && isPolling, // Expose polling status
   };
 };

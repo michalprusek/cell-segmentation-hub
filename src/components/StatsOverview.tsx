@@ -1,5 +1,8 @@
 import { logger } from '@/lib/logger';
 import React, { useState, useEffect } from 'react';
+
+// Constants
+const MAX_PAGES = 40;
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Microscope, Image, FileUp, HardDrive } from 'lucide-react';
 import apiClient from '@/lib/api';
@@ -76,12 +79,17 @@ const StatsOverview = () => {
   const [storageGrowth, setStorageGrowth] = useState('0 MB');
 
   useEffect(() => {
+    const abortController = new AbortController();
+    const signal = abortController.signal;
+
     const fetchStats = async () => {
       if (!user) return;
 
       try {
         // Get total projects count
-        const projectsResponse = await apiClient.getProjects();
+        const projectsResponse = await apiClient.getProjects({ signal });
+        if (signal.aborted) return;
+
         const projectsCount = projectsResponse.total || 0;
 
         // Get statistics for all projects
@@ -98,10 +106,39 @@ const StatsOverview = () => {
         // Fetch all project images in parallel
         const imagePromises = projects.map(async project => {
           try {
-            const imagesResponse = await apiClient.getProjectImages(project.id);
+            // Fetch all images for each project by making multiple requests if needed
+            let allImages: any[] = [];
+            let page = 1;
+            let hasMore = true;
+            const limit = 50; // Maximum allowed by backend
+
+            while (hasMore && !signal.aborted) {
+              const imagesResponse = await apiClient.getProjectImages(
+                project.id,
+                {
+                  limit,
+                  page,
+                },
+                { signal }
+              );
+
+              if (signal.aborted) break;
+
+              allImages = [...allImages, ...(imagesResponse?.images || [])];
+
+              // Check if we've fetched all images
+              hasMore = imagesResponse.total
+                ? page * limit < imagesResponse.total
+                : (imagesResponse?.images?.length ?? 0) === limit;
+              page++;
+
+              // Safety limit to prevent infinite loops
+              if (page > MAX_PAGES) break;
+            }
+
             return {
               projectId: project.id,
-              images: imagesResponse?.images || [],
+              images: allImages,
               success: true,
             };
           } catch (error) {
@@ -123,12 +160,16 @@ const StatsOverview = () => {
         for (const result of imageResults) {
           if (result.success && result.images && Array.isArray(result.images)) {
             totalImages += result.images.length;
-            completedImages += result.images.filter(
-              img => img.segmentation_status === 'completed'
-            ).length;
-            todayImages += result.images.filter(
-              img => new Date(img.created_at) >= today
-            ).length;
+            completedImages += result.images.filter(img => {
+              // Handle both field names from backend
+              const status = img.segmentationStatus || img.segmentation_status;
+              return status === 'completed' || status === 'segmented';
+            }).length;
+            todayImages += result.images.filter(img => {
+              // Handle both field names for created date
+              const createdAt = img.createdAt || img.created_at;
+              return new Date(createdAt) >= today;
+            }).length;
           }
         }
 
@@ -139,7 +180,11 @@ const StatsOverview = () => {
 
         // Fetch storage stats
         try {
-          const storageStats = await apiClient.getUserStorageStats();
+          if (signal.aborted) return;
+
+          const storageStats = await apiClient.getUserStorageStats({ signal });
+
+          if (signal.aborted) return;
 
           // Format storage used based on size
           let formattedStorage = '0 MB';
@@ -169,32 +214,39 @@ const StatsOverview = () => {
     };
 
     fetchStats();
+
+    // Cleanup function to abort requests when component unmounts
+    return () => {
+      abortController.abort();
+    };
   }, [user]);
 
   const stats = [
     {
-      title: 'Total Projects',
+      title: t('dashboard.stats.totalProjects'),
       value: loading ? '...' : String(projectCount),
-      description: 'Active spheroid studies',
+      description: t('dashboard.stats.totalProjectsDesc'),
       icon: <Microscope size={16} />,
     },
     {
-      title: 'Processed Images',
+      title: t('dashboard.stats.processedImages'),
       value: loading ? '...' : String(completedImageCount),
-      description: 'Successfully segmented',
+      description: t('dashboard.stats.processedImagesDesc'),
       icon: <Image size={16} />,
     },
     {
-      title: 'Uploaded Today',
+      title: t('dashboard.stats.uploadedToday'),
       value: loading ? '...' : String(todayUploadCount),
-      description: 'Spheroid images',
+      description: t('dashboard.stats.uploadedTodayDesc'),
       icon: <FileUp size={16} />,
     },
     {
-      title: t('dashboard.storageUsed') || 'Storage Used',
+      title: t('dashboard.stats.storageUsed'),
       value: loading ? '...' : storageUsed,
       description:
-        storageGrowth !== '0 MB' ? storageGrowth : 'Total space used',
+        storageGrowth !== '0 MB'
+          ? storageGrowth
+          : t('dashboard.stats.totalSpaceUsed'),
       icon: <HardDrive size={16} />,
     },
   ];

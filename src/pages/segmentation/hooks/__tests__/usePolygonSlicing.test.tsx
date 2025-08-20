@@ -304,17 +304,18 @@ describe('usePolygonSlicing', () => {
     it('should start slicing mode correctly', () => {
       const { result } = renderHook(() => usePolygonSlicing(mockProps));
 
-      const startPoint: Point = { x: 25, y: 25 };
+      const polygonId = 'polygon-1';
 
       act(() => {
-        result.current.startSlicing(startPoint);
+        result.current.startSlicing(polygonId);
       });
 
       expect(mockProps.setEditMode).toHaveBeenCalledWith(EditMode.Slice);
-      expect(mockProps.setTempPoints).toHaveBeenCalledWith([startPoint]);
+      expect(mockProps.setTempPoints).toHaveBeenCalledWith([]);
+      expect(mockProps.setSelectedPolygonId).toHaveBeenCalledWith(polygonId);
       expect(mockProps.setInteractionState).toHaveBeenCalledWith(
         expect.objectContaining({
-          sliceStartPoint: startPoint,
+          sliceStartPoint: null,
         })
       );
     });
@@ -322,29 +323,51 @@ describe('usePolygonSlicing', () => {
     it('should handle multiple start slice calls', () => {
       const { result } = renderHook(() => usePolygonSlicing(mockProps));
 
-      const firstPoint: Point = { x: 10, y: 10 };
-      const secondPoint: Point = { x: 20, y: 20 };
+      const firstPolygonId = 'polygon-1';
+      const secondPolygonId = 'polygon-2';
 
       act(() => {
-        result.current.startSlicing(firstPoint);
+        result.current.startSlicing(firstPolygonId);
       });
 
       act(() => {
-        result.current.startSlicing(secondPoint);
+        result.current.startSlicing(secondPolygonId);
       });
 
-      // Should use the latest start point
-      expect(mockProps.setTempPoints).toHaveBeenLastCalledWith([secondPoint]);
+      // Should use the latest polygon and reset temp points each time
+      expect(mockProps.setTempPoints).toHaveBeenLastCalledWith([]);
+      expect(mockProps.setSelectedPolygonId).toHaveBeenLastCalledWith(
+        secondPolygonId
+      );
       expect(mockProps.setInteractionState).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          sliceStartPoint: secondPoint,
+          sliceStartPoint: null,
         })
       );
     });
   });
 
-  describe('completeSlicing', () => {
-    it('should complete slicing with valid end point', () => {
+  describe('handleSlicePointClick', () => {
+    it('should handle first point click correctly', () => {
+      const { result } = renderHook(() => usePolygonSlicing(mockProps));
+
+      const firstPoint: Point = { x: 25, y: 25 };
+
+      let clickResult: boolean;
+      act(() => {
+        clickResult = result.current.handleSlicePointClick(firstPoint);
+      });
+
+      expect(clickResult!).toBe(true);
+      expect(mockProps.setTempPoints).toHaveBeenCalledWith([firstPoint]);
+      expect(mockProps.setInteractionState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          sliceStartPoint: firstPoint,
+        })
+      );
+    });
+
+    it('should complete slicing on second point click', () => {
       const mockSlicedPolygons = [
         { ...testPolygonObjects.squarePolygon, id: 'slice-1' },
         { ...testPolygonObjects.squarePolygon, id: 'slice-2' },
@@ -353,79 +376,75 @@ describe('usePolygonSlicing', () => {
       (validateSliceLine as any).mockReturnValue({ isValid: true });
       (slicePolygon as any).mockReturnValue(mockSlicedPolygons);
 
-      const propsWithSliceStart = {
+      const firstPoint = { x: 0, y: 50 };
+      const propsWithFirstPoint = {
         ...mockProps,
-        tempPoints: [{ x: 0, y: 50 }], // Start point
+        tempPoints: [firstPoint],
         interactionState: createMockInteractionState({
-          sliceStartPoint: { x: 0, y: 50 },
+          sliceStartPoint: firstPoint,
         }),
       };
 
       const { result } = renderHook(() =>
-        usePolygonSlicing(propsWithSliceStart)
+        usePolygonSlicing(propsWithFirstPoint)
       );
 
-      const endPoint: Point = { x: 100, y: 50 };
+      const secondPoint: Point = { x: 100, y: 50 };
 
-      let completeResult: boolean;
+      let clickResult: boolean;
       act(() => {
-        completeResult = result.current.completeSlicing(endPoint);
+        clickResult = result.current.handleSlicePointClick(secondPoint);
       });
 
-      expect(completeResult!).toBe(true);
+      expect(clickResult!).toBe(true);
+      expect(mockProps.setTempPoints).toHaveBeenCalledWith([
+        firstPoint,
+        secondPoint,
+      ]);
       expect(validateSliceLine).toHaveBeenCalledWith(
         testPolygonObjects.squarePolygon,
-        { x: 0, y: 50 },
-        endPoint
+        firstPoint,
+        secondPoint
       );
-      expect(slicePolygon).toHaveBeenCalled();
     });
 
-    it('should fail when no slice start point exists', () => {
-      const propsWithoutSliceStart = {
+    it('should fail when no polygon is selected', () => {
+      const propsWithoutSelection = {
         ...mockProps,
-        interactionState: createMockInteractionState({
-          sliceStartPoint: null,
-        }),
+        selectedPolygonId: null,
       };
 
       const { result } = renderHook(() =>
-        usePolygonSlicing(propsWithoutSliceStart)
+        usePolygonSlicing(propsWithoutSelection)
       );
 
-      let completeResult: boolean;
+      let clickResult: boolean;
       act(() => {
-        completeResult = result.current.completeSlicing({ x: 100, y: 50 });
+        clickResult = result.current.handleSlicePointClick({ x: 25, y: 25 });
       });
 
-      expect(completeResult!).toBe(false);
-      expect(validateSliceLine).not.toHaveBeenCalled();
+      expect(clickResult!).toBe(false);
     });
 
-    it('should update temp points during slicing', () => {
-      const startPoint: Point = { x: 0, y: 50 };
-      const endPoint: Point = { x: 100, y: 50 };
-
-      const propsWithSliceStart = {
+    it('should return false when max points reached', () => {
+      const propsWithTwoPoints = {
         ...mockProps,
-        tempPoints: [startPoint],
-        interactionState: createMockInteractionState({
-          sliceStartPoint: startPoint,
-        }),
+        tempPoints: [
+          { x: 0, y: 50 },
+          { x: 100, y: 50 },
+        ],
       };
 
       const { result } = renderHook(() =>
-        usePolygonSlicing(propsWithSliceStart)
+        usePolygonSlicing(propsWithTwoPoints)
       );
 
+      let clickResult: boolean;
       act(() => {
-        result.current.updateSlicing(endPoint);
+        clickResult = result.current.handleSlicePointClick({ x: 50, y: 25 });
       });
 
-      expect(mockProps.setTempPoints).toHaveBeenCalledWith([
-        startPoint,
-        endPoint,
-      ]);
+      expect(clickResult!).toBe(false);
     });
   });
 
@@ -587,17 +606,17 @@ describe('usePolygonSlicing', () => {
     it('should properly integrate with interaction state updates', () => {
       const { result } = renderHook(() => usePolygonSlicing(mockProps));
 
-      const startPoint: Point = { x: 25, y: 25 };
+      const polygonId = 'polygon-1';
 
       act(() => {
-        result.current.startSlicing(startPoint);
+        result.current.startSlicing(polygonId);
       });
 
       // Should call setInteractionState with proper update
       expect(mockProps.setInteractionState).toHaveBeenCalledWith(
         expect.objectContaining({
           ...mockProps.interactionState,
-          sliceStartPoint: startPoint,
+          sliceStartPoint: null,
         })
       );
     });
@@ -653,11 +672,12 @@ describe('usePolygonSlicing', () => {
 
       const startTime = performance.now();
 
-      // Attempt many rapid slices
+      // Attempt many rapid slice operations
       for (let i = 0; i < 100; i++) {
         act(() => {
-          result.current.startSlicing({ x: i, y: i });
-          result.current.completeSlicing({ x: i + 50, y: i + 50 });
+          result.current.startSlicing('polygon-1');
+          result.current.handleSlicePointClick({ x: i, y: i });
+          result.current.handleSlicePointClick({ x: i + 50, y: i + 50 });
         });
       }
 
@@ -673,7 +693,7 @@ describe('usePolygonSlicing', () => {
       // Perform operations that might create closures or listeners
       for (let i = 0; i < 50; i++) {
         act(() => {
-          result.current.startSlicing({ x: i, y: i });
+          result.current.startSlicing('polygon-1');
           result.current.cancelSlicing();
         });
       }

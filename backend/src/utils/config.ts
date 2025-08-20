@@ -1,102 +1,31 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
-import fs from 'fs';
-import path from 'path';
 
 // Load environment variables
 dotenv.config();
 
-// Helper function to read secrets from Docker secret files
-const readSecretFile = (secretPath: string): string | undefined => {
-  try {
-    if (fs.existsSync(secretPath)) {
-      return fs.readFileSync(secretPath, 'utf8').trim();
-    }
-    return undefined;
-  } catch (error) {
-    console.warn(`Failed to read secret file ${secretPath}:`, error);
-    return undefined;
-  }
-};
-
-// Helper function to get value from environment or secret file
-const getSecretValue = (envKey: string, secretFileKey?: string): string | undefined => {
-  // First try environment variable
-  const envValue = process.env[envKey];
-  if (envValue) return envValue;
-  
-  // Then try secret file if specified
-  if (secretFileKey) {
-    const secretFilePath = process.env[secretFileKey];
-    if (secretFilePath) {
-      return readSecretFile(secretFilePath);
-    }
-  }
-  
-  return undefined;
-};
-
 // Configuration schema for validation
 const configSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().transform(Number).default('3001'),
+  PORT: z.string().default('3001').transform(Number),
   HOST: z.string().default('localhost'),
   
   // Database
-  DATABASE_URL: z.string().default('file:./dev.db').transform((url) => {
-    // Support DATABASE_URL template with secret substitution for production
-    const urlTemplate = process.env.DATABASE_URL_TEMPLATE;
-    if (urlTemplate) {
-      // Validate template contains required placeholder
-      if (!urlTemplate.includes('{{DB_PASSWORD}}')) {
-        throw new Error('DATABASE_URL_TEMPLATE must contain {{DB_PASSWORD}} placeholder');
-      }
-      
-      // Check for multiple occurrences (should be exactly one)
-      const occurrences = (urlTemplate.match(/\{\{DB_PASSWORD\}\}/g) || []).length;
-      if (occurrences !== 1) {
-        throw new Error('DATABASE_URL_TEMPLATE must contain exactly one {{DB_PASSWORD}} placeholder');
-      }
-      
-      const dbPassword = getSecretValue('DB_PASSWORD', 'DB_PASSWORD_FILE');
-      if (!dbPassword) {
-        throw new Error('DB_PASSWORD or DB_PASSWORD_FILE must be provided when using DATABASE_URL_TEMPLATE');
-      }
-      
-      const resultUrl = urlTemplate.replace('{{DB_PASSWORD}}', dbPassword);
-      
-      // Validate the resulting URL is well-formed
-      try {
-        new URL(resultUrl);
-      } catch {
-        // If URL constructor fails, try basic database URL pattern validation
-        if (!/^(postgres|postgresql|mysql|sqlite):\/\/.+/.test(resultUrl)) {
-          throw new Error('DATABASE_URL_TEMPLATE substitution resulted in invalid database URL format');
-        }
-      }
-      
-      return resultUrl;
+  DATABASE_URL: z.string().default(() => {
+    // In production, DATABASE_URL must be provided
+    if (process.env.NODE_ENV === 'production') {
+      return process.env.DATABASE_URL || '';
     }
-    return url;
+    // In development, use SQLite
+    return 'file:./data/dev.db';
   }),
   
   // JWT
-  JWT_ACCESS_SECRET: z.string().transform(() => {
-    const secret = getSecretValue('JWT_ACCESS_SECRET', 'JWT_ACCESS_SECRET_FILE');
-    if (!secret || secret.length < 32) {
-      throw new Error('JWT Access Secret must be at least 32 characters');
-    }
-    return secret;
-  }),
-  JWT_REFRESH_SECRET: z.string().transform(() => {
-    const secret = getSecretValue('JWT_REFRESH_SECRET', 'JWT_REFRESH_SECRET_FILE');
-    if (!secret || secret.length < 32) {
-      throw new Error('JWT Refresh Secret must be at least 32 characters');
-    }
-    return secret;
-  }),
+  JWT_ACCESS_SECRET: z.string().min(32, 'JWT Access Secret must be at least 32 characters'),
+  JWT_REFRESH_SECRET: z.string().min(32, 'JWT Refresh Secret must be at least 32 characters'),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
+  JWT_REFRESH_EXPIRY_REMEMBER: z.string().default('30d'),
   
   // Email
   EMAIL_SERVICE: z.enum(['sendgrid', 'smtp']).default('sendgrid'),
@@ -111,6 +40,7 @@ const configSchema = z.object({
   // File Storage
   STORAGE_TYPE: z.enum(['local', 's3']).default('local'),
   UPLOAD_DIR: z.string().min(1, 'Upload directory cannot be empty').default('./uploads'),
+  EXPORT_DIR: z.string().min(1, 'Export directory cannot be empty').default('./exports'),
   MAX_FILE_SIZE: z.string().transform((val) => {
     const num = Number(val);
     if (isNaN(num) || num <= 0) {
@@ -128,15 +58,21 @@ const configSchema = z.object({
   REDIS_URL: z.string().optional(),
   
   // Segmentation Service
-  SEGMENTATION_SERVICE_URL: z.string().url().default('http://localhost:8000'),
+  SEGMENTATION_SERVICE_URL: process.env.NODE_ENV === 'production'
+    ? z.string().url()
+    : z.string().url().default('http://localhost:8000'),
   
   // CORS
-  ALLOWED_ORIGINS: z.string().default('http://localhost:8080,http://localhost:3000,http://localhost:8082'),
+  ALLOWED_ORIGINS: z.string().default(
+    process.env.NODE_ENV === 'production' 
+      ? (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+      : 'http://localhost:3000'
+  ),
   
   // Rate Limiting
   RATE_LIMIT_ENABLED: z.coerce.boolean().default(true),
-  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1).default(60000), // 1 minute
-  RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10000) // 10000 requests per minute for production (increased from 5000)
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().default(60000), // 1 minute
+  RATE_LIMIT_MAX: z.coerce.number().default(5000) // 5000 requests per minute for development
 }).refine((data) => {
   // S3 storage validation
   if (data.STORAGE_TYPE === 's3') {
@@ -163,11 +99,25 @@ const configSchema = z.object({
     if (!data.SMTP_PORT) {
       throw new Error('SMTP_PORT is required when EMAIL_SERVICE is smtp');
     }
-    if (!data.SMTP_USER || data.SMTP_USER.trim() === '') {
-      throw new Error('SMTP_USER is required when EMAIL_SERVICE is smtp');
+    // SMTP_USER and SMTP_PASS are optional for servers without authentication
+  }
+
+  // Production validation - ensure required variables are set
+  if (data.NODE_ENV === 'production') {
+    if (!data.DATABASE_URL || data.DATABASE_URL.trim() === '') {
+      throw new Error('DATABASE_URL is required in production');
     }
-    if (!data.SMTP_PASS || data.SMTP_PASS.trim() === '') {
-      throw new Error('SMTP_PASS is required when EMAIL_SERVICE is smtp');
+    if (!data.UPLOAD_DIR || data.UPLOAD_DIR.trim() === '') {
+      throw new Error('UPLOAD_DIR is required in production');
+    }
+    if (!data.EXPORT_DIR || data.EXPORT_DIR.trim() === '') {
+      throw new Error('EXPORT_DIR is required in production');
+    }
+    if (!data.SEGMENTATION_SERVICE_URL || data.SEGMENTATION_SERVICE_URL.trim() === '') {
+      throw new Error('SEGMENTATION_SERVICE_URL is required in production');
+    }
+    if (!data.ALLOWED_ORIGINS || data.ALLOWED_ORIGINS.trim() === '') {
+      throw new Error('ALLOWED_ORIGINS is required in production');
     }
   }
   
@@ -183,30 +133,32 @@ const parseConfig = (): ConfigType => {
     return configSchema.parse(process.env);
   } catch (error) {
      
+    // Console is needed here for startup configuration errors
     console.error('❌ Invalid environment configuration:');
     if (error instanceof z.ZodError) {
-       
+      // Detailed validation error reporting
       console.error('Zod validation errors:');
       error.errors.forEach((err) => {
-         
+        // Log each validation error
         console.error(`  ${err.path.join('.')}: ${err.message}`);
-         
+        // Additional error details
         console.error(`    Code: ${err.code}`);
       });
     } else {
-       
+      // Non-validation errors
       console.error('Non-Zod error:', error);
     }
-     
+    // Debug information for troubleshooting
     console.error('Environment variables:');
-     
+    // Show current environment
     console.error('NODE_ENV:', process.env.NODE_ENV);
-     
+    // Email configuration check
     console.error('FROM_EMAIL:', process.env.FROM_EMAIL);
+    
+    // Only log boolean presence, never expose secret details
+    console.error('JWT_ACCESS_SECRET configured:', !!process.env.JWT_ACCESS_SECRET);
+    console.error('JWT_REFRESH_SECRET configured:', !!process.env.JWT_REFRESH_SECRET);
      
-    console.error('JWT_ACCESS_SECRET length:', process.env.JWT_ACCESS_SECRET?.length);
-     
-    console.error('JWT_REFRESH_SECRET length:', process.env.JWT_REFRESH_SECRET?.length);
     process.exit(1);
   }
 };

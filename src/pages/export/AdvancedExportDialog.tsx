@@ -47,6 +47,7 @@ import { useAdvancedExport } from './hooks/useAdvancedExport';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { ProjectImage } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
+import { ImageSelectionGrid } from './components/ImageSelectionGrid';
 
 interface AdvancedExportDialogProps {
   open: boolean;
@@ -116,7 +117,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
             <TabsTrigger value="visualization">
               {t('export.visualization')}
             </TabsTrigger>
-            <TabsTrigger value="formats">{t('export.formats')}</TabsTrigger>
+            <TabsTrigger value="formats">{t('export.formatsTab')}</TabsTrigger>
           </TabsList>
 
           <TabsContent value="general" className="space-y-4">
@@ -172,22 +173,22 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
 
             <Card>
               <CardHeader>
-                <CardTitle>{t('export.selectedImages')}</CardTitle>
-                <CardDescription>
-                  {t('export.imagesSelected', {
-                    count:
-                      exportOptions.selectedImageIds?.length || images.length,
-                    total: images.length,
-                  })}
-                </CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <FileImage className="h-4 w-4" />
+                  {t('export.selectedImages')}
+                </CardTitle>
+                <CardDescription>{t('export.chooseImages')}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-sm text-muted-foreground">
-                  {exportOptions.selectedImageIds?.length === 0 ||
-                  !exportOptions.selectedImageIds
-                    ? 'All images will be exported'
-                    : `Exporting ${exportOptions.selectedImageIds.length} selected images`}
-                </div>
+                <ImageSelectionGrid
+                  images={images}
+                  selectedImageIds={
+                    exportOptions.selectedImageIds || images.map(img => img.id)
+                  }
+                  onSelectionChange={selectedIds =>
+                    updateExportOptions({ selectedImageIds: selectedIds })
+                  }
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -400,11 +401,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="coco-format"
                     checked={exportOptions.annotationFormats?.includes('coco')}
                     onCheckedChange={checked => {
-                      const formats = Array.isArray(
-                        exportOptions.annotationFormats
-                      )
-                        ? exportOptions.annotationFormats
-                        : [];
+                      const formats = exportOptions.annotationFormats || [];
                       updateExportOptions({
                         annotationFormats: checked
                           ? [...formats, 'coco']
@@ -422,11 +419,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="yolo-format"
                     checked={exportOptions.annotationFormats?.includes('yolo')}
                     onCheckedChange={checked => {
-                      const formats = Array.isArray(
-                        exportOptions.annotationFormats
-                      )
-                        ? exportOptions.annotationFormats
-                        : [];
+                      const formats = exportOptions.annotationFormats || [];
                       updateExportOptions({
                         annotationFormats: checked
                           ? [...formats, 'yolo']
@@ -444,11 +437,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="json-format"
                     checked={exportOptions.annotationFormats?.includes('json')}
                     onCheckedChange={checked => {
-                      const formats = Array.isArray(
-                        exportOptions.annotationFormats
-                      )
-                        ? exportOptions.annotationFormats
-                        : [];
+                      const formats = exportOptions.annotationFormats || [];
                       updateExportOptions({
                         annotationFormats: checked
                           ? [...formats, 'json']
@@ -477,11 +466,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="excel-metrics"
                     checked={exportOptions.metricsFormats?.includes('excel')}
                     onCheckedChange={checked => {
-                      const formats = Array.isArray(
-                        exportOptions.metricsFormats
-                      )
-                        ? exportOptions.metricsFormats
-                        : [];
+                      const formats = exportOptions.metricsFormats || [];
                       updateExportOptions({
                         metricsFormats: checked
                           ? [...formats, 'excel']
@@ -499,11 +484,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="csv-metrics"
                     checked={exportOptions.metricsFormats?.includes('csv')}
                     onCheckedChange={checked => {
-                      const formats = Array.isArray(
-                        exportOptions.metricsFormats
-                      )
-                        ? exportOptions.metricsFormats
-                        : [];
+                      const formats = exportOptions.metricsFormats || [];
                       updateExportOptions({
                         metricsFormats: checked
                           ? [...formats, 'csv']
@@ -521,11 +502,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
                     id="json-metrics"
                     checked={exportOptions.metricsFormats?.includes('json')}
                     onCheckedChange={checked => {
-                      const formats = Array.isArray(
-                        exportOptions.metricsFormats
-                      )
-                        ? exportOptions.metricsFormats
-                        : [];
+                      const formats = exportOptions.metricsFormats || [];
                       updateExportOptions({
                         metricsFormats: checked
                           ? [...formats, 'json']

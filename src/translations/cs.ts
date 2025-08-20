@@ -48,6 +48,8 @@ export default {
     notifications: 'Oznámení',
     passwordConfirm: 'Potvrdit heslo',
     manageAccount: 'Spravovat účet',
+    getStarted: 'Začít',
+    learnMore: 'Zjistit více',
     documentation: 'Dokumentace',
     changePassword: 'Změnit heslo',
     deleteAccount: 'Smazat účet',
@@ -65,7 +67,44 @@ export default {
     returnToHome: 'Návrat domů',
     // Navigation
     next: 'Další',
+    copy: 'Kopírovat',
+    noImage: 'Žádný obrázek',
+    untitledImage: 'Nepojmenovaný obrázek',
+    rename: 'Přejmenovat',
   },
+
+  landing: {
+    hero: {
+      badge: 'Pokročilá platforma pro segmentaci sféroidů',
+      title: 'AI analýza buněk pro biomedicínský výzkum',
+      subtitle:
+        'Vylepšete svou analýzu mikroskopických buněčných obrázků s naší nejmodernější platformou pro segmentaci sféroidů. Navrženo pro výzkumníky hledající přesnost a efektivitu.',
+      getStarted: 'Začít',
+      learnMore: 'Zjistit více',
+    },
+    about: {
+      badge: 'Naše mise',
+      title: 'Posouvání biomedicínského výzkumu prostřednictvím technologie',
+      description1:
+        'Naše platforma byla vyvinuta Bc. Michalem Průškem, studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D.',
+      description2:
+        'Tento projekt je ve spolupráci s výzkumníky z Ústavu biochemie a mikrobiologie UCT Praha (VŠCHT Praha).',
+      description3:
+        'Kombinujeme nejmodernější AI modely s intuitivním rozhraním a poskytujeme výzkumníkům mocné nástroje pro analýzu mikroskopických obrázků se zaměřením na segmentaci sféroidů s bezkonkurenční přesností.',
+      contactText: 'Pro dotazy nás prosím kontaktujte na',
+    },
+    cta: {
+      title:
+        'Jste připraveni transformovat svůj pracovní postup analýzy buněk?',
+      subtitle:
+        'Připojte se k předním výzkumníkům, kteří již používají naši platformu k urychlení svých objevů.',
+      cardTitle: 'Začněte ještě dnes',
+      cardDescription:
+        'Zaregistrujte se zdarma a zažijte sílu AI-řízené segmentace sféroidů.',
+      createAccount: 'Vytvořit účet',
+    },
+  },
+
   dashboard: {
     manageProjects: 'Spravujte své výzkumné projekty a analýzy',
     projectGallery: 'Galerie Projektů',
@@ -126,6 +165,7 @@ export default {
     deleteImageFailed: 'Odstranění obrázku selhalo',
     imagesQueuedForSegmentation:
       '{{count}} obrázků přidáno do fronty pro segmentaci',
+    imageQueuedForResegmentation: 'Obrázek přidán do fronty pro re-segmentaci',
     allImagesAlreadySegmented:
       'Všechny obrázky jsou již segmentovány nebo ve frontě',
     errorAddingToQueue: 'Chyba při přidávání obrázků do fronty',
@@ -145,16 +185,94 @@ export default {
     projectCreatedDesc: '"{{name}}" je připraven pro obrázky',
     descriptionOptional: 'Popis (volitelný)',
     noDescriptionProvided: 'Nebyl poskytnut žádný popis',
+    deleteDialog: {
+      title: 'Potvrdit smazání',
+      description:
+        'Opravdu chcete smazat {{count}} vybraných obrázků? Tuto akci nelze vrátit zpět.',
+    },
     selectProject: 'Vybrat projekt',
     projectSelection: 'Výběr projektu',
     selectProjectHeader: 'Vybrat projekt',
   },
   errors: {
-    noProjectOrUser: 'Chyba: Není vybrán projekt nebo uživatel',
-    unknown: 'Neznámá chyba',
-    validation: {
+    noProjectOrUser:
+      'Není vybrán žádný projekt nebo uživatel. Vyberte prosím projekt ze seznamu.',
+    unknown: 'Nastala neočekávaná chyba. Zkuste prosím akci opakovat.',
+    network:
+      'Nelze se připojit k serveru. Zkontrolujte své internetové připojení a zkuste to znovu.',
+    unauthorized: 'Vaše přihlášení vypršelo. Přihlaste se prosím znovu.',
+    forbidden:
+      'K této akci nemáte oprávnění. Kontaktujte správce, pokud si myslíte, že je to chyba.',
+    notFound: 'Požadovaný obsah nebyl nalezen. Možná byl smazán nebo přesunut.',
+    conflict:
+      'Tento email je již zaregistrován. Zkuste se přihlásit nebo použijte jiný email.',
+    invalidCredentials:
+      'Nesprávný email nebo heslo. Zkontrolujte své přihlašovací údaje.',
+    validation:
+      'Zadané údaje nejsou správné. Zkontrolujte formulář a opravte chyby.',
+    general: 'Něco se pokazilo. Zkuste to prosím znovu za chvíli.',
+    server: 'Server je momentálně nedostupný. Zkuste to prosím později.',
+    timeout:
+      'Požadavek trval příliš dlouho. Zkontrolujte připojení a zkuste to znovu.',
+    sessionExpired:
+      'Vaše přihlášení vypršelo. Pro pokračování se prosím přihlaste znovu.',
+    tooManyRequests:
+      'Příliš mnoho požadavků. Počkejte prosím chvíli a zkuste to znovu.',
+    serverUnavailable:
+      'Služba je dočasně nedostupná. Zkuste to prosím za několik minut.',
+    clientError:
+      'Chyba v požadavku. Zkontrolujte zadané údaje a zkuste to znovu.',
+    emailAlreadyExists:
+      'Tento email je již zaregistrován. Zkuste se přihlásit nebo použijte jiný email.',
+    validationErrors: {
       projectNameRequired: 'Zadejte prosím název projektu',
       loginRequired: 'Pro vytvoření projektu se musíte přihlásit',
+      emailRequired: 'E-mail je povinný',
+      passwordRequired: 'Heslo je povinné',
+      invalidEmail: 'Zadejte prosím platnou e-mailovou adresu',
+      passwordTooShort: 'Heslo musí mít alespoň 6 znaků',
+      passwordsDoNotMatch: 'Hesla se neshodují',
+      confirmationRequired: 'Potvrďte prosím svou akci',
+      fieldRequired: 'Toto pole je povinné',
+    },
+    operations: {
+      loadProject:
+        'Projekt se nepodařilo načíst. Zkontrolujte připojení a zkuste to znovu.',
+      saveProject:
+        'Změny projektu se nepodařilo uložit. Zkuste to prosím znovu.',
+      deleteProject:
+        'Projekt nelze smazat. Ujistěte se, že máte potřebná oprávnění.',
+      uploadImage:
+        'Obrázek se nepodařilo nahrát. Zkontrolujte formát a velikost souboru.',
+      deleteImage:
+        'Obrázek nelze smazat. Zkuste obnovit stránku a opakovat akci.',
+      processImage:
+        'Zpracování obrázku selhalo. Zkuste jiný obrázek nebo kontaktujte podporu.',
+      segmentation:
+        'Segmentace se nezdařila. Zkuste použít jiný model nebo upravit nastavení.',
+      export: 'Export dat selhal. Zkontrolujte, zda jsou data k dispozici.',
+      login: 'Přihlášení se nezdařilo. Zkontrolujte e-mail a heslo.',
+      logout: 'Odhlášení se nezdařilo. Zkuste zavřít prohlížeč.',
+      register: 'Registrace se nezdařila. Tento e-mail může být již použit.',
+      updateProfile:
+        'Profil se nepodařilo aktualizovat. Zkontrolujte zadané údaje.',
+      changePassword:
+        'Heslo se nepodařilo změnit. Zkontrolujte současné heslo.',
+      deleteAccount:
+        'Účet se nepodařilo smazat. Kontaktujte podporu pro pomoc.',
+      resetPassword: 'Obnovení hesla selhalo. Zkontrolujte zadaný e-mail.',
+      updateConsent:
+        'Nastavení souhlasu se nepodařilo aktualizovat. Zkuste to prosím znovu.',
+    },
+    contexts: {
+      dashboard: 'Chyba dashboardu',
+      project: 'Chyba projektu',
+      image: 'Chyba obrázku',
+      segmentation: 'Chyba segmentace',
+      export: 'Chyba exportu',
+      auth: 'Chyba autentifikace',
+      profile: 'Chyba profilu',
+      settings: 'Chyba nastavení',
     },
   },
   images: {
@@ -189,6 +307,10 @@ export default {
     processImageFailed: 'Zpracování obrázku selhalo',
   },
   settings: {
+    pageTitle: 'Nastavení',
+    profile: 'Profil',
+    account: 'Účet',
+    models: 'Modely',
     manageSettings: 'Spravujte své nastavení účtu',
     appearance: 'Vzhled',
     themeSettings: 'Nastavení motivu',
@@ -211,7 +333,6 @@ export default {
       marketingEmails: 'Marketingové e-maily',
       billing: 'Oznámení o fakturaci',
     },
-    models: 'Modely',
     modelSelection: {
       title: 'Výběr modelu',
       description: 'Vyberte AI model pro segmentaci buněk',
@@ -360,6 +481,8 @@ export default {
       noPolygons: 'Žádné polygony',
       startCreating: 'Začněte vytvářením polygonu',
       polygonList: 'Seznam polygonů',
+      external: 'Externí',
+      internal: 'Interní',
     },
     shortcuts: {
       buttonText: 'Zkratky',
@@ -503,6 +626,7 @@ export default {
     passwordPlaceholder: '••••••••',
     signingIn: 'Přihlašování...',
     redirectingToDashboard: 'Přesměrování na dashboard...',
+    redirectingToSignIn: 'Přesměrování k přihlášení...',
     fillAllFields: 'Vyplňte prosím všechna pole',
     // Toast messages
     signInSuccess: 'Úspěšně přihlášen',
@@ -532,6 +656,19 @@ export default {
     alreadySignedUp: 'Již jste zaregistrováni a přihlášeni.',
     goToDashboard: 'Přejít na Dashboard',
     signUpFailed: 'Registrace selhala',
+    // Forgot Password specific
+    enterEmailForReset: 'Zadejte svou e-mailovou adresu pro reset hesla',
+    sending: 'Odesílání...',
+    sendNewPassword: 'Odeslat nové heslo',
+    emailSent: 'Email odeslán',
+    checkEmailForNewPassword:
+      'Zkontrolujte svůj email pro odkaz na reset hesla',
+    resetPasswordEmailSent:
+      'Pokud email existuje, byl odeslán odkaz na reset hesla',
+    resetPasswordError: 'Nepodařilo se odeslat email s novým heslem',
+    backToSignIn: 'Zpět na přihlášení',
+    didntReceiveEmail: 'Nedostali jste email?',
+    rememberPassword: 'Vzpomněli jste si na heslo?',
   },
   profile: {
     title: 'Profil',
@@ -576,6 +713,22 @@ export default {
     createdProject: 'Vytvořil projekt',
     completedSegmentation: 'Dokončil segmentaci pro',
     uploadedImage: 'Nahrál obrázek',
+    avatar: {
+      uploadButton: 'Nahrát Avatar',
+      selectFile: 'Vybrat obrázek avatara',
+      cropTitle: 'Oříznutí Avatara',
+      cropDescription: 'Ořízněte svůj avatar pro perfektní zobrazení',
+      zoomLevel: 'Úroveň Přiblížení',
+      cropInstructions:
+        'Táhněte pro přesunutí, použijte posuvník pro přiblížení',
+      applyChanges: 'Použít Změny',
+      processing: 'Zpracovává se...',
+      invalidFileType: 'Neplatný typ souboru. Vyberte prosím obrázek.',
+      fileTooLarge: 'Soubor je příliš velký. Maximální velikost je 5MB.',
+      cropError: 'Chyba při zpracování obrázku. Zkuste to znovu.',
+      uploadSuccess: 'Avatar byl úspěšně nahrán',
+      uploadError: 'Nepodařilo se nahrát avatar. Zkuste to znovu.',
+    },
   },
   status: {
     segmented: 'Segmentováno',
@@ -594,6 +747,12 @@ export default {
     waiting: 'čeká',
     processing: 'zpracovává se',
     segmentAll: 'Segmentovat vše',
+    segmentAllWithCount: 'Segmentovat vše ({{count}})',
+    resegmentSelected: 'Znovu segmentovat vybrané ({{count}})',
+    segmentMixed:
+      'Segmentovat {{new}} + Znovu {{resegment}} (celkem {{total}})',
+    segmentTooltip:
+      '{{new}} nových obrázků bude segmentováno, {{resegment}} vybraných obrázků bude znovu segmentováno',
     totalProgress: 'Celkový postup',
     images: 'obrázků',
     loadingStats: 'Načítání statistik...',
@@ -683,6 +842,7 @@ export default {
   },
   export: {
     // Dialog headers
+    advancedExport: 'Pokročilý export',
     advancedOptions: 'Pokročilé možnosti exportu',
     configureSettings:
       'Nakonfigurujte nastavení exportu pro vytvoření komplexního balíčku dat',
@@ -703,6 +863,15 @@ export default {
     selectNone: 'Nevybrat žádný',
     imageSelection: 'Výběr obrázků',
     chooseImages: 'Vyberte obrázky k zahrnutí do exportu',
+    searchImages: 'Hledat obrázky...',
+    sortBy: 'Seřadit podle',
+    sortOptions: {
+      date: 'Datum',
+      name: 'Název',
+      status: 'Stav',
+    },
+    showingImages: 'Zobrazeno {{start}}-{{end}} z {{total}}',
+    noImagesFound: 'Žádné obrázky nenalezeny',
     // Quality settings
     qualitySettings: 'Nastavení kvality',
     imageQuality: 'Kvalita obrázku',
@@ -756,6 +925,7 @@ export default {
     title: 'Dokumentace SpheroSeg',
     subtitle:
       'Komplexní průvodce používáním naší platformy pro segmentaci sféroidů',
+    backTo: 'Zpět na {{page}}',
 
     // Navigation
     navigation: 'Navigace',
@@ -1350,9 +1520,110 @@ export default {
     reconnected: 'Připojení k serveru obnoveno',
     reconnectFailed: 'Nepodařilo se obnovit připojení k serveru',
     connectionLost: 'Spojení se serverem ztraceno',
-    pollingMode: 'Připojeno k serveru (polling režim)',
-    upgradedToWebSocket: 'Přepnuto na real-time připojení',
-    connectionError: 'Nelze se připojit k serveru',
-    authError: 'Chyba autentizace',
+  },
+
+  // Context menu
+  contextMenu: {
+    editPolygon: 'Upravit polygon',
+    splitPolygon: 'Rozdělit polygon',
+    deletePolygon: 'Smazat polygon',
+    confirmDeletePolygon: 'Opravdu chcete smazat polygon?',
+    deletePolygonDescription:
+      'Tato akce je nevratná. Polygon bude trvale odstraněn ze segmentace.',
+    duplicateVertex: 'Duplikovat bod',
+    deleteVertex: 'Smazat bod',
+  },
+
+  // Zobrazení metrik
+  metrics: {
+    info: 'Metriky jsou vyhodnocovány pouze pro externí polygony. Plochy interních polygonů (děr) jsou automaticky odečteny od příslušných externích polygonů.',
+    spheroid: 'Sféroid',
+    area: 'Plocha',
+    perimeter: 'Obvod',
+    equivalentDiameter: 'Ekvivalentní průměr',
+    circularity: 'Kruhovitost',
+    feretMax: 'Feretův maximum',
+    feretMin: 'Feretův minimální',
+    compactness: 'Kompaktnost',
+    convexity: 'Konvexita',
+    solidity: 'Solidita',
+    sphericity: 'Sféricita',
+    feretAspectRatio: 'Feretův poměr stran',
+    noPolygonsFound: 'Nebyly nalezeny žádné polygony pro analýzu',
+  },
+
+  // Klávesové zkratky
+  keyboardShortcuts: {
+    title: 'Klávesové zkratky',
+    buttonLabel: 'Zkratky',
+    viewMode: 'Režim prohlížení',
+    editVertices: 'Režim úprav bodů',
+    addPoints: 'Režim přidávání bodů',
+    createPolygon: 'Vytvořit nový polygon',
+    sliceMode: 'Režim řezání',
+    deleteMode: 'Režim mazání',
+    holdToAutoAdd: 'Držte pro automatické přidávání bodů',
+    undo: 'Zpět',
+    redo: 'Znovu',
+    deleteSelected: 'Smazat vybraný polygon',
+    cancelOperation: 'Zrušit aktuální operaci',
+    zoomIn: 'Přiblížit',
+    zoomOut: 'Oddálit',
+    resetView: 'Resetovat zobrazení',
+    helperText:
+      'Tyto zkratky fungují v editoru segmentace pro rychlejší a pohodlnější práci.',
+  },
+
+  // Přístupnost a popisky pro čtečky obrazovky
+  accessibility: {
+    // Navigace
+    toggleSidebar: 'Přepnout boční panel',
+    toggleMenu: 'Přepnout menu',
+    selectLanguage: 'Vybrat jazyk',
+    selectTheme: 'Vybrat téma',
+    breadcrumb: 'drobečková navigace',
+    pagination: 'stránkování',
+
+    // Akce
+    close: 'Zavřít',
+    more: 'Více',
+
+    // Stránkování
+    goToPreviousPage: 'Jít na předchozí stránku',
+    goToNextPage: 'Jít na další stránku',
+    previousPage: 'Předchozí',
+    nextPage: 'Další',
+    morePages: 'Více stránek',
+
+    // Karusel
+    previousSlide: 'Předchozí snímek',
+    nextSlide: 'Další snímek',
+
+    // Možnosti zobrazení
+    gridView: 'Mřížkové zobrazení',
+    listView: 'Seznamové zobrazení',
+  },
+
+  // Zápatí
+  footer: {
+    appName: 'SpheroSeg',
+    description:
+      'Pokročilá platforma pro segmentaci a analýzu sféroidů pro biomedicínské výzkumníky, poskytující AI nástroje pro analýzu mikroskopických buněčných obrázků.',
+    contact: 'Kontakt',
+    institution: 'Instituce',
+    institutionName: 'ÚTIA AV ČR',
+    address: 'Adresa',
+    addressText: 'Pod Vodárenskou věží 4, 182 08 Praha 8',
+    resources: 'Zdroje',
+    documentation: 'Dokumentace',
+    features: 'Funkce',
+    tutorials: 'Návody',
+    research: 'Výzkum',
+    legal: 'Právní',
+    termsOfService: 'Podmínky služby',
+    privacyPolicy: 'Zásady ochrany osobních údajů',
+    contactUs: 'Kontaktujte nás',
+    copyright:
+      '© {{year}} SpheroSeg. Vyvinuto na ÚTIA AV ČR (Ústav teorie informace a automatizace, Akademie věd České republiky).',
   },
 };

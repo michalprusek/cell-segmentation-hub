@@ -5,28 +5,38 @@ import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
 
 // Extend Express Request interface to include user
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace Express {
-    interface Request {
-      user?: {
+declare module 'express-serve-static-core' {
+  interface Request {
+    user?: {
+      id: string;
+      email: string;
+      emailVerified: boolean;
+      profile?: {
         id: string;
-        email: string;
-        emailVerified: boolean;
-        profile?: {
-          id: string;
-          firstName?: string | null;
-          lastName?: string | null;
-          organizationName?: string | null;
-          role?: string | null;
-          bio?: string | null;
-          avatarUrl?: string | null;
-          userId: string;
-          createdAt: Date;
-          updatedAt: Date;
-        } | null;
-      };
-    }
+        userId: string;
+        username?: string | null;
+        avatarUrl?: string | null;
+        avatarPath?: string | null;
+        avatarMimeType?: string | null;
+        avatarSize?: number | null;
+        bio?: string | null;
+        organization?: string | null;
+        location?: string | null;
+        title?: string | null;
+        publicProfile: boolean;
+        preferredModel: string;
+        modelThreshold: number;
+        preferredLang: string;
+        preferredTheme: string;
+        emailNotifications: boolean;
+        consentToMLTraining: boolean;
+        consentToAlgorithmImprovement: boolean;
+        consentToFeatureDevelopment: boolean;
+        consentUpdatedAt?: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+      } | null;
+    };
   }
 }
 
@@ -129,21 +139,19 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
     }
 
     try {
-      // Whitelist of allowed resource models for security
-      const allowedModels = ['project', 'projectImage', 'segmentationResult', 'user', 'userProfile', 'queueItem'];
-      
-      if (!allowedModels.includes(resourceModel)) {
-        logger.warn(`Attempted access to unauthorized model: ${resourceModel}`, 'Auth');
+      // Validate that the provided resource model exists in Prisma
+      if (!(resourceModel in prisma)) {
         throw new Error(`Invalid resource model: ${resourceModel}`);
       }
 
-      // Validate that the provided resource model exists in Prisma
-      if (!(resourceModel in prisma)) {
-        throw new Error(`Resource model does not exist: ${resourceModel}`);
+      // Dynamic access to Prisma model
+      const model = (prisma as any)[resourceModel];
+      
+      // Check if model is valid
+      if (!model) {
+        ResponseHelper.badRequest(res, 'Invalid resource model', 'Auth');
+        return;
       }
-
-      // Safe dynamic access to Prisma model after whitelist validation
-      const model = (prisma as Record<string, any>)[resourceModel];
       
       const resource = await model.findUnique({
         where: { id: resourceId },
@@ -152,6 +160,12 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
 
       if (!resource) {
         ResponseHelper.notFound(res, 'Zdroj nenalezen', 'Auth');
+        return;
+      }
+
+      // Check if the resource has the expected field
+      if (!(resourceUserIdField in resource)) {
+        ResponseHelper.internalError(res, new Error(`Resource missing field: ${resourceUserIdField}`), 'Invalid resource structure', 'Auth');
         return;
       }
 

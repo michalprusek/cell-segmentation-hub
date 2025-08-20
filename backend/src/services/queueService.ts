@@ -1,6 +1,6 @@
-import { PrismaClient, SegmentationQueue } from '@prisma/client';
+import { PrismaClient, SegmentationQueue, Prisma } from '@prisma/client';
 import { logger } from '../utils/logger';
-import { SegmentationService } from './segmentationService';
+import { SegmentationService, SegmentationResponse } from './segmentationService';
 import { ImageService } from './imageService';
 import { WebSocketService } from './websocketService';
 
@@ -139,7 +139,8 @@ export class QueueService {
     userId: string,
     model = 'hrnet',
     threshold = 0.5,
-    priority = 0
+    priority = 0,
+    forceResegment = false
   ): Promise<SegmentationQueue[]> {
     try {
       const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -154,28 +155,45 @@ export class QueueService {
             continue;
           }
 
-          // Skip if already in queue or segmented
-          if (image.segmentationStatus === 'queued' || 
-              image.segmentationStatus === 'processing' || 
-              image.segmentationStatus === 'segmented') {
-            logger.info('Skipping image - already processed or in queue', 'QueueService', {
+          // Skip if already in queue or processing (unless forceResegment)
+          if (!forceResegment && (image.segmentationStatus === 'queued' || 
+              image.segmentationStatus === 'processing')) {
+            logger.info('Skipping image - already in queue or processing', 'QueueService', {
               imageId,
               status: image.segmentationStatus
             });
             continue;
           }
 
-          const queueEntry = await this.prisma.segmentationQueue.create({
-            data: {
-              imageId,
-              projectId,
-              userId,
-              model,
-              threshold,
-              priority,
-              status: 'queued',
-              batchId
+          // Use transaction for atomic operations
+          const queueEntry = await this.prisma.$transaction(async (tx) => {
+            // If forceResegment, delete existing segmentation results
+            if (forceResegment && (image.segmentationStatus === 'completed' || 
+                image.segmentationStatus === 'segmented')) {
+              logger.info('Force resegment - removing existing segmentation', 'QueueService', {
+                imageId,
+                oldStatus: image.segmentationStatus
+              });
+              
+              // Delete existing segmentation results
+              await tx.segmentation.deleteMany({
+                where: { imageId }
+              });
             }
+
+            // Create queue entry
+            return await tx.segmentationQueue.create({
+              data: {
+                imageId,
+                projectId,
+                userId,
+                model,
+                threshold,
+                priority,
+                status: 'queued',
+                batchId
+              }
+            });
           });
 
           // Update image status
@@ -215,7 +233,7 @@ export class QueueService {
    */
   async getQueueStats(projectId?: string, userId?: string): Promise<QueueStats> {
     try {
-      const whereClause: any = {};
+      const whereClause: Prisma.SegmentationQueueWhereInput = {};
       
       if (projectId) {
         whereClause.projectId = projectId;
@@ -404,8 +422,12 @@ export class QueueService {
       return;
     }
 
-    const model = batch[0]!.model;
-    const threshold = batch[0]!.threshold;
+    const firstItem = batch[0];
+    if (!firstItem) {
+      return; // Should never happen due to length check above
+    }
+    const model = firstItem.model;
+    const threshold = firstItem.threshold;
     
     logger.info('Starting batch processing', 'QueueService', {
       batchSize: batch.length,
@@ -450,14 +472,14 @@ export class QueueService {
       }
 
       // Call appropriate segmentation service based on batch size
-      let results: any[];
+      let results: SegmentationResponse[];
       if (batch.length === 1) {
         // Single item - use individual segmentation endpoint for better compatibility
         const singleResult = await this.segmentationService.requestSegmentation({
-          imageId: batch[0]!.imageId,
-          model: model as any,
+          imageId: firstItem.imageId,
+          model: model as 'hrnet' | 'resunet_advanced' | 'resunet_small',
           threshold: threshold,
-          userId: batch[0]!.userId
+          userId: firstItem.userId
         });
         results = [singleResult];
       } else {
@@ -471,11 +493,15 @@ export class QueueService {
 
       // Process results for each item
       for (let i = 0; i < batch.length; i++) {
-        const item = batch[i]!;
+        const item = batch[i];
         const result = results[i];
-        const image = imageData[i]!;
+        const image = imageData[i];
+        
+        if (!item || !image || !result) {
+          continue;
+        }
 
-        if (result && result.polygons && result.polygons.length > 0) {
+        if (result.polygons && result.polygons.length > 0) {
           // Success - save results and update image status
           // Prioritize image dimensions from ML service result, fallback to database
           const imageWidth = result.image_size?.width || image.width || null;
@@ -487,7 +513,7 @@ export class QueueService {
             model,
             threshold,
             result.confidence || null,
-            result.processingTime || null,
+            result.processing_time || null,
             imageWidth,
             imageHeight,
             item.userId
@@ -544,7 +570,7 @@ export class QueueService {
             model,
             threshold,
             result?.confidence || null,
-            result?.processingTime || null,
+            result?.processing_time || null,
             imageWidth,
             imageHeight,
             item.userId
@@ -587,12 +613,17 @@ export class QueueService {
         threshold
       });
 
-      // Emit updated queue stats for all affected projects
-      const projectIds = [...new Set(batch.map(item => item.projectId))];
-      for (const projectId of projectIds) {
-        const stats = await this.getQueueStats(projectId, batch[0]!.userId);
+      // Emit updated queue stats for all affected projects and users
+      const projectUserPairs = batch.map(item => ({ projectId: item.projectId, userId: item.userId }));
+      const uniquePairs = Array.from(
+        new Map(projectUserPairs.map(pair => [`${pair.projectId}-${pair.userId}`, pair])).values()
+      );
+      
+      for (const { projectId, userId } of uniquePairs) {
+        const stats = await this.getQueueStats(projectId, userId);
         logger.debug('Emitted queue stats after batch completion', 'QueueService', {
           projectId,
+          userId,
           stats
         });
       }

@@ -1,12 +1,14 @@
 import { Request, Response } from 'express';
-import { AuthService } from '../../services/authService';
+import { promises as fs } from 'fs';
+import * as AuthService from '../../services/authService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import { prisma } from '../../db';
-import { BusinessMetricsService } from '../../services/businessMetrics';
+import { logger } from '../../utils/logger';
 import {
   loginSchema,
   registerSchema,
-  resetPasswordRequestSchema
+  resetPasswordRequestSchema,
+  resetPasswordConfirmSchema
 } from '../../auth/validation';
 import type {
   LoginData,
@@ -96,20 +98,14 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
       message: 'Validation failed',
       details: { errors }
     };
-    BusinessMetricsService.trackUserRegistration('email', false);
     return ResponseHelper.error(res, apiError, 400);
   }
   
   const data: RegisterData = validationResult.data;
   
-  try {
-    const result = await AuthService.register(data);
-    BusinessMetricsService.trackUserRegistration('email', true);
-    return ResponseHelper.success(res, result, result.message, 201);
-  } catch (error) {
-    BusinessMetricsService.trackUserRegistration('email', false);
-    throw error;
-  }
+  const result = await AuthService.register(data);
+  
+  return ResponseHelper.success(res, result, result.message, 201);
 });
 
 /**
@@ -137,6 +133,10 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
  *               password:
  *                 type: string
  *                 example: "securePassword123"
+ *               rememberMe:
+ *                 type: boolean
+ *                 example: true
+ *                 description: "Keep user logged in for extended period"
  *     responses:
  *       200:
  *         description: Úspěšné přihlášení
@@ -178,20 +178,14 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
       message: 'Validation failed',
       details: { errors }
     };
-    BusinessMetricsService.trackUserLogin('email', false);
     return ResponseHelper.error(res, apiError, 400);
   }
   
   const data: LoginData = validationResult.data;
   
-  try {
-    const result = await AuthService.login(data);
-    BusinessMetricsService.trackUserLogin('email', true);
-    return ResponseHelper.success(res, result, 'Přihlášení bylo úspěšné');
-  } catch (error) {
-    BusinessMetricsService.trackUserLogin('email', false);
-    throw error;
-  }
+  const result = await AuthService.login(data);
+  
+  return ResponseHelper.success(res, result, 'Přihlášení bylo úspěšné');
 });
 
 /**
@@ -219,7 +213,48 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * Request password reset
+ * @swagger
+ * /auth/request-password-reset:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Žádost o reset hesla
+ *     description: Odešle reset token uživateli na email (token není vrácen v odpovědi)
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "jan.novak@example.com"
+ *     responses:
+ *       200:
+ *         description: Žádost o reset hesla byla úspěšně zpracována
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Pokud email existuje, byl odeslán email s instrukcemi pro reset hesla."
+ *                 message:
+ *                   type: string
+ *                   example: "Pokud email existuje, byl odeslán email s instrukcemi pro reset hesla."
+ *       400:
+ *         description: Nevalidní vstupní data
  */
 export const requestPasswordReset = asyncHandler(async (req: Request, res: Response) => {
   // Validate email using Zod schema
@@ -245,15 +280,86 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
 });
 
 /**
- * Confirm password reset
+ * @swagger
+ * /auth/reset-password:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Reset hesla pomocí tokenu
+ *     description: Resetuje heslo uživatele pomocí tokenu obdrženého emailem
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - token
+ *               - newPassword
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 description: Reset token obdržený emailem
+ *                 example: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 8
+ *                 description: Nové heslo pro uživatelský účet
+ *                 example: "NewSecurePassword123!"
+ *           examples:
+ *             resetPassword:
+ *               summary: Příklad požadavku na reset hesla
+ *               value:
+ *                 token: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+ *                 newPassword: "NewSecurePassword123!"
+ *     responses:
+ *       200:
+ *         description: Heslo bylo úspěšně resetováno
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Heslo bylo úspěšně změněno."
+ *                 message:
+ *                   type: string
+ *                   example: "Heslo bylo úspěšně změněno."
+ *       400:
+ *         description: Neplatný nebo expirovaný token
+ *       404:
+ *         description: Token nebyl nalezen
  */
-export const confirmPasswordReset = asyncHandler(async (req: Request, res: Response) => {
-  const data: ResetPasswordConfirmData = req.body;
+export const resetPasswordWithToken = asyncHandler(async (req: Request, res: Response) => {
+  // Validate token and new password using Zod schema
+  const validationResult = resetPasswordConfirmSchema.safeParse(req.body);
+  if (!validationResult.success) {
+    const errors = validationResult.error.errors.map(err => ({
+      field: err.path.join('.'),
+      message: err.message
+    }));
+    const apiError = {
+      code: 'VALIDATION_ERROR' as const,
+      message: 'Validation failed',
+      details: { errors }
+    };
+    return ResponseHelper.error(res, apiError, 400);
+  }
   
-  const result = await AuthService.confirmPasswordReset(data);
+  const data: ResetPasswordConfirmData = validationResult.data;
+  
+  const result = await AuthService.resetPasswordWithToken(data);
   
   return ResponseHelper.success(res, result, result.message);
 });
+
 
 /**
  * Change password (authenticated user)
@@ -306,7 +412,32 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
   }
   
   const user = req.user;
-  return ResponseHelper.success(res, { user }, 'Profil uživatele');
+  
+  // Transform to frontend Profile format
+  const profile = {
+    id: user.id,
+    email: user.email,
+    username: user.profile?.username || null,
+    organization: user.profile?.organization || null,
+    bio: user.profile?.bio || null,
+    avatarUrl: user.profile?.avatarUrl || null,
+    location: user.profile?.location || null,
+    title: user.profile?.title || null,
+    publicProfile: user.profile?.publicProfile || false,
+    preferredModel: user.profile?.preferredModel || 'hrnet',
+    modelThreshold: user.profile?.modelThreshold || 0.5,
+    preferredLang: user.profile?.preferredLang || 'cs',
+    preferredTheme: user.profile?.preferredTheme || 'light',
+    emailNotifications: user.profile?.emailNotifications || true,
+    consentToMLTraining: user.profile?.consentToMLTraining || false,
+    consentToAlgorithmImprovement: user.profile?.consentToAlgorithmImprovement || false,
+    consentToFeatureDevelopment: user.profile?.consentToFeatureDevelopment || false,
+    consentUpdatedAt: user.profile?.consentUpdatedAt?.toISOString() || null,
+    createdAt: user.profile?.createdAt?.toISOString() || new Date().toISOString(),
+    updatedAt: user.profile?.updatedAt?.toISOString() || new Date().toISOString(),
+  };
+  
+  return ResponseHelper.success(res, profile, 'Profil uživatele');
 });
 
 /**
@@ -403,4 +534,82 @@ export const getUserStorageStats = asyncHandler(async (req: Request, res: Respon
     totalImages,
     averageImageSizeMB: totalImages > 0 ? Math.round((totalStorageMB / totalImages) * 100) / 100 : 0
   }, 'Storage statistics retrieved successfully');
+});
+
+/**
+ * Upload user avatar
+ */
+export const uploadAvatar = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
+
+  if (!req.file) {
+    return ResponseHelper.validationError(res, 'No image file provided');
+  }
+
+  const user = req.user;
+  const imageFile = req.file;
+  
+  // Validate file size (2MB max for avatars)
+  const MAX_AVATAR_SIZE_BYTES = parseInt(process.env.MAX_AVATAR_SIZE || '2097152', 10); // Default 2MB
+  if (imageFile.size > MAX_AVATAR_SIZE_BYTES) {
+    // Clean up temp file if it exists
+    if ('path' in imageFile && imageFile.path) {
+      try {
+        await fs.unlink(imageFile.path);
+      } catch (err) {
+        // Log but don't fail the request
+        console.debug('Failed to cleanup temporary file:', err);
+      }
+    }
+    const maxSizeMB = Math.round(MAX_AVATAR_SIZE_BYTES / (1024 * 1024));
+    return ResponseHelper.validationError(res, `Avatar file too large. Maximum size: ${maxSizeMB}MB`);
+  }
+  
+  // Get crop data from request body
+  let cropData = null;
+  if (req.body.cropData) {
+    try {
+      cropData = JSON.parse(req.body.cropData);
+      
+      // Validate cropData structure
+      if (cropData && typeof cropData === 'object') {
+        const { x, y, width, height } = cropData;
+        
+        // Check all required properties exist and are valid numbers
+        if (!Number.isFinite(Number(x)) || !Number.isFinite(Number(y)) || 
+            !Number.isFinite(Number(width)) || !Number.isFinite(Number(height))) {
+          return ResponseHelper.validationError(res, 'Invalid cropData: expected numeric x,y,width,height');
+        }
+        
+        // Check width and height are positive, x and y are non-negative
+        if (Number(width) <= 0 || Number(height) <= 0 || Number(x) < 0 || Number(y) < 0) {
+          return ResponseHelper.validationError(res, 'Invalid cropData: width and height must be positive, x and y must be non-negative');
+        }
+        
+        // Convert to numbers for use
+        cropData = {
+          x: Number(x),
+          y: Number(y),
+          width: Number(width),
+          height: Number(height)
+        };
+      } else {
+        return ResponseHelper.validationError(res, 'Invalid cropData: expected object with x,y,width,height');
+      }
+    } catch (parseError) {
+      return ResponseHelper.validationError(res, 'Invalid cropData JSON');
+    }
+  }
+  
+  try {
+    const result = await AuthService.uploadAvatar(user.id, imageFile, cropData || undefined);
+    return ResponseHelper.success(res, result, 'Avatar byl úspěšně nahrán');
+  } catch (error) {
+    logger.error('Avatar upload failed:', error as Error, 'AuthController', {
+      userId: user.id
+    });
+    return ResponseHelper.internalError(res, error as Error);
+  }
 });

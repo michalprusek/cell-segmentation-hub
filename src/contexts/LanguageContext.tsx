@@ -17,7 +17,7 @@ export type Translations = typeof en;
 interface LanguageContextType {
   language: Language;
   setLanguage: (language: Language) => Promise<void>;
-  t: (key: string, options?: Record<string, unknown>) => string;
+  t: (key: string, options?: Record<string, unknown>) => string | string[];
   translations: Translations;
 }
 
@@ -110,7 +110,10 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // Funkce pro překlad
-  const t = (key: string, options?: Record<string, unknown>): string => {
+  const t = (
+    key: string,
+    options?: Record<string, unknown>
+  ): string | string[] => {
     // Rozdělení klíče podle teček pro přístup k vnořeným objektům
     const keys = key.split('.');
 
@@ -118,13 +121,22 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
     let translation: Record<string, unknown> = translations[language];
 
     for (const k of keys) {
-      if (translation && translation[k] !== undefined) {
-        translation = translation[k];
+      if (
+        translation &&
+        typeof translation === 'object' &&
+        translation[k] !== undefined
+      ) {
+        translation = translation[k] as Record<string, unknown>;
       } else {
         // Pokud překlad neexistuje, logujeme chybějící klíč a vrátíme původní klíč
         i18nLogger.logMissingKey(key);
         return key;
       }
+    }
+
+    // Pokud je překlad pole, vrátíme ho
+    if (Array.isArray(translation)) {
+      return translation;
     }
 
     // Pokud překlad není řetězec, vrátíme původní klíč

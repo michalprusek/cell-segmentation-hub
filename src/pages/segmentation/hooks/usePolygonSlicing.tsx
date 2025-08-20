@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { Point, Polygon } from '@/lib/segmentation';
 import { slicePolygon, validateSliceLine } from '@/lib/polygonSlicing';
 import { EditMode, InteractionState } from '../types';

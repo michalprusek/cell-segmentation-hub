@@ -65,6 +65,38 @@ export default {
     returnToHome: '返回主页',
     // Navigation
     next: '下一个',
+    copy: '复制',
+    noImage: '无图像',
+    untitledImage: '无标题图像',
+    rename: '重命名',
+  },
+  landing: {
+    hero: {
+      badge: '先进的球状体分割平台',
+      title: '用于生物医学研究的AI细胞分析',
+      subtitle:
+        '使用我们尖端的球状体分割平台提升您的显微细胞图像分析。专为寻求精确性和效率的研究人员设计。',
+      getStarted: '开始使用',
+      learnMore: '了解更多',
+    },
+    about: {
+      badge: '我们的使命',
+      title: '通过技术推进生物医学研究',
+      description1:
+        '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）的学生Bc. Michal Průšek开发，在Ing. Adam Novozámský博士的指导下完成。',
+      description2:
+        '该项目是与UCT布拉格（VŠCHT Praha）生物化学与微生物学研究所研究人员的合作。',
+      description3:
+        '我们将尖端的AI模型与直观的界面相结合，为研究人员提供强大的显微图像分析工具，专注于以无与伦比的精度进行球状体分割。',
+      contactText: '如有疑问，请联系我们',
+    },
+    cta: {
+      title: '准备好改变您的细胞分析工作流程了吗？',
+      subtitle: '加入已经在使用我们平台加速发现的领先研究人员。',
+      cardTitle: '今天开始',
+      cardDescription: '注册免费账户，体验AI驱动的球状体分割的力量。',
+      createAccount: '创建您的账户',
+    },
   },
   dashboard: {
     manageProjects: '管理您的研究项目和分析',
@@ -122,6 +154,7 @@ export default {
     deleteImageError: '删除图像失败',
     deleteImageFailed: '图像删除失败',
     imagesQueuedForSegmentation: '{{count}} 张图像已添加到分割队列',
+    imageQueuedForResegmentation: '图像已添加到重新分割队列',
     allImagesAlreadySegmented: '所有图像已分割或在队列中',
     errorAddingToQueue: '添加到队列时出错',
     imageAlreadyProcessing: '图像正在处理中',
@@ -139,15 +172,69 @@ export default {
     projectCreatedDesc: '"{{name}}" 已准备好添加图像',
     descriptionOptional: '描述（可选）',
     noDescriptionProvided: '未提供描述',
+    deleteDialog: {
+      title: '确认删除',
+      description: '您确定要删除 {{count}} 张所选图片吗？此操作无法撤消。',
+    },
     selectProjectHeader: '选择项目',
     noProjects: '未找到项目',
   },
   errors: {
     noProjectOrUser: '错误：未选择项目或用户',
     unknown: '未知错误',
-    validation: {
+    network: '网络连接错误。请检查您的互联网连接。',
+    unauthorized: '访问被拒绝。请重新登录。',
+    forbidden: '您没有权限执行此操作。',
+    notFound: '请求的资源未找到。',
+    conflict: '此邮箱已被注册。请尝试登录或使用其他邮箱。',
+    invalidCredentials: '邮箱或密码错误。请检查您的登录凭据。',
+    validation: '验证错误。请检查您的输入。',
+    general: '发生了意外错误。请重试。',
+    server: '服务器错误。请稍后重试。',
+    timeout: '请求超时。请重试。',
+    sessionExpired: '您的会话已过期。请重新登录以继续。',
+    tooManyRequests: '请求过多。请稍等片刻后重试。',
+    serverUnavailable: '服务暂时不可用。请几分钟后重试。',
+    clientError: '请求错误。请检查您的输入并重试。',
+    emailAlreadyExists: '此邮箱已被注册。请尝试登录或使用其他邮箱。',
+    validationErrors: {
       projectNameRequired: '请输入项目名称',
       loginRequired: '您必须登录才能创建项目',
+      emailRequired: '邮箱是必需的',
+      passwordRequired: '密码是必需的',
+      invalidEmail: '请输入有效的邮箱地址',
+      passwordTooShort: '密码必须至少6个字符',
+      passwordsDoNotMatch: '密码不匹配',
+      confirmationRequired: '请确认您的操作',
+      fieldRequired: '此字段是必需的',
+    },
+    operations: {
+      loadProject: '无法加载项目。请检查您的连接并重试。',
+      saveProject: '无法保存项目更改。请重试。',
+      deleteProject: '无法删除项目。请确保您有必要的权限。',
+      uploadImage: '无法上传图像。请检查文件格式和大小。',
+      deleteImage: '无法删除图像。请尝试刷新页面并重复操作。',
+      processImage: '图像处理失败。请尝试使用不同的图像或联系支持。',
+      segmentation: '分割失败。请尝试使用不同的模型或调整配置。',
+      export: '数据导出失败。请验证数据是否可用。',
+      login: '登录错误。请验证您的邮箱和密码。',
+      logout: '登出错误。请尝试关闭浏览器。',
+      register: '注册失败。该邮箱可能已被使用。',
+      updateProfile: '无法更新个人资料。请验证提供的信息。',
+      changePassword: '无法更改密码。请验证您的当前密码。',
+      resetPassword: '密码重置失败。请验证提供的邮箱地址。',
+      deleteAccount: '无法删除账户。请联系支持获取帮助。',
+      updateConsent: '无法更新同意偏好设置。请重试。',
+    },
+    contexts: {
+      dashboard: '仪表板错误',
+      project: '项目错误',
+      image: '图像错误',
+      segmentation: '分割错误',
+      export: '导出错误',
+      auth: '身份验证错误',
+      profile: '配置文件错误',
+      settings: '设置错误',
     },
   },
   images: {
@@ -217,7 +304,6 @@ export default {
     currentPassword: '当前密码',
     newPassword: '新密码',
     confirmNewPassword: '确认新密码',
-    models: '模型',
     modelSelection: {
       title: '模型选择',
       description: '选择用于细胞分割的AI模型',
@@ -276,9 +362,6 @@ export default {
       confirmationLabel: '请输入 {{email}} 以确认：',
       confirmationPlaceholder: '{email}',
     },
-    pageTitle: '设置',
-    profile: '个人资料',
-    account: '账户',
     fillAllFields: '请填写所有必填字段',
     passwordsDoNotMatch: '密码不匹配',
     passwordTooShort: '密码至少需要6个字符',
@@ -357,6 +440,18 @@ export default {
     alreadySignedUp: '您已经注册并登录了。',
     goToDashboard: '前往仪表板',
     signUpFailed: '注册失败',
+    // Forgot Password specific
+    enterEmailForReset: '输入邮箱地址重置密码',
+    sending: '发送中...',
+    sendNewPassword: '发送新密码',
+    emailSent: '邮件已发送',
+    checkEmailForNewPassword: '请检查您的邮箱获取新密码',
+    resetPasswordEmailSent: '密码重置邮件已发送',
+    resetPasswordEmailSubject: '密码重置请求',
+    resetPasswordError: '重置密码时出错',
+    backToSignIn: '返回登录',
+    didntReceiveEmail: '没有收到邮件？',
+    rememberPassword: '想起密码了？',
   },
   profile: {
     title: '个人资料',
@@ -401,6 +496,21 @@ export default {
     createdProject: '创建了项目',
     completedSegmentation: '完成了分割',
     uploadedImage: '上传了图像',
+    avatar: {
+      uploadButton: '上传头像',
+      selectFile: '选择头像图片',
+      cropTitle: '裁剪您的头像',
+      cropDescription: '裁剪您的头像以完美适配',
+      zoomLevel: '缩放级别',
+      cropInstructions: '拖动以重新定位，使用滑块进行缩放',
+      applyChanges: '应用更改',
+      processing: '处理中...',
+      invalidFileType: '无效的文件类型。请选择图片文件。',
+      fileTooLarge: '文件过大。最大大小为5MB。',
+      cropError: '处理图片时出错。请重试。',
+      uploadSuccess: '头像上传成功',
+      uploadError: '头像上传失败。请重试。',
+    },
   },
   segmentation: {
     mode: {
@@ -575,12 +685,17 @@ export default {
     waiting: '等待中',
     processing: '处理中',
     segmentAll: '分割全部',
+    segmentAllWithCount: '分割全部 ({{count}})',
     totalProgress: '总进度',
     images: '图像',
     loadingStats: '加载统计数据...',
     connectingMessage: '连接到服务器... 实时更新即将可用。',
     emptyMessage: '队列中没有图像。上传图像并将其添加到队列进行分割。',
     addingToQueue: '添加到队列...',
+    resegmentSelected: '重新分割选中的 ({{count}})',
+    segmentMixed: '分割 {{new}} + 重新分割 {{resegment}} (共 {{total}} 个)',
+    segmentTooltip:
+      '{{new}} 个新图像将被分割，{{resegment}} 个选中图像将被重新分割',
   },
   toast: {
     // Generic messages
@@ -643,6 +758,7 @@ export default {
     },
   },
   export: {
+    advancedExport: '高级导出',
     // Dialog headers
     advancedOptions: '高级导出选项',
     configureSettings: '配置您的导出设置以创建全面的数据包',
@@ -663,6 +779,15 @@ export default {
     selectNone: '全不选',
     imageSelection: '图像选择',
     chooseImages: '选择要包含在导出中的图像',
+    searchImages: '搜索图像...',
+    sortBy: '排序方式',
+    sortOptions: {
+      date: '日期',
+      name: '名称',
+      status: '状态',
+    },
+    showingImages: '显示 {{start}}-{{end}}，共 {{total}}',
+    noImagesFound: '未找到图像',
     // Quality settings
     qualitySettings: '质量设置',
     imageQuality: '图像质量',
@@ -732,6 +857,7 @@ export default {
     badge: '文档',
     title: 'SpheroSeg 文档',
     subtitle: '我们球状体分割平台的综合使用指南',
+    backTo: '返回 {{page}}',
     navigation: '导航',
     nav: {
       introduction: '介绍',
@@ -1245,15 +1371,91 @@ export default {
     },
   },
 
+  // 上下文菜单
+  contextMenu: {
+    editPolygon: '编辑多边形',
+    splitPolygon: '分割多边形',
+    deletePolygon: '删除多边形',
+    confirmDeletePolygon: '您确定要删除此多边形吗？',
+    deletePolygonDescription: '此操作不可撤销。多边形将从分割中永久删除。',
+    duplicateVertex: '复制顶点',
+    deleteVertex: '删除顶点',
+  },
+
   // WebSocket messages
   websocket: {
     reconnecting: '正在重新连接服务器...',
     reconnected: '服务器连接已恢复',
     reconnectFailed: '恢复服务器连接失败',
     connectionLost: '与服务器的连接丢失',
-    pollingMode: '正在使用备用连接模式',
-    upgradedToWebSocket: '已升级到实时连接',
-    connectionError: '无法连接到服务器',
-    authError: '认证错误',
+  },
+
+  // 指标显示
+  metrics: {
+    info: '指标仅针对外部多边形进行评估。内部多边形（孔洞）的面积会自动从相应的外部多边形中减去。',
+    spheroid: '球体',
+    area: '面积',
+    perimeter: '周长',
+    equivalentDiameter: '等效直径',
+    circularity: '圆形度',
+    feretMax: 'Feret最大值',
+    feretMin: 'Feret最小值',
+    compactness: '紧密度',
+    convexity: '凸性',
+    solidity: '实心度',
+    sphericity: '球形度',
+    feretAspectRatio: 'Feret纵横比',
+    noPolygonsFound: '未找到可分析的多边形',
+  },
+
+  // 键盘快捷键
+  keyboardShortcuts: {
+    title: '键盘快捷键',
+    buttonLabel: '快捷键',
+    viewMode: '查看模式',
+    editVertices: '编辑顶点模式',
+    addPoints: '添加点模式',
+    createPolygon: '创建新多边形',
+    sliceMode: '切片模式',
+    deleteMode: '删除模式',
+    holdToAutoAdd: '按住以自动添加点',
+    undo: '撤销',
+    redo: '重做',
+    deleteSelected: '删除选定的多边形',
+    cancelOperation: '取消当前操作',
+    zoomIn: '放大',
+    zoomOut: '缩小',
+    resetView: '重置视图',
+    helperText: '这些快捷键在分割编辑器中工作，以便更快、更方便地工作。',
+  },
+
+  // 无障碍访问和屏幕阅读器标签
+  accessibility: {
+    // 导航
+    toggleSidebar: '切换侧边栏',
+    toggleMenu: '切换菜单',
+    selectLanguage: '选择语言',
+    selectTheme: '选择主题',
+    breadcrumb: '面包屑导航',
+    pagination: '分页',
+
+    // 操作
+    close: '关闭',
+    more: '更多',
+
+    // 分页
+    goToPreviousPage: '转到上一页',
+    goToNextPage: '转到下一页',
+    previousPage: '上一页',
+    nextPage: '下一页',
+    morePages: '更多页面',
+
+    // 轮播图
+    previousSlide: '上一张幻灯片',
+    nextSlide: '下一张幻灯片',
+
+    // 视图选项
+    gridView: '网格视图',
+    listView: '列表视图',
   },
 };

@@ -3,6 +3,7 @@ import { SegmentationResult } from '@/lib/segmentation';
 import { CheckCircle, Clipboard, DownloadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { convertToCOCO } from '../../../utils/cocoConverter';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface CocoTabProps {
   segmentation: SegmentationResult;
@@ -10,6 +11,7 @@ interface CocoTabProps {
 
 const CocoTab: React.FC<CocoTabProps> = ({ segmentation }) => {
   const [copied, setCopied] = useState(false);
+  const { t } = useLanguage();
   const cocoData = convertToCOCO(segmentation);
 
   const handleCopyToClipboard = () => {
@@ -36,7 +38,7 @@ const CocoTab: React.FC<CocoTabProps> = ({ segmentation }) => {
   return (
     <div className="flex-1 overflow-auto flex flex-col">
       <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
-        <h3 className="font-medium">COCO formát (Common Objects in Context)</h3>
+        <h3 className="font-medium">{t('export.cocoFormatTitle')}</h3>
         <div className="flex gap-2">
           <Button
             variant="outline"
@@ -49,7 +51,7 @@ const CocoTab: React.FC<CocoTabProps> = ({ segmentation }) => {
             ) : (
               <Clipboard className="h-4 w-4 mr-1" />
             )}
-            Kopírovat
+            {t('common.copy')}
           </Button>
           <Button
             variant="default"
@@ -58,7 +60,7 @@ const CocoTab: React.FC<CocoTabProps> = ({ segmentation }) => {
             onClick={handleDownload}
           >
             <DownloadCloud className="h-4 w-4 mr-1" />
-            Stáhnout JSON
+            {t('export.downloadJson')}
           </Button>
         </div>
       </div>

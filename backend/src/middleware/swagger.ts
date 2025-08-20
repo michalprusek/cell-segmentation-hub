@@ -3,10 +3,12 @@ import swaggerUi from 'swagger-ui-express';
 import { Express } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { logger } from '../utils/logger';
 
-// CommonJS __dirname - already available globally
-// const __dirname = __dirname; // Not needed
+// ES module equivalent for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Build list of YAML candidate paths and pick the first that exists
 const yamlCandidates = [

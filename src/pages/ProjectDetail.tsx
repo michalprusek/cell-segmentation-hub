@@ -21,9 +21,22 @@ import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
+import { usePagination } from '@/hooks/usePagination';
 import { motion } from 'framer-motion';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -33,6 +46,11 @@ const ProjectDetail = () => {
   const [showUploader, setShowUploader] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
+  const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
+    new Set()
+  );
+  const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
+  const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
 
   // Debouncing and deduplication for segmentation refresh
   const debounceTimeoutRef = useRef<{ [imageId: string]: NodeJS.Timeout }>({});
@@ -93,10 +111,36 @@ const ProjectDetail = () => {
     handleSort,
   } = useImageFilter(images);
 
+  // Pagination
+  const {
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    startIndex,
+    endIndex,
+    canGoNext,
+    canGoPrevious,
+    setCurrentPage,
+    goToNextPage,
+    goToPreviousPage,
+    pageNumbers,
+    paginatedIndices,
+  } = usePagination({
+    totalItems: filteredImages.length,
+    itemsPerPage: 30,
+    initialPage: 1,
+  });
+
+  // Get paginated images
+  const paginatedImages = useMemo(
+    () => filteredImages.slice(paginatedIndices.start, paginatedIndices.end),
+    [filteredImages, paginatedIndices]
+  );
+
   // Memoized calculations for heavy operations
   const imagesToSegmentCount = useMemo(
     () =>
-      (Array.isArray(images) ? images : []).filter(img =>
+      images.filter(img =>
         ['pending', 'failed', 'no_segmentation'].includes(
           img.segmentationStatus
         )
@@ -106,10 +150,7 @@ const ProjectDetail = () => {
 
   // Check if there are any images currently processing
   const hasProcessingImages = useMemo(
-    () =>
-      (Array.isArray(images) ? images : []).some(
-        img => img.segmentationStatus === 'processing'
-      ),
+    () => images.some(img => img.segmentationStatus === 'processing'),
     [images]
   );
 
@@ -162,45 +203,70 @@ const ProjectDetail = () => {
     if (lastUpdate.status === 'segmented') {
       // Don't immediately set to completed - verify segmentation data exists first
       normalizedStatus = 'processing'; // Keep as processing until we verify data
+    } else if (lastUpdate.status === 'no_segmentation') {
+      // Backend explicitly says no segmentation found
+      normalizedStatus = 'no_segmentation';
     }
 
     // Update the specific image status in the images array immediately
     updateImagesRef.current(prevImages =>
-      prevImages.map(img =>
-        img.id === lastUpdate.imageId
-          ? {
-              ...img,
-              segmentationStatus: normalizedStatus,
-              updatedAt: new Date(), // Update timestamp for tracking and reconciliation
-            }
-          : img
-      )
+      prevImages.map(img => {
+        if (img.id === lastUpdate.imageId) {
+          // Clear segmentation data if this is a re-segmentation being queued
+          const clearSegmentationData =
+            lastUpdate.status === 'queued' &&
+            (img.segmentationStatus === 'completed' ||
+              img.segmentationStatus === 'segmented');
+
+          return {
+            ...img,
+            segmentationStatus: normalizedStatus,
+            updatedAt: new Date(), // Update timestamp for tracking and reconciliation
+            // Clear existing segmentation result if re-segmenting
+            segmentationResult: clearSegmentationData
+              ? undefined
+              : img.segmentationResult,
+            segmentationData: clearSegmentationData
+              ? undefined
+              : img.segmentationData,
+          };
+        }
+        return img;
+      })
     );
 
     // For completed segmentation, refresh immediately to get polygon data and validate
+    // Skip refresh if backend already says no_segmentation
     if (
-      lastUpdate.status === 'segmented' ||
-      lastUpdate.status === 'completed'
+      (lastUpdate.status === 'segmented' ||
+        lastUpdate.status === 'completed') &&
+      lastUpdate.status !== 'no_segmentation'
     ) {
       // Immediate refresh for completed status - this will also validate if polygons exist
       refreshImageSegmentationRef
         .current(lastUpdate.imageId)
-        .then(() => {
-          // After refresh, check if we actually have segmentation data
+        .then(async () => {
+          // Wait a tick to ensure the state has been updated
+          await new Promise(resolve => setTimeout(resolve, 0));
+
+          // After refresh, check the updated segmentation data
           updateImagesRef.current(prevImages =>
             prevImages.map(img => {
               if (img.id === lastUpdate.imageId) {
-                // Only mark as completed if we have actual polygon data
+                // Check if we have actual polygon data after refresh
                 const hasPolygons =
                   img.segmentationResult &&
                   img.segmentationResult.polygons &&
                   img.segmentationResult.polygons.length > 0;
 
+                // If backend says 'segmented' but no polygons, mark as 'no_segmentation'
+                const finalStatus = hasPolygons
+                  ? 'completed'
+                  : 'no_segmentation';
+
                 return {
                   ...img,
-                  segmentationStatus: hasPolygons
-                    ? 'completed'
-                    : 'no_segmentation',
+                  segmentationStatus: finalStatus,
                   updatedAt: new Date(),
                 };
               }
@@ -305,7 +371,103 @@ const ProjectDetail = () => {
     handleOpenSegmentationEditor(imageId);
   };
 
-  // Handle batch segmentation of all images without segmentation
+  // Selection handlers
+  const handleImageSelection = useCallback(
+    (imageId: string, selected: boolean) => {
+      setSelectedImageIds(prev => {
+        const newSet = new Set(prev);
+        if (selected) {
+          newSet.add(imageId);
+        } else {
+          newSet.delete(imageId);
+        }
+        return newSet;
+      });
+    },
+    []
+  );
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedImageIds(new Set(paginatedImages.map(img => img.id)));
+  }, [paginatedImages]);
+
+  const handleDeselectAll = useCallback(() => {
+    setSelectedImageIds(new Set());
+  }, []);
+
+  const handleSelectAllToggle = useCallback(() => {
+    const allSelected =
+      paginatedImages.length > 0 &&
+      paginatedImages.every(img => selectedImageIds.has(img.id));
+    if (allSelected) {
+      handleDeselectAll();
+    } else {
+      handleSelectAll();
+    }
+  }, [paginatedImages, selectedImageIds, handleSelectAll, handleDeselectAll]);
+
+  const handleBatchDeleteConfirm = async () => {
+    if (!id || !user?.id || selectedImageIds.size === 0) {
+      toast.error(t('errors.noProjectOrUser'));
+      return;
+    }
+
+    // Prevent duplicate submissions
+    if (isBatchDeleting) {
+      return;
+    }
+
+    setIsBatchDeleting(true);
+
+    try {
+      const imageIds = Array.from(selectedImageIds);
+
+      const result = await apiClient.deleteBatch(imageIds, id);
+
+      if (result.deletedCount > 0) {
+        toast.success(
+          t('project.imagesDeleted', { count: result.deletedCount })
+        );
+
+        // Clear selection
+        setSelectedImageIds(new Set());
+
+        // Only remove deleted images from current state instead of refreshing all
+        // This preserves thumbnails and other loaded data for remaining images
+        const deletedIds = imageIds.filter(
+          id => !result.failedIds.includes(id)
+        );
+        updateImages(prevImages =>
+          prevImages.filter(img => !deletedIds.includes(img.id))
+        );
+      }
+
+      if (result.failedIds.length > 0) {
+        toast.warning(
+          t('project.imagesDeleteFailed', { count: result.failedIds.length })
+        );
+      }
+    } catch (error) {
+      toast.error(t('errors.deleteImages'));
+    } finally {
+      setShowDeleteDialog(false);
+      setIsBatchDeleting(false);
+    }
+  };
+
+  const handleBatchDelete = () => {
+    setShowDeleteDialog(true);
+  };
+
+  // Calculate selection state
+  const selectedCount = selectedImageIds.size;
+  const isAllSelected =
+    paginatedImages.length > 0 &&
+    paginatedImages.every(img => selectedImageIds.has(img.id));
+  const isPartiallySelected =
+    selectedCount > 0 && selectedCount < paginatedImages.length;
+
+  // Handle batch segmentation of all images without segmentation + selected images
   const handleSegmentAll = async () => {
     if (!id || !user?.id) {
       toast.error(t('errors.noProjectOrUser'));
@@ -319,7 +481,7 @@ const ProjectDetail = () => {
 
     try {
       // Get images that don't have segmentation or have failed
-      const imagesToSegment = images.filter(
+      const imagesWithoutSegmentation = images.filter(
         img =>
           img.segmentationStatus === 'pending' ||
           img.segmentationStatus === 'failed' ||
@@ -327,7 +489,21 @@ const ProjectDetail = () => {
           !img.segmentationStatus
       );
 
-      if (imagesToSegment.length === 0) {
+      // Get selected images that have segmentation (will be re-segmented)
+      const selectedImagesWithSegmentation = images.filter(
+        img =>
+          selectedImageIds.has(img.id) &&
+          (img.segmentationStatus === 'completed' ||
+            img.segmentationStatus === 'segmented')
+      );
+
+      // Combine both groups
+      const allImagesToProcess = [
+        ...imagesWithoutSegmentation,
+        ...selectedImagesWithSegmentation,
+      ];
+
+      if (allImagesToProcess.length === 0) {
         toast.info(t('projects.allImagesAlreadySegmented'));
         return;
       }
@@ -335,21 +511,73 @@ const ProjectDetail = () => {
       // Mark as submitted to prevent double clicks
       setBatchSubmitted(true);
 
-      const imageIds = imagesToSegment.map(img => img.id);
-
-      // Add to queue
-      const response = await apiClient.addBatchToQueue(
-        imageIds,
-        id,
-        selectedModel,
-        confidenceThreshold
+      // Prepare image IDs for batch processing
+      const imageIdsWithoutSegmentation = imagesWithoutSegmentation.map(
+        img => img.id
       );
+      const imageIdsToResegment = selectedImagesWithSegmentation.map(
+        img => img.id
+      );
+
+      // Update UI immediately for better UX
+      updateImages(prevImages =>
+        prevImages.map(img => {
+          if (
+            imageIdsWithoutSegmentation.includes(img.id) ||
+            imageIdsToResegment.includes(img.id)
+          ) {
+            return {
+              ...img,
+              segmentationStatus: 'queued',
+              // Clear segmentation data for re-segmented images
+              segmentationResult: imageIdsToResegment.includes(img.id)
+                ? undefined
+                : img.segmentationResult,
+              segmentationData: imageIdsToResegment.includes(img.id)
+                ? undefined
+                : img.segmentationData,
+            };
+          }
+          return img;
+        })
+      );
+
+      let totalQueued = 0;
+
+      // Process images without segmentation (normal segmentation)
+      if (imageIdsWithoutSegmentation.length > 0) {
+        const response = await apiClient.addBatchToQueue(
+          imageIdsWithoutSegmentation,
+          id,
+          selectedModel,
+          confidenceThreshold,
+          0, // priority
+          false // not force re-segment
+        );
+        totalQueued += response.queuedCount;
+      }
+
+      // Process selected images with segmentation (force re-segment)
+      if (imageIdsToResegment.length > 0) {
+        const response = await apiClient.addBatchToQueue(
+          imageIdsToResegment,
+          id,
+          selectedModel,
+          confidenceThreshold,
+          0, // priority
+          true // force re-segment
+        );
+        totalQueued += response.queuedCount;
+      }
 
       toast.success(
         t('projects.imagesQueuedForSegmentation', {
-          count: response.queuedCount,
+          count: totalQueued,
         })
       );
+
+      // Clear selection after successful batch operation
+      setSelectedImageIds(new Set());
 
       // Refresh queue stats
       requestQueueStats();
@@ -357,6 +585,23 @@ const ProjectDetail = () => {
       toast.error(t('projects.errorAddingToQueue'));
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);
+
+      // Revert UI changes on error
+      updateImages(prevImages =>
+        prevImages.map(img => {
+          // Restore original status for queued images
+          const originalImage = images.find(i => i.id === img.id);
+          if (originalImage) {
+            return {
+              ...img,
+              segmentationStatus: originalImage.segmentationStatus,
+              segmentationResult: originalImage.segmentationResult,
+              segmentationData: originalImage.segmentationData,
+            };
+          }
+          return img;
+        })
+      );
     }
   };
 
@@ -411,6 +656,12 @@ const ProjectDetail = () => {
               setViewMode={setViewMode}
               projectName={projectTitle}
               images={images}
+              selectedCount={selectedCount}
+              isAllSelected={isAllSelected}
+              isPartiallySelected={isPartiallySelected}
+              onSelectAllToggle={handleSelectAllToggle}
+              onBatchDelete={handleBatchDelete}
+              showSelectAll={true}
             />
 
             {/* Queue Stats Panel */}
@@ -420,6 +671,8 @@ const ProjectDetail = () => {
               onSegmentAll={handleSegmentAll}
               batchSubmitted={batchSubmitted || hasActiveQueue}
               imagesToSegmentCount={imagesToSegmentCount}
+              selectedImageIds={selectedImageIds}
+              images={images}
             />
 
             {loading ? (
@@ -443,16 +696,61 @@ const ProjectDetail = () => {
                 />
               </motion.div>
             ) : (
-              <ProjectImages
-                images={filteredImages}
-                onDelete={handleDeleteImage}
-                onOpen={handleOpenImage}
-                viewMode={viewMode}
-              />
+              <>
+                <ProjectImages
+                  images={paginatedImages}
+                  onDelete={handleDeleteImage}
+                  onOpen={handleOpenImage}
+                  viewMode={viewMode}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  canGoNext={canGoNext}
+                  canGoPrevious={canGoPrevious}
+                  goToNextPage={goToNextPage}
+                  goToPreviousPage={goToPreviousPage}
+                  pageNumbers={pageNumbers}
+                  selectedImageIds={selectedImageIds}
+                  onSelectionChange={handleImageSelection}
+                />
+                {/* Show pagination info */}
+                {totalPages > 0 && (
+                  <div className="mt-4 text-sm text-muted-foreground text-center">
+                    {t('export.showingImages', {
+                      start: startIndex,
+                      end: endIndex,
+                      total: filteredImages.length,
+                    })}
+                  </div>
+                )}
+              </>
             )}
           </motion.div>
         )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('projects.deleteDialog.title')}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('projects.deleteDialog.description', { count: selectedCount })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBatchDeleteConfirm}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {t('common.delete')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 };

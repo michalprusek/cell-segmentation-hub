@@ -48,7 +48,7 @@ export class ImageController {
 
       // Validate files before processing
       const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/bmp', 'image/x-ms-bmp', 'image/x-bmp', 'image/tiff', 'image/tif', 'image/gif'];
-      const maxFileSize = 5 * 1024 * 1024; // 5MB
+      const maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '5242880', 10); // Default 5MB
 
       for (const file of files) {
         if (!file.buffer || !file.originalname) {
@@ -62,7 +62,8 @@ export class ImageController {
         }
         
         if (file.size > maxFileSize) {
-          ResponseHelper.validationError(res, `File too large: ${file.originalname}. Maximum size: 5MB`);
+          const maxSizeMB = Math.round(maxFileSize / (1024 * 1024));
+          ResponseHelper.validationError(res, `File too large: ${file.originalname}. Maximum size: ${maxSizeMB}MB`);
           return;
         }
       }
@@ -278,6 +279,70 @@ export class ImageController {
   };
 
   /**
+   * Delete multiple images in batch
+   * DELETE /api/images/batch
+   */
+  deleteBatch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
+
+      const { imageIds, projectId } = req.body;
+
+      // Validation
+      if (!Array.isArray(imageIds) || imageIds.length === 0) {
+        ResponseHelper.badRequest(res, 'Musíte zadat alespoň jeden obrázek');
+        return;
+      }
+
+      if (imageIds.length > 100) {
+        ResponseHelper.badRequest(res, 'Můžete smazat maximálně 100 obrázků najednou');
+        return;
+      }
+
+      if (!projectId) {
+        ResponseHelper.badRequest(res, 'ID projektu je povinné');
+        return;
+      }
+
+      // Validate all imageIds are UUIDs
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const invalidIds = imageIds.filter(id => !uuidRegex.test(id));
+      if (invalidIds.length > 0) {
+        ResponseHelper.badRequest(res, 'Neplatná ID obrázků');
+        return;
+      }
+
+      logger.info('Deleting images in batch', 'ImageController', {
+        imageIds,
+        projectId,
+        userId,
+        count: imageIds.length
+      });
+
+      const result = await this.imageService.deleteBatch(imageIds, userId, projectId);
+
+      ResponseHelper.success(res, result, `Úspěšně smazáno ${result.deletedCount} obrázků`);
+
+    } catch (error) {
+      logger.error('Failed to delete images in batch', error instanceof Error ? error : undefined, 'ImageController', {
+        userId: req.user?.id,
+        imageIds: req.body?.imageIds
+      });
+
+      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
+      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
+        ResponseHelper.notFound(res, errorMessage);
+      } else {
+        ResponseHelper.internalError(res, error as Error);
+      }
+    }
+  };
+
+  /**
    * Get single image with optional segmentation data
    * GET /api/images/:imageId
    */
@@ -442,7 +507,7 @@ export class ImageController {
       // Validate level of detail parameter
       const validLods = ['low', 'medium', 'high'] as const;
       const levelOfDetail = lod as string;
-      if (!validLods.includes(levelOfDetail as any)) {
+      if (!validLods.includes(levelOfDetail as typeof validLods[number])) {
         ResponseHelper.badRequest(res, 'Level of detail must be one of: low, medium, high');
         return;
       }

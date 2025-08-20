@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Keyboard, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface KeyboardShortcutsHelpProps {
   className?: string;
@@ -11,22 +12,23 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
   className = '',
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useLanguage();
 
   const shortcuts = [
-    { key: 'V', description: 'Režim prohlížení' },
-    { key: 'E', description: 'Režim editace vrcholů' },
-    { key: 'A', description: 'Režim přidávání bodů' },
-    { key: 'N', description: 'Vytvoření nového polygonu' },
-    { key: 'S', description: 'Režim řezání' },
-    { key: 'D', description: 'Režim mazání' },
-    { key: 'Shift', description: 'Držet pro automatické přidávání bodů' },
-    { key: 'Ctrl+Z', description: 'Zpět' },
-    { key: 'Ctrl+Y', description: 'Znovu' },
-    { key: 'Delete', description: 'Smazat vybraný polygon' },
-    { key: 'Esc', description: 'Zrušit aktuální operaci' },
-    { key: '+', description: 'Přiblížit' },
-    { key: '-', description: 'Oddálit' },
-    { key: 'R', description: 'Obnovit pohled' },
+    { key: 'V', description: t('keyboardShortcuts.viewMode') },
+    { key: 'E', description: t('keyboardShortcuts.editVertices') },
+    { key: 'A', description: t('keyboardShortcuts.addPoints') },
+    { key: 'N', description: t('keyboardShortcuts.createPolygon') },
+    { key: 'S', description: t('keyboardShortcuts.sliceMode') },
+    { key: 'D', description: t('keyboardShortcuts.deleteMode') },
+    { key: 'Shift', description: t('keyboardShortcuts.holdToAutoAdd') },
+    { key: 'Ctrl+Z', description: t('keyboardShortcuts.undo') },
+    { key: 'Ctrl+Y', description: t('keyboardShortcuts.redo') },
+    { key: 'Delete', description: t('keyboardShortcuts.deleteSelected') },
+    { key: 'Esc', description: t('keyboardShortcuts.cancelOperation') },
+    { key: '+', description: t('keyboardShortcuts.zoomIn') },
+    { key: '-', description: t('keyboardShortcuts.zoomOut') },
+    { key: 'R', description: t('keyboardShortcuts.resetView') },
   ];
 
   return (
@@ -37,7 +39,9 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
         onClick={() => setIsOpen(true)}
       >
         <Keyboard className="h-4 w-4" />
-        <span className="hidden sm:inline">Zkratky</span>
+        <span className="hidden sm:inline">
+          {t('keyboardShortcuts.buttonLabel')}
+        </span>
       </Button>
 
       <AnimatePresence>
@@ -57,7 +61,9 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium">Klávesové zkratky</h3>
+                <h3 className="text-lg font-medium">
+                  {t('keyboardShortcuts.title')}
+                </h3>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -88,8 +94,7 @@ const KeyboardShortcutsHelp: React.FC<KeyboardShortcutsHelpProps> = ({
               </div>
 
               <div className="mt-5 text-xs text-gray-500 dark:text-gray-400 border-t border-gray-200 dark:border-gray-700 pt-3">
-                Tyto zkratky fungují v rámci segmentačního editoru pro rychlejší
-                a pohodlnější práci.
+                {t('keyboardShortcuts.helperText')}
               </div>
             </motion.div>
           </motion.div>
