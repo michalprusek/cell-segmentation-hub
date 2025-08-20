@@ -1,0 +1,72 @@
+# Prometheus configuration for staging environment
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    environment: 'staging'
+    cluster: 'spheroseg-staging'
+
+# Scrape configuration
+scrape_configs:
+  # Prometheus itself
+  - job_name: 'prometheus-staging'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 60s
+
+  # Staging Backend API metrics
+  - job_name: 'staging-backend'
+    static_configs:
+      - targets: ['staging-backend:3001']
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'staging-backend'
+
+  # Staging Backend Business metrics
+  - job_name: 'staging-backend-business'
+    static_configs:
+      - targets: ['staging-backend:3001']
+    metrics_path: '/api/metrics/business'
+    scrape_interval: 60s
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'staging-backend-business'
+
+  # Staging ML Service metrics (if available)
+  - job_name: 'staging-ml-service'
+    static_configs:
+      - targets: ['staging-ml:8000']
+    metrics_path: '/metrics'
+    scrape_interval: 60s
+    params:
+      format: ['prometheus']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'staging-ml'
+    # Don't fail if ML service doesn't have metrics endpoint
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: 'up'
+        target_label: service
+        replacement: 'ml-staging'
+
+# Rule files (if any)
+rule_files:
+  # - "staging_rules.yml"
+
+# Alerting configuration (simplified for staging)
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: [] # No alertmanager for staging
+
+# Storage configuration is set via command line args in docker-compose

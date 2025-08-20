@@ -829,7 +829,14 @@ function insertPointsBetweenVertices(
   endVertexIndex: number,
   newPoints: Point[]
 ): Point[] | null {
-  if (newPoints.length === 0) return null;
+  // If no new points, remove points between vertices instead
+  if (newPoints.length === 0) {
+    return removePointsBetweenVertices(
+      originalPoints,
+      startVertexIndex,
+      endVertexIndex
+    );
+  }
 
   const numPoints = originalPoints.length;
 
@@ -898,4 +905,69 @@ function calculatePolygonPerimeter(points: Point[]): number {
     perimeter += Math.sqrt(dx * dx + dy * dy);
   }
   return perimeter;
+}
+
+/**
+ * Helper function to remove points between two vertices
+ * Chooses the shorter path to maintain logical polygon shape
+ */
+function removePointsBetweenVertices(
+  originalPoints: Point[],
+  startVertexIndex: number,
+  endVertexIndex: number
+): Point[] {
+  const numPoints = originalPoints.length;
+
+  // If adjacent vertices, no points to remove
+  if (
+    Math.abs(startVertexIndex - endVertexIndex) === 1 ||
+    Math.abs(startVertexIndex - endVertexIndex) === numPoints - 1
+  ) {
+    return originalPoints;
+  }
+
+  // Create two candidate polygons by keeping different paths
+  const candidate1Points: Point[] = [];
+  const candidate2Points: Point[] = [];
+
+  // Candidate 1: Keep the forward path from start to end
+  if (startVertexIndex < endVertexIndex) {
+    // Direct path (remove points between)
+    for (let i = 0; i <= startVertexIndex; i++) {
+      candidate1Points.push(originalPoints[i]);
+    }
+    for (let i = endVertexIndex; i < numPoints; i++) {
+      candidate1Points.push(originalPoints[i]);
+    }
+  } else {
+    // Wrapped path (remove points between, crossing zero)
+    for (let i = 0; i <= endVertexIndex; i++) {
+      candidate1Points.push(originalPoints[i]);
+    }
+    for (let i = startVertexIndex; i < numPoints; i++) {
+      candidate1Points.push(originalPoints[i]);
+    }
+  }
+
+  // Candidate 2: Keep the backward path from end to start
+  if (startVertexIndex < endVertexIndex) {
+    // Keep points from start to end (remove the rest)
+    for (let i = startVertexIndex; i <= endVertexIndex; i++) {
+      candidate2Points.push(originalPoints[i]);
+    }
+  } else {
+    // Keep wrapped path from start to end
+    for (let i = startVertexIndex; i < numPoints; i++) {
+      candidate2Points.push(originalPoints[i]);
+    }
+    for (let i = 0; i <= endVertexIndex; i++) {
+      candidate2Points.push(originalPoints[i]);
+    }
+  }
+
+  // Return the polygon with shorter perimeter (removes more points)
+  const perimeter1 = calculatePolygonPerimeter(candidate1Points);
+  const perimeter2 = calculatePolygonPerimeter(candidate2Points);
+
+  return perimeter1 <= perimeter2 ? candidate1Points : candidate2Points;
 }

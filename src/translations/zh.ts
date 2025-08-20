@@ -640,7 +640,8 @@ export default {
       },
       addPoints: {
         clickVertex: '点击任意顶点开始添加点',
-        addPoints: '点击添加点，然后点击另一个顶点完成',
+        addPoints:
+          '点击添加点，然后点击另一个顶点完成。直接点击另一个顶点而不添加点，可删除它们之间的所有点。',
         holdShift: '按住SHIFT自动添加点',
         cancel: '按ESC取消',
       },
