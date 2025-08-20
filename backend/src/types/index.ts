@@ -4,6 +4,8 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
   message?: string;
+  code?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface PaginatedResponse<T> {

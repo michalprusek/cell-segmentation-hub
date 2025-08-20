@@ -56,24 +56,27 @@ class Logger {
 
     const message = this.formatMessage(entry);
     
+     
+    // Console output is the core functionality of a logger
     switch (entry.level) {
       case LogLevel.ERROR:
-         
+        // Error logging to console
         console.error(message);
         break;
       case LogLevel.WARN:
-         
+        // Warning logging to console
         console.warn(message);
         break;
       case LogLevel.INFO:
-         
+        // Info logging to console
         console.info(message);
         break;
       case LogLevel.DEBUG:
-         
+        // Debug logging to console
         console.debug(message);
         break;
     }
+     
   }
 
   error(message: string, error?: Error, context?: string, data?: Record<string, unknown> | string | number | boolean | null): void {

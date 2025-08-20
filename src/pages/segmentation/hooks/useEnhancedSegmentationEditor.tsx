@@ -113,8 +113,10 @@ export const useEnhancedSegmentationEditor = ({
   // History management
   const [history, setHistory] = useState<Polygon[][]>([initialPolygons]);
   const [historyIndex, setHistoryIndex] = useState(0);
+  const [savedHistoryIndex, setSavedHistoryIndex] = useState(0); // Track last saved state
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isUndoRedoInProgress, setIsUndoRedoInProgress] = useState(false);
 
   // Track image changes and polygon data
   const initialPolygonsRef = useRef<Polygon[]>([]);
@@ -168,6 +170,7 @@ export const useEnhancedSegmentationEditor = ({
       // Reset history with new initial state
       setHistory([initialPolygons]);
       setHistoryIndex(0);
+      setSavedHistoryIndex(0); // Reset saved index when changing images
       setHasUnsavedChanges(false);
 
       // Update refs
@@ -243,29 +246,81 @@ export const useEnhancedSegmentationEditor = ({
 
   const handleUndo = useCallback(() => {
     if (canUndo) {
+      // Set flag to disable transitions
+      setIsUndoRedoInProgress(true);
+
       const newIndex = historyIndex - 1;
       setHistoryIndex(newIndex);
       setPolygons(history[newIndex]);
-      setHasUnsavedChanges(newIndex !== 0);
+      // Check if we're at a different state than the saved state
+      setHasUnsavedChanges(newIndex !== savedHistoryIndex);
+
+      // Reset vertex drag state to ensure vertices are shown in correct positions
+      setVertexDragState({
+        isDragging: false,
+        polygonId: null,
+        vertexIndex: null,
+        dragOffset: undefined,
+        originalPosition: undefined,
+      });
+
+      // Also reset interaction state to clear any dragging states
+      setInteractionState(prev => ({
+        ...prev,
+        isDraggingVertex: false,
+        draggedVertexInfo: null,
+        originalVertexPosition: null,
+      }));
 
       if (onPolygonsChange) {
         onPolygonsChange(history[newIndex]);
       }
+
+      // Reset flag after a brief delay to ensure updates are applied
+      setTimeout(() => {
+        setIsUndoRedoInProgress(false);
+      }, 50);
     }
-  }, [canUndo, historyIndex, history, onPolygonsChange]);
+  }, [canUndo, historyIndex, history, savedHistoryIndex, onPolygonsChange]);
 
   const handleRedo = useCallback(() => {
     if (canRedo) {
+      // Set flag to disable transitions
+      setIsUndoRedoInProgress(true);
+
       const newIndex = historyIndex + 1;
       setHistoryIndex(newIndex);
       setPolygons(history[newIndex]);
-      setHasUnsavedChanges(true);
+      // Check if we're at a different state than the saved state
+      setHasUnsavedChanges(newIndex !== savedHistoryIndex);
+
+      // Reset vertex drag state to ensure vertices are shown in correct positions
+      setVertexDragState({
+        isDragging: false,
+        polygonId: null,
+        vertexIndex: null,
+        dragOffset: undefined,
+        originalPosition: undefined,
+      });
+
+      // Also reset interaction state to clear any dragging states
+      setInteractionState(prev => ({
+        ...prev,
+        isDraggingVertex: false,
+        draggedVertexInfo: null,
+        originalVertexPosition: null,
+      }));
 
       if (onPolygonsChange) {
         onPolygonsChange(history[newIndex]);
       }
+
+      // Reset flag after a brief delay to ensure updates are applied
+      setTimeout(() => {
+        setIsUndoRedoInProgress(false);
+      }, 50);
     }
-  }, [canRedo, historyIndex, history, onPolygonsChange]);
+  }, [canRedo, historyIndex, history, savedHistoryIndex, onPolygonsChange]);
 
   // Save operation
   const handleSave = useCallback(async () => {
@@ -275,6 +330,8 @@ export const useEnhancedSegmentationEditor = ({
     try {
       await onSave(polygons);
       setHasUnsavedChanges(false);
+      // Update the saved history index to current position
+      setSavedHistoryIndex(historyIndex);
       toast.success(t('toast.segmentation.saved'));
     } catch (error) {
       toast.error(t('toast.segmentation.failed'));
@@ -282,7 +339,7 @@ export const useEnhancedSegmentationEditor = ({
     } finally {
       setIsSaving(false);
     }
-  }, [onSave, hasUnsavedChanges, polygons, t]);
+  }, [onSave, hasUnsavedChanges, polygons, historyIndex, t]);
 
   // Transform operations with improved constraints
   const handleZoomIn = useCallback(() => {
@@ -601,6 +658,7 @@ export const useEnhancedSegmentationEditor = ({
       canUndo,
       canRedo,
       isSaving,
+      isUndoRedoInProgress,
     }),
     [
       editMode,
@@ -616,6 +674,7 @@ export const useEnhancedSegmentationEditor = ({
       canUndo,
       canRedo,
       isSaving,
+      isUndoRedoInProgress,
     ]
   );
 

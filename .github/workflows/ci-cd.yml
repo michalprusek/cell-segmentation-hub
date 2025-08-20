@@ -1,0 +1,600 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20'
+  PYTHON_VERSION: '3.11'
+  DOCKER_BUILDKIT: 1
+  COMPOSE_DOCKER_CLI_BUILD: 1
+
+jobs:
+  # ====================
+  # Code Quality Checks
+  # ====================
+  lint-and-type-check:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Run TypeScript check
+        run: npm run type-check
+
+      - name: Check translations
+        run: npm run i18n:validate
+
+  # ====================
+  # Security Scanning
+  # ====================
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: NPM Audit - Frontend
+        run: npm audit --audit-level=high
+
+      - name: NPM Audit - Backend
+        working-directory: ./backend
+        run: npm audit --audit-level=high
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Python Safety Check
+        working-directory: ./backend/segmentation
+        run: |
+          if [ -f "requirements.txt" ]; then
+            pip install safety
+            pip install -r requirements.txt
+            safety check --file=requirements.txt --json
+          else
+            echo "Warning: requirements.txt not found in backend/segmentation"
+            echo "Skipping Python safety check"
+          fi
+
+      - name: Trivy Security Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          severity: 'HIGH,CRITICAL'
+
+  # ====================
+  # Unit Tests
+  # ====================
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Frontend tests
+        run: npm run test:coverage
+
+      - name: Run Backend tests
+        working-directory: ./backend
+        run: |
+          npm ci
+          npm run test:coverage
+
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info,./backend/coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  # ====================
+  # Integration Tests
+  # ====================
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci
+
+      - name: Setup test environment
+        run: |
+          cp .env.example .env
+          echo "DATABASE_URL=postgresql://postgres:testpass@localhost:5432/testdb" >> .env
+          echo "REDIS_URL=redis://localhost:6379" >> .env
+
+      - name: Run database migrations
+        working-directory: ./backend
+        run: npx prisma migrate deploy
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+  # ====================
+  # E2E Tests
+  # ====================
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps
+
+      - name: Start Docker services with health checks
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+
+          # Health check loop with timeout
+          echo "Waiting for services to be healthy..."
+          TIMEOUT=120
+          ELAPSED=0
+          INTERVAL=5
+
+          # Function to check service health
+          check_service_health() {
+            local service_name=$1
+            local health_url=$2
+            local expected_response=$3
+            local max_retries=3
+            local retry=0
+            
+            while [ $retry -lt $max_retries ]; do
+              if response=$(curl -f -s --max-time 5 "$health_url" 2>/dev/null); then
+                if [ -n "$expected_response" ]; then
+                  if echo "$response" | grep -q "$expected_response"; then
+                    echo "✓ $service_name health check passed"
+                    return 0
+                  else
+                    echo "✗ $service_name returned unexpected response"
+                  fi
+                else
+                  echo "✓ $service_name health check passed (HTTP 200)"
+                  return 0
+                fi
+              fi
+              retry=$((retry + 1))
+              [ $retry -lt $max_retries ] && sleep 2
+            done
+            
+            echo "✗ $service_name health check failed after $max_retries attempts"
+            return 1
+          }
+
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            # Check if containers are running (non-empty check)
+            RUNNING_IDS=$(docker-compose -f docker-compose.test.yml ps -q 2>/dev/null | tr -d '[:space:]')
+            
+            if [ -n "$RUNNING_IDS" ]; then
+              # Count running containers properly
+              RUNNING_COUNT=$(echo "$RUNNING_IDS" | wc -l | tr -d '[:space:]')
+              echo "Found $RUNNING_COUNT running container(s)"
+              
+              # Check each service health endpoint
+              all_healthy=true
+              
+              # Backend health check
+              if ! check_service_health "Backend" "http://localhost:3001/health" "\"status\":\"ok\""; then
+                all_healthy=false
+              fi
+              
+              # Frontend health check (basic HTTP check)
+              if ! check_service_health "Frontend" "http://localhost:3000" ""; then
+                all_healthy=false
+              fi
+              
+              # ML Service health check
+              if ! check_service_health "ML Service" "http://localhost:8000/health" "\"status\":\"healthy\""; then
+                all_healthy=false
+              fi
+              
+              if [ "$all_healthy" = true ]; then
+                echo "All services are healthy!"
+                break
+              fi
+            else
+              echo "No containers running yet..."
+            fi
+            
+            sleep $INTERVAL
+            ELAPSED=$((ELAPSED + INTERVAL))
+          done
+
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "ERROR: Services failed to start within ${TIMEOUT} seconds"
+            echo "=== Docker Compose Logs ==="
+            docker-compose -f docker-compose.test.yml logs --tail=50
+            echo "=== Docker Compose Status ==="
+            docker-compose -f docker-compose.test.yml ps
+            exit 1
+          fi
+
+          echo "All services are healthy!"
+          docker-compose -f docker-compose.test.yml ps
+
+      - name: Run E2E tests
+        run: npm run test:e2e
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Stop Docker services
+        if: always()
+        run: docker-compose -f docker-compose.test.yml down
+
+  # ====================
+  # Build Docker Images
+  # ====================
+  build-docker:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [lint-and-type-check, security-scan, unit-tests]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: cell-seg-hub/frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: cell-seg-hub/backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build ML Service Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend/segmentation
+          file: ./backend/segmentation/Dockerfile
+          push: false
+          tags: cell-seg-hub/ml-service:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test production build
+        run: |
+          docker-compose -f docker-compose.production.yml build
+          docker-compose -f docker-compose.production.yml config
+
+  # ====================
+  # Deploy to Staging
+  # ====================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [integration-tests, e2e-tests, build-docker]
+    if: github.ref == 'refs/heads/dev'
+    environment:
+      name: staging
+      url: https://staging.cellsegmentation.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-get-login@v2
+
+      - name: Build and push images to ECR
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/cell-seg-frontend:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/cell-seg-backend:$IMAGE_TAG ./backend
+          docker build -t $ECR_REGISTRY/cell-seg-ml:$IMAGE_TAG ./backend/segmentation
+
+          docker push $ECR_REGISTRY/cell-seg-frontend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/cell-seg-backend:$IMAGE_TAG
+          docker push $ECR_REGISTRY/cell-seg-ml:$IMAGE_TAG
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster staging-cluster \
+            --service cell-seg-staging \
+            --force-new-deployment
+
+      - name: Run smoke tests
+        run: |
+          echo "Running comprehensive health checks..."
+          ENDPOINTS=(
+            "https://staging.cellsegmentation.com/health"
+            "https://staging.cellsegmentation.com/api/health"
+            "https://staging.cellsegmentation.com/api/endpoints"
+          )
+
+          MAX_RETRIES=12
+          RETRY_DELAY=10
+
+          for endpoint in "${ENDPOINTS[@]}"; do
+            echo "Checking $endpoint..."
+            RETRY_COUNT=0
+            
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              if curl -f -s -o /dev/null -w "%{http_code}" "$endpoint" | grep -q "^2"; then
+                echo "✓ $endpoint is healthy"
+                break
+              else
+                RETRY_COUNT=$((RETRY_COUNT + 1))
+                if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+                  echo "✗ $endpoint failed after $MAX_RETRIES attempts"
+                  exit 1
+                fi
+                echo "  Retry $RETRY_COUNT/$MAX_RETRIES in ${RETRY_DELAY}s..."
+                sleep $RETRY_DELAY
+              fi
+            done
+          done
+
+          echo "All health checks passed!"
+
+  # ====================
+  # Deploy to Production
+  # ====================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [integration-tests, e2e-tests, build-docker]
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://cellsegmentation.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.PROD_AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-get-login@v2
+
+      - name: Promote staging images to production
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          # Tag staging images as production
+          docker pull $ECR_REGISTRY/cell-seg-frontend:$IMAGE_TAG
+          docker pull $ECR_REGISTRY/cell-seg-backend:$IMAGE_TAG
+          docker pull $ECR_REGISTRY/cell-seg-ml:$IMAGE_TAG
+
+          docker tag $ECR_REGISTRY/cell-seg-frontend:$IMAGE_TAG $ECR_REGISTRY/cell-seg-frontend:production
+          docker tag $ECR_REGISTRY/cell-seg-backend:$IMAGE_TAG $ECR_REGISTRY/cell-seg-backend:production
+          docker tag $ECR_REGISTRY/cell-seg-ml:$IMAGE_TAG $ECR_REGISTRY/cell-seg-ml:production
+
+          docker push $ECR_REGISTRY/cell-seg-frontend:production
+          docker push $ECR_REGISTRY/cell-seg-backend:production
+          docker push $ECR_REGISTRY/cell-seg-ml:production
+
+      - name: Create database backup
+        timeout-minutes: 10
+        run: |
+          SNAPSHOT_ID="prod-cellseg-backup-${{ github.sha }}"
+
+          echo "Creating database snapshot: $SNAPSHOT_ID"
+          aws rds create-db-snapshot \
+            --db-instance-identifier prod-cellseg-db \
+            --db-snapshot-identifier "$SNAPSHOT_ID" || exit 1
+
+          echo "Waiting for snapshot to complete..."
+          TIMEOUT=600  # 10 minutes
+          ELAPSED=0
+          INTERVAL=30
+
+          while [ $ELAPSED -lt $TIMEOUT ]; do
+            STATUS=$(aws rds describe-db-snapshots \
+              --db-snapshot-identifier "$SNAPSHOT_ID" \
+              --query 'DBSnapshots[0].Status' \
+              --output text 2>/dev/null || echo "pending")
+            
+            if [ "$STATUS" = "available" ]; then
+              echo "✓ Database snapshot completed successfully"
+              break
+            elif [ "$STATUS" = "failed" ] || [ "$STATUS" = "error" ]; then
+              echo "✗ Database snapshot failed with status: $STATUS"
+              exit 1
+            else
+              echo "  Snapshot status: $STATUS (${ELAPSED}s elapsed)"
+              sleep $INTERVAL
+              ELAPSED=$((ELAPSED + INTERVAL))
+            fi
+          done
+
+          if [ $ELAPSED -ge $TIMEOUT ]; then
+            echo "✗ Database snapshot timed out after ${TIMEOUT} seconds"
+            exit 1
+          fi
+
+      - name: Store current task definition
+        id: current-task
+        run: |
+          CURRENT_TASK=$(aws ecs describe-services \
+            --cluster production-cluster \
+            --services cell-seg-production \
+            --query 'services[0].taskDefinition' \
+            --output text)
+          echo "current_task_def=$CURRENT_TASK" >> $GITHUB_OUTPUT
+
+      - name: Deploy to ECS
+        run: |
+          aws ecs update-service \
+            --cluster production-cluster \
+            --service cell-seg-production \
+            --force-new-deployment
+
+      - name: Health check
+        run: |
+          sleep 120
+          curl -f https://cellsegmentation.com/health || exit 1
+
+      - name: Notify deployment
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          text: 'Production deployment successful! 🚀'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Rolling back to previous task definition..."
+          aws ecs update-service \
+            --cluster production-cluster \
+            --service cell-seg-production \
+            --task-definition ${{ steps.current-task.outputs.current_task_def }}
+          echo "Rollback initiated"
+
+      - name: Notify team of rollback
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              text: "🚨 Production Deployment Failed - Rollback Executed",
+              attachments: [{
+                color: "danger",
+                fields: [
+                  { title: "Workflow", value: "${{ github.workflow }}", short: true },
+                  { title: "Failed Job", value: "${{ github.job }}", short: true },
+                  { title: "Commit SHA", value: "${{ github.sha }}", short: true },
+                  { title: "Rolled Back To", value: "${{ steps.current-task.outputs.current_task_def }}", short: true },
+                  { title: "Repository", value: "${{ github.repository }}", short: false },
+                  { title: "Action URL", value: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}", short: false }
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+  # ====================
+  # Performance Testing
+  # ====================
+  performance-test:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: [build-docker]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v10
+        with:
+          urls: |
+            http://localhost:3000
+            http://localhost:3000/projects
+            http://localhost:3000/segmentation
+          uploadArtifacts: true
+          temporaryPublicStorage: true

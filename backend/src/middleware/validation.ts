@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import type { Express } from 'express-serve-static-core';
 import { ZodSchema, ZodError } from 'zod';
 import { ResponseHelper } from '../utils/response';
 

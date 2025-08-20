@@ -2,6 +2,7 @@ import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -9,23 +10,28 @@ import { ModelProvider } from '@/contexts/ModelContext';
 import { WebSocketProvider } from '@/contexts/WebSocketContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { logger } from '@/lib/logger';
-
-import Index from './pages/Index';
-import SignIn from './pages/SignIn';
-import SignUp from './pages/SignUp';
-import Dashboard from './pages/Dashboard';
-import ProjectDetail from './pages/ProjectDetail';
-import SegmentationEditor from './pages/segmentation/SegmentationEditor';
-import NotFound from './pages/NotFound';
-import Settings from './pages/Settings';
-import Profile from './pages/Profile';
-import TermsOfService from './pages/TermsOfService';
-import PrivacyPolicy from './pages/PrivacyPolicy';
-import Documentation from './pages/Documentation';
-import ProjectExport from './pages/export/ProjectExport';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastEventProvider } from '@/components/AuthToastProvider';
 import { toast } from 'sonner';
+import PageLoadingFallback from '@/components/PageLoadingFallback';
+
+// Lazy load all page components for code splitting
+const Index = lazy(() => import('./pages/Index'));
+const SignIn = lazy(() => import('./pages/SignIn'));
+const SignUp = lazy(() => import('./pages/SignUp'));
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
+const SegmentationEditor = lazy(
+  () => import('./pages/segmentation/SegmentationEditor')
+);
+const NotFound = lazy(() => import('./pages/NotFound'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Profile = lazy(() => import('./pages/Profile'));
+const TermsOfService = lazy(() => import('./pages/TermsOfService'));
+const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
+const Documentation = lazy(() => import('./pages/Documentation'));
+const ProjectExport = lazy(() => import('./pages/export/ProjectExport'));
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -48,7 +54,9 @@ const queryClient = new QueryClient({
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <BrowserRouter>
+      <BrowserRouter
+        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+      >
         <AuthProvider>
           <WebSocketProvider>
             <ThemeProvider>
@@ -63,74 +71,158 @@ const App = () => (
                       }}
                     />
                     <div className="app-container animate-fade-in">
-                      <Routes>
-                        <Route path="/" element={<Index />} />
-                        <Route path="/sign-in" element={<SignIn />} />
-                        <Route path="/sign-up" element={<SignUp />} />
-                        <Route
-                          path="/documentation"
-                          element={<Documentation />}
-                        />
-                        <Route
-                          path="/terms-of-service"
-                          element={<TermsOfService />}
-                        />
-                        <Route
-                          path="/privacy-policy"
-                          element={<PrivacyPolicy />}
-                        />
-                        <Route
-                          path="/dashboard"
-                          element={
-                            <ProtectedRoute>
-                              <Dashboard />
-                            </ProtectedRoute>
-                          }
-                        />
-                        <Route
-                          path="/project/:id"
-                          element={
-                            <ProtectedRoute>
-                              <ProjectDetail />
-                            </ProtectedRoute>
-                          }
-                        />
-                        <Route
-                          path="/segmentation/:projectId/:imageId"
-                          element={
-                            <ProtectedRoute>
-                              <SegmentationEditor />
-                            </ProtectedRoute>
-                          }
-                        />
-                        <Route
-                          path="/project/:id/export"
-                          element={
-                            <ProtectedRoute>
-                              <ProjectExport />
-                            </ProtectedRoute>
-                          }
-                        />
-                        <Route
-                          path="/settings"
-                          element={
-                            <ProtectedRoute>
-                              <Settings />
-                            </ProtectedRoute>
-                          }
-                        />
-                        <Route
-                          path="/profile"
-                          element={
-                            <ProtectedRoute>
-                              <Profile />
-                            </ProtectedRoute>
-                          }
-                        />
+                      <ErrorBoundary>
+                        <Routes>
+                          <Route
+                            path="/"
+                            element={
+                              <Suspense fallback={<PageLoadingFallback />}>
+                                <Index />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/sign-in"
+                            element={
+                              <Suspense
+                                fallback={<PageLoadingFallback type="form" />}
+                              >
+                                <SignIn />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/sign-up"
+                            element={
+                              <Suspense
+                                fallback={<PageLoadingFallback type="form" />}
+                              >
+                                <SignUp />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/forgot-password"
+                            element={
+                              <Suspense
+                                fallback={<PageLoadingFallback type="form" />}
+                              >
+                                <ForgotPassword />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/documentation"
+                            element={
+                              <Suspense fallback={<PageLoadingFallback />}>
+                                <Documentation />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/terms-of-service"
+                            element={
+                              <Suspense fallback={<PageLoadingFallback />}>
+                                <TermsOfService />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/privacy-policy"
+                            element={
+                              <Suspense fallback={<PageLoadingFallback />}>
+                                <PrivacyPolicy />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/dashboard"
+                            element={
+                              <ProtectedRoute>
+                                <Suspense
+                                  fallback={
+                                    <PageLoadingFallback type="dashboard" />
+                                  }
+                                >
+                                  <Dashboard />
+                                </Suspense>
+                              </ProtectedRoute>
+                            }
+                          />
+                          <Route
+                            path="/project/:id"
+                            element={
+                              <ProtectedRoute>
+                                <Suspense
+                                  fallback={
+                                    <PageLoadingFallback type="dashboard" />
+                                  }
+                                >
+                                  <ProjectDetail />
+                                </Suspense>
+                              </ProtectedRoute>
+                            }
+                          />
+                          <Route
+                            path="/segmentation/:projectId/:imageId"
+                            element={
+                              <ProtectedRoute>
+                                <Suspense
+                                  fallback={
+                                    <PageLoadingFallback type="editor" />
+                                  }
+                                >
+                                  <SegmentationEditor />
+                                </Suspense>
+                              </ProtectedRoute>
+                            }
+                          />
+                          <Route
+                            path="/project/:id/export"
+                            element={
+                              <ProtectedRoute>
+                                <Suspense fallback={<PageLoadingFallback />}>
+                                  <ProjectExport />
+                                </Suspense>
+                              </ProtectedRoute>
+                            }
+                          />
+                          <Route
+                            path="/settings"
+                            element={
+                              <ProtectedRoute>
+                                <Suspense
+                                  fallback={<PageLoadingFallback type="form" />}
+                                >
+                                  <Settings />
+                                </Suspense>
+                              </ProtectedRoute>
+                            }
+                          />
+                          <Route
+                            path="/profile"
+                            element={
+                              <ProtectedRoute>
+                                <Suspense
+                                  fallback={<PageLoadingFallback type="form" />}
+                                >
+                                  <Profile />
+                                </Suspense>
+                              </ProtectedRoute>
+                            }
+                          />
 
-                        {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                        <Route path="*" element={<NotFound />} />
-                      </Routes>
+                          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                          <Route
+                            path="*"
+                            element={
+                              <Suspense fallback={<PageLoadingFallback />}>
+                                <NotFound />
+                              </Suspense>
+                            }
+                          />
+                        </Routes>
+                      </ErrorBoundary>
                     </div>
                   </ModelProvider>
                 </ToastEventProvider>

@@ -7,6 +7,7 @@ import {
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import { Trash, Scissors, Edit } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,6 +35,7 @@ const PolygonContextMenu = ({
   polygonId,
 }: PolygonContextMenuProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const { t } = useLanguage();
 
   return (
     <>
@@ -42,11 +44,11 @@ const PolygonContextMenu = ({
         <ContextMenuContent className="w-64">
           <ContextMenuItem onClick={onEdit} className="cursor-pointer">
             <Edit className="mr-2 h-4 w-4" />
-            <span>Upravit polygon</span>
+            <span>{t('contextMenu.editPolygon')}</span>
           </ContextMenuItem>
           <ContextMenuItem onClick={onSlice} className="cursor-pointer">
             <Scissors className="mr-2 h-4 w-4" />
-            <span>Rozdělit polygon</span>
+            <span>{t('contextMenu.splitPolygon')}</span>
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem
@@ -54,7 +56,7 @@ const PolygonContextMenu = ({
             className="cursor-pointer text-red-600"
           >
             <Trash className="mr-2 h-4 w-4" />
-            <span>Smazat polygon</span>
+            <span>{t('contextMenu.deletePolygon')}</span>
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
@@ -62,14 +64,15 @@ const PolygonContextMenu = ({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Opravdu chcete smazat polygon?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {t('contextMenu.confirmDeletePolygon')}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Tato akce je nevratná. Polygon bude trvale odstraněn ze
-              segmentace.
+              {t('contextMenu.deletePolygonDescription')}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Zrušit</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 onDelete();
@@ -77,7 +80,7 @@ const PolygonContextMenu = ({
               }}
               className="bg-red-600 hover:bg-red-700"
             >
-              Smazat
+              {t('common.delete')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

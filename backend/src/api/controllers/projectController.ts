@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { ProjectService } from '../../services/projectService';
+import * as ProjectService from '../../services/projectService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import { CreateProjectData, UpdateProjectData, ProjectQueryParams } from '../../types/validation';
 import { logger } from '../../utils/logger';

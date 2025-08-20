@@ -7,6 +7,7 @@ import apiClient, { SegmentationResultData } from '@/lib/api';
 import type { SegmentationData } from '@/types';
 import type { ProjectImage } from '@/types';
 import { getErrorMessage } from '@/types';
+import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 
 // Utility function to enrich images with segmentation results
 const enrichImagesWithSegmentation = async (
@@ -75,10 +76,22 @@ const enrichImagesWithSegmentation = async (
             : null,
         };
       } catch (error) {
-        logger.error(
-          `❌ Failed to fetch segmentation results for image ${img.id.slice(0, 8)}:`,
-          error
-        );
+        // Check if it's a 404 error (no segmentation found)
+        if (
+          error &&
+          typeof error === 'object' &&
+          'response' in error &&
+          (error as { response?: { status?: number } }).response?.status === 404
+        ) {
+          logger.debug(
+            `ℹ️ No segmentation found for image ${img.id.slice(0, 8)} (404) - this is normal for images pending segmentation`
+          );
+        } else {
+          logger.error(
+            `❌ Failed to fetch segmentation results for image ${img.id.slice(0, 8)}:`,
+            error
+          );
+        }
         return null;
       }
     });
@@ -150,16 +163,54 @@ export const useProjectData = (
         const project = await apiClient.getProject(projectId);
 
         if (!project) {
-          toast.error(t('toast.project.notFound'));
+          toast.error(t('errors.notFound'));
           navigateRef.current('/dashboard');
           return;
         }
 
         setProjectTitle(project.name);
 
-        // Then fetch the images
-        const imagesResponse = await apiClient.getProjectImages(projectId);
-        const imagesData = imagesResponse.images;
+        // Fetch all images by making multiple requests if needed
+        // Backend has a max limit of 50 images per request
+        let allImages: any[] = [];
+        let page = 1;
+        let hasMore = true;
+        const limit = 50; // Maximum allowed by backend
+
+        // Always fetch all images to ensure proper pagination on frontend
+        while (hasMore) {
+          try {
+            const imagesResponse = await apiClient.getProjectImages(projectId, {
+              limit,
+              page,
+            });
+
+            if (
+              !imagesResponse.images ||
+              !Array.isArray(imagesResponse.images)
+            ) {
+              console.error('Invalid images response format');
+              break;
+            }
+
+            allImages = [...allImages, ...imagesResponse.images];
+
+            // Check if we've fetched all images
+            hasMore = page * limit < imagesResponse.total;
+            page++;
+
+            // Safety limit to prevent infinite loops (max 2000 images)
+            if (page > 40) {
+              console.warn('Reached maximum pagination limit (2000 images)');
+              break;
+            }
+          } catch (error) {
+            console.error(`Error fetching images page ${page}:`, error);
+            break;
+          }
+        }
+
+        const imagesData = allImages;
 
         const formattedImages: ProjectImage[] = (imagesData || []).map(img => {
           // Normalize segmentation status from different backend field names
@@ -200,11 +251,15 @@ export const useProjectData = (
           'response' in error &&
           (error as { response?: { status?: number } }).response?.status === 404
         ) {
-          toast.error(t('toast.project.notFound'));
+          toast.error(t('errors.notFound'));
           navigateRef.current('/dashboard');
         } else {
-          const errorMessage = getErrorMessage(error);
-          toast.error(errorMessage || 'Failed to load project data');
+          const errorMessage = getLocalizedErrorMessage(
+            error,
+            t,
+            'errors.operations.loadProject'
+          );
+          toast.error(errorMessage);
         }
       } finally {
         setLoading(false);

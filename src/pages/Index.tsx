@@ -3,8 +3,11 @@ import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import Features from '@/components/Features';
 import Footer from '@/components/Footer';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Index = () => {
+  const { t } = useLanguage();
+
   useEffect(() => {
     const observerOptions = {
       threshold: 0.1,
@@ -45,11 +48,11 @@ const Index = () => {
               <div className="text-center mb-12">
                 <div className="inline-block bg-blue-100 px-4 py-2 rounded-full mb-4">
                   <span className="text-sm font-medium text-blue-700">
-                    Our Mission
+                    {t('landing.about.badge')}
                   </span>
                 </div>
                 <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                  Advancing Biomedical Research Through Technology
+                  {t('landing.about.title')}
                 </h2>
               </div>
 
@@ -64,24 +67,16 @@ const Index = () => {
 
                 <div className="space-y-6">
                   <p className="text-gray-700 leading-relaxed">
-                    Our platform was developed by Bc. Michal Průšek, a student
-                    at the Faculty of Nuclear Sciences and Physical Engineering
-                    (FJFI) at Czech Technical University in Prague, under the
-                    supervision of Ing. Adam Novozámský, Ph.D.
+                    {t('landing.about.description1')}
                   </p>
                   <p className="text-gray-700 leading-relaxed">
-                    This project is a collaboration with researchers from the
-                    Institute of Biochemistry and Microbiology at UCT Prague
-                    (VŠCHT Praha).
+                    {t('landing.about.description2')}
                   </p>
                   <p className="text-gray-700 leading-relaxed">
-                    We combine cutting-edge AI models with an intuitive
-                    interface to provide researchers with powerful tools for
-                    microscopic image analysis, focusing on spheroid
-                    segmentation with unparalleled precision.
+                    {t('landing.about.description3')}
                   </p>
                   <p className="text-gray-700 leading-relaxed">
-                    For inquiries, please contact us at{' '}
+                    {t('landing.about.contactText')}{' '}
                     <a
                       href="mailto:prusemic@cvut.cz"
                       className="text-blue-600 hover:underline"
@@ -111,25 +106,23 @@ const Index = () => {
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto text-center animate-on-scroll">
               <h2 className="text-3xl md:text-4xl font-bold mb-8">
-                Ready to Transform Your Cell Analysis Workflow?
+                {t('landing.cta.title')}
               </h2>
               <p className="text-xl text-gray-600 mb-10 max-w-2xl mx-auto">
-                Join leading researchers who are already using our platform to
-                accelerate their discoveries.
+                {t('landing.cta.subtitle')}
               </p>
               <div className="inline-block glass-morphism rounded-xl p-10 shadow-glass-lg">
                 <h3 className="text-2xl font-semibold mb-6">
-                  Get Started Today
+                  {t('landing.cta.cardTitle')}
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  Sign up for a free account and experience the power of
-                  AI-driven spheroid segmentation.
+                  {t('landing.cta.cardDescription')}
                 </p>
                 <a
                   href="/sign-in"
                   className="inline-block bg-blue-600 hover:bg-blue-700 text-white py-3 px-8 rounded-md font-medium transition-colors"
                 >
-                  Create Your Account
+                  {t('landing.cta.createAccount')}
                 </a>
               </div>
             </div>

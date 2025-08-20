@@ -65,6 +65,40 @@ export default {
     returnToHome: 'Zurück zur Startseite',
     // Navigation
     next: 'Weiter',
+    copy: 'Kopieren',
+    noImage: 'Kein Bild',
+    untitledImage: 'Unbenanntes Bild',
+    rename: 'Umbenennen',
+  },
+  landing: {
+    hero: {
+      badge: 'Fortschrittliche Sphäroid-Segmentierungsplattform',
+      title: 'KI-gestützte Zellanalyse für biomedizinische Forschung',
+      subtitle:
+        'Verbessern Sie Ihre mikroskopische Zellbildanalyse mit unserer hochmodernen Sphäroid-Segmentierungsplattform. Entwickelt für Forscher, die Präzision und Effizienz suchen.',
+      getStarted: 'Loslegen',
+      learnMore: 'Mehr erfahren',
+    },
+    about: {
+      badge: 'Unsere Mission',
+      title: 'Biomedizinische Forschung durch Technologie vorantreiben',
+      description1:
+        'Unsere Plattform wurde von Bc. Michal Průšek, Student an der Fakultät für Kernwissenschaften und Physikalisches Ingenieurwesen (FJFI) an der Tschechischen Technischen Universität Prag, unter der Leitung von Ing. Adam Novozámský, Ph.D. entwickelt.',
+      description2:
+        'Dieses Projekt ist eine Zusammenarbeit mit Forschern vom Institut für Biochemie und Mikrobiologie an der UCT Prag (VŠCHT Praha).',
+      description3:
+        'Wir kombinieren modernste KI-Modelle mit einer intuitiven Benutzeroberfläche, um Forschern leistungsstarke Werkzeuge für die mikroskopische Bildanalyse zur Verfügung zu stellen, mit Fokus auf Sphäroid-Segmentierung mit unvergleichlicher Präzision.',
+      contactText: 'Für Anfragen kontaktieren Sie uns bitte unter',
+    },
+    cta: {
+      title: 'Bereit, Ihren Zellanalyse-Workflow zu transformieren?',
+      subtitle:
+        'Schließen Sie sich führenden Forschern an, die unsere Plattform bereits nutzen, um ihre Entdeckungen zu beschleunigen.',
+      cardTitle: 'Heute beginnen',
+      cardDescription:
+        'Melden Sie sich für ein kostenloses Konto an und erleben Sie die Kraft der KI-gesteuerten Sphäroid-Segmentierung.',
+      createAccount: 'Konto erstellen',
+    },
   },
   dashboard: {
     manageProjects: 'Verwalten Sie Ihre Forschungsprojekte und Analysen',
@@ -127,6 +161,8 @@ export default {
     deleteImageFailed: 'Bildlöschung fehlgeschlagen',
     imagesQueuedForSegmentation:
       '{{count}} Bilder zur Segmentierungswarteschlange hinzugefügt',
+    imageQueuedForResegmentation:
+      'Bild zur Re-Segmentierung in die Warteschlange eingereiht',
     allImagesAlreadySegmented:
       'Alle Bilder sind bereits segmentiert oder in der Warteschlange',
     errorAddingToQueue: 'Fehler beim Hinzufügen zur Warteschlange',
@@ -146,15 +182,93 @@ export default {
     projectCreatedDesc: '"{{name}}" ist bereit für Bilder',
     descriptionOptional: 'Beschreibung (Optional)',
     noDescriptionProvided: 'Keine Beschreibung angegeben',
+    deleteDialog: {
+      title: 'Löschen bestätigen',
+      description:
+        'Sind Sie sicher, dass Sie {{count}} ausgewählte Bilder löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.',
+    },
     selectProjectHeader: 'Projekt Auswählen',
     noProjects: 'Keine Projekte gefunden',
   },
   errors: {
     noProjectOrUser: 'Fehler: Kein Projekt oder Benutzer ausgewählt',
     unknown: 'Unbekannter Fehler',
-    validation: {
+    network:
+      'Netzwerkverbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.',
+    unauthorized: 'Zugriff verweigert. Bitte melden Sie sich erneut an.',
+    forbidden: 'Sie haben keine Berechtigung für diese Aktion.',
+    notFound: 'Die angeforderte Ressource wurde nicht gefunden.',
+    conflict:
+      'Diese E-Mail ist bereits registriert. Versuchen Sie sich anzumelden oder verwenden Sie eine andere E-Mail.',
+    invalidCredentials:
+      'Ungültige E-Mail oder Passwort. Bitte überprüfen Sie Ihre Anmeldedaten.',
+    validation: 'Validierungsfehler. Bitte überprüfen Sie Ihre Eingabe.',
+    general:
+      'Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.',
+    server: 'Serverfehler. Bitte versuchen Sie es später erneut.',
+    timeout: 'Anfrage-Timeout. Bitte versuchen Sie es erneut.',
+    sessionExpired:
+      'Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.',
+    tooManyRequests:
+      'Zu viele Anfragen. Bitte warten Sie einen Moment und versuchen Sie es erneut.',
+    serverUnavailable:
+      'Dienst vorübergehend nicht verfügbar. Bitte versuchen Sie es in einigen Minuten erneut.',
+    clientError:
+      'Anfragefehler. Bitte überprüfen Sie Ihre Eingabe und versuchen Sie es erneut.',
+    emailAlreadyExists:
+      'Diese E-Mail ist bereits registriert. Versuchen Sie sich anzumelden oder verwenden Sie eine andere E-Mail.',
+    validationErrors: {
       projectNameRequired: 'Bitte geben Sie einen Projektnamen ein',
       loginRequired: 'Sie müssen angemeldet sein, um ein Projekt zu erstellen',
+      emailRequired: 'E-Mail ist erforderlich',
+      passwordRequired: 'Passwort ist erforderlich',
+      invalidEmail: 'Bitte geben Sie eine gültige E-Mail-Adresse ein',
+      passwordTooShort: 'Das Passwort muss mindestens 6 Zeichen lang sein',
+      passwordsDoNotMatch: 'Die Passwörter stimmen nicht überein',
+      confirmationRequired: 'Bitte bestätigen Sie Ihre Aktion',
+      fieldRequired: 'Dieses Feld ist erforderlich',
+    },
+    operations: {
+      loadProject:
+        'Das Projekt konnte nicht geladen werden. Überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
+      saveProject:
+        'Projektänderungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.',
+      deleteProject:
+        'Das Projekt kann nicht gelöscht werden. Stellen Sie sicher, dass Sie die erforderlichen Berechtigungen haben.',
+      uploadImage:
+        'Das Bild konnte nicht hochgeladen werden. Überprüfen Sie Format und Dateigröße.',
+      deleteImage:
+        'Das Bild kann nicht gelöscht werden. Versuchen Sie, die Seite zu aktualisieren und den Vorgang zu wiederholen.',
+      processImage:
+        'Die Bildverarbeitung ist fehlgeschlagen. Versuchen Sie es mit einem anderen Bild oder kontaktieren Sie den Support.',
+      segmentation:
+        'Die Segmentierung ist fehlgeschlagen. Versuchen Sie ein anderes Modell oder passen Sie die Konfiguration an.',
+      export:
+        'Der Datenexport ist fehlgeschlagen. Überprüfen Sie, ob die Daten verfügbar sind.',
+      login: 'Anmeldefehler. Überprüfen Sie Ihre E-Mail und Ihr Passwort.',
+      logout: 'Abmeldefehler. Versuchen Sie, Ihren Browser zu schließen.',
+      register:
+        'Die Registrierung ist fehlgeschlagen. Diese E-Mail-Adresse wird möglicherweise bereits verwendet.',
+      updateProfile:
+        'Das Profil konnte nicht aktualisiert werden. Überprüfen Sie die angegebenen Informationen.',
+      changePassword:
+        'Das Passwort konnte nicht geändert werden. Überprüfen Sie Ihr aktuelles Passwort.',
+      resetPassword:
+        'Das Zurücksetzen des Passworts ist fehlgeschlagen. Überprüfen Sie die angegebene E-Mail-Adresse.',
+      deleteAccount:
+        'Das Konto konnte nicht gelöscht werden. Wenden Sie sich für Unterstützung an den Support.',
+      updateConsent:
+        'Einwilligungseinstellungen konnten nicht aktualisiert werden. Bitte versuchen Sie es erneut.',
+    },
+    contexts: {
+      dashboard: 'Dashboard-Fehler',
+      project: 'Projekt-Fehler',
+      image: 'Bild-Fehler',
+      segmentation: 'Segmentierung-Fehler',
+      export: 'Export-Fehler',
+      auth: 'Authentifizierung-Fehler',
+      profile: 'Profil-Fehler',
+      settings: 'Einstellungen-Fehler',
     },
   },
   images: {
@@ -190,6 +304,10 @@ export default {
     processImageFailed: 'Bildverarbeitung fehlgeschlagen',
   },
   settings: {
+    pageTitle: 'Einstellungen',
+    profile: 'Profil',
+    account: 'Konto',
+    models: 'Modelle',
     manageSettings: 'Ihre Kontoeinstellungen verwalten',
     appearance: 'Erscheinungsbild',
     themeSettings: 'Design-Einstellungen',
@@ -225,7 +343,6 @@ export default {
     currentPassword: 'Aktuelles Passwort',
     newPassword: 'Neues Passwort',
     confirmNewPassword: 'Neues Passwort bestätigen',
-    models: 'Modelle',
     modelSelection: {
       title: 'Modellauswahl',
       description: 'Wählen Sie das KI-Modell für die Zellsegmentierung',
@@ -290,9 +407,6 @@ export default {
       confirmationLabel: 'Bitte tippen Sie {email} zur Bestätigung:',
       confirmationPlaceholder: '{email}',
     },
-    pageTitle: 'Einstellungen',
-    profile: 'Profil',
-    account: 'Konto',
     fillAllFields: 'Bitte füllen Sie alle erforderlichen Felder aus',
     passwordsDoNotMatch: 'Passwörter stimmen nicht überein',
     passwordTooShort: 'Passwort muss mindestens 6 Zeichen lang sein',
@@ -374,6 +488,18 @@ export default {
     alreadySignedUp: 'Sie sind bereits registriert und angemeldet.',
     goToDashboard: 'Zum Dashboard gehen',
     signUpFailed: 'Registrierung fehlgeschlagen',
+    // Forgot Password specific
+    enterEmailForReset: 'E-Mail-Adresse für Passwort-Reset eingeben',
+    sending: 'Senden...',
+    sendNewPassword: 'Neues Passwort senden',
+    emailSent: 'E-Mail gesendet',
+    checkEmailForNewPassword:
+      'Überprüfen Sie Ihre E-Mail für den Passwort-Reset-Link',
+    resetPasswordEmailSent: 'Passwort-Reset-E-Mail gesendet',
+    resetPasswordError: 'Fehler beim Zurücksetzen des Passworts',
+    backToSignIn: 'Zurück zur Anmeldung',
+    didntReceiveEmail: 'E-Mail nicht erhalten?',
+    rememberPassword: 'Passwort wieder eingefallen?',
   },
   profile: {
     title: 'Profil',
@@ -418,6 +544,25 @@ export default {
     createdProject: 'Projekt erstellt',
     completedSegmentation: 'Segmentierung abgeschlossen für',
     uploadedImage: 'Bild hochgeladen',
+    avatar: {
+      uploadButton: 'Avatar hochladen',
+      selectFile: 'Avatar-Bild auswählen',
+      cropTitle: 'Avatar zuschneiden',
+      cropDescription:
+        'Schneiden Sie Ihr Avatar-Bild für die perfekte Darstellung zu',
+      zoomLevel: 'Zoomstufe',
+      cropInstructions:
+        'Ziehen zum Verschieben, Schieberegler zum Zoomen verwenden',
+      applyChanges: 'Änderungen übernehmen',
+      processing: 'Verarbeitung läuft...',
+      invalidFileType: 'Ungültiger Dateityp. Bitte wählen Sie eine Bilddatei.',
+      fileTooLarge: 'Datei zu groß. Maximale Größe ist 5MB.',
+      cropError:
+        'Fehler beim Verarbeiten des Bildes. Bitte versuchen Sie es erneut.',
+      uploadSuccess: 'Avatar erfolgreich hochgeladen',
+      uploadError:
+        'Fehler beim Hochladen des Avatars. Bitte versuchen Sie es erneut.',
+    },
   },
   segmentation: {
     mode: {
@@ -608,6 +753,7 @@ export default {
     waiting: 'wartend',
     processing: 'verarbeitend',
     segmentAll: 'Alle Segmentieren',
+    segmentAllWithCount: 'Alle Segmentieren ({{count}})',
     totalProgress: 'Gesamtfortschritt',
     images: 'Bilder',
     loadingStats: 'Statistiken werden geladen...',
@@ -616,6 +762,11 @@ export default {
     emptyMessage:
       'Keine Bilder in der Warteschlange. Laden Sie Bilder hoch und fügen Sie sie zur Segmentierung hinzu.',
     addingToQueue: 'Zur Warteschlange hinzufügen...',
+    resegmentSelected: 'Ausgewählte re-segmentieren ({{count}})',
+    segmentMixed:
+      'Segmentiere {{new}} + Re-segmentiere {{resegment}} ({{total}} gesamt)',
+    segmentTooltip:
+      '{{new}} neue Bilder werden segmentiert, {{resegment}} ausgewählte Bilder werden re-segmentiert',
   },
   toast: {
     // Generic messages
@@ -683,6 +834,7 @@ export default {
     },
   },
   export: {
+    advancedExport: 'Erweiterter Export',
     // Dialog headers
     advancedOptions: 'Erweiterte Export-Optionen',
     configureSettings:
@@ -707,6 +859,15 @@ export default {
     imageSelection: 'Bildauswahl',
     chooseImages:
       'Wählen Sie aus, welche Bilder in den Export einbezogen werden sollen',
+    searchImages: 'Bilder suchen...',
+    sortBy: 'Sortieren nach',
+    sortOptions: {
+      date: 'Datum',
+      name: 'Name',
+      status: 'Status',
+    },
+    showingImages: 'Zeige {{start}}-{{end}} von {{total}}',
+    noImagesFound: 'Keine Bilder gefunden',
     // Quality settings
     qualitySettings: 'Qualitätseinstellungen',
     imageQuality: 'Bildqualität',
@@ -777,6 +938,7 @@ export default {
     title: 'SpheroSeg Dokumentation',
     subtitle:
       'Umfassender Leitfaden für unsere Sphäroid-Segmentierungsplattform',
+    backTo: 'Zurück zu {{page}}',
     navigation: 'Navigation',
     nav: {
       introduction: 'Einführung',
@@ -1297,15 +1459,94 @@ export default {
     },
   },
 
+  // Context menu
+  contextMenu: {
+    editPolygon: 'Polygon bearbeiten',
+    splitPolygon: 'Polygon teilen',
+    deletePolygon: 'Polygon löschen',
+    confirmDeletePolygon:
+      'Sind Sie sicher, dass Sie dieses Polygon löschen möchten?',
+    deletePolygonDescription:
+      'Diese Aktion ist unumkehrbar. Das Polygon wird dauerhaft aus der Segmentierung entfernt.',
+    duplicateVertex: 'Eckpunkt duplizieren',
+    deleteVertex: 'Eckpunkt löschen',
+  },
+
   // WebSocket messages
   websocket: {
     reconnecting: 'Verbinde erneut mit Server...',
     reconnected: 'Verbindung zum Server wiederhergestellt',
     reconnectFailed: 'Wiederherstellung der Serververbindung fehlgeschlagen',
     connectionLost: 'Verbindung zum Server verloren',
-    pollingMode: 'Fallback-Verbindungsmodus wird verwendet',
-    upgradedToWebSocket: 'Auf Echtzeit-Verbindung aktualisiert',
-    connectionError: 'Kann nicht mit Server verbinden',
-    authError: 'Authentifizierungsfehler',
+  },
+
+  // Metriken-Anzeige
+  metrics: {
+    info: 'Metriken werden nur für externe Polygone ausgewertet. Flächen interner Polygone (Löcher) werden automatisch von den entsprechenden externen Polygonen abgezogen.',
+    spheroid: 'Sphäroid',
+    area: 'Fläche',
+    perimeter: 'Umfang',
+    equivalentDiameter: 'Äquivalenter Durchmesser',
+    circularity: 'Zirkularität',
+    feretMax: 'Feret Maximum',
+    feretMin: 'Feret Minimum',
+    compactness: 'Kompaktheit',
+    convexity: 'Konvexität',
+    solidity: 'Festigkeit',
+    sphericity: 'Sphärizität',
+    feretAspectRatio: 'Feret-Seitenverhältnis',
+    noPolygonsFound: 'Keine Polygone zur Analyse gefunden',
+  },
+
+  // Tastaturkürzel
+  keyboardShortcuts: {
+    title: 'Tastaturkürzel',
+    buttonLabel: 'Kürzel',
+    viewMode: 'Ansichtsmodus',
+    editVertices: 'Eckpunkt-Bearbeitungsmodus',
+    addPoints: 'Punkte-Hinzufügen-Modus',
+    createPolygon: 'Neues Polygon erstellen',
+    sliceMode: 'Schnittmodus',
+    deleteMode: 'Löschmodus',
+    holdToAutoAdd: 'Halten für automatisches Hinzufügen von Punkten',
+    undo: 'Rückgängig',
+    redo: 'Wiederholen',
+    deleteSelected: 'Ausgewähltes Polygon löschen',
+    cancelOperation: 'Aktuelle Operation abbrechen',
+    zoomIn: 'Hineinzoomen',
+    zoomOut: 'Herauszoomen',
+    resetView: 'Ansicht zurücksetzen',
+    helperText:
+      'Diese Kürzel funktionieren im Segmentierungseditor für schnellere und bequemere Arbeit.',
+  },
+
+  // Barrierefreiheit und Bildschirmleser-Labels
+  accessibility: {
+    // Navigation
+    toggleSidebar: 'Seitenleiste umschalten',
+    toggleMenu: 'Menü umschalten',
+    selectLanguage: 'Sprache auswählen',
+    selectTheme: 'Theme auswählen',
+    breadcrumb: 'Brotkrümel-Navigation',
+    pagination: 'Seitennummerierung',
+
+    // Aktionen
+    close: 'Schließen',
+    more: 'Mehr',
+
+    // Seitennummerierung
+    goToPreviousPage: 'Zur vorherigen Seite gehen',
+    goToNextPage: 'Zur nächsten Seite gehen',
+    previousPage: 'Vorherige',
+    nextPage: 'Nächste',
+    morePages: 'Weitere Seiten',
+
+    // Karussell
+    previousSlide: 'Vorherige Folie',
+    nextSlide: 'Nächste Folie',
+
+    // Ansichtsoptionen
+    gridView: 'Rasteransicht',
+    listView: 'Listenansicht',
   },
 };

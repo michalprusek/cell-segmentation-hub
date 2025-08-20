@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { ProjectImage, SpheroidMetric, PolygonData } from '@/types';
 import { calculateMetrics } from '@/pages/segmentation/utils/metricCalculations';
 import { logger } from '@/lib/logger';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
+import { createExcelExport } from '@/services/excelExportService';
 
 export const useExportFunctions = (
   images: ProjectImage[],
@@ -64,12 +65,17 @@ export const useExportFunctions = (
     const externalPolygons = polygons.filter(p => p.type === 'external');
     if (externalPolygons.length === 0) return null;
 
+    // Get all internal polygons
+    const allInternalPolygons = polygons.filter(p => p.type === 'internal');
+
     // Calculate metrics for each external polygon
     return externalPolygons.map((polygon, index) => {
-      // Find internal polygons (holes) for this external polygon
-      const holes = polygons.filter(p => p.type === 'internal');
+      // Find internal polygons (holes) that are actually inside this external polygon
+      const holes = allInternalPolygons.filter(internal =>
+        isPolygonInsidePolygon(internal.points, polygon.points)
+      );
 
-      // Calculate area
+      // Calculate area with only the holes that are inside this polygon
       const metrics = calculateMetrics(polygon, holes);
 
       return {
@@ -142,54 +148,74 @@ export const useExportFunctions = (
         return;
       }
 
-      // Create workbook and worksheet using SheetJS
-      const workbook = XLSX.utils.book_new();
+      // Create workbook and worksheet using lazy-loaded ExcelJS
+      const excelService = await createExcelExport();
+      const workbook = excelService.createWorkbook();
+      const worksheet = workbook.addWorksheet('Object Metrics');
 
-      // Prepare data with headers
-      const worksheetData = [
-        [
-          'Image Name',
-          'Image ID',
-          'Object ID',
-          'Area (px²)',
-          'Perimeter (px)',
-          'Circularity',
-          'Equivalent Diameter (px)',
-          'Aspect Ratio',
-          'Compactness',
-          'Convexity',
-          'Solidity',
-          'Sphericity',
-          'Feret Diameter Max (px)',
-          'Feret Diameter Min (px)',
-        ],
-        ...allMetrics.map(metric => [
-          metric.imageName,
-          metric.imageId,
-          metric.contourNumber,
-          metric.area,
-          metric.perimeter,
-          metric.circularity,
-          metric.equivalentDiameter,
-          metric.aspectRatio,
-          metric.compactness,
-          metric.convexity,
-          metric.solidity,
-          metric.sphericity,
-          metric.feretDiameterMax,
-          metric.feretDiameterMin,
-        ]),
+      // Add headers
+      worksheet.columns = [
+        { header: 'Image Name', key: 'imageName', width: 20 },
+        { header: 'Image ID', key: 'imageId', width: 15 },
+        { header: 'Object ID', key: 'contourNumber', width: 10 },
+        { header: 'Area (px²)', key: 'area', width: 15 },
+        { header: 'Perimeter (px)', key: 'perimeter', width: 15 },
+        { header: 'Circularity', key: 'circularity', width: 15 },
+        {
+          header: 'Equivalent Diameter (px)',
+          key: 'equivalentDiameter',
+          width: 25,
+        },
+        { header: 'Aspect Ratio', key: 'aspectRatio', width: 15 },
+        { header: 'Compactness', key: 'compactness', width: 15 },
+        { header: 'Convexity', key: 'convexity', width: 15 },
+        { header: 'Solidity', key: 'solidity', width: 15 },
+        { header: 'Sphericity', key: 'sphericity', width: 15 },
+        {
+          header: 'Feret Diameter Max (px)',
+          key: 'feretDiameterMax',
+          width: 25,
+        },
+        {
+          header: 'Feret Diameter Min (px)',
+          key: 'feretDiameterMin',
+          width: 25,
+        },
       ];
 
-      // Create worksheet
-      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      // Add data rows
+      allMetrics.forEach(metric => {
+        worksheet.addRow({
+          imageName: metric.imageName,
+          imageId: metric.imageId,
+          contourNumber: metric.contourNumber,
+          area: metric.area,
+          perimeter: metric.perimeter,
+          circularity: metric.circularity,
+          equivalentDiameter: metric.equivalentDiameter,
+          aspectRatio: metric.aspectRatio,
+          compactness: metric.compactness,
+          convexity: metric.convexity,
+          solidity: metric.solidity,
+          sphericity: metric.sphericity,
+          feretDiameterMax: metric.feretDiameterMax,
+          feretDiameterMin: metric.feretDiameterMin,
+        });
+      });
 
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Object Metrics');
+      // Style the header row
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' },
+      };
 
-      // Download file
+      // Generate Excel file buffer and download
+      const buffer = await excelService.writeBuffer(workbook);
+      const blob = excelService.createBlob(buffer);
       const filename = `${projectTitle || 'project'}_metrics_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
-      XLSX.writeFile(workbook, filename);
+      excelService.downloadFile(blob, filename);
 
       toast.success(t('export.metricsExportComplete'));
     } catch (error) {

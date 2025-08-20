@@ -149,6 +149,8 @@ export function useOptimizedPolygonRendering(
   useEffect(() => {
     const abortController = new AbortController();
     let isMounted = true;
+    // Capture ref value at effect start for cleanup
+    const currentMonitor = performanceMonitor.current;
 
     const initializeServices = async () => {
       if (isInitialized.current) return;
@@ -197,9 +199,9 @@ export function useOptimizedPolygonRendering(
         polygonServiceRef.current = null;
       }
 
-      // Clear performance monitor
-      if (performanceMonitor.current) {
-        performanceMonitor.current.reset?.();
+      // Clear performance monitor using captured value
+      if (currentMonitor) {
+        currentMonitor.reset?.();
       }
     };
   }, [opts.enableWorkers, opts.targetFPS]);
@@ -372,9 +374,12 @@ export function useOptimizedPolygonRendering(
 
   // Cleanup on unmount
   useEffect(() => {
+    // Capture ref value at effect start for cleanup
+    const currentMonitor = performanceMonitor.current;
+
     return () => {
-      if (performanceMonitor.current) {
-        performanceMonitor.current.reset();
+      if (currentMonitor) {
+        currentMonitor.reset();
       }
     };
   }, []);

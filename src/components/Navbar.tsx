@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
+import LanguageSwitcher from '@/components/LanguageSwitcher';
+import ThemeSwitcher from '@/components/ThemeSwitcher';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Navbar = () => {
+  const { t } = useLanguage();
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -44,38 +48,42 @@ const Navbar = () => {
         </Link>
 
         {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center gap-8">
+        <nav className="hidden md:flex items-center gap-6">
           <Link
             to="/documentation"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
-            Documentation
+            {t('common.documentation')}
           </Link>
           <Link
             to="/terms-of-service"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
-            Terms
+            {t('common.termsOfService')}
           </Link>
           <Link
             to="/privacy-policy"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
-            Privacy
+            {t('common.privacyPolicy')}
           </Link>
           <Link
             to="/sign-in"
             className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
           >
-            Login
+            {t('auth.signIn')}
           </Link>
+          <div className="flex items-center gap-2 ml-2">
+            <LanguageSwitcher />
+            <ThemeSwitcher />
+          </div>
         </nav>
 
         {/* Mobile Menu Button */}
         <button
           className="md:hidden text-gray-700"
           onClick={toggleMobileMenu}
-          aria-label="Toggle menu"
+          aria-label={t('accessibility.toggleMenu')}
         >
           {isMobileMenuOpen ? (
             <X size={24} className="animate-fade-in" />
@@ -94,28 +102,37 @@ const Navbar = () => {
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Documentation
+              {t('common.documentation')}
             </Link>
             <Link
               to="/terms-of-service"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Terms of Service
+              {t('common.termsOfService')}
             </Link>
             <Link
               to="/privacy-policy"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Privacy Policy
+              {t('common.privacyPolicy')}
             </Link>
+            <div className="flex items-center justify-between py-2 border-t border-gray-200">
+              <span className="text-sm text-gray-600">
+                {t('common.settings')}
+              </span>
+              <div className="flex items-center gap-2">
+                <LanguageSwitcher />
+                <ThemeSwitcher />
+              </div>
+            </div>
             <Link
               to="/sign-in"
               className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
               onClick={() => setIsMobileMenuOpen(false)}
             >
-              Login
+              {t('auth.signIn')}
             </Link>
           </div>
         </div>

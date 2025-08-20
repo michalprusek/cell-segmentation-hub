@@ -3,7 +3,8 @@ import { z } from 'zod';
 // Auth validation schemas
 export const loginSchema = z.object({
   email: z.string().email('Neplatná emailová adresa'),
-  password: z.string().min(1, 'Heslo je vyžadováno')
+  password: z.string().min(1, 'Heslo je vyžadováno'),
+  rememberMe: z.boolean().optional()
 });
 
 export const registerSchema = z.object({
@@ -21,7 +22,7 @@ export const resetPasswordRequestSchema = z.object({
 
 export const resetPasswordConfirmSchema = z.object({
   token: z.string().min(1, 'Token je vyžadován'),
-  password: z.string().min(6, 'Heslo musí mít minimálně 6 znaků')
+  newPassword: z.string().min(6, 'Nové heslo musí mít minimálně 6 znaků')
 });
 
 export const changePasswordSchema = z.object({

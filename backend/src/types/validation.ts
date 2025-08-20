@@ -87,7 +87,7 @@ export const imageUploadSchema = z.object({
  */
 export const imageQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(50).optional().default(20),
+  limit: z.coerce.number().int().min(1).max(50).optional().default(30),
   status: z.enum(['pending', 'processing', 'completed', 'failed'], {
     errorMap: () => ({ message: 'Neplatný status. Možné hodnoty: pending, processing, completed, failed' })
   }).optional(),
@@ -121,6 +121,18 @@ export const projectImageParamsSchema = z.object({
     .uuid('Neplatné ID obrázku')
 });
 
+/**
+ * Schema for batch deleting images
+ */
+export const imageBatchDeleteSchema = z.object({
+  imageIds: z.array(z.string().uuid('Neplatné ID obrázku'))
+    .min(1, 'Musí být vybrán alespoň jeden obrázek')
+    .max(100, 'Maximálně 100 obrázků může být smazáno najednou'),
+  projectId: z.string()
+    .uuid('Neplatné ID projektu')
+    .optional()
+});
+
 // Export types
 export type CreateProjectData = z.infer<typeof createProjectSchema>;
 export type UpdateProjectData = z.infer<typeof updateProjectSchema>;
@@ -130,3 +142,4 @@ export type ImageUploadData = z.infer<typeof imageUploadSchema>;
 export type ImageQueryParams = z.infer<typeof imageQuerySchema>;
 export type ImageIdParams = z.infer<typeof imageIdSchema>;
 export type ProjectImageParams = z.infer<typeof projectImageParamsSchema>;
+export type ImageBatchDeleteData = z.infer<typeof imageBatchDeleteSchema>;

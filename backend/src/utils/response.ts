@@ -85,7 +85,9 @@ export const ResponseHelper = {
 
     const response: ApiResponse = {
       success: false,
-      error: apiError.message
+      error: apiError.message,
+      code: apiError.code,
+      details: apiError.details
     };
 
     return res.status(statusCode).json(response);

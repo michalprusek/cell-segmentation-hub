@@ -1,0 +1,45 @@
+# Dockerfile for logrotate service
+FROM ubuntu:22.04
+
+# Install logrotate and dependencies
+RUN apt-get update && apt-get install -y \
+    logrotate \
+    cron \
+    rsyslog \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy logrotate configurations
+COPY logrotate.conf /etc/logrotate.conf
+COPY spheroseg-*.conf /etc/logrotate.d/
+
+# Create log directories
+RUN mkdir -p /var/log/spheroseg/backend \
+    && mkdir -p /var/log/spheroseg/ml \
+    && mkdir -p /var/log/spheroseg/prometheus \
+    && mkdir -p /var/log/spheroseg/grafana \
+    && mkdir -p /var/log/nginx
+
+# Set proper permissions
+RUN chmod 644 /etc/logrotate.conf \
+    && chmod 644 /etc/logrotate.d/spheroseg-*
+
+# Create a script to run logrotate daily
+RUN echo '#!/bin/bash\n\
+# Run logrotate every hour (can be adjusted)\n\
+while true; do\n\
+    /usr/sbin/logrotate -v /etc/logrotate.conf\n\
+    sleep 3600\n\
+done' > /usr/local/bin/logrotate-daemon.sh \
+    && chmod +x /usr/local/bin/logrotate-daemon.sh
+
+# Health check script
+RUN echo '#!/bin/bash\n\
+# Check if logrotate configuration is valid\n\
+/usr/sbin/logrotate -d /etc/logrotate.conf > /dev/null 2>&1\n\
+exit $?' > /usr/local/bin/health-check.sh \
+    && chmod +x /usr/local/bin/health-check.sh
+
+HEALTHCHECK --interval=1h --timeout=30s --start-period=5s --retries=3 \
+    CMD ["/usr/local/bin/health-check.sh"]
+
+CMD ["/usr/local/bin/logrotate-daemon.sh"]

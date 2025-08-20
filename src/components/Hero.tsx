@@ -2,8 +2,10 @@ import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Hero = () => {
+  const { t } = useLanguage();
   const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,18 +54,16 @@ const Hero = () => {
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <div className="inline-block glass-morphism px-4 py-2 rounded-full mb-4">
             <span className="text-sm font-medium text-blue-600">
-              Advanced Spheroid Segmentation Platform
+              {t('landing.hero.badge')}
             </span>
           </div>
 
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight">
-            AI-powered Cell Analysis for Biomedical Research
+            {t('landing.hero.title')}
           </h1>
 
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Elevate your microscopic cell image analysis with our cutting-edge
-            spheroid segmentation platform. Designed for researchers seeking
-            precision and efficiency.
+            {t('landing.hero.subtitle')}
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
@@ -73,7 +73,7 @@ const Hero = () => {
               className="rounded-md text-base px-8 py-6"
             >
               <Link to="/sign-in">
-                Get Started
+                {t('landing.hero.getStarted')}
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
@@ -83,7 +83,7 @@ const Hero = () => {
               size="lg"
               className="rounded-md text-base px-8 py-6"
             >
-              <a href="#features">Learn More</a>
+              <a href="#features">{t('landing.hero.learnMore')}</a>
             </Button>
           </div>
 

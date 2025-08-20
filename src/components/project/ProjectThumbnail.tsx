@@ -3,6 +3,7 @@ import { logger } from '@/lib/logger';
 import React, { useState, useEffect } from 'react';
 import apiClient from '@/lib/api';
 import { getErrorMessage } from '@/types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProjectThumbnailProps {
   projectId: string;
@@ -16,6 +17,7 @@ const ProjectThumbnail = ({
   imageCount,
 }: ProjectThumbnailProps) => {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const fetchFirstImage = async () => {
@@ -58,7 +60,7 @@ const ProjectThumbnail = ({
   return (
     <img
       src={imageUrl || fallbackSrc || '/placeholder.svg'}
-      alt="Project thumbnail"
+      alt={t('common.project')}
       className="w-full h-full object-cover transition-transform duration-500 hover:scale-105"
     />
   );

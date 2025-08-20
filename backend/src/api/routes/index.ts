@@ -6,7 +6,6 @@ import imageRoutes from './imageRoutes';
 import { segmentationRoutes } from './segmentationRoutes';
 import { queueRoutes } from './queueRoutes';
 import { exportRoutes } from './exportRoutes';
-import metricsRoutes from './metricsRoutes';
 
 interface RouteInfo {
   path: string;
@@ -49,7 +48,6 @@ export function setupRoutes(app: Express): void {
   app.use('/api/segmentation', segmentationRoutes);
   app.use('/api/queue', queueRoutes);
   app.use('/api', exportRoutes); // Export routes
-  app.use('/api/metrics', metricsRoutes); // Business metrics routes
 
   // Manuální registrace známých routes
   registerKnownRoutes();

@@ -4,12 +4,17 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ProjectImage } from '@/types';
 import { Badge } from '@/components/ui/badge';
-import ImageActions from './ImageActions';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Trash2 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ImageListItemProps {
   image: ProjectImage;
   onDelete: (imageId: string) => void;
   onOpen: (imageId: string) => void;
+  isSelected: boolean;
+  onSelectionChange: (imageId: string, selected: boolean) => void;
   className?: string;
 }
 
@@ -17,8 +22,11 @@ export const ImageListItem = ({
   image,
   onDelete,
   onOpen,
+  isSelected,
+  onSelectionChange,
   className,
 }: ImageListItemProps) => {
+  const { t } = useLanguage();
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -32,6 +40,16 @@ export const ImageListItem = ({
       )}
       onClick={() => onOpen(image.id)}
     >
+      {/* Checkbox */}
+      <div className="mr-3" onClick={e => e.stopPropagation()}>
+        <Checkbox
+          checked={isSelected}
+          onCheckedChange={checked =>
+            onSelectionChange(image.id, checked as boolean)
+          }
+        />
+      </div>
+
       {/* Thumbnail */}
       <div className="h-10 w-10 rounded overflow-hidden bg-gray-100 dark:bg-gray-700 flex-shrink-0 cursor-pointer">
         {image.thumbnail_url ? (
@@ -48,7 +66,7 @@ export const ImageListItem = ({
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center">
-            <span className="text-xs text-gray-400">No Image</span>
+            <span className="text-xs text-gray-400">{t('common.noImage')}</span>
           </div>
         )}
       </div>
@@ -57,7 +75,7 @@ export const ImageListItem = ({
       <div className="ml-3 flex-1 min-w-0 cursor-pointer">
         <div className="flex items-center">
           <h4 className="text-sm font-medium truncate">
-            {image.name || 'Untitled Image'}
+            {image.name || t('common.untitledImage')}
           </h4>
           {image.segmentationStatus && (
             <Badge
@@ -72,10 +90,10 @@ export const ImageListItem = ({
               )}
             >
               {image.segmentationStatus === 'completed'
-                ? 'Zpracováno'
+                ? t('status.segmented')
                 : image.segmentationStatus === 'processing'
-                  ? 'Zpracovává se'
-                  : 'Čeká'}
+                  ? t('status.processing')
+                  : t('status.queued')}
             </Badge>
           )}
         </div>
@@ -84,9 +102,20 @@ export const ImageListItem = ({
         </p>
       </div>
 
-      {/* Delete icon */}
-      <div onClick={e => e.stopPropagation()}>
-        <ImageActions onDelete={() => onDelete(image.id)} />
+      {/* Action buttons */}
+      <div className="ml-auto pl-3 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+        <Button
+          variant="destructive"
+          size="icon"
+          className="h-8 w-8"
+          aria-label={`Delete ${image.name || 'image'}`}
+          onClick={e => {
+            e.stopPropagation();
+            onDelete(image.id);
+          }}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
       </div>
     </motion.div>
   );

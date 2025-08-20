@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
 import { Profile, UpdateProfile, PolygonData } from '@/types';
 import { logger } from '@/lib/logger';
+import config from '@/lib/config';
 
 export interface LoginRequest {
   email: string;
@@ -53,9 +54,9 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const exponentialBackoff = async <T>(
   fn: () => Promise<T>,
-  maxRetries: number = 1, // Reduced from 3 to 1 to prevent retry loops
-  baseDelay: number = 2000, // Increased base delay to 2s
-  maxDelay: number = 5000 // Reduced max delay to 5s
+  maxRetries: number = 3,
+  baseDelay: number = 1000,
+  maxDelay: number = 10000
 ): Promise<T> => {
   let lastError: Error;
 
@@ -76,7 +77,7 @@ const exponentialBackoff = async <T>(
 
       // Calculate delay with exponential backoff
       const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-      const jitter = Math.random() * 0.2 * delay; // Increased jitter to 20%
+      const jitter = Math.random() * 0.1 * delay; // Add 10% jitter
       const finalDelay = delay + jitter;
 
       logger.warn(
@@ -169,12 +170,10 @@ class ApiClient {
   private instance: AxiosInstance;
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
+  private rememberMePreferred: boolean = true;
   private baseURL: string;
 
-  constructor(
-    baseURL: string = import.meta.env.VITE_API_BASE_URL ||
-      'http://localhost:3001/api'
-  ) {
+  constructor(baseURL: string = config.apiBaseUrl) {
     this.baseURL = baseURL;
     this.instance = axios.create({
       baseURL,
@@ -251,9 +250,14 @@ class ApiClient {
     this.refreshToken =
       localStorage.getItem('refreshToken') ||
       sessionStorage.getItem('refreshToken');
+
+    // Set rememberMePreferred based on where tokens were found
+    this.rememberMePreferred = localStorage.getItem('accessToken') !== null;
   }
 
-  private saveTokensToStorage(rememberMe: boolean = true): void {
+  private saveTokensToStorage(
+    rememberMe: boolean = this.rememberMePreferred
+  ): void {
     const storage = rememberMe ? localStorage : sessionStorage;
     if (this.accessToken) {
       storage.setItem('accessToken', this.accessToken);
@@ -282,6 +286,7 @@ class ApiClient {
     const response = await this.instance.post('/auth/login', {
       email,
       password,
+      rememberMe,
     });
 
     // Sanitize response before logging
@@ -323,6 +328,7 @@ class ApiClient {
 
     this.accessToken = accessToken;
     this.refreshToken = refreshToken;
+    this.rememberMePreferred = rememberMe;
     this.saveTokensToStorage(rememberMe);
 
     logger.debug('🔑 Tokens saved to localStorage and memory');
@@ -415,6 +421,37 @@ class ApiClient {
     const data = this.extractData<{ accessToken: string }>(response);
     this.accessToken = data.accessToken;
     this.saveTokensToStorage();
+  }
+
+  async uploadAvatar(
+    imageFile: File,
+    cropData?: { x: number; y: number; width: number; height: number }
+  ): Promise<{ avatarUrl: string; message: string }> {
+    // Validate cropData dimensions if provided
+    if (cropData) {
+      if (cropData.width <= 0 || cropData.height <= 0) {
+        throw new Error(
+          'Invalid crop dimensions: width and height must be positive'
+        );
+      }
+      if (cropData.x < 0 || cropData.y < 0) {
+        throw new Error('Invalid crop position: x and y must be non-negative');
+      }
+    }
+
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    if (cropData) {
+      formData.append('cropData', JSON.stringify(cropData));
+    }
+
+    const response = await this.instance.post('/auth/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return this.extractData(response);
   }
 
   // Helper method to extract data from backend response structure
@@ -573,10 +610,35 @@ class ApiClient {
 
     // Fallback for other response formats
     const data = this.extractData(response);
+
+    // Handle null/undefined data safely
+    if (!data) {
+      return {
+        projects: [],
+        total: 0,
+        page: 1,
+        totalPages: 1,
+      };
+    }
+
+    // Handle array data directly
+    if (Array.isArray(data)) {
+      return {
+        projects: this.mapProjectsFields(data),
+        total: data.length,
+        page: 1,
+        totalPages: 1,
+      };
+    }
+
+    // Handle object data
+    const dataProjects = data.projects || [];
     return {
-      projects: this.mapProjectsFields(data.projects || data || []),
+      projects: this.mapProjectsFields(
+        Array.isArray(dataProjects) ? dataProjects : []
+      ),
       total:
-        data.total || (data.projects ? data.projects.length : data.length || 0),
+        data.total || (Array.isArray(dataProjects) ? dataProjects.length : 0),
       page: data.page || 1,
       totalPages: data.totalPages || 1,
     };
@@ -1062,7 +1124,8 @@ class ApiClient {
     projectId: string,
     model?: string,
     threshold?: number,
-    priority?: number
+    priority?: number,
+    forceResegment?: boolean
   ): Promise<BatchQueueResponse> {
     const response = await this.instance.post('/queue/batch', {
       imageIds,
@@ -1070,8 +1133,30 @@ class ApiClient {
       model,
       threshold,
       priority,
+      forceResegment,
     });
     return this.extractData<BatchQueueResponse>(response);
+  }
+
+  async deleteBatch(
+    imageIds: string[],
+    projectId: string
+  ): Promise<{
+    deletedCount: number;
+    failedIds: string[];
+    errors: string[];
+  }> {
+    const response = await this.instance.delete('/images/batch', {
+      data: {
+        imageIds,
+        projectId,
+      },
+    });
+    return this.extractData<{
+      deletedCount: number;
+      failedIds: string[];
+      errors: string[];
+    }>(response);
   }
 
   async getQueueStats(projectId: string): Promise<QueueStats> {

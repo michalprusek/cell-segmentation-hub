@@ -15,6 +15,7 @@ interface CanvasPolygonProps {
   viewportBounds?: { x: number; y: number; width: number; height: number };
   hideVertices?: boolean;
   isHovered?: boolean;
+  isUndoRedoInProgress?: boolean;
   onSelectPolygon?: (id: string) => void;
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
@@ -33,6 +34,7 @@ const CanvasPolygon = React.memo(
     viewportBounds,
     hideVertices = false,
     isHovered = false,
+    isUndoRedoInProgress = false,
     onSelectPolygon,
     onDeletePolygon,
     onSlicePolygon,
@@ -187,6 +189,7 @@ const CanvasPolygon = React.memo(
           {/* Render vertices using separate component for performance */}
           {!hideVertices && (
             <PolygonVertices
+              key={`vertices-${id}-${points.length}`}
               polygonId={id}
               points={points}
               polygonType={type}
@@ -196,6 +199,7 @@ const CanvasPolygon = React.memo(
               vertexDragState={vertexDragState}
               zoom={zoom}
               viewportBounds={viewportBounds}
+              isUndoRedoInProgress={isUndoRedoInProgress}
               onDeleteVertex={onDeleteVertex}
               onDuplicateVertex={onDuplicateVertex}
             />
@@ -234,6 +238,7 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.type === nextProps.polygon.type &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
+      prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
       prevProps.zoom === nextProps.zoom &&
       prevProps.hideVertices === nextProps.hideVertices &&
       sameViewport &&

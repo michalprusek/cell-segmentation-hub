@@ -54,7 +54,5 @@ docs/
 # Test files
 test/
 tests/
-**/*.test.ts
-**/*.test.tsx
-**/*.spec.ts
-**/*.spec.tsx
+**/*.test.*
+**/*.spec.*

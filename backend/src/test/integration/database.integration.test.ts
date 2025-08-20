@@ -136,8 +136,8 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'temp@example.com',
           password: 'password',
-          firstName: 'Temp',
-          lastName: 'User'
+          // firstName: 'Temp', // Field doesn't exist in current schema
+          // lastName: 'User' // Field doesn't exist in current schema
         }
       })
 
@@ -241,14 +241,14 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'seg-test@example.com',
           password: await bcrypt.hash('password', 10),
-          firstName: 'Segmentation',
-          lastName: 'Test'
+          // firstName: 'Segmentation', // Field doesn't exist in current schema
+          // lastName: 'Test' // Field doesn't exist in current schema
         }
       })
 
       testProject = await prisma.project.create({
         data: {
-          name: 'Segmentation Test Project',
+          title: 'Segmentation Test Project',
           description: 'For testing segmentation',
           userId: testUser.id
         }
@@ -336,8 +336,8 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'complex-test@example.com',
           password: await bcrypt.hash('password', 10),
-          firstName: 'Complex',
-          lastName: 'Test'
+          // firstName: 'Complex', // Field doesn't exist in current schema
+          // lastName: 'Test' // Field doesn't exist in current schema
         }
       })
 
@@ -345,38 +345,38 @@ describe('Database Integration Tests', () => {
       testProjects = await Promise.all([
         prisma.project.create({
           data: {
-            name: 'Project A',
+            title: 'Project A',
             description: 'First project',
             userId: testUser.id,
             images: {
               create: [
                 {
-                  filename: 'imageA1.jpg',
-                  originalName: 'imageA1.jpg',
+                  name: 'imageA1.jpg',
+                  originalPath: 'imageA1.jpg',
                   mimeType: 'image/jpeg',
-                  size: 1000000,
+                  fileSize: 1000000,
                   width: 1000,
                   height: 1000,
-                  processingStatus: 'completed',
-                  segmentationResults: {
+                  segmentationStatus: 'segmented',
+                  segmentation: {
                     create: [
                       {
-                        modelName: 'hrnet',
-                        status: 'completed',
-                        polygons: [{ points: [[0, 0], [10, 0], [10, 10], [0, 10]] }],
+                        model: 'hrnet',
+                        threshold: 0.5,
+                        polygons: JSON.stringify([{ points: [[0, 0], [10, 0], [10, 10], [0, 10]] }]),
                         processingTime: 1000
                       }
                     ]
                   }
                 },
                 {
-                  filename: 'imageA2.jpg',
-                  originalName: 'imageA2.jpg',
+                  name: 'imageA2.jpg',
+                  originalPath: 'imageA2.jpg',
                   mimeType: 'image/jpeg',
-                  size: 1000000,
+                  fileSize: 1000000,
                   width: 1000,
                   height: 1000,
-                  processingStatus: 'pending'
+                  segmentationStatus: 'pending'
                 }
               ]
             }
@@ -384,19 +384,19 @@ describe('Database Integration Tests', () => {
         }),
         prisma.project.create({
           data: {
-            name: 'Project B',
+            title: 'Project B',
             description: 'Second project',
             userId: testUser.id,
             images: {
               create: [
                 {
-                  filename: 'imageB1.jpg',
-                  originalName: 'imageB1.jpg',
+                  name: 'imageB1.jpg',
+                  originalPath: 'imageB1.jpg',
                   mimeType: 'image/jpeg',
-                  size: 1000000,
+                  fileSize: 1000000,
                   width: 1000,
                   height: 1000,
-                  processingStatus: 'completed'
+                  segmentationStatus: 'segmented'
                 }
               ]
             }
@@ -413,7 +413,7 @@ describe('Database Integration Tests', () => {
             include: {
               images: {
                 include: {
-                  segmentationResults: true
+                  segmentation: true
                 }
               }
             }
@@ -423,26 +423,26 @@ describe('Database Integration Tests', () => {
 
       expect(userWithData?.projects).toHaveLength(2)
       expect(userWithData?.projects[0].images).toBeDefined()
-      expect(userWithData?.projects[0].images.some(img => img.segmentationResults.length > 0)).toBe(true)
+      expect(userWithData?.projects[0].images.some(img => Array.isArray(img.segmentation) && img.segmentation.length > 0)).toBe(true)
     })
 
     it('should count images by processing status', async () => {
-      const statusCounts = await prisma.projectImage.groupBy({
-        by: ['processingStatus'],
+      const statusCounts = await prisma.image.groupBy({
+        by: ['segmentationStatus'],
         where: {
           project: {
             userId: testUser.id
           }
         },
         _count: {
-          processingStatus: true
+          segmentationStatus: true
         }
       })
 
-      const completedCount = statusCounts.find(s => s.processingStatus === 'completed')?._count.processingStatus || 0
-      const pendingCount = statusCounts.find(s => s.processingStatus === 'pending')?._count.processingStatus || 0
+      const segmentedCount = statusCounts.find(s => s.segmentationStatus === 'segmented')?._count.segmentationStatus || 0
+      const pendingCount = statusCounts.find(s => s.segmentationStatus === 'pending')?._count.segmentationStatus || 0
 
-      expect(completedCount).toBe(2)
+      expect(segmentedCount).toBe(2)
       expect(pendingCount).toBe(1)
     })
 
@@ -452,9 +452,9 @@ describe('Database Integration Tests', () => {
           userId: testUser.id,
           images: {
             some: {
-              segmentationResults: {
+              segmentation: {
                 some: {
-                  status: 'completed'
+                  model: 'hrnet'
                 }
               }
             }
@@ -463,9 +463,9 @@ describe('Database Integration Tests', () => {
         include: {
           images: {
             include: {
-              segmentationResults: {
+              segmentation: {
                 where: {
-                  status: 'completed'
+                  model: 'hrnet'
                 }
               }
             }
@@ -474,7 +474,7 @@ describe('Database Integration Tests', () => {
       })
 
       expect(projectsWithSegmentations).toHaveLength(1)
-      expect(projectsWithSegmentations[0].name).toBe('Project A')
+      expect(projectsWithSegmentations[0].title).toBe('Project A')
     })
   })
 
@@ -486,8 +486,8 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'transaction-test@example.com',
           password: await bcrypt.hash('password', 10),
-          firstName: 'Transaction',
-          lastName: 'Test'
+          // firstName: 'Transaction', // Field doesn't exist in current schema
+          // lastName: 'Test' // Field doesn't exist in current schema
         }
       })
     })
@@ -562,14 +562,14 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'bulk-test@example.com',
           password: await bcrypt.hash('password', 10),
-          firstName: 'Bulk',
-          lastName: 'Test'
+          // firstName: 'Bulk', // Field doesn't exist in current schema
+          // lastName: 'Test' // Field doesn't exist in current schema
         }
       })
 
       // Create multiple projects
       const projectData = Array.from({ length: 10 }, (_, i) => ({
-        name: `Bulk Project ${i + 1}`,
+        title: `Bulk Project ${i + 1}`,
         description: `Bulk test project ${i + 1}`,
         userId: bulkUser.id
       }))
