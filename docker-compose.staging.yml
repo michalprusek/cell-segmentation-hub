@@ -18,9 +18,9 @@ services:
       - ./tsconfig.json:/app/tsconfig.json
       - ./tsconfig.app.json:/app/tsconfig.app.json
     environment:
-      - VITE_API_BASE_URL=http://localhost:4001/api
-      - VITE_ML_SERVICE_URL=http://localhost:4008
-      - VITE_WS_URL=http://localhost:4001
+      - VITE_API_URL=https://spherosegapp.utia.cas.cz/api
+      - VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/ml
+      - VITE_WS_URL=https://spherosegapp.utia.cas.cz
     networks:
       - staging-network
     restart: always
@@ -51,14 +51,14 @@ services:
       - ./backend/uploads/staging:/app/uploads
       - staging-backend-logs:/app/logs
     environment:
-      - NODE_ENV=development  # Development mode for hot reload
+      - NODE_ENV=production  # Production mode for CORS validation
       - PORT=3001
       - HOST=0.0.0.0
       - DATABASE_URL=postgresql://spheroseg:${STAGING_DB_PASSWORD:-password}@staging-db:5432/spheroseg_staging
       - REDIS_URL=redis://staging-redis:6379
       - API_BASE_URL=http://localhost:4001
-      - ALLOWED_ORIGINS=https://staging.spherosegapp.utia.cas.cz,http://localhost:4000,http://localhost:4001
-      - WS_ALLOWED_ORIGINS=https://staging.spherosegapp.utia.cas.cz,ws://localhost:4001,http://localhost:4000,http://localhost:4001
+      - ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,http://localhost:4000,http://localhost:4001
+      - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,ws://localhost:4001,http://localhost:4000,http://localhost:4001
       - SEGMENTATION_SERVICE_URL=http://staging-ml:8000
       - UPLOAD_DIR=/app/uploads
       - STORAGE_TYPE=local
