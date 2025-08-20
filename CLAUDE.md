@@ -331,9 +331,21 @@ The project uses Husky for comprehensive pre-commit validation:
 
 ## Blue-Green Deployment System
 
-### Current Production Setup
+### ⚠️ CRITICAL DATABASE SAFETY WARNING
 
-**IMPORTANT**: Production currently runs on **staging** environment (ports 4000-4008). The actual production environment (ports 5000-5008) is ready for the next deployment.
+**VŽDY PŘED DEPLOYMENTEM:**
+
+1. **ZÁLOHA DATABÁZE JE POVINNÁ** - deployment skripty to dělají automaticky, ale vždy zkontroluj!
+2. **Nikdy neměň docker-compose volumes sekci** - může způsobit ztrátu dat
+3. **Databáze jsou ODDĚLENÉ** - blue má `spheroseg_blue`, green má `spheroseg_green`
+4. **Při rollbacku se data NEVRACÍ** - rollback vrátí jen kód, ne databázi
+
+### Current Production Setup (AKTUALIZOVÁNO 20.8.2025)
+
+**DŮLEŽITÉ**: Produkce nyní běží na **BLUE** prostředí (porty 4000-4008), nikoliv staging!
+
+- Blue prostředí je aktivní a nginx směřuje na `blue-backend`, `blue-frontend`, `blue-ml`
+- Green prostředí (porty 5000-5008) je připraveno pro další deployment
 
 ### Deployment Strategy
 
@@ -347,15 +359,22 @@ The system uses **Blue-Green deployment** for zero-downtime releases:
 2. **Deployment Process**:
 
    ```bash
+   # VŽDY NEJDŘÍV - zkontroluj aktivní prostředí!
+   docker ps | grep -E "blue|green"
+
    # Deploy new version (automatic zero-downtime)
    ./scripts/deploy-blue-green.sh
 
-   # Emergency rollback (takes seconds)
+   # Emergency rollback (takes seconds) - POZOR: nevrací data!
    ./scripts/rollback-deployment.sh
 
    # Health check both environments
    ./scripts/deployment-health-check.sh
    ```
+
+   **⚠️ POZOR NA NGINX KONFIGURACI:**
+   - Vždy zkontroluj, že nginx upstream směřuje na správné kontejnery
+   - Aktuálně musí být: `server blue-backend:3001`, NE `staging-backend`!
 
 3. **How it works**:
    - Detects current active environment from nginx config
@@ -385,9 +404,56 @@ The system uses **Blue-Green deployment** for zero-downtime releases:
    - **Databases**: Separate (spheroseg_staging, spheroseg_production)
    - **File storage**: Separate directories per environment
 
-### Nginx Routing Fix Applied
+### Nginx Routing - KRITICKÉ BODY
+
+**WebSocket podpora (MUSÍ BÝT!):**
+
+```nginx
+location /socket.io/ {
+    proxy_pass http://backend/socket.io/;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    # WebSocket timeouts - důležité pro real-time notifikace
+    proxy_connect_timeout 7d;
+    proxy_send_timeout 7d;
+    proxy_read_timeout 7d;
+}
+```
+
+**API routing fix:**
 
 - **Issue**: API routes returning 404 due to incorrect rewrite rule
 - **Solution**: Changed from `rewrite ^/api/(.*)$ /api/$1 break;` to `proxy_pass http://backend/api/;`
 - **Location**: `/docker/nginx/nginx.prod.conf` line 132
 - **Test**: `curl -X POST https://spherosegapp.utia.cas.cz/api/auth/login`
+
+### Environment Variables - POVINNÉ PRO BLUE/GREEN
+
+**Při spuštění docker-compose VŽDY exportuj:**
+
+```bash
+export STAGING_JWT_ACCESS_SECRET=<hodnota z .env.blue>
+export STAGING_JWT_REFRESH_SECRET=<hodnota z .env.blue>
+export FROM_EMAIL=spheroseg@utia.cas.cz
+```
+
+**WebSocket CORS - MUSÍ být nastaveno:**
+
+- V `.env.blue` nebo `.env.green`: `WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz`
+- V docker-compose.yml environment sekci obou!
+
+### Upload Permissions - KRITICKÉ
+
+**Složky musí mít správná oprávnění (UID 1001):**
+
+```bash
+sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/blue/
+sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/green/
+```
+
+**Podsložky MUSÍ existovat:**
+
+- `/images`
+- `/thumbnails`
+- `/temp`

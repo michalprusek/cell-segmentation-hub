@@ -1,0 +1,131 @@
+version: '3.8'
+
+services:
+  # Blue Frontend (port 4000)
+  frontend-blue:
+    build:
+      context: .
+      dockerfile: docker/frontend.prod.Dockerfile
+      args:
+        - VITE_API_BASE_URL=https://spherosegapp.utia.cas.cz/api
+        - VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/api/ml
+        - VITE_WS_URL=wss://spherosegapp.utia.cas.cz
+    container_name: blue-frontend
+    ports:
+      - "4000:80"
+    networks:
+      - blue-network
+    environment:
+      - NODE_ENV=production
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Blue Backend API (port 4001)
+  backend-blue:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.prod.Dockerfile
+    container_name: blue-backend
+    ports:
+      - "4001:3001"
+    networks:
+      - blue-network
+    depends_on:
+      postgres-blue:
+        condition: service_healthy
+      redis-blue:
+        condition: service_healthy
+    env_file: .env.blue
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3001
+      - DATABASE_URL=postgresql://spheroseg:spheroseg@blue-db:5432/spheroseg_blue
+      - REDIS_URL=redis://blue-redis:6379
+      - JWT_ACCESS_SECRET=${STAGING_JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${STAGING_JWT_REFRESH_SECRET}
+      - SEGMENTATION_SERVICE_URL=http://blue-ml:8000
+      - FROM_EMAIL=${FROM_EMAIL}
+      - ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz
+      - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz
+    volumes:
+      - ./backend/uploads/blue:/app/uploads
+      - blue-backend-logs:/app/logs
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Blue PostgreSQL Database
+  postgres-blue:
+    image: postgres:15-alpine
+    container_name: blue-db
+    networks:
+      - blue-network
+    environment:
+      - POSTGRES_USER=spheroseg
+      - POSTGRES_PASSWORD=spheroseg
+      - POSTGRES_DB=spheroseg_blue
+    volumes:
+      - blue-postgres-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spheroseg"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Blue Redis Cache
+  redis-blue:
+    image: redis:7-alpine
+    container_name: blue-redis
+    networks:
+      - blue-network
+    volumes:
+      - blue-redis-data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Blue ML Service (port 4008)
+  ml-blue:
+    build:
+      context: ./backend/segmentation
+      dockerfile: ../../docker/ml.Dockerfile
+    container_name: blue-ml
+    ports:
+      - "4008:8000"
+    networks:
+      - blue-network
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=production
+    volumes:
+      - ./backend/segmentation/weights:/app/weights
+      - ./backend/uploads/blue:/app/uploads
+      - blue-ml-logs:/app/logs
+    restart: always
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  blue-network:
+    driver: bridge
+
+volumes:
+  blue-postgres-data:
+  blue-redis-data:
+  blue-backend-logs:
+  blue-ml-logs:
