@@ -9,7 +9,7 @@ export async function fetchWithRetry(
   options: RequestInit = {},
   retryOptions: RetryOptions = {}
 ): Promise<Response> {
-  const { retries = 1, delay = 2000, backoff = 1.5 } = retryOptions; // Reduced retries, increased delay
+  const { retries = 3, delay = 1000, backoff = 1.5 } = retryOptions;
 
   let lastError: Error | null = null;
 

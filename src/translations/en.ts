@@ -48,6 +48,8 @@ export default {
     notifications: 'Notifications',
     passwordConfirm: 'Confirm Password',
     manageAccount: 'Manage your account',
+    getStarted: 'Get Started',
+    learnMore: 'Learn More',
     documentation: 'Documentation',
     changePassword: 'Change Password',
     deleteAccount: 'Delete Account',
@@ -65,7 +67,44 @@ export default {
     returnToHome: 'Return to Home',
     // Navigation
     next: 'Next',
+    copy: 'Copy',
+    close: 'Close',
+    noImage: 'No Image',
+    untitledImage: 'Untitled Image',
+    rename: 'Rename',
   },
+
+  landing: {
+    hero: {
+      badge: 'Advanced Spheroid Segmentation Platform',
+      title: 'AI-powered Cell Analysis for Biomedical Research',
+      subtitle:
+        'Elevate your microscopic cell image analysis with our cutting-edge spheroid segmentation platform. Designed for researchers seeking precision and efficiency.',
+      getStarted: 'Get Started',
+      learnMore: 'Learn More',
+    },
+    about: {
+      badge: 'Our Mission',
+      title: 'Advancing Biomedical Research Through Technology',
+      description1:
+        'Our platform was developed by Bc. Michal Průšek, a student at the Faculty of Nuclear Sciences and Physical Engineering (FJFI) at Czech Technical University in Prague, under the supervision of Ing. Adam Novozámský, Ph.D.',
+      description2:
+        'This project is a collaboration with researchers from the Institute of Biochemistry and Microbiology at UCT Prague (VŠCHT Praha).',
+      description3:
+        'We combine cutting-edge AI models with an intuitive interface to provide researchers with powerful tools for microscopic image analysis, focusing on spheroid segmentation with unparalleled precision.',
+      contactText: 'For inquiries, please contact us at',
+    },
+    cta: {
+      title: 'Ready to Transform Your Cell Analysis Workflow?',
+      subtitle:
+        'Join leading researchers who are already using our platform to accelerate their discoveries.',
+      cardTitle: 'Get Started Today',
+      cardDescription:
+        'Sign up for a free account and experience the power of AI-driven spheroid segmentation.',
+      createAccount: 'Create Your Account',
+    },
+  },
+
   dashboard: {
     manageProjects: 'Manage your research projects and analyses',
     projectGallery: 'Project Gallery',
@@ -128,6 +167,7 @@ export default {
     deleteImageError: 'Failed to delete image',
     deleteImageFailed: 'Image deletion failed',
     imagesQueuedForSegmentation: '{{count}} images added to segmentation queue',
+    imageQueuedForResegmentation: 'Image added to queue for re-segmentation',
     allImagesAlreadySegmented: 'All images are already segmented or queued',
     errorAddingToQueue: 'Error adding images to queue',
     imageAlreadyProcessing: 'Image is already being processed',
@@ -146,13 +186,85 @@ export default {
     projectCreatedDesc: '"{{name}}" is ready for images',
     descriptionOptional: 'Description (Optional)',
     noDescriptionProvided: 'No description provided',
+    deleteDialog: {
+      title: 'Confirm Deletion',
+      description:
+        'Are you sure you want to delete {{count}} selected images? This action cannot be undone.',
+    },
   },
   errors: {
-    noProjectOrUser: 'Error: No project or user selected',
-    unknown: 'Unknown error',
-    validation: {
+    noProjectOrUser:
+      'No project or user selected. Please select a project from the list.',
+    unknown: 'An unexpected error occurred. Please try again.',
+    network:
+      'Cannot connect to server. Check your internet connection and try again.',
+    unauthorized: 'Your session has expired. Please sign in again.',
+    forbidden:
+      'You do not have permission for this action. Contact an administrator if you believe this is an error.',
+    notFound:
+      'The requested content was not found. It may have been deleted or moved.',
+    conflict:
+      'This email is already registered. Try signing in or use a different email.',
+    invalidCredentials:
+      'Invalid email or password. Please check your credentials.',
+    validation:
+      'The information provided is incorrect. Please check the form and correct any errors.',
+    general: 'Something went wrong. Please try again in a moment.',
+    server: 'The server is currently unavailable. Please try again later.',
+    timeout: 'The request took too long. Check your connection and try again.',
+    sessionExpired:
+      'Your session has expired. Please sign in again to continue.',
+    tooManyRequests: 'Too many requests. Please wait a moment and try again.',
+    serverUnavailable:
+      'Service temporarily unavailable. Please try again in a few minutes.',
+    clientError: 'Request error. Please check your input and try again.',
+    emailAlreadyExists:
+      'This email is already registered. Try signing in or use a different email.',
+    validationErrors: {
       projectNameRequired: 'Please enter a project name',
       loginRequired: 'You must be logged in to create a project',
+      emailRequired: 'Email is required',
+      passwordRequired: 'Password is required',
+      invalidEmail: 'Please enter a valid email address',
+      passwordTooShort: 'Password must be at least 6 characters',
+      passwordsDoNotMatch: 'Passwords do not match',
+      confirmationRequired: 'Please confirm your action',
+      fieldRequired: 'This field is required',
+    },
+    operations: {
+      loadProject:
+        'Could not load the project. Check your connection and try again.',
+      saveProject: 'Could not save project changes. Please try again.',
+      deleteProject:
+        'Cannot delete project. Make sure you have the necessary permissions.',
+      uploadImage: 'Could not upload image. Check the file format and size.',
+      deleteImage:
+        'Cannot delete image. Try refreshing the page and repeating the action.',
+      processImage:
+        'Image processing failed. Try a different image or contact support.',
+      segmentation:
+        'Segmentation failed. Try using a different model or adjusting settings.',
+      export: 'Data export failed. Check that data is available.',
+      login: 'Sign in failed. Check your email and password.',
+      logout: 'Sign out failed. Try closing your browser.',
+      register: 'Registration failed. This email may already be in use.',
+      updateProfile:
+        'Could not update profile. Check the information provided.',
+      changePassword: 'Could not change password. Check your current password.',
+      deleteAccount:
+        'Could not delete account. Contact support for assistance.',
+      resetPassword: 'Password reset failed. Check the email address provided.',
+      updateConsent: 'Could not update consent preferences. Please try again.',
+    },
+    contexts: {
+      dashboard: 'Dashboard error',
+      project: 'Project error',
+      image: 'Image error',
+      segmentation: 'Segmentation error',
+      export: 'Export error',
+      auth: 'Authentication error',
+      profile: 'Profile error',
+      settings: 'Settings error',
     },
   },
   images: {
@@ -357,21 +469,12 @@ export default {
       },
     },
     helpTips: {
-      editMode: [
-        'Click to create a new point',
-        'Hold Shift to automatically create sequence of points',
-        'Close polygon by clicking on the first point',
-      ],
-      slicingMode: [
-        'Click to start slice',
-        'Click again to finish slice',
-        'Esc cancels slicing',
-      ],
-      pointAddingMode: [
-        'Hover cursor over polygon line',
-        'Click to add point to selected polygon',
-        'Esc exits adding mode',
-      ],
+      editMode:
+        'Click to create a new point. Hold Shift to automatically create sequence of points. Close polygon by clicking on the first point.',
+      slicingMode:
+        'Click to start slice. Click again to finish slice. Esc cancels slicing.',
+      pointAddingMode:
+        'Hover cursor over polygon line. Click to add point to selected polygon. Esc exits adding mode.',
     },
     modeDescription: {
       view: 'Navigate and select polygons',
@@ -415,6 +518,8 @@ export default {
       noPolygons: 'No polygons',
       startCreating: 'Start by creating a polygon',
       polygonList: 'Polygon List',
+      external: 'External',
+      internal: 'Internal',
     },
     loading: 'Loading segmentation...',
     noPolygons: 'No polygons found',
@@ -503,6 +608,7 @@ export default {
     passwordPlaceholder: '••••••••',
     signingIn: 'Signing in...',
     redirectingToDashboard: 'Redirecting to dashboard...',
+    redirectingToSignIn: 'Redirecting to sign-in...',
     fillAllFields: 'Please fill in all fields',
     // Toast messages
     signInSuccess: 'Successfully signed in',
@@ -531,6 +637,19 @@ export default {
     alreadySignedUp: "You're already signed up and logged in.",
     goToDashboard: 'Go to Dashboard',
     signUpFailed: 'Sign up failed',
+    // Forgot Password specific
+    enterEmailForReset: 'Enter your email address to reset password',
+    sending: 'Sending...',
+    sendNewPassword: 'Send New Password',
+    emailSent: 'Email Sent',
+    checkEmailForNewPassword: 'Check your email for new password',
+    resetPasswordEmailSent:
+      'If email exists, an email with new password was sent',
+    resetPasswordError: 'Failed to send password reset email',
+    backToSignIn: 'Back to Sign In',
+    didntReceiveEmail: "Didn't receive email?",
+    rememberPassword: 'Remember your password?',
+    tryAgain: 'Try Again',
   },
   profile: {
     title: 'Profile',
@@ -575,6 +694,21 @@ export default {
     createdProject: 'Created project',
     completedSegmentation: 'Completed segmentation for',
     uploadedImage: 'Uploaded image',
+    avatar: {
+      uploadButton: 'Upload Avatar',
+      selectFile: 'Select avatar image',
+      cropTitle: 'Crop Your Avatar',
+      cropDescription: 'Crop your avatar image to fit perfectly',
+      zoomLevel: 'Zoom Level',
+      cropInstructions: 'Drag to reposition, use slider to zoom',
+      applyChanges: 'Apply Changes',
+      processing: 'Processing...',
+      invalidFileType: 'Invalid file type. Please select an image file.',
+      fileTooLarge: 'File too large. Maximum size is 5MB.',
+      cropError: 'Error processing image. Please try again.',
+      uploadSuccess: 'Avatar uploaded successfully',
+      uploadError: 'Failed to upload avatar. Please try again.',
+    },
   },
   status: {
     segmented: 'Segmented',
@@ -593,6 +727,12 @@ export default {
     waiting: 'waiting',
     processing: 'processing',
     segmentAll: 'Segment All',
+    segmentAllWithCount: 'Segment All ({{count}})',
+    resegmentSelected: 'Re-segment Selected ({{count}})',
+    segmentMixed:
+      'Segment {{new}} + Re-segment {{resegment}} ({{total}} total)',
+    segmentTooltip:
+      '{{new}} new images will be segmented, {{resegment}} selected images will be re-segmented',
     totalProgress: 'Total Progress',
     images: 'images',
     loadingStats: 'Loading statistics...',
@@ -664,13 +804,14 @@ export default {
   },
   export: {
     // Dialog headers
+    advancedExport: 'Advanced Export',
     advancedOptions: 'Advanced Export Options',
     configureSettings:
       'Configure your export settings to create a comprehensive dataset package',
     // Tabs
     general: 'General',
     visualization: 'Visualization',
-    formats: 'Formats',
+    formatsTab: 'Formats',
     // Content selection
     exportContents: 'Export Contents',
     selectContent: 'Select which content types to include in your export',
@@ -684,6 +825,15 @@ export default {
     selectNone: 'Select None',
     imageSelection: 'Image Selection',
     chooseImages: 'Choose which images to include in the export',
+    searchImages: 'Search images...',
+    sortBy: 'Sort by',
+    sortOptions: {
+      date: 'Date',
+      name: 'Name',
+      status: 'Status',
+    },
+    showingImages: 'Showing {{start}}-{{end}} of {{total}}',
+    noImagesFound: 'No images found',
     // Quality settings
     qualitySettings: 'Quality Settings',
     imageQuality: 'Image Quality',
@@ -730,6 +880,16 @@ export default {
     serverError: 'Server error occurred',
     invalidSelection: 'Please select at least one image',
     noData: 'No data available for export',
+    segmentationData: 'Segmentation Data',
+    spheroidMetrics: 'Spheroid Metrics',
+    cocoFormat: 'COCO Format',
+    cocoFormatTitle: 'COCO Format Export',
+    downloadJson: 'Download JSON',
+    formats: {
+      yolo: 'YOLO Format',
+      excel: 'Excel Format',
+      json: 'JSON Format',
+    },
   },
   // Export dialog
   // Standalone image action messages (used without prefix)
@@ -755,6 +915,7 @@ export default {
     badge: 'Documentation',
     title: 'SpheroSeg Documentation',
     subtitle: 'Comprehensive guide to using our spheroid segmentation platform',
+    backTo: 'Back to {{page}}',
 
     // Navigation
     navigation: 'Navigation',
@@ -1340,9 +1501,110 @@ export default {
     reconnected: 'Connection to server restored',
     reconnectFailed: 'Failed to restore connection to server',
     connectionLost: 'Connection to server lost',
-    pollingMode: 'Connected to server (polling mode)',
-    upgradedToWebSocket: 'Upgraded to real-time connection',
-    connectionError: 'Unable to connect to server',
-    authError: 'Authentication error',
+  },
+
+  // Context menu
+  contextMenu: {
+    editPolygon: 'Edit polygon',
+    splitPolygon: 'Split polygon',
+    deletePolygon: 'Delete polygon',
+    confirmDeletePolygon: 'Are you sure you want to delete this polygon?',
+    deletePolygonDescription:
+      'This action is irreversible. The polygon will be permanently removed from the segmentation.',
+    duplicateVertex: 'Duplicate vertex',
+    deleteVertex: 'Delete vertex',
+  },
+
+  // Metrics display
+  metrics: {
+    info: 'Metrics are evaluated only for external polygons. Areas of internal polygons (holes) are automatically subtracted from the corresponding external polygons.',
+    spheroid: 'Spheroid',
+    area: 'Area',
+    perimeter: 'Perimeter',
+    equivalentDiameter: 'Equivalent Diameter',
+    circularity: 'Circularity',
+    feretMax: 'Feret Maximum',
+    feretMin: 'Feret Minimum',
+    compactness: 'Compactness',
+    convexity: 'Convexity',
+    solidity: 'Solidity',
+    sphericity: 'Sphericity',
+    feretAspectRatio: 'Feret Aspect Ratio',
+    noPolygonsFound: 'No polygons found for analysis',
+  },
+
+  // Keyboard shortcuts
+  keyboardShortcuts: {
+    title: 'Keyboard Shortcuts',
+    buttonLabel: 'Shortcuts',
+    viewMode: 'View mode',
+    editVertices: 'Edit vertices mode',
+    addPoints: 'Add points mode',
+    createPolygon: 'Create new polygon',
+    sliceMode: 'Slice mode',
+    deleteMode: 'Delete mode',
+    holdToAutoAdd: 'Hold for automatic point addition',
+    undo: 'Undo',
+    redo: 'Redo',
+    deleteSelected: 'Delete selected polygon',
+    cancelOperation: 'Cancel current operation',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
+    resetView: 'Reset view',
+    helperText:
+      'These shortcuts work within the segmentation editor for faster and more convenient work.',
+  },
+
+  // Accessibility and screen reader labels
+  accessibility: {
+    // Navigation
+    toggleSidebar: 'Toggle Sidebar',
+    toggleMenu: 'Toggle menu',
+    selectLanguage: 'Select language',
+    selectTheme: 'Select theme',
+    breadcrumb: 'breadcrumb',
+    pagination: 'pagination',
+
+    // Actions
+    close: 'Close',
+    more: 'More',
+
+    // Pagination
+    goToPreviousPage: 'Go to previous page',
+    goToNextPage: 'Go to next page',
+    previousPage: 'Previous',
+    nextPage: 'Next',
+    morePages: 'More pages',
+
+    // Carousel
+    previousSlide: 'Previous slide',
+    nextSlide: 'Next slide',
+
+    // View options
+    gridView: 'Grid view',
+    listView: 'List view',
+  },
+
+  // Footer section
+  footer: {
+    appName: 'SpheroSeg',
+    description:
+      'Advanced spheroid segmentation and analysis platform for biomedical researchers, providing AI-powered tools for microscopic cell image analysis.',
+    contact: 'Contact',
+    institution: 'Institution',
+    institutionName: 'ÚTIA AV ČR',
+    address: 'Address',
+    addressText: 'Pod Vodárenskou věží 4, 182 08 Prague 8',
+    resources: 'Resources',
+    documentation: 'Documentation',
+    features: 'Features',
+    tutorials: 'Tutorials',
+    research: 'Research',
+    legal: 'Legal',
+    termsOfService: 'Terms of Service',
+    privacyPolicy: 'Privacy Policy',
+    contactUs: 'Contact Us',
+    copyright:
+      '© {{year}} SpheroSeg. Developed at ÚTIA AV ČR (Institute of Information Theory and Automation, Czech Academy of Sciences).',
   },
 };

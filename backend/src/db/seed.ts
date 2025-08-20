@@ -3,10 +3,13 @@ import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { logger } from '../utils/logger';
 import * as dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
 import * as path from 'path';
 
-// CommonJS equivalents
-const isMainModule = require.main === module;
+// ES module equivalents for __dirname and require.main
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 
 // Load environment variables
 dotenv.config();

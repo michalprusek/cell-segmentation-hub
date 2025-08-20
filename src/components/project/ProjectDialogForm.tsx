@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useProjectForm } from '@/hooks/useProjectForm';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProjectDialogFormProps {
   onSuccess?: (projectId: string) => void;
@@ -16,6 +17,7 @@ interface ProjectDialogFormProps {
 }
 
 const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
+  const { t } = useLanguage();
   const {
     projectName,
     setProjectName,
@@ -28,20 +30,18 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
   return (
     <>
       <DialogHeader>
-        <DialogTitle>Create New Project</DialogTitle>
-        <DialogDescription>
-          Add a new project to organize your spheroid images and analyses.
-        </DialogDescription>
+        <DialogTitle>{t('projects.createProject')}</DialogTitle>
+        <DialogDescription>{t('projects.createProjectDesc')}</DialogDescription>
       </DialogHeader>
       <form onSubmit={handleCreateProject}>
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
             <Label htmlFor="projectName" className="text-right">
-              Project Name
+              {t('common.projectName')}
             </Label>
             <Input
               id="projectName"
-              placeholder="e.g., HeLa Cell Spheroids"
+              placeholder={t('projects.projectNamePlaceholder')}
               value={projectName}
               onChange={e => setProjectName(e.target.value)}
               required
@@ -49,11 +49,11 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
           </div>
           <div className="space-y-2">
             <Label htmlFor="projectDescription" className="text-right">
-              Description (Optional)
+              {t('projects.descriptionOptional')}
             </Label>
             <Input
               id="projectDescription"
-              placeholder="e.g., Analysis of tumor spheroids for drug resistance studies"
+              placeholder={t('projects.projectDescPlaceholder')}
               value={projectDescription}
               onChange={e => setProjectDescription(e.target.value)}
             />
@@ -61,7 +61,9 @@ const ProjectDialogForm = ({ onSuccess, onClose }: ProjectDialogFormProps) => {
         </div>
         <DialogFooter>
           <Button type="submit" disabled={isCreating}>
-            {isCreating ? 'Creating...' : 'Create Project'}
+            {isCreating
+              ? t('projects.creatingProject')
+              : t('projects.createProject')}
           </Button>
         </DialogFooter>
       </form>

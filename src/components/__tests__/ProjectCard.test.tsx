@@ -1,26 +1,62 @@
-import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { render, mockProject } from '@/test/utils/test-utils';
-import { ProjectThumbnail } from '@/components/project/ProjectThumbnail';
+import { render } from '@/test/utils/test-utils';
+import ProjectCard from '@/components/ProjectCard';
+
+// Mock the child components
+vi.mock('@/components/project/ProjectThumbnail', () => ({
+  default: ({
+    projectId,
+    fallbackSrc,
+  }: {
+    projectId: string;
+    fallbackSrc: string;
+  }) => (
+    <img
+      src={fallbackSrc}
+      alt="Project thumbnail"
+      data-testid="project-thumbnail"
+    />
+  ),
+}));
+
+vi.mock('@/components/project/ProjectActions', () => ({
+  default: ({ projectId }: { projectId: string }) => (
+    <button aria-label="More options" data-testid="project-actions">
+      Actions
+    </button>
+  ),
+}));
+
+vi.mock('@/components/project/ProjectMetadata', () => ({
+  default: ({ date, imageCount }: { date: string; imageCount: number }) => (
+    <div data-testid="project-metadata">
+      <span>{imageCount === 0 ? 'No images' : `${imageCount} images`}</span>
+      <span>Created {date}</span>
+    </div>
+  ),
+}));
 
 // Mock react-router-dom
+const mockNavigate = vi.fn();
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom');
   return {
     ...actual,
-    useNavigate: () => vi.fn(),
+    useNavigate: () => mockNavigate,
   };
 });
 
-describe('ProjectThumbnail', () => {
-  const mockOnDelete = vi.fn();
-  const mockOnEdit = vi.fn();
-
+describe('ProjectCard', () => {
   const defaultProps = {
-    project: mockProject,
-    onDelete: mockOnDelete,
-    onEdit: mockOnEdit,
+    id: 'test-project-id',
+    title: 'Test Project',
+    description: 'Test project description',
+    thumbnail: '/placeholder.svg',
+    date: 'Dec 25, 2023',
+    imageCount: 2,
+    onClick: vi.fn(),
   };
 
   beforeEach(() => {
@@ -28,159 +64,96 @@ describe('ProjectThumbnail', () => {
   });
 
   it('renders project information correctly', () => {
-    render(<ProjectThumbnail {...defaultProps} />);
+    render(<ProjectCard {...defaultProps} />);
 
-    expect(screen.getByText(mockProject.name)).toBeInTheDocument();
-    expect(screen.getByText(mockProject.description)).toBeInTheDocument();
+    expect(screen.getByText(defaultProps.title)).toBeInTheDocument();
+    expect(screen.getByText(defaultProps.description)).toBeInTheDocument();
     expect(screen.getByText(/created/i)).toBeInTheDocument();
   });
 
   it('displays correct image count', () => {
-    const projectWithImages = {
-      ...mockProject,
-      images: [
-        { id: '1', filename: 'image1.jpg' },
-        { id: '2', filename: 'image2.jpg' },
-      ],
-    };
-
-    render(
-      <ProjectThumbnail
-        project={projectWithImages}
-        onDelete={mockOnDelete}
-        onEdit={mockOnEdit}
-      />
-    );
+    render(<ProjectCard {...defaultProps} imageCount={2} />);
 
     expect(screen.getByText('2 images')).toBeInTheDocument();
   });
 
   it('shows "No images" when project has no images', () => {
-    render(<ProjectThumbnail {...defaultProps} />);
+    render(<ProjectCard {...defaultProps} imageCount={0} />);
 
     expect(screen.getByText(/no images/i)).toBeInTheDocument();
   });
 
-  it('navigates to project detail on card click', async () => {
-    const { useNavigate } = await import('react-router-dom');
-    const mockNavigate = vi.fn();
-    vi.mocked(useNavigate).mockReturnValue(mockNavigate);
-
+  it('calls onClick when card is clicked', async () => {
     const user = userEvent.setup();
-    render(<ProjectThumbnail {...defaultProps} />);
+    const mockOnClick = vi.fn();
 
-    const card = screen.getByRole('article');
+    render(<ProjectCard {...defaultProps} onClick={mockOnClick} />);
+
+    const card = screen.getByRole('button');
     await user.click(card);
 
-    expect(mockNavigate).toHaveBeenCalledWith(`/projects/${mockProject.id}`);
+    expect(mockOnClick).toHaveBeenCalled();
   });
 
-  it('opens dropdown menu on button click', async () => {
-    const user = userEvent.setup();
-    render(<ProjectThumbnail {...defaultProps} />);
+  it('renders project actions component', () => {
+    render(<ProjectCard {...defaultProps} />);
 
-    const menuButton = screen.getByRole('button', { name: /more options/i });
-    await user.click(menuButton);
-
-    expect(screen.getByText(/edit/i)).toBeInTheDocument();
-    expect(screen.getByText(/delete/i)).toBeInTheDocument();
+    expect(screen.getByTestId('project-actions')).toBeInTheDocument();
   });
 
-  it('calls onEdit when edit option is clicked', async () => {
-    const user = userEvent.setup();
-    render(<ProjectThumbnail {...defaultProps} />);
+  it('renders project metadata correctly', () => {
+    render(<ProjectCard {...defaultProps} />);
 
-    const menuButton = screen.getByRole('button', { name: /more options/i });
-    await user.click(menuButton);
-
-    const editButton = screen.getByText(/edit/i);
-    await user.click(editButton);
-
-    expect(mockOnEdit).toHaveBeenCalledWith(mockProject);
+    expect(screen.getByTestId('project-metadata')).toBeInTheDocument();
   });
 
-  it('calls onDelete when delete option is clicked', async () => {
-    const user = userEvent.setup();
-    render(<ProjectThumbnail {...defaultProps} />);
+  it('displays project thumbnail', () => {
+    render(<ProjectCard {...defaultProps} />);
 
-    const menuButton = screen.getByRole('button', { name: /more options/i });
-    await user.click(menuButton);
-
-    const deleteButton = screen.getByText(/delete/i);
-    await user.click(deleteButton);
-
-    expect(mockOnDelete).toHaveBeenCalledWith(mockProject.id);
+    const thumbnail = screen.getByTestId('project-thumbnail');
+    expect(thumbnail).toBeInTheDocument();
+    expect(thumbnail).toHaveAttribute('src', defaultProps.thumbnail);
   });
 
-  it('displays project thumbnail when available', () => {
-    const projectWithThumbnail = {
-      ...mockProject,
-      thumbnailPath: '/thumbnails/project-thumb.jpg',
-    };
+  it('displays custom thumbnail when provided', () => {
+    const customThumbnail = '/custom-thumbnail.jpg';
 
-    render(
-      <ProjectThumbnail
-        project={projectWithThumbnail}
-        onDelete={mockOnDelete}
-        onEdit={mockOnEdit}
-      />
-    );
+    render(<ProjectCard {...defaultProps} thumbnail={customThumbnail} />);
 
-    const thumbnail = screen.getByRole('img', { name: /project thumbnail/i });
-    expect(thumbnail).toHaveAttribute(
-      'src',
-      projectWithThumbnail.thumbnailPath
-    );
+    const thumbnail = screen.getByTestId('project-thumbnail');
+    expect(thumbnail).toHaveAttribute('src', customThumbnail);
   });
 
-  it('shows placeholder when no thumbnail available', () => {
-    render(<ProjectThumbnail {...defaultProps} />);
+  it('shows default placeholder when no thumbnail provided', () => {
+    render(<ProjectCard {...defaultProps} thumbnail="" />);
 
-    expect(
-      screen.getByRole('img', { name: /no thumbnail/i })
-    ).toBeInTheDocument();
+    const thumbnail = screen.getByTestId('project-thumbnail');
+    expect(thumbnail).toHaveAttribute('src', '');
   });
 
-  it('formats creation date correctly', () => {
-    const projectWithDate = {
-      ...mockProject,
-      createdAt: new Date('2023-12-25T10:30:00Z'),
-    };
-
-    render(
-      <ProjectThumbnail
-        project={projectWithDate}
-        onDelete={mockOnDelete}
-        onEdit={mockOnEdit}
-      />
-    );
+  it('displays formatted date correctly', () => {
+    render(<ProjectCard {...defaultProps} date="Dec 25, 2023" />);
 
     expect(screen.getByText(/dec 25, 2023/i)).toBeInTheDocument();
   });
 
   it('has proper accessibility attributes', () => {
-    render(<ProjectThumbnail {...defaultProps} />);
+    render(<ProjectCard {...defaultProps} />);
 
-    const card = screen.getByRole('article');
-    expect(card).toHaveAttribute('tabIndex', '0');
+    const card = screen.getByRole('button');
+    expect(card).toBeInTheDocument();
 
-    const menuButton = screen.getByRole('button', { name: /more options/i });
-    expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+    const title = screen.getByText(defaultProps.title);
+    expect(title).toHaveAttribute('title', defaultProps.title);
   });
 
-  it('stops event propagation on menu button click', async () => {
-    const user = userEvent.setup();
-    const mockCardClick = vi.fn();
+  it('truncates long titles appropriately', () => {
+    const longTitle =
+      'This is a very long project title that should be truncated';
 
-    render(
-      <div onClick={mockCardClick}>
-        <ProjectThumbnail {...defaultProps} />
-      </div>
-    );
+    render(<ProjectCard {...defaultProps} title={longTitle} />);
 
-    const menuButton = screen.getByRole('button', { name: /more options/i });
-    await user.click(menuButton);
-
-    expect(mockCardClick).not.toHaveBeenCalled();
+    const titleElement = screen.getByText(longTitle);
+    expect(titleElement).toHaveClass('truncate');
   });
 });

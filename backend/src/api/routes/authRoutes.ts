@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as authController from '../controllers/authController';
 import { authenticate } from '../../middleware/auth';
 import { validateBody, validateParams } from '../../middleware/validation';
+import { uploadSingleImage, handleUploadError } from '../../middleware/upload';
 import {
   loginSchema,
   registerSchema,
@@ -41,10 +42,11 @@ router.post('/request-password-reset',
   authController.requestPasswordReset
 );
 
-router.post('/confirm-password-reset',
+router.post('/reset-password',
   validateBody(resetPasswordConfirmSchema),
-  authController.confirmPasswordReset
+  authController.resetPasswordWithToken
 );
+
 
 router.get('/verify-email/:token',
   validateParams(z.object({ token: z.string() })),
@@ -83,6 +85,12 @@ router.get('/storage-stats',
 router.post('/change-password',
   validateBody(changePasswordSchema),
   authController.changePassword
+);
+
+router.post('/avatar',
+  uploadSingleImage,
+  handleUploadError,
+  authController.uploadAvatar
 );
 
 export default router;

@@ -1,13 +1,25 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import { DeleteAccountDialog } from '../DeleteAccountDialog';
-import * as api from '@/lib/api';
+import { render } from '@/test/utils/test-utils';
+import DeleteAccountDialog from '../DeleteAccountDialog';
 
-// Mock the API module
-vi.mock('@/lib/api', () => ({
-  deleteAccount: vi.fn(),
-}));
+// Mock the useAuth hook
+const mockDeleteAccount = vi.fn();
+vi.mock('@/contexts/AuthContext', async () => {
+  const actual = await vi.importActual('@/contexts/AuthContext');
+  return {
+    ...actual,
+    useAuth: () => ({
+      user: {
+        email: 'test@example.com',
+        id: 'test-user-id',
+      },
+      deleteAccount: mockDeleteAccount,
+      isAuthenticated: true,
+    }),
+  };
+});
 
 // Mock the toast module
 vi.mock('sonner', () => ({
@@ -18,10 +30,14 @@ vi.mock('sonner', () => ({
 }));
 
 // Mock the router
-const mockPush = vi.fn();
-vi.mock('react-router-dom', () => ({
-  useNavigate: () => mockPush,
-}));
+const mockNavigate = vi.fn();
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate,
+  };
+});
 
 describe('DeleteAccountDialog', () => {
   const defaultProps = {
@@ -32,6 +48,8 @@ describe('DeleteAccountDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDeleteAccount.mockReset();
+    mockNavigate.mockReset();
   });
 
   it('should render the dialog when open', () => {
@@ -100,7 +118,6 @@ describe('DeleteAccountDialog', () => {
   });
 
   it('should call deleteAccount API when confirmed', async () => {
-    const mockDeleteAccount = vi.mocked(api.deleteAccount);
     mockDeleteAccount.mockResolvedValue({ success: true });
 
     render(<DeleteAccountDialog {...defaultProps} />);
@@ -119,7 +136,6 @@ describe('DeleteAccountDialog', () => {
   });
 
   it('should redirect to home after successful deletion', async () => {
-    const mockDeleteAccount = vi.mocked(api.deleteAccount);
     mockDeleteAccount.mockResolvedValue({ success: true });
 
     render(<DeleteAccountDialog {...defaultProps} />);
@@ -133,12 +149,11 @@ describe('DeleteAccountDialog', () => {
     fireEvent.click(deleteButton);
 
     await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith('/');
+      expect(mockNavigate).toHaveBeenCalledWith('/');
     });
   });
 
   it('should show error toast on deletion failure', async () => {
-    const mockDeleteAccount = vi.mocked(api.deleteAccount);
     mockDeleteAccount.mockRejectedValue(new Error('Network error'));
 
     const { toast } = await import('sonner');
@@ -161,7 +176,6 @@ describe('DeleteAccountDialog', () => {
   });
 
   it('should disable input and button during deletion', async () => {
-    const mockDeleteAccount = vi.mocked(api.deleteAccount);
     mockDeleteAccount.mockImplementation(
       () => new Promise(resolve => setTimeout(resolve, 100))
     );

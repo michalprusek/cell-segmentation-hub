@@ -4,6 +4,9 @@ import { ProjectImage } from '@/types';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import { getLocalizedErrorMessage } from '@/lib/errorUtils';
+import { useLanguage } from '@/contexts/LanguageContext';
+import config from '@/lib/config';
 
 export interface DashboardProjectsOptions {
   sortField: string;
@@ -21,6 +24,7 @@ export const useDashboardProjects = ({
   sortDirection,
   userId,
 }: DashboardProjectsOptions) => {
+  const { t } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -52,10 +56,11 @@ export const useDashboardProjects = ({
 
             // Ensure URL is absolute for Docker environment
             if (thumbnail && !thumbnail.startsWith('http')) {
-              const baseUrl =
-                import.meta.env.VITE_API_BASE_URL?.replace('/api', '') ||
-                'http://localhost:3001';
-              thumbnail = `${baseUrl}${thumbnail.startsWith('/') ? '' : '/'}${thumbnail}`;
+              const baseUrl = config.apiBaseUrl
+                .replace('/api', '')
+                .replace(/\/+$/, '');
+              const cleanThumbnail = thumbnail.replace(/^\/+/, '');
+              thumbnail = `${baseUrl}/${cleanThumbnail}`;
             }
           }
 
@@ -132,12 +137,17 @@ export const useDashboardProjects = ({
       setProjects(sortedProjects);
     } catch (error) {
       logger.error('Error fetching projects:', error);
-      setFetchError('Failed to load projects. Please try again.');
-      toast.error('Failed to load projects');
+      const errorMessage = getLocalizedErrorMessage(
+        error,
+        t,
+        'errors.operations.loadProject'
+      );
+      setFetchError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
-  }, [userId, sortField, sortDirection]);
+  }, [userId, sortField, sortDirection, t]);
 
   useEffect(() => {
     if (userId) {

@@ -1,0 +1,106 @@
+# Enhanced Docker Compose configuration with monitoring and log rotation
+# This extends the main docker-compose.yml with additional monitoring services
+
+services:
+  # Log rotation service
+  logrotate:
+    build:
+      context: ./docker/logrotate
+      dockerfile: Dockerfile.logrotate
+    container_name: spheroseg-logrotate
+    volumes:
+      - ./docker/logrotate:/etc/logrotate.d/spheroseg
+      - backend-logs:/var/log/spheroseg/backend
+      - ml-logs:/var/log/spheroseg/ml
+      - prometheus-logs:/var/log/spheroseg/prometheus
+      - grafana-logs:/var/log/spheroseg/grafana
+      - nginx-logs:/var/log/nginx
+      - ./docker/logrotate/setup-log-rotation.sh:/usr/local/bin/setup-log-rotation.sh:ro
+      - ./docker/logrotate/docker-entrypoint.sh:/usr/local/bin/docker-entrypoint.sh:ro
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
+    entrypoint: ["/usr/local/bin/docker-entrypoint.sh"]
+    # Remove healthcheck if script doesn't exist
+    # healthcheck:
+    #   test: ["CMD", "/usr/local/bin/health-check.sh"]
+    #   interval: 1h
+    #   timeout: 30s
+    #   retries: 3
+    #   start_period: 5s
+
+  # Nginx reverse proxy with enhanced logging
+  nginx:
+    image: nginx:alpine
+    container_name: spheroseg-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./backend/docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./backend/docker/nginx/ssl:/etc/nginx/ssl:ro
+      - nginx-logs:/var/log/nginx
+    depends_on:
+      - frontend
+      - backend
+      - ml-service
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+  
+  # Node Exporter for system metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: spheroseg-node-exporter
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    command:
+      - '--path.rootfs=/host'
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
+
+  # cAdvisor for container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: spheroseg-cadvisor
+    ports:
+      - "8080:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    cap_add:
+      - SYS_ADMIN
+      - DAC_READ_SEARCH
+    devices:
+      - /dev/kmsg
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
+
+volumes:
+  backend-logs:
+    driver: local
+  ml-logs:
+    driver: local
+  prometheus-logs:
+    driver: local
+  grafana-logs:
+    driver: local
+  nginx-logs:
+    driver: local

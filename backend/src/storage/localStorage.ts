@@ -11,6 +11,7 @@ import {
 } from './interface';
 import { config } from '../utils/config';
 import { logger } from '../utils/logger';
+import { getBaseUrl } from '../utils/getBaseUrl';
 
 /**
  * Local file system storage provider
@@ -130,12 +131,22 @@ export class LocalStorageProvider implements StorageProvider {
         await fs.unlink(filePath);
       }
 
-      // Delete thumbnail if exists
-      const thumbnailKey = this.getThumbnailKey(key);
-      const thumbnailPath = path.join(this.uploadDir, thumbnailKey);
-      
-      if (existsSync(thumbnailPath)) {
-        await fs.unlink(thumbnailPath);
+      // Delete thumbnail if exists (skip for avatars since they don't have thumbnails)
+      if (!key.startsWith('avatars/')) {
+        try {
+          const thumbnailKey = this.getThumbnailKey(key);
+          const thumbnailPath = path.join(this.uploadDir, thumbnailKey);
+          
+          if (existsSync(thumbnailPath)) {
+            await fs.unlink(thumbnailPath);
+          }
+        } catch (error) {
+          // If thumbnail key generation fails, continue with main file deletion
+          logger.warn('Failed to delete thumbnail (may not exist)', 'LocalStorage', { 
+            key, 
+            error: (error as Error).message 
+          });
+        }
       }
 
       logger.info('File deleted successfully', 'LocalStorage', { key });
@@ -154,14 +165,8 @@ export class LocalStorageProvider implements StorageProvider {
    * Get URL for accessing file
    */
   async getUrl(key: string): Promise<string> {
-    // For local storage, we return an absolute URL with proper host/port
-    const port = process.env.PORT || '3001';
-    
-    // In Docker, we need to use localhost for frontend access
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? '' // In production, use relative URLs
-      : `http://localhost:${port}`; // In development/Docker, use absolute URL
-    
+    // Use shared utility for consistent base URL across services
+    const baseUrl = getBaseUrl();
     return `${baseUrl}/uploads/${key}`;
   }
 
@@ -257,17 +262,33 @@ export class LocalStorageProvider implements StorageProvider {
    * Generate storage key for file
    */
   public static generateKey(userId: string | undefined, projectId: string | undefined, filename: string, isOriginal = true): string {
-    // Sanitize user and project IDs to prevent path traversal
-    const sanitizedUserId = (userId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
-    const sanitizedProjectId = (projectId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+    // Enhanced sanitization to prevent path traversal attacks
+    const sanitizePathComponent = (component: string): string => {
+      // Remove any path traversal sequences and dangerous characters
+      return component
+        .replace(/\.\./g, '') // Remove parent directory references
+        .replace(/[/\\]/g, '') // Remove path separators
+        .replace(/^\.+/, '') // Remove leading dots
+        .replace(/[^a-zA-Z0-9_-]/g, '_') // Keep only safe characters
+        .substring(0, 255); // Limit length to prevent filesystem issues
+    };
+    
+    const sanitizedUserId = sanitizePathComponent(userId || 'unknown');
+    const sanitizedProjectId = sanitizePathComponent(projectId || 'unknown');
     
     const folder = isOriginal ? 'originals' : 'thumbnails';
     const timestamp = Date.now();
-    const ext = path.extname(filename);
-    const nameWithoutExt = path.basename(filename, ext);
-    const sanitizedName = nameWithoutExt.replace(/[^a-zA-Z0-9._-]/g, '_');
     
-    return `${sanitizedUserId}/${sanitizedProjectId}/${folder}/${timestamp}_${sanitizedName}${ext}`;
+    // Secure filename handling
+    const basename = path.basename(filename); // Remove any directory components
+    const ext = path.extname(basename);
+    const nameWithoutExt = path.basename(basename, ext);
+    const sanitizedName = sanitizePathComponent(nameWithoutExt);
+    
+    // Validate and sanitize extension
+    const sanitizedExt = ext.toLowerCase().replace(/[^a-z0-9.]/g, '').substring(0, 10);
+    
+    return `${sanitizedUserId}/${sanitizedProjectId}/${folder}/${timestamp}_${sanitizedName}${sanitizedExt}`;
   }
 
   /**

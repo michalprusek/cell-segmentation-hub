@@ -75,3 +75,11 @@ Thumbs.db
 # Test files
 test-results/
 coverage/
+# Production environment (never commit!)
+.env.production
+!.env.production.template
+
+# SSL certificates and keys
+docker/nginx/ssl/*
+!docker/nginx/ssl/.gitkeep
+!docker/nginx/ssl/README.md

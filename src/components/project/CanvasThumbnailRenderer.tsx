@@ -110,18 +110,20 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
         width: rect.width || THUMBNAIL_WIDTH,
         height: rect.height || THUMBNAIL_HEIGHT,
       };
-      setContainerSize(newSize);
 
-      // Log size changes for debugging
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug('🔧 Container size changed (not affecting rendering):', {
-          oldSize: containerSize,
-          newSize,
-          usingFixedSize: !width && !height,
-          actualRenderSize: `${actualWidth}x${actualHeight}`,
-          disableResizeObserver,
-        });
-      }
+      setContainerSize(prevSize => {
+        // Log size changes for debugging
+        if (process.env.NODE_ENV === 'development') {
+          logger.debug('🔧 Container size changed (not affecting rendering):', {
+            oldSize: prevSize,
+            newSize,
+            usingFixedSize: !width && !height,
+            actualRenderSize: `${actualWidth}x${actualHeight}`,
+            disableResizeObserver,
+          });
+        }
+        return newSize;
+      });
     };
 
     // Initial size
@@ -133,14 +135,7 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [
-    width,
-    height,
-    actualWidth,
-    actualHeight,
-    disableResizeObserver,
-    containerSize,
-  ]);
+  }, [width, height, actualWidth, actualHeight, disableResizeObserver]);
 
   // Memoize scaling calculations
   const scalingParams = useMemo(() => {

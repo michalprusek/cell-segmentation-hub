@@ -76,7 +76,8 @@ const AccountSection = () => {
       });
     } catch (error: unknown) {
       logger.error('Error changing password:', error);
-      const errorMessage = getErrorMessage(error) || 'Změna hesla se nezdařila';
+      const errorMessage =
+        getErrorMessage(error, t) || t('errors.operations.changePassword');
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);

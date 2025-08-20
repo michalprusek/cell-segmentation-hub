@@ -5,12 +5,15 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
-import { Clock, Edit, Mail, MapPin, Loader2 } from 'lucide-react';
+import { Clock, Edit, Mail, MapPin, Loader2, Camera } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 // Note: Profile functionality now handled by AuthContext and Settings page
 import { useLanguage } from '@/contexts/LanguageContext';
+import AvatarUploadButton from '@/components/profile/AvatarUploadButton';
+import AvatarCropDialog from '@/components/profile/AvatarCropDialog';
 import { apiClient, Project, ProjectImage } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import { createImagePreviewUrl } from '@/lib/tiffConverter';
 
 interface ProfileData {
   name: string;
@@ -32,7 +35,7 @@ interface ActivityItem {
 }
 
 const Profile = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { t } = useLanguage();
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,6 +54,12 @@ const Profile = () => {
   const [recentActivityError, setRecentActivityError] = useState<string | null>(
     null
   );
+  const [selectedAvatarFile, setSelectedAvatarFile] = useState<File | null>(
+    null
+  );
+  const [avatarImageSrc, setAvatarImageSrc] = useState<string>('');
+  const [showCropDialog, setShowCropDialog] = useState(false);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -279,6 +288,186 @@ const Profile = () => {
     fetchData();
   }, [user, profile, t]);
 
+  // Clean up object URLs on unmount or when avatar image changes
+  useEffect(() => {
+    const currentUrl = avatarImageSrc;
+    return () => {
+      if (currentUrl && currentUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentUrl);
+      }
+    };
+  }, [avatarImageSrc]);
+
+  const handleAvatarFileSelect = async (file: File) => {
+    // Validate file type
+    const allowedTypes = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'image/tif',
+    ];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error(t('profile.avatar.invalidFileType'));
+      logger.error('Invalid avatar file type:', file.type);
+      return;
+    }
+
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      toast.error(t('profile.avatar.fileTooLarge'));
+      logger.error('Avatar file too large:', file.size);
+      return;
+    }
+
+    setSelectedAvatarFile(file);
+
+    // Revoke previous URL if exists
+    if (avatarImageSrc && avatarImageSrc.startsWith('blob:')) {
+      URL.revokeObjectURL(avatarImageSrc);
+    }
+
+    // Convert TIFF or other formats to displayable format
+    let imageUrl: string | null = null;
+    try {
+      imageUrl = await createImagePreviewUrl(file);
+      setAvatarImageSrc(imageUrl);
+      setShowCropDialog(true);
+    } catch (error) {
+      // Clean up URL if error occurred after creation
+      if (imageUrl && imageUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(imageUrl);
+      }
+      logger.error('Failed to create image preview:', error);
+      toast({
+        title: t('common.error'),
+        description: t(
+          'profile.avatar.previewError',
+          'Failed to preview image'
+        ),
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const validateAvatarFile = (
+    fileOrBlob: File | Blob
+  ): { valid: boolean; reason?: string } => {
+    const allowedTypes = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'image/tif',
+    ];
+
+    // Check type - for blobs without type, accept them (cropped images)
+    if (fileOrBlob.type && !allowedTypes.includes(fileOrBlob.type)) {
+      return { valid: false, reason: 'invalidFileType' };
+    }
+
+    // Check size
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (fileOrBlob.size > maxSize) {
+      return { valid: false, reason: 'fileTooLarge' };
+    }
+
+    return { valid: true };
+  };
+
+  const handleCropComplete = async (croppedImageBlob: Blob) => {
+    if (!selectedAvatarFile) return;
+
+    // Validate cropped blob
+    const validation = validateAvatarFile(croppedImageBlob);
+    if (!validation.valid) {
+      toast.error(t(`profile.avatar.${validation.reason}`));
+      logger.error(`Avatar validation failed: ${validation.reason}`, {
+        originalType: selectedAvatarFile.type,
+        blobType: croppedImageBlob.type,
+        size: croppedImageBlob.size,
+      });
+      return;
+    }
+
+    // Additional validation before upload
+    const allowedTypes = [
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+      'image/bmp',
+      'image/tiff',
+      'image/tif',
+    ];
+    if (!allowedTypes.includes(croppedImageBlob.type)) {
+      toast.error(t('profile.avatar.invalidFileType'));
+      logger.error('Invalid cropped image type:', croppedImageBlob.type);
+      return;
+    }
+
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (croppedImageBlob.size > maxSize) {
+      toast.error(t('profile.avatar.fileTooLarge'));
+      logger.error('Cropped image too large:', croppedImageBlob.size);
+      return;
+    }
+
+    setIsUploadingAvatar(true);
+    try {
+      // Convert blob to file
+      const croppedFile = new File(
+        [croppedImageBlob],
+        selectedAvatarFile.name,
+        {
+          type: croppedImageBlob.type,
+        }
+      );
+
+      // Upload to server
+      const result = await apiClient.uploadAvatar(croppedFile);
+
+      // Update profile data locally
+      if (profileData) {
+        setProfileData({
+          ...profileData,
+          avatar: result.avatarUrl,
+        });
+      }
+
+      // Refresh global profile state
+      await refreshProfile();
+
+      toast.success(t('profile.avatar.uploadSuccess'));
+    } catch (error) {
+      logger.error('Avatar upload error:', error);
+      toast.error(t('profile.avatar.uploadError'));
+    } finally {
+      setIsUploadingAvatar(false);
+      setShowCropDialog(false);
+      setSelectedAvatarFile(null);
+      // Clean up object URL
+      if (avatarImageSrc) {
+        URL.revokeObjectURL(avatarImageSrc);
+        setAvatarImageSrc('');
+      }
+    }
+  };
+
+  const handleCropCancel = () => {
+    setShowCropDialog(false);
+    setSelectedAvatarFile(null);
+    if (avatarImageSrc) {
+      URL.revokeObjectURL(avatarImageSrc);
+      setAvatarImageSrc('');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -323,12 +512,25 @@ const Profile = () => {
               <Card className="dark:bg-gray-800 dark:border-gray-700">
                 <CardContent className="pt-6">
                   <div className="flex flex-col items-center text-center">
-                    <div className="w-24 h-24 rounded-full overflow-hidden mb-4 border-2 border-blue-100 dark:border-blue-900">
-                      <img
-                        src={profileData.avatar}
-                        alt={profileData.name}
-                        className="w-full h-full object-cover"
-                      />
+                    <div className="relative mb-4">
+                      <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-blue-100 dark:border-blue-900 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
+                        {profile?.avatarUrl || profileData.avatar ? (
+                          <img
+                            src={profile?.avatarUrl || profileData.avatar}
+                            alt={profileData.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Camera className="w-8 h-8 text-gray-400" />
+                        )}
+                      </div>
+                      <div className="absolute -bottom-2 right-0">
+                        <AvatarUploadButton
+                          onFileSelect={handleAvatarFileSelect}
+                          disabled={isUploadingAvatar}
+                          className="rounded-full p-2 bg-white dark:bg-gray-800 shadow-md border border-gray-200 dark:border-gray-600"
+                        />
+                      </div>
                     </div>
                     <h2 className="text-xl font-semibold dark:text-white">
                       {profileData.name}
@@ -540,6 +742,14 @@ const Profile = () => {
           </div>
         )}
       </div>
+
+      {/* Avatar Crop Dialog */}
+      <AvatarCropDialog
+        open={showCropDialog}
+        onClose={handleCropCancel}
+        imageSrc={avatarImageSrc}
+        onCropComplete={handleCropComplete}
+      />
     </div>
   );
 };

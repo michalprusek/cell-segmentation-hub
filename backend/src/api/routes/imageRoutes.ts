@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { ImageController } from '../controllers/imageController';
 import { authenticate } from '../../middleware/auth';
-import { validateParams, validateQuery } from '../../middleware/validation';
+import { validateParams, validateQuery, validateBody } from '../../middleware/validation';
 import { 
   uploadImages, 
   handleUploadError, 
@@ -10,7 +10,8 @@ import {
 import {
   projectIdSchema,
   projectImageParamsSchema,
-  imageQuerySchema
+  imageQuerySchema,
+  imageBatchDeleteSchema
 } from '../../types/validation';
 
 const router = Router();
@@ -33,6 +34,17 @@ router.get(
 // All other routes require authentication (email verification disabled for development)
 router.use(authenticate);
 // router.use(requireEmailVerification); // Temporarily disabled for development
+
+/**
+ * Delete multiple images in batch
+ * DELETE /images/batch
+ * NOTE: Must be placed before parameterized routes to avoid routing conflicts
+ */
+router.delete(
+  '/batch',
+  validateBody(imageBatchDeleteSchema),
+  imageController.deleteBatch
+);
 
 /**
  * Get project images with optimized thumbnails

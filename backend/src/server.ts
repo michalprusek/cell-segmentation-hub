@@ -10,7 +10,7 @@ import { ResponseHelper } from './utils/response';
 import { initializeDatabase, disconnectDatabase, checkDatabaseHealth } from './db';
 import { setupSwagger } from './middleware/swagger';
 import { setupRoutes, createEndpointTracker } from './api/routes';
-import { createMonitoringMiddleware, getCombinedMetricsEndpoint, getMonitoringHealth } from './middleware/monitoring';
+import { createMonitoringMiddleware, getMetricsEndpoint, getMonitoringHealth } from './middleware/monitoring';
 import { WebSocketService } from './services/websocketService';
 import { prisma } from './db';
 
@@ -30,7 +30,12 @@ app.use(helmet({
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "https:", "data:"]
     }
-  }
+  },
+  hsts: config.NODE_ENV === 'production' ? {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  } : false
 }));
 
 // CORS configuration
@@ -46,39 +51,18 @@ app.use(cors({
 if (config.RATE_LIMIT_ENABLED) {
   const limiter = rateLimit({
     windowMs: config.NODE_ENV === 'development' ? 60000 : config.RATE_LIMIT_WINDOW_MS, // 1 minute in dev
-    max: config.NODE_ENV === 'development' ? 50000 : config.RATE_LIMIT_MAX, // 50000 requests per minute in dev (much higher)
+    max: config.NODE_ENV === 'development' ? 10000 : config.RATE_LIMIT_MAX, // 10000 requests per minute in dev
     message: {
       success: false,
       error: 'Příliš mnoho požadavků, zkuste to později'
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // Skip rate limiting for data loading operations (both dev and prod)
     skip: (req) => {
-      // Always skip health checks and metrics
-      if (req.path === '/health' || req.path === '/metrics' || req.path === '/api/health') {
-        return true;
+      // Skip rate limiting for health checks and metrics in development
+      if (config.NODE_ENV === 'development') {
+        return req.path === '/health' || req.path === '/metrics' || req.path === '/api/health';
       }
-      
-      // Skip GET requests for data loading (thumbnails, images, segmentation results)
-      if (req.method === 'GET') {
-        return req.path.includes('/thumbnails/') ||     // Thumbnail loading
-               req.path.includes('/images/') ||         // Image data loading
-               req.path.includes('/results') ||         // Segmentation results
-               req.path.startsWith('/api/projects/') ||  // Project data loading
-               req.path.startsWith('/api/segmentation/'); // Segmentation data
-      }
-      
-      // Skip OPTIONS requests (CORS preflight)
-      if (req.method === 'OPTIONS') {
-        return true;
-      }
-      
-      // In development, also skip auth endpoints
-      if (config.NODE_ENV === 'development' && req.path.startsWith('/api/auth')) {
-        return true;
-      }
-      
       return false;
     },
     handler: (req, res) => {
@@ -123,8 +107,8 @@ app.get('/health', async (req, res) => {
   }, dbHealth.healthy ? 'Server is healthy' : 'Server has issues');
 });
 
-// Prometheus metrics endpoint (combined infrastructure + business metrics)
-app.get('/metrics', getCombinedMetricsEndpoint());
+// Prometheus metrics endpoint
+app.get('/metrics', getMetricsEndpoint());
 
 // Setup all API routes
 setupRoutes(app);
@@ -141,8 +125,78 @@ app.use(errorHandler);
 // Start server
 const startServer = async (): Promise<void> => {
   try {
+    // JWT Security validation - MUST run before any other initialization
+    const jwtAccessSecret = process.env.JWT_ACCESS_SECRET || '';
+    const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || '';
+    
+    // Check for valid JWT secrets (64 hex characters = 32 bytes)
+    const isValidHexSecret = (secret: string): boolean => {
+      return /^[0-9a-fA-F]{64}$/.test(secret);
+    };
+    
+    const invalidPlaceholders = [
+      'REPLACE_ME_GENERATE_64_HEX_WITH_OPENSSL_RAND',
+      'INVALID_PLACEHOLDER_GENERATE_WITH_OPENSSL_RAND_HEX_32',
+      'your-super-secret-jwt-key-here',
+      'your-super-secret-refresh-key-here'
+    ];
+    
+    if (!jwtAccessSecret || 
+        !isValidHexSecret(jwtAccessSecret) || 
+        invalidPlaceholders.some(p => jwtAccessSecret.includes(p))) {
+      logger.error('SECURITY ERROR: Invalid JWT_ACCESS_SECRET detected');
+      logger.error('JWT_ACCESS_SECRET must be a 64-character hexadecimal string (32 bytes)');
+      logger.error('Generate a secure secret using: openssl rand -hex 32');
+      process.exit(1);
+    }
+    
+    if (!jwtRefreshSecret || 
+        !isValidHexSecret(jwtRefreshSecret) || 
+        invalidPlaceholders.some(p => jwtRefreshSecret.includes(p))) {
+      logger.error('SECURITY ERROR: Invalid JWT_REFRESH_SECRET detected');
+      logger.error('JWT_REFRESH_SECRET must be a 64-character hexadecimal string (32 bytes)');
+      logger.error('Generate a secure secret using: openssl rand -hex 32');
+      process.exit(1);
+    }
+    
+    if (jwtAccessSecret === jwtRefreshSecret) {
+      logger.error('SECURITY ERROR: JWT_ACCESS_SECRET and JWT_REFRESH_SECRET must be different');
+      logger.error('Generate unique secrets for each using: openssl rand -hex 32');
+      process.exit(1);
+    }
+    
+    logger.info('✓ JWT secrets validation passed');
+    
+    // Security check: Prevent using placeholder values in production
+    if (config.NODE_ENV === 'production' && process.env.ENABLE_GRAFANA === 'true') {
+      const grafanaPassword = process.env.GF_SECURITY_ADMIN_PASSWORD;
+      if (!grafanaPassword || 
+          grafanaPassword.includes('__REPLACE_WITH') || 
+          grafanaPassword === 'DO_NOT_USE_IN_PRODUCTION_CHANGE_ME_NOW' ||
+          grafanaPassword === 'REQUIRED_CHANGE_ME_GENERATE_STRONG_PASSWORD' ||
+          grafanaPassword === 'admin' || 
+          grafanaPassword === 'password' || 
+          grafanaPassword === 'changeme') {
+        logger.error('SECURITY ERROR: Default or placeholder Grafana admin password detected in production');
+        logger.error('Please set GF_SECURITY_ADMIN_PASSWORD to a secure password before restarting');
+        process.exit(1);
+      }
+    } else if (config.NODE_ENV === 'production') {
+      logger.info('Grafana password check skipped (ENABLE_GRAFANA not set to true)');
+    }
+    
     // Initialize database connection
     await initializeDatabase();
+    
+    // Initialize email service
+    try {
+      const { initializeEmailService } = await import('./services/emailService');
+      await initializeEmailService();
+      logger.info('📧 Email service initialization complete');
+    } catch (error) {
+      logger.error('Failed to initialize email service:', error as Error);
+      // Don't exit - email service can fail gracefully
+    }
     
     // Create HTTP server
     const server = createServer(app);

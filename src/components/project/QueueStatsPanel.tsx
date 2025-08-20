@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Clock, Play, BarChart3, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { QueueStats } from '@/hooks/useSegmentationQueue';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { ProjectImage } from '@/types';
 
 interface QueueStatsPanelProps {
   stats: QueueStats | null;
@@ -16,6 +17,8 @@ interface QueueStatsPanelProps {
   className?: string;
   batchSubmitted?: boolean;
   imagesToSegmentCount?: number;
+  selectedImageIds?: Set<string>;
+  images?: ProjectImage[];
 }
 
 export const QueueStatsPanel = ({
@@ -26,10 +29,56 @@ export const QueueStatsPanel = ({
   className,
   batchSubmitted = false,
   imagesToSegmentCount = 0,
+  selectedImageIds = new Set(),
+  images = [],
 }: QueueStatsPanelProps) => {
   const { t } = useLanguage();
   const hasQueuedItems = stats && stats.queued > 0;
   const isProcessing = stats && stats.processing > 0;
+
+  // Calculate counts for button label
+  const { selectedWithSegmentationCount, totalToProcess, buttonLabel } =
+    useMemo(() => {
+      // Count selected images that have segmentation
+      const selectedWithSegmentation = images.filter(
+        img =>
+          selectedImageIds.has(img.id) &&
+          (img.segmentationStatus === 'completed' ||
+            img.segmentationStatus === 'segmented')
+      ).length;
+
+      // Total images to process
+      const total = imagesToSegmentCount + selectedWithSegmentation;
+
+      // Determine button label
+      let label = t('queue.segmentAll');
+      if (total > 0) {
+        if (selectedWithSegmentation > 0 && imagesToSegmentCount > 0) {
+          // Both new and re-segmentation
+          label = t('queue.segmentMixed', {
+            new: imagesToSegmentCount,
+            resegment: selectedWithSegmentation,
+            total: total,
+          });
+        } else if (selectedWithSegmentation > 0) {
+          // Only re-segmentation
+          label = t('queue.resegmentSelected', {
+            count: selectedWithSegmentation,
+          });
+        } else {
+          // Only new segmentation
+          label = t('queue.segmentAllWithCount', {
+            count: imagesToSegmentCount,
+          });
+        }
+      }
+
+      return {
+        selectedWithSegmentationCount: selectedWithSegmentation,
+        totalToProcess: total,
+        buttonLabel: label,
+      };
+    }, [selectedImageIds, images, imagesToSegmentCount, t]);
 
   return (
     <motion.div
@@ -108,20 +157,24 @@ export const QueueStatsPanel = ({
               <Button
                 onClick={onSegmentAll}
                 disabled={
-                  !isConnected || imagesToSegmentCount === 0 || batchSubmitted
+                  !isConnected || totalToProcess === 0 || batchSubmitted
                 }
                 className={cn(
                   'gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white',
-                  (!isConnected ||
-                    imagesToSegmentCount === 0 ||
-                    batchSubmitted) &&
+                  (!isConnected || totalToProcess === 0 || batchSubmitted) &&
                     'bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed'
                 )}
+                title={
+                  selectedWithSegmentationCount > 0
+                    ? t('queue.segmentTooltip', {
+                        new: imagesToSegmentCount,
+                        resegment: selectedWithSegmentationCount,
+                      })
+                    : undefined
+                }
               >
                 <Play className="h-4 w-4" />
-                {batchSubmitted
-                  ? t('queue.addingToQueue')
-                  : t('queue.segmentAll')}
+                {batchSubmitted ? t('queue.addingToQueue') : buttonLabel}
               </Button>
             </div>
           </div>

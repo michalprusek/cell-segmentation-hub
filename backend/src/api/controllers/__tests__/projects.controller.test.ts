@@ -1,21 +1,19 @@
 import request from 'supertest'
 import express from 'express'
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals'
-import { ProjectsController } from '../projects.controller'
-import { ProjectsService } from '../../services/projects.service'
-import { authMiddleware } from '../../middleware/auth.middleware'
+import { createProject, getProjects, getProject, updateProject, deleteProject } from '../projectController'
+import * as projectService from '../../../services/projectService'
+import { authenticate } from '../../../middleware/auth'
 
 // Mock dependencies
-jest.mock('../../services/projects.service')
-jest.mock('../../middleware/auth.middleware')
+jest.mock('../../../services/projectService')
+jest.mock('../../../middleware/auth')
 
-const MockProjectsService = ProjectsService as jest.MockedClass<typeof ProjectsService>
-const mockAuthMiddleware = authMiddleware as jest.MockedFunction<typeof authMiddleware>
+const MockProjectService = projectService as jest.Mocked<typeof projectService>
+const mockAuthMiddleware = authenticate as jest.MockedFunction<typeof authenticate>
 
-describe('ProjectsController', () => {
+describe('ProjectController', () => {
   let app: express.Application
-  let projectsService: jest.Mocked<ProjectsService>
-  let projectsController: ProjectsController
 
   const mockUser = {
     id: 'user-id',
@@ -31,7 +29,10 @@ describe('ProjectsController', () => {
     userId: 'user-id',
     createdAt: new Date('2023-01-01'),
     updatedAt: new Date('2023-01-01'),
-    images: []
+    images: [],
+    _count: {
+      images: 0
+    }
   }
 
   beforeEach(() => {
@@ -39,26 +40,39 @@ describe('ProjectsController', () => {
     app.use(express.json())
     
     // Mock auth middleware to add user to request
-    mockAuthMiddleware.mockImplementation((req, res, next) => {
+    mockAuthMiddleware.mockImplementation(async (req: any, res: any, next: any) => {
       req.user = mockUser
       next()
     })
 
-    projectsService = new MockProjectsService() as jest.Mocked<ProjectsService>
-    projectsController = new ProjectsController(projectsService)
+    // Setup routes with function controllers
+    app.get('/projects', mockAuthMiddleware, getProjects)
+    app.post('/projects', mockAuthMiddleware, createProject)
+    app.get('/projects/:id', mockAuthMiddleware, getProject)
+    app.put('/projects/:id', mockAuthMiddleware, updateProject)
+    app.delete('/projects/:id', mockAuthMiddleware, deleteProject)
+  })
 
-    // Setup routes
-    app.get('/projects', mockAuthMiddleware, projectsController.getProjects.bind(projectsController))
-    app.post('/projects', mockAuthMiddleware, projectsController.createProject.bind(projectsController))
-    app.get('/projects/:id', mockAuthMiddleware, projectsController.getProject.bind(projectsController))
-    app.put('/projects/:id', mockAuthMiddleware, projectsController.updateProject.bind(projectsController))
-    app.delete('/projects/:id', mockAuthMiddleware, projectsController.deleteProject.bind(projectsController))
+  afterEach(() => {
+    jest.restoreAllMocks()
+    jest.clearAllMocks()
+    jest.resetAllMocks()
   })
 
   describe('GET /projects', () => {
     it('should return user projects successfully', async () => {
-      const mockProjects = [mockProject]
-      projectsService.getUserProjects.mockResolvedValueOnce(mockProjects)
+      const mockResponse = {
+        projects: [mockProject],
+        totalCount: 1,
+        pagination: {
+          page: 1,
+          limit: 10,
+          totalPages: 1,
+          hasNext: false,
+          hasPrev: false
+        }
+      }
+      MockProjectService.getUserProjects.mockResolvedValueOnce(mockResponse)
 
       const response = await request(app)
         .get('/projects')
@@ -66,15 +80,15 @@ describe('ProjectsController', () => {
 
       expect(response.body).toEqual({
         success: true,
-        data: mockProjects,
+        data: mockResponse,
         message: 'Projects retrieved successfully'
       })
 
-      expect(projectsService.getUserProjects).toHaveBeenCalledWith(mockUser.id)
+      expect(MockProjectService.getUserProjects).toHaveBeenCalledWith(mockUser.id)
     })
 
     it('should handle service error', async () => {
-      projectsService.getUserProjects.mockRejectedValueOnce(new Error('Database error'))
+MockProjectService.getUserProjects.mockRejectedValueOnce(new Error('Database error'))
 
       const response = await request(app)
         .get('/projects')
@@ -85,13 +99,24 @@ describe('ProjectsController', () => {
     })
 
     it('should return empty array when user has no projects', async () => {
-      projectsService.getUserProjects.mockResolvedValueOnce([])
+      const emptyResponse = {
+        projects: [],
+        totalCount: 0,
+        pagination: {
+          page: 1,
+          limit: 10,
+          totalPages: 0,
+          hasNext: false,
+          hasPrev: false
+        }
+      }
+      MockProjectService.getUserProjects.mockResolvedValueOnce(emptyResponse)
 
       const response = await request(app)
         .get('/projects')
         .expect(200)
 
-      expect(response.body.data).toEqual([])
+      expect(response.body.data.projects).toEqual([])
     })
   })
 
@@ -107,7 +132,7 @@ describe('ProjectsController', () => {
         ...projectData
       }
 
-      projectsService.createProject.mockResolvedValueOnce(createdProject)
+MockProjectService.createProject.mockResolvedValueOnce(createdProject)
 
       const response = await request(app)
         .post('/projects')
@@ -120,10 +145,10 @@ describe('ProjectsController', () => {
         message: 'Project created successfully'
       })
 
-      expect(projectsService.createProject).toHaveBeenCalledWith({
-        ...projectData,
-        userId: mockUser.id
-      })
+      expect(MockProjectService.createProject).toHaveBeenCalledWith(
+        projectData,
+        mockUser.id
+      )
     })
 
     it('should return 400 for missing project name', async () => {
@@ -161,7 +186,7 @@ describe('ProjectsController', () => {
         description: 'Description'
       }
 
-      projectsService.createProject.mockRejectedValueOnce(
+MockProjectService.createProject.mockRejectedValueOnce(
         new Error('Project with this name already exists')
       )
 
@@ -177,7 +202,7 @@ describe('ProjectsController', () => {
 
   describe('GET /projects/:id', () => {
     it('should return project successfully', async () => {
-      projectsService.getProjectById.mockResolvedValueOnce(mockProject)
+MockProjectService.getProjectById.mockResolvedValueOnce(mockProject)
 
       const response = await request(app)
         .get(`/projects/${mockProject.id}`)
@@ -189,14 +214,14 @@ describe('ProjectsController', () => {
         message: 'Project retrieved successfully'
       })
 
-      expect(projectsService.getProjectById).toHaveBeenCalledWith(
+      expect(MockProjectService.getProjectById).toHaveBeenCalledWith(
         mockProject.id,
         mockUser.id
       )
     })
 
     it('should return 404 for non-existent project', async () => {
-      projectsService.getProjectById.mockResolvedValueOnce(null)
+MockProjectService.getProjectById.mockResolvedValueOnce(null)
 
       const response = await request(app)
         .get('/projects/non-existent-id')
@@ -207,7 +232,7 @@ describe('ProjectsController', () => {
     })
 
     it('should return 403 for unauthorized access', async () => {
-      projectsService.getProjectById.mockRejectedValueOnce(
+MockProjectService.getProjectById.mockRejectedValueOnce(
         new Error('Unauthorized access to project')
       )
 
@@ -233,7 +258,7 @@ describe('ProjectsController', () => {
         updatedAt: new Date()
       }
 
-      projectsService.updateProject.mockResolvedValueOnce(updatedProject)
+MockProjectService.updateProject.mockResolvedValueOnce(updatedProject)
 
       const response = await request(app)
         .put(`/projects/${mockProject.id}`)
@@ -246,7 +271,7 @@ describe('ProjectsController', () => {
         message: 'Project updated successfully'
       })
 
-      expect(projectsService.updateProject).toHaveBeenCalledWith(
+      expect(MockProjectService.updateProject).toHaveBeenCalledWith(
         mockProject.id,
         mockUser.id,
         updateData
@@ -258,7 +283,7 @@ describe('ProjectsController', () => {
         name: 'Updated Project'
       }
 
-      projectsService.updateProject.mockResolvedValueOnce(null)
+MockProjectService.updateProject.mockResolvedValueOnce(null)
 
       const response = await request(app)
         .put('/projects/non-existent-id')
@@ -287,7 +312,11 @@ describe('ProjectsController', () => {
 
   describe('DELETE /projects/:id', () => {
     it('should delete project successfully', async () => {
-      projectsService.deleteProject.mockResolvedValueOnce(true)
+      const deletedProject = { 
+        ...mockProject, 
+        imageCount: 5 
+      }
+      MockProjectService.deleteProject.mockResolvedValueOnce(deletedProject)
 
       const response = await request(app)
         .delete(`/projects/${mockProject.id}`)
@@ -298,14 +327,14 @@ describe('ProjectsController', () => {
         message: 'Project deleted successfully'
       })
 
-      expect(projectsService.deleteProject).toHaveBeenCalledWith(
+      expect(MockProjectService.deleteProject).toHaveBeenCalledWith(
         mockProject.id,
         mockUser.id
       )
     })
 
     it('should return 404 for deleting non-existent project', async () => {
-      projectsService.deleteProject.mockResolvedValueOnce(false)
+MockProjectService.deleteProject.mockRejectedValueOnce(new Error('Project not found'))
 
       const response = await request(app)
         .delete('/projects/non-existent-id')
@@ -316,7 +345,7 @@ describe('ProjectsController', () => {
     })
 
     it('should handle deletion error', async () => {
-      projectsService.deleteProject.mockRejectedValueOnce(
+MockProjectService.deleteProject.mockRejectedValueOnce(
         new Error('Cannot delete project with active processing')
       )
 
@@ -332,7 +361,7 @@ describe('ProjectsController', () => {
   describe('Authorization checks', () => {
     it('should require authentication for GET /projects', async () => {
       // Mock auth middleware to return unauthorized
-      mockAuthMiddleware.mockImplementationOnce((req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -342,7 +371,7 @@ describe('ProjectsController', () => {
     })
 
     it('should require authentication for POST /projects', async () => {
-      mockAuthMiddleware.mockImplementationOnce((req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -353,7 +382,7 @@ describe('ProjectsController', () => {
     })
 
     it('should require authentication for GET /projects/:id', async () => {
-      mockAuthMiddleware.mockImplementationOnce((req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -363,7 +392,7 @@ describe('ProjectsController', () => {
     })
 
     it('should require authentication for PUT /projects/:id', async () => {
-      mockAuthMiddleware.mockImplementationOnce((req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -374,7 +403,7 @@ describe('ProjectsController', () => {
     })
 
     it('should require authentication for DELETE /projects/:id', async () => {
-      mockAuthMiddleware.mockImplementationOnce((req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -384,7 +413,7 @@ describe('ProjectsController', () => {
     })
 
     it('should prevent access to other users projects', async () => {
-      projectsService.getProjectById.mockRejectedValueOnce(
+MockProjectService.getProjectById.mockRejectedValueOnce(
         new Error('Project belongs to different user')
       )
 

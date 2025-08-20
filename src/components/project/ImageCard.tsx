@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import CanvasThumbnailRenderer from './CanvasThumbnailRenderer';
 
 interface ImageCardProps {
@@ -37,6 +38,8 @@ interface ImageCardProps {
   };
   onDelete: (imageId: string) => void;
   onOpen: (imageId: string) => void;
+  isSelected: boolean;
+  onSelectionChange: (imageId: string, selected: boolean) => void;
   className?: string;
 }
 
@@ -92,6 +95,8 @@ export const ImageCard = ({
   image,
   onDelete,
   onOpen,
+  isSelected,
+  onSelectionChange,
   className,
 }: ImageCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
@@ -121,6 +126,10 @@ export const ImageCard = ({
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
     onDelete(image.id);
+  };
+
+  const handleSelectionChange = (checked: boolean | 'indeterminate') => {
+    onSelectionChange(image.id, checked === true);
   };
 
   return (
@@ -223,6 +232,23 @@ export const ImageCard = ({
           style={{ zIndex: 5 }}
         />
 
+        {/* Checkbox - top left */}
+        <div
+          className="absolute top-2 left-2 z-20"
+          onClick={e => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={handleSelectionChange}
+            className={cn(
+              'h-5 w-5 border-2 rounded shadow-sm transition-all',
+              isSelected
+                ? 'border-blue-500 bg-blue-500 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white'
+                : 'border-white bg-white/80 backdrop-blur-sm hover:bg-white data-[state=unchecked]:bg-white/80'
+            )}
+          />
+        </div>
+
         {/* Top action buttons */}
         <div
           className={cn(
@@ -249,9 +275,9 @@ export const ImageCard = ({
           {/* File name */}
           <h3
             className="font-semibold text-sm truncate mb-1"
-            title={image.name || 'Image'}
+            title={image.name || t('common.image')}
           >
-            {image.name || 'Image'}
+            {image.name || t('common.image')}
           </h3>
 
           {/* Date and status */}

@@ -1,5 +1,6 @@
 import { SegmentationResult } from '@/lib/segmentation';
 import { calculateMetrics } from './metricCalculations';
+import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
 
 // Convert segmentation to COCO format
 export const convertToCOCO = (segmentation: SegmentationResult): string => {
@@ -7,9 +8,16 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
     p => p.type === 'external'
   );
 
+  // Get all internal polygons
+  const allInternalPolygons = segmentation.polygons.filter(
+    p => p.type === 'internal'
+  );
+
   const annotations = externalPolygons.map((polygon, index) => {
-    // Find all internal polygons (holes)
-    const holes = segmentation.polygons.filter(p => p.type === 'internal');
+    // Find internal polygons (holes) that are actually inside this external polygon
+    const holes = allInternalPolygons.filter(internal =>
+      isPolygonInsidePolygon(internal.points, polygon.points)
+    );
 
     // Convert points to COCO format (all x coordinates, then all y coordinates)
     const segmentationPoints = [
@@ -19,7 +27,7 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
       ),
     ];
 
-    // Add holes to segmentation
+    // Add only the holes that are inside this polygon to segmentation
     holes.forEach(hole => {
       segmentationPoints.push(
         hole.points.reduce<number[]>(
@@ -37,7 +45,7 @@ export const convertToCOCO = (segmentation: SegmentationResult): string => {
     const width = Math.max(...xs) - x;
     const height = Math.max(...ys) - y;
 
-    // Calculate area with holes subtracted
+    // Calculate area with only the contained holes subtracted
     const area = calculateMetrics(polygon, holes).Area;
 
     return {

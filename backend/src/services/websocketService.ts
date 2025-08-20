@@ -4,6 +4,7 @@ import { logger } from '../utils/logger';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
 import { QueueService } from './queueService';
+import { SegmentationPolygon } from './segmentationService';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -25,7 +26,7 @@ export interface ThumbnailUpdate {
   segmentationId: string;
   thumbnailData: {
     levelOfDetail: 'low' | 'medium' | 'high';
-    polygons: any[];
+    polygons: SegmentationPolygon[];
     polygonCount: number;
     pointCount: number;
     compressionRatio: number;

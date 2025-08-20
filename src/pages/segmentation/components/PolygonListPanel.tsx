@@ -62,7 +62,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   };
 
   const getPolygonColor = (type: string) => {
-    return type === 'external' ? 'bg-blue-500' : 'bg-orange-500';
+    return type === 'external' ? 'bg-red-500' : 'bg-blue-500';
   };
 
   // Handle wheel events in the scroll area to prevent page scrolling
@@ -194,10 +194,15 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                       )}
 
                       <div className="flex items-center gap-2 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        <span>{polygon.points?.length || 0} vrcholů</span>
+                        <span>
+                          {polygon.points?.length || 0}{' '}
+                          {t('segmentation.status.vertices')}
+                        </span>
                         <span>•</span>
                         <span>
-                          {polygon.type === 'external' ? 'Externí' : 'Interní'}
+                          {polygon.type === 'external'
+                            ? t('segmentation.status.external')
+                            : t('segmentation.status.internal')}
                         </span>
                         {polygon.area && (
                           <>
@@ -244,14 +249,14 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                             onClick={() => handleStartRename(polygon)}
                           >
                             <Edit3 className="h-3 w-3 mr-2" />
-                            Přejmenovat
+                            {t('common.rename')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={() => onDeletePolygon?.(polygon.id)}
                             className="text-red-600 dark:text-red-400"
                           >
                             <Trash2 className="h-3 w-3 mr-2" />
-                            Smazat
+                            {t('common.delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

@@ -83,24 +83,15 @@ router.post(
     body('priority')
       .optional()
       .isInt({ min: 0, max: 10 })
-      .withMessage('Priorita musí být mezi 0 a 10')
+      .withMessage('Priorita musí být mezi 0 a 10'),
+    body('forceResegment')
+      .optional()
+      .isBoolean()
+      .withMessage('forceResegment musí být boolean')
+      .toBoolean()
   ],
   handleValidation,
   queueController.addBatchToQueue
-);
-
-/**
- * @route GET /api/queue/status/:projectId
- * @description Get queue status for a project (polling endpoint)
- * @access Private
- */
-router.get(
-  '/status/:projectId',
-  [
-    param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')
-  ],
-  handleValidation,
-  queueController.getQueueStats
 );
 
 /**

@@ -52,4 +52,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 
 # Start script with proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "[ \"$PRISMA_DB_PUSH\" = \"true\" ] && npx prisma db push --accept-data-loss; npm run dev"]
+CMD ["sh", "-c", "npx prisma db push --skip-generate && npm run dev"]

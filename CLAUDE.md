@@ -10,54 +10,6 @@ VERY IMPORTANT: Always read relevant docs and fetch relevant documentation using
 
 VERY IMPORTANT: Use subagents often to save context. They dont have shared context with main agent, so give them comprehensive and clear instructions, also recommend them to use available knowledge systems.
 
-## Test-Driven Development (TDD) - MANDATORY
-
-**CRITICAL: Always follow Test-Driven Development principles!**
-
-### TDD Workflow Requirements
-
-**BEFORE implementing any feature or fixing any bug:**
-
-1. **Check for existing tests**: Look for test files related to the component/feature you're modifying
-2. **Write/update tests FIRST**: If no tests exist, create them. If tests exist, update them for new requirements
-3. **Verify test failure**: Run the test to ensure it fails (red phase)
-4. **Implement the feature**: Write minimal code to make the test pass (green phase)
-5. **Refactor if needed**: Improve the code while keeping tests passing (refactor phase)
-6. **Add to test suites**: Ensure new tests are included in the appropriate test suite
-
-### Test Locations
-
-- **Frontend unit tests**: `/src/**/*.test.ts(x)` - Run with `docker exec -it spheroseg-frontend npm run test`
-- **Frontend E2E tests**: `/e2e/*.spec.ts` - Run with `docker exec -it spheroseg-frontend npm run test:e2e`
-- **Backend unit tests**: `/backend/src/**/*.test.ts` - Run with `docker exec -it spheroseg-backend npm run test`
-- **API integration tests**: `/backend/src/api/**/*.test.ts`
-
-### Test Implementation Guidelines
-
-- **Component tests**: Test user interactions, state changes, and rendered output
-- **Hook tests**: Test custom hooks in isolation using `@testing-library/react-hooks`
-- **API tests**: Test endpoints with different scenarios (success, validation errors, auth failures)
-- **Integration tests**: Test complete user flows with Playwright
-- **ML service tests**: Verify model loading, inference, and postprocessing
-
-### Running Tests
-
-```bash
-# Frontend unit tests
-docker exec -it spheroseg-frontend npm run test
-
-# Frontend E2E tests
-docker exec -it spheroseg-frontend npm run test:e2e
-
-# Backend tests
-docker exec -it spheroseg-backend npm run test
-
-# Test with coverage
-docker exec -it spheroseg-frontend npm run test:coverage
-```
-
-**REMEMBER**: No feature is complete without tests. This is not optional - it's mandatory for maintaining code quality and preventing regressions.
-
 ## Knowledge Management System
 
 **Knowledge storage and retrieval** is available through the connected MCP servers for storing and retrieving application knowledge, best practices, and implementation details.
@@ -104,107 +56,31 @@ Before starting work, query the knowledge system for:
 
 ### Docker Environment (Required)
 
-**CRITICAL: This project uses Docker exclusively. NEVER use npm/node/make commands directly - always use Docker!**
-
-## 🚨 DEPLOYMENT STRATEGY - MANDATORY TO FOLLOW
-
-**CRITICAL RULE: Work ONLY in staging environment. Production deployments are AUTOMATED via GitHub Actions.**
-
-### Development & Staging Workflow
-
-1. **ALL development work happens in STAGING**:
-
-   ```bash
-   # Work in staging environment ONLY
-   docker compose -f docker-compose.staging.yml up -d
-   docker compose -f docker-compose.staging.yml build
-   docker compose -f docker-compose.staging.yml logs -f
-   ```
-
-2. **AUTOMATED STAGING DEPLOYMENT**:
-   - **Auto-deploy script is running**: `/home/cvat/cell-segmentation-hub/scripts/auto-deploy-staging.sh`
-   - Automatically pulls and deploys changes every 30 seconds
-   - Just push to `staging` branch - deployment is automatic!
-   - No manual intervention needed
-
-3. **NEVER directly modify production**:
-   - ❌ DO NOT use `docker-compose.prod.yml` for development
-   - ❌ DO NOT manually deploy to production
-   - ❌ DO NOT make changes directly on production server
-
-4. **Production deployment via GitHub Actions ONLY**:
-   - Push changes to `staging` branch → Auto-deploy to local staging
-   - After testing on staging → Merge to `main` branch
-   - GitHub Actions automatically deploys to production
-   - This ensures all production deployments have:
-     - ✅ Passed all tests
-     - ✅ Built successfully in Docker
-     - ✅ Been tested on staging first
-     - ✅ Proper rollback capability
-
-### Staging Environment Commands:
-
-- **Start services**: `docker compose -f docker-compose.staging.yml up -d`
-- **Stop services**: `docker compose -f docker-compose.staging.yml down`
-- **Build services**: `docker compose -f docker-compose.staging.yml build [--no-cache]`
-- **View logs**: `docker compose -f docker-compose.staging.yml logs -f [service]`
-- **Shell access**: `docker exec -it [container-name] /bin/bash`
-
-### Production Deployment (AUTOMATED ONLY):
-
-**Production is deployed ONLY through GitHub Actions workflow:**
-
-1. Push to `staging` branch and test thoroughly
-2. Create PR from `staging` to `main`
-3. Merge PR triggers automatic production deployment
-4. GitHub Actions handles:
-   - Database backup
-   - Blue-green deployment
-   - Health checks
-   - Automatic rollback on failure
-
-**Container Names:**
-
-- `spheroseg-nginx` - Web server (nginx)
-- `spheroseg-backend` - API server (Node.js)
-- `spheroseg-ml` - ML service (Python)
-- `spheroseg-db` - Database (PostgreSQL)
-- `spheroseg-redis` - Cache (Redis)
-- `spheroseg-prometheus` - Metrics
-- `spheroseg-grafana` - Dashboard
+- **Start all services**: `make up` or `make dev-setup`
+- **View logs**: `make logs-f` (all services) or `make logs-fe`/`make logs-be`/`make logs-ml`
+- **Stop services**: `make down`
+- **Health check**: `make health` or `make test`
+- **Reset environment**: `make reset` (clean + rebuild)
+- **Shell access**: `make shell-fe`/`make shell-be`/`make shell-ml`
 
 ### Service URLs (Docker only)
 
-**Staging Environment (PRIMARY WORKING ENVIRONMENT):**
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:3001
+- **ML Service**: http://localhost:8000
+- **API Documentation**: http://localhost:3001/api-docs
+- **Prometheus**: http://localhost:9090
+- **Grafana**: http://localhost:3030
 
-- **Frontend**: http://localhost:4000 ✅ **USE THIS FOR ALL DEVELOPMENT**
-- **Backend API**: http://localhost:4001/api
-- **ML Service**: http://localhost:4008
-- **API Documentation**: http://localhost:4001/api-docs
-- **Grafana**: http://localhost:3031
+**Note**: Some documentation may reference port 8082 for frontend - this is legacy. Always use port 3000 for Docker development.
 
-**Production Environment (READ-ONLY - DEPLOYED VIA GITHUB ONLY):**
+### Legacy Frontend Commands (Do NOT use in development)
 
-- **Frontend**: https://spherosegapp.utia.cas.cz (DO NOT MODIFY DIRECTLY)
-- **Backend API**: https://spherosegapp.utia.cas.cz/api
-- **ML Service**: Internal only
-- **Monitoring**: Internal Grafana
+These only work for building static assets, but the app must run in Docker:
 
-**IMPORTANT**:
-
-- 🟢 Always work in STAGING (port 4000)
-- 🔴 NEVER modify production directly
-- 🔵 Production updates happen ONLY through GitHub Actions
-
-### DISABLED Commands (Do NOT use)
-
-**These commands are DISABLED and should NEVER be used:**
-
-- ~~`make up/down/logs`~~ - Use Docker commands directly
-- ~~`npm run build/lint/test`~~ - All tasks must run inside Docker containers
-- ~~Direct Node.js/npm commands~~ - Everything runs in containerized environment
-
-**Compose-only — do not run make or npm on the host; run npm inside containers via docker exec/docker-compose run.**
+- `npm run build` - Production build
+- `npm run lint` - Code linting
+- `npm run preview` - Preview build (but use Docker for development)
 
 ### Docker Build Commands (Use Desktop Commander MCP)
 
@@ -317,9 +193,7 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 
 ### Important Reminders
 
-- **Docker-first development**: Always use Docker Compose commands, never direct npm/node/make commands on host
-- **STAGING ONLY**: All development and testing happens in staging environment (`docker-compose.staging.yml`)
-- **PRODUCTION VIA GITHUB**: Production deployments happen ONLY through GitHub Actions - NEVER manually
+- **Docker-first development**: Always use `make` commands, never direct npm/node commands
 - **File editing**: Always prefer editing existing files over creating new ones
 - **Documentation**: Only create docs when explicitly requested by the user
 - **Terminal safety**: Never use KillBash tool as it terminates the user's session
@@ -327,25 +201,31 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 
 ### Testing and Quality
 
-- **Linting**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run lint`
-- **Lint fix**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run lint:fix`
-- **Type checking**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run type-check`
-- **Unit tests**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test`
-- **Test UI**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test:ui`
-- **E2E tests**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test:e2e`
-- **E2E UI**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test:e2e:ui`
-- **Test coverage**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run test:coverage`
-- **Formatting**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run format`
-- **Format check**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run format:check`
+**IMPORTANT: Always use Desktop Commander MCP for running tests inside Docker containers to prevent terminal timeouts**
+
+- For Docker test commands, use `mcp__desktop-commander__start_process` instead of Bash tool
+- Example: `mcp__desktop-commander__start_process("make test", 300000)`
+- Note: All test commands must run inside Docker containers per Docker-first development policy
+
+- **Linting**: Run `make lint` for code quality checks in Docker
+- **Lint fix**: Run `make lint-fix` to auto-fix ESLint issues in Docker
+- **Type checking**: Run `make type-check` to verify TypeScript types in Docker
+- **Unit tests**: Run `make test` for Vitest unit tests in Docker (USE DESKTOP COMMANDER, timeout: 300000)
+- **Test UI**: Run `make test-ui` for interactive Vitest interface in Docker
+- **E2E tests**: Run `make test-e2e` for Playwright end-to-end tests in Docker (USE DESKTOP COMMANDER, timeout: 600000)
+- **E2E UI**: Run `make test-e2e-ui` for interactive Playwright interface in Docker
+- **Test coverage**: Run `make test-coverage` to generate coverage report in Docker (USE DESKTOP COMMANDER, timeout: 600000)
+- **Formatting**: Run `npm run format` to format code with Prettier
+- **Format check**: Run `npm run format:check` to check formatting without changes
 - **API testing**: Use Swagger UI at http://localhost:3001/api-docs
-- **Health checks**: Use `docker compose ps` to verify all services are running
-- **Service logs**: Use `docker compose logs -f` to monitor all services in real-time
+- **Health checks**: Use `make health` to verify all services are running
+- **Service logs**: Use `make logs-f` to monitor all services in real-time
 
 ### Internationalization (i18n)
 
-- **Translation validation**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run i18n:validate`
-- **Translation check**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run i18n:check`
-- **Translation lint**: Run inside frontend container: `docker exec -it spheroseg-frontend npm run i18n:lint`
+- **Translation validation**: Run `npm run i18n:validate` to check translation completeness and consistency
+- **Translation check**: Run `npm run i18n:check` to verify all translation keys exist
+- **Translation lint**: Run `npm run i18n:lint` to lint i18n-specific rules
 - **Supported languages**: English (en), Czech (cs), Spanish (es), German (de), French (fr), Chinese (zh)
 - **Translation files**: Located in `/src/translations/`
 
@@ -372,15 +252,15 @@ The project uses Husky for comprehensive pre-commit validation:
 - **Adding new API endpoints**: Add routes in `/backend/src/api/routes/`, controllers in `/backend/src/api/controllers/`, and update OpenAPI spec
 - **Frontend components**: Create in `/src/components/` following existing patterns, use shadcn/ui primitives
 - **ML model changes**: Modify `/backend/segmentation/models/` and update model loading in `/backend/segmentation/services/`
-- **Adding translations**: Add new keys to all language files in `/src/translations/`, run inside frontend container: `docker exec -it spheroseg-frontend npm run i18n:validate`
+- **Adding translations**: Add new keys to all language files in `/src/translations/`, run `npm run i18n:validate` to verify
 - **Database changes**:
   - Update `/backend/prisma/schema.prisma`
-  - Shell into backend container: `docker exec -it spheroseg-backend /bin/bash`
+  - Shell into backend container: `make shell-be`
   - Run migration: `npx prisma migrate dev --name your_migration_name`
   - Generate client: `npx prisma generate`
-- **Viewing database**: Run inside backend container: `docker exec -it spheroseg-backend npm run db:studio`
-- **Docker operations**: Use docker compose commands directly (see `docker compose --help`)
-- **Running single tests**: Use Vitest filtering inside frontend container: `docker exec -it spheroseg-frontend npm run test -- --run specific-test-name`
+- **Viewing database**: Run `cd backend && npm run db:studio` (opens Prisma Studio)
+- **Docker operations**: All docker commands available via `make` targets (see `make help`)
+- **Running single tests**: Use Vitest filtering: `npm run test -- --run specific-test-name`
 - **Frontend debugging**: Use browser dev tools with source maps enabled in development
 
 ## Current System Status
@@ -418,131 +298,17 @@ The project uses Husky for comprehensive pre-commit validation:
 
 **Before making changes:**
 
-1. Always use STAGING Docker environment (`docker compose -f docker-compose.staging.yml up -d`)
+1. Always use Docker environment (`make up` to start)
 2. Query knowledge system for existing patterns and solutions
 3. Check if translations need updates for UI changes
 
-**During development:** 4. Work ONLY in staging environment (port 4000) 5. Use `docker compose -f docker-compose.staging.yml logs -f` to monitor services 6. Test changes inside containers: `docker exec -it spheroseg-frontend npm run test` 7. Validate translations: `docker exec -it spheroseg-frontend npm run i18n:validate`
+**During development:** 4. Run `npm run dev` for frontend development with hot reload 5. Use `make logs-f` to monitor all services 6. Test changes with `npm run test` and `npm run test:e2e` 7. Validate translations with `npm run i18n:validate` if applicable
 
-**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.) 11. Push to `staging` branch - **AUTO-DEPLOY HANDLES THE REST!**
+**Before committing:** 8. The pre-commit hook automatically runs comprehensive checks 9. All checks must pass (ESLint, Prettier, TypeScript, security) 10. Use conventional commit format (feat:, fix:, chore:, etc.)
 
-**Automated deployment process:** 12. **Push to staging** → GitHub Actions runs tests 13. **Auto-deploy script** (running locally) detects changes within 30s 14. **Automatic rebuild** and restart of Docker containers 15. **No manual steps needed** - just commit and push!
-
-**Production deployment:** 16. Create PR from `staging` to `main` branch 17. Merge PR triggers automatic production deployment via GitHub Actions 18. Store learnings and solutions in the knowledge system for future reference
+**Quality assurance:** 11. Always run `npm run type-check` and `npm run lint` before major changes 12. Use `make health` to verify all services are running correctly 13. Store learnings and solutions in the knowledge system for future reference
 
 ## Recent Implementations & Important Notes
-
-### Automated Staging Deployment
-
-**IMPLEMENTED: Auto-deploy script for seamless staging updates**
-
-- **Script location**: `/home/cvat/cell-segmentation-hub/scripts/auto-deploy-staging.sh`
-- **Status**: Must be started manually or via systemd/Docker
-- **Check interval**: Every 30 seconds
-- **Process**: Automatically pulls, builds, and restarts staging when changes detected
-
-**Three ways to run auto-deploy:**
-
-1. **Manual (temporary)**:
-
-   ```bash
-   ./scripts/auto-deploy-staging.sh &
-   ```
-
-2. **Systemd service (permanent, recommended for Linux)**:
-
-   ```bash
-   sudo ./scripts/install-auto-deploy.sh
-   ```
-
-3. **Docker container (portable, auto-restart)**:
-   ```bash
-   docker compose -f docker-compose.auto-deploy.yml up -d
-   ```
-
-**How it works:**
-
-1. Script monitors `staging` branch for new commits
-2. When changes detected, automatically:
-   - Pulls latest code
-   - Rebuilds Docker images
-   - Restarts services with zero downtime
-   - Runs health checks
-
-**GitHub Actions Integration:**
-
-- **Repository**: PUBLIC (unlimited free Actions minutes)
-- **Workflow**: `.github/workflows/staging.yml`
-- **Triggers on**: Push to `staging` branch
-- **Tests**: TypeScript, ESLint, unit tests (with continue-on-error for known mock issues)
-
-### SSL Automation with Let's Encrypt
-
-**CRITICAL: Automated SSL certificate management is now implemented for production deployments.**
-
-#### SSL Setup Scripts:
-
-- **Initial Setup**: `./scripts/init-letsencrypt.sh` - Run ONCE after production deployment
-- **Automatic Renewal**: `./scripts/certbot-renew.sh` - Automated renewal script
-- **Certificate Status**: `./scripts/check-ssl-expiry.sh` - Check certificate health
-
-#### Production SSL Configuration:
-
-- **Certbot Service**: Integrated into `docker-compose.prod.yml`
-- **Automatic Renewal**: Runs every 12 hours via Docker container
-- **Nginx Integration**: ACME challenge support at `/.well-known/acme-challenge/`
-- **Certificate Location**: `/etc/letsencrypt/live/spherosegapp.utia.cas.cz/`
-
-#### SSL Management Commands:
-
-```bash
-# Initial SSL setup (run once)
-./scripts/init-letsencrypt.sh
-
-# Check certificate status
-./scripts/check-ssl-expiry.sh
-
-# Manual renewal (if needed)
-./scripts/certbot-renew.sh
-
-# Start automatic renewal service
-docker compose -f docker-compose.prod.yml up -d certbot
-```
-
-### Business Metrics & Advanced Monitoring
-
-**MAJOR: Comprehensive business metrics system implemented alongside infrastructure monitoring.**
-
-#### Custom Business Metrics Available:
-
-- **User Activity**: Registrations, logins, active users (daily/weekly/monthly)
-- **Project Metrics**: Projects created, active projects, images uploaded, average images per project
-- **Segmentation Analytics**: Request counts, processing times, queue lengths, model usage distribution
-- **Storage Tracking**: Storage used by type, per-user storage usage
-- **Export Statistics**: Export counts by format, processing times
-- **Error Tracking**: Business-level errors by type and operation
-
-#### Metrics Endpoints:
-
-- **Combined Metrics**: `GET /metrics` - Infrastructure + business metrics (Prometheus format)
-- **Business Only**: `GET /api/metrics/business` - Business metrics only
-- **Infrastructure Only**: `GET /api/metrics` - Infrastructure metrics only
-- **Health Check**: `GET /api/metrics/health` - Metrics system health status
-- **Admin Stats**: `GET /api/metrics/stats` - JSON summary for admin dashboard (requires auth)
-- **Refresh**: `POST /api/metrics/refresh` - Manual metrics refresh (admin only)
-
-#### Grafana Dashboard:
-
-- **Configuration**: See `/monitoring/business-dashboard-config.md`
-- **Access**: http://localhost:3030 (use GRAFANA_ADMIN_PASSWORD)
-- **Dashboards**: Infrastructure + Business metrics with alerts
-- **Data Collection**: Automatic every 5 minutes + real-time tracking
-
-#### Prometheus Scraping:
-
-- **Combined Metrics**: `backend:3001/metrics` (30s interval)
-- **Business Metrics**: `backend:3001/api/metrics/business` (60s interval)
-- **Data Retention**: 30 days (configurable in prometheus.yml)
 
 ### Storage Space Indicator (Dashboard)
 
@@ -562,5 +328,3 @@ docker compose -f docker-compose.prod.yml up -d certbot
 - **Solution**: Enable Socket.io auto-reconnection, add keep-alive pings, fix disconnect handling
 - **Key settings**: `reconnection: true`, ping interval every 25s, proper reconnect event handlers
 - **Location**: `/src/services/webSocketManager.ts`
-
-- nikdy neobcházej husky commit!

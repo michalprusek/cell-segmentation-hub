@@ -26,6 +26,23 @@ const DashboardHeader = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Determine current page for back button
+  const getCurrentPageInfo = () => {
+    const path = location.pathname;
+    if (path === '/dashboard') {
+      return { name: t('common.dashboard'), path: '/dashboard' };
+    } else if (path === '/settings') {
+      return { name: t('common.settings'), path: '/settings' };
+    } else if (path === '/profile') {
+      return { name: t('common.profile'), path: '/profile' };
+    } else if (path.startsWith('/project/')) {
+      return { name: t('common.project'), path };
+    }
+    return null;
+  };
+
+  const currentPageInfo = getCurrentPageInfo();
+
   // Check if we're on a project detail page to avoid conflicts
   const isProjectDetailPage = location.pathname.includes('/project/');
   const { isConnected, queueStats } = useSegmentationQueue(
@@ -116,7 +133,16 @@ const DashboardHeader = () => {
             variant="ghost"
             size="sm"
             className="text-gray-600 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400"
-            onClick={() => navigate('/documentation')}
+            onClick={() =>
+              navigate('/documentation', {
+                state: currentPageInfo
+                  ? {
+                      from: currentPageInfo.name,
+                      path: currentPageInfo.path,
+                    }
+                  : undefined,
+              })
+            }
           >
             <BookOpen className="h-4 w-4 mr-2" />
             {t('common.documentation', 'Documentation')}

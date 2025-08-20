@@ -1,10 +1,11 @@
 import axios, { AxiosInstance } from 'axios';
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { createObjectCsvStringifier } from 'csv-writer';
 import fs from 'fs/promises';
 import path from 'path';
 import { URL } from 'url';
 import { logger } from '../../utils/logger';
+import { config } from '../../utils/config';
 
 export interface PolygonMetrics {
   imageId: string;
@@ -48,7 +49,6 @@ export interface SegmentationData {
 export interface ImageWithSegmentation {
   id: string;
   name: string;
-  filename?: string;
   width?: number;
   height?: number;
   segmentation?: SegmentationData;
@@ -62,23 +62,17 @@ export class MetricsCalculator {
   private logger = logger;
 
   constructor() {
-    const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://localhost:8000';
-    
     // Validate ML service URL
     try {
-      const url = new URL(mlServiceUrl);
+      const url = new URL(config.SEGMENTATION_SERVICE_URL);
       if (!['http:', 'https:'].includes(url.protocol)) {
         throw new Error('Invalid protocol - must be http or https');
       }
-      this.pythonApiUrl = mlServiceUrl;
+      this.pythonApiUrl = config.SEGMENTATION_SERVICE_URL;
     } catch (error) {
-      const errorMsg = `Invalid ML_SERVICE_URL: ${mlServiceUrl} - ${error instanceof Error ? error.message : String(error)}`;
-      if (process.env.NODE_ENV === 'production') {
-        throw new Error(errorMsg);
-      } else {
-        this.logger.error(errorMsg, undefined, 'MetricsCalculator');
-        this.pythonApiUrl = 'http://localhost:8000';
-      }
+      const errorMsg = `Invalid SEGMENTATION_SERVICE_URL configuration (from env var SEGMENTATION_SERVICE_URL): ${config.SEGMENTATION_SERVICE_URL} - ${error instanceof Error ? error.message : String(error)}`;
+      this.logger.error(errorMsg, error as Error, 'MetricsCalculator');
+      throw new Error(errorMsg);
     }
 
     // Initialize Axios client with baseURL and timeout
@@ -108,7 +102,7 @@ export class MetricsCalculator {
             const imageMetrics = await this.calculateImageMetrics(
               polygons,
               image.id,
-              image.filename ?? image.name ?? `image_${String(imageIdx + 1).padStart(3, '0')}.jpg`
+              `image_${String(imageIdx + 1).padStart(3, '0')}.jpg`
             );
             allMetrics.push(...imageMetrics);
           } catch (parseError) {
@@ -147,6 +141,12 @@ export class MetricsCalculator {
       
       if (!polygon) {
         this.logger.warn(`Skipping undefined polygon at index ${i}`, 'MetricsCalculator');
+        continue;
+      }
+      
+      // Skip degenerate polygons with insufficient points
+      if (!polygon.points || polygon.points.length < 3) {
+        this.logger.warn(`Skipping degenerate polygon at index ${i} with ${polygon.points?.length || 0} points`, 'MetricsCalculator');
         continue;
       }
       
@@ -304,6 +304,9 @@ export class MetricsCalculator {
     );
     let feretDiameterMin = Math.min(boundingBox.width, boundingBox.height);
     feretDiameterMin = Math.max(feretDiameterMin, Number.EPSILON);
+    
+    // Ensure safe division for aspect ratio
+    const feretAspectRatio = feretDiameterMin > 0 ? feretDiameterMax / feretDiameterMin : 1;
 
     return {
       area,
@@ -313,7 +316,7 @@ export class MetricsCalculator {
       feretDiameterMax,
       feretDiameterMaxOrthogonalDistance: feretDiameterMin,
       feretDiameterMin,
-      feretAspectRatio: feretDiameterMax / feretDiameterMin,
+      feretAspectRatio: isFinite(feretAspectRatio) ? feretAspectRatio : 1,
       lengthMajorDiameterThroughCentroid: feretDiameterMax,
       lengthMinorDiameterThroughCentroid: feretDiameterMin,
       compactness: circularity,
@@ -330,88 +333,98 @@ export class MetricsCalculator {
     metrics: PolygonMetrics[],
     outputPath: string
   ): Promise<void> {
-    const workbook = XLSX.utils.book_new();
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Polygon Metrics');
 
-    // Prepare data for worksheet
-    const worksheetData = [
-      [
-        'Image Name',
-        'Image ID',
-        'Polygon ID',
-        'Type',
-        'Area (px²)',
-        'Perimeter (px)',
-        'Equivalent Diameter (px)',
-        'Circularity',
-        'Feret Diameter Max (px)',
-        'Feret Diameter Min (px)',
-        'Feret Aspect Ratio',
-        'Major Axis Length (px)',
-        'Minor Axis Length (px)',
-        'Compactness',
-        'Convexity',
-        'Solidity',
-        'Sphericity',
-      ],
-      ...metrics.map(m => [
-        m.imageName,
-        m.imageId,
-        m.polygonId,
-        m.type,
-        m.area.toFixed(2),
-        m.perimeter.toFixed(2),
-        m.equivalentDiameter.toFixed(2),
-        m.circularity.toFixed(4),
-        m.feretDiameterMax.toFixed(2),
-        m.feretDiameterMin.toFixed(2),
-        m.feretAspectRatio.toFixed(2),
-        m.lengthMajorDiameterThroughCentroid.toFixed(2),
-        m.lengthMinorDiameterThroughCentroid.toFixed(2),
-        m.compactness.toFixed(4),
-        m.convexity.toFixed(4),
-        m.solidity.toFixed(4),
-        m.sphericity.toFixed(4),
-      ]),
+    // Add headers
+    worksheet.columns = [
+      { header: 'Image Name', key: 'imageName', width: 20 },
+      { header: 'Image ID', key: 'imageId', width: 15 },
+      { header: 'Polygon ID', key: 'polygonId', width: 10 },
+      { header: 'Type', key: 'type', width: 10 },
+      { header: 'Area (px²)', key: 'area', width: 12 },
+      { header: 'Perimeter (px)', key: 'perimeter', width: 12 },
+      { header: 'Equivalent Diameter (px)', key: 'equivalentDiameter', width: 18 },
+      { header: 'Circularity', key: 'circularity', width: 10 },
+      { header: 'Feret Diameter Max (px)', key: 'feretDiameterMax', width: 18 },
+      { header: 'Feret Diameter Min (px)', key: 'feretDiameterMin', width: 18 },
+      { header: 'Feret Aspect Ratio', key: 'feretAspectRatio', width: 15 },
+      { header: 'Major Axis Length (px)', key: 'lengthMajorDiameter', width: 18 },
+      { header: 'Minor Axis Length (px)', key: 'lengthMinorDiameter', width: 18 },
+      { header: 'Compactness', key: 'compactness', width: 12 },
+      { header: 'Convexity', key: 'convexity', width: 10 },
+      { header: 'Solidity', key: 'solidity', width: 10 },
+      { header: 'Sphericity', key: 'sphericity', width: 10 },
     ];
 
-    // Create worksheet
-    const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+    // Add data rows with validation for finite values
+    metrics.forEach(m => {
+      // Helper function to ensure finite values
+      const safeValue = (value: number, decimals: number = 2): number => {
+        if (!isFinite(value)) {
+          return 0;
+        }
+        return parseFloat(value.toFixed(decimals));
+      };
+      
+      worksheet.addRow({
+        imageName: m.imageName,
+        imageId: m.imageId,
+        polygonId: m.polygonId,
+        type: m.type,
+        area: safeValue(m.area, 2),
+        perimeter: safeValue(m.perimeter, 2),
+        equivalentDiameter: safeValue(m.equivalentDiameter, 2),
+        circularity: safeValue(m.circularity, 4),
+        feretDiameterMax: safeValue(m.feretDiameterMax, 2),
+        feretDiameterMin: safeValue(m.feretDiameterMin, 2),
+        feretAspectRatio: safeValue(m.feretAspectRatio, 2),
+        lengthMajorDiameter: safeValue(m.lengthMajorDiameterThroughCentroid, 2),
+        lengthMinorDiameter: safeValue(m.lengthMinorDiameterThroughCentroid, 2),
+        compactness: safeValue(m.compactness, 4),
+        convexity: safeValue(m.convexity, 4),
+        solidity: safeValue(m.solidity, 4),
+        sphericity: safeValue(m.sphericity, 4),
+      });
+    });
 
-    // Set column widths
-    worksheet['!cols'] = [
-      { wch: 20 }, // Image Name
-      { wch: 15 }, // Image ID
-      { wch: 10 }, // Polygon ID
-      { wch: 10 }, // Type
-      { wch: 12 }, // Area
-      { wch: 12 }, // Perimeter
-      { wch: 18 }, // Equivalent Diameter
-      { wch: 10 }, // Circularity
-      { wch: 18 }, // Feret Max
-      { wch: 18 }, // Feret Min
-      { wch: 15 }, // Feret Ratio
-      { wch: 18 }, // Major Axis
-      { wch: 18 }, // Minor Axis
-      { wch: 12 }, // Compactness
-      { wch: 10 }, // Convexity
-      { wch: 10 }, // Solidity
-      { wch: 10 }, // Sphericity
-    ];
-
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Polygon Metrics');
+    // Style the header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
 
     // Add summary sheet
+    const summarySheet = workbook.addWorksheet('Summary');
     const summaryData = this.generateSummaryStatistics(metrics);
-    const summaryWorksheet = XLSX.utils.aoa_to_sheet(summaryData);
-    XLSX.utils.book_append_sheet(workbook, summaryWorksheet, 'Summary');
+    
+    // Add summary data to the sheet
+    summaryData.forEach((row, index) => {
+      const excelRow = summarySheet.addRow(row);
+      // Bold the header row
+      if (index === 0) {
+        excelRow.font = { bold: true };
+        excelRow.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: 'FFE0E0E0' }
+        };
+      }
+    });
+
+    // Auto-fit columns in summary sheet
+    summarySheet.columns.forEach(column => {
+      column.width = 20;
+    });
 
     // Create parent directory if it doesn't exist
     const parentDir = path.dirname(outputPath);
     await fs.mkdir(parentDir, { recursive: true });
     
     // Write file
-    XLSX.writeFile(workbook, outputPath);
+    await workbook.xlsx.writeFile(outputPath);
     this.logger.info(`Excel file created: ${outputPath}`, 'MetricsCalculator');
   }
 

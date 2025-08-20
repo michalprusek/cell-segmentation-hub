@@ -1,5 +1,7 @@
-import { createCanvas, loadImage, Canvas, CanvasRenderingContext2D } from 'canvas';
-import { writeFile } from 'fs/promises';
+import { createCanvas, loadImage, CanvasRenderingContext2D } from 'canvas';
+import { writeFile, readFile } from 'fs/promises';
+import sharp from 'sharp';
+import path from 'path';
 import { logger } from '../../utils/logger';
 
 
@@ -47,13 +49,30 @@ export class VisualizationGenerator {
     const mergedOptions = { ...this.defaultOptions, ...options };
 
     try {
+      // Check if image is TIFF and convert to PNG if needed
+      let imageToLoad = imagePath;
+      const ext = path.extname(imagePath).toLowerCase();
+      
+      if (ext === '.tiff' || ext === '.tif') {
+        // Convert TIFF to PNG buffer
+        const tiffBuffer = await readFile(imagePath);
+        const pngBuffer = await sharp(tiffBuffer)
+          .png()
+          .toBuffer();
+        
+        // Create a temporary PNG file path (in memory)
+        imageToLoad = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+        
+        logger.info(`Converting TIFF to PNG for visualization: ${imagePath}`, 'VisualizationGenerator');
+      }
+      
       // Load the image
-      const image = await loadImage(imagePath);
+      const image = await loadImage(imageToLoad);
       const canvas = createCanvas(image.width, image.height);
       const ctx = canvas.getContext('2d');
 
       // Draw the original image
-      ctx.drawImage(image as any, 0, 0);
+      ctx.drawImage(image, 0, 0);
 
       // Draw polygons
       let polygonNumber = 1;
@@ -137,40 +156,38 @@ export class VisualizationGenerator {
     // Calculate centroid
     const centroid = this.calculateCentroid(polygon.points);
 
-    // Calculate polygon bounding box for adaptive font sizing
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const point of polygon.points) {
-      minX = Math.min(minX, point.x);
-      maxX = Math.max(maxX, point.x);
-      minY = Math.min(minY, point.y);
-      maxY = Math.max(maxY, point.y);
-    }
-    
-    // Calculate polygon dimensions
-    const polygonWidth = maxX - minX;
-    const polygonHeight = maxY - minY;
-    const polygonSize = Math.min(polygonWidth, polygonHeight);
-    
-    // Get canvas dimensions for scaling
-    const canvasSize = Math.min(ctx.canvas.width, ctx.canvas.height);
-    
-    // Calculate adaptive font size
-    // Use user-provided fontSize as base, but scale it based on polygon and canvas size
-    const baseFontSize = options.fontSize ?? 32;
-    const scaleFactor = Math.max(1, canvasSize / 1000); // Scale based on canvas size
-    const polygonScaleFactor = Math.max(0.3, Math.min(2, polygonSize / 50)); // Scale based on polygon size
-    const adaptiveFontSize = Math.max(16, Math.min(200, baseFontSize * scaleFactor * polygonScaleFactor));
-
-    // Set text style with adaptive font
-    ctx.fillStyle = '#FFFFFF';
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = Math.max(3, adaptiveFontSize / 10); // Scale stroke with font size
-    ctx.font = `bold ${adaptiveFontSize}px Arial`;
+    // Set text style with larger, more visible font
+    const fontSize = options.fontSize ?? 32;
+    ctx.font = `bold ${fontSize}px Arial`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
 
-    // Draw text with thick outline for better visibility
     const text = number.toString();
+    
+    // Draw white background circle for better contrast
+    const padding = 8;
+    const metrics = ctx.measureText(text);
+    const textWidth = metrics.width;
+    const textHeight = fontSize;
+    const radius = Math.max(textWidth, textHeight) / 2 + padding;
+    
+    // Draw semi-transparent white background circle
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.beginPath();
+    ctx.arc(centroid.x, centroid.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Draw black outline for the circle
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw the number with proper contrast
+    ctx.fillStyle = '#000000'; // Black text
+    ctx.strokeStyle = '#FFFFFF'; // White outline
+    ctx.lineWidth = 3; // Thinner outline
+    
+    // Draw text with outline for maximum visibility
     ctx.strokeText(text, centroid.x, centroid.y);
     ctx.fillText(text, centroid.x, centroid.y);
   }

@@ -83,8 +83,8 @@ const NewProject = ({ onProjectCreated }: NewProjectProps) => {
     } catch (error: unknown) {
       logger.error('Error creating project:', error);
       const errorMessage =
-        getErrorMessage(error) || t('projects.failedToCreateProject');
-      toast.error(t('projects.failedToCreateProject') + ': ' + errorMessage);
+        getErrorMessage(error, t) || t('projects.failedToCreateProject');
+      toast.error(errorMessage);
     } finally {
       setIsCreating(false);
     }

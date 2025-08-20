@@ -1,24 +1,24 @@
 services:
-  # Database service
+  # PostgreSQL database
   postgres:
     image: postgres:15-alpine
     container_name: spheroseg-db
     environment:
-      - POSTGRES_DB=spheroseg
-      - POSTGRES_USER=spheroseg
-      - POSTGRES_PASSWORD=spheroseg_dev
+      POSTGRES_USER: spheroseg
+      POSTGRES_PASSWORD: spheroseg_dev
+      POSTGRES_DB: spheroseg
     ports:
       - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
-    networks:
-      - spheroseg-network
-    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U spheroseg -d spheroseg"]
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
 
   # Frontend service
   frontend:
@@ -26,6 +26,7 @@ services:
       context: .
       dockerfile: docker/frontend.Dockerfile
     container_name: spheroseg-frontend
+    env_file: ${ENV_FILE:-.env.development}
     ports:
       - "3000:5173"
     volumes:
@@ -37,9 +38,6 @@ services:
       - ./postcss.config.js:/app/postcss.config.js
       - ./tsconfig.json:/app/tsconfig.json
       - ./tsconfig.app.json:/app/tsconfig.app.json
-    environment:
-      - VITE_API_BASE_URL=http://localhost:3001/api
-      - VITE_ML_SERVICE_URL=http://localhost:8000
     depends_on:
       - backend
     networks:
@@ -52,7 +50,11 @@ services:
       context: ./backend
       dockerfile: ../docker/backend.Dockerfile
     container_name: spheroseg-backend
-    env_file: .env
+    env_file: ${ENV_FILE:-.env.development}
+    environment:
+      - DATABASE_URL=postgresql://spheroseg:spheroseg_dev@postgres:5432/spheroseg
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
     ports:
       - "3001:3001"
     volumes:
@@ -60,23 +62,6 @@ services:
       - ./backend/prisma:/app/prisma
       - ./backend/uploads:/app/uploads
       - backend-db:/app/data
-    environment:
-      - NODE_ENV=development
-      - PORT=3001
-      - HOST=0.0.0.0
-      - DATABASE_URL=postgresql://spheroseg:spheroseg_dev@postgres:5432/spheroseg
-      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001,http://localhost:5173
-      - SEGMENTATION_SERVICE_URL=http://ml-service:8000
-      - UPLOAD_DIR=/app/uploads
-      - STORAGE_TYPE=local
-      - EMAIL_SERVICE=sendgrid
-      - SENDGRID_API_KEY=dummy-key-for-development
-      - FROM_EMAIL=noreply@spheroseg.local
-      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - RATE_LIMIT_ENABLED=true
-      - RATE_LIMIT_WINDOW_MS=60000
-      - RATE_LIMIT_MAX=50000
     depends_on:
       postgres:
         condition: service_healthy
@@ -92,6 +77,7 @@ services:
       context: ./backend/segmentation
       dockerfile: ../../docker/ml.Dockerfile
     container_name: spheroseg-ml
+    env_file: ${ENV_FILE:-.env.development}
     ports:
       - "8000:8000"
     volumes:
@@ -137,20 +123,28 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: spheroseg-grafana
+    env_file: ${ENV_FILE:-.env.development}
     ports:
       - "3030:3000"
     volumes:
       - grafana-data:/var/lib/grafana
       - ./docker/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
       - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
-    environment:
-      - GF_SECURITY_ADMIN_USER=${GF_SECURITY_ADMIN_USER:-spheroseg_admin}
-      - GF_SECURITY_ADMIN_PASSWORD=${GF_SECURITY_ADMIN_PASSWORD:-change_me_in_production}
-      - GF_USERS_ALLOW_SIGN_UP=false
     networks:
       - spheroseg-network
     depends_on:
       - prometheus
+    restart: unless-stopped
+
+  # MailHog email testing service
+  mailhog:
+    image: mailhog/mailhog
+    container_name: spheroseg-mailhog
+    ports:
+      - "1025:1025"  # SMTP server
+      - "8025:8025"  # Web UI
+    networks:
+      - spheroseg-network
     restart: unless-stopped
 
 networks:
@@ -161,11 +155,11 @@ networks:
         - subnet: 172.20.0.0/16
 
 volumes:
+  postgres-data:
+    driver: local
   ml-models:
     driver: local
   backend-db:
-    driver: local
-  postgres-data:
     driver: local
   prometheus-data:
     driver: local

@@ -4,9 +4,10 @@ import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SegmentationResult } from '@/lib/segmentation';
-import ExcelExporter from './export/ExcelExporter';
+import LazyExcelExporter from './export/LazyExcelExporter';
 import MetricsDisplay from './export/MetricsDisplay';
 import CocoTab from './export/CocoTab';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProjectImageExportProps {
   segmentation: SegmentationResult | null;
@@ -20,6 +21,7 @@ const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
   onClose,
 }) => {
   const [activeTab, setActiveTab] = useState('metrics');
+  const { t } = useLanguage();
 
   if (!segmentation) return null;
 
@@ -37,7 +39,9 @@ const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
         exit={{ scale: 0.95, opacity: 0 }}
       >
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
-          <h2 className="text-xl font-semibold">Export segmentačních dat</h2>
+          <h2 className="text-xl font-semibold">
+            {t('export.segmentationData')}
+          </h2>
           <Button variant="ghost" size="icon" onClick={onClose}>
             <X className="h-5 w-5" />
           </Button>
@@ -50,14 +54,16 @@ const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
         >
           <div className="px-4 border-b dark:border-gray-700">
             <TabsList className="mt-2">
-              <TabsTrigger value="metrics">Metriky sféroidů</TabsTrigger>
-              <TabsTrigger value="coco">COCO formát</TabsTrigger>
+              <TabsTrigger value="metrics">
+                {t('export.spheroidMetrics')}
+              </TabsTrigger>
+              <TabsTrigger value="coco">{t('export.cocoFormat')}</TabsTrigger>
             </TabsList>
           </div>
 
           <TabsContent value="metrics" className="flex-1 overflow-auto p-4">
             <div className="mb-4 flex justify-end">
-              <ExcelExporter
+              <LazyExcelExporter
                 segmentation={segmentation}
                 imageName={imageName}
               />
@@ -74,7 +80,7 @@ const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
         </Tabs>
 
         <div className="p-4 border-t dark:border-gray-700 flex justify-end">
-          <Button onClick={onClose}>Zavřít</Button>
+          <Button onClick={onClose}>{t('common.close')}</Button>
         </div>
       </motion.div>
     </motion.div>

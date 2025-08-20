@@ -4,6 +4,7 @@ import apiClient, { AuthResponse } from '@/lib/api';
 import { User, Profile, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 import { authEventEmitter } from '@/lib/authEvents';
+import { tokenRefreshManager } from '@/lib/tokenRefresh';
 
 interface ConsentOptions {
   consentToMLTraining?: boolean;
@@ -30,6 +31,7 @@ interface AuthContextType {
   ) => Promise<void>;
   signOut: () => Promise<void>;
   deleteAccount: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -56,40 +58,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
           // Try to fetch user profile to verify token is still valid
           const profileData = await apiClient.getUserProfile();
-          // Validate profileData before constructing user object
-          if (
-            profileData &&
-            (profileData.user || (profileData.id && profileData.email))
-          ) {
-            const userData = profileData.user || {
+          logger.debug('Profile data received in AuthContext:', profileData);
+
+          // Validate profileData exists and has required fields
+          if (profileData && profileData.id && profileData.email) {
+            // Create user object from profile data
+            const userData = {
               id: profileData.id,
               email: profileData.email,
               username: profileData.username,
+              emailVerified: true, // Assume verified if we got profile
             };
 
-            // Validate required fields exist and are not empty
-            if (userData.id && userData.email) {
-              setUser(userData);
-              setProfile(profileData);
-              setIsAuthenticated(true);
-            } else {
-              logger.error('Missing required user fields:', {
-                id: userData.id,
-                email: userData.email,
-              });
-              // Clear state if required fields are missing
-              setUser(null);
-              setProfile(null);
-              setToken(null);
-              setIsAuthenticated(false);
-              try {
-                await apiClient.logout();
-              } catch (logoutError) {
-                logger.error('Error during logout:', logoutError);
-              }
-            }
+            // Set both user and profile data
+            setUser(userData);
+            setProfile(profileData);
+            setIsAuthenticated(true);
+
+            // Start token refresh management
+            tokenRefreshManager.startTokenRefreshManager();
           } else {
-            // Invalid profile data, clear state
+            logger.error('Invalid profile data received:', {
+              hasProfileData: !!profileData,
+              hasId: !!(profileData && profileData.id),
+              hasEmail: !!(profileData && profileData.email),
+            });
+            // Stop token refresh management
+            tokenRefreshManager.stopTokenRefreshManager();
+            // Clear state if profile data is invalid
             setUser(null);
             setProfile(null);
             setToken(null);
@@ -103,6 +99,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         logger.error('Error initializing auth:', error);
+        // Stop token refresh management
+        tokenRefreshManager.stopTokenRefreshManager();
         // If token is invalid, clear it
         try {
           await apiClient.logout();
@@ -120,6 +118,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     initializeAuth();
   }, []);
+
+  const syncLocalPreferencesToDatabase = async () => {
+    try {
+      const localTheme = localStorage.getItem('theme');
+      const localLanguage = localStorage.getItem('language');
+
+      if (localTheme || localLanguage) {
+        const updateData: {
+          preferred_theme?: string;
+          preferredLang?: string;
+        } = {};
+
+        if (localTheme && ['light', 'dark', 'system'].includes(localTheme)) {
+          updateData.preferred_theme = localTheme;
+        }
+
+        if (
+          localLanguage &&
+          ['en', 'cs', 'es', 'de', 'fr', 'zh'].includes(localLanguage)
+        ) {
+          updateData.preferredLang = localLanguage;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await apiClient.updateUserProfile(updateData);
+          logger.debug(
+            'Successfully synced local preferences to database:',
+            updateData
+          );
+        }
+      }
+    } catch (error) {
+      logger.warn('Failed to sync local preferences to database:', error);
+      // Don't throw error - this shouldn't block login
+    }
+  };
 
   const signIn = async (
     email: string,
@@ -143,16 +177,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const accessToken = apiClient.getAccessToken();
       setToken(accessToken);
 
-      // Emit event for localized toast (handled by useAuthToasts hook)
-      authEventEmitter.emit({ type: 'signin_success' });
+      // Start token refresh management
+      tokenRefreshManager.startTokenRefreshManager();
 
-      // Don't fetch profile immediately - let it happen naturally later
+      // Emit event for localized toast (handled by useAuthToasts hook)
+      setTimeout(() => authEventEmitter.emit({ type: 'signin_success' }), 0);
+
+      // Sync localStorage preferences to database
+      await syncLocalPreferencesToDatabase();
+
+      // Fetch full profile data including avatar
+      try {
+        const profileData = await apiClient.getUserProfile();
+        if (profileData) {
+          setProfile(profileData);
+          logger.debug(
+            'Profile loaded after sign in with avatarUrl:',
+            profileData.avatarUrl
+          );
+        }
+      } catch (profileError) {
+        logger.error('Failed to load profile after sign in:', profileError);
+        // Don't fail the sign in if profile loading fails
+      }
+
+      navigate('/dashboard');
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error) || 'Sign in failed';
-      authEventEmitter.emit({
-        type: 'signin_error',
-        data: { error: errorMessage },
-      });
+      setTimeout(
+        () =>
+          authEventEmitter.emit({
+            type: 'signin_error',
+            data: { error: errorMessage },
+          }),
+        0
+      );
       throw error;
     } finally {
       setLoading(false);
@@ -181,18 +240,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const accessToken = apiClient.getAccessToken();
       setToken(accessToken);
 
+      // Start token refresh management
+      tokenRefreshManager.startTokenRefreshManager();
+
       // Emit event for localized toast (handled by useAuthToasts hook)
-      authEventEmitter.emit({ type: 'signup_success' });
+      setTimeout(() => authEventEmitter.emit({ type: 'signup_success' }), 0);
+
+      // Sync localStorage preferences to database
+      await syncLocalPreferencesToDatabase();
+
+      // Fetch full profile data including avatar (new users won't have avatar yet)
+      try {
+        const profileData = await apiClient.getUserProfile();
+        if (profileData) {
+          setProfile(profileData);
+          logger.debug(
+            'Profile loaded after sign up with avatarUrl:',
+            profileData.avatarUrl
+          );
+        }
+      } catch (profileError) {
+        logger.error('Failed to load profile after sign up:', profileError);
+        // Don't fail the sign up if profile loading fails
+      }
 
       navigate('/dashboard');
-
-      // Don't fetch profile immediately - let it happen naturally later
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error) || 'Registration failed';
-      authEventEmitter.emit({
-        type: 'signup_error',
-        data: { error: errorMessage },
-      });
+      setTimeout(
+        () =>
+          authEventEmitter.emit({
+            type: 'signup_error',
+            data: { error: errorMessage },
+          }),
+        0
+      );
       throw error;
     } finally {
       setLoading(false);
@@ -202,6 +284,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       setLoading(true);
+
+      // Stop token refresh management
+      tokenRefreshManager.stopTokenRefreshManager();
+
       await apiClient.logout();
 
       setUser(null);
@@ -214,16 +300,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: unknown) {
       logger.error('Error signing out:', error);
       // Even if logout fails on server, clear local state
+      tokenRefreshManager.stopTokenRefreshManager();
       setUser(null);
       setProfile(null);
       setToken(null);
       setIsAuthenticated(false);
 
       const errorMessage = getErrorMessage(error) || 'Sign out failed';
-      authEventEmitter.emit({
-        type: 'logout_error',
-        data: { error: errorMessage },
-      });
+      setTimeout(
+        () =>
+          authEventEmitter.emit({
+            type: 'logout_error',
+            data: { error: errorMessage },
+          }),
+        0
+      );
       navigate('/sign-in');
     } finally {
       setLoading(false);
@@ -240,6 +331,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     try {
       setLoading(true);
+
+      // Stop token refresh management
+      tokenRefreshManager.stopTokenRefreshManager();
+
       await apiClient.deleteAccount();
 
       setUser(null);
@@ -252,13 +347,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: unknown) {
       logger.error('Error deleting account:', error);
       const errorMessage = getErrorMessage(error) || 'Failed to delete account';
-      authEventEmitter.emit({
-        type: 'profile_error',
-        data: { error: errorMessage },
-      });
+      setTimeout(
+        () =>
+          authEventEmitter.emit({
+            type: 'profile_error',
+            data: { error: errorMessage },
+          }),
+        0
+      );
       throw error;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const refreshProfile = async () => {
+    if (!user) return;
+
+    try {
+      const profileData = await apiClient.getUserProfile();
+      logger.debug('Profile refresh data:', profileData);
+      if (profileData) {
+        setProfile(profileData);
+        logger.debug(
+          'Profile state updated with avatarUrl:',
+          profileData.avatarUrl
+        );
+      }
+    } catch (error: unknown) {
+      logger.error('Error refreshing profile:', error);
+      const errorMessage =
+        getErrorMessage(error) || 'Failed to refresh profile';
+      setTimeout(
+        () =>
+          authEventEmitter.emit({
+            type: 'profile_error',
+            data: { error: errorMessage },
+          }),
+        0
+      );
+      throw error;
     }
   };
 
@@ -284,6 +412,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signUp,
         signOut,
         deleteAccount,
+        refreshProfile,
       }}
     >
       {children}

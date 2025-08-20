@@ -4,9 +4,10 @@ import React from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import * as XLSX from 'xlsx';
 import { SpheroidMetric } from '@/types';
 import { calculateMetrics } from '../../../utils/metricCalculations';
+import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
+import { createExcelExport } from '@/services/excelExportService';
 
 interface ExcelExporterProps {
   segmentation: SegmentationResult | null;
@@ -28,15 +29,35 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({
         polygon => polygon.type === 'external'
       );
 
-      // Calculate metrics for each external polygon
-      const metricsData: SpheroidMetric[] = externalPolygons.map(
-        (polygon, index) => {
-          // Find internal polygons (holes) related to this external polygon
-          const holes = segmentation.polygons.filter(
-            p => p.type === 'internal'
-          );
+      // Get all internal polygons
+      const allInternalPolygons = segmentation.polygons.filter(
+        p => p.type === 'internal'
+      );
 
-          // Calculate metrics with holes considered
+      // Calculate metrics for each external polygon - filter out invalid polygons
+      const validExternalPolygons = externalPolygons.filter(
+        (polygon, index) => {
+          // Validate polygon points before processing
+          if (!polygon.points || polygon.points.length < 3) {
+            logger.warn(`Polygon ${index + 1} has invalid points, skipping`);
+            return false;
+          }
+          return true;
+        }
+      );
+
+      // Calculate metrics for each valid external polygon
+      const metricsData: SpheroidMetric[] = validExternalPolygons.map(
+        (polygon, index) => {
+          // Find internal polygons (holes) that are actually inside this external polygon
+          const holes = allInternalPolygons.filter(internal => {
+            if (!internal.points || internal.points.length < 3) {
+              return false; // Skip invalid internal polygons
+            }
+            return isPolygonInsidePolygon(internal.points, polygon.points);
+          });
+
+          // Calculate metrics with only the holes that are inside this polygon
           const metrics = calculateMetrics(polygon, holes);
 
           return {
@@ -62,58 +83,78 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({
         }
       );
 
-      // Create workbook and worksheet using SheetJS
-      const workbook = XLSX.utils.book_new();
+      // Create workbook and worksheet using lazy-loaded ExcelJS
+      const excelService = await createExcelExport();
+      const workbook = excelService.createWorkbook();
+      const worksheet = workbook.addWorksheet('Spheroid Metrics');
 
-      // Prepare data with headers
-      const worksheetData = [
-        [
-          'Image Name',
-          'Contour',
-          'Area',
-          'Circularity',
-          'Compactness',
-          'Convexity',
-          'Equivalent Diameter',
-          'Aspect Ratio',
-          'Feret Diameter Max',
-          'Feret Diameter Max Orthogonal',
-          'Feret Diameter Min',
-          'Length Major Diameter',
-          'Length Minor Diameter',
-          'Perimeter',
-          'Solidity',
-          'Sphericity',
-        ],
-        ...metricsData.map(metric => [
-          metric.imageName,
-          metric.contourNumber,
-          metric.area,
-          metric.circularity,
-          metric.compactness,
-          metric.convexity,
-          metric.equivalentDiameter,
-          metric.aspectRatio,
-          metric.feretDiameterMax,
-          metric.feretDiameterMaxOrthogonal,
-          metric.feretDiameterMin,
-          metric.lengthMajorDiameter,
-          metric.lengthMinorDiameter,
-          metric.perimeter,
-          metric.solidity,
-          metric.sphericity,
-        ]),
+      // Add headers
+      worksheet.columns = [
+        { header: 'Image Name', key: 'imageName', width: 20 },
+        { header: 'Contour', key: 'contourNumber', width: 10 },
+        { header: 'Area', key: 'area', width: 15 },
+        { header: 'Circularity', key: 'circularity', width: 15 },
+        { header: 'Compactness', key: 'compactness', width: 15 },
+        { header: 'Convexity', key: 'convexity', width: 15 },
+        { header: 'Equivalent Diameter', key: 'equivalentDiameter', width: 20 },
+        { header: 'Aspect Ratio', key: 'aspectRatio', width: 15 },
+        { header: 'Feret Diameter Max', key: 'feretDiameterMax', width: 20 },
+        {
+          header: 'Feret Diameter Max Orthogonal',
+          key: 'feretDiameterMaxOrthogonal',
+          width: 25,
+        },
+        { header: 'Feret Diameter Min', key: 'feretDiameterMin', width: 20 },
+        {
+          header: 'Length Major Diameter',
+          key: 'lengthMajorDiameter',
+          width: 20,
+        },
+        {
+          header: 'Length Minor Diameter',
+          key: 'lengthMinorDiameter',
+          width: 20,
+        },
+        { header: 'Perimeter', key: 'perimeter', width: 15 },
+        { header: 'Solidity', key: 'solidity', width: 15 },
+        { header: 'Sphericity', key: 'sphericity', width: 15 },
       ];
 
-      // Create worksheet
-      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      // Add data rows
+      metricsData.forEach(metric => {
+        worksheet.addRow({
+          imageName: metric.imageName,
+          contourNumber: metric.contourNumber,
+          area: metric.area,
+          circularity: metric.circularity,
+          compactness: metric.compactness,
+          convexity: metric.convexity,
+          equivalentDiameter: metric.equivalentDiameter,
+          aspectRatio: metric.aspectRatio,
+          feretDiameterMax: metric.feretDiameterMax,
+          feretDiameterMaxOrthogonal: metric.feretDiameterMaxOrthogonal,
+          feretDiameterMin: metric.feretDiameterMin,
+          lengthMajorDiameter: metric.lengthMajorDiameter,
+          lengthMinorDiameter: metric.lengthMinorDiameter,
+          perimeter: metric.perimeter,
+          solidity: metric.solidity,
+          sphericity: metric.sphericity,
+        });
+      });
 
-      // Add worksheet to workbook
-      XLSX.utils.book_append_sheet(workbook, worksheet, 'Spheroid Metrics');
+      // Style the header row
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE0E0E0' },
+      };
 
-      // Download file
+      // Generate Excel file buffer and download
+      const buffer = await excelService.writeBuffer(workbook);
+      const blob = excelService.createBlob(buffer);
       const filename = `${imageName || 'spheroid'}_metrics.xlsx`;
-      XLSX.writeFile(workbook, filename);
+      excelService.downloadFile(blob, filename);
     } catch (error) {
       logger.error('Failed to export Excel file:', error);
       // You could add a toast notification here if available in the project

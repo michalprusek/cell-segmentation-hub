@@ -1,7 +1,12 @@
 import React from 'react';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
-import { Link } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+
+interface LocationState {
+  from?: string;
+  path?: string;
+}
 import {
   FileText,
   Code,
@@ -17,9 +22,15 @@ import {
 } from 'lucide-react';
 import { useActiveSection } from '@/hooks/useActiveSection';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
 
 const Documentation = () => {
   const { t } = useLanguage();
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+
   const sectionIds = [
     'introduction',
     'getting-started',
@@ -32,11 +43,33 @@ const Documentation = () => {
 
   const { activeSection, scrollToSection } = useActiveSection(sectionIds);
 
+  // Get referrer information from navigation state
+  const locationState = location.state as LocationState | null;
+  const referrerPage = locationState?.from;
+  const referrerPath = locationState?.path;
+
+  // Show Navbar only when NOT coming from authenticated pages
+  const showNavbar = !isAuthenticated || !referrerPage || !referrerPath;
+
   return (
     <div className="min-h-screen flex flex-col">
-      <Navbar />
-      <main className="flex-1 pt-24 pb-16">
+      {showNavbar && <Navbar />}
+      <main className={`flex-1 ${showNavbar ? 'pt-24' : 'pt-8'} pb-16`}>
         <div className="container mx-auto px-4">
+          {/* Back button for authenticated users */}
+          {isAuthenticated && referrerPage && referrerPath && (
+            <div className="max-w-7xl mx-auto mb-4 flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => navigate(referrerPath)}
+                className="flex items-center gap-2"
+              >
+                {t('docs.backTo', { page: referrerPage })}
+                <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
+
           {/* Header */}
           <div className="max-w-3xl mx-auto text-center mb-12 md:mb-16">
             <div className="inline-block bg-blue-100 px-4 py-2 rounded-full mb-4">
@@ -502,94 +535,93 @@ const Documentation = () => {
                     </div>
                   </div>
 
-                  <h3 className="text-xl font-semibold mb-3">Key Features</h3>
+                  <h3 className="text-xl font-semibold mb-3">
+                    {t('docs.segmentationEditor.keyFeatures')}
+                  </h3>
                   <ul className="list-disc pl-6 mb-6 space-y-2">
+                    <li>{t('docs.segmentationEditor.features.undoRedo')}</li>
+                    <li>{t('docs.segmentationEditor.features.autoSave')}</li>
+                    <li>{t('docs.segmentationEditor.features.zoomPan')}</li>
                     <li>
-                      <strong>Undo/Redo System:</strong> Full history tracking
-                      with Ctrl+Z/Ctrl+Y support
+                      {t('docs.segmentationEditor.features.polygonManagement')}
                     </li>
                     <li>
-                      <strong>Auto-save:</strong> Periodic saving with visual
-                      indicators showing unsaved changes
+                      {t('docs.segmentationEditor.features.keyboardShortcuts')}
                     </li>
                     <li>
-                      <strong>Zoom & Pan:</strong> Mouse wheel zooming and
-                      drag-to-pan navigation
-                    </li>
-                    <li>
-                      <strong>Polygon Management:</strong> Show/hide, rename,
-                      and batch operations
-                    </li>
-                    <li>
-                      <strong>Keyboard Shortcuts:</strong> Comprehensive hotkeys
-                      for efficient editing
-                    </li>
-                    <li>
-                      <strong>Real-time Feedback:</strong> Live preview of edits
-                      and status updates
+                      {t('docs.segmentationEditor.features.realTimeFeedback')}
                     </li>
                   </ul>
 
                   <h3 className="text-xl font-semibold mb-3">
-                    Essential Keyboard Shortcuts
+                    {t('docs.segmentationEditor.shortcuts')}
                   </h3>
                   <div className="bg-gray-50 border rounded-lg p-4 mb-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                       <div>
-                        <p className="font-medium mb-1">Navigation:</p>
+                        <p className="font-medium mb-1">
+                          {t(
+                            'docs.segmentationEditor.shortcutCategories.navigation'
+                          )}
+                        </p>
                         <ul className="space-y-1">
                           <li>
                             <kbd className="bg-gray-200 px-2 py-1 rounded">
                               V
                             </kbd>{' '}
-                            - View mode
+                            - {t('docs.segmentationEditor.shortcutsList.v')}
                           </li>
                           <li>
                             <kbd className="bg-gray-200 px-2 py-1 rounded">
                               E
                             </kbd>{' '}
-                            - Edit vertices
+                            - {t('docs.segmentationEditor.shortcutsList.e')}
                           </li>
                           <li>
                             <kbd className="bg-gray-200 px-2 py-1 rounded">
                               A
                             </kbd>{' '}
-                            - Add points
+                            - {t('docs.segmentationEditor.shortcutsList.a')}
                           </li>
                           <li>
                             <kbd className="bg-gray-200 px-2 py-1 rounded">
                               N
                             </kbd>{' '}
-                            - Create polygon
+                            - {t('docs.segmentationEditor.shortcutsList.n')}
                           </li>
                         </ul>
                       </div>
                       <div>
-                        <p className="font-medium mb-1">Actions:</p>
+                        <p className="font-medium mb-1">
+                          {t(
+                            'docs.segmentationEditor.shortcutCategories.actions'
+                          )}
+                        </p>
                         <ul className="space-y-1">
                           <li>
                             <kbd className="bg-gray-200 px-2 py-1 rounded">
                               Ctrl+Z
                             </kbd>{' '}
-                            - Undo
+                            - {t('docs.segmentationEditor.shortcutsList.ctrlZ')}
                           </li>
                           <li>
                             <kbd className="bg-gray-200 px-2 py-1 rounded">
                               Ctrl+Y
                             </kbd>{' '}
-                            - Redo
+                            - {t('docs.segmentationEditor.shortcutsList.ctrlY')}
                           </li>
                           <li>
                             <kbd className="bg-gray-200 px-2 py-1 rounded">
                               Ctrl+S
                             </kbd>{' '}
-                            - Save
+                            - {t('docs.segmentationEditor.shortcutsList.ctrlS')}
                           </li>
                           <li>
                             <kbd className="bg-gray-200 px-2 py-1 rounded">
                               Delete
                             </kbd>{' '}
-                            - Remove selected
+                            -{' '}
+                            {t('docs.segmentationEditor.shortcutsList.delete')}
                           </li>
                         </ul>
                       </div>
@@ -597,22 +629,14 @@ const Documentation = () => {
                   </div>
 
                   <h3 className="text-xl font-semibold mb-3">
-                    Working with Polygons
+                    {t('docs.segmentationEditor.workingWithPolygons')}
                   </h3>
                   <ol className="list-decimal pl-6 mb-6 space-y-2">
-                    <li>
-                      Select a polygon by clicking on it (highlighted in blue
-                      when selected)
-                    </li>
-                    <li>
-                      Switch to the appropriate editing mode for your task
-                    </li>
-                    <li>Make your modifications using mouse interactions</li>
-                    <li>
-                      Use the polygon panel on the right to manage visibility
-                      and properties
-                    </li>
-                    <li>Save your changes periodically or rely on auto-save</li>
+                    <li>{t('docs.segmentationEditor.polygonSteps.step1')}</li>
+                    <li>{t('docs.segmentationEditor.polygonSteps.step2')}</li>
+                    <li>{t('docs.segmentationEditor.polygonSteps.step3')}</li>
+                    <li>{t('docs.segmentationEditor.polygonSteps.step4')}</li>
+                    <li>{t('docs.segmentationEditor.polygonSteps.step5')}</li>
                   </ol>
                 </section>
 
@@ -624,139 +648,153 @@ const Documentation = () => {
                   <p className="mb-4">{t('docs.exportFeatures.description')}</p>
 
                   <h3 className="text-xl font-semibold mb-3">
-                    Export Package Contents
+                    {t('docs.exportFeatures.packageContents')}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                       <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
                         <FileText className="w-4 h-4 mr-2" />
-                        Original Images
+                        {t('docs.exportFeatures.contents.originalImages.title')}
                       </h4>
                       <p className="text-sm text-blue-600">
-                        High-quality original microscopic images in their native
-                        format.
+                        {t(
+                          'docs.exportFeatures.contents.originalImages.description'
+                        )}
                       </p>
                     </div>
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                       <h4 className="font-semibold text-green-800 mb-2 flex items-center">
                         <Layers className="w-4 h-4 mr-2" />
-                        Visualizations
+                        {t('docs.exportFeatures.contents.visualizations.title')}
                       </h4>
                       <p className="text-sm text-green-600">
-                        Annotated images with numbered polygons and customizable
-                        colors.
+                        {t(
+                          'docs.exportFeatures.contents.visualizations.description'
+                        )}
                       </p>
                     </div>
                   </div>
 
                   <h3 className="text-xl font-semibold mb-3">
-                    Annotation Formats
+                    {t('docs.exportFeatures.annotationFormats')}
                   </h3>
                   <ul className="list-disc pl-6 mb-6 space-y-2">
-                    <li>
-                      <strong>COCO Format:</strong> Common Objects in Context -
-                      standard format for object detection frameworks like
-                      PyTorch and TensorFlow
-                    </li>
-                    <li>
-                      <strong>YOLO Format:</strong> You Only Look Once -
-                      optimized format for YOLO-based detection models
-                    </li>
-                    <li>
-                      <strong>Custom JSON:</strong> Structured JSON format with
-                      detailed polygon coordinates and metadata
-                    </li>
+                    <li>{t('docs.exportFeatures.formats.coco')}</li>
+                    <li>{t('docs.exportFeatures.formats.yolo')}</li>
+                    <li>{t('docs.exportFeatures.formats.json')}</li>
                   </ul>
 
                   <h3 className="text-xl font-semibold mb-3">
-                    Calculated Metrics
+                    {t('docs.exportFeatures.calculatedMetrics')}
                   </h3>
                   <p className="mb-4">
-                    SpheroSeg automatically calculates comprehensive
-                    morphological metrics for each detected spheroid:
+                    {t('docs.exportFeatures.metricsDescription')}
                   </p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                     <div>
                       <h4 className="font-semibold mb-2">
-                        Basic Measurements:
+                        {t('docs.exportFeatures.metricsCategories.basic.title')}
                       </h4>
                       <ul className="list-disc pl-6 text-sm space-y-1">
-                        <li>Area (pixels and scaled units)</li>
-                        <li>Perimeter</li>
-                        <li>Equivalent diameter</li>
-                        <li>Circularity</li>
+                        <li>
+                          {t(
+                            'docs.exportFeatures.metricsCategories.basic.items.area'
+                          )}
+                        </li>
+                        <li>
+                          {t(
+                            'docs.exportFeatures.metricsCategories.basic.items.perimeter'
+                          )}
+                        </li>
+                        <li>
+                          {t(
+                            'docs.exportFeatures.metricsCategories.basic.items.diameter'
+                          )}
+                        </li>
+                        <li>
+                          {t(
+                            'docs.exportFeatures.metricsCategories.basic.items.circularity'
+                          )}
+                        </li>
                       </ul>
                     </div>
                     <div>
-                      <h4 className="font-semibold mb-2">Advanced Metrics:</h4>
+                      <h4 className="font-semibold mb-2">
+                        {t(
+                          'docs.exportFeatures.metricsCategories.advanced.title'
+                        )}
+                      </h4>
                       <ul className="list-disc pl-6 text-sm space-y-1">
-                        <li>Feret diameters (max, min, aspect ratio)</li>
-                        <li>Major/minor diameter through centroid</li>
-                        <li>Compactness, convexity, solidity</li>
-                        <li>Sphericity index</li>
+                        <li>
+                          {t(
+                            'docs.exportFeatures.metricsCategories.advanced.items.feret'
+                          )}
+                        </li>
+                        <li>
+                          {t(
+                            'docs.exportFeatures.metricsCategories.advanced.items.majorMinor'
+                          )}
+                        </li>
+                        <li>
+                          {t(
+                            'docs.exportFeatures.metricsCategories.advanced.items.compactness'
+                          )}
+                        </li>
+                        <li>
+                          {t(
+                            'docs.exportFeatures.metricsCategories.advanced.items.sphericity'
+                          )}
+                        </li>
                       </ul>
                     </div>
                   </div>
 
                   <h3 className="text-xl font-semibold mb-3">
-                    Metrics Export Formats
+                    {t('docs.exportFeatures.exportFormats')}
                   </h3>
                   <ul className="list-disc pl-6 mb-6 space-y-2">
+                    <li>{t('docs.exportFeatures.exportFormatsList.excel')}</li>
+                    <li>{t('docs.exportFeatures.exportFormatsList.csv')}</li>
                     <li>
-                      <strong>Excel (.xlsx):</strong> Formatted spreadsheet with
-                      separate sheets for summary and detailed data
-                    </li>
-                    <li>
-                      <strong>CSV:</strong> Comma-separated values for easy
-                      import into statistical software
-                    </li>
-                    <li>
-                      <strong>JSON:</strong> Structured data format for
-                      programmatic analysis
+                      {t('docs.exportFeatures.exportFormatsList.jsonExport')}
                     </li>
                   </ul>
 
                   <h3 className="text-xl font-semibold mb-3">
-                    Visualization Customization
+                    {t('docs.exportFeatures.visualizationCustomization')}
                   </h3>
                   <ul className="list-disc pl-6 mb-6 space-y-2">
                     <li>
-                      <strong>Polygon colors:</strong> Customize external
-                      (green) and internal (red) polygon colors
+                      {t('docs.exportFeatures.customizationOptions.colors')}
                     </li>
                     <li>
-                      <strong>Numbering:</strong> Show/hide polygon numbers for
-                      identification
+                      {t('docs.exportFeatures.customizationOptions.numbering')}
                     </li>
                     <li>
-                      <strong>Stroke width:</strong> Adjust line thickness
-                      (1-10px)
+                      {t(
+                        'docs.exportFeatures.customizationOptions.strokeWidth'
+                      )}
                     </li>
                     <li>
-                      <strong>Font size:</strong> Control text size for polygon
-                      numbers (10-30px)
+                      {t('docs.exportFeatures.customizationOptions.fontSize')}
                     </li>
                     <li>
-                      <strong>Transparency:</strong> Set polygon fill
-                      transparency (0-100%)
+                      {t(
+                        'docs.exportFeatures.customizationOptions.transparency'
+                      )}
                     </li>
                   </ul>
 
-                  <h3 className="text-xl font-semibold mb-3">How to Export</h3>
+                  <h3 className="text-xl font-semibold mb-3">
+                    {t('docs.exportFeatures.howToExport')}
+                  </h3>
                   <ol className="list-decimal pl-6 mb-6 space-y-2">
-                    <li>Navigate to your project dashboard</li>
-                    <li>
-                      Select the images you want to export (or export all)
-                    </li>
-                    <li>Click "Advanced Export" to open the export dialog</li>
-                    <li>
-                      Configure your export settings across the three tabs:
-                      General, Visualization, and Formats
-                    </li>
-                    <li>Review the export summary</li>
-                    <li>
-                      Click "Start Export" to generate and download your package
-                    </li>
+                    <li>{t('docs.exportFeatures.exportSteps.step1')}</li>
+                    <li>{t('docs.exportFeatures.exportSteps.step2')}</li>
+                    <li>{t('docs.exportFeatures.exportSteps.step3')}</li>
+                    <li>{t('docs.exportFeatures.exportSteps.step4')}</li>
+                    <li>{t('docs.exportFeatures.exportSteps.step5')}</li>
+                    <li>{t('docs.exportFeatures.exportSteps.step6')}</li>
                   </ol>
 
                   <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
@@ -766,10 +804,8 @@ const Documentation = () => {
                       </div>
                       <div className="ml-3">
                         <p className="text-sm text-green-700">
-                          <strong>Export packages are comprehensive:</strong>{' '}
-                          Each export includes documentation, metadata, and all
-                          selected content types organized in a clear folder
-                          structure for easy use.
+                          <strong>{t('docs.exportFeatures.exportNote')}</strong>{' '}
+                          {t('docs.exportFeatures.exportNoteText')}
                         </p>
                       </div>
                     </div>

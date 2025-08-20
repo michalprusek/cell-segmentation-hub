@@ -35,13 +35,32 @@ export const generateAccessToken = (payload: JwtPayload): string => {
 /**
  * Generate JWT refresh token
  */
-export const generateRefreshToken = (payload: JwtPayload): string => {
+export const generateRefreshToken = (payload: JwtPayload, rememberMe = false): string => {
   try {
     if (!config.JWT_REFRESH_SECRET) {
       throw new Error('JWT_REFRESH_SECRET is not configured');
     }
+    
+    // Determine expiry based on rememberMe flag
+    let expiresIn: string | undefined;
+    if (rememberMe) {
+      if (config.JWT_REFRESH_EXPIRY_REMEMBER) {
+        expiresIn = config.JWT_REFRESH_EXPIRY_REMEMBER;
+      } else {
+        logger.warn('JWT_REFRESH_EXPIRY_REMEMBER not configured, falling back to JWT_REFRESH_EXPIRY', 'JWT');
+        expiresIn = config.JWT_REFRESH_EXPIRY;
+      }
+    } else {
+      expiresIn = config.JWT_REFRESH_EXPIRY;
+    }
+    
+    // Ensure we always have an expiry
+    if (!expiresIn) {
+      throw new Error('No refresh token expiry configured. Set JWT_REFRESH_EXPIRY and optionally JWT_REFRESH_EXPIRY_REMEMBER');
+    }
+    
     return jwt.sign(payload, config.JWT_REFRESH_SECRET, {
-      expiresIn: config.JWT_REFRESH_EXPIRY,
+      expiresIn,
       issuer: 'cell-segmentation-api',
       audience: 'cell-segmentation-app'
     } as jwt.SignOptions);
@@ -54,10 +73,10 @@ export const generateRefreshToken = (payload: JwtPayload): string => {
 /**
  * Generate both access and refresh tokens
  */
-export const generateTokenPair = (payload: JwtPayload): TokenPair => {
+export const generateTokenPair = (payload: JwtPayload, rememberMe = false): TokenPair => {
   return {
     accessToken: generateAccessToken(payload),
-    refreshToken: generateRefreshToken(payload)
+    refreshToken: generateRefreshToken(payload, rememberMe)
   };
 };
 

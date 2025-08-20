@@ -344,3 +344,28 @@ export const getPolygonCentroid = (points: Point[]): Point => {
     y: sum.y / points.length,
   };
 };
+
+/**
+ * Check if one polygon is inside another polygon
+ * Uses centroid check - if the centroid of the inner polygon is inside the outer polygon,
+ * we consider the inner polygon to be contained by the outer polygon
+ */
+export const isPolygonInsidePolygon = (
+  innerPoints: Point[],
+  outerPoints: Point[]
+): boolean => {
+  if (
+    !innerPoints ||
+    !outerPoints ||
+    innerPoints.length === 0 ||
+    outerPoints.length === 0
+  ) {
+    return false;
+  }
+
+  // Calculate centroid of inner polygon
+  const centroid = getPolygonCentroid(innerPoints);
+
+  // Check if centroid is inside outer polygon
+  return isPointInPolygon(centroid, outerPoints);
+};

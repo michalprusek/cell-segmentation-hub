@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/AuthContext';
 import { getErrorMessage } from '@/types';
+import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { logger } from '@/lib/logger';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -22,12 +23,12 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
     e.preventDefault();
 
     if (!projectName.trim()) {
-      toast.error(t('errors.validation.projectNameRequired'));
+      toast.error(t('errors.validationErrors.projectNameRequired'));
       return;
     }
 
     if (!user) {
-      toast.error(t('errors.validation.loginRequired'));
+      toast.error(t('errors.validationErrors.loginRequired'));
       return;
     }
 
@@ -36,7 +37,7 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
     try {
       const projectData = await apiClient.createProject({
         name: projectName,
-        description: projectDescription || 'No description provided',
+        description: projectDescription || t('projects.noDescriptionProvided'),
       });
 
       // Validate response
@@ -68,8 +69,12 @@ export const useProjectForm = ({ onSuccess, onClose }: UseProjectFormProps) => {
       }
     } catch (error: unknown) {
       logger.error('Error creating project:', error);
-      const errorMessage = getErrorMessage(error) || 'Failed to create project';
-      toast.error('Failed to create project: ' + errorMessage);
+      const errorMessage = getLocalizedErrorMessage(
+        error,
+        t,
+        'errors.operations.saveProject'
+      );
+      toast.error(errorMessage);
     } finally {
       setIsCreating(false);
     }

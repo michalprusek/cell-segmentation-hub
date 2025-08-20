@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -31,6 +30,11 @@ model Profile {
   userId                        String    @unique
   username                      String?   @unique
   avatarUrl                     String?
+  // Avatar storage model: Files stored in /app/uploads/avatars/
+  // Support for JPEG, PNG, GIF formats with automatic Sharp processing
+  avatarPath                    String?   // Storage path for avatar file
+  avatarMimeType                String?   // MIME type of avatar
+  avatarSize                    Int?      // Size of avatar in bytes
   bio                           String?
   organization                  String?
   location                      String?
@@ -154,6 +158,7 @@ model Session {
   userAgent    String?
   ipAddress    String?
   isValid      Boolean  @default(true)
+  rememberMe   Boolean  @default(false)
   expiresAt    DateTime
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)

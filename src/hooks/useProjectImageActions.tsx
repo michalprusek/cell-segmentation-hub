@@ -4,7 +4,7 @@ import apiClient from '@/lib/api';
 import { toast } from 'sonner';
 import { updateImageProcessingStatus } from '@/lib/imageProcessingService';
 import type { ProjectImage, SegmentationData } from '@/types';
-import { getErrorMessage } from '@/types';
+import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { logger } from '@/lib/logger';
 
@@ -46,8 +46,12 @@ export const useProjectImageActions = ({
       toast.success(t('imageDeleted'));
     } catch (error: unknown) {
       logger.error('Error deleting image:', error);
-      const errorMessage = getErrorMessage(error) || t('deleteImageFailed');
-      toast.error(t('deleteImageError') + ': ' + errorMessage);
+      const errorMessage = getLocalizedErrorMessage(
+        error,
+        t,
+        'errors.operations.deleteImage'
+      );
+      toast.error(errorMessage);
     }
   };
 
@@ -101,9 +105,12 @@ export const useProjectImageActions = ({
         },
       }).catch((error: unknown) => {
         logger.error('Error processing image:', error);
-        const errorMessage =
-          getErrorMessage(error) || 'Failed to process image';
-        toast.error(t('processImageFailed') + ': ' + errorMessage);
+        const errorMessage = getLocalizedErrorMessage(
+          error,
+          t,
+          'errors.operations.processImage'
+        );
+        toast.error(errorMessage);
 
         // Remove from in-flight tracking
         processingImagesRef.current.delete(imageId);

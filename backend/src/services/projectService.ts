@@ -2,15 +2,15 @@ import { prisma } from '../db';
 import { CreateProjectData, UpdateProjectData, ProjectQueryParams } from '../types/validation';
 import { calculatePagination } from '../utils/response';
 import { logger } from '../utils/logger';
+import type { Project, Prisma } from '@prisma/client';
 
 /**
  * Service for managing projects
  */
-export class ProjectService {
   /**
    * Create a new project for a user
    */
-  static async createProject(userId: string, data: CreateProjectData) {
+export async function createProject(userId: string, data: CreateProjectData): Promise<Project> {
     try {
       const project = await prisma.project.create({
         data: {
@@ -45,12 +45,12 @@ export class ProjectService {
   /**
    * Get projects for a user with pagination and search
    */
-  static async getUserProjects(userId: string, options: ProjectQueryParams) {
+export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: Project[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     try {
       const { page, limit, search, sortBy, sortOrder } = options;
       
       // Build where clause
-      const where: any = {
+      const where: Prisma.ProjectWhereInput = {
         userId: userId
       };
 
@@ -58,22 +58,28 @@ export class ProjectService {
         where.OR = [
           {
             title: {
-              contains: search,
-              mode: 'insensitive'
+              contains: search
             }
           },
           {
             description: {
-              contains: search,
-              mode: 'insensitive'
+              contains: search
             }
           }
         ];
       }
 
-      // Build order clause
-      const orderBy: any = {};
-      orderBy[sortBy] = sortOrder;
+      // Build order clause with type safety
+      const allowedSortFields = ['createdAt', 'updatedAt', 'title'] as const;
+      type AllowedSortField = typeof allowedSortFields[number];
+      
+      const orderBy: Prisma.ProjectOrderByWithRelationInput = {};
+      if (allowedSortFields.includes(sortBy as AllowedSortField)) {
+        orderBy[sortBy as keyof Prisma.ProjectOrderByWithRelationInput] = sortOrder as Prisma.SortOrder;
+      } else {
+        // Default to createdAt if invalid field provided
+        orderBy.createdAt = sortOrder as Prisma.SortOrder;
+      }
 
       // Calculate pagination
       const total = await prisma.project.count({ where });
@@ -130,7 +136,7 @@ export class ProjectService {
   /**
    * Get a specific project by ID (with ownership check)
    */
-  static async getProjectById(projectId: string, userId: string) {
+export async function getProjectById(projectId: string, userId: string): Promise<(Project & { _count: { images: number } }) | null> {
     try {
       const project = await prisma.project.findFirst({
         where: {
@@ -180,7 +186,7 @@ export class ProjectService {
   /**
    * Update a project (with ownership check)
    */
-  static async updateProject(projectId: string, userId: string, data: UpdateProjectData) {
+export async function updateProject(projectId: string, userId: string, data: UpdateProjectData): Promise<Project | null> {
     try {
       // First check if project exists and belongs to user
       const existingProject = await prisma.project.findFirst({
@@ -231,7 +237,7 @@ export class ProjectService {
   /**
    * Delete a project (with ownership check)
    */
-  static async deleteProject(projectId: string, userId: string) {
+export async function deleteProject(projectId: string, userId: string): Promise<(Project & { _count: { images: number } }) | null> {
     try {
       // First check if project exists and belongs to user
       const existingProject = await prisma.project.findFirst({
@@ -275,7 +281,32 @@ export class ProjectService {
   /**
    * Get project statistics
    */
-  static async getProjectStats(projectId: string, userId: string) {
+export async function getProjectStats(projectId: string, userId: string): Promise<{
+  project: {
+    id: string;
+    title: string;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  images: {
+    total: number;
+    byStatus: {
+      pending: number;
+      processing: number;
+      completed: number;
+      failed: number;
+    };
+    totalFileSize: number;
+  };
+  segmentations: {
+    total: number;
+  };
+  progress: {
+    completionPercentage: number;
+    completedImages: number;
+    remainingImages: number;
+  };
+} | null> {
     try {
       // First check if project exists and belongs to user
       const project = await prisma.project.findFirst({
@@ -374,7 +405,7 @@ export class ProjectService {
   /**
    * Check if user owns a project
    */
-  static async checkProjectOwnership(projectId: string, userId: string) {
+export async function checkProjectOwnership(projectId: string, userId: string): Promise<boolean> {
     try {
       const project = await prisma.project.findFirst({
         where: {
@@ -392,4 +423,3 @@ export class ProjectService {
       throw error;
     }
   }
-}

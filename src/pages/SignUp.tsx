@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Loader2, ArrowLeft, Check, X } from 'lucide-react';
 import { getErrorMessage } from '@/types';
+import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { logger } from '@/lib/logger';
 
 const SignUp = () => {
@@ -33,17 +34,17 @@ const SignUp = () => {
     e.preventDefault();
 
     if (!email || !password) {
-      toast.error(t('auth.fillAllFields'));
+      toast.error(t('errors.validationErrors.fieldRequired'));
       return;
     }
 
     if (password !== confirmPassword) {
-      toast.error(t('auth.passwordsDoNotMatch'));
+      toast.error(t('errors.validationErrors.passwordsDoNotMatch'));
       return;
     }
 
     if (!agreeTerms) {
-      toast.error(t('auth.mustAgreeToTerms'));
+      toast.error(t('errors.validationErrors.confirmationRequired'));
       return;
     }
 
@@ -56,7 +57,11 @@ const SignUp = () => {
       // signUp already navigates to /dashboard automatically
     } catch (error) {
       logger.error('Sign up error:', error);
-      const errorMessage = getErrorMessage(error) || t('auth.signUpFailed');
+      const errorMessage = getLocalizedErrorMessage(
+        error,
+        t,
+        'errors.operations.register'
+      );
       toast.error(errorMessage);
     } finally {
       setIsLoading(false);
@@ -122,7 +127,7 @@ const SignUp = () => {
               <Input
                 id="email"
                 type="email"
-                autoComplete="email"
+                autoComplete="username"
                 placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}

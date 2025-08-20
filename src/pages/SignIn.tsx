@@ -50,7 +50,7 @@ const SignIn = () => {
     e.preventDefault();
 
     if (!email || !password) {
-      toast.error(t('auth.fillAllFields'));
+      toast.error(t('errors.validationErrors.fieldRequired'));
       return;
     }
 
@@ -126,7 +126,7 @@ const SignIn = () => {
               <Input
                 id="email"
                 type="email"
-                autoComplete="email"
+                autoComplete="username"
                 placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -149,18 +149,26 @@ const SignIn = () => {
               />
             </div>
 
-            <div className="flex items-center">
-              <Checkbox
-                id="remember"
-                checked={rememberMe}
-                onCheckedChange={checked => setRememberMe(checked as boolean)}
-              />
-              <label
-                htmlFor="remember"
-                className="ml-2 block text-sm text-gray-700"
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <Checkbox
+                  id="remember"
+                  checked={rememberMe}
+                  onCheckedChange={checked => setRememberMe(checked === true)}
+                />
+                <label
+                  htmlFor="remember"
+                  className="ml-2 block text-sm text-gray-700"
+                >
+                  {t('auth.rememberMe')}
+                </label>
+              </div>
+              <Link
+                to="/forgot-password"
+                className="text-sm text-blue-600 hover:text-blue-500 transition-colors font-medium"
               >
-                {t('auth.rememberMe')}
-              </label>
+                {t('auth.forgotPassword')}
+              </Link>
             </div>
 
             <Button

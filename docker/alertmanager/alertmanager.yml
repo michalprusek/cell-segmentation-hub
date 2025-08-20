@@ -1,0 +1,84 @@
+# Alertmanager configuration for SpheroSeg Cell Segmentation Hub
+global:
+  smtp_smarthost: 'mailhog:1025'
+  smtp_from: 'alerts@spheroseg.local'
+  smtp_require_tls: false
+
+# Route configuration
+route:
+  group_by: ['alertname', 'cluster', 'service']
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'default-receiver'
+  routes:
+    - match:
+        severity: critical
+      receiver: 'critical-receiver'
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 1h
+    - match:
+        severity: warning
+      receiver: 'warning-receiver'
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+
+# Receivers configuration
+receivers:
+  - name: 'default-receiver'
+    email_configs:
+      - to: 'admin@spheroseg.local'
+        subject: '[SpheroSeg] Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          {{ range .Alerts }}
+          **Alert:** {{ .Annotations.summary }}
+          **Description:** {{ .Annotations.description }}
+          **Severity:** {{ .Labels.severity }}
+          **Service:** {{ .Labels.service }}
+          **Started:** {{ .StartsAt }}
+          {{ if .EndsAt }}**Ended:** {{ .EndsAt }}{{ end }}
+          {{ end }}
+
+  - name: 'critical-receiver'
+    email_configs:
+      - to: 'admin@spheroseg.local'
+        subject: '[CRITICAL] SpheroSeg Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          🚨 **CRITICAL ALERT** 🚨
+          
+          {{ range .Alerts }}
+          **Alert:** {{ .Annotations.summary }}
+          **Description:** {{ .Annotations.description }}
+          **Severity:** {{ .Labels.severity }}
+          **Service:** {{ .Labels.service }}
+          **Started:** {{ .StartsAt }}
+          {{ if .EndsAt }}**Ended:** {{ .EndsAt }}{{ end }}
+          {{ end }}
+          
+          Please investigate immediately!
+          
+  - name: 'warning-receiver'
+    email_configs:
+      - to: 'admin@spheroseg.local'
+        subject: '[WARNING] SpheroSeg Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          ⚠️ **WARNING ALERT** ⚠️
+          
+          {{ range .Alerts }}
+          **Alert:** {{ .Annotations.summary }}
+          **Description:** {{ .Annotations.description }}
+          **Severity:** {{ .Labels.severity }}
+          **Service:** {{ .Labels.service }}
+          **Started:** {{ .StartsAt }}
+          {{ if .EndsAt }}**Ended:** {{ .EndsAt }}{{ end }}
+          {{ end }}
+
+# Inhibit rules - prevent warning alerts when critical alerts are firing
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'service', 'instance']

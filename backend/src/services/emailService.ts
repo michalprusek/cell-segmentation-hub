@@ -1,0 +1,359 @@
+import nodemailer, { Transporter, SendMailOptions } from 'nodemailer';
+import SMTPTransport from 'nodemailer/lib/smtp-transport';
+import { logger } from '../utils/logger';
+import { generatePasswordResetEmailHTML, generatePasswordResetEmailText, PasswordResetEmailData } from '../templates/passwordResetEmail';
+import { generateVerificationEmailHTML } from '../templates/verificationEmail';
+import { escapeHtml, sanitizeUrl } from '../utils/escapeHtml';
+
+export interface EmailConfig {
+  service: 'smtp' | 'sendgrid';
+  smtp?: {
+    host: string;
+    port: number;
+    secure: boolean;
+    user: string;
+    pass: string;
+  };
+  sendgrid?: {
+    apiKey: string;
+  };
+  from: {
+    email: string;
+    name: string;
+  };
+}
+
+export interface EmailServiceOptions {
+  to: string;
+  subject: string;
+  html?: string;
+  text?: string;
+  attachments?: Array<{
+    filename: string;
+    content: string | Buffer;
+    contentType?: string;
+  }>;
+}
+
+/* EmailService functions */
+let _transporter: Transporter | null = null;
+let _config: EmailConfig | null = null;
+
+  /**
+   * Initialize email service with configuration
+   */
+export function init(): void {
+    try {
+      const config: EmailConfig = {
+        service: (process.env.EMAIL_SERVICE as 'smtp' | 'sendgrid') || 'smtp',
+        from: {
+          email: process.env.FROM_EMAIL || 'noreply@localhost',
+          name: process.env.FROM_NAME || 'Cell Segmentation Platform'
+        }
+      };
+
+      if (config.service === 'smtp') {
+        config.smtp = {
+          host: process.env.SMTP_HOST || 'localhost',
+          port: parseInt(process.env.SMTP_PORT || '587'),
+          secure: process.env.SMTP_SECURE === 'true',
+          user: process.env.SMTP_USER || '',
+          pass: process.env.SMTP_PASS || ''
+        };
+
+        const transportConfig: SMTPTransport.Options = {
+          host: config.smtp.host,
+          port: config.smtp.port,
+          secure: config.smtp.secure,
+          tls: {
+            // Certificate validation enabled by default, only disable with explicit flag
+            rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true'
+          }
+        };
+
+        // Only include auth if credentials are provided
+        if (config.smtp.user && config.smtp.pass) {
+          transportConfig.auth = {
+            user: config.smtp.user,
+            pass: config.smtp.pass
+          };
+        }
+
+        _transporter = nodemailer.createTransport(transportConfig);
+      } else if (config.service === 'sendgrid') {
+        config.sendgrid = {
+          apiKey: process.env.SENDGRID_API_KEY || ''
+        };
+
+        // Note: For SendGrid, you would typically use @sendgrid/mail
+        // This is a basic SMTP configuration for SendGrid
+        _transporter = nodemailer.createTransport({
+          host: 'smtp.sendgrid.net',
+          port: 587,
+          auth: {
+            user: 'apikey',
+            pass: config.sendgrid.apiKey
+          }
+        });
+      }
+
+      _config = config;
+      logger.info('Email service initialized successfully', 'EmailService', { 
+        service: config.service,
+        host: config.smtp?.host || 'sendgrid'
+      });
+    } catch (error) {
+      logger.error('Failed to initialize email service:', error as Error, 'EmailService');
+      throw new Error('Email service initialization failed');
+    }
+  }
+
+  /**
+   * Send email
+   */
+export async function sendEmail(options: EmailServiceOptions): Promise<void> {
+    try {
+      ensureInitialized();
+      
+      if (!_transporter || !_config) {
+        throw new Error('Email service not properly initialized.');
+      }
+
+      const mailOptions: SendMailOptions = {
+        from: `"${_config.from.name}" <${_config.from.email}>`,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+        attachments: options.attachments
+      };
+
+      const result = await _transporter.sendMail(mailOptions);
+      
+      logger.info('Email sent successfully', 'EmailService', { 
+        to: options.to,
+        subject: options.subject,
+        messageId: result.messageId
+      });
+    } catch (error) {
+      logger.error('Failed to send email:', error as Error, 'EmailService', {
+        to: options.to,
+        subject: options.subject
+      });
+      throw new Error(`Failed to send email: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Send password reset email with secure token link
+   */
+export async function sendPasswordResetEmail(userEmail: string, resetToken: string, expiresAt: Date): Promise<void> {
+    try {
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
+
+      const emailData: PasswordResetEmailData = {
+        resetToken,
+        userEmail,
+        resetUrl,
+        expiresAt
+      };
+
+      const htmlContent = generatePasswordResetEmailHTML(emailData);
+      const textContent = generatePasswordResetEmailText(emailData);
+
+      await sendEmail({
+        to: userEmail,
+        subject: 'Password Reset - Cell Segmentation Platform',
+        html: htmlContent,
+        text: textContent
+      });
+
+      logger.info('Password reset email sent', 'EmailService', { userEmail });
+    } catch (error) {
+      logger.error('Failed to send password reset email:', error as Error, 'EmailService', { userEmail });
+      throw error;
+    }
+  }
+
+  /**
+   * Send verification email (for future use)
+   */
+export async function sendVerificationEmail(userEmail: string, verificationToken: string, locale = 'en'): Promise<void> {
+    try {
+      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+      const verificationUrl = `${baseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+
+      const emailContent = generateVerificationEmailHTML({
+        verificationUrl,
+        userEmail,
+        locale
+      });
+
+      await sendEmail({
+        to: userEmail,
+        subject: emailContent.subject,
+        html: emailContent.html
+      });
+
+      logger.info('Verification email sent', 'EmailService', { userEmail, locale });
+    } catch (error) {
+      logger.error('Failed to send verification email:', error as Error, 'EmailService', { userEmail });
+      throw error;
+    }
+  }
+
+  /**
+   * Send project share email (for future use)
+   */
+export async function sendProjectShareEmail(
+    recipientEmail: string, 
+    senderName: string, 
+    projectName: string, 
+    projectUrl: string,
+    locale = 'en'
+  ): Promise<void> {
+    try {
+      // Simple inline translations for project share email
+      // Escape user-provided values
+      const escapedSenderName = escapeHtml(senderName);
+      const escapedProjectName = escapeHtml(projectName);
+      
+      const translations = {
+        en: {
+          subject: `Shared Project: ${escapedProjectName} - Cell Segmentation Platform`,
+          title: 'Shared Project',
+          body: `${escapedSenderName} has shared the project "${escapedProjectName}" with you.`,
+          buttonText: 'View Project',
+          altText: 'Or copy and paste this link into your browser:'
+        },
+        cs: {
+          subject: `Sdílený projekt: ${escapedProjectName} - Cell Segmentation Platform`,
+          title: 'Sdílený projekt',
+          body: `${escapedSenderName} s vámi sdílel projekt "${escapedProjectName}".`,
+          buttonText: 'Zobrazit projekt',
+          altText: 'Nebo zkopírujte a vložte tento odkaz do prohlížeče:'
+        },
+        es: {
+          subject: `Proyecto compartido: ${escapedProjectName} - Cell Segmentation Platform`,
+          title: 'Proyecto compartido',
+          body: `${escapedSenderName} ha compartido el proyecto "${escapedProjectName}" contigo.`,
+          buttonText: 'Ver proyecto',
+          altText: 'O copia y pega este enlace en tu navegador:'
+        },
+        de: {
+          subject: `Geteiltes Projekt: ${escapedProjectName} - Cell Segmentation Platform`,
+          title: 'Geteiltes Projekt',
+          body: `${escapedSenderName} hat das Projekt "${escapedProjectName}" mit Ihnen geteilt.`,
+          buttonText: 'Projekt anzeigen',
+          altText: 'Oder kopieren Sie diesen Link und fügen Sie ihn in Ihren Browser ein:'
+        },
+        fr: {
+          subject: `Projet partagé : ${escapedProjectName} - Cell Segmentation Platform`,
+          title: 'Projet partagé',
+          body: `${escapedSenderName} a partagé le projet "${escapedProjectName}" avec vous.`,
+          buttonText: 'Voir le projet',
+          altText: 'Ou copiez et collez ce lien dans votre navigateur :'
+        },
+        zh: {
+          subject: `共享项目：${escapedProjectName} - 细胞分割平台`,
+          title: '共享项目',
+          body: `${escapedSenderName} 与您分享了项目 "${escapedProjectName}"。`,
+          buttonText: '查看项目',
+          altText: '或将此链接复制并粘贴到您的浏览器中：'
+        }
+      };
+
+      const t = translations[locale as keyof typeof translations] || translations.en;
+      
+      // Validate the project URL first
+      try {
+        new URL(projectUrl);
+      } catch (error) {
+        throw new Error('Invalid project URL provided');
+      }
+      
+      // Then sanitize the validated URL
+      const sanitizedUrl = sanitizeUrl(projectUrl);
+      if (!sanitizedUrl) {
+        throw new Error('Invalid project URL provided');
+      }
+      
+      const htmlContent = `
+        <h2>${escapeHtml(t.title)}</h2>
+        <p>${t.body}</p>
+        <a href="${sanitizedUrl}" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+          ${escapeHtml(t.buttonText)}
+        </a>
+        <p>${escapeHtml(t.altText)}</p>
+        <p>${escapeHtml(sanitizedUrl)}</p>
+      `;
+
+      const textContent = `
+        ${t.title}
+        
+        ${t.body}
+        
+        ${t.buttonText}: ${projectUrl}
+      `;
+
+      await sendEmail({
+        to: recipientEmail,
+        subject: t.subject,
+        html: htmlContent,
+        text: textContent
+      });
+
+      logger.info('Project share email sent', 'EmailService', { recipientEmail, projectName, locale });
+    } catch (error) {
+      logger.error('Failed to send project share email:', error as Error, 'EmailService', { 
+        recipientEmail, 
+        projectName 
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Test email configuration
+   */
+export async function testConnection(): Promise<boolean> {
+    try {
+      if (!_transporter) {
+        throw new Error('Email service not initialized');
+      }
+
+      await _transporter.verify();
+      logger.info('Email service connection test successful', 'EmailService');
+      return true;
+    } catch (error) {
+      logger.error('Email service connection test failed:', error as Error, 'EmailService');
+      return false;
+    }
+  }
+
+/**
+ * Initialize email service - should be called from server startup
+ */
+export async function initializeEmailService(): Promise<void> {
+  if (process.env.NODE_ENV !== 'test' && (process.env.SMTP_HOST || process.env.SENDGRID_API_KEY)) {
+    try {
+      await init();
+      logger.info('Email service initialized successfully', 'EmailService');
+    } catch (error) {
+      logger.error('Failed to initialize email service', error as Error, 'EmailService');
+      // Don't throw - allow app to start even if email fails
+    }
+  } else {
+    logger.info('Email service skipped (test mode or no configuration)', 'EmailService');
+  }
+}
+
+/**
+ * Ensure email service is initialized before use
+ */
+function ensureInitialized(): void {
+  if (!_transporter) {
+    throw new Error('Email service not initialized. Call init() first.');
+  }
+}

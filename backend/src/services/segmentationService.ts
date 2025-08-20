@@ -1,8 +1,9 @@
-import { PrismaClient } from '@prisma/client';
-import axios, { AxiosInstance } from 'axios';
+import { PrismaClient, Prisma } from '@prisma/client';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import FormData from 'form-data';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger';
+import { config } from '../utils/config';
 import { ImageService } from './imageService';
 import { ThumbnailService } from './thumbnailService';
 import { getStorageProvider } from '../storage/index';
@@ -38,6 +39,8 @@ export interface SegmentationResponse {
     width: number;
     height: number;
   };
+  imageWidth?: number;
+  imageHeight?: number;
   error?: string;
 }
 
@@ -63,6 +66,15 @@ export interface ModelsResponse {
   models: ModelInfo[];
 }
 
+export interface ImageForSegmentation {
+  id: string;
+  name: string;
+  originalPath: string;
+  mimeType?: string | null;
+  width?: number | null;
+  height?: number | null;
+}
+
 export class SegmentationService {
   private httpClient: AxiosInstance;
   private pythonServiceUrl: string;
@@ -74,7 +86,7 @@ export class SegmentationService {
   ) {
     this.thumbnailService = new ThumbnailService(prisma);
     // Python microservice URL - can be configured via environment
-    this.pythonServiceUrl = process.env.SEGMENTATION_SERVICE_URL || process.env.PYTHON_SEGMENTATION_URL || 'http://localhost:8000';
+    this.pythonServiceUrl = config.SEGMENTATION_SERVICE_URL;
     
     // Configure HTTP client for Python microservice
     this.httpClient = axios.create({
@@ -143,7 +155,7 @@ export class SegmentationService {
       return response.data;
     } catch (error) {
       logger.error('Failed to get available models', error instanceof Error ? error : undefined, 'SegmentationService');
-      throw new Error(`Chyba při načítání dostupných modelů: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
+      throw new Error(`Error loading available models: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -163,7 +175,7 @@ export class SegmentationService {
     // Get image details and verify ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
-      throw new Error('Obrázek nenalezen nebo nemáte oprávnění');
+      throw new Error('Image not found or no access');
     }
 
     // Update image status to processing
@@ -175,7 +187,7 @@ export class SegmentationService {
       const imageBuffer = await storage.getBuffer(image.originalPath);
 
       if (!imageBuffer) {
-        throw new Error('Nepodařilo se načíst obrázek ze storage');
+        throw new Error('Failed to load image from storage');
       }
 
       // Prepare form data for Python service
@@ -262,7 +274,7 @@ export class SegmentationService {
         userId
       });
 
-      const axiosError = error as any;
+      const axiosError = error as AxiosError;
       
       // Log detailed error information
       logger.error('ML service communication error', error instanceof Error ? error : undefined, 'SegmentationService', {
@@ -279,15 +291,15 @@ export class SegmentationService {
       });
       
       if (axiosError.response?.status === 400) {
-        throw new Error(`Neplatný obrázek nebo parametry segmentace: ${axiosError.response?.data?.detail || 'Neznámá chyba'}`);
+        throw new Error(`Invalid image or segmentation parameters: ${(axiosError.response?.data as any)?.detail || 'Unknown error'}`);
       } else if (axiosError.response?.status === 500) {
-        throw new Error(`Chyba segmentační služby: ${axiosError.response?.data?.detail || 'Vnitřní chyba ML služby'}`);
+        throw new Error(`Segmentation service error: ${(axiosError.response?.data as any)?.detail || 'Internal ML service error'}`);
       } else if (axiosError.code === 'ECONNREFUSED') {
         throw new Error('ML služba není dostupná - připojení odmítnuto');
       } else if (axiosError.code === 'ETIMEDOUT') {
         throw new Error('ML služba neodpovídá - timeout');
       } else {
-        throw new Error(`Chyba při segmentaci: ${error instanceof Error ? error.message : 'Neznámá chyba'}`);
+        throw new Error(`Segmentation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
     }
   }
@@ -297,14 +309,14 @@ export class SegmentationService {
    */
   public async saveSegmentationResults(
     imageId: string,
-    polygons: any[],
+    polygons: SegmentationPolygon[],
     model: string,
     threshold: number,
-    confidence: number | null = null,
+    _confidence: number | null = null,
     processingTime: number | null = null,
     imageWidth: number | null = null,
     imageHeight: number | null = null,
-    userId: string
+    _userId: string
   ): Promise<void> {
     // Create compatible segmentation result object
     const segmentationResult: SegmentationResponse = {
@@ -496,7 +508,7 @@ export class SegmentationService {
    * Request batch segmentation for multiple images using ML service batch endpoint
    */
   async requestBatchSegmentation(
-    images: any[], 
+    images: ImageForSegmentation[], 
     model = 'hrnet', 
     threshold = 0.5
   ): Promise<SegmentationResponse[]> {
@@ -515,6 +527,10 @@ export class SegmentationService {
       // Add each image file to the form data
       for (let i = 0; i < images.length; i++) {
         const image = images[i];
+        if (!image || !image.originalPath) {
+          logger.warn('Skipping invalid image at index', 'SegmentationService', { index: i });
+          continue;
+        }
         const imageBuffer = await storage.getBuffer(image.originalPath);
         formData.append('files', imageBuffer, {
           filename: image.name,
@@ -552,13 +568,18 @@ export class SegmentationService {
       const results: SegmentationResponse[] = [];
 
       // Process each result in the batch
-      for (let i = 0; i < batchResult.results.length; i++) {
+      for (let i = 0; i < batchResult.results.length && i < images.length; i++) {
         const result = batchResult.results[i];
         const image = images[i];
 
+        if (!image || !image.originalPath) {
+          logger.warn('Missing or invalid image for batch result', 'SegmentationService', { batchIndex: i });
+          continue;
+        }
+
         if (result.success && result.polygons) {
           // Calculate vertices statistics for logging
-          const verticesStats = result.polygons.map((p: any) => p.points?.length || 0);
+          const verticesStats = result.polygons.map((p: SegmentationPolygon) => p.points?.length || 0);
           const totalVertices = verticesStats.reduce((sum: number, count: number) => sum + count, 0);
           const avgVertices = verticesStats.length > 0 ? totalVertices / verticesStats.length : 0;
           const maxVertices = Math.max(...verticesStats, 0);
@@ -616,7 +637,7 @@ export class SegmentationService {
     } catch (error) {
       // Enhanced error logging for debugging ML service issues
       if (error instanceof Error && 'response' in error) {
-        const axiosError = error as any;
+        const axiosError = error as AxiosError;
         logger.error('ML service HTTP error', error, 'SegmentationService', {
           batchSize: images.length,
           model,
@@ -642,7 +663,7 @@ export class SegmentationService {
       }
 
       // Return failed results for all images
-      return images.map((image, index) => ({
+      return images.map((image) => ({
         success: false,
         polygons: [],
         model_used: model,
@@ -658,14 +679,14 @@ export class SegmentationService {
   /**
    * Get segmentation results for an image
    */
-  async getSegmentationResults(imageId: string, userId: string): Promise<any | null> {
+  async getSegmentationResults(imageId: string, userId: string): Promise<SegmentationResponse | null> {
     logger.debug('Getting segmentation results', 'SegmentationService', { imageId, userId });
 
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
       logger.warn('Image not found or no access', 'SegmentationService', { imageId, userId });
-      throw new Error('Obrázek nenalezen nebo nemáte oprávnění');
+      throw new Error('Image not found or no access');
     }
 
     // Get segmentation data
@@ -678,7 +699,7 @@ export class SegmentationService {
       return null;
     }
 
-    // Parse polygons from JSON and prepare result
+    // Always use full polygons - no simplification
     let polygons = [];
     try {
       polygons = JSON.parse(segmentationData.polygons);
@@ -690,16 +711,20 @@ export class SegmentationService {
       polygons = [];
     }
 
-    const result = {
+    const result: SegmentationResponse = {
+      success: true,
       polygons: polygons,
-      modelUsed: segmentationData.model,
-      thresholdUsed: segmentationData.threshold,
+      model_used: segmentationData.model,
+      threshold_used: segmentationData.threshold,
       confidence: segmentationData.confidence,
-      processingTime: segmentationData.processingTime,
-      imageWidth: segmentationData.imageWidth,
-      imageHeight: segmentationData.imageHeight,
-      createdAt: segmentationData.createdAt,
-      updatedAt: segmentationData.updatedAt
+      processing_time: segmentationData.processingTime ? segmentationData.processingTime / 1000 : null,
+      image_size: { 
+        width: segmentationData.imageWidth || 0, 
+        height: segmentationData.imageHeight || 0 
+      },
+      // Add image dimensions for frontend rendering
+      imageWidth: segmentationData.imageWidth || 0,
+      imageHeight: segmentationData.imageHeight || 0
     };
 
     logger.debug('Successfully retrieved segmentation results', 'SegmentationService', {
@@ -717,15 +742,27 @@ export class SegmentationService {
    */
   async updateSegmentationResults(
     imageId: string, 
-    polygons: any[], 
+    polygons: SegmentationPolygon[], 
     userId: string, 
     imageWidth?: number, 
     imageHeight?: number
-  ): Promise<any> {
+  ): Promise<{
+    id: string;
+    imageId: string;
+    polygons: SegmentationPolygon[];
+    model: string;
+    threshold: number;
+    confidence: number | null;
+    imageWidth: number | null;
+    imageHeight: number | null;
+    status: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }> {
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
-      throw new Error('Obrázek nenalezen nebo nemáte oprávnění');
+      throw new Error('Image not found or no access');
     }
 
     // Check if segmentation exists
@@ -736,13 +773,13 @@ export class SegmentationService {
     const polygonsJson = JSON.stringify(polygons);
     
     // Calculate statistics from polygons
-    const externalPolygons = polygons.filter((p: any) => p.type === 'external');
-    const internalPolygons = polygons.filter((p: any) => p.type === 'internal');
-    const avgConfidence = polygons.reduce((sum: number, p: any) => sum + (p.confidence || 0.8), 0) / polygons.length;
+    const externalPolygons = polygons.filter((p: SegmentationPolygon) => p.type === 'external');
+    const internalPolygons = polygons.filter((p: SegmentationPolygon) => p.type === 'internal');
+    const avgConfidence = polygons.reduce((sum: number, p: SegmentationPolygon) => sum + (p.confidence || 0.8), 0) / polygons.length;
 
     if (existingSegmentation) {
       // Update existing segmentation
-      const updateData: any = {
+      const updateData: Prisma.SegmentationUpdateInput = {
         polygons: polygonsJson,
         confidence: avgConfidence,
         updatedAt: new Date()
@@ -796,8 +833,10 @@ export class SegmentationService {
       };
     } else {
       // Create new segmentation record
-      const createData: any = {
-        imageId,
+      const createData: Prisma.SegmentationCreateInput = {
+        image: {
+          connect: { id: imageId }
+        },
         polygons: polygonsJson,
         model: 'manual', // Manual editing
         threshold: 0.5,
@@ -861,7 +900,7 @@ export class SegmentationService {
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
-      throw new Error('Obrázek nenalezen nebo nemáte oprávnění');
+      throw new Error('Image not found or no access');
     }
 
     // Delete segmentation data
@@ -878,15 +917,20 @@ export class SegmentationService {
   /**
    * Get segmentation statistics for a project
    */
-  async getProjectSegmentationStats(projectId: string, userId: string): Promise<any> {
+  async getProjectSegmentationStats(projectId: string, userId: string): Promise<{ totalImages: number; processedImages: number; totalPolygons: number; averageConfidence: number; models: Record<string, number> }> {
     // Verify project ownership
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, userId }
     });
 
     if (!project) {
-      throw new Error('Projekt nenalezen nebo nemáte oprávnění');
+      throw new Error('Project not found or no access');
     }
+
+    // Get total images count for the project
+    const totalImages = await this.prisma.image.count({
+      where: { projectId }
+    });
 
     // Get all segmentation data for the project
     const segmentationData = await this.prisma.segmentation.findMany({
@@ -933,11 +977,11 @@ export class SegmentationService {
     });
 
     return {
-      totalSegmented,
+      totalImages: totalImages,
+      processedImages: totalSegmented,
       totalPolygons,
-      averagePolygonsPerImage,
       averageConfidence,
-      modelUsage
+      models: modelUsage
     };
   }
 
@@ -949,13 +993,8 @@ export class SegmentationService {
     model: 'hrnet' | 'resunet_advanced' | 'resunet_small' = 'hrnet',
     threshold = 0.5,
     userId: string
-  ): Promise<{ successful: number; failed: number; results: any[] }> {
-    const results: Array<{
-      imageId: string;
-      success: boolean;
-      result?: SegmentationResponse;
-      error?: string;
-    }> = [];
+  ): Promise<{ successful: number; failed: number; results: Array<{ imageId: string; success: boolean; error?: string; result?: SegmentationResponse }> }> {
+    const results = [];
     let successful = 0;
     let failed = 0;
 

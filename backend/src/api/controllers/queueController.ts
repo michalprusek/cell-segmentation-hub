@@ -94,7 +94,7 @@ class QueueController {
    */
   addBatchToQueue = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { imageIds, projectId, model = 'hrnet', threshold = 0.5, priority = 0 } = req.body;
+      const { imageIds, projectId, model = 'hrnet', threshold = 0.5, priority = 0, forceResegment = false } = req.body;
       
       const userId = this.validateUser(req, res);
       if (!userId) {
@@ -131,13 +131,14 @@ class QueueController {
         userId,
         model,
         threshold,
-        priority
+        priority,
+        forceResegment
       );
 
       // Emit WebSocket updates
       const websocketService = WebSocketService.getInstance();
       
-      // Emit individual image updates
+      // Emit individual image updates with re-segmentation context
       for (const entry of queueEntries) {
         websocketService.emitSegmentationUpdate(userId, {
           imageId: entry.imageId,

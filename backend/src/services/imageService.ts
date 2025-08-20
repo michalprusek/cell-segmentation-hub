@@ -1,8 +1,10 @@
 import { PrismaClient, Image, Prisma } from '@prisma/client';
 import { getStorageProvider, LocalStorageProvider } from '../storage/index';
 import { logger } from '../utils/logger';
+import { config } from '../utils/config';
+import { getBaseUrl } from '../utils/getBaseUrl';
 import { ImageQueryParams } from '../types/validation';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as _uuidv4 } from 'uuid';
 import sharp from 'sharp';
 import path from 'path';
 import { existsSync } from 'fs';
@@ -66,7 +68,7 @@ export class ImageService {
     });
 
     if (!project) {
-      throw new Error('Projekt nenalezen nebo nemáte oprávnění');
+      throw new Error('Project not found or no access');
     }
 
     logger.info('Starting image upload', 'ImageService', {
@@ -169,7 +171,7 @@ export class ImageService {
     });
 
     if (!project) {
-      throw new Error('Projekt nenalezen nebo nemáte oprávnění');
+      throw new Error('Project not found or no access');
     }
 
     const { page, limit, status, sortBy, sortOrder } = options;
@@ -282,7 +284,7 @@ export class ImageService {
     });
 
     if (!image) {
-      throw new Error('Obrázek nenalezen nebo nemáte oprávnění');
+      throw new Error('Image not found or no access');
     }
 
     const storage = getStorageProvider();
@@ -317,6 +319,114 @@ export class ImageService {
   }
 
   /**
+   * Delete multiple images in batch with transaction
+   */
+  async deleteBatch(imageIds: string[], userId: string, projectId: string): Promise<{
+    deletedCount: number;
+    failedIds: string[];
+    errors: string[];
+  }> {
+    let deletedCount = 0;
+    const failedIds: string[] = [];
+    const errors: string[] = [];
+
+    logger.info('Starting batch delete operation', 'ImageService', {
+      imageIds,
+      userId,
+      projectId,
+      count: imageIds.length
+    });
+
+    // Verify project ownership first
+    const project = await this.prisma.project.findFirst({
+      where: {
+        id: projectId,
+        userId
+      }
+    });
+
+    if (!project) {
+      throw new Error('Project not found or no access');
+    }
+
+    // Get all images that exist and belong to the user
+    const imagesToDelete = await this.prisma.image.findMany({
+      where: {
+        id: { in: imageIds },
+        projectId,
+        project: {
+          userId
+        }
+      }
+    });
+
+    if (imagesToDelete.length === 0) {
+      throw new Error('No images found for deletion');
+    }
+
+    const storage = getStorageProvider();
+
+    // Process deletions in transaction for database operations
+    await this.prisma.$transaction(async (tx) => {
+      for (const image of imagesToDelete) {
+        try {
+          // Delete from storage first
+          await storage.delete(image.originalPath);
+          
+          if (image.thumbnailPath) {
+            await storage.delete(image.thumbnailPath);
+          }
+
+          // Delete from database (CASCADE will handle segmentation data)
+          await tx.image.delete({
+            where: { id: image.id }
+          });
+
+          deletedCount++;
+
+          logger.info('Image deleted in batch', 'ImageService', {
+            imageId: image.id,
+            filename: image.name,
+            userId
+          });
+
+        } catch (error) {
+          failedIds.push(image.id);
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          errors.push(`Image ${image.name}: ${errorMsg}`);
+          
+          logger.error('Failed to delete image in batch', error instanceof Error ? error : undefined, 'ImageService', {
+            imageId: image.id,
+            userId
+          });
+        }
+      }
+    });
+
+    // Check for images that weren't found
+    const foundIds = imagesToDelete.map(img => img.id);
+    const notFoundIds = imageIds.filter(id => !foundIds.includes(id));
+    
+    if (notFoundIds.length > 0) {
+      failedIds.push(...notFoundIds);
+      errors.push(...notFoundIds.map(id => `Image ${id}: Not found or no permission`));
+    }
+
+    logger.info('Batch delete operation completed', 'ImageService', {
+      deletedCount,
+      failedCount: failedIds.length,
+      userId,
+      projectId
+    });
+
+    return {
+      deletedCount,
+      failedIds,
+      errors
+    };
+  }
+
+  /**
    * Get image statistics for a project
    */
   async getImageStats(projectId: string, userId: string): Promise<ImageStats> {
@@ -326,7 +436,7 @@ export class ImageService {
     });
 
     if (!project) {
-      throw new Error('Projekt nenalezen nebo nemáte oprávnění');
+      throw new Error('Project not found or no access');
     }
 
     // Get all images in the project
@@ -392,7 +502,7 @@ export class ImageService {
     const image = await this.prisma.image.findFirst({ where });
 
     if (!image) {
-      throw new Error('Obrázek nenalezen nebo nemáte oprávnění');
+      throw new Error('Image not found or no access');
     }
 
     await this.prisma.image.update({
@@ -423,10 +533,8 @@ export class ImageService {
 
     const image = await this.prisma.image.findFirst({ where });
     if (!image) {
-      throw new Error('Obrázek nenalezen nebo nemáte oprávnění');
+      throw new Error('Image not found or no access');
     }
-
-    const storage = getStorageProvider();
     
     // Check if conversion is needed
     const browserSupportedTypes = [
@@ -510,7 +618,7 @@ export class ImageService {
         imageId,
         originalType: image.mimeType
       });
-      throw new Error(`Chyba při konverzi obrázku: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(`Error converting image: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -518,12 +626,33 @@ export class ImageService {
    * Generate display URL for browser-compatible image viewing
    */
   private getDisplayUrl(imageId: string): string {
-    const port = process.env.PORT || '3001';
-    const baseUrl = process.env.NODE_ENV === 'production' 
-      ? (process.env.API_BASE_URL || process.env.BACKEND_URL || `https://api.yourdomain.com`)
-      : `http://localhost:${port}`;
+    const baseUrl = getBaseUrl();
     
-    return `${baseUrl}/api/images/${imageId}/display`;
+    if (!baseUrl) {
+      const missingVars = [
+        'API_BASE_URL', 'BACKEND_URL', 'PUBLIC_URL'
+      ].filter(varName => !process.env[varName]);
+      
+      logger.error(
+        `Base URL configuration missing. Environment: ${config.NODE_ENV}. Missing variables: ${missingVars.join(', ')}`, 
+        undefined, 
+        'ImageService'
+      );
+      
+      // Try fallback from DEFAULT_BASE_URL if configured
+      if (process.env.DEFAULT_BASE_URL) {
+        logger.warn(`Using fallback DEFAULT_BASE_URL: ${process.env.DEFAULT_BASE_URL}`, undefined, 'ImageService');
+        const fallbackBase = process.env.DEFAULT_BASE_URL.replace(/\/+$/, '');
+        return `${fallbackBase}/api/images/${imageId}/display`;
+      }
+      
+      throw new Error(`Base URL configuration required. Missing: ${missingVars.join(', ')}. Set one of: API_BASE_URL, BACKEND_URL, PUBLIC_URL, or DEFAULT_BASE_URL`);
+    }
+    
+    // Remove trailing slash for consistency
+    const normalizedBase = baseUrl.replace(/\/+$/, '');
+    
+    return `${normalizedBase}/api/images/${imageId}/display`;
   }
 
   /**
@@ -548,7 +677,7 @@ export class ImageService {
   /**
    * Clean up old converted PNG files from cache
    */
-  private async cleanupConvertedCache(retentionDays: number = 7): Promise<void> {
+  private async cleanupConvertedCache(retentionDays = 7): Promise<void> {
     try {
       const convertedDir = path.join(process.env.UPLOAD_DIR || './uploads', 'converted');
       

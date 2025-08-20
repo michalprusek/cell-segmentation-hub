@@ -54,26 +54,286 @@ export interface PolygonMetrics {
   };
 }
 
-// Helper function for safe error message extraction
-export function getErrorMessage(error: unknown): string {
+// Helper function for safe error message extraction with HTTP status code mapping
+export function getErrorMessage(
+  error: unknown,
+  t?: (key: string) => string,
+  context?: string
+): string {
+  // Extract status code if available
+  let statusCode: number | undefined;
+  let message: string | undefined;
+  let url: string | undefined;
+
   if (error instanceof Error) {
-    return error.message;
+    message = error.message;
   }
 
   if (typeof error === 'object' && error !== null) {
-    const apiError = error as ApiError;
-    return (
-      apiError.response?.data?.message ||
-      apiError.message ||
-      'An error occurred'
-    );
+    const apiError = error as ApiError & { config?: { url?: string } };
+    statusCode = apiError.response?.status || apiError.status;
+    message = apiError.response?.data?.message || apiError.message;
+    url = apiError.config?.url;
+
+    // Special handling for authentication endpoints
+    if (
+      statusCode === 401 &&
+      url &&
+      (url.includes('/auth/login') || url.includes('/auth/signin'))
+    ) {
+      // For login endpoints, 401 means invalid credentials, not expired session
+      if (t) {
+        return t('errors.invalidCredentials');
+      }
+      return 'Invalid email or password. Please check your credentials and try again.';
+    }
+
+    // Special handling for registration endpoint conflicts
+    if (
+      statusCode === 409 &&
+      url &&
+      (url.includes('/auth/register') || url.includes('/auth/signup'))
+    ) {
+      // For registration endpoints, 409 means email already exists
+      if (t) {
+        return t('errors.emailAlreadyExists');
+      }
+      return 'This email is already registered. Try signing in or use a different email.';
+    }
+
+    // Map common HTTP status codes to user-friendly messages
+    if (statusCode && t) {
+      switch (statusCode) {
+        case 400:
+          return t('errors.validation');
+        case 401:
+          return t('errors.sessionExpired');
+        case 403:
+          return t('errors.forbidden');
+        case 404:
+          return t('errors.notFound');
+        case 409:
+          return t('errors.conflict');
+        case 422:
+          return t('errors.validation');
+        case 429:
+          return t('errors.tooManyRequests');
+        case 500:
+          return t('errors.server');
+        case 502:
+        case 503:
+        case 504:
+          return t('errors.serverUnavailable');
+        default:
+          if (statusCode >= 400 && statusCode < 500) {
+            return t('errors.clientError');
+          } else if (statusCode >= 500) {
+            return t('errors.server');
+          }
+      }
+    }
+
+    // If no translation function provided, return basic messages
+    if (statusCode && !t) {
+      switch (statusCode) {
+        case 400:
+          return 'Invalid request. Please check your input.';
+        case 401:
+          return 'Your session has expired. Please sign in again.';
+        case 403:
+          return 'You do not have permission to perform this action.';
+        case 404:
+          return 'The requested resource was not found.';
+        case 409:
+          return 'A conflict occurred. Please refresh and try again.';
+        case 422:
+          return 'Validation error. Please check your input.';
+        case 429:
+          return 'Too many requests. Please wait a moment and try again.';
+        case 500:
+          return 'Server error. Please try again later.';
+        case 502:
+        case 503:
+        case 504:
+          return 'Service temporarily unavailable. Please try again later.';
+        default:
+          if (statusCode >= 400 && statusCode < 500) {
+            return message || 'Request error. Please try again.';
+          } else if (statusCode >= 500) {
+            return 'Server error. Please try again later.';
+          }
+      }
+    }
+
+    if (message) {
+      // Clean up technical messages
+      if (message.includes('resource code')) {
+        // Extract status code from messages like "resource code 401"
+        const codeMatch = message.match(/resource code (\d+)/);
+        if (codeMatch) {
+          const code = parseInt(codeMatch[1]);
+          // Map the extracted code directly to the appropriate message without recursion
+          if (t) {
+            switch (code) {
+              case 400:
+                return t('errors.validation');
+              case 401:
+                return t('errors.sessionExpired');
+              case 403:
+                return t('errors.forbidden');
+              case 404:
+                return t('errors.notFound');
+              case 409:
+                return t('errors.conflict');
+              case 422:
+                return t('errors.validation');
+              case 429:
+                return t('errors.tooManyRequests');
+              case 500:
+                return t('errors.server');
+              case 502:
+              case 503:
+              case 504:
+                return t('errors.serverUnavailable');
+              default:
+                if (code >= 400 && code < 500) {
+                  return t('errors.clientError');
+                } else if (code >= 500) {
+                  return t('errors.server');
+                }
+            }
+          } else {
+            // Fallback messages when no translation function is available
+            switch (code) {
+              case 400:
+                return 'Invalid request. Please check your input.';
+              case 401:
+                return 'Your session has expired. Please sign in again.';
+              case 403:
+                return 'You do not have permission to perform this action.';
+              case 404:
+                return 'The requested resource was not found.';
+              case 409:
+                return 'A conflict occurred. Please refresh and try again.';
+              case 422:
+                return 'Validation error. Please check your input.';
+              case 429:
+                return 'Too many requests. Please wait a moment and try again.';
+              case 500:
+                return 'Server error. Please try again later.';
+              case 502:
+              case 503:
+              case 504:
+                return 'Service temporarily unavailable. Please try again later.';
+              default:
+                if (code >= 400 && code < 500) {
+                  return 'Request error. Please try again.';
+                } else if (code >= 500) {
+                  return 'Server error. Please try again later.';
+                }
+            }
+          }
+          // If no specific message found, return a generic one
+          return 'An error occurred. Please try again.';
+        }
+      }
+
+      // Convert camelCase to readable text
+      if (/^[a-z]+([A-Z][a-z]+)+$/.test(message)) {
+        return message
+          .replace(/([A-Z])/g, ' $1')
+          .toLowerCase()
+          .replace(/^./, str => str.toUpperCase());
+      }
+
+      return message;
+    }
   }
 
   if (typeof error === 'string') {
+    // Clean up string errors
+    if (error.includes('resource code')) {
+      const codeMatch = error.match(/resource code (\d+)/);
+      if (codeMatch) {
+        const code = parseInt(codeMatch[1]);
+        // Map the extracted code directly to the appropriate message without recursion
+        if (t) {
+          switch (code) {
+            case 400:
+              return t('errors.validation');
+            case 401:
+              return t('errors.sessionExpired');
+            case 403:
+              return t('errors.forbidden');
+            case 404:
+              return t('errors.notFound');
+            case 409:
+              return t('errors.conflict');
+            case 422:
+              return t('errors.validation');
+            case 429:
+              return t('errors.tooManyRequests');
+            case 500:
+              return t('errors.server');
+            case 502:
+            case 503:
+            case 504:
+              return t('errors.serverUnavailable');
+            default:
+              if (code >= 400 && code < 500) {
+                return t('errors.clientError');
+              } else if (code >= 500) {
+                return t('errors.server');
+              }
+          }
+        } else {
+          // Fallback messages when no translation function is available
+          switch (code) {
+            case 400:
+              return 'Invalid request. Please check your input.';
+            case 401:
+              return 'Your session has expired. Please sign in again.';
+            case 403:
+              return 'You do not have permission to perform this action.';
+            case 404:
+              return 'The requested resource was not found.';
+            case 409:
+              return 'A conflict occurred. Please refresh and try again.';
+            case 422:
+              return 'Validation error. Please check your input.';
+            case 429:
+              return 'Too many requests. Please wait a moment and try again.';
+            case 500:
+              return 'Server error. Please try again later.';
+            case 502:
+            case 503:
+            case 504:
+              return 'Service temporarily unavailable. Please try again later.';
+            default:
+              if (code >= 400 && code < 500) {
+                return 'Request error. Please try again.';
+              } else if (code >= 500) {
+                return 'Server error. Please try again later.';
+              }
+          }
+        }
+        // If no specific message found, return a generic one
+        return 'An error occurred. Please try again.';
+      }
+    }
+
+    // Convert camelCase to readable text
+    if (/^[a-z]+([A-Z][a-z]+)+$/.test(error)) {
+      return error
+        .replace(/([A-Z])/g, ' $1')
+        .toLowerCase()
+        .replace(/^./, str => str.toUpperCase());
+    }
+
     return error;
   }
 
-  return 'An unknown error occurred';
+  return t ? t('errors.unknown') : 'An unknown error occurred';
 }
 
 export interface AuthResponse {

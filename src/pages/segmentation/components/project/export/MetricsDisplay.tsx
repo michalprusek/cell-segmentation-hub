@@ -6,12 +6,15 @@ import {
   calculateMetrics,
   formatNumber,
 } from '../../../utils/metricCalculations';
+import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface MetricsDisplayProps {
   segmentation: SegmentationResult;
 }
 
 const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
+  const { t } = useLanguage();
   const [copiedStatus, setCopiedStatus] = useState<{ [key: string]: boolean }>(
     {}
   );
@@ -42,11 +45,21 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
     polygon => polygon.type === 'external'
   );
 
+  // Get all internal polygons
+  const allInternalPolygons = segmentation.polygons.filter(
+    p => p.type === 'internal'
+  );
+
   return (
     <div className="space-y-6">
+      <div className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        <p>ℹ️ {t('metrics.info')}</p>
+      </div>
       {externalPolygons.map((polygon, index) => {
-        // Find internal polygons (holes) for this external polygon
-        const holes = segmentation.polygons.filter(p => p.type === 'internal');
+        // Find internal polygons (holes) that are actually inside this external polygon
+        const holes = allInternalPolygons.filter(internal =>
+          isPolygonInsidePolygon(internal.points, polygon.points)
+        );
         const metrics = calculateMetrics(polygon, holes);
 
         return (
@@ -55,7 +68,9 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
             className="border dark:border-gray-700 rounded-lg overflow-hidden"
           >
             <div className="bg-gray-100 dark:bg-gray-700 p-3 font-medium flex justify-between items-center">
-              <span>Sféroid #{index + 1}</span>
+              <span>
+                {t('metrics.spheroid')} #{index + 1}
+              </span>
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -73,7 +88,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
                   ) : (
                     <Clipboard className="h-4 w-4 mr-1" />
                   )}
-                  Kopírovat
+                  {t('common.copy')}
                 </Button>
                 <Button
                   variant="default"
@@ -87,14 +102,14 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
                   }
                 >
                   <DownloadCloud className="h-4 w-4 mr-1" />
-                  Stáhnout
+                  {t('export.download')}
                 </Button>
               </div>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Plocha
+                  {t('metrics.area')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.Area)} px²
@@ -102,7 +117,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Obvod
+                  {t('metrics.perimeter')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.Perimeter)} px
@@ -110,7 +125,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Ekvivalentní průměr
+                  {t('metrics.equivalentDiameter')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.EquivalentDiameter)} px
@@ -118,7 +133,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Kruhovitost
+                  {t('metrics.circularity')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.Circularity)}
@@ -126,7 +141,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Feretův maximum
+                  {t('metrics.feretMax')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.FeretDiameterMax)} px
@@ -134,7 +149,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Feretův minimální
+                  {t('metrics.feretMin')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.FeretDiameterMin)} px
@@ -142,7 +157,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Kompaktnost
+                  {t('metrics.compactness')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.Compactness)}
@@ -150,7 +165,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Konvexita
+                  {t('metrics.convexity')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.Convexity)}
@@ -158,7 +173,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Solidita
+                  {t('metrics.solidity')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.Solidity)}
@@ -166,7 +181,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Sféricita
+                  {t('metrics.sphericity')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.Sphericity)}
@@ -174,7 +189,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
               </div>
               <div className="border dark:border-gray-700 rounded p-2">
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  Feretův poměr stran
+                  {t('metrics.feretAspectRatio')}
                 </div>
                 <div className="font-mono font-medium">
                   {formatNumber(metrics.FeretAspectRatio)}
@@ -187,7 +202,7 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
 
       {externalPolygons.length === 0 && (
         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-          Nebyly nalezeny žádné polygony pro analýzu
+          {t('metrics.noPolygonsFound')}
         </div>
       )}
     </div>

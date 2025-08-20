@@ -1,6 +1,7 @@
 import React from 'react';
 import { Grid2X2, List as ListIcon } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ProjectViewOptionsProps {
   viewMode: 'grid' | 'list';
@@ -11,6 +12,8 @@ const ProjectViewOptions = ({
   viewMode,
   setViewMode,
 }: ProjectViewOptionsProps) => {
+  const { t } = useLanguage();
+
   return (
     <ToggleGroup
       type="single"
@@ -22,14 +25,14 @@ const ProjectViewOptions = ({
     >
       <ToggleGroupItem
         value="grid"
-        aria-label="Grid view"
+        aria-label={t('accessibility.gridView')}
         className="h-9 px-2 flex items-center justify-center"
       >
         <Grid2X2 className="h-4 w-4" />
       </ToggleGroupItem>
       <ToggleGroupItem
         value="list"
-        aria-label="List view"
+        aria-label={t('accessibility.listView')}
         className="h-9 px-2 flex items-center justify-center"
       >
         <ListIcon className="h-4 w-4" />

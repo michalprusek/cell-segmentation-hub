@@ -487,7 +487,7 @@ describe('useEnhancedSegmentationEditor', () => {
   });
 
   describe('Mouse Interaction Handling', () => {
-    it('tracks cursor position correctly', () => {
+    it('tracks cursor position correctly', async () => {
       const { result } = renderHook(() =>
         useEnhancedSegmentationEditor(defaultProps)
       );
@@ -517,9 +517,14 @@ describe('useEnhancedSegmentationEditor', () => {
         result.current.handleMouseMove(mockEvent);
       });
 
+      // Wait for throttled cursor position update
+      await waitFor(() => {
+        expect(result.current.cursorPosition).not.toBeNull();
+      });
+
       expect(result.current.cursorPosition).toEqual({
-        x: 50, // (150 - 100) / 1
-        y: 50, // (100 - 50) / 1
+        x: -350, // (150 - 100) - 800/2 - 0 = 50 - 400 = -350
+        y: -250, // (100 - 50) - 600/2 - 0 = 50 - 300 = -250
       });
     });
   });

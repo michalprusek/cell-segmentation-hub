@@ -1,0 +1,30 @@
+# Redis configuration for production
+# This is a template file - actual redis.conf will be generated from this
+
+# Require password for all connections
+requirepass ${REDIS_PASSWORD}
+
+# Basic settings
+port 6379
+bind 0.0.0.0
+protected-mode yes
+timeout 0
+tcp-keepalive 300
+
+# Persistence
+save 900 1
+save 300 10
+save 60 10000
+stop-writes-on-bgsave-error yes
+rdbcompression yes
+rdbchecksum yes
+dbfilename dump.rdb
+dir /data
+
+# Performance
+maxmemory-policy allkeys-lru
+maxmemory 256mb
+
+# Logging
+loglevel notice
+logfile ""

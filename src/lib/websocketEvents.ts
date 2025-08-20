@@ -3,20 +3,11 @@
  */
 
 export interface WebSocketEvent {
-  type:
-    | 'reconnecting'
-    | 'reconnected'
-    | 'reconnect_failed'
-    | 'connection_lost'
-    | 'polling_mode'
-    | 'websocket_upgrade'
-    | 'connection_error'
-    | 'auth_error';
+  type: 'reconnecting' | 'reconnected' | 'reconnect_failed' | 'connection_lost';
   data?: {
     message?: string;
     attempts?: number;
   };
-  message?: string;
 }
 
 class WebSocketEventEmitter {
@@ -25,7 +16,17 @@ class WebSocketEventEmitter {
 
   emit(event: WebSocketEvent) {
     const eventListeners = this.listeners.get(event.type) || [];
-    eventListeners.forEach(listener => listener(event));
+    eventListeners.forEach(listener => {
+      try {
+        listener(event);
+      } catch (error) {
+        // Log error but continue with other listeners
+        console.error(
+          `WebSocket event listener error for ${event.type}:`,
+          error
+        );
+      }
+    });
   }
 
   on(eventType: string, listener: (event: WebSocketEvent) => void) {
@@ -43,6 +44,10 @@ class WebSocketEventEmitter {
         eventListeners.splice(index, 1);
       }
     }
+  }
+
+  clearListeners() {
+    this.listeners.clear();
   }
 }
 

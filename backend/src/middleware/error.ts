@@ -60,12 +60,12 @@ export const errorHandler = (
 
   // Handle JWT errors
   if (error.name === 'JsonWebTokenError') {
-    ResponseHelper.unauthorized(res, 'Neplatný token', context);
+    ResponseHelper.unauthorized(res, 'Invalid authentication token', context);
     return;
   }
 
   if (error.name === 'TokenExpiredError') {
-    ResponseHelper.unauthorized(res, 'Token vypršel', context);
+    ResponseHelper.unauthorized(res, 'Authentication token has expired', context);
     return;
   }
 
@@ -83,17 +83,17 @@ export const errorHandler = (
 
   // Handle generic errors based on message patterns
   if (error.message.includes('ENOENT')) {
-    ResponseHelper.notFound(res, 'Soubor nebyl nalezen', context);
+    ResponseHelper.notFound(res, 'File not found', context);
     return;
   }
 
   if (error.message.includes('EACCES')) {
-    ResponseHelper.forbidden(res, 'Nedostatečná oprávnění k souboru', context);
+    ResponseHelper.forbidden(res, 'Insufficient file permissions', context);
     return;
   }
 
   if (error.message.includes('EMFILE') || error.message.includes('ENFILE')) {
-    ResponseHelper.serviceUnavailable(res, 'Server je přetížený', context);
+    ResponseHelper.serviceUnavailable(res, 'Server is overloaded', context);
     return;
   }
 
@@ -110,10 +110,16 @@ function handlePrismaError(error: PrismaError, res: Response, context: string): 
   switch (code) {
     case 'P2002': {
       // Unique constraint violation
-      const field = meta?.target?.[0] || 'pole';
+      const field = meta?.target?.[0] || 'field';
+      const fieldMap: Record<string, string> = {
+        email: 'email address',
+        username: 'username',
+        name: 'name'
+      };
+      const friendlyField = fieldMap[field] || field;
       ResponseHelper.conflict(
         res,
-        `Hodnota pro ${field} již existuje`,
+        `This ${friendlyField} is already in use`,
         context
       );
       break;
@@ -123,7 +129,7 @@ function handlePrismaError(error: PrismaError, res: Response, context: string): 
       // Record not found
       ResponseHelper.notFound(
         res,
-        'Záznam nebyl nalezen',
+        'The requested resource was not found',
         context
       );
       break;
@@ -132,17 +138,17 @@ function handlePrismaError(error: PrismaError, res: Response, context: string): 
       // Foreign key constraint violation
       ResponseHelper.conflict(
         res,
-        'Nelze provést operaci kvůli vazbám na jiné záznamy',
+        'Cannot perform operation due to related records',
         context
       );
       break;
 
     case 'P2011': {
       // Null constraint violation
-      const nullField = meta?.column_name || 'povinné pole';
+      const nullField = meta?.field_name || 'required field';
       ResponseHelper.validationError(
         res,
-        `${nullField} je povinné`,
+        `${nullField} is required`,
         context
       );
       break;
@@ -152,7 +158,7 @@ function handlePrismaError(error: PrismaError, res: Response, context: string): 
       // Missing required value
       ResponseHelper.validationError(
         res,
-        'Chybí povinná hodnota',
+        'Required value is missing',
         context
       );
       break;
@@ -161,17 +167,17 @@ function handlePrismaError(error: PrismaError, res: Response, context: string): 
       // Invalid ID
       ResponseHelper.validationError(
         res,
-        'Neplatné ID',
+        'Invalid ID provided',
         context
       );
       break;
 
     default:
-      logger.error(`Neznámá Prisma chyba: ${code}`, error, context);
+      logger.error(`Unknown Prisma error: ${code}`, error, context);
       ResponseHelper.internalError(
         res,
         error,
-        'Chyba databáze',
+        'Database operation failed',
         context
       );
   }
@@ -185,7 +191,7 @@ function handleMulterError(error: MulterError, res: Response, context: string): 
     case 'LIMIT_FILE_SIZE':
       ResponseHelper.validationError(
         res,
-        'Soubor je příliš velký',
+        'File size exceeds the maximum limit',
         context
       );
       break;
@@ -193,7 +199,7 @@ function handleMulterError(error: MulterError, res: Response, context: string): 
     case 'LIMIT_FILE_COUNT':
       ResponseHelper.validationError(
         res,
-        'Příliš mnoho souborů',
+        'Too many files uploaded',
         context
       );
       break;
@@ -201,7 +207,7 @@ function handleMulterError(error: MulterError, res: Response, context: string): 
     case 'LIMIT_UNEXPECTED_FILE':
       ResponseHelper.validationError(
         res,
-        'Neočekávaný soubor',
+        'Unexpected file field',
         context
       );
       break;
@@ -209,7 +215,7 @@ function handleMulterError(error: MulterError, res: Response, context: string): 
     case 'LIMIT_FIELD_KEY':
       ResponseHelper.validationError(
         res,
-        'Neplatný název pole',
+        'Invalid field name',
         context
       );
       break;
@@ -217,7 +223,7 @@ function handleMulterError(error: MulterError, res: Response, context: string): 
     case 'LIMIT_FIELD_VALUE':
       ResponseHelper.validationError(
         res,
-        'Hodnota pole je příliš dlouhá',
+        'Field value is too long',
         context
       );
       break;
@@ -225,7 +231,7 @@ function handleMulterError(error: MulterError, res: Response, context: string): 
     case 'LIMIT_FIELD_COUNT':
       ResponseHelper.validationError(
         res,
-        'Příliš mnoho polí',
+        'Too many fields',
         context
       );
       break;
@@ -233,7 +239,7 @@ function handleMulterError(error: MulterError, res: Response, context: string): 
     case 'LIMIT_PART_COUNT':
       ResponseHelper.validationError(
         res,
-        'Příliš mnoho částí',
+        'Too many parts',
         context
       );
       break;
@@ -242,7 +248,7 @@ function handleMulterError(error: MulterError, res: Response, context: string): 
       ResponseHelper.internalError(
         res,
         error,
-        'Chyba při nahrávání souboru',
+        'File upload failed',
         context
       );
   }
@@ -271,6 +277,10 @@ export class ApiError extends Error {
     return new ApiError(message, 400, code);
   }
 
+  static validationError(message: string, code = 'VALIDATION_ERROR'): ApiError {
+    return new ApiError(message, 400, code);
+  }
+
   static unauthorized(message = 'Neautorizovaný přístup', code = 'UNAUTHORIZED'): ApiError {
     return new ApiError(message, 401, code);
   }
@@ -287,7 +297,7 @@ export class ApiError extends Error {
     return new ApiError(message, 409, code);
   }
 
-  static internalError(message = 'Interní chyba serveru', code = 'INTERNAL_ERROR'): ApiError {
+  static internalError(message = 'Internal server error', code = 'INTERNAL_ERROR'): ApiError {
     return new ApiError(message, 500, code);
   }
 }
@@ -296,5 +306,5 @@ export class ApiError extends Error {
  * Middleware to handle 404 errors
  */
 export const notFoundHandler = (req: Request, res: Response, _next: NextFunction): void => {
-  ResponseHelper.notFound(res, `Endpoint ${req.method} ${req.path} nebyl nalezen`);
+  ResponseHelper.notFound(res, `Endpoint ${req.method} ${req.path} not found`);
 };

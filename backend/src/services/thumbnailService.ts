@@ -14,9 +14,16 @@ interface Polygon {
   class?: string;
 }
 
+interface PolygonWithMetadata extends Polygon {
+  area?: number;
+  confidence?: number;
+}
+
 interface SimplifiedPolygon extends Polygon {
   originalPointCount: number;
   compressionRatio: number;
+  area: number;
+  confidence: number;
 }
 
 export interface ThumbnailData {
@@ -34,7 +41,7 @@ export class ThumbnailService {
     // Try to get WebSocket service instance (may not be available during initialization)
     try {
       this.webSocketService = WebSocketService.getInstance();
-    } catch (error) {
+    } catch {
       logger.debug('WebSocket service not yet available for thumbnail service', 'ThumbnailService');
     }
   }
@@ -72,7 +79,7 @@ export class ThumbnailService {
       return [...leftPart.slice(0, -1), ...rightPart];
     } else {
       // If all points are within tolerance, return just the endpoints
-      return [start!, end!];
+      return [start, end];
     }
   }
 
@@ -99,7 +106,7 @@ export class ThumbnailService {
    * Generate thumbnail data at different levels of detail
    */
   private generateThumbnailLevels(
-    polygons: Polygon[],
+    polygons: PolygonWithMetadata[],
     imageWidth: number,
     imageHeight: number
   ): ThumbnailData[] {
@@ -124,7 +131,9 @@ export class ThumbnailService {
           ...polygon,
           points: simplifiedPoints,
           originalPointCount,
-          compressionRatio
+          compressionRatio,
+          area: polygon.area ?? 0,
+          confidence: polygon.confidence ?? 0.8
         };
       });
 
@@ -167,7 +176,7 @@ export class ThumbnailService {
       }
 
       // Parse polygons
-      let polygons: Polygon[];
+      let polygons: PolygonWithMetadata[];
       try {
         polygons = JSON.parse(segmentation.polygons);
       } catch (error) {

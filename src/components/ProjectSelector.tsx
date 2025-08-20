@@ -35,8 +35,8 @@ const ProjectSelector = ({ value, onChange }: ProjectSelectorProps) => {
       } catch (error: unknown) {
         logger.error('Error fetching projects:', error);
         const errorMessage =
-          getErrorMessage(error) || t('projects.failedToLoadProjects');
-        toast.error(t('projects.failedToLoadProjects') + ': ' + errorMessage);
+          getErrorMessage(error, t) || t('projects.failedToLoadProjects');
+        toast.error(errorMessage);
       } finally {
         setLoading(false);
       }

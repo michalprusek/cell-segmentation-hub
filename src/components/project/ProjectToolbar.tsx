@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SlidersHorizontal, Package } from 'lucide-react';
+import { SlidersHorizontal, Package, Trash2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { AdvancedExportDialog } from '@/pages/export/AdvancedExportDialog';
 
 interface ProjectToolbarProps {
@@ -27,6 +28,13 @@ interface ProjectToolbarProps {
   projectName?: string;
   images?: unknown[];
   selectedImageIds?: string[];
+  // Selection props
+  selectedCount?: number;
+  isAllSelected?: boolean;
+  isPartiallySelected?: boolean;
+  onSelectAllToggle?: () => void;
+  onBatchDelete?: () => void;
+  showSelectAll?: boolean;
 }
 
 const ProjectToolbar = ({
@@ -44,6 +52,12 @@ const ProjectToolbar = ({
   projectName = 'Project',
   images = [],
   selectedImageIds,
+  selectedCount = 0,
+  isAllSelected = false,
+  isPartiallySelected = false,
+  onSelectAllToggle,
+  onBatchDelete,
+  showSelectAll = false,
 }: ProjectToolbarProps) => {
   const { t } = useLanguage();
   const navigate = useNavigate();
@@ -55,8 +69,43 @@ const ProjectToolbar = ({
   };
 
   return (
-    <div className="flex flex-wrap justify-end items-center mb-6 gap-4">
-      {/* Toolbar actions */}
+    <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
+      {/* Selection bar - left side */}
+      <div className="flex items-center gap-3">
+        {/* Select All checkbox - only show when showSelectAll is true */}
+        {showSelectAll && (
+          <label className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+            <Checkbox
+              checked={isAllSelected}
+              indeterminate={isPartiallySelected}
+              onCheckedChange={onSelectAllToggle}
+              className="h-4 w-4"
+            />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none">
+              {t('export.selectAll')}
+            </span>
+          </label>
+        )}
+
+        {selectedCount > 0 && (
+          <>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              {t('project.selected', { count: selectedCount })}
+            </span>
+            <Button
+              onClick={onBatchDelete}
+              size="sm"
+              variant="destructive"
+              className="ml-2"
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              {t('project.deleteSelected')}
+            </Button>
+          </>
+        )}
+      </div>
+
+      {/* Toolbar actions - right side */}
       <div className="flex gap-2 items-center">
         {/* Vyhledávací pole zobrazit pouze pokud je požadováno */}
         {showSearchBar && searchTerm !== undefined && onSearchChange && (
@@ -122,7 +171,7 @@ const ProjectToolbar = ({
             onClick={handleExport}
           >
             <Package className="mr-1 h-4 w-4" />
-            Advanced Export
+            {t('export.advancedExport')}
           </Button>
         )}
 
@@ -135,7 +184,7 @@ const ProjectToolbar = ({
               className="flex items-center h-9"
             >
               <SlidersHorizontal className="mr-1 h-4 w-4" />
-              Seřadit
+              {t('common.sort')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48">

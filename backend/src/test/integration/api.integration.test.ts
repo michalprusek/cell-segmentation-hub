@@ -1,6 +1,6 @@
 import request from 'supertest'
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals'
-import { app } from '../../server'
+import app from '../../server'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
@@ -23,8 +23,8 @@ describe('API Integration Tests', () => {
 
     // Clean database
     await prisma.$transaction([
-      prisma.segmentationResult.deleteMany(),
-      prisma.projectImage.deleteMany(),
+      prisma.segmentation.deleteMany(),
+      prisma.image.deleteMany(),
       prisma.project.deleteMany(),
       prisma.user.deleteMany(),
     ])
@@ -33,8 +33,8 @@ describe('API Integration Tests', () => {
   afterAll(async () => {
     // Clean up and disconnect
     await prisma.$transaction([
-      prisma.segmentationResult.deleteMany(),
-      prisma.projectImage.deleteMany(),
+      prisma.segmentation.deleteMany(),
+      prisma.image.deleteMany(),
       prisma.project.deleteMany(),
       prisma.user.deleteMany(),
     ])
@@ -46,8 +46,8 @@ describe('API Integration Tests', () => {
       const userData = {
         email: 'integration@test.com',
         password: 'password123',
-        firstName: 'Integration',
-        lastName: 'Test'
+        // firstName: 'Integration', // Field doesn't exist in current schema
+        // lastName: 'Test' // Field doesn't exist in current schema
       }
 
       const response = await request(app)
@@ -69,8 +69,8 @@ describe('API Integration Tests', () => {
       const userData = {
         email: 'integration@test.com', // Same email
         password: 'password123',
-        firstName: 'Another',
-        lastName: 'User'
+        // firstName: 'Another', // Field doesn't exist in current schema
+        // lastName: 'User' // Field doesn't exist in current schema
       }
 
       await request(app)
@@ -122,7 +122,7 @@ describe('API Integration Tests', () => {
   describe('Project Management Flow', () => {
     it('should create a new project', async () => {
       const projectData = {
-        name: 'Integration Test Project',
+        title: 'Integration Test Project',
         description: 'A test project for integration testing'
       }
 
@@ -133,7 +133,7 @@ describe('API Integration Tests', () => {
         .expect(201)
 
       expect(response.body.success).toBe(true)
-      expect(response.body.data.name).toBe(projectData.name)
+      expect(response.body.data.title).toBe(projectData.title)
       expect(response.body.data.userId).toBe(testUser.id)
 
       testProject = response.body.data
@@ -162,7 +162,7 @@ describe('API Integration Tests', () => {
 
     it('should update project', async () => {
       const updateData = {
-        name: 'Updated Integration Test Project',
+        title: 'Updated Integration Test Project',
         description: 'Updated description'
       }
 
@@ -173,7 +173,7 @@ describe('API Integration Tests', () => {
         .expect(200)
 
       expect(response.body.success).toBe(true)
-      expect(response.body.data.name).toBe(updateData.name)
+      expect(response.body.data.title).toBe(updateData.title)
       expect(response.body.data.description).toBe(updateData.description)
     })
 
@@ -183,14 +183,14 @@ describe('API Integration Tests', () => {
         data: {
           email: 'another@test.com',
           password: await bcrypt.hash('password', 10),
-          firstName: 'Another',
-          lastName: 'User'
+          // firstName: 'Another', // Field doesn't exist in current schema
+          // lastName: 'User' // Field doesn't exist in current schema
         }
       })
 
       const anotherProject = await prisma.project.create({
         data: {
-          name: 'Another User Project',
+          title: 'Another User Project',
           description: 'Should not be accessible',
           userId: anotherUser.id
         }
@@ -215,7 +215,7 @@ describe('API Integration Tests', () => {
         .expect(201)
 
       expect(response.body.success).toBe(true)
-      expect(response.body.data.filename).toBeDefined()
+      expect(response.body.data.name).toBeDefined()
       expect(response.body.data.projectId).toBe(testProject.id)
     })
 

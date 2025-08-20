@@ -3,28 +3,7 @@ import { ExportService } from '../../services/exportService';
 import { logger } from '../../utils/logger';
 import * as path from 'path';
 import { promises as fs } from 'fs';
-
-interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    emailVerified: boolean;
-    profile?: {
-      id: string;
-      firstName?: string | null;
-      lastName?: string | null;
-      organizationName?: string | null;
-      role?: string | null;
-      bio?: string | null;
-      avatarUrl?: string | null;
-      userId: string;
-      createdAt: Date;
-      updatedAt: Date;
-    } | null;
-  };
-  params: Record<string, string>;
-  body: Record<string, any>;
-}
+import { AuthRequest } from '../../types/auth';
 
 export class ExportController {
   private exportService: ExportService;
@@ -160,7 +139,8 @@ export class ExportController {
           res.status(404).json({ error: 'File not found' });
           return;
         }
-      } catch (_error) {
+      } catch (err) {
+        logger.error('File not found:', err instanceof Error ? err : new Error(String(err)), 'ExportController');
         res.status(404).json({ error: 'File not found' });
         return;
       }

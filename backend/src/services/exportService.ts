@@ -230,7 +230,7 @@ export class ExportService {
     projectId: string,
     userId: string,
     options: ExportOptions
-  ) {
+  ): Promise<void> {
     const job = this.exportJobs.get(jobId);
     if (!job) {return;}
 
@@ -346,7 +346,7 @@ export class ExportService {
     }
   }
 
-  private async createFolderStructure(exportDir: string) {
+  private async createFolderStructure(exportDir: string): Promise<void> {
     const folders = [
       'images',
       'visualizations',
@@ -408,54 +408,86 @@ export class ExportService {
   ): Promise<void> {
     const vizDir = path.join(exportDir, 'visualizations');
     
+    logger.info(`Starting visualization generation for ${images.length} images`, undefined, 'ExportService');
+    let processedCount = 0;
+    let skippedCount = 0;
+    
     for (let i = 0; i < images.length; i++) {
       const image = images[i];
-      if (image && image.segmentation) {
-        const result = image.segmentation;
-        if (result.polygons) {
-          const imageNameWithoutExt = path.parse(image.name).name;
-          const vizPath = path.join(
-            vizDir,
-            `${imageNameWithoutExt}_viz.png`
-          );
-          
-          let polygons;
-          try {
-            polygons = JSON.parse(result.polygons);
-          } catch (error) {
-            logger.error('Failed to parse polygons for visualization:', error instanceof Error ? error : new Error(String(error)), 'ExportService', { 
-              imageId: image.id
-            });
-            continue;
-          }
-          
-          try {
-            // Validate originalPath before joining
-            if (typeof image.originalPath !== 'string' || !image.originalPath) {
-              logger.error('Invalid or empty originalPath for image', new Error(`Invalid originalPath for image ${image.id}: ${image.originalPath}`));
-              continue; // Skip this image
-            }
-            
-            // Construct full path to the image
-            const uploadDir = process.env.UPLOAD_DIR || './uploads';
-            const fullImagePath = path.resolve(path.join(uploadDir, image.originalPath));
-            
-            await this.visualizationGenerator.generateVisualization(
-              fullImagePath,
-              polygons,
-              vizPath,
-              options
-            );
-          } catch (error) {
-            logger.error('Visualization generation failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService', {
-              imageId: image.id,
-              imagePath: image.originalPath
-            });
-            // Continue with other images even if visualization fails
-          }
+      
+      if (!image) {
+        logger.warn(`Image at index ${i} is undefined`, 'ExportService');
+        skippedCount++;
+        continue;
+      }
+      
+      if (!image.segmentation) {
+        logger.warn(`Image ${image.name} (${image.id}) has no segmentation results`, 'ExportService');
+        skippedCount++;
+        continue;
+      }
+      
+      const result = image.segmentation;
+      if (!result.polygons) {
+        logger.warn(`Image ${image.name} (${image.id}) has segmentation but no polygons`, 'ExportService');
+        skippedCount++;
+        continue;
+      }
+      
+      const imageNameWithoutExt = path.parse(image.name).name;
+      const vizPath = path.join(
+        vizDir,
+        `${imageNameWithoutExt}_viz.png`
+      );
+      
+      let polygons;
+      try {
+        polygons = JSON.parse(result.polygons);
+      } catch (error) {
+        logger.error('Failed to parse polygons for visualization:', error instanceof Error ? error : new Error(String(error)), 'ExportService', { 
+          imageId: image.id,
+          imageName: image.name
+        });
+        skippedCount++;
+        continue;
+      }
+      
+      try {
+        // Validate originalPath before joining
+        if (typeof image.originalPath !== 'string' || !image.originalPath) {
+          logger.error('Invalid or empty originalPath for image', new Error(`Invalid originalPath for image ${image.id}: ${image.originalPath}`));
+          skippedCount++;
+          continue; // Skip this image
         }
+        
+        // Construct full path to the image
+        const uploadDir = process.env.UPLOAD_DIR || './uploads';
+        const fullImagePath = path.resolve(path.join(uploadDir, image.originalPath));
+        
+        const result = await this.visualizationGenerator.generateVisualization(
+          fullImagePath,
+          polygons,
+          vizPath,
+          options
+        );
+        
+        if (result === 'success') {
+          processedCount++;
+        } else {
+          skippedCount++;
+          logger.warn(`Visualization generation returned ${result} for image ${image.name}`, 'ExportService');
+        }
+      } catch (error) {
+        logger.error('Visualization generation failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService', {
+          imageId: image.id,
+          imagePath: image.originalPath
+        });
+        skippedCount++;
+        // Continue with other images even if visualization fails
       }
     }
+    
+    logger.info(`Visualization generation completed: ${processedCount} processed, ${skippedCount} skipped out of ${images.length} total`, undefined, 'ExportService');
   }
 
   private async generateAnnotations(
@@ -528,7 +560,7 @@ export class ExportService {
     images: ImageWithSegmentation[],
     exportDir: string,
     formats: string[],
-    projectName: string
+    _projectName: string
   ): Promise<void> {
     const metricsDir = path.join(exportDir, 'metrics');
     // Convert images to the format expected by metrics calculator
@@ -639,7 +671,8 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 
 ## Notes
 - External polygons are numbered sequentially
-- Metrics are calculated for external polygons with internal areas subtracted
+- Metrics are calculated only for external polygons
+- Internal polygon areas (holes) are automatically subtracted from their containing external polygons
 - All coordinates are in pixel space relative to original image dimensions
 `;
   }
@@ -691,10 +724,11 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 - **Range**: 0 to 1 (1 = perfect sphere projection)
 
 ## Important Notes
-1. All metrics account for internal polygons (holes)
-2. Measurements are in pixel coordinates
-3. For physical measurements, apply appropriate scale factor
-4. Metrics are calculated using OpenCV algorithms for accuracy
+1. Metrics are evaluated only for external polygons
+2. Internal polygon areas (holes) are automatically subtracted from their containing external polygons
+3. Measurements are in pixel coordinates
+4. For physical measurements, apply appropriate scale factor
+5. Metrics are calculated using OpenCV algorithms for accuracy
 `;
   }
 
@@ -714,7 +748,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
     return new Promise((resolve, reject) => {
       let cleanupCalled = false;
       
-      const cleanup = async () => {
+      const cleanup = async (): Promise<void> => {
         if (cleanupCalled) {return;}
         cleanupCalled = true;
         
@@ -846,8 +880,8 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
     if (job && job.projectId === projectId && job.userId === userId) {
       job.status = 'cancelled';
       // Cancel the Bull queue job if bullJobId exists and queue is available
-      if (job.bullJobId && this.exportQueue && typeof (this.exportQueue as any).getJob === 'function') {
-        const queueJob = await (this.exportQueue as any).getJob(job.bullJobId);
+      if (job.bullJobId && this.exportQueue && typeof (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob === 'function') {
+        const queueJob = await (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob(job.bullJobId);
         if (queueJob && ['waiting', 'delayed'].includes(await queueJob.getState())) {
           await queueJob.remove();
         }

@@ -36,12 +36,28 @@ function loadTranslations(langCode) {
     let exportObject = null;
 
     function visit(node) {
-      if (ts.isExportAssignment(node) && node.isExportEquals === false) {
-        // Found export default
+      // Debug: Log node types to understand the AST structure
+      // console.log(`Node kind: ${ts.SyntaxKind[node.kind]}`);
+
+      // Handle export default syntax: export default { ... }
+      if (ts.isExportAssignment(node) && !node.isExportEquals) {
         if (ts.isObjectLiteralExpression(node.expression)) {
           exportObject = parseObjectLiteral(node.expression);
         }
       }
+      // Also check for bare object literals at the root (fallback)
+      else if (ts.isObjectLiteralExpression(node) && !exportObject) {
+        // Check if this is a child of export assignment by looking at parent context
+        let parent = node.parent;
+        while (parent) {
+          if (ts.isExportAssignment(parent) && !parent.isExportEquals) {
+            exportObject = parseObjectLiteral(node);
+            break;
+          }
+          parent = parent.parent;
+        }
+      }
+
       ts.forEachChild(node, visit);
     }
 
@@ -86,6 +102,18 @@ function parseObjectLiteral(node) {
         result[key] = parseObjectLiteral(property.initializer);
       } else if (ts.isNoSubstitutionTemplateLiteral(property.initializer)) {
         result[key] = property.initializer.text;
+      } else if (ts.isArrayLiteralExpression(property.initializer)) {
+        // Handle array literals
+        result[key] = property.initializer.elements
+          .map(element => {
+            if (ts.isStringLiteral(element)) {
+              return element.text;
+            } else if (ts.isNoSubstitutionTemplateLiteral(element)) {
+              return element.text;
+            }
+            return null;
+          })
+          .filter(item => item !== null);
       }
       // Skip other types (functions, computed values, etc.)
     }

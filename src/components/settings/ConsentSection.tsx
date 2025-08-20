@@ -87,7 +87,7 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
     } catch (error: unknown) {
       logger.error('Error saving consent preferences:', error);
       const errorMessage =
-        getErrorMessage(error) || 'Failed to update consent preferences';
+        getErrorMessage(error, t) || t('errors.operations.updateConsent');
       toast.error(errorMessage);
     } finally {
       setLoading(false);
