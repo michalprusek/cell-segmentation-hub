@@ -165,7 +165,12 @@ export class LocalStorageProvider implements StorageProvider {
    * Get URL for accessing file
    */
   async getUrl(key: string): Promise<string> {
-    // Use shared utility for consistent base URL across services
+    // In production, use relative URL to work with any domain
+    // This will be served through nginx proxy
+    if (process.env.NODE_ENV === 'production') {
+      return `/uploads/${key}`;
+    }
+    // In development, use the base URL
     const baseUrl = getBaseUrl();
     return `${baseUrl}/uploads/${key}`;
   }
