@@ -1,7 +1,27 @@
-#!/bin/bash
+#!/bin/sh
 
-# Fix volume mount permissions
-chown -R nodejs:nodejs /app/uploads /app/logs /app/data 2>/dev/null || true
+# PostgreSQL Migration Entrypoint
+# Automatically runs database migrations on container startup
 
-# Switch to nodejs user and start the application
-exec su -m -s /bin/sh nodejs -c "npx tsx src/server.ts"
+set -e
+
+echo "Starting backend service with PostgreSQL..."
+
+# Wait for PostgreSQL to be ready
+echo "Waiting for PostgreSQL..."
+while ! nc -z postgres 5432; do
+  sleep 1
+done
+echo "PostgreSQL is ready!"
+
+# Run Prisma migrations
+echo "Running database migrations..."
+npx prisma migrate deploy
+
+# Generate Prisma client
+echo "Generating Prisma client..."
+npx prisma generate
+
+# Start the application
+echo "Starting Node.js application..."
+exec "$@"

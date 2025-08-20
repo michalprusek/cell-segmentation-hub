@@ -1,0 +1,57 @@
+# PostgreSQL Migration - Minimal Configuration
+# This file contains ONLY the PostgreSQL database migration changes
+# Part of PR split - feat/1-postgresql-migration
+
+services:
+  # PostgreSQL database service (replacing SQLite)
+  postgres:
+    image: postgres:15-alpine
+    container_name: spheroseg-db
+    environment:
+      POSTGRES_USER: ${DB_USER:-spheroseg}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-spheroseg_dev}
+      POSTGRES_DB: ${DB_NAME:-spheroseg}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
+
+  # Backend service - updated for PostgreSQL
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: spheroseg-backend
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      - DATABASE_URL=postgresql://${DB_USER:-spheroseg}:${DB_PASSWORD:-spheroseg_dev}@postgres:5432/${DB_NAME:-spheroseg}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
+
+networks:
+  spheroseg-network:
+    driver: bridge
+
+volumes:
+  postgres-data:
+    driver: local
