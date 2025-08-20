@@ -328,3 +328,66 @@ The project uses Husky for comprehensive pre-commit validation:
 - **Solution**: Enable Socket.io auto-reconnection, add keep-alive pings, fix disconnect handling
 - **Key settings**: `reconnection: true`, ping interval every 25s, proper reconnect event handlers
 - **Location**: `/src/services/webSocketManager.ts`
+
+## Blue-Green Deployment System
+
+### Current Production Setup
+
+**IMPORTANT**: Production currently runs on **staging** environment (ports 4000-4008). The actual production environment (ports 5000-5008) is ready for the next deployment.
+
+### Deployment Strategy
+
+The system uses **Blue-Green deployment** for zero-downtime releases:
+
+1. **Two identical environments**:
+   - **Staging** (Blue): Ports 4000-4008, database: spheroseg_staging
+   - **Production** (Green): Ports 5000-5008, database: spheroseg_production
+   - **Nginx**: Routes traffic to active environment via `docker/nginx/nginx.prod.conf`
+
+2. **Deployment Process**:
+
+   ```bash
+   # Deploy new version (automatic zero-downtime)
+   ./scripts/deploy-blue-green.sh
+
+   # Emergency rollback (takes seconds)
+   ./scripts/rollback-deployment.sh
+
+   # Health check both environments
+   ./scripts/deployment-health-check.sh
+   ```
+
+3. **How it works**:
+   - Detects current active environment from nginx config
+   - Backs up database before deployment
+   - Deploys new version to inactive environment
+   - Runs database migrations automatically
+   - Switches nginx routing (milliseconds downtime)
+   - Keeps old environment running for instant rollback
+
+4. **Key files**:
+   - `docker-compose.staging.yml` - Staging environment config
+   - `docker-compose.production.yml` - Production environment config (new)
+   - `docker/nginx/nginx.prod.conf` - Nginx routing configuration
+   - `scripts/deploy-blue-green.sh` - Main deployment script
+   - `scripts/rollback-deployment.sh` - Emergency rollback script
+   - `scripts/deployment-health-check.sh` - Health monitoring
+   - `docs/DEPLOYMENT.md` - Full deployment documentation
+
+5. **Port mapping**:
+   - **Staging**: Frontend 4000, Backend 4001, ML 4008, Grafana 3031
+   - **Production**: Frontend 5000, Backend 5001, ML 5008, Grafana 3032
+   - **Public**: https://spherosegapp.utia.cas.cz (nginx on 80/443)
+
+6. **Current status**:
+   - **Active environment**: staging (serving production traffic)
+   - **Next deployment**: Will automatically go to production environment
+   - **Databases**: Separate (spheroseg_staging, spheroseg_production)
+   - **File storage**: Separate directories per environment
+
+### Nginx Routing Fix Applied
+
+- **Issue**: API routes returning 404 due to incorrect rewrite rule
+- **Solution**: Changed from `rewrite ^/api/(.*)$ /api/$1 break;` to `proxy_pass http://backend/api/;`
+- **Location**: `/docker/nginx/nginx.prod.conf` line 132
+- **Test**: `curl -X POST https://spherosegapp.utia.cas.cz/api/auth/login`

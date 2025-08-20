@@ -7,6 +7,7 @@ export default defineConfig({
   server: {
     host: '::',
     port: 8082,
+    allowedHosts: ['localhost', '127.0.0.1', 'spherosegapp.utia.cas.cz'],
   },
   plugins: [react()],
   resolve: {
