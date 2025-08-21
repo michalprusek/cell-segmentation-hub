@@ -6,6 +6,7 @@ import path from 'path';
 import { URL } from 'url';
 import { logger } from '../../utils/logger';
 import { config } from '../../utils/config';
+import { SCALE_CONFIG, validateScale, getScaleValidationMessage, getScaleWarningMessage } from './scaleConfig';
 
 export interface PolygonMetrics {
   imageId: string;
@@ -159,8 +160,11 @@ export class MetricsCalculator {
     }
 
     // Log performance summary
+    const polygonsPerSec = calcTime > 0 
+      ? (totalPolygonCount / (calcTime / 1000)).toFixed(0) 
+      : 'N/A';
     this.logger.info(
-      `Metrics calculated: ${totalPolygonCount} polygons across ${images.length} images in ${calcTime}ms (${(totalPolygonCount / (calcTime / 1000)).toFixed(0)} polygons/sec)`,
+      `Metrics calculated: ${totalPolygonCount} polygons across ${images.length} images in ${calcTime}ms (${polygonsPerSec} polygons/sec)`,
       'MetricsCalculator'
     );
 
@@ -737,20 +741,34 @@ export class MetricsCalculator {
   }
 
   /**
-   * Apply scale conversion to metrics
+   * Apply scale conversion to metrics with enhanced validation
    */
   private applyScaleConversion(metrics: PolygonMetrics[], scale: number): PolygonMetrics[] {
-    // Validate scale parameter
-    if (!scale || scale <= 0 || !isFinite(scale)) {
-      this.logger.warn(`Invalid scale value: ${scale}. Using original pixel values.`, 'MetricsCalculator');
+    // Validate scale using enhanced validation
+    const validation = validateScale(scale);
+    
+    if (!validation.valid) {
+      this.logger.error(validation.error || 'Invalid scale value', new Error('Scale validation failed'), 'MetricsCalculator');
+      this.logger.info('Falling back to pixel units due to invalid scale', 'MetricsCalculator');
       return metrics;
     }
     
-    // Warn if scale seems unrealistic
-    if (scale > 100) {
-      this.logger.warn(`Unusually high scale value: ${scale} pixels/µm. Please verify this is correct.`, 'MetricsCalculator');
-    } else if (scale < 0.01) {
-      this.logger.warn(`Unusually low scale value: ${scale} pixels/µm. Please verify this is correct.`, 'MetricsCalculator');
+    if (validation.warning) {
+      this.logger.warn(validation.warning, 'MetricsCalculator');
+      
+      // Log additional context for debugging
+      this.logger.info(
+        `Scale conversion will proceed with ${scale} pixels/µm. ` +
+        `This will convert: 1 pixel = ${(1/scale).toFixed(4)} µm, ` +
+        `100x100 px area = ${(10000/(scale*scale)).toFixed(2)} µm²`,
+        'MetricsCalculator'
+      );
+    } else {
+      // Log normal scale application for valid common values
+      this.logger.info(
+        `Applying scale conversion: ${scale} pixels/µm (1 pixel = ${(1/scale).toFixed(4)} µm)`,
+        'MetricsCalculator'
+      );
     }
     
     return metrics.map(metric => ({

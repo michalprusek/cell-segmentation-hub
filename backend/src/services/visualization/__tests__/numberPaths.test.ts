@@ -291,8 +291,9 @@ describe('NumberPaths Caching System', () => {
   });
 
   describe('Performance Logging', () => {
-    it('should log cache performance periodically', () => {
-      const { logger } = require('../../../utils/logger');
+    it('should log cache performance periodically', async () => {
+      const loggerModule = await import('../../../utils/logger');
+      const { logger } = loggerModule;
       const canvas = createCanvas(200, 200);
       const ctx = canvas.getContext('2d');
       
