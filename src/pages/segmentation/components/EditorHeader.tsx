@@ -10,6 +10,11 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import SegmentationStatusIndicator from './SegmentationStatusIndicator';
+import type {
+  SegmentationUpdate,
+  QueueStats,
+} from '@/hooks/useSegmentationQueue';
 
 interface EditorHeaderProps {
   projectId: string;
@@ -18,6 +23,12 @@ interface EditorHeaderProps {
   currentImageIndex: number;
   totalImages: number;
   onNavigate: (direction: 'prev' | 'next') => void;
+  hasUnsavedChanges?: boolean;
+  onSave?: () => Promise<void>;
+  imageId?: string;
+  segmentationStatus?: string;
+  lastUpdate?: SegmentationUpdate | null;
+  queueStats?: QueueStats | null;
 }
 
 const EditorHeader = ({
@@ -27,15 +38,39 @@ const EditorHeader = ({
   currentImageIndex,
   totalImages,
   onNavigate,
+  hasUnsavedChanges = false,
+  onSave,
+  imageId,
+  segmentationStatus,
+  lastUpdate,
+  queueStats,
 }: EditorHeaderProps) => {
   const navigate = useNavigate();
   const { t } = useLanguage();
 
-  const handleBackClick = () => {
+  const handleBackClick = async () => {
+    // Autosave before leaving the editor
+    if (hasUnsavedChanges && onSave) {
+      try {
+        await onSave();
+      } catch (error) {
+        console.error('Failed to autosave before navigation:', error);
+        // Continue navigation even if save fails
+      }
+    }
     navigate(`/project/${projectId}`);
   };
 
-  const handleHomeClick = () => {
+  const handleHomeClick = async () => {
+    // Autosave before leaving the editor
+    if (hasUnsavedChanges && onSave) {
+      try {
+        await onSave();
+      } catch (error) {
+        console.error('Failed to autosave before navigation:', error);
+        // Continue navigation even if save fails
+      }
+    }
     navigate('/dashboard');
   };
 
@@ -81,6 +116,16 @@ const EditorHeader = ({
 
       {/* Right section - Navigation and Progress */}
       <div className="flex items-center space-x-4">
+        {/* Segmentation Status Indicator */}
+        {imageId && (
+          <SegmentationStatusIndicator
+            imageId={imageId}
+            segmentationStatus={segmentationStatus}
+            lastUpdate={lastUpdate}
+            queuePosition={queueStats?.position}
+          />
+        )}
+
         {/* Progress indicator */}
         <div className="hidden md:flex items-center space-x-3">
           <div className="text-sm text-slate-600 dark:text-slate-300 flex items-center space-x-2">

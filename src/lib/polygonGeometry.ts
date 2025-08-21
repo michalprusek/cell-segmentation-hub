@@ -180,6 +180,46 @@ export const lineIntersection = (
 };
 
 /**
+ * Calculate intersection between an infinite line (defined by two points) and a line segment
+ * Unlike lineIntersection, this treats the first line as infinite (extending beyond p1 and p2)
+ * while the second line remains a segment between p3 and p4
+ */
+export const lineRayIntersection = (
+  p1: Point,
+  p2: Point, // Points defining the infinite line
+  p3: Point,
+  p4: Point // Line segment endpoints
+): Point | null => {
+  const x1 = p1.x,
+    y1 = p1.y;
+  const x2 = p2.x,
+    y2 = p2.y;
+  const x3 = p3.x,
+    y3 = p3.y;
+  const x4 = p4.x,
+    y4 = p4.y;
+
+  const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+
+  // Lines are parallel
+  if (Math.abs(denom) < 1e-10) return null;
+
+  const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+  const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+
+  // Only check if intersection is within the segment (p3-p4)
+  // The line p1-p2 is treated as infinite (no constraint on t)
+  if (u >= 0 && u <= 1) {
+    return {
+      x: x1 + t * (x2 - x1),
+      y: y1 + t * (y2 - y1),
+    };
+  }
+
+  return null;
+};
+
+/**
  * Check which side of a line a point is on
  * Returns positive if point is on the left, negative if on the right, 0 if on the line
  */

@@ -7,6 +7,7 @@ interface CanvasContainerProps {
   onMouseMove: (e: React.MouseEvent) => void;
   onMouseUp: (e: React.MouseEvent) => void;
   onWheel?: (e: React.WheelEvent) => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
   children: React.ReactNode;
   loading: boolean;
   editMode: EditMode;
@@ -26,6 +27,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       onMouseMove,
       onMouseUp,
       onWheel,
+      onContextMenu,
       children,
       loading,
       editMode,
@@ -109,6 +111,14 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       }
     };
 
+    // Handle context menu - prevent default browser menu
+    const handleContextMenu = (e: React.MouseEvent) => {
+      e.preventDefault();
+      if (onContextMenu) {
+        onContextMenu(e);
+      }
+    };
+
     return (
       <div
         ref={ref}
@@ -127,6 +137,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
         onWheel={onWheel}
+        onContextMenu={handleContextMenu}
         data-testid="canvas-container"
         data-edit-mode={editMode}
       >

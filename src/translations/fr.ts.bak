@@ -571,8 +571,6 @@ export default {
       deletePolygon: 'Supprimer le polygone',
       unknown: 'Inconnu',
     },
-    autosaveFailed:
-      'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
     modeDescription: {
       view: 'Naviguer et sélectionner les polygones',
       edit: 'Déplacer et modifier les sommets',
@@ -824,12 +822,9 @@ export default {
       saved: 'Segmentation sauvegardée avec succès',
       failed: 'Échec de la sauvegarde de la segmentation',
       deleted: 'Polygone supprimé',
-      cannotDeleteVertex:
-        'Impossible de supprimer le sommet - le polygone a besoin d\u2019au moins 3 points',
+      cannotDeleteVertex: 'Impossible de supprimer le sommet - le polygone a besoin d\u2019au moins 3 points',
       vertexDeleted: 'Sommet supprimé avec succès',
     },
-    autosaveFailed:
-      'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
   },
   export: {
     advancedExport: 'Export Avancé',
@@ -1114,8 +1109,6 @@ export default {
         step4: 'Utilisez le panneau de droite',
         step5: 'Sauvegardez périodiquement',
       },
-      segmenting: "Segmentation de l'image...",
-      waitingInQueue: 'En attente dans la file',
     },
     exportFeatures: {
       title: "Fonctions d'Export",

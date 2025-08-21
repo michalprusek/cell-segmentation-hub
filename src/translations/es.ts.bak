@@ -570,7 +570,6 @@ export default {
       deletePolygon: 'Eliminar polígono',
       unknown: 'Desconocido',
     },
-    autosaveFailed: 'Autosave failed - changes may be lost',
     modeDescription: {
       view: 'Navegar y seleccionar polígonos',
       edit: 'Mover y modificar vértices',
@@ -819,12 +818,9 @@ export default {
       saved: 'Segmentación guardada exitosamente',
       failed: 'Error al guardar segmentación',
       deleted: 'Polígono eliminado',
-      cannotDeleteVertex:
-        'No se puede eliminar vértice - el polígono necesita al menos 3 puntos',
+      cannotDeleteVertex: 'No se puede eliminar vértice - el polígono necesita al menos 3 puntos',
       vertexDeleted: 'Vértice eliminado exitosamente',
     },
-    autosaveFailed:
-      'Error en guardado automático - los cambios pueden perderse',
   },
   export: {
     advancedExport: 'Exportación Avanzada',
@@ -1172,8 +1168,6 @@ export default {
         step5:
           'Guarda tus cambios periódicamente o confía en el guardado automático',
       },
-      segmenting: 'Segmentando imagen...',
-      waitingInQueue: 'Esperando en la cola',
     },
 
     // Export Features section

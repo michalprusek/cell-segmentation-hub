@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useProjectData } from '@/hooks/useProjectData';
 import { sortImagesBySettings } from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
+import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { EditMode } from './types';
 import { Polygon } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
@@ -51,6 +52,9 @@ const SegmentationEditor = () => {
     loading: projectLoading,
   } = useProjectData(projectId, user?.id, { fetchAll: true });
 
+  // WebSocket connection for segmentation status updates
+  const { lastUpdate, queueStats } = useSegmentationQueue(projectId);
+
   // Create compatibility objects for existing code
   // Apply the same sorting as in ProjectDetail page
   const projectImages = useMemo(() => {
@@ -59,6 +63,54 @@ const SegmentationEditor = () => {
   }, [images]);
 
   const selectedImage = projectImages.find(img => img.id === imageId);
+
+  // Function to reload segmentation data
+  const reloadSegmentation = useCallback(async () => {
+    if (!projectId || !imageId) return;
+
+    try {
+      logger.debug('🔄 Reloading segmentation after completion:', { imageId });
+
+      const segmentationData = await apiClient.getSegmentationResults(imageId);
+
+      if (!segmentationData || !segmentationData.polygons) {
+        logger.debug('No segmentation data found after completion:', imageId);
+        setSegmentationPolygons(null);
+        return;
+      }
+
+      const polygons = segmentationData.polygons;
+
+      // Extract image dimensions from segmentation data if available
+      if (segmentationData.imageWidth && segmentationData.imageHeight) {
+        logger.debug(
+          '📐 Updating image dimensions from fresh segmentation data:',
+          {
+            width: segmentationData.imageWidth,
+            height: segmentationData.imageHeight,
+          }
+        );
+        setImageDimensions({
+          width: segmentationData.imageWidth,
+          height: segmentationData.imageHeight,
+        });
+      }
+
+      logger.debug('✅ Successfully reloaded segmentation polygons:', {
+        imageId,
+        polygonCount: polygons.length,
+        imageDimensions:
+          segmentationData.imageWidth && segmentationData.imageHeight
+            ? `${segmentationData.imageWidth}x${segmentationData.imageHeight}`
+            : 'not available',
+      });
+
+      setSegmentationPolygons(polygons);
+    } catch (error) {
+      logger.error('Failed to reload segmentation after completion:', error);
+    }
+  }, [projectId, imageId]);
+
   const project = { name: projectTitle || 'Unknown Project' };
 
   // State for segmentation polygons from API
@@ -212,8 +264,9 @@ const SegmentationEditor = () => {
     canvasWidth,
     canvasHeight,
     imageId, // Pass imageId to track image changes
-    onSave: async polygons => {
-      if (!projectId || !imageId) return;
+    onSave: async (polygons, targetImageId) => {
+      const saveToImageId = targetImageId || imageId;
+      if (!projectId || !saveToImageId) return;
 
       try {
         // Transform Polygon[] to SegmentationPolygon[] for API
@@ -228,14 +281,19 @@ const SegmentationEditor = () => {
         }));
 
         const updatedResult = await apiClient.updateSegmentationResults(
-          imageId,
+          saveToImageId,
           polygonData,
           imageDimensions?.width,
           imageDimensions?.height
         );
-        // Extract polygons array from the result object
-        setSegmentationPolygons(updatedResult.polygons || []);
-        toast.success(t('toast.dataSaved'));
+        // Only update UI state if we're saving the current image (not autosave for different image)
+        if (saveToImageId === imageId) {
+          setSegmentationPolygons(updatedResult.polygons || []);
+          toast.success(t('toast.dataSaved'));
+        } else {
+          // This is an autosave for a different image, don't show success toast or update UI
+          logger.debug('✅ Autosaved polygons for image:', saveToImageId);
+        }
       } catch (error) {
         logger.error('Failed to save segmentation:', error);
         toast.error(t('toast.operationFailed'));
@@ -448,6 +506,48 @@ const SegmentationEditor = () => {
     editor.transform,
   ]);
 
+  // Listen for segmentation completion and auto-reload polygons
+  useEffect(() => {
+    // Only proceed if we have a WebSocket update for the current image
+    if (!lastUpdate || lastUpdate.imageId !== imageId) {
+      return;
+    }
+
+    // Auto-reload polygons when segmentation is completed
+    if (
+      lastUpdate.status === 'segmented' ||
+      lastUpdate.status === 'completed'
+    ) {
+      logger.debug(
+        '🎯 Segmentation completed via WebSocket, auto-reloading polygons:',
+        {
+          imageId: lastUpdate.imageId,
+          status: lastUpdate.status,
+          polygonCount: lastUpdate.polygonCount,
+        }
+      );
+
+      // Add a small delay to ensure the API is ready
+      const timeoutId = setTimeout(() => {
+        reloadSegmentation();
+      }, 500);
+
+      return () => clearTimeout(timeoutId);
+    }
+
+    // Also handle failed segmentation
+    if (
+      lastUpdate.status === 'failed' ||
+      lastUpdate.status === 'no_segmentation'
+    ) {
+      logger.debug('❌ Segmentation failed/empty, clearing polygons:', {
+        imageId: lastUpdate.imageId,
+        status: lastUpdate.status,
+      });
+      setSegmentationPolygons(null);
+    }
+  }, [lastUpdate, imageId, reloadSegmentation]);
+
   // Handle image load to get dimensions (only if not already set from segmentation data)
   const handleImageLoad = (width: number, height: number) => {
     setImageDimensions(current => {
@@ -527,6 +627,45 @@ const SegmentationEditor = () => {
     });
   };
 
+  // Context menu handlers for polygon right-click
+  const handleDeletePolygonFromContextMenu = useCallback(
+    (polygonId: string) => {
+      editor.handleDeletePolygon(polygonId);
+      setHiddenPolygonIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(polygonId);
+        return newSet;
+      });
+    },
+    [editor]
+  );
+
+  const handleSlicePolygonFromContextMenu = useCallback(
+    (polygonId: string) => {
+      // Select the polygon and switch to slice mode (skip to step 2)
+      editor.setSelectedPolygonId(polygonId);
+      editor.setEditMode(EditMode.Slice);
+    },
+    [editor]
+  );
+
+  const handleEditPolygonFromContextMenu = useCallback(
+    (polygonId: string) => {
+      // Select the polygon and switch to edit vertices mode
+      editor.setSelectedPolygonId(polygonId);
+      editor.setEditMode(EditMode.EditVertices);
+    },
+    [editor]
+  );
+
+  // Context menu handlers for vertex right-click
+  const handleDeleteVertexFromContextMenu = useCallback(
+    (polygonId: string, vertexIndex: number) => {
+      editor.handleDeleteVertex(polygonId, vertexIndex);
+    },
+    [editor]
+  );
+
   // Convert new EditMode to legacy booleans for compatibility
   const legacyModes = useMemo(
     () => ({
@@ -537,6 +676,20 @@ const SegmentationEditor = () => {
     }),
     [editor.editMode]
   );
+
+  // Autosave on component unmount (when leaving the editor completely)
+  useEffect(() => {
+    return () => {
+      // Cleanup function - called when component unmounts
+      if (editor.hasUnsavedChanges && editor.handleSave) {
+        logger.debug('🧹 Autosaving on editor unmount');
+        // Note: This may not always complete due to component unmounting
+        editor.handleSave().catch(error => {
+          logger.error('Failed to autosave on unmount:', error);
+        });
+      }
+    };
+  }, []); // Empty dependency array means this runs only on unmount
 
   const currentImageIndex =
     projectImages?.findIndex(img => img.id === imageId) ?? -1;
@@ -572,6 +725,12 @@ const SegmentationEditor = () => {
         currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
         totalImages={projectImages?.length || 0}
         onNavigate={navigateToImage}
+        hasUnsavedChanges={editor.hasUnsavedChanges}
+        onSave={editor.handleSave}
+        imageId={imageId}
+        segmentationStatus={selectedImage?.segmentationStatus}
+        lastUpdate={lastUpdate}
+        queueStats={queueStats}
       />
 
       {/* Main Content Area */}
@@ -691,6 +850,12 @@ const SegmentationEditor = () => {
                               onSelectPolygon={() =>
                                 handlePolygonSelection(polygon.id)
                               }
+                              onDeletePolygon={
+                                handleDeletePolygonFromContextMenu
+                              }
+                              onSlicePolygon={handleSlicePolygonFromContextMenu}
+                              onEditPolygon={handleEditPolygonFromContextMenu}
+                              onDeleteVertex={handleDeleteVertexFromContextMenu}
                             />
                           ))}
                         </>
