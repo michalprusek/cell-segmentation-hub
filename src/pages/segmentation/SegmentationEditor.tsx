@@ -721,7 +721,7 @@ const SegmentationEditor = () => {
         });
       }
     };
-  }, []); // Empty dependency array means this runs only on unmount
+  }, [editor]); // Empty dependency array means this runs only on unmount
 
   const currentImageIndex =
     projectImages?.findIndex(img => img.id === imageId) ?? -1;

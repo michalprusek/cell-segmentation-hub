@@ -37,35 +37,7 @@ function ShareAcceptPage() {
   const [accepted, setAccepted] = useState(false);
   const [autoAccepting, setAutoAccepting] = useState(false);
 
-  useEffect(() => {
-    if (!token) {
-      setError(t('sharing.invitationInvalid'));
-      setLoading(false);
-      return;
-    }
-
-    validateToken();
-  }, [token]);
-
-  // Auto-accept invitation if user is already logged in and matches email
-  useEffect(() => {
-    if (shareData && user && !accepted && !autoAccepting) {
-      if (!shareData.needsLogin && shareData.status === 'pending') {
-        // For email invitations, check if the logged-in user matches
-        if (shareData.email && user.email === shareData.email) {
-          setAutoAccepting(true);
-          handleAccept();
-        }
-        // For link invitations, auto-accept for any logged-in user
-        else if (!shareData.email) {
-          setAutoAccepting(true);
-          handleAccept();
-        }
-      }
-    }
-  }, [shareData, user, accepted, autoAccepting]);
-
-  const validateToken = async () => {
+  const validateToken = useCallback(async () => {
     try {
       setLoading(true);
       const data = await apiClient.validateShareToken(token!);
@@ -82,9 +54,9 @@ function ShareAcceptPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, t]);
 
-  const handleAccept = async () => {
+  const handleAccept = useCallback(async () => {
     if (!token) return;
 
     try {
@@ -127,7 +99,35 @@ function ShareAcceptPage() {
     } finally {
       setAccepting(false);
     }
-  };
+  }, [token, t, navigate]);
+
+  useEffect(() => {
+    if (!token) {
+      setError(t('sharing.invitationInvalid'));
+      setLoading(false);
+      return;
+    }
+
+    validateToken();
+  }, [token, t, validateToken]);
+
+  // Auto-accept invitation if user is already logged in and matches email
+  useEffect(() => {
+    if (shareData && user && !accepted && !autoAccepting) {
+      if (!shareData.needsLogin && shareData.status === 'pending') {
+        // For email invitations, check if the logged-in user matches
+        if (shareData.email && user.email === shareData.email) {
+          setAutoAccepting(true);
+          handleAccept();
+        }
+        // For link invitations, auto-accept for any logged-in user
+        else if (!shareData.email) {
+          setAutoAccepting(true);
+          handleAccept();
+        }
+      }
+    }
+  }, [shareData, user, accepted, autoAccepting, handleAccept]);
 
   const handleLogin = () => {
     navigate(`/sign-in?returnTo=/share/accept/${token}`);

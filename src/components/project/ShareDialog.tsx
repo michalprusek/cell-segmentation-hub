@@ -88,14 +88,7 @@ export function ShareDialog({
   const [expiryHours, setExpiryHours] = useState<number | undefined>(undefined);
   const [generatedLink, setGeneratedLink] = useState<string>('');
 
-  // Load existing shares when dialog opens
-  useEffect(() => {
-    if (open) {
-      loadShares();
-    }
-  }, [open, projectId]);
-
-  const loadShares = async () => {
+  const loadShares = useCallback(async () => {
     try {
       const data = await apiClient.getProjectShares(projectId);
       setShares(data);
@@ -107,7 +100,14 @@ export function ShareDialog({
         variant: 'destructive',
       });
     }
-  };
+  }, [projectId, t]);
+
+  // Load existing shares when dialog opens
+  useEffect(() => {
+    if (open) {
+      loadShares();
+    }
+  }, [open, projectId, loadShares]);
 
   const handleEmailShare = async () => {
     if (!email.trim()) {
