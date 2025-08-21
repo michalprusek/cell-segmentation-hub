@@ -577,6 +577,8 @@ export default {
       deletePolygon: 'Polygon löschen',
       unknown: 'Unbekannt',
     },
+    autosaveFailed:
+      'Automatisches Speichern fehlgeschlagen – Änderungen können verloren gehen',
     modeDescription: {
       view: 'Navigieren und Polygone auswählen',
       edit: 'Eckpunkte bewegen und modifizieren',
@@ -745,6 +747,8 @@ export default {
     disconnected: 'Vom Server getrennt',
     error: 'ML-Service-Fehler',
     ready: 'Bereit für Segmentierung',
+    online: 'Online',
+    offline: 'Offline',
   },
   queue: {
     title: 'Segmentierungs-Warteschlange',
@@ -831,7 +835,12 @@ export default {
       saved: 'Segmentierung erfolgreich gespeichert',
       failed: 'Speichern der Segmentierung fehlgeschlagen',
       deleted: 'Polygon gelöscht',
+      cannotDeleteVertex:
+        'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
+      vertexDeleted: 'Scheitelpunkt erfolgreich gelöscht',
     },
+    autosaveFailed:
+      'Automatisches Speichern fehlgeschlagen - Änderungen können verloren gehen',
   },
   export: {
     advancedExport: 'Erweiterter Export',
@@ -1117,6 +1126,9 @@ export default {
         step4: 'Rechtes Panel verwenden',
         step5: 'Regelmäßig speichern',
       },
+      segmenting: 'Bild wird segmentiert...',
+      waitingInQueue: 'Wartend in der Warteschlange',
+      reloadingSegmentation: 'Aktualisierung der Segmentierungsdaten...',
     },
     exportFeatures: {
       title: 'Export-Funktionen',
@@ -1478,6 +1490,8 @@ export default {
     reconnected: 'Verbindung zum Server wiederhergestellt',
     reconnectFailed: 'Wiederherstellung der Serververbindung fehlgeschlagen',
     connectionLost: 'Verbindung zum Server verloren',
+    connected: 'Mit Echtzeit-Updates verbunden',
+    disconnected: 'Von Echtzeit-Updates getrennt',
   },
 
   // Metriken-Anzeige

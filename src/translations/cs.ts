@@ -739,6 +739,8 @@ export default {
     disconnected: 'Odpojeno od serveru',
     error: 'Chyba ML služby',
     ready: 'Připraven k segmentaci',
+    online: 'Online',
+    offline: 'Offline',
   },
   queue: {
     title: 'Segmentační fronta',
@@ -814,9 +816,13 @@ export default {
     // Segmentation messages
     segmentation: {
       deleted: 'Polygon byl smazán',
+      cannotDeleteVertex:
+        'Nelze smazat vrchol - polygon potřebuje alespoň 3 body',
+      vertexDeleted: 'Vrchol byl úspěšně smazán',
       failed: 'Nepodařilo se uložit segmentaci',
       saved: 'Segmentace byla úspěšně uložena',
     },
+    autosaveFailed: 'Automatické ukládání selhalo - změny mohou být ztraceny',
     // Upload messages
     upload: {
       failed: 'Nepodařilo se obnovit obrázky po nahrání',
@@ -1159,6 +1165,9 @@ export default {
         step5:
           'Uložte své změny periodicky nebo spoléhejte na automatické ukládání',
       },
+      segmenting: 'Segmentování obrázku...',
+      waitingInQueue: 'Čekání ve frontě',
+      reloadingSegmentation: 'Obnovování dat segmentace...',
     },
 
     // Export Features section
@@ -1520,6 +1529,8 @@ export default {
     reconnected: 'Připojení k serveru obnoveno',
     reconnectFailed: 'Nepodařilo se obnovit připojení k serveru',
     connectionLost: 'Spojení se serverem ztraceno',
+    connected: 'Připojeno k aktualizacím v reálném čase',
+    disconnected: 'Odpojeno od aktualizací v reálném čase',
   },
 
   // Context menu

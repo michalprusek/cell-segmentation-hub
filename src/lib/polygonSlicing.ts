@@ -2,6 +2,7 @@ import { logger } from '@/lib/logger';
 import type { Point, Polygon } from './segmentation';
 import {
   lineIntersection,
+  lineRayIntersection,
   createPolygon,
   calculatePolygonArea,
 } from './polygonGeometry';
@@ -9,6 +10,27 @@ import {
 /**
  * Polygon slicing functionality inspired by SpheroSeg
  */
+
+function computeAndPushIntersection(
+  intersections: Array<{ point: Point; edgeIndex: number; t: number }>,
+  intersectionPoint: Point,
+  points: Point[],
+  edgeIndex: number
+): void {
+  const j = (edgeIndex + 1) % points.length;
+  // Calculate parameter t along the edge for sorting intersections
+  const edgeLength = Math.sqrt(
+    Math.pow(points[j].x - points[edgeIndex].x, 2) +
+      Math.pow(points[j].y - points[edgeIndex].y, 2)
+  );
+  const intersectionDist = Math.sqrt(
+    Math.pow(intersectionPoint.x - points[edgeIndex].x, 2) +
+      Math.pow(intersectionPoint.y - points[edgeIndex].y, 2)
+  );
+  const t = edgeLength > 0 ? intersectionDist / edgeLength : 0;
+
+  intersections.push({ point: intersectionPoint, edgeIndex, t });
+}
 
 /**
  * Slices a polygon along a line defined by two points
@@ -31,6 +53,7 @@ export function slicePolygon(
   const points = polygon.points;
 
   // Find all intersections between the slice line and polygon edges
+  // First try with line segment intersection
   for (let i = 0; i < points.length; i++) {
     const j = (i + 1) % points.length;
     const intersection = lineIntersection(
@@ -41,18 +64,26 @@ export function slicePolygon(
     );
 
     if (intersection) {
-      // Calculate parameter t along the edge for sorting intersections
-      const edgeLength = Math.sqrt(
-        Math.pow(points[j].x - points[i].x, 2) +
-          Math.pow(points[j].y - points[i].y, 2)
-      );
-      const intersectionDist = Math.sqrt(
-        Math.pow(intersection.x - points[i].x, 2) +
-          Math.pow(intersection.y - points[i].y, 2)
-      );
-      const t = edgeLength > 0 ? intersectionDist / edgeLength : 0;
+      computeAndPushIntersection(intersections, intersection, points, i);
+    }
+  }
 
-      intersections.push({ point: intersection, edgeIndex: i, t });
+  // If we don't have exactly 2 intersections with the segment, try infinite line
+  if (intersections.length !== 2) {
+    intersections.length = 0; // Clear array
+
+    for (let i = 0; i < points.length; i++) {
+      const j = (i + 1) % points.length;
+      const intersection = lineRayIntersection(
+        sliceStart,
+        sliceEnd,
+        points[i],
+        points[j]
+      );
+
+      if (intersection) {
+        computeAndPushIntersection(intersections, intersection, points, i);
+      }
     }
   }
 
@@ -174,6 +205,7 @@ export function slicePolygon(
 
 /**
  * Validate if a slice line is valid for a given polygon
+ * If the line segment doesn't intersect properly, try extending it to an infinite line
  */
 export function validateSliceLine(
   polygon: Polygon,
@@ -183,6 +215,7 @@ export function validateSliceLine(
   isValid: boolean;
   reason?: string;
   intersectionCount?: number;
+  extendedToInfiniteLine?: boolean;
 } {
   if (!polygon.points || polygon.points.length < 3) {
     return { isValid: false, reason: 'Polygon must have at least 3 points' };
@@ -197,7 +230,7 @@ export function validateSliceLine(
     return { isValid: false, reason: 'Slice line is too short' };
   }
 
-  // Count intersections
+  // First, try with the line segment (original behavior)
   let intersectionCount = 0;
   const points = polygon.points;
 
@@ -215,15 +248,44 @@ export function validateSliceLine(
     }
   }
 
-  if (intersectionCount !== 2) {
+  // If we have exactly 2 intersections with the segment, we're good
+  if (intersectionCount === 2) {
+    return { isValid: true, intersectionCount };
+  }
+
+  // If we have 0 or 1 intersections with the segment, try extending to infinite line
+  // This handles cases where one or both slice points are inside the polygon
+  let rayIntersectionCount = 0;
+
+  for (let i = 0; i < points.length; i++) {
+    const j = (i + 1) % points.length;
+    const intersection = lineRayIntersection(
+      sliceStart,
+      sliceEnd,
+      points[i],
+      points[j]
+    );
+
+    if (intersection) {
+      rayIntersectionCount++;
+    }
+  }
+
+  // If the infinite line has exactly 2 intersections, the slice can work
+  if (rayIntersectionCount === 2) {
     return {
-      isValid: false,
-      reason: `Expected 2 intersections, found ${intersectionCount}`,
-      intersectionCount,
+      isValid: true,
+      intersectionCount: rayIntersectionCount,
+      extendedToInfiniteLine: true,
     };
   }
 
-  return { isValid: true, intersectionCount };
+  // Neither segment nor infinite line work
+  return {
+    isValid: false,
+    reason: `Expected 2 intersections, found ${intersectionCount} with segment, ${rayIntersectionCount} with infinite line`,
+    intersectionCount,
+  };
 }
 
 /**

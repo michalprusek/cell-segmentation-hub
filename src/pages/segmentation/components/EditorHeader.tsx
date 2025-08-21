@@ -8,8 +8,15 @@ import {
   Home,
   FolderOpen,
   Image as ImageIcon,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import SegmentationStatusIndicator from './SegmentationStatusIndicator';
+import type {
+  SegmentationUpdate,
+  QueueStats,
+} from '@/hooks/useSegmentationQueue';
 
 interface EditorHeaderProps {
   projectId: string;
@@ -18,6 +25,13 @@ interface EditorHeaderProps {
   currentImageIndex: number;
   totalImages: number;
   onNavigate: (direction: 'prev' | 'next') => void;
+  hasUnsavedChanges?: boolean;
+  onSave?: () => Promise<void>;
+  imageId?: string;
+  segmentationStatus?: string;
+  lastUpdate?: SegmentationUpdate | null;
+  queueStats?: QueueStats | null;
+  isWebSocketConnected?: boolean;
 }
 
 const EditorHeader = ({
@@ -27,15 +41,40 @@ const EditorHeader = ({
   currentImageIndex,
   totalImages,
   onNavigate,
+  hasUnsavedChanges = false,
+  onSave,
+  imageId,
+  segmentationStatus,
+  lastUpdate,
+  queueStats,
+  isWebSocketConnected = false,
 }: EditorHeaderProps) => {
   const navigate = useNavigate();
   const { t } = useLanguage();
 
-  const handleBackClick = () => {
+  const handleBackClick = async () => {
+    // Autosave before leaving the editor
+    if (hasUnsavedChanges && onSave) {
+      try {
+        await onSave();
+      } catch (error) {
+        console.error('Failed to autosave before navigation:', error);
+        // Continue navigation even if save fails
+      }
+    }
     navigate(`/project/${projectId}`);
   };
 
-  const handleHomeClick = () => {
+  const handleHomeClick = async () => {
+    // Autosave before leaving the editor
+    if (hasUnsavedChanges && onSave) {
+      try {
+        await onSave();
+      } catch (error) {
+        console.error('Failed to autosave before navigation:', error);
+        // Continue navigation even if save fails
+      }
+    }
     navigate('/dashboard');
   };
 
@@ -81,6 +120,39 @@ const EditorHeader = ({
 
       {/* Right section - Navigation and Progress */}
       <div className="flex items-center space-x-4">
+        {/* WebSocket Connection Status */}
+        <div
+          className={`flex items-center space-x-1 px-2 py-1 rounded-md text-xs ${
+            isWebSocketConnected
+              ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20'
+              : 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20'
+          }`}
+          title={
+            isWebSocketConnected
+              ? t('websocket.connected')
+              : t('websocket.disconnected')
+          }
+        >
+          {isWebSocketConnected ? (
+            <Wifi className="h-3 w-3" />
+          ) : (
+            <WifiOff className="h-3 w-3" />
+          )}
+          <span className="hidden sm:inline">
+            {isWebSocketConnected ? t('status.online') : t('status.offline')}
+          </span>
+        </div>
+
+        {/* Segmentation Status Indicator */}
+        {imageId && (
+          <SegmentationStatusIndicator
+            imageId={imageId}
+            segmentationStatus={segmentationStatus}
+            lastUpdate={lastUpdate}
+            queuePosition={queueStats?.position}
+          />
+        )}
+
         {/* Progress indicator */}
         <div className="hidden md:flex items-center space-x-3">
           <div className="text-sm text-slate-600 dark:text-slate-300 flex items-center space-x-2">

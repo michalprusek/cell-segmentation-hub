@@ -8,23 +8,14 @@ import WebSocketManager from '@/services/webSocketManager';
 import type {
   QueueStats,
   SegmentationUpdate,
-} from '@/services/webSocketManager';
+  SegmentationStatusMessage,
+  QueueStatsMessage,
+  SegmentationCompletedMessage,
+  SegmentationFailedMessage,
+  WebSocketEventMap,
+} from '@/types/websocket';
 
-interface Notification {
-  type: string;
-  imageId: string;
-  projectId: string;
-  polygonCount: number;
-  timestamp: string;
-}
-
-interface SystemMessage {
-  type: 'info' | 'warning' | 'error';
-  message: string;
-  timestamp: string;
-}
-
-export type { QueueStats, SegmentationUpdate };
+export type { QueueStats, SegmentationUpdate } from '@/types/websocket';
 
 export const useSegmentationQueue = (projectId?: string) => {
   // Check if this hook should be disabled to avoid conflicts
