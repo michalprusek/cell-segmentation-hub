@@ -17,7 +17,7 @@ vi.mock('@/services/webSocketManager', () => ({
 
 describe('useSegmentationQueue', () => {
   const mockProjectId = 'test-project-123';
-  let mockListeners: Map<string, Set<Function>>;
+  let mockListeners: Map<string, Set<(data: any) => void>>;
 
   beforeEach(() => {
     vi.clearAllMocks();

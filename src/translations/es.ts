@@ -738,6 +738,8 @@ export default {
     disconnected: 'Desconectado del servidor',
     error: 'Error del servicio ML',
     ready: 'Listo para segmentación',
+    online: 'En línea',
+    offline: 'Fuera de línea',
   },
   queue: {
     title: 'Cola de Segmentación',
@@ -1555,6 +1557,8 @@ export default {
     reconnected: 'Conexión al servidor restaurada',
     reconnectFailed: 'Error al restaurar la conexión al servidor',
     connectionLost: 'Conexión al servidor perdida',
+    connected: 'Conectado a actualizaciones en tiempo real',
+    disconnected: 'Desconectado de actualizaciones en tiempo real',
   },
 
   // Visualización de métricas

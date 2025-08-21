@@ -719,6 +719,8 @@ export default {
     disconnected: 'Disconnected from server',
     error: 'ML service error',
     ready: 'Ready for segmentation',
+    online: 'Online',
+    offline: 'Offline',
   },
   queue: {
     title: 'Segmentation Queue',
@@ -1508,6 +1510,8 @@ export default {
     reconnected: 'Connection to server restored',
     reconnectFailed: 'Failed to restore connection to server',
     connectionLost: 'Connection to server lost',
+    connected: 'Connected to real-time updates',
+    disconnected: 'Disconnected from real-time updates',
   },
 
   // Context menu
