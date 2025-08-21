@@ -29,6 +29,13 @@ export enum VisualizationResult {
   ERROR = 'error'
 }
 
+interface PerformanceMetrics {
+  totalPolygons: number;
+  renderTime: number;
+  cacheHitRate: number;
+  warningThresholdExceeded: boolean;
+}
+
 export class VisualizationGenerator {
   private defaultOptions: VisualizationOptions = {
     showNumbers: true,
@@ -40,10 +47,16 @@ export class VisualizationGenerator {
     fontSize: 32,
     transparency: 0.3,
   };
+  
+  // Performance thresholds
+  private readonly WARN_POLYGON_COUNT = 1000;
+  private readonly ERROR_POLYGON_COUNT = 5000;
+  private readonly WARN_RENDER_TIME_MS = 5000;
+  private readonly ERROR_RENDER_TIME_MS = 30000;
 
   constructor() {
     // No complex font registration needed - use universal approach
-    logger.info('VisualizationGenerator initialized with universal number rendering', 'VisualizationGenerator');
+    logger.info('VisualizationGenerator initialized with universal number rendering and performance monitoring', 'VisualizationGenerator');
   }
 
   async generateVisualization(
@@ -53,6 +66,29 @@ export class VisualizationGenerator {
     options?: VisualizationOptions
   ): Promise<VisualizationResult> {
     const mergedOptions = { ...this.defaultOptions, ...options };
+    const startTime = Date.now();
+    const metrics: PerformanceMetrics = {
+      totalPolygons: polygons.length,
+      renderTime: 0,
+      cacheHitRate: 0,
+      warningThresholdExceeded: false
+    };
+
+    // Check polygon count thresholds
+    if (polygons.length > this.ERROR_POLYGON_COUNT) {
+      logger.error(
+        `Polygon count (${polygons.length}) exceeds error threshold (${this.ERROR_POLYGON_COUNT})`, 
+        new Error('Too many polygons'),
+        'VisualizationGenerator'
+      );
+      metrics.warningThresholdExceeded = true;
+    } else if (polygons.length > this.WARN_POLYGON_COUNT) {
+      logger.warn(
+        `High polygon count detected: ${polygons.length} polygons. Performance may be degraded.`,
+        'VisualizationGenerator'
+      );
+      metrics.warningThresholdExceeded = true;
+    }
 
     try {
       // Check if image is TIFF and convert to PNG if needed
@@ -95,10 +131,47 @@ export class VisualizationGenerator {
       const buffer = canvas.toBuffer('image/png');
       await writeFile(outputPath, buffer);
 
-      logger.info(`Visualization generated: ${outputPath}`, 'VisualizationGenerator');
+      // Calculate final metrics
+      metrics.renderTime = Date.now() - startTime;
+      const cacheStats = NUMBER_PATHS.getCacheStats();
+      metrics.cacheHitRate = cacheStats.hitRate;
+
+      // Check render time thresholds
+      if (metrics.renderTime > this.ERROR_RENDER_TIME_MS) {
+        logger.error(
+          `Render time (${metrics.renderTime}ms) exceeds error threshold (${this.ERROR_RENDER_TIME_MS}ms)`,
+          new Error('Render timeout'),
+          'VisualizationGenerator'
+        );
+      } else if (metrics.renderTime > this.WARN_RENDER_TIME_MS) {
+        logger.warn(
+          `Slow render detected: ${metrics.renderTime}ms for ${polygons.length} polygons`,
+          'VisualizationGenerator'
+        );
+      }
+
+      // Log performance metrics
+      logger.info(
+        `Visualization generated: ${outputPath} | Metrics: ${polygons.length} polygons in ${metrics.renderTime}ms (cache hit rate: ${(metrics.cacheHitRate * 100).toFixed(1)}%)`,
+        'VisualizationGenerator'
+      );
+
+      // Log detailed metrics for monitoring
+      if (polygons.length > 100) {
+        logger.debug(
+          `Performance details - Polygons: ${polygons.length}, Time: ${metrics.renderTime}ms, Cache hits: ${cacheStats.hits}, Cache misses: ${cacheStats.misses}`,
+          'VisualizationGenerator'
+        );
+      }
+
       return VisualizationResult.SUCCESS;
     } catch (error) {
-      logger.error(`Failed to generate visualization for ${imagePath}:`, error instanceof Error ? error : new Error(String(error)), 'VisualizationGenerator');
+      const renderTime = Date.now() - startTime;
+      logger.error(
+        `Failed to generate visualization for ${imagePath} after ${renderTime}ms:`,
+        error instanceof Error ? error : new Error(String(error)),
+        'VisualizationGenerator'
+      );
       return VisualizationResult.ERROR;
     }
   }

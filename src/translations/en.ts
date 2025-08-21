@@ -860,6 +860,7 @@ export default {
       'Specify how many micrometers equal one pixel to convert measurements',
     scalePlaceholder: 'e.g., 0.5 (1 pixel = 0.5 µm)',
     scaleUnit: 'µm/pixel',
+    scaleWarning: 'Note: Scale value seems unusually high. Please verify.',
     // Format options
     outputSettings: 'Output Settings',
     exportFormats: 'Export Formats',

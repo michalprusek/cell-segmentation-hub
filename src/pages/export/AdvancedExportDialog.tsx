@@ -208,17 +208,25 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                         value={exportOptions.pixelToMicrometerScale || ''}
                         onChange={e => {
                           const value = e.target.value;
+
+                          // Handle empty string
+                          if (value === '') {
+                            updateExportOptions({
+                              pixelToMicrometerScale: undefined,
+                            });
+                            return;
+                          }
+
                           const numValue = parseFloat(value);
 
-                          // Validate input: must be positive and within reasonable range
+                          // Validate input: reject NaN, enforce min 0.001 and max 1000
                           if (
-                            value === '' ||
-                            (numValue > 0 && numValue <= 1000)
+                            !isNaN(numValue) &&
+                            numValue >= 0.001 &&
+                            numValue <= 1000
                           ) {
                             updateExportOptions({
-                              pixelToMicrometerScale: value
-                                ? numValue
-                                : undefined,
+                              pixelToMicrometerScale: numValue,
                             });
                           }
                         }}
@@ -227,8 +235,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                       {exportOptions.pixelToMicrometerScale &&
                         exportOptions.pixelToMicrometerScale > 100 && (
                           <p className="text-xs text-amber-600">
-                            {t('export.scaleWarning') ||
-                              'Note: Scale value seems unusually high. Please verify.'}
+                            {t('export.scaleWarning')}
                           </p>
                         )}
                     </div>

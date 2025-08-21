@@ -898,6 +898,8 @@ export default {
       'Určete, kolik mikrometrů odpovídá jednomu pixelu pro převod měření',
     scalePlaceholder: 'např. 0,5 (1 pixel = 0,5 µm)',
     scaleUnit: 'µm/pixel',
+    scaleWarning:
+      'Poznámka: Hodnota měřítka se zdá být neobvykle vysoká. Prosím ověřte.',
     // Format options
     outputSettings: 'Nastavení výstupu',
     exportFormats: 'Formáty exportu',

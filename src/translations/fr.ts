@@ -888,6 +888,8 @@ export default {
       'Spécifiez combien de micromètres équivalent à un pixel pour convertir les mesures',
     scalePlaceholder: 'ex. 0,5 (1 pixel = 0,5 µm)',
     scaleUnit: 'µm/pixel',
+    scaleWarning:
+      "Remarque: La valeur d'échelle semble inhabituellement élevée. Veuillez vérifier.",
     // Format options
     outputSettings: 'Paramètres de Sortie',
     exportFormats: "Formats d'Exportation",
