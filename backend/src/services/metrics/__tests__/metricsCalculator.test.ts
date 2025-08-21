@@ -322,7 +322,7 @@ describe('MetricsCalculator', () => {
       await calculator.exportToCSV(mockMetrics, outputPathMicrometers, 2.0);
 
       // Read and verify the CSV headers
-      const fs = require('fs').promises;
+      const fs = await import('fs').then(m => m.promises);
       
       try {
         // Read pixels CSV header
