@@ -48,6 +48,11 @@ coverage/
 .nyc_output/
 
 # Security reports
+
+# Backup files
+*.bak
+*.tmp
+*~
 security-reports/
 
 # Database files

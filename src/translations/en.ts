@@ -1150,6 +1150,7 @@ export default {
       },
       segmenting: 'Segmenting image...',
       waitingInQueue: 'Waiting in queue',
+      reloadingSegmentation: 'Refreshing segmentation data...',
     },
 
     // Export Features section

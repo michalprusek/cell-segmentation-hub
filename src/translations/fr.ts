@@ -571,8 +571,6 @@ export default {
       deletePolygon: 'Supprimer le polygone',
       unknown: 'Inconnu',
     },
-    autosaveFailed:
-      'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
     modeDescription: {
       view: 'Naviguer et sélectionner les polygones',
       edit: 'Déplacer et modifier les sommets',
@@ -739,6 +737,9 @@ export default {
     disconnected: 'Déconnecté du serveur',
     error: 'Erreur du service ML',
     ready: 'Prêt pour la segmentation',
+    segmenting: "Segmentation de l'image...",
+    waitingInQueue: 'En attente dans la file',
+    reloadingSegmentation: 'Actualisation des données de segmentation...',
   },
   queue: {
     title: 'File de Segmentation',
@@ -1114,8 +1115,6 @@ export default {
         step4: 'Utilisez le panneau de droite',
         step5: 'Sauvegardez périodiquement',
       },
-      segmenting: "Segmentation de l'image...",
-      waitingInQueue: 'En attente dans la file',
     },
     exportFeatures: {
       title: "Fonctions d'Export",
