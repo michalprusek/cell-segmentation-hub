@@ -144,7 +144,7 @@ export class FormatConverter {
       // Add image to COCO images list
       imagesList.push({
         id: imageIdx + 1,
-        file_name: `image_${String(imageIdx + 1).padStart(3, '0')}.jpg`,
+        file_name: image.filename,
         width: image.width || 800,
         height: image.height || 600,
         date_captured: new Date().toISOString(),
@@ -339,7 +339,7 @@ export class FormatConverter {
       const imageData: JSONImageData = {
         id: image.id,
         index: imageIdx + 1,
-        filename: `image_${String(imageIdx + 1).padStart(3, '0')}.jpg`,
+        filename: image.filename,
         dimensions: {
           width: image.width || 800,
           height: image.height || 600,

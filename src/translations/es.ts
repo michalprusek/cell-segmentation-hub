@@ -875,6 +875,13 @@ export default {
     fontSize: 'Tamaño de Fuente',
     showNumbers: 'Mostrar números de polígonos',
     showLabels: 'Mostrar etiquetas',
+    // Scale conversion
+    scaleConversion: 'Conversión de Escala',
+    pixelToMicrometerScale: 'Escala Píxel a Micrómetro',
+    scaleDescription:
+      'Especifique cuántos micrómetros equivalen a un píxel para convertir mediciones',
+    scalePlaceholder: 'ej. 0,5 (1 píxel = 0,5 µm)',
+    scaleUnit: 'µm/píxel',
     // Format options
     outputSettings: 'Configuración de Salida',
     exportFormats: 'Formatos de Exportación',

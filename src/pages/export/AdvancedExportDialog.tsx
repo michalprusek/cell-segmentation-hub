@@ -174,6 +174,42 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> = ({
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-4 w-4" />
+                  {t('export.scaleConversion')}
+                </CardTitle>
+                <CardDescription>
+                  {t('export.scaleDescription')}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="scale-input">
+                    {t('export.pixelToMicrometerScale')} (
+                    {t('export.scaleUnit')})
+                  </Label>
+                  <Input
+                    id="scale-input"
+                    type="number"
+                    step="0.001"
+                    min="0"
+                    placeholder={t('export.scalePlaceholder')}
+                    value={exportOptions.pixelToMicrometerScale || ''}
+                    onChange={e =>
+                      updateExportOptions({
+                        pixelToMicrometerScale: e.target.value
+                          ? parseFloat(e.target.value)
+                          : undefined,
+                      })
+                    }
+                    className="w-full"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
                   <FileImage className="h-4 w-4" />
                   {t('export.selectedImages')}
                 </CardTitle>

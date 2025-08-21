@@ -21,6 +21,7 @@ export interface ExportOptions {
   metricsFormats?: ('excel' | 'csv' | 'json')[];
   includeDocumentation?: boolean;
   selectedImageIds?: string[];
+  pixelToMicrometerScale?: number;
 }
 
 interface ExportJob {

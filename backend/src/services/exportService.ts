@@ -29,6 +29,7 @@ export interface ExportOptions {
   metricsFormats?: ('excel' | 'csv' | 'json')[];
   includeDocumentation?: boolean;
   selectedImageIds?: string[];
+  pixelToMicrometerScale?: number;
 }
 
 // Define type for project with images and segmentation data
@@ -302,7 +303,8 @@ export class ExportService {
           project.images,
           exportDir,
           options.metricsFormats,
-          project.title
+          project.title,
+          options
         );
         this.updateJobProgress(jobId, 80);
       }
@@ -560,7 +562,8 @@ export class ExportService {
     images: ImageWithSegmentation[],
     exportDir: string,
     formats: string[],
-    _projectName: string
+    _projectName: string,
+    options?: ExportOptions
   ): Promise<void> {
     const metricsDir = path.join(exportDir, 'metrics');
     // Convert images to the format expected by metrics calculator
@@ -578,18 +581,23 @@ export class ExportService {
       } : undefined
     }));
     
-    const allMetrics = await this.metricsCalculator.calculateAllMetrics(metricsImages as Parameters<typeof this.metricsCalculator.calculateAllMetrics>[0]);
+    const allMetrics = await this.metricsCalculator.calculateAllMetrics(
+      metricsImages as Parameters<typeof this.metricsCalculator.calculateAllMetrics>[0],
+      options?.pixelToMicrometerScale
+    );
 
     for (const format of formats) {
       if (format === 'excel') {
         await this.metricsCalculator.exportToExcel(
           allMetrics,
-          path.join(metricsDir, 'metrics.xlsx')
+          path.join(metricsDir, 'metrics.xlsx'),
+          options?.pixelToMicrometerScale
         );
       } else if (format === 'csv') {
         await this.metricsCalculator.exportToCSV(
           allMetrics,
-          path.join(metricsDir, 'metrics.csv')
+          path.join(metricsDir, 'metrics.csv'),
+          options?.pixelToMicrometerScale
         );
       } else if (format === 'json') {
         await fs.writeFile(
@@ -626,7 +634,7 @@ export class ExportService {
     );
 
     // Generate metrics guide
-    const metricsGuide = this.generateMetricsGuide();
+    const metricsGuide = this.generateMetricsGuide(options);
     await fs.writeFile(path.join(docDir, 'metrics_guide.md'), metricsGuide);
   }
 
@@ -637,6 +645,9 @@ export class ExportService {
 - **Date**: ${new Date().toISOString()}
 - **Total Images**: ${project.images?.length || 0}
 - **Project ID**: ${project.id}
+${options.pixelToMicrometerScale && options.pixelToMicrometerScale > 0 
+  ? `- **Scale Conversion**: ${options.pixelToMicrometerScale} µm/pixel (measurements converted to micrometers)` 
+  : '- **Units**: All measurements in pixels'}
 
 ## Export Contents
 
@@ -677,19 +688,27 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 `;
   }
 
-  private generateMetricsGuide(): string {
-    return `# Metrics Guide
+  private generateMetricsGuide(options?: ExportOptions): string {
+    // Determine units based on scale
+    const isScaled = options?.pixelToMicrometerScale && options.pixelToMicrometerScale > 0;
+    const areaUnit = isScaled ? 'µm²' : 'pixels²';
+    const lengthUnit = isScaled ? 'µm' : 'pixels';
+    const scaleInfo = isScaled 
+      ? `\n## Scale Conversion\n\n- **Scale**: ${options.pixelToMicrometerScale} µm/pixel\n- **All linear measurements converted to micrometers**\n- **All area measurements converted to square micrometers**\n` 
+      : '\n## Units\n\n- **All measurements are in pixel units**\n';
 
+    return `# Metrics Guide
+${scaleInfo}
 ## Calculated Metrics
 
 ### Area
-- **Description**: Total area of the polygon in pixels²
+- **Description**: Total area of the polygon in ${areaUnit}
 - **Calculation**: Area of external polygon minus areas of all internal polygons (holes)
-- **Units**: pixels²
+- **Units**: ${areaUnit}
 
 ### Perimeter
 - **Description**: Total length of the polygon boundary
-- **Units**: pixels
+- **Units**: ${lengthUnit}
 
 ### Circularity
 - **Description**: Measure of how circular the shape is
@@ -699,7 +718,7 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 ### Equivalent Diameter
 - **Description**: Diameter of a circle with the same area
 - **Formula**: √(4 × Area / π)
-- **Units**: pixels
+- **Units**: ${lengthUnit}
 
 ### Feret Diameters
 - **Maximum**: Longest distance between any two points on the boundary

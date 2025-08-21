@@ -14,7 +14,14 @@ RUN apk add --no-cache \
     jpeg-dev \
     pango-dev \
     giflib-dev \
-    pixman-dev
+    pixman-dev \
+    fontconfig \
+    ttf-dejavu \
+    ttf-liberation \
+    font-noto
+
+# Refresh font cache
+RUN fc-cache -fv
 
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
