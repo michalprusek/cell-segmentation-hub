@@ -62,9 +62,27 @@ export class ImageService {
     const storage = getStorageProvider();
     const uploadedImages: ImageWithUrls[] = [];
 
-    // Verify project ownership
+    // Verify project ownership or share access
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, userId }
+      where: {
+        id: projectId,
+        OR: [
+          { userId }, // User owns the project
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  {
+                    sharedWith: { id: userId },
+                    status: 'accepted'
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
     });
 
     if (!project) {
@@ -165,9 +183,27 @@ export class ImageService {
     userId: string,
     options: ImageQueryParams
   ): Promise<PaginatedImages> {
-    // Verify project ownership
+    // Verify project ownership or share access
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, userId }
+      where: {
+        id: projectId,
+        OR: [
+          { userId }, // User owns the project
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  {
+                    sharedWith: { id: userId },
+                    status: 'accepted'
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
     });
 
     if (!project) {
@@ -242,7 +278,22 @@ export class ImageService {
       where: {
         id: imageId,
         project: {
-          userId
+          OR: [
+            { userId }, // User owns the project
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    {
+                      sharedWith: { id: userId },
+                      status: 'accepted'
+                    }
+                  ]
+                }
+              }
+            }
+          ]
         }
       },
       include: {
@@ -430,9 +481,27 @@ export class ImageService {
    * Get image statistics for a project
    */
   async getImageStats(projectId: string, userId: string): Promise<ImageStats> {
-    // Verify project ownership
+    // Verify project ownership or share access
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, userId }
+      where: {
+        id: projectId,
+        OR: [
+          { userId }, // User owns the project
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  {
+                    sharedWith: { id: userId },
+                    status: 'accepted'
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
     });
 
     if (!project) {

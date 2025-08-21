@@ -4,6 +4,24 @@ import { logger } from '../utils/logger';
 import * as EmailService from './emailService';
 import { User, ProjectShare, Project } from '@prisma/client';
 
+/**
+ * Escape HTML special characters to prevent XSS
+ */
+function escapeHtml(str: string | null | undefined): string {
+  if (!str) return '';
+  
+  const htmlEscapeMap: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+    '/': '&#x2F;'
+  };
+  
+  return str.replace(/[&<>"'\/]/g, char => htmlEscapeMap[char] || char);
+}
+
 export interface ShareByEmailData {
   email: string;
   message?: string;
@@ -48,17 +66,17 @@ export async function shareProjectByEmail(
       throw new Error('Cannot share project with yourself');
     }
 
-    // Check if already shared with this email
-    const existingShare = await prisma.projectShare.findFirst({
+    // Check if already accepted by this email (allow resending pending invitations)
+    const existingAcceptedShare = await prisma.projectShare.findFirst({
       where: {
         projectId,
         email: data.email,
-        status: { in: ['pending', 'accepted'] }
+        status: 'accepted'
       }
     });
 
-    if (existingShare) {
-      throw new Error('Project is already shared with this email');
+    if (existingAcceptedShare) {
+      throw new Error('Project is already shared with this user');
     }
 
     // Generate unique share token
@@ -138,7 +156,7 @@ export async function shareProjectByLink(
         sharedById,
         shareToken,
         tokenExpiry,
-        status: 'accepted' // Link shares are immediately active
+        status: 'pending' // Link shares start as pending until someone accepts them
       }
     });
 
@@ -197,6 +215,20 @@ export async function acceptShareInvitation(
       return { share, needsLogin: true };
     }
 
+    // Check if user already has access to this project
+    const existingAcceptedShare = await prisma.projectShare.findFirst({
+      where: {
+        projectId: share.projectId,
+        sharedWithId: userId,
+        status: 'accepted'
+      }
+    });
+
+    if (existingAcceptedShare) {
+      // User already has access, return the existing share
+      return { share: existingAcceptedShare, needsLogin: false };
+    }
+
     // Find user by email if this was an email invitation
     let targetUser = null;
     if (share.email) {
@@ -238,15 +270,24 @@ export async function acceptShareInvitation(
  */
 export async function getSharedProjects(userId: string): Promise<ShareWithDetails[]> {
   try {
+    // Fetch user email once
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    
+    const whereConditions: any[] = [
+      { sharedWithId: userId, status: 'accepted' }
+    ];
+    
+    // Only add email condition if user and email exist
+    if (user?.email) {
+      whereConditions.push({
+        email: user.email,
+        status: { in: ['pending', 'accepted'] }
+      });
+    }
+    
     const shares = await prisma.projectShare.findMany({
       where: {
-        OR: [
-          { sharedWithId: userId, status: 'accepted' },
-          { 
-            email: (await prisma.user.findUnique({ where: { id: userId } }))?.email,
-            status: { in: ['pending', 'accepted'] }
-          }
-        ]
+        OR: whereConditions
       },
       include: {
         project: true,
@@ -268,7 +309,7 @@ export async function getSharedProjects(userId: string): Promise<ShareWithDetail
 }
 
 /**
- * Get all shares for a specific project
+ * Get all shares for a specific project with enhanced details
  */
 export async function getProjectShares(
   projectId: string,
@@ -290,19 +331,26 @@ export async function getProjectShares(
     const shares = await prisma.projectShare.findMany({
       where: {
         projectId,
-        status: { not: 'revoked' }
+        status: { in: ['pending', 'accepted'] }
       },
       include: {
         project: true,
         sharedBy: true,
         sharedWith: true
       },
-      orderBy: {
-        createdAt: 'desc'
-      }
+      orderBy: [
+        { status: 'asc' }, // accepted first, then pending
+        { createdAt: 'desc' }
+      ]
     });
 
-    return shares as ShareWithDetails[];
+    // Add share URL to each share for frontend display
+    const sharesWithUrls = shares.map(share => ({
+      ...share,
+      shareUrl: `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`
+    }));
+
+    return sharesWithUrls as ShareWithDetails[];
   } catch (error) {
     logger.error('Failed to get project shares:', error as Error, 'SharingService', {
       projectId,
@@ -450,10 +498,28 @@ async function sendShareInvitationEmail(
   message?: string
 ): Promise<void> {
   try {
-    const acceptUrl = `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`;
+    // Validate FRONTEND_URL is configured
+    const frontendUrl = process.env.FRONTEND_URL;
+    if (!frontendUrl || frontendUrl.trim() === '') {
+      throw new Error('FRONTEND_URL environment variable is not configured');
+    }
+    
+    // Normalize frontend URL and encode token
+    const normalizedUrl = frontendUrl.trim().replace(/\/+$/, '');
+    const encodedToken = encodeURIComponent(share.shareToken);
+    const acceptUrl = `${normalizedUrl}/share/accept/${encodedToken}`;
+    
+    // Check if email exists (link shares may not have email)
+    if (!share.email) {
+      logger.warn('Cannot send email for link-only share', 'SharingService', {
+        shareId: share.id,
+        isLinkShare: true
+      });
+      return; // Skip email sending for link-only shares
+    }
     
     const emailOptions: EmailService.EmailServiceOptions = {
-      to: share.email!,
+      to: share.email,
       subject: `${share.sharedBy.email} shared a project with you - Cell Segmentation Platform`,
       html: generateShareInvitationHTML(share, acceptUrl, message),
       text: generateShareInvitationText(share, acceptUrl, message)
@@ -482,47 +548,233 @@ function generateShareInvitationHTML(
     <html>
     <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <style>
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-            .header { background: #2563eb; color: white; padding: 20px; text-align: center; }
-            .content { padding: 30px 20px; }
-            .project-info { background: #f8fafc; padding: 20px; border-radius: 8px; margin: 20px 0; }
-            .button { display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
-            .footer { border-top: 1px solid #e2e8f0; padding: 20px; font-size: 14px; color: #64748b; }
+            body { 
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #1a202c;
+                background-color: #f7fafc;
+                margin: 0;
+                padding: 0;
+            }
+            .wrapper {
+                background-color: #f7fafc;
+                padding: 40px 20px;
+            }
+            .container { 
+                max-width: 600px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 12px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+                overflow: hidden;
+            }
+            .header { 
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 40px 30px;
+                text-align: center;
+            }
+            .header h1 {
+                margin: 0;
+                font-size: 28px;
+                font-weight: 600;
+                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .header p {
+                margin: 10px 0 0 0;
+                opacity: 0.95;
+                font-size: 16px;
+            }
+            .content { 
+                padding: 40px 30px;
+            }
+            .greeting {
+                font-size: 18px;
+                color: #2d3748;
+                margin-bottom: 20px;
+            }
+            .project-card {
+                background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 25px;
+                margin: 30px 0;
+            }
+            .project-title {
+                font-size: 22px;
+                font-weight: 600;
+                color: #2d3748;
+                margin: 0 0 10px 0;
+            }
+            .project-description {
+                color: #4a5568;
+                margin: 10px 0;
+                line-height: 1.5;
+            }
+            .shared-by {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                margin-bottom: 25px;
+                padding: 15px;
+                background: #f8fafc;
+                border-radius: 8px;
+            }
+            .avatar {
+                width: 48px;
+                height: 48px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: white;
+                font-weight: 600;
+                font-size: 20px;
+            }
+            .shared-by-text {
+                flex: 1;
+            }
+            .shared-by-name {
+                font-weight: 600;
+                color: #2d3748;
+                font-size: 16px;
+            }
+            .shared-by-label {
+                color: #718096;
+                font-size: 14px;
+                margin-top: 2px;
+            }
+            .message-box {
+                background: #fef5e7;
+                border-left: 4px solid #f39c12;
+                padding: 20px;
+                margin: 25px 0;
+                border-radius: 6px;
+            }
+            .message-quote {
+                color: #2d3748;
+                font-style: italic;
+                font-size: 16px;
+                line-height: 1.6;
+            }
+            .button-container {
+                text-align: center;
+                margin: 35px 0;
+            }
+            .button { 
+                display: inline-block;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white !important;
+                padding: 14px 32px;
+                text-decoration: none;
+                border-radius: 8px;
+                font-weight: 600;
+                font-size: 16px;
+                box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);
+                transition: transform 0.2s, box-shadow 0.2s;
+            }
+            .button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
+            }
+            .url-box {
+                background: #f8fafc;
+                border: 1px solid #e2e8f0;
+                padding: 12px;
+                border-radius: 6px;
+                word-break: break-all;
+                font-family: 'Monaco', 'Menlo', monospace;
+                font-size: 13px;
+                color: #4a5568;
+                margin: 15px 0;
+            }
+            .footer { 
+                border-top: 2px solid #f0f4f8;
+                padding: 30px;
+                text-align: center;
+                background: #fafbfc;
+            }
+            .footer-logo {
+                font-size: 20px;
+                font-weight: 600;
+                color: #667eea;
+                margin-bottom: 10px;
+            }
+            .footer-text {
+                font-size: 14px;
+                color: #718096;
+                line-height: 1.5;
+            }
+            .footer-links {
+                margin-top: 20px;
+            }
+            .footer-link {
+                color: #667eea;
+                text-decoration: none;
+                margin: 0 10px;
+                font-size: 14px;
+            }
         </style>
     </head>
     <body>
-        <div class="container">
-            <div class="header">
-                <h1>Project Shared With You</h1>
-            </div>
-            <div class="content">
-                <p>Hello!</p>
-                <p><strong>${share.sharedBy.email}</strong> has shared a project with you on the Cell Segmentation Platform.</p>
-                
-                <div class="project-info">
-                    <h3>${share.project.title}</h3>
-                    ${share.project.description ? `<p>${share.project.description}</p>` : ''}
+        <div class="wrapper">
+            <div class="container">
+                <div class="header">
+                    <h1>🔬 Project Invitation</h1>
+                    <p>You've been invited to collaborate!</p>
                 </div>
-                
-                ${message ? `
-                <div style="border-left: 4px solid #2563eb; padding-left: 15px; margin: 20px 0;">
-                    <p><em>"${message}"</em></p>
+                <div class="content">
+                    <div class="greeting">Hello there! 👋</div>
+                    
+                    <div class="shared-by">
+                        <div class="avatar">${escapeHtml(share.sharedBy.email).charAt(0).toUpperCase()}</div>
+                        <div class="shared-by-text">
+                            <div class="shared-by-name">${escapeHtml(share.sharedBy.email)}</div>
+                            <div class="shared-by-label">invited you to collaborate</div>
+                        </div>
+                    </div>
+                    
+                    <div class="project-card">
+                        <div class="project-title">📁 ${escapeHtml(share.project.title)}</div>
+                        ${share.project.description ? `<div class="project-description">${escapeHtml(share.project.description)}</div>` : ''}
+                    </div>
+                    
+                    ${message ? `
+                    <div class="message-box">
+                        <div class="message-quote">"${escapeHtml(message)}"</div>
+                    </div>
+                    ` : ''}
+                    
+                    <p style="color: #4a5568; text-align: center; margin: 30px 0;">
+                        Join the Cell Segmentation Platform to start analyzing and collaborating on this project.
+                    </p>
+                    
+                    <div class="button-container">
+                        <a href="${acceptUrl}" class="button">Accept Invitation</a>
+                    </div>
+                    
+                    <p style="color: #718096; font-size: 14px; text-align: center;">
+                        Can't click the button? Copy this link to your browser:
+                    </p>
+                    <div class="url-box">${acceptUrl}</div>
+                    
+                    <p style="color: #a0aec0; font-size: 13px; text-align: center; margin-top: 25px;">
+                        This invitation link will remain active until you accept it or it's revoked by the sender.
+                    </p>
                 </div>
-                ` : ''}
-                
-                <p>Click the button below to accept the invitation and start collaborating:</p>
-                
-                <a href="${acceptUrl}" class="button">Accept Invitation</a>
-                
-                <p>Or copy and paste this link in your browser:</p>
-                <p style="word-break: break-all; background: #f1f5f9; padding: 10px; border-radius: 4px;">${acceptUrl}</p>
-                
-                <p>This invitation will remain valid until you accept it.</p>
-            </div>
-            <div class="footer">
-                <p>Best regards,<br>Cell Segmentation Platform Team</p>
+                <div class="footer">
+                    <div class="footer-logo">Cell Segmentation Platform</div>
+                    <div class="footer-text">
+                        Advancing cell analysis through collaboration
+                    </div>
+                    <div class="footer-links">
+                        <a href="${process.env.FRONTEND_URL}" class="footer-link">Visit Platform</a>
+                        <a href="${process.env.FRONTEND_URL}/help" class="footer-link">Get Help</a>
+                    </div>
+                </div>
             </div>
         </div>
     </body>

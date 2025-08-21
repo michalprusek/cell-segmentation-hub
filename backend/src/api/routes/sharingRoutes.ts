@@ -67,11 +67,11 @@ router.delete(
 );
 
 /**
- * GET /api/projects/shared
+ * GET /api/shared/projects
  * Get all projects shared with the current user
  */
 router.get(
-  '/projects/shared',
+  '/shared/projects',
   authenticate,
   getSharedProjects
 );

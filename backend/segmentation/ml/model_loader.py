@@ -237,10 +237,41 @@ class ModelLoader:
                 memory_before = torch.cuda.memory_allocated()
                 logger.info(f"GPU memory before inference: {memory_before / 1024**2:.1f} MB")
             
-            # Perform inference
+            # Perform inference with timeout
             logger.info(f"Starting inference with {model_name}")
-            with torch.no_grad():
-                output = model(input_tensor)
+            import signal
+            import threading
+            
+            output = None
+            inference_error = None
+            
+            def run_inference():
+                nonlocal output, inference_error
+                try:
+                    with torch.no_grad():
+                        output = model(input_tensor)
+                except Exception as e:
+                    inference_error = e
+            
+            # Run inference in a thread with timeout
+            inference_thread = threading.Thread(target=run_inference)
+            inference_thread.daemon = True
+            inference_thread.start()
+            
+            # Wait for inference with timeout (60 seconds for CPU inference)
+            timeout_seconds = 60
+            inference_thread.join(timeout=timeout_seconds)
+            
+            if inference_thread.is_alive():
+                logger.error(f"Inference timeout after {timeout_seconds}s for model {model_name}")
+                raise TimeoutError(f"Model inference timed out after {timeout_seconds} seconds. The model may be too complex for CPU inference.")
+            
+            if inference_error:
+                raise inference_error
+                
+            if output is None:
+                raise RuntimeError("Inference failed to produce output")
+                
             logger.info(f"Inference completed, output shape: {output.shape if not isinstance(output, tuple) else [o.shape for o in output]}")
             
             # Check memory after inference
@@ -255,12 +286,28 @@ class ModelLoader:
             # Postprocess
             binary_mask = self.postprocess_mask(output, original_size, threshold)
         
+            # If detect_holes is False, fill all holes in the binary mask
+            if not detect_holes:
+                # Create filled mask by flood-filling from edges
+                h, w = binary_mask.shape
+                filled_mask = binary_mask.copy()
+                
+                # Find all contours
+                temp_contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                # Fill all contours (this fills holes)
+                for contour in temp_contours:
+                    cv2.fillPoly(filled_mask, [contour], 255)
+                
+                binary_mask = filled_mask
+                logger.info("Holes detection disabled - filled all holes in binary mask")
+            
             # Find contours for polygon extraction with hierarchy
             if detect_holes:
                 # Use RETR_TREE to detect holes and internal structures
                 contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
             else:
-                # Use RETR_EXTERNAL to detect only external boundaries
+                # Use RETR_EXTERNAL to detect only external boundaries (holes already filled)
                 contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
             # Convert contours to polygons with hierarchy information

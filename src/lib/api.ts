@@ -749,7 +749,7 @@ class ApiClient {
       isShared: true;
     }>
   > {
-    const response = await this.instance.get('/projects/shared');
+    const response = await this.instance.get('/shared/projects');
     return this.extractData(response);
   }
 
@@ -927,7 +927,7 @@ class ApiClient {
       imageIds,
       model: model || 'hrnet',
       threshold: threshold || 0.5,
-      detectHoles: detectHoles !== undefined ? detectHoles : true,
+      detectHoles: detectHoles,
     });
     return this.extractData(response);
   }
@@ -1202,12 +1202,14 @@ class ApiClient {
     imageId: string,
     model?: string,
     threshold?: number,
-    priority?: number
+    priority?: number,
+    detectHoles?: boolean
   ): Promise<AddToQueueResponse> {
     const response = await this.instance.post(`/queue/images/${imageId}`, {
       model,
       threshold,
       priority,
+      detectHoles,
     });
     return this.extractData<AddToQueueResponse>(response);
   }
@@ -1218,7 +1220,8 @@ class ApiClient {
     model?: string,
     threshold?: number,
     priority?: number,
-    forceResegment?: boolean
+    forceResegment?: boolean,
+    detectHoles?: boolean
   ): Promise<BatchQueueResponse> {
     const response = await this.instance.post('/queue/batch', {
       imageIds,
@@ -1227,6 +1230,7 @@ class ApiClient {
       threshold,
       priority,
       forceResegment,
+      detectHoles,
     });
     return this.extractData<BatchQueueResponse>(response);
   }

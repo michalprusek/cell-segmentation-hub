@@ -137,6 +137,7 @@ model SegmentationQueue {
   userId      String
   model       String    @default("hrnet")
   threshold   Float     @default(0.5)
+  detectHoles Boolean   @default(true)
   priority    Int       @default(0)
   status      String    @default("queued")
   error       String?

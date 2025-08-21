@@ -164,7 +164,7 @@ export class SegmentationService {
    * Request segmentation for an image
    */
   async requestSegmentation(request: SegmentationRequest): Promise<SegmentationResponse> {
-    const { imageId, model = 'hrnet', threshold = 0.5, userId, detectHoles = true } = request;
+    const { imageId, model = 'hrnet', threshold = 0.5, userId, detectHoles } = request;
 
     logger.info('Starting segmentation request', 'SegmentationService', {
       imageId,
@@ -206,16 +206,17 @@ export class SegmentationService {
         model,
         threshold,
         detectHoles,
+        detectHoles,
         mlServiceUrl: this.pythonServiceUrl
       });
 
+      // Add model, threshold and detect_holes parameters to form data
+      formData.append('model', model);
+      formData.append('threshold', threshold.toString());
+      formData.append('detect_holes', detectHoles.toString());
+
       // Make request to Python segmentation service
       const response = await this.httpClient.post('/api/v1/segment', formData, {
-        params: {
-          model,
-          threshold,
-          detect_holes: detectHoles
-        },
         headers: {
           ...formData.getHeaders(),
         },
@@ -514,7 +515,8 @@ export class SegmentationService {
   async requestBatchSegmentation(
     images: ImageForSegmentation[], 
     model = 'hrnet', 
-    threshold = 0.5
+    threshold = 0.5,
+    detectHoles = true
   ): Promise<SegmentationResponse[]> {
     logger.info('Starting batch segmentation request', 'SegmentationService', {
       batchSize: images.length,
@@ -542,14 +544,16 @@ export class SegmentationService {
         });
       }
 
-      // Add model and threshold parameters
+      // Add model, threshold and detectHoles parameters
       formData.append('model', model);
       formData.append('threshold', threshold.toString());
+      formData.append('detect_holes', detectHoles.toString());
 
       logger.info('Sending batch segmentation request to ML service', 'SegmentationService', {
         batchSize: images.length,
         model,
         threshold,
+        detectHoles,
         mlServiceUrl: this.pythonServiceUrl
       });
 
@@ -997,7 +1001,7 @@ export class SegmentationService {
     model: 'hrnet' | 'resunet_advanced' | 'resunet_small' = 'hrnet',
     threshold = 0.5,
     userId: string,
-    detectHoles = true
+    detectHoles?: boolean
   ): Promise<{ successful: number; failed: number; results: Array<{ imageId: string; success: boolean; error?: string; result?: SegmentationResponse }> }> {
     const results = [];
     let successful = 0;

@@ -150,6 +150,18 @@ async def segment_image(
         
     except HTTPException:
         raise
+    except TimeoutError as e:
+        processing_time = time.time() - start_time
+        logger.error(f"Segmentation timeout after {processing_time:.2f}s: {e}")
+        raise HTTPException(
+            status_code=504, 
+            detail={
+                "error": "Model inference timeout",
+                "message": str(e),
+                "suggestion": "Try using a simpler model (hrnet) or reducing image size",
+                "processing_time": processing_time
+            }
+        )
     except Exception as e:
         processing_time = time.time() - start_time
         logger.error(f"Segmentation failed after {processing_time:.2f}s: {e}")
@@ -209,6 +221,20 @@ async def batch_segment_images(
                 
                 logger.info(f"Batch image {i+1} completed, found {len(result['polygons'])} polygons")
                 
+            except TimeoutError as e:
+                logger.error(f"Timeout processing batch image {i+1}: {file.filename}: {e}")
+                
+                # Add timeout error result
+                results.append({
+                    "filename": file.filename,
+                    "batch_index": i,
+                    "success": False,
+                    "error": "Inference timeout",
+                    "error_detail": str(e),
+                    "polygons": [],
+                    "model_used": model,
+                    "threshold_used": threshold
+                })
             except Exception as e:
                 logger.error(f"Failed to process batch image {i+1}: {file.filename}: {e}")
                 

@@ -191,21 +191,30 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
   try {
     const shares = await SharingService.getSharedProjects(req.user.id);
     
-    const formattedProjects = shares.map(share => ({
-      id: share.project.id,
-      title: share.project.title,
-      description: share.project.description,
-      createdAt: share.project.createdAt,
-      updatedAt: share.project.updatedAt,
-      owner: {
+    // Handle case when no shares exist
+    if (!shares || shares.length === 0) {
+      ResponseHelper.success(res, [], 'No shared projects found');
+      return;
+    }
+    
+    const formattedProjects = shares
+      .filter(share => share.project && share.sharedBy) // Filter out shares with missing data
+      .map(share => ({
+      project: {
+        id: share.project.id,
+        name: share.project.title, // Use 'name' for consistency with owned projects
+        title: share.project.title,
+        description: share.project.description,
+        createdAt: share.project.createdAt,
+        updatedAt: share.project.updatedAt,
+      },
+      sharedBy: {
         id: share.sharedBy.id,
         email: share.sharedBy.email
       },
-      share: {
-        id: share.id,
-        status: share.status,
-        sharedAt: share.createdAt
-      },
+      status: share.status,
+      shareId: share.id,
+      sharedAt: share.createdAt,
       isShared: true
     }));
 

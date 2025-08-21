@@ -153,7 +153,7 @@ test:
 # Test email configuration with MailHog
 test-email-mailhog:
 	@echo "📧 Testing email with MailHog..."
-	@echo "1. MailHog SMTP: http://localhost:1025"
+	@echo "1. MailHog SMTP: localhost:1025 (SMTP)"
 	@echo "2. MailHog Web UI: http://localhost:8025"
 	@echo "3. Configuration uses MailHog by default"
 	@echo "✅ Open http://localhost:8025 to see sent emails"
