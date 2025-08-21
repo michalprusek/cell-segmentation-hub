@@ -3,6 +3,7 @@ import { writeFile, readFile } from 'fs/promises';
 import sharp from 'sharp';
 import path from 'path';
 import { logger } from '../../utils/logger';
+import { NUMBER_PATHS } from './numberPaths';
 
 
 export interface VisualizationOptions {
@@ -28,6 +29,13 @@ export enum VisualizationResult {
   ERROR = 'error'
 }
 
+interface PerformanceMetrics {
+  totalPolygons: number;
+  renderTime: number;
+  cacheHitRate: number;
+  warningThresholdExceeded: boolean;
+}
+
 export class VisualizationGenerator {
   private defaultOptions: VisualizationOptions = {
     showNumbers: true,
@@ -39,6 +47,17 @@ export class VisualizationGenerator {
     fontSize: 32,
     transparency: 0.3,
   };
+  
+  // Performance thresholds
+  private readonly WARN_POLYGON_COUNT = 1000;
+  private readonly ERROR_POLYGON_COUNT = 5000;
+  private readonly WARN_RENDER_TIME_MS = 5000;
+  private readonly ERROR_RENDER_TIME_MS = 30000;
+
+  constructor() {
+    // No complex font registration needed - use universal approach
+    logger.info('VisualizationGenerator initialized with universal number rendering and performance monitoring', 'VisualizationGenerator');
+  }
 
   async generateVisualization(
     imagePath: string,
@@ -47,6 +66,30 @@ export class VisualizationGenerator {
     options?: VisualizationOptions
   ): Promise<VisualizationResult> {
     const mergedOptions = { ...this.defaultOptions, ...options };
+    const startTime = Date.now();
+    const metrics: PerformanceMetrics = {
+      totalPolygons: polygons.length,
+      renderTime: 0,
+      cacheHitRate: 0,
+      warningThresholdExceeded: false
+    };
+
+    // Check polygon count thresholds
+    if (polygons.length > this.ERROR_POLYGON_COUNT) {
+      logger.error(
+        `Polygon count (${polygons.length}) exceeds error threshold (${this.ERROR_POLYGON_COUNT})`, 
+        new Error('Too many polygons'),
+        'VisualizationGenerator'
+      );
+      metrics.warningThresholdExceeded = true;
+      throw new Error(`Polygon count (${polygons.length}) exceeds maximum threshold (${this.ERROR_POLYGON_COUNT}). Visualization aborted to prevent performance issues.`);
+    } else if (polygons.length > this.WARN_POLYGON_COUNT) {
+      logger.warn(
+        `High polygon count detected: ${polygons.length} polygons. Performance may be degraded.`,
+        'VisualizationGenerator'
+      );
+      metrics.warningThresholdExceeded = true;
+    }
 
     try {
       // Check if image is TIFF and convert to PNG if needed
@@ -89,10 +132,48 @@ export class VisualizationGenerator {
       const buffer = canvas.toBuffer('image/png');
       await writeFile(outputPath, buffer);
 
-      logger.info(`Visualization generated: ${outputPath}`, 'VisualizationGenerator');
+      // Calculate final metrics
+      metrics.renderTime = Date.now() - startTime;
+      const cacheStats = NUMBER_PATHS.getCacheStats();
+      metrics.cacheHitRate = cacheStats.hitRate;
+
+      // Check render time thresholds
+      if (metrics.renderTime > this.ERROR_RENDER_TIME_MS) {
+        logger.error(
+          `Render time (${metrics.renderTime}ms) exceeds error threshold (${this.ERROR_RENDER_TIME_MS}ms)`,
+          new Error('Render timeout'),
+          'VisualizationGenerator'
+        );
+        throw new Error(`Render timeout: renderTime ${metrics.renderTime}ms exceeds threshold ${this.ERROR_RENDER_TIME_MS}ms`);
+      } else if (metrics.renderTime > this.WARN_RENDER_TIME_MS) {
+        logger.warn(
+          `Slow render detected: ${metrics.renderTime}ms for ${polygons.length} polygons`,
+          'VisualizationGenerator'
+        );
+      }
+
+      // Log performance metrics
+      logger.info(
+        `Visualization generated: ${outputPath} | Metrics: ${polygons.length} polygons in ${metrics.renderTime}ms (cache hit rate: ${(metrics.cacheHitRate * 100).toFixed(1)}%)`,
+        'VisualizationGenerator'
+      );
+
+      // Log detailed metrics for monitoring
+      if (polygons.length > 100) {
+        logger.debug(
+          `Performance details - Polygons: ${polygons.length}, Time: ${metrics.renderTime}ms, Cache hits: ${cacheStats.hits}, Cache misses: ${cacheStats.misses}`,
+          'VisualizationGenerator'
+        );
+      }
+
       return VisualizationResult.SUCCESS;
     } catch (error) {
-      logger.error(`Failed to generate visualization for ${imagePath}:`, error instanceof Error ? error : new Error(String(error)), 'VisualizationGenerator');
+      const renderTime = Date.now() - startTime;
+      logger.error(
+        `Failed to generate visualization for ${imagePath} after ${renderTime}ms:`,
+        error instanceof Error ? error : new Error(String(error)),
+        'VisualizationGenerator'
+      );
       return VisualizationResult.ERROR;
     }
   }
@@ -156,41 +237,38 @@ export class VisualizationGenerator {
     // Calculate centroid
     const centroid = this.calculateCentroid(polygon.points);
 
-    // Set text style with larger, more visible font
-    const fontSize = options.fontSize ?? 32;
-    ctx.font = `bold ${fontSize}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-
-    const text = number.toString();
+    // Use geometric approach - draw numbers as simple shapes
+    const baseSize = Math.max(options.fontSize ?? 32, 24);
+    const radius = baseSize * 0.8; // Circle radius
     
-    // Draw white background circle for better contrast
-    const padding = 8;
-    const metrics = ctx.measureText(text);
-    const textWidth = metrics.width;
-    const textHeight = fontSize;
-    const radius = Math.max(textWidth, textHeight) / 2 + padding;
+    // Save context state
+    ctx.save();
     
-    // Draw semi-transparent white background circle
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    // Draw white background circle with strong border
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+    ctx.lineWidth = 3;
+    
     ctx.beginPath();
     ctx.arc(centroid.x, centroid.y, radius, 0, Math.PI * 2);
     ctx.fill();
-    
-    // Draw black outline for the circle
-    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-    ctx.lineWidth = 2;
     ctx.stroke();
     
-    // Draw the number with proper contrast
-    ctx.fillStyle = '#000000'; // Black text
-    ctx.strokeStyle = '#FFFFFF'; // White outline
-    ctx.lineWidth = 3; // Thinner outline
+    // Draw number using geometric shapes instead of text
+    ctx.fillStyle = 'rgba(0, 0, 0, 1.0)';
+    ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+    ctx.lineWidth = Math.max(3, baseSize * 0.08);
     
-    // Draw text with outline for maximum visibility
-    ctx.strokeText(text, centroid.x, centroid.y);
-    ctx.fillText(text, centroid.x, centroid.y);
+    // Use extracted number path definitions
+    NUMBER_PATHS.drawLargeNumber(ctx, number, centroid.x, centroid.y, baseSize * 0.5);
+    
+    // Restore context state
+    ctx.restore();
+    
+    // Log successful rendering for debugging
+    logger.debug(`Rendered polygon number ${number} at (${centroid.x.toFixed(1)}, ${centroid.y.toFixed(1)}) using geometric shapes`, 'VisualizationGenerator');
   }
+
 
   private drawVertices(
     ctx: CanvasRenderingContext2D,
@@ -207,22 +285,48 @@ export class VisualizationGenerator {
   }
 
   private calculateCentroid(points: Array<{ x: number; y: number }>): { x: number; y: number } {
+    // Validate input
+    if (!points || points.length === 0) {
+      logger.warn('Empty points array for centroid calculation', 'VisualizationGenerator');
+      return { x: 0, y: 0 };
+    }
+
+    // Filter out invalid points
+    const validPoints = points.filter(p => 
+      p && typeof p.x === 'number' && typeof p.y === 'number' && 
+      !isNaN(p.x) && !isNaN(p.y) && isFinite(p.x) && isFinite(p.y)
+    );
+
+    if (validPoints.length === 0) {
+      logger.warn('No valid points for centroid calculation', 'VisualizationGenerator');
+      return { x: 0, y: 0 };
+    }
+
+    // For very small polygons, use simple arithmetic mean
+    if (validPoints.length < 3) {
+      const meanX = validPoints.reduce((sum, p) => sum + p.x, 0) / validPoints.length;
+      const meanY = validPoints.reduce((sum, p) => sum + p.y, 0) / validPoints.length;
+      return { x: meanX, y: meanY };
+    }
+
     let area = 0;
     let cx = 0;
     let cy = 0;
 
-    for (let i = 0; i < points.length; i++) {
-      const j = (i + 1) % points.length;
-      const pointI = points[i];
-      const pointJ = points[j];
-      if (!pointI || !pointJ || typeof pointI.x !== 'number' || typeof pointI.y !== 'number' || 
-          typeof pointJ.x !== 'number' || typeof pointJ.y !== 'number') {
+    // Calculate polygon area and centroid using shoelace formula
+    for (let i = 0; i < validPoints.length; i++) {
+      const j = (i + 1) % validPoints.length;
+      const currentPoint = validPoints[i];
+      const nextPoint = validPoints[j];
+      
+      if (!currentPoint || !nextPoint) {
         continue;
       }
-      const xi = pointI.x;
-      const yi = pointI.y;
-      const xj = pointJ.x;
-      const yj = pointJ.y;
+      
+      const xi = currentPoint.x;
+      const yi = currentPoint.y;
+      const xj = nextPoint.x;
+      const yj = nextPoint.y;
 
       const a = xi * yj - xj * yi;
       area += a;
@@ -235,13 +339,22 @@ export class VisualizationGenerator {
     // Guard against division by zero for degenerate/collinear polygons
     if (Math.abs(area) < 1e-8) {
       // Return arithmetic mean of vertices as fallback
-      const meanX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
-      const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+      const meanX = validPoints.reduce((sum, p) => sum + p.x, 0) / validPoints.length;
+      const meanY = validPoints.reduce((sum, p) => sum + p.y, 0) / validPoints.length;
+      logger.debug(`Using arithmetic mean centroid for degenerate polygon: (${meanX.toFixed(1)}, ${meanY.toFixed(1)})`, 'VisualizationGenerator');
       return { x: meanX, y: meanY };
     }
     
     cx /= (6 * area);
     cy /= (6 * area);
+
+    // Validate result
+    if (!isFinite(cx) || !isFinite(cy)) {
+      const meanX = validPoints.reduce((sum, p) => sum + p.x, 0) / validPoints.length;
+      const meanY = validPoints.reduce((sum, p) => sum + p.y, 0) / validPoints.length;
+      logger.warn(`Invalid centroid calculated, using arithmetic mean: (${meanX.toFixed(1)}, ${meanY.toFixed(1)})`, 'VisualizationGenerator');
+      return { x: meanX, y: meanY };
+    }
 
     return { x: cx, y: cy };
   }

@@ -6,6 +6,7 @@ import path from 'path';
 import { URL } from 'url';
 import { logger } from '../../utils/logger';
 import { config } from '../../utils/config';
+import { SCALE_CONFIG, validateScale, getScaleValidationMessage, getScaleWarningMessage } from './scaleConfig';
 
 export interface PolygonMetrics {
   imageId: string;
@@ -86,10 +87,18 @@ export class MetricsCalculator {
   }
 
   /**
-   * Calculate metrics for all images
+   * Calculate metrics for all images with performance monitoring
    */
-  async calculateAllMetrics(images: ImageWithSegmentation[]): Promise<PolygonMetrics[]> {
+  async calculateAllMetrics(images: ImageWithSegmentation[], pixelToMicrometerScale?: number): Promise<PolygonMetrics[]> {
+    const startTime = Date.now();
     const allMetrics: PolygonMetrics[] = [];
+    let totalPolygonCount = 0;
+
+    // Performance thresholds
+    const WARN_POLYGON_COUNT = 1000;
+    const ERROR_POLYGON_COUNT = 5000;
+    const WARN_CALC_TIME_MS = 5000;
+    const ERROR_CALC_TIME_MS = 30000;
 
     for (let imageIdx = 0; imageIdx < images.length; imageIdx++) {
       const image = images[imageIdx];
@@ -99,10 +108,12 @@ export class MetricsCalculator {
         if (result.polygons) {
           try {
             const polygons = JSON.parse(result.polygons);
+            totalPolygonCount += polygons.length;
+            
             const imageMetrics = await this.calculateImageMetrics(
               polygons,
               image.id,
-              `image_${String(imageIdx + 1).padStart(3, '0')}.jpg`
+              image.name
             );
             allMetrics.push(...imageMetrics);
           } catch (parseError) {
@@ -116,6 +127,58 @@ export class MetricsCalculator {
           }
         }
       }
+    }
+
+    // Calculate performance metrics
+    const calcTime = Date.now() - startTime;
+    
+    // Check thresholds and log warnings
+    if (totalPolygonCount > ERROR_POLYGON_COUNT) {
+      this.logger.error(
+        `Polygon count (${totalPolygonCount}) exceeds error threshold (${ERROR_POLYGON_COUNT})`,
+        new Error('Too many polygons for metrics calculation'),
+        'MetricsCalculator'
+      );
+    } else if (totalPolygonCount > WARN_POLYGON_COUNT) {
+      this.logger.warn(
+        `High polygon count in metrics calculation: ${totalPolygonCount} polygons`,
+        'MetricsCalculator'
+      );
+    }
+
+    if (calcTime > ERROR_CALC_TIME_MS) {
+      this.logger.error(
+        `Metrics calculation time (${calcTime}ms) exceeds error threshold (${ERROR_CALC_TIME_MS}ms)`,
+        new Error('Metrics calculation timeout'),
+        'MetricsCalculator'
+      );
+    } else if (calcTime > WARN_CALC_TIME_MS) {
+      this.logger.warn(
+        `Slow metrics calculation: ${calcTime}ms for ${totalPolygonCount} polygons across ${images.length} images`,
+        'MetricsCalculator'
+      );
+    }
+
+    // Log performance summary
+    const polygonsPerSec = calcTime > 0 
+      ? (totalPolygonCount / (calcTime / 1000)).toFixed(0) 
+      : 'N/A';
+    this.logger.info(
+      `Metrics calculated: ${totalPolygonCount} polygons across ${images.length} images in ${calcTime}ms (${polygonsPerSec} polygons/sec)`,
+      'MetricsCalculator'
+    );
+
+    // Apply scale conversion if provided
+    if (pixelToMicrometerScale) {
+      if (pixelToMicrometerScale <= 0) {
+        const error = new Error(`Invalid scale value: ${pixelToMicrometerScale}. Scale must be greater than 0.`);
+        this.logger.error(
+          `Scale validation failed: ${error.message}`,
+          'MetricsCalculator'
+        );
+        throw error;
+      }
+      return this.applyScaleConversion(allMetrics, pixelToMicrometerScale);
     }
 
     return allMetrics;
@@ -331,10 +394,16 @@ export class MetricsCalculator {
    */
   async exportToExcel(
     metrics: PolygonMetrics[],
-    outputPath: string
+    outputPath: string,
+    pixelToMicrometerScale?: number
   ): Promise<void> {
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Polygon Metrics');
+
+    // Determine units based on scale
+    const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
+    const areaUnit = isScaled ? 'µm²' : 'px²';
+    const lengthUnit = isScaled ? 'µm' : 'px';
 
     // Add headers
     worksheet.columns = [
@@ -342,15 +411,15 @@ export class MetricsCalculator {
       { header: 'Image ID', key: 'imageId', width: 15 },
       { header: 'Polygon ID', key: 'polygonId', width: 10 },
       { header: 'Type', key: 'type', width: 10 },
-      { header: 'Area (px²)', key: 'area', width: 12 },
-      { header: 'Perimeter (px)', key: 'perimeter', width: 12 },
-      { header: 'Equivalent Diameter (px)', key: 'equivalentDiameter', width: 18 },
+      { header: `Area (${areaUnit})`, key: 'area', width: 12 },
+      { header: `Perimeter (${lengthUnit})`, key: 'perimeter', width: 12 },
+      { header: `Equivalent Diameter (${lengthUnit})`, key: 'equivalentDiameter', width: 18 },
       { header: 'Circularity', key: 'circularity', width: 10 },
-      { header: 'Feret Diameter Max (px)', key: 'feretDiameterMax', width: 18 },
-      { header: 'Feret Diameter Min (px)', key: 'feretDiameterMin', width: 18 },
+      { header: `Feret Diameter Max (${lengthUnit})`, key: 'feretDiameterMax', width: 18 },
+      { header: `Feret Diameter Min (${lengthUnit})`, key: 'feretDiameterMin', width: 18 },
       { header: 'Feret Aspect Ratio', key: 'feretAspectRatio', width: 15 },
-      { header: 'Major Axis Length (px)', key: 'lengthMajorDiameter', width: 18 },
-      { header: 'Minor Axis Length (px)', key: 'lengthMinorDiameter', width: 18 },
+      { header: `Major Axis Length (${lengthUnit})`, key: 'lengthMajorDiameter', width: 18 },
+      { header: `Minor Axis Length (${lengthUnit})`, key: 'lengthMinorDiameter', width: 18 },
       { header: 'Compactness', key: 'compactness', width: 12 },
       { header: 'Convexity', key: 'convexity', width: 10 },
       { header: 'Solidity', key: 'solidity', width: 10 },
@@ -398,7 +467,7 @@ export class MetricsCalculator {
 
     // Add summary sheet
     const summarySheet = workbook.addWorksheet('Summary');
-    const summaryData = this.generateSummaryStatistics(metrics);
+    const summaryData = this.generateSummaryStatistics(metrics, pixelToMicrometerScale);
     
     // Add summary data to the sheet
     summaryData.forEach((row, index) => {
@@ -433,20 +502,26 @@ export class MetricsCalculator {
    */
   async exportToCSV(
     metrics: PolygonMetrics[],
-    outputPath: string
+    outputPath: string,
+    pixelToMicrometerScale?: number
   ): Promise<void> {
+    // Determine units based on scale
+    const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
+    const areaUnit = isScaled ? 'µm²' : 'px²';
+    const lengthUnit = isScaled ? 'µm' : 'px';
+
     const csvStringifier = createObjectCsvStringifier({
       header: [
         { id: 'imageName', title: 'Image Name' },
         { id: 'imageId', title: 'Image ID' },
         { id: 'polygonId', title: 'Polygon ID' },
         { id: 'type', title: 'Type' },
-        { id: 'area', title: 'Area (px²)' },
-        { id: 'perimeter', title: 'Perimeter (px)' },
-        { id: 'equivalentDiameter', title: 'Equivalent Diameter (px)' },
+        { id: 'area', title: `Area (${areaUnit})` },
+        { id: 'perimeter', title: `Perimeter (${lengthUnit})` },
+        { id: 'equivalentDiameter', title: `Equivalent Diameter (${lengthUnit})` },
         { id: 'circularity', title: 'Circularity' },
-        { id: 'feretDiameterMax', title: 'Feret Diameter Max (px)' },
-        { id: 'feretDiameterMin', title: 'Feret Diameter Min (px)' },
+        { id: 'feretDiameterMax', title: `Feret Diameter Max (${lengthUnit})` },
+        { id: 'feretDiameterMin', title: `Feret Diameter Min (${lengthUnit})` },
         { id: 'feretAspectRatio', title: 'Feret Aspect Ratio' },
         { id: 'compactness', title: 'Compactness' },
         { id: 'convexity', title: 'Convexity' },
@@ -469,7 +544,7 @@ export class MetricsCalculator {
   /**
    * Generate summary statistics for metrics
    */
-  private generateSummaryStatistics(metrics: PolygonMetrics[]): SummaryStatisticsRow[] {
+  private generateSummaryStatistics(metrics: PolygonMetrics[], pixelToMicrometerScale?: number): SummaryStatisticsRow[] {
     const externalMetrics = metrics.filter(m => m.type === 'external');
     
     if (externalMetrics.length === 0) {
@@ -486,15 +561,20 @@ export class MetricsCalculator {
       avgSphericity: this.average(externalMetrics.map(m => m.sphericity)),
     };
 
+    // Determine units based on scale
+    const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
+    const areaUnit = isScaled ? 'µm²' : 'px²';
+    const lengthUnit = isScaled ? 'µm' : 'px';
+
     return [
       ['Summary Statistics'],
       [''],
       ['Metric', 'Value'],
       ['Total External Polygons', stats.count],
-      ['Average Area (px²)', stats.avgArea.toFixed(2)],
-      ['Minimum Area (px²)', stats.minArea.toFixed(2)],
-      ['Maximum Area (px²)', stats.maxArea.toFixed(2)],
-      ['Average Perimeter (px)', stats.avgPerimeter.toFixed(2)],
+      [`Average Area (${areaUnit})`, stats.avgArea.toFixed(2)],
+      [`Minimum Area (${areaUnit})`, stats.minArea.toFixed(2)],
+      [`Maximum Area (${areaUnit})`, stats.maxArea.toFixed(2)],
+      [`Average Perimeter (${lengthUnit})`, stats.avgPerimeter.toFixed(2)],
       ['Average Circularity', stats.avgCircularity.toFixed(4)],
       ['Average Sphericity', stats.avgSphericity.toFixed(4)],
     ];
@@ -666,5 +746,58 @@ export class MetricsCalculator {
     cy /= (6 * area);
 
     return { x: cx, y: cy };
+  }
+
+  /**
+   * Apply scale conversion to metrics with enhanced validation
+   */
+  private applyScaleConversion(metrics: PolygonMetrics[], scale: number): PolygonMetrics[] {
+    // Validate scale using enhanced validation
+    const validation = validateScale(scale);
+    
+    if (!validation.valid) {
+      this.logger.error(validation.error || 'Invalid scale value', new Error('Scale validation failed'), 'MetricsCalculator');
+      this.logger.info('Falling back to pixel units due to invalid scale', 'MetricsCalculator');
+      return metrics;
+    }
+    
+    if (validation.warning) {
+      this.logger.warn(validation.warning, 'MetricsCalculator');
+      
+      // Log additional context for debugging
+      this.logger.info(
+        `Scale conversion will proceed with ${scale} pixels/µm. ` +
+        `This will convert: 1 pixel = ${(1/scale).toFixed(4)} µm, ` +
+        `100x100 px area = ${(10000/(scale*scale)).toFixed(2)} µm²`,
+        'MetricsCalculator'
+      );
+    } else {
+      // Log normal scale application for valid common values
+      this.logger.info(
+        `Applying scale conversion: ${scale} pixels/µm (1 pixel = ${(1/scale).toFixed(4)} µm)`,
+        'MetricsCalculator'
+      );
+    }
+    
+    return metrics.map(metric => ({
+      ...metric,
+      // Convert area from px² to µm² (divide by scale²)
+      area: metric.area / (scale * scale),
+      // Convert linear measurements from px to µm (divide by scale)
+      perimeter: metric.perimeter / scale,
+      equivalentDiameter: metric.equivalentDiameter / scale,
+      feretDiameterMax: metric.feretDiameterMax / scale,
+      feretDiameterMaxOrthogonalDistance: metric.feretDiameterMaxOrthogonalDistance / scale,
+      feretDiameterMin: metric.feretDiameterMin / scale,
+      lengthMajorDiameterThroughCentroid: metric.lengthMajorDiameterThroughCentroid / scale,
+      lengthMinorDiameterThroughCentroid: metric.lengthMinorDiameterThroughCentroid / scale,
+      // Dimensionless ratios remain unchanged
+      circularity: metric.circularity,
+      feretAspectRatio: metric.feretAspectRatio,
+      compactness: metric.compactness,
+      convexity: metric.convexity,
+      solidity: metric.solidity,
+      sphericity: metric.sphericity,
+    }));
   }
 }
