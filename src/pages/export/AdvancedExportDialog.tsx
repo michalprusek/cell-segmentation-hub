@@ -711,17 +711,13 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
 
             <DialogFooter>
               <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={isExporting}
+                variant={isExporting ? 'destructive' : 'outline'}
+                onClick={isExporting ? cancelExport : onClose}
+                disabled={false}
               >
                 {t('export.cancel')}
               </Button>
-              {isExporting ? (
-                <Button onClick={cancelExport} variant="destructive">
-                  {t('export.cancel')}
-                </Button>
-              ) : (
+              {!isExporting && (
                 <Button onClick={handleExport} disabled={isExporting}>
                   <Download className="mr-2 h-4 w-4" />
                   {t('export.startExport')}

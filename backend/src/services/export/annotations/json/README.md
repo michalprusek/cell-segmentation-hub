@@ -284,6 +284,9 @@ To export enhanced annotations back from CVAT:
 
 ```python
 # coco_to_spheroseg_json.py
+import json
+from datetime import datetime
+
 def coco_to_spheroseg_json(coco_file, original_json, output_file):
     """Convert CVAT COCO export back to SpheroSeg JSON format"""
     
@@ -312,12 +315,21 @@ def coco_to_spheroseg_json(coco_file, original_json, output_file):
     # Process each image
     image_map = {img['id']: img for img in coco_data['images']}
     
+    # Build mapping of original image data for metadata preservation
+    original_image_map = {}
+    for orig_img in original_data.get('images', []):
+        # Map by file name for more reliable matching
+        original_image_map[orig_img.get('file_name')] = orig_img
+    
     for image_id, image_info in image_map.items():
         # Get annotations for this image
         image_annotations = [
             ann for ann in coco_data['annotations'] 
             if ann['image_id'] == image_id
         ]
+        
+        # Get original image metadata if it exists
+        original_image_metadata = original_image_map.get(image_info['file_name'], {})
         
         # Build image data
         image_data = {
@@ -327,6 +339,11 @@ def coco_to_spheroseg_json(coco_file, original_json, output_file):
             "height": image_info['height'],
             "polygons": []
         }
+        
+        # Merge any per-image metadata from original (scale, model defaults, etc.)
+        for key, value in original_image_metadata.items():
+            if key not in ['id', 'file_name', 'width', 'height', 'polygons']:
+                image_data[key] = value
         
         # Convert annotations back to polygons
         for ann in image_annotations:

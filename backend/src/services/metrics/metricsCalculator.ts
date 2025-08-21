@@ -169,7 +169,15 @@ export class MetricsCalculator {
     );
 
     // Apply scale conversion if provided
-    if (pixelToMicrometerScale && pixelToMicrometerScale > 0) {
+    if (pixelToMicrometerScale) {
+      if (pixelToMicrometerScale <= 0) {
+        const error = new Error(`Invalid scale value: ${pixelToMicrometerScale}. Scale must be greater than 0.`);
+        this.logger.error(
+          `Scale validation failed: ${error.message}`,
+          'MetricsCalculator'
+        );
+        throw error;
+      }
       return this.applyScaleConversion(allMetrics, pixelToMicrometerScale);
     }
 
@@ -773,16 +781,16 @@ export class MetricsCalculator {
     
     return metrics.map(metric => ({
       ...metric,
-      // Convert area from px² to µm²
-      area: metric.area * (scale * scale),
-      // Convert linear measurements from px to µm
-      perimeter: metric.perimeter * scale,
-      equivalentDiameter: metric.equivalentDiameter * scale,
-      feretDiameterMax: metric.feretDiameterMax * scale,
-      feretDiameterMaxOrthogonalDistance: metric.feretDiameterMaxOrthogonalDistance * scale,
-      feretDiameterMin: metric.feretDiameterMin * scale,
-      lengthMajorDiameterThroughCentroid: metric.lengthMajorDiameterThroughCentroid * scale,
-      lengthMinorDiameterThroughCentroid: metric.lengthMinorDiameterThroughCentroid * scale,
+      // Convert area from px² to µm² (divide by scale²)
+      area: metric.area / (scale * scale),
+      // Convert linear measurements from px to µm (divide by scale)
+      perimeter: metric.perimeter / scale,
+      equivalentDiameter: metric.equivalentDiameter / scale,
+      feretDiameterMax: metric.feretDiameterMax / scale,
+      feretDiameterMaxOrthogonalDistance: metric.feretDiameterMaxOrthogonalDistance / scale,
+      feretDiameterMin: metric.feretDiameterMin / scale,
+      lengthMajorDiameterThroughCentroid: metric.lengthMajorDiameterThroughCentroid / scale,
+      lengthMinorDiameterThroughCentroid: metric.lengthMinorDiameterThroughCentroid / scale,
       // Dimensionless ratios remain unchanged
       circularity: metric.circularity,
       feretAspectRatio: metric.feretAspectRatio,

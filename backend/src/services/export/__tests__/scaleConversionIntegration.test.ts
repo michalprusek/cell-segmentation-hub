@@ -131,30 +131,37 @@ describe('Scale Conversion Integration Tests', () => {
         }
       }];
 
-      for (const testCase of edgeCaseScales) {
-        const loggerSpy = vi.spyOn(metricsCalculator['logger'], 'warn');
-        
-        const metrics = await metricsCalculator.calculateAllMetrics(
-          mockImages as any,
-          testCase.value
-        );
-
-        if (testCase.shouldWarn) {
-          expect(loggerSpy).toHaveBeenCalledWith(
-            expect.stringContaining('scale'),
-            'MetricsCalculator'
+      // Create spy once before the loop
+      const loggerSpy = vi.spyOn(metricsCalculator['logger'], 'warn');
+      
+      try {
+        for (const testCase of edgeCaseScales) {
+          // Clear mock calls for each iteration
+          loggerSpy.mockClear();
+          
+          const metrics = await metricsCalculator.calculateAllMetrics(
+            mockImages as any,
+            testCase.value
           );
-        }
 
-        if (testCase.shouldFallback) {
-          // Should use pixel values when scale is invalid
-          expect(metrics[0].area).toBe(10000); // Original pixel area
-        } else {
-          // Should apply scale when valid
-          const expectedArea = 10000 * testCase.value * testCase.value;
-          expect(metrics[0].area).toBeCloseTo(expectedArea, 2);
+          if (testCase.shouldWarn) {
+            expect(loggerSpy).toHaveBeenCalledWith(
+              expect.stringContaining('scale'),
+              'MetricsCalculator'
+            );
+          }
+
+          if (testCase.shouldFallback) {
+            // Should use pixel values when scale is invalid
+            expect(metrics[0].area).toBe(10000); // Original pixel area
+          } else {
+            // Should apply scale when valid
+            const expectedArea = 10000 / (testCase.value * testCase.value);
+            expect(metrics[0].area).toBeCloseTo(expectedArea, 2);
+          }
         }
-        
+      } finally {
+        // Always restore the spy even if tests fail
         loggerSpy.mockRestore();
       }
     });

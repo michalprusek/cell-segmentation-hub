@@ -252,10 +252,32 @@ test.describe('Number Rendering Visual Regression', () => {
 
       await page.waitForSelector('canvas', { state: 'visible' });
 
-      // Get cache statistics via API
+      // Get cache statistics via API with error handling
       const cacheStats = await page.evaluate(async () => {
-        const response = await fetch('/api/visualization/cache-stats');
-        return response.json();
+        try {
+          const response = await fetch('/api/visualization/cache-stats');
+          if (!response.ok) {
+            throw new Error(
+              `Cache stats request failed: ${response.status} ${response.statusText}`
+            );
+          }
+          try {
+            return await response.json();
+          } catch (parseError) {
+            throw new Error(
+              `Failed to parse cache stats JSON: ${parseError.message}`
+            );
+          }
+        } catch (error) {
+          // Return default values on error
+          console.error('Failed to fetch cache stats:', error);
+          return {
+            hitRate: 0,
+            hits: 0,
+            misses: 0,
+            error: error.message,
+          };
+        }
       });
 
       // Cache hit rate should be high for repeated numbers
