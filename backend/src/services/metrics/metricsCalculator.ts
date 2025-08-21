@@ -86,10 +86,18 @@ export class MetricsCalculator {
   }
 
   /**
-   * Calculate metrics for all images
+   * Calculate metrics for all images with performance monitoring
    */
   async calculateAllMetrics(images: ImageWithSegmentation[], pixelToMicrometerScale?: number): Promise<PolygonMetrics[]> {
+    const startTime = Date.now();
     const allMetrics: PolygonMetrics[] = [];
+    let totalPolygonCount = 0;
+
+    // Performance thresholds
+    const WARN_POLYGON_COUNT = 1000;
+    const ERROR_POLYGON_COUNT = 5000;
+    const WARN_CALC_TIME_MS = 5000;
+    const ERROR_CALC_TIME_MS = 30000;
 
     for (let imageIdx = 0; imageIdx < images.length; imageIdx++) {
       const image = images[imageIdx];
@@ -99,6 +107,8 @@ export class MetricsCalculator {
         if (result.polygons) {
           try {
             const polygons = JSON.parse(result.polygons);
+            totalPolygonCount += polygons.length;
+            
             const imageMetrics = await this.calculateImageMetrics(
               polygons,
               image.id,
@@ -117,6 +127,42 @@ export class MetricsCalculator {
         }
       }
     }
+
+    // Calculate performance metrics
+    const calcTime = Date.now() - startTime;
+    
+    // Check thresholds and log warnings
+    if (totalPolygonCount > ERROR_POLYGON_COUNT) {
+      this.logger.error(
+        `Polygon count (${totalPolygonCount}) exceeds error threshold (${ERROR_POLYGON_COUNT})`,
+        new Error('Too many polygons for metrics calculation'),
+        'MetricsCalculator'
+      );
+    } else if (totalPolygonCount > WARN_POLYGON_COUNT) {
+      this.logger.warn(
+        `High polygon count in metrics calculation: ${totalPolygonCount} polygons`,
+        'MetricsCalculator'
+      );
+    }
+
+    if (calcTime > ERROR_CALC_TIME_MS) {
+      this.logger.error(
+        `Metrics calculation time (${calcTime}ms) exceeds error threshold (${ERROR_CALC_TIME_MS}ms)`,
+        new Error('Metrics calculation timeout'),
+        'MetricsCalculator'
+      );
+    } else if (calcTime > WARN_CALC_TIME_MS) {
+      this.logger.warn(
+        `Slow metrics calculation: ${calcTime}ms for ${totalPolygonCount} polygons across ${images.length} images`,
+        'MetricsCalculator'
+      );
+    }
+
+    // Log performance summary
+    this.logger.info(
+      `Metrics calculated: ${totalPolygonCount} polygons across ${images.length} images in ${calcTime}ms (${(totalPolygonCount / (calcTime / 1000)).toFixed(0)} polygons/sec)`,
+      'MetricsCalculator'
+    );
 
     // Apply scale conversion if provided
     if (pixelToMicrometerScale && pixelToMicrometerScale > 0) {

@@ -1,11 +1,188 @@
 import { CanvasRenderingContext2D } from 'canvas';
+import { logger } from '../../utils/logger';
 
 /**
- * Universal number rendering using geometric shapes
+ * Universal number rendering using geometric shapes with caching
  * This approach works across all environments without font dependencies
  */
+
+// Cache for rendered number paths to improve performance
+interface CachedPath {
+  path: any | null; // Path2D not available in node-canvas, use null
+  operations: Array<{ type: string; args: any[] }>;
+  lastAccessed: number;
+}
+
+class NumberPathCache {
+  private cache: Map<string, CachedPath> = new Map();
+  private maxCacheSize = 100; // Maximum number of cached entries
+  private cacheHits = 0;
+  private cacheMisses = 0;
+
+  /**
+   * Generate cache key for a number at a specific size
+   */
+  private getCacheKey(number: number, size: number): string {
+    // Round size to nearest integer to improve cache hits
+    const roundedSize = Math.round(size);
+    return `${number}-${roundedSize}`;
+  }
+
+  /**
+   * Get cached path operations or null if not cached
+   */
+  get(number: number, size: number): Array<{ type: string; args: any[] }> | null {
+    const key = this.getCacheKey(number, size);
+    const cached = this.cache.get(key);
+    
+    if (cached) {
+      cached.lastAccessed = Date.now();
+      this.cacheHits++;
+      
+      // Log cache performance periodically
+      if ((this.cacheHits + this.cacheMisses) % 100 === 0) {
+        const hitRate = (this.cacheHits / (this.cacheHits + this.cacheMisses) * 100).toFixed(1);
+        logger.debug(`Number path cache hit rate: ${hitRate}% (${this.cacheHits} hits, ${this.cacheMisses} misses)`, 'NumberPathCache');
+      }
+      
+      return cached.operations;
+    }
+    
+    this.cacheMisses++;
+    return null;
+  }
+
+  /**
+   * Store path operations in cache
+   */
+  set(number: number, size: number, operations: Array<{ type: string; args: any[] }>): void {
+    const key = this.getCacheKey(number, size);
+    
+    // Implement LRU eviction if cache is full
+    if (this.cache.size >= this.maxCacheSize) {
+      this.evictLeastRecentlyUsed();
+    }
+    
+    this.cache.set(key, {
+      path: null,
+      operations: operations,
+      lastAccessed: Date.now()
+    });
+  }
+
+  /**
+   * Evict least recently used entry from cache
+   */
+  private evictLeastRecentlyUsed(): void {
+    let oldestKey: string | null = null;
+    let oldestTime = Date.now();
+    
+    for (const [key, value] of this.cache.entries()) {
+      if (value.lastAccessed < oldestTime) {
+        oldestTime = value.lastAccessed;
+        oldestKey = key;
+      }
+    }
+    
+    if (oldestKey) {
+      this.cache.delete(oldestKey);
+    }
+  }
+
+  /**
+   * Clear the entire cache
+   */
+  clear(): void {
+    this.cache.clear();
+    this.cacheHits = 0;
+    this.cacheMisses = 0;
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getStats(): { hits: number; misses: number; size: number; hitRate: number } {
+    const total = this.cacheHits + this.cacheMisses;
+    return {
+      hits: this.cacheHits,
+      misses: this.cacheMisses,
+      size: this.cache.size,
+      hitRate: total > 0 ? this.cacheHits / total : 0
+    };
+  }
+}
+
+// Create singleton cache instance
+const pathCache = new NumberPathCache();
+
+/**
+ * Record canvas operations for caching
+ */
+class OperationRecorder {
+  operations: Array<{ type: string; args: any[] }> = [];
+
+  beginPath(): void {
+    this.operations.push({ type: 'beginPath', args: [] });
+  }
+
+  moveTo(x: number, y: number): void {
+    this.operations.push({ type: 'moveTo', args: [x, y] });
+  }
+
+  lineTo(x: number, y: number): void {
+    this.operations.push({ type: 'lineTo', args: [x, y] });
+  }
+
+  quadraticCurveTo(cpx: number, cpy: number, x: number, y: number): void {
+    this.operations.push({ type: 'quadraticCurveTo', args: [cpx, cpy, x, y] });
+  }
+
+  stroke(): void {
+    this.operations.push({ type: 'stroke', args: [] });
+  }
+
+  arc(x: number, y: number, radius: number, startAngle: number, endAngle: number): void {
+    this.operations.push({ type: 'arc', args: [x, y, radius, startAngle, endAngle] });
+  }
+
+  fill(): void {
+    this.operations.push({ type: 'fill', args: [] });
+  }
+
+  /**
+   * Replay recorded operations on a canvas context
+   */
+  replay(ctx: CanvasRenderingContext2D): void {
+    for (const op of this.operations) {
+      const method = (ctx as any)[op.type];
+      if (typeof method === 'function') {
+        method.apply(ctx, op.args);
+      }
+    }
+  }
+}
+
 export const NUMBER_PATHS = {
+  /**
+   * Draw a single digit with caching support
+   */
   drawDigit: (ctx: CanvasRenderingContext2D, digit: number, centerX: number, centerY: number, size: number): void => {
+    // Check cache first
+    const cachedOps = pathCache.get(digit, size);
+    if (cachedOps) {
+      // Replay cached operations
+      for (const op of cachedOps) {
+        const method = (ctx as any)[op.type];
+        if (typeof method === 'function') {
+          method.apply(ctx, op.args);
+        }
+      }
+      return;
+    }
+
+    // Record operations for caching
+    const recorder = new OperationRecorder();
+    
     const width = size * 0.6;
     const height = size;
     const strokeWidth = Math.max(2, size * 0.12);
@@ -22,112 +199,118 @@ export const NUMBER_PATHS = {
     
     switch (digit) {
       case 0:
-        ctx.beginPath();
-        ctx.moveTo(centerX, top);
-        ctx.quadraticCurveTo(right, top, right, middle);
-        ctx.quadraticCurveTo(right, bottom, centerX, bottom);
-        ctx.quadraticCurveTo(left, bottom, left, middle);
-        ctx.quadraticCurveTo(left, top, centerX, top);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(centerX, top);
+        recorder.quadraticCurveTo(right, top, right, middle);
+        recorder.quadraticCurveTo(right, bottom, centerX, bottom);
+        recorder.quadraticCurveTo(left, bottom, left, middle);
+        recorder.quadraticCurveTo(left, top, centerX, top);
+        recorder.stroke();
         break;
         
       case 1:
-        ctx.beginPath();
-        ctx.moveTo(centerX, top);
-        ctx.lineTo(centerX, bottom);
-        ctx.moveTo(centerX - width * 0.2, top + height * 0.15);
-        ctx.lineTo(centerX, top);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(centerX, top);
+        recorder.lineTo(centerX, bottom);
+        recorder.moveTo(centerX - width * 0.2, top + height * 0.15);
+        recorder.lineTo(centerX, top);
+        recorder.stroke();
         break;
         
       case 2:
-        ctx.beginPath();
-        ctx.moveTo(left, top + height * 0.25);
-        ctx.quadraticCurveTo(centerX, top, right, top + height * 0.25);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        ctx.lineTo(left, bottom - height * 0.1);
-        ctx.lineTo(right, bottom);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(left, top + height * 0.25);
+        recorder.quadraticCurveTo(centerX, top, right, top + height * 0.25);
+        recorder.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
+        recorder.lineTo(left, bottom - height * 0.1);
+        recorder.lineTo(right, bottom);
+        recorder.stroke();
         break;
         
       case 3:
-        ctx.beginPath();
-        ctx.moveTo(left, top + height * 0.2);
-        ctx.quadraticCurveTo(centerX, top, right, top + height * 0.25);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        ctx.moveTo(centerX, middle);
-        ctx.quadraticCurveTo(right, middle + height * 0.1, right, bottom - height * 0.25);
-        ctx.quadraticCurveTo(centerX, bottom, left, bottom - height * 0.2);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(left, top + height * 0.2);
+        recorder.quadraticCurveTo(centerX, top, right, top + height * 0.25);
+        recorder.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
+        recorder.moveTo(centerX, middle);
+        recorder.quadraticCurveTo(right, middle + height * 0.1, right, bottom - height * 0.25);
+        recorder.quadraticCurveTo(centerX, bottom, left, bottom - height * 0.2);
+        recorder.stroke();
         break;
         
       case 4:
-        ctx.beginPath();
-        ctx.moveTo(left + width * 0.2, top);
-        ctx.lineTo(left + width * 0.2, middle);
-        ctx.lineTo(right, middle);
-        ctx.moveTo(right - width * 0.2, top);
-        ctx.lineTo(right - width * 0.2, bottom);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(left + width * 0.2, top);
+        recorder.lineTo(left + width * 0.2, middle);
+        recorder.lineTo(right, middle);
+        recorder.moveTo(right - width * 0.2, top);
+        recorder.lineTo(right - width * 0.2, bottom);
+        recorder.stroke();
         break;
         
       case 5:
-        ctx.beginPath();
-        ctx.moveTo(right, top);
-        ctx.lineTo(left, top);
-        ctx.lineTo(left, middle - height * 0.1);
-        ctx.quadraticCurveTo(centerX, middle - height * 0.1, right, middle + height * 0.1);
-        ctx.quadraticCurveTo(right, bottom - height * 0.1, centerX, bottom);
-        ctx.lineTo(left, bottom - height * 0.2);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(right, top);
+        recorder.lineTo(left, top);
+        recorder.lineTo(left, middle - height * 0.1);
+        recorder.quadraticCurveTo(centerX, middle - height * 0.1, right, middle + height * 0.1);
+        recorder.quadraticCurveTo(right, bottom - height * 0.1, centerX, bottom);
+        recorder.lineTo(left, bottom - height * 0.2);
+        recorder.stroke();
         break;
         
       case 6:
-        ctx.beginPath();
-        ctx.moveTo(right - width * 0.2, top);
-        ctx.quadraticCurveTo(left, top, left, middle);
-        ctx.quadraticCurveTo(left, bottom, centerX, bottom);
-        ctx.quadraticCurveTo(right, bottom, right, middle + height * 0.1);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        ctx.lineTo(left, middle);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(right - width * 0.2, top);
+        recorder.quadraticCurveTo(left, top, left, middle);
+        recorder.quadraticCurveTo(left, bottom, centerX, bottom);
+        recorder.quadraticCurveTo(right, bottom, right, middle + height * 0.1);
+        recorder.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
+        recorder.lineTo(left, middle);
+        recorder.stroke();
         break;
         
       case 7:
-        ctx.beginPath();
-        ctx.moveTo(left, top);
-        ctx.lineTo(right, top);
-        ctx.lineTo(centerX, bottom);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(left, top);
+        recorder.lineTo(right, top);
+        recorder.lineTo(centerX, bottom);
+        recorder.stroke();
         break;
         
       case 8:
-        ctx.beginPath();
+        recorder.beginPath();
         // Top circle
-        ctx.moveTo(left, top + height * 0.2);
-        ctx.quadraticCurveTo(centerX, top, right, top + height * 0.2);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        ctx.quadraticCurveTo(left, middle - height * 0.1, left, top + height * 0.2);
+        recorder.moveTo(left, top + height * 0.2);
+        recorder.quadraticCurveTo(centerX, top, right, top + height * 0.2);
+        recorder.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
+        recorder.quadraticCurveTo(left, middle - height * 0.1, left, top + height * 0.2);
         // Bottom circle
-        ctx.moveTo(left, middle + height * 0.1);
-        ctx.quadraticCurveTo(left, bottom, centerX, bottom);
-        ctx.quadraticCurveTo(right, bottom, right, middle + height * 0.1);
-        ctx.quadraticCurveTo(right, middle + height * 0.1, centerX, middle);
-        ctx.stroke();
+        recorder.moveTo(left, middle + height * 0.1);
+        recorder.quadraticCurveTo(left, bottom, centerX, bottom);
+        recorder.quadraticCurveTo(right, bottom, right, middle + height * 0.1);
+        recorder.quadraticCurveTo(right, middle + height * 0.1, centerX, middle);
+        recorder.stroke();
         break;
         
       case 9:
-        ctx.beginPath();
-        ctx.moveTo(centerX, middle);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, right, top + height * 0.2);
-        ctx.quadraticCurveTo(right, top, centerX, top);
-        ctx.quadraticCurveTo(left, top, left, middle - height * 0.1);
-        ctx.quadraticCurveTo(left, middle + height * 0.1, centerX, middle);
-        ctx.lineTo(right, middle);
-        ctx.quadraticCurveTo(right, bottom, left + width * 0.2, bottom);
-        ctx.stroke();
+        recorder.beginPath();
+        recorder.moveTo(centerX, middle);
+        recorder.quadraticCurveTo(right, middle - height * 0.1, right, top + height * 0.2);
+        recorder.quadraticCurveTo(right, top, centerX, top);
+        recorder.quadraticCurveTo(left, top, left, middle - height * 0.1);
+        recorder.quadraticCurveTo(left, middle + height * 0.1, centerX, middle);
+        recorder.lineTo(right, middle);
+        recorder.quadraticCurveTo(right, bottom, left + width * 0.2, bottom);
+        recorder.stroke();
         break;
     }
+    
+    // Cache the operations
+    pathCache.set(digit, size, recorder.operations);
+    
+    // Apply the operations to the actual context
+    recorder.replay(ctx);
   },
   
   /**
@@ -138,6 +321,20 @@ export const NUMBER_PATHS = {
       NUMBER_PATHS.drawDigit(ctx, number, centerX, centerY, size);
       return;
     }
+    
+    // Check cache for large numbers too
+    const cachedOps = pathCache.get(number, size);
+    if (cachedOps) {
+      for (const op of cachedOps) {
+        const method = (ctx as any)[op.type];
+        if (typeof method === 'function') {
+          method.apply(ctx, op.args);
+        }
+      }
+      return;
+    }
+    
+    const recorder = new OperationRecorder();
     
     if (number <= 99) {
       // Draw two digits side by side
@@ -170,9 +367,9 @@ export const NUMBER_PATHS = {
         const dotX = centerX + Math.cos(angle) * dotRadius;
         const dotY = centerY + Math.sin(angle) * dotRadius;
         
-        ctx.beginPath();
-        ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
-        ctx.fill();
+        recorder.beginPath();
+        recorder.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
+        recorder.fill();
       }
       
       // Draw abbreviated number in center if space allows
@@ -195,6 +392,23 @@ export const NUMBER_PATHS = {
         ctx.fillText(displayText, centerX, centerY);
         ctx.restore();
       }
+      
+      // Cache operations for large numbers if they're common (e.g., 1000, 2000, etc.)
+      if (number % 100 === 0 || number % 1000 === 0) {
+        pathCache.set(number, size, recorder.operations);
+      }
+      
+      recorder.replay(ctx);
     }
-  }
+  },
+  
+  /**
+   * Get cache statistics for monitoring
+   */
+  getCacheStats: () => pathCache.getStats(),
+  
+  /**
+   * Clear the cache (useful for testing)
+   */
+  clearCache: () => pathCache.clear()
 };

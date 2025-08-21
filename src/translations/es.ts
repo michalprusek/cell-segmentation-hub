@@ -882,6 +882,8 @@ export default {
       'Especifique cuántos micrómetros equivalen a un píxel para convertir mediciones',
     scalePlaceholder: 'ej. 0,5 (1 píxel = 0,5 µm)',
     scaleUnit: 'µm/píxel',
+    scaleWarning:
+      'Nota: El valor de escala parece inusualmente alto. Por favor verifique.',
     // Format options
     outputSettings: 'Configuración de Salida',
     exportFormats: 'Formatos de Exportación',

@@ -814,6 +814,7 @@ export default {
     scaleDescription: '指定一个像素等于多少微米来转换测量值',
     scalePlaceholder: '例如 0.5 (1像素 = 0.5µm)',
     scaleUnit: 'µm/像素',
+    scaleWarning: '注意：比例值似乎异常高。请验证。',
     // Format options
     outputSettings: '输出设置',
     exportFormats: '导出格式',
