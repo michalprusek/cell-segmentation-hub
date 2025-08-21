@@ -11,6 +11,27 @@ import {
  * Polygon slicing functionality inspired by SpheroSeg
  */
 
+function computeAndPushIntersection(
+  intersections: Array<{ point: Point; edgeIndex: number; t: number }>,
+  intersectionPoint: Point,
+  points: Point[],
+  edgeIndex: number
+): void {
+  const j = (edgeIndex + 1) % points.length;
+  // Calculate parameter t along the edge for sorting intersections
+  const edgeLength = Math.sqrt(
+    Math.pow(points[j].x - points[edgeIndex].x, 2) +
+      Math.pow(points[j].y - points[edgeIndex].y, 2)
+  );
+  const intersectionDist = Math.sqrt(
+    Math.pow(intersectionPoint.x - points[edgeIndex].x, 2) +
+      Math.pow(intersectionPoint.y - points[edgeIndex].y, 2)
+  );
+  const t = edgeLength > 0 ? intersectionDist / edgeLength : 0;
+
+  intersections.push({ point: intersectionPoint, edgeIndex, t });
+}
+
 /**
  * Slices a polygon along a line defined by two points
  * @param polygon The polygon to slice
@@ -43,18 +64,7 @@ export function slicePolygon(
     );
 
     if (intersection) {
-      // Calculate parameter t along the edge for sorting intersections
-      const edgeLength = Math.sqrt(
-        Math.pow(points[j].x - points[i].x, 2) +
-          Math.pow(points[j].y - points[i].y, 2)
-      );
-      const intersectionDist = Math.sqrt(
-        Math.pow(intersection.x - points[i].x, 2) +
-          Math.pow(intersection.y - points[i].y, 2)
-      );
-      const t = edgeLength > 0 ? intersectionDist / edgeLength : 0;
-
-      intersections.push({ point: intersection, edgeIndex: i, t });
+      computeAndPushIntersection(intersections, intersection, points, i);
     }
   }
 
@@ -72,18 +82,7 @@ export function slicePolygon(
       );
 
       if (intersection) {
-        // Calculate parameter t along the edge for sorting intersections
-        const edgeLength = Math.sqrt(
-          Math.pow(points[j].x - points[i].x, 2) +
-            Math.pow(points[j].y - points[i].y, 2)
-        );
-        const intersectionDist = Math.sqrt(
-          Math.pow(intersection.x - points[i].x, 2) +
-            Math.pow(intersection.y - points[i].y, 2)
-        );
-        const t = edgeLength > 0 ? intersectionDist / edgeLength : 0;
-
-        intersections.push({ point: intersection, edgeIndex: i, t });
+        computeAndPushIntersection(intersections, intersection, points, i);
       }
     }
   }

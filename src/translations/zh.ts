@@ -1043,6 +1043,7 @@ export default {
       },
       segmenting: '正在分割图像...',
       waitingInQueue: '在队列中等待',
+      reloadingSegmentation: '刷新分割数据...',
     },
     exportFeatures: {
       title: '导出功能',

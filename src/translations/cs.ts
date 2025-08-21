@@ -1165,6 +1165,7 @@ export default {
       },
       segmenting: 'Segmentování obrázku...',
       waitingInQueue: 'Čekání ve frontě',
+      reloadingSegmentation: 'Obnovování dat segmentace...',
     },
 
     // Export Features section

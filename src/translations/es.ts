@@ -570,7 +570,8 @@ export default {
       deletePolygon: 'Eliminar polígono',
       unknown: 'Desconocido',
     },
-    autosaveFailed: 'Autosave failed - changes may be lost',
+    autosaveFailed:
+      'Error en guardado automático - los cambios pueden perderse',
     modeDescription: {
       view: 'Navegar y seleccionar polígonos',
       edit: 'Mover y modificar vértices',
@@ -1174,6 +1175,7 @@ export default {
       },
       segmenting: 'Segmentando imagen...',
       waitingInQueue: 'Esperando en la cola',
+      reloadingSegmentation: 'Actualizando datos de segmentación...',
     },
 
     // Export Features section

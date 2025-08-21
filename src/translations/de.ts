@@ -577,7 +577,8 @@ export default {
       deletePolygon: 'Polygon löschen',
       unknown: 'Unbekannt',
     },
-    autosaveFailed: 'Autosave failed - changes may be lost',
+    autosaveFailed:
+      'Automatisches Speichern fehlgeschlagen – Änderungen können verloren gehen',
     modeDescription: {
       view: 'Navigieren und Polygone auswählen',
       edit: 'Eckpunkte bewegen und modifizieren',
@@ -1125,6 +1126,7 @@ export default {
       },
       segmenting: 'Bild wird segmentiert...',
       waitingInQueue: 'Wartend in der Warteschlange',
+      reloadingSegmentation: 'Aktualisierung der Segmentierungsdaten...',
     },
     exportFeatures: {
       title: 'Export-Funktionen',

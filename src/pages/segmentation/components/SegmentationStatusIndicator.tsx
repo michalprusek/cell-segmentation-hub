@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
   Loader2,
@@ -67,80 +67,91 @@ const getStatusInfo = (status: string, t: (key: string) => string) => {
   }
 };
 
-export const SegmentationStatusIndicator: React.FC<
-  SegmentationStatusIndicatorProps
-> = ({ imageId, segmentationStatus, lastUpdate, queuePosition, className }) => {
-  const { t } = useLanguage();
+export const SegmentationStatusIndicator: React.FC<SegmentationStatusIndicatorProps> =
+  React.memo(
+    ({ imageId, segmentationStatus, lastUpdate, queuePosition, className }) => {
+      const { t } = useLanguage();
 
-  // Determine the current status to display
-  let currentStatus = segmentationStatus;
+      // Memoize status calculation for performance
+      const currentStatus = useMemo(() => {
+        // If we have a recent update for this specific image, use its status
+        if (lastUpdate && lastUpdate.imageId === imageId) {
+          return lastUpdate.status;
+        }
+        return segmentationStatus;
+      }, [lastUpdate, imageId, segmentationStatus]);
 
-  // If we have a recent update for this specific image, use its status
-  if (lastUpdate && lastUpdate.imageId === imageId) {
-    currentStatus = lastUpdate.status;
-  }
+      // Memoize visibility check
+      const shouldShow = useMemo(() => {
+        return !!(
+          currentStatus &&
+          ['processing', 'queued', 'failed', 'no_segmentation'].includes(
+            currentStatus
+          )
+        );
+      }, [currentStatus]);
 
-  // Don't show indicator if no active segmentation status
-  if (
-    !currentStatus ||
-    !['processing', 'queued', 'failed', 'no_segmentation'].includes(
-      currentStatus
-    )
-  ) {
-    return null;
-  }
+      // Memoize status info to prevent unnecessary recalculations
+      const statusInfo = useMemo(() => {
+        return currentStatus ? getStatusInfo(currentStatus, t) : null;
+      }, [currentStatus, t]);
 
-  const statusInfo = getStatusInfo(currentStatus, t);
-  if (!statusInfo) return null;
+      if (!shouldShow || !statusInfo) {
+        return null;
+      }
 
-  const StatusIcon = statusInfo.icon;
+      const StatusIcon = statusInfo.icon;
 
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
-      className={cn('flex items-center space-x-2', className)}
-    >
-      <Badge
-        className={cn(
-          'flex items-center gap-2 text-xs font-medium',
-          statusInfo.className
-        )}
-      >
-        <StatusIcon
-          className={cn('h-3 w-3', statusInfo.animate && 'animate-spin')}
-        />
-        <span>{statusInfo.label}</span>
-        {queuePosition !== undefined &&
-          queuePosition > 0 &&
-          currentStatus === 'queued' && (
-            <span className="text-xs opacity-75">(#{queuePosition})</span>
+      return (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.2 }}
+          className={cn('flex items-center space-x-2', className)}
+        >
+          <Badge
+            className={cn(
+              'flex items-center gap-2 text-xs font-medium',
+              statusInfo.className
+            )}
+          >
+            <StatusIcon
+              className={cn('h-3 w-3', statusInfo.animate && 'animate-spin')}
+            />
+            <span>{statusInfo.label}</span>
+            {queuePosition !== undefined &&
+              queuePosition > 0 &&
+              currentStatus === 'queued' && (
+                <span className="text-xs opacity-75">(#{queuePosition})</span>
+              )}
+          </Badge>
+
+          {/* Additional processing details */}
+          {currentStatus === 'processing' && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-xs text-gray-600 dark:text-gray-400"
+            >
+              {t('segmentationEditor.segmenting')}
+            </motion.div>
           )}
-      </Badge>
-
-      {/* Additional processing details */}
-      {currentStatus === 'processing' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-xs text-gray-600 dark:text-gray-400"
-        >
-          {t('segmentationEditor.segmenting')}
+          {currentStatus === 'queued' && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="text-xs text-gray-600 dark:text-gray-400"
+            >
+              {t('segmentationEditor.waitingInQueue')}
+            </motion.div>
+          )}
         </motion.div>
-      )}
-      {currentStatus === 'queued' && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-xs text-gray-600 dark:text-gray-400"
-        >
-          {t('segmentationEditor.waitingInQueue')}
-        </motion.div>
-      )}
-    </motion.div>
+      );
+    }
   );
-};
+
+// Display name for debugging
+SegmentationStatusIndicator.displayName = 'SegmentationStatusIndicator';
 
 export default SegmentationStatusIndicator;

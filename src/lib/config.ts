@@ -14,8 +14,11 @@ function validateEnvVar(name: string, value: string | undefined): string {
 
 const config: AppConfig = {
   apiBaseUrl: validateEnvVar(
-    'VITE_API_BASE_URL',
-    import.meta.env.VITE_API_BASE_URL || `${import.meta.env.VITE_API_URL}/api`
+    'VITE_API_BASE_URL - API base URL for backend communication',
+    import.meta.env.VITE_API_BASE_URL ||
+      (import.meta.env.VITE_API_URL
+        ? `${import.meta.env.VITE_API_URL}/api`
+        : undefined)
   ),
   mlServiceUrl: validateEnvVar(
     'VITE_ML_SERVICE_URL',
