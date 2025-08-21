@@ -22,6 +22,7 @@ from models.resunet_small import ResUNetSmall
 MAX_IMAGE_WIDTH = 2048
 MAX_IMAGE_HEIGHT = 2048
 MAX_MEMORY_GB = 4.0
+ML_FALLBACK_TIMEOUT = 300  # 5 minutes as absolute maximum safety net
 
 logger = logging.getLogger(__name__)
 

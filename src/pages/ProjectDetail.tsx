@@ -64,12 +64,18 @@ const ProjectDetail = () => {
 
   // Unified segmentation update handling - no dependency on queueStats
   const handleUnifiedUpdate = useCallback((update: any) => {
-    logger.debug(
-      `🔄 Processing unified update for image ${update.imageId.slice(0, 8)}`,
+    // ENHANCED DEBUG LOGGING
+    logger.warn(
+      `🟡 PROJECT DETAIL Processing update for ${update.imageId.slice(0, 8)}`,
       {
         status: update.status,
         hasSegmentationResult: !!update.segmentationResult,
         hasThumbnailData: !!update.thumbnailData,
+        segmentationResultKeys: update.segmentationResult
+          ? Object.keys(update.segmentationResult)
+          : [],
+        polygonCount: update.segmentationResult?.polygonCount,
+        timestamp: new Date().toISOString(),
       }
     );
 
