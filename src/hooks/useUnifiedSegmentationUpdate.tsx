@@ -276,7 +276,7 @@ export const useUnifiedSegmentationUpdate = ({
    */
   const handleQueueStatsUpdate = useCallback((stats: QueueStats) => {
     if (
-      !currentProjectRef.current ||
+      currentProjectRef.current &&
       stats.projectId === currentProjectRef.current
     ) {
       setQueueStats(stats);
@@ -386,8 +386,21 @@ export const useUnifiedSegmentationUpdate = ({
       logger.debug('Joining project room for unified updates:', projectId);
     }
 
-    wsManagerRef.current.joinProject(projectId);
-    wsManagerRef.current.requestQueueStats(projectId);
+    // Capture the projectId for cleanup
+    const currentProjectId = projectId;
+
+    wsManagerRef.current.joinProject(currentProjectId);
+    wsManagerRef.current.requestQueueStats(currentProjectId);
+
+    // Cleanup function to leave the project on unmount or when projectId changes
+    return () => {
+      if (wsManagerRef.current && currentProjectId) {
+        if (process.env.NODE_ENV === 'development') {
+          logger.debug('Leaving project room:', currentProjectId);
+        }
+        wsManagerRef.current.leaveProject(currentProjectId);
+      }
+    };
   }, [projectId, isConnected, enabled]);
 
   // Functions for external control

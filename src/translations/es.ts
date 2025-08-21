@@ -628,6 +628,8 @@ export default {
     status: {
       polygons: 'Polígonos',
       polygonList: 'Lista de Polígonos',
+      external: 'Externo',
+      internal: 'Interno',
       selected: 'Seleccionado',
       vertices: 'vértices',
       zoom: 'Zoom',
