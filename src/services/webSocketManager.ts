@@ -260,15 +260,36 @@ class WebSocketManager {
 
     // Data events
     this.socket.on('segmentation-update', (update: SegmentationUpdate) => {
+      // ENHANCED DEBUG LOGGING
+      logger.warn('🔴 SEGMENTATION UPDATE RECEIVED:', {
+        imageId: update.imageId,
+        status: update.status,
+        hasSegmentationResult: !!(update as any).segmentationResult,
+        segmentationResultKeys: (update as any).segmentationResult
+          ? Object.keys((update as any).segmentationResult)
+          : [],
+        polygonCount: (update as any).segmentationResult?.polygonCount,
+        timestamp: new Date().toISOString(),
+      });
+
       if (process.env.NODE_ENV === 'development') {
-        logger.debug('Segmentation update received:', update);
+        logger.debug('Full segmentation update:', update);
       }
       this.emitToListeners('segmentation-update', update);
     });
 
     this.socket.on('thumbnail:updated', (thumbnailUpdate: any) => {
+      // ENHANCED DEBUG LOGGING
+      logger.warn('🟢 THUMBNAIL UPDATE RECEIVED:', {
+        imageId: thumbnailUpdate.imageId,
+        hasThumbnailData: !!thumbnailUpdate.thumbnailData,
+        polygonCount: thumbnailUpdate.thumbnailData?.polygonCount,
+        levelOfDetail: thumbnailUpdate.thumbnailData?.levelOfDetail,
+        timestamp: new Date().toISOString(),
+      });
+
       if (process.env.NODE_ENV === 'development') {
-        logger.debug('Thumbnail update received:', thumbnailUpdate);
+        logger.debug('Full thumbnail update:', thumbnailUpdate);
       }
       this.emitToListeners('thumbnail:updated', thumbnailUpdate);
     });

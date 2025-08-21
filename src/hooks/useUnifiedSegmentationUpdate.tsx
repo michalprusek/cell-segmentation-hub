@@ -131,12 +131,18 @@ export const useUnifiedSegmentationUpdate = ({
         return;
       }
 
-      logger.debug(
-        `🔄 Processing segmentation update for ${update.imageId.slice(0, 8)}`,
+      // ENHANCED DEBUG LOGGING
+      logger.warn(
+        `🔵 UNIFIED HOOK Processing update for ${update.imageId.slice(0, 8)}`,
         {
           status: update.status,
           projectId: update.projectId,
           hasSegmentationResult: !!update.segmentationResult,
+          segmentationResultKeys: update.segmentationResult
+            ? Object.keys(update.segmentationResult)
+            : [],
+          polygonCount: update.segmentationResult?.polygonCount,
+          timestamp: new Date().toISOString(),
         }
       );
 

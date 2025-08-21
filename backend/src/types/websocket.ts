@@ -371,6 +371,20 @@ export function isSegmentationStatusData(data: unknown): data is SegmentationSta
 }
 
 /**
+ * Type guard for SegmentationUpdateData
+ */
+export function isSegmentationUpdateData(data: unknown): data is SegmentationUpdateData {
+  if (typeof data !== 'object' || data === null) return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.imageId === 'string' &&
+    typeof d.projectId === 'string' &&
+    typeof d.status === 'string' &&
+    ['queued', 'processing', 'completed', 'failed', 'cancelled', 'no_segmentation'].includes(d.status as string)
+  );
+}
+
+/**
  * Type guard for QueueStatsData
  */
 export function isQueueStatsData(data: unknown): data is QueueStatsData {
@@ -379,8 +393,40 @@ export function isQueueStatsData(data: unknown): data is QueueStatsData {
   return (
     typeof d.queued === 'number' &&
     typeof d.processing === 'number' &&
-    typeof d.completed === 'number' &&
-    typeof d.failed === 'number'
+    typeof d.total === 'number'
+  );
+}
+
+/**
+ * Type guard for SegmentationCompletedData
+ */
+export function isSegmentationCompletedData(data: unknown): data is SegmentationCompletedData {
+  if (typeof data !== 'object' || data === null) return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.imageId === 'string' &&
+    typeof d.projectId === 'string' &&
+    typeof d.segmentationId === 'string' &&
+    typeof d.polygonCount === 'number' &&
+    typeof d.processingTime === 'number' &&
+    typeof d.model === 'string' &&
+    ['hrnet', 'resunet_advanced', 'resunet_small'].includes(d.model as string)
+  );
+}
+
+/**
+ * Type guard for SegmentationFailedData
+ */
+export function isSegmentationFailedData(data: unknown): data is SegmentationFailedData {
+  if (typeof data !== 'object' || data === null) return false;
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.imageId === 'string' &&
+    typeof d.projectId === 'string' &&
+    typeof d.queueId === 'string' &&
+    typeof d.error === 'string' &&
+    typeof d.model === 'string' &&
+    typeof d.retryable === 'boolean'
   );
 }
 
@@ -407,6 +453,9 @@ export default {
   getProjectRoom,
   getBatchRoom,
   isSegmentationStatusData,
+  isSegmentationUpdateData,
+  isSegmentationCompletedData,
+  isSegmentationFailedData,
   isQueueStatsData,
   isWebSocketMessage
 };
