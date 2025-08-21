@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { thumbnailCache } from '@/lib/thumbnailCache';
-import { useThumbnailUpdates } from './useThumbnailUpdates';
+import { useUnifiedSegmentationUpdate } from './useUnifiedSegmentationUpdate';
 import { logger } from '@/lib/logger';
 import type { ProjectImage } from '@/types';
 
@@ -153,14 +153,16 @@ export const useOptimizedProjectImages = ({
     gcTime: 10 * 60 * 1000, // 10 minutes
   });
 
-  // Handle real-time thumbnail updates
-  const handleThumbnailUpdate = useCallback(
+  // Handle real-time unified segmentation updates
+  const handleUnifiedUpdate = useCallback(
     (update: any) => {
       if (update.projectId !== projectId) return;
 
-      logger.debug('🔄 Processing real-time thumbnail update', {
+      logger.debug('🔄 Processing real-time unified update in optimized hook', {
         imageId: update.imageId,
-        levelOfDetail: update.thumbnailData.levelOfDetail,
+        status: update.status,
+        hasSegmentationResult: !!update.segmentationResult,
+        hasThumbnailData: !!update.thumbnailData,
       });
 
       // Update local images map
@@ -169,18 +171,32 @@ export const useOptimizedProjectImages = ({
         const existingImage = updated.get(update.imageId);
 
         if (existingImage) {
-          updated.set(update.imageId, {
-            ...existingImage,
-            segmentationResult: {
-              polygons: update.thumbnailData.polygons,
-              imageWidth: existingImage.width || 0,
-              imageHeight: existingImage.height || 0,
-              levelOfDetail: update.thumbnailData.levelOfDetail,
-              polygonCount: update.thumbnailData.polygonCount,
-              pointCount: update.thumbnailData.pointCount,
-              compressionRatio: update.thumbnailData.compressionRatio,
-            },
-          });
+          // Use segmentation result or thumbnail data
+          const resultData = update.segmentationResult || update.thumbnailData;
+
+          if (resultData) {
+            updated.set(update.imageId, {
+              ...existingImage,
+              segmentationStatus: update.status,
+              segmentationResult: {
+                polygons: resultData.polygons || [],
+                imageWidth: resultData.imageWidth || existingImage.width || 0,
+                imageHeight:
+                  resultData.imageHeight || existingImage.height || 0,
+                levelOfDetail: resultData.levelOfDetail || levelOfDetail,
+                polygonCount:
+                  resultData.polygonCount || resultData.polygons?.length || 0,
+                pointCount: resultData.pointCount || 0,
+                compressionRatio: resultData.compressionRatio || 1,
+              },
+            });
+          } else {
+            // Just update status if no result data
+            updated.set(update.imageId, {
+              ...existingImage,
+              segmentationStatus: update.status,
+            });
+          }
         }
 
         return updated;
@@ -189,13 +205,13 @@ export const useOptimizedProjectImages = ({
       // Invalidate React Query cache to trigger background refetch
       queryClient.invalidateQueries({ queryKey });
     },
-    [projectId, queryClient, queryKey]
+    [projectId, queryClient, queryKey, levelOfDetail]
   );
 
-  // Set up real-time updates
-  useThumbnailUpdates({
+  // Set up real-time updates using unified hook
+  useUnifiedSegmentationUpdate({
     projectId,
-    onThumbnailUpdate: handleThumbnailUpdate,
+    onImageUpdate: handleUnifiedUpdate,
     enabled,
   });
 

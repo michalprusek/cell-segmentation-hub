@@ -4,8 +4,8 @@ uvicorn[standard]==0.24.0
 python-multipart==0.0.18
 
 # Deep learning frameworks
-torch==2.7.1
-torchvision==0.18.1
+torch==2.1.1
+torchvision==0.16.1
 
 # Image processing
 opencv-python-headless==4.8.1.78
@@ -32,3 +32,6 @@ faker==20.1.0
 
 # Production deployment
 gunicorn==23.0.0
+
+# System monitoring
+psutil==5.9.6

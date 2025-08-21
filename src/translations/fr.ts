@@ -48,6 +48,8 @@ export default {
     notifications: 'Notifications',
     passwordConfirm: 'Confirmer le mot de passe',
     manageAccount: 'Gérer votre compte',
+    getStarted: 'Commencer',
+    learnMore: 'En savoir plus',
     documentation: 'Documentation',
     changePassword: 'Changer le mot de passe',
     deleteAccount: 'Supprimer le compte',
@@ -66,9 +68,17 @@ export default {
     // Navigation
     next: 'Suivant',
     copy: 'Copier',
+    close: 'Fermer',
     noImage: 'Aucune image',
     untitledImage: 'Image sans titre',
     rename: 'Renommer',
+    // Alt text for accessibility
+    logoAlt: 'SpheroSeg Logo',
+    segmentedSpheroidAlt: 'Sphéroïde segmenté',
+    segmentationTargetAlt: 'Cible de segmentation',
+    spheroidExampleAlt: 'Exemple de sphéroïde segmenté',
+    spheroidImageAlt: 'Image microscopique de sphéroïde',
+    spheroidAnalysisImageAlt: 'Image microscopique de sphéroïde avec analyse',
   },
   landing: {
     hero: {
@@ -189,6 +199,8 @@ export default {
     },
     selectProjectHeader: 'Sélectionner un Projet',
     noProjects: 'Aucun projet trouvé',
+    selected: '{{count}} sélectionné',
+    deleteSelected: 'Supprimer sélectionnés',
   },
   errors: {
     noProjectOrUser: 'Erreur : Aucun projet ou utilisateur sélectionné',
@@ -303,6 +315,9 @@ export default {
     processImageFailed: "Échec du traitement de l'image",
   },
   settings: {
+    pageTitle: 'Paramètres',
+    profile: 'Profil',
+    account: 'Compte',
     manageSettings: 'Gérer vos préférences de compte',
     appearance: 'Apparence',
     themeSettings: 'Paramètres du thème',
@@ -338,6 +353,7 @@ export default {
     currentPassword: 'Mot de passe actuel',
     newPassword: 'Nouveau mot de passe',
     confirmNewPassword: 'Confirmer le nouveau mot de passe',
+    models: 'Modèles',
     modelSelection: {
       title: 'Sélection de modèle',
       description:
@@ -457,6 +473,7 @@ export default {
     passwordPlaceholder: '••••••••',
     signingIn: 'Connexion en cours...',
     redirectingToDashboard: 'Redirection vers le tableau de bord...',
+    redirectingToSignIn: 'Redirection vers la connexion...',
     fillAllFields: 'Veuillez remplir tous les champs',
     // Toast messages
     signInSuccess: 'Connexion réussie',
@@ -499,6 +516,7 @@ export default {
     backToSignIn: 'Retour à la connexion',
     didntReceiveEmail: "Vous n'avez pas reçu l'email ?",
     rememberPassword: 'Vous vous souvenez de votre mot de passe ?',
+    tryAgain: 'Réessayer',
   },
   profile: {
     title: 'Profil',
@@ -543,6 +561,10 @@ export default {
     createdProject: 'A créé le projet',
     completedSegmentation: 'A terminé la segmentation pour',
     uploadedImage: "A téléchargé l'image",
+    noBioProvided: 'Aucune biographie fournie',
+    notSpecified: 'Non spécifié',
+    defaultTitle: 'Chercheur',
+    defaultOrganization: 'Institut de Recherche',
     avatar: {
       uploadButton: 'Télécharger Avatar',
       selectFile: "Sélectionner l'image d'avatar",
@@ -616,6 +638,11 @@ export default {
       noPolygons: 'Aucun polygone',
       startCreating: 'Commencez par créer un polygone',
       polygonList: 'Liste des Polygones',
+      external: 'Externe',
+      internal: 'Interne',
+      zoom: 'Zoom',
+      mode: 'Mode',
+      unsavedChanges: 'Modifications non sauvegardées',
     },
     shortcuts: {
       buttonText: 'Raccourcis',
@@ -742,9 +769,6 @@ export default {
     ready: 'Prêt pour la segmentation',
     online: 'En ligne',
     offline: 'Hors ligne',
-    segmenting: "Segmentation de l'image...",
-    waitingInQueue: 'En attente dans la file',
-    reloadingSegmentation: 'Actualisation des données de segmentation...',
   },
   queue: {
     title: 'File de Segmentation',
@@ -786,6 +810,12 @@ export default {
     somethingWentWrongPage:
       "Quelque chose s'est mal passé lors du chargement de cette page.",
     returnToHome: "Retour à l'Accueil",
+    // Segmentation error boundary
+    segmentationError: 'Erreur de Segmentation',
+    segmentationErrorDescription:
+      "Une erreur s'est produite lors du chargement des données de segmentation. Cela peut être dû à des problèmes de réseau ou de serveur.",
+    errorDetails: "Détails de l'Erreur",
+    tryAgain: 'Réessayer',
     // Success messages
     operationCompleted: 'Opération terminée avec succès',
     dataSaved: 'Données sauvegardées avec succès',
@@ -815,6 +845,8 @@ export default {
       notFound: 'Projet introuvable',
       invalidResponse: 'La réponse du serveur était invalide',
       readyForImages: 'est prêt pour les images',
+      selected: '{{count}} sélectionné(s)',
+      deleteSelected: 'Supprimer sélectionnés',
     },
     // Profile actions
     profile: {
@@ -852,7 +884,7 @@ export default {
     // Tabs
     general: 'Général',
     visualization: 'Visualisation',
-    formats: 'Formats',
+    formatsTab: 'Formats',
     // Content selection
     exportContents: "Contenu d'Exportation",
     selectContent:
@@ -932,6 +964,16 @@ export default {
     serverError: 'Erreur serveur survenue',
     invalidSelection: 'Veuillez sélectionner au moins une image',
     noData: "Aucune donnée disponible pour l'exportation",
+    segmentationData: 'Données de Segmentation',
+    spheroidMetrics: 'Métriques de Sphéroïdes',
+    cocoFormat: 'Format COCO',
+    cocoFormatTitle: 'Exportation Format COCO',
+    downloadJson: 'Télécharger JSON',
+    formats: {
+      yolo: 'Format YOLO',
+      excel: 'Format Excel',
+      json: 'Format JSON',
+    },
   },
   // Standalone image action messages (used without prefix)
   imageDeleted: 'Image supprimée avec succès',
@@ -1135,6 +1177,9 @@ export default {
         step4: 'Utilisez le panneau de droite',
         step5: 'Sauvegardez périodiquement',
       },
+      segmenting: "Segmentation de l'image...",
+      waitingInQueue: 'En attente dans la file',
+      reloadingSegmentation: 'Actualisation des données de segmentation...',
     },
     exportFeatures: {
       title: "Fonctions d'Export",
@@ -1567,5 +1612,108 @@ export default {
     // Options de vue
     gridView: 'Vue en grille',
     listView: 'Vue en liste',
+  },
+
+  // Section du pied de page
+  footer: {
+    appName: 'SpheroSeg',
+    description:
+      "Plateforme avancée de segmentation et d'analyse de sphéroïdes pour les chercheurs biomédicaux, fournissant des outils alimentés par l'IA pour l'analyse d'images cellulaires microscopiques.",
+    contact: 'Contact',
+    institution: 'Institution',
+    institutionName: 'ÚTIA AV ČR',
+    address: 'Adresse',
+    addressText: 'Pod Vodárenskou věží 4, 182 08 Prague 8',
+    resources: 'Ressources',
+    documentation: 'Documentation',
+    features: 'Fonctionnalités',
+    tutorials: 'Tutoriels',
+    research: 'Recherche',
+    legal: 'Légal',
+    termsOfService: 'Conditions de Service',
+    privacyPolicy: 'Politique de Confidentialité',
+    contactUs: 'Nous Contacter',
+    copyright:
+      "© {{year}} SpheroSeg. Développé à l'ÚTIA AV ČR (Institut de Théorie de l'Information et d'Automatisation, Académie des Sciences de la République Tchèque).",
+  },
+
+  // Partage de projet
+  sharing: {
+    share: 'Partager',
+    shareProject: 'Partager le projet',
+    shareDescription:
+      'Partager le projet "{{title}}" avec des collègues et collaborateurs',
+    shareByEmail: 'Partager par email',
+    shareByLink: 'Partager par lien',
+    emailAddress: 'Adresse email',
+    enterEmailPlaceholder: "Entrez l'adresse email",
+    optionalMessage: 'Message optionnel',
+    messagePlaceholder: "Ajoutez un message personnel à l'invitation...",
+    sendInvitation: "Envoyer l'invitation",
+    sending: 'Envoi...',
+    emailSent: 'Invitation par email envoyée !',
+    emailRequired: "L'adresse email est requise",
+    emailShareFailed: "Échec de l'envoi de l'invitation par email",
+
+    linkExpiry: 'Expiration du lien',
+    neverExpires: "N'expire jamais",
+    hours: 'heures',
+    days: 'jours',
+    generateLink: 'Générer le lien',
+    generating: 'Génération...',
+    linkGenerated: 'Lien de partage créé !',
+    linkCopied: 'Lien copié dans le presse-papiers',
+    linkCopyFailed: 'Échec de la copie du lien',
+    linkShareFailed: 'Échec de la génération du lien de partage',
+
+    emailInvitations: 'Invitations par email',
+    shareLinks: 'Liens de partage',
+    shareRevoked: 'Le partage a été révoqué',
+    acceptedUsers: 'Utilisateurs acceptés',
+    pendingInvitations: 'Invitations en attente',
+    joinedViaLink: 'Rejoint via lien',
+    activeShareLinks: 'Liens de partage actifs',
+    joinedOn: 'Rejoint le',
+    sentOn: 'Envoyé le',
+    joinedViaLinkOn: 'Rejoint via lien le',
+    resendInvitation: "Renvoyer l'invitation",
+    invitationResent: 'Invitation renvoyée avec succès',
+    resendFailed: "Échec du renvoi de l'invitation",
+    revokeAccess: "Révoquer l'accès",
+    cancelInvitation: "Annuler l'invitation",
+    reminderMessage:
+      'Ceci est un rappel que vous avez été invité à collaborer sur un projet',
+    revokeShareFailed: 'Échec de la révocation du partage',
+    failedToLoadShares: 'Échec du chargement des partages',
+
+    status: {
+      pending: 'En attente',
+      accepted: 'Accepté',
+      revoked: 'Révoqué',
+    },
+
+    sharedWithYou: 'Partagé avec vous',
+    sharedBy: 'Partagé par : {{email}}',
+    sharedProjects: 'Projets partagés',
+    noSharedProjects: "Aucun projet n'a été partagé avec vous",
+    acceptInvitation: "Accepter l'invitation",
+    invitationAccepted:
+      'Invitation acceptée ! Le projet a été ajouté à votre tableau de bord.',
+    invitationExpired: 'Cette invitation a expiré',
+    invitationInvalid: 'Invitation invalide',
+    loginToAccept: 'Veuillez vous connecter pour accepter cette invitation',
+    accepting: 'Acceptation',
+    redirectingToProject: 'Redirection vers le projet',
+    redirectingToDashboard: 'Redirection vers le tableau de bord',
+    invitedEmail: 'Email invité',
+    loadingShare: 'Chargement des informations de partage...',
+    projectSharedBy: 'Projet partagé par',
+    signInRequired: 'Connexion requise',
+    signInToAccept: 'Veuillez vous connecter pour accepter cette invitation',
+    signInButton: 'Se connecter',
+    goToProject: 'Aller au Projet',
+    backToHome: "Retour à l'Accueil",
+    acceptFailed: "Échec de l'acceptation de l'invitation",
+    differentEmail: 'Cette invitation est pour une adresse email différente',
   },
 };
