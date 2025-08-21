@@ -1,43 +1,40 @@
 # Annotation Export Formats
 
-This directory contains annotation export utilities for various computer vision annotation formats. Each format has its own subdirectory with specific README instructions.
+This directory contains annotation export utilities for various computer vision annotation formats.
+
+## 📚 Quick Start
+
+**See [FORMATS_GUIDE.md](./FORMATS_GUIDE.md) for the complete consolidated guide covering all formats.**
 
 ## Available Formats
 
-- **COCO** - Microsoft Common Objects in Context format
-- **YOLO** - You Only Look Once bounding box format  
-- **JSON** - Custom JSON format with polygon coordinates
+| Format | Directory | Best Use Case |
+|--------|-----------|---------------|
+| **COCO** | `coco/` | Instance segmentation, research datasets |
+| **YOLO** | `yolo/` | Real-time object detection training |
+| **JSON** | `json/` | Custom workflows, full detail preservation |
 
-## Export Process
-
-Annotations are generated during the export process and saved to the respective format directories:
+## Directory Structure
 
 ```
 annotations/
-├── coco/           # COCO format files
-├── yolo/           # YOLO format files
-├── json/           # JSON format files
-└── README.md       # This file
+├── FORMATS_GUIDE.md  # Complete guide (START HERE)
+├── coco/            # COCO format with CVAT instructions
+├── yolo/            # YOLO format with training examples
+├── json/            # Custom JSON with conversion tools
+└── README.md        # This overview file
 ```
 
-## Usage with Annotation Tools
+## Scale Conversion Support
 
-Each format directory contains detailed instructions for:
-- Setting up annotation projects in popular tools (CVAT, LabelMe, etc.)
-- Importing the exported annotations
-- Label configuration and mapping
-- Workflow recommendations
+All formats support pixel-to-micrometer scale conversion:
+- Linear measurements: px → µm
+- Area measurements: px² → µm²
+- Dimensionless ratios remain unchanged
 
-## Supported Annotation Types
+## Quick Links
 
-- **Polygons**: Cell boundary segmentation
-- **Classification**: Cell type labeling (if configured)
-- **Metadata**: Image dimensions, processing parameters
-
-## Format Selection
-
-Choose the appropriate format based on your target annotation tool or ML framework:
-
-- **COCO**: Best for instance segmentation, object detection research
-- **YOLO**: Lightweight format for real-time detection applications
-- **JSON**: Custom format with full polygon detail preservation
+- [Complete Format Guide](./FORMATS_GUIDE.md)
+- [COCO Detailed Instructions](./coco/README.md)
+- [YOLO Training Setup](./yolo/README.md)
+- [JSON Custom Workflows](./json/README.md)

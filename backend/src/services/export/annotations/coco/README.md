@@ -29,6 +29,11 @@ The exported `annotations.json` follows the COCO format specification:
       "id": 1,
       "name": "cell",
       "supercategory": "biological"
+    },
+    {
+      "id": 2,
+      "name": "cell_hole",
+      "supercategory": "biological"
     }
   ],
   "images": [...],

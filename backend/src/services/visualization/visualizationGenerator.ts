@@ -3,6 +3,7 @@ import { writeFile, readFile } from 'fs/promises';
 import sharp from 'sharp';
 import path from 'path';
 import { logger } from '../../utils/logger';
+import { NUMBER_PATHS } from './numberPaths';
 
 
 export interface VisualizationOptions {
@@ -183,7 +184,8 @@ export class VisualizationGenerator {
     ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
     ctx.lineWidth = Math.max(3, baseSize * 0.08);
     
-    this.drawNumberShape(ctx, number, centroid.x, centroid.y, baseSize * 0.5);
+    // Use extracted number path definitions
+    NUMBER_PATHS.drawLargeNumber(ctx, number, centroid.x, centroid.y, baseSize * 0.5);
     
     // Restore context state
     ctx.restore();
@@ -192,154 +194,6 @@ export class VisualizationGenerator {
     logger.debug(`Rendered polygon number ${number} at (${centroid.x.toFixed(1)}, ${centroid.y.toFixed(1)}) using geometric shapes`, 'VisualizationGenerator');
   }
 
-  /**
-   * Draw numbers using simple geometric shapes - universal approach
-   */
-  private drawNumberShape(ctx: CanvasRenderingContext2D, number: number, centerX: number, centerY: number, size: number): void {
-    const width = size * 0.6;
-    const height = size;
-    const strokeWidth = Math.max(2, size * 0.12);
-    
-    ctx.lineWidth = strokeWidth;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    
-    const left = centerX - width / 2;
-    const right = centerX + width / 2;
-    const top = centerY - height / 2;
-    const bottom = centerY + height / 2;
-    const middle = centerY;
-    
-    switch (number) {
-      case 1:
-        // Vertical line with small top stroke
-        ctx.beginPath();
-        ctx.moveTo(centerX, top);
-        ctx.lineTo(centerX, bottom);
-        ctx.moveTo(centerX - width * 0.2, top + height * 0.15);
-        ctx.lineTo(centerX, top);
-        ctx.stroke();
-        break;
-        
-      case 2:
-        ctx.beginPath();
-        ctx.moveTo(left, top + height * 0.25);
-        ctx.quadraticCurveTo(centerX, top, right, top + height * 0.25);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        ctx.lineTo(left, bottom - height * 0.1);
-        ctx.lineTo(right, bottom);
-        ctx.stroke();
-        break;
-        
-      case 3:
-        ctx.beginPath();
-        ctx.moveTo(left, top + height * 0.2);
-        ctx.quadraticCurveTo(centerX, top, right, top + height * 0.25);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        ctx.moveTo(centerX, middle);
-        ctx.quadraticCurveTo(right, middle + height * 0.1, right, bottom - height * 0.25);
-        ctx.quadraticCurveTo(centerX, bottom, left, bottom - height * 0.2);
-        ctx.stroke();
-        break;
-        
-      case 4:
-        ctx.beginPath();
-        ctx.moveTo(left + width * 0.2, top);
-        ctx.lineTo(left + width * 0.2, middle);
-        ctx.lineTo(right, middle);
-        ctx.moveTo(right - width * 0.2, top);
-        ctx.lineTo(right - width * 0.2, bottom);
-        ctx.stroke();
-        break;
-        
-      case 5:
-        ctx.beginPath();
-        ctx.moveTo(right, top);
-        ctx.lineTo(left, top);
-        ctx.lineTo(left, middle - height * 0.1);
-        ctx.quadraticCurveTo(centerX, middle - height * 0.1, right, middle + height * 0.1);
-        ctx.quadraticCurveTo(right, bottom - height * 0.1, centerX, bottom);
-        ctx.lineTo(left, bottom - height * 0.2);
-        ctx.stroke();
-        break;
-        
-      case 6:
-        ctx.beginPath();
-        ctx.moveTo(right - width * 0.2, top);
-        ctx.quadraticCurveTo(left, top, left, middle);
-        ctx.quadraticCurveTo(left, bottom, centerX, bottom);
-        ctx.quadraticCurveTo(right, bottom, right, middle + height * 0.1);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        ctx.lineTo(left, middle);
-        ctx.stroke();
-        break;
-        
-      case 7:
-        ctx.beginPath();
-        ctx.moveTo(left, top);
-        ctx.lineTo(right, top);
-        ctx.lineTo(centerX, bottom);
-        ctx.stroke();
-        break;
-        
-      case 8:
-        ctx.beginPath();
-        // Top circle
-        ctx.moveTo(left, top + height * 0.2);
-        ctx.quadraticCurveTo(centerX, top, right, top + height * 0.2);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        ctx.quadraticCurveTo(left, middle - height * 0.1, left, top + height * 0.2);
-        // Bottom circle
-        ctx.moveTo(left, middle + height * 0.1);
-        ctx.quadraticCurveTo(left, bottom, centerX, bottom);
-        ctx.quadraticCurveTo(right, bottom, right, middle + height * 0.1);
-        ctx.quadraticCurveTo(right, middle + height * 0.1, centerX, middle);
-        ctx.stroke();
-        break;
-        
-      case 9:
-        ctx.beginPath();
-        ctx.moveTo(centerX, middle);
-        ctx.quadraticCurveTo(right, middle - height * 0.1, right, top + height * 0.2);
-        ctx.quadraticCurveTo(right, top, centerX, top);
-        ctx.quadraticCurveTo(left, top, left, middle - height * 0.1);
-        ctx.quadraticCurveTo(left, middle + height * 0.1, centerX, middle);
-        ctx.lineTo(right, middle);
-        ctx.quadraticCurveTo(right, bottom, left + width * 0.2, bottom);
-        ctx.stroke();
-        break;
-        
-      case 0:
-        ctx.beginPath();
-        ctx.moveTo(centerX, top);
-        ctx.quadraticCurveTo(right, top, right, middle);
-        ctx.quadraticCurveTo(right, bottom, centerX, bottom);
-        ctx.quadraticCurveTo(left, bottom, left, middle);
-        ctx.quadraticCurveTo(left, top, centerX, top);
-        ctx.stroke();
-        break;
-        
-      default: {
-        // For numbers > 9, show simple dot pattern
-        const dotSize = size * 0.15;
-        const dots = Math.min(number, 12); // Max 12 dots
-        const angleStep = (Math.PI * 2) / dots;
-        const dotRadius = size * 0.3;
-        
-        ctx.fillStyle = 'rgba(0, 0, 0, 1.0)';
-        for (let i = 0; i < dots; i++) {
-          const angle = i * angleStep - Math.PI / 2;
-          const dotX = centerX + Math.cos(angle) * dotRadius;
-          const dotY = centerY + Math.sin(angle) * dotRadius;
-          
-          ctx.beginPath();
-          ctx.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
-          ctx.fill();
-        }
-        break;
-      }
-    }
-  }
 
   private drawVertices(
     ctx: CanvasRenderingContext2D,
@@ -387,10 +241,17 @@ export class VisualizationGenerator {
     // Calculate polygon area and centroid using shoelace formula
     for (let i = 0; i < validPoints.length; i++) {
       const j = (i + 1) % validPoints.length;
-      const xi = validPoints[i].x;
-      const yi = validPoints[i].y;
-      const xj = validPoints[j].x;
-      const yj = validPoints[j].y;
+      const currentPoint = validPoints[i];
+      const nextPoint = validPoints[j];
+      
+      if (!currentPoint || !nextPoint) {
+        continue;
+      }
+      
+      const xi = currentPoint.x;
+      const yi = currentPoint.y;
+      const xj = nextPoint.x;
+      const yj = nextPoint.y;
 
       const a = xi * yj - xj * yi;
       area += a;
