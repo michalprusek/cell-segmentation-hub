@@ -853,6 +853,13 @@ export default {
     fontSize: 'Font Size',
     showNumbers: 'Show polygon numbers',
     showLabels: 'Show labels',
+    // Scale conversion
+    scaleConversion: 'Scale Conversion',
+    pixelToMicrometerScale: 'Pixel to Micrometer Scale',
+    scaleDescription:
+      'Specify how many micrometers equal one pixel to convert measurements',
+    scalePlaceholder: 'e.g., 0.5 (1 pixel = 0.5 µm)',
+    scaleUnit: 'µm/pixel',
     // Format options
     outputSettings: 'Output Settings',
     exportFormats: 'Export Formats',

@@ -890,6 +890,13 @@ export default {
     fontSize: 'Schriftgröße',
     showNumbers: 'Polygon-Nummern anzeigen',
     showLabels: 'Beschriftungen anzeigen',
+    // Scale conversion
+    scaleConversion: 'Skalierungskonvertierung',
+    pixelToMicrometerScale: 'Pixel-zu-Mikrometer-Verhältnis',
+    scaleDescription:
+      'Geben Sie an, wie viele Mikrometer einem Pixel entsprechen, um Messungen umzurechnen',
+    scalePlaceholder: 'z.B. 0,5 (1 Pixel = 0,5 µm)',
+    scaleUnit: 'µm/Pixel',
     // Format options
     outputSettings: 'Ausgabeeinstellungen',
     exportFormats: 'Export-Formate',

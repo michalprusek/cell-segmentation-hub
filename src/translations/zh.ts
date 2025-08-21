@@ -808,6 +808,12 @@ export default {
     fontSize: '字体大小',
     showNumbers: '显示多边形编号',
     showLabels: '显示标签',
+    // Scale conversion
+    scaleConversion: '比例转换',
+    pixelToMicrometerScale: '像素到微米比例',
+    scaleDescription: '指定一个像素等于多少微米来转换测量值',
+    scalePlaceholder: '例如 0.5 (1像素 = 0.5µm)',
+    scaleUnit: 'µm/像素',
     // Format options
     outputSettings: '输出设置',
     exportFormats: '导出格式',
