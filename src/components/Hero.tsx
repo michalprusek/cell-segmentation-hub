@@ -93,7 +93,7 @@ const Hero = () => {
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10"></div>
                 <img
                   src="/lovable-uploads/026f6ae6-fa28-487c-8263-f49babd99dd3.png"
-                  alt="Spheroid microscopy image"
+                  alt={t('common.spheroidImageAlt')}
                   className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
                 />
               </div>
@@ -101,7 +101,7 @@ const Hero = () => {
                 <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10"></div>
                 <img
                   src="/lovable-uploads/19687f60-a78f-49e3-ada7-8dfc6a5fab4e.png"
-                  alt="Spheroid microscopy image with analysis"
+                  alt={t('common.spheroidAnalysisImageAlt')}
                   className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
                 />
               </div>

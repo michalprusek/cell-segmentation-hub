@@ -267,11 +267,12 @@ const Profile = () => {
 
         setProfileData({
           name: profile?.username || user.email?.split('@')[0] || 'User',
-          title: profile?.title || 'Researcher',
-          organization: profile?.organization || 'Research Institute',
-          bio: profile?.bio || 'No bio provided',
+          title: profile?.title || t('profile.defaultTitle'),
+          organization:
+            profile?.organization || t('profile.defaultOrganization'),
+          bio: profile?.bio || t('profile.noBioProvided'),
           email: user.email || '',
-          location: profile?.location || 'Not specified',
+          location: profile?.location || t('profile.notSpecified'),
           joined: `${month} ${year}`,
           projects: projectCount,
           analyses: imageCount,

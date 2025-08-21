@@ -57,6 +57,9 @@ export default {
     signInToAccount: 'Iniciar sesión en tu cuenta',
     sort: 'Ordenar',
     no_preview: 'Sin vista previa',
+    getStarted: 'Comenzar',
+    learnMore: 'Saber más',
+    close: 'Cerrar',
     // Navigation and UI
     openMenu: 'Abrir menú',
     logOut: 'Cerrar sesión',
@@ -69,6 +72,13 @@ export default {
     noImage: 'Sin imagen',
     untitledImage: 'Imagen sin título',
     rename: 'Renombrar',
+    // Alt text for accessibility
+    logoAlt: 'SpheroSeg Logo',
+    segmentedSpheroidAlt: 'Esferoide segmentado',
+    segmentationTargetAlt: 'Objetivo de segmentación',
+    spheroidExampleAlt: 'Ejemplo de esferoide segmentado',
+    spheroidImageAlt: 'Imagen microscópica de esferoide',
+    spheroidAnalysisImageAlt: 'Imagen microscópica de esferoide con análisis',
   },
   landing: {
     hero: {
@@ -189,6 +199,8 @@ export default {
     selectProject: 'Seleccionar Proyecto',
     projectSelection: 'Selección de Proyecto',
     selectProjectHeader: 'Seleccionar Proyecto',
+    selected: '{{count}} seleccionado',
+    deleteSelected: 'Eliminar seleccionados',
   },
   errors: {
     noProjectOrUser: 'Error: No hay proyecto o usuario seleccionado',
@@ -303,6 +315,9 @@ export default {
     processImageFailed: 'Error al procesar la imagen',
   },
   settings: {
+    pageTitle: 'Configuración',
+    profile: 'Perfil',
+    account: 'Cuenta',
     manageSettings: 'Administra las preferencias de tu cuenta',
     appearance: 'Apariencia',
     themeSettings: 'Configuración del tema',
@@ -405,6 +420,7 @@ export default {
     currentPassword: 'Contraseña Actual',
     newPassword: 'Nueva Contraseña',
     confirmNewPassword: 'Confirmar Nueva Contraseña',
+    models: 'Modelos',
     fillAllFields: 'Por favor completa todos los campos requeridos',
     passwordsDoNotMatch: 'Las contraseñas no coinciden',
     passwordTooShort: 'La contraseña debe tener al menos 6 caracteres',
@@ -498,6 +514,7 @@ export default {
     backToSignIn: 'Volver al inicio de sesión',
     didntReceiveEmail: '¿No recibiste el email?',
     rememberPassword: '¿Recordaste tu contraseña?',
+    tryAgain: 'Intentar de nuevo',
   },
   profile: {
     title: 'Perfil',
@@ -542,6 +559,10 @@ export default {
     createdProject: 'Creó proyecto',
     completedSegmentation: 'Completó segmentación para',
     uploadedImage: 'Subió imagen',
+    noBioProvided: 'No se proporcionó biografía',
+    notSpecified: 'No especificado',
+    defaultTitle: 'Investigador',
+    defaultOrganization: 'Instituto de Investigación',
     avatar: {
       uploadButton: 'Subir Avatar',
       selectFile: 'Seleccionar imagen de avatar',
@@ -573,8 +594,6 @@ export default {
       deletePolygon: 'Eliminar polígono',
       unknown: 'Desconocido',
     },
-    autosaveFailed:
-      'Error en guardado automático - los cambios pueden perderse',
     modeDescription: {
       view: 'Navegar y seleccionar polígonos',
       edit: 'Mover y modificar vértices',
@@ -607,18 +626,68 @@ export default {
       nothingToSave: 'Todos los cambios guardados',
     },
     status: {
-      polygons: 'polígonos',
-      vertices: 'vértices',
-      visible: 'visibles',
-      hidden: 'ocultos',
-      selected: 'seleccionado',
-      saved: 'Guardado',
-      unsaved: 'No guardado',
-      noPolygons: 'Sin polígonos',
-      startCreating: 'Comience creando un polígono',
+      polygons: 'Polígonos',
       polygonList: 'Lista de Polígonos',
-      external: 'Externo',
-      internal: 'Interno',
+      selected: 'Seleccionado',
+      vertices: 'vértices',
+      zoom: 'Zoom',
+      mode: 'Modo',
+      unsavedChanges: 'Cambios no guardados',
+    },
+    loading: 'Cargando segmentación...',
+    noPolygons: 'No se encontraron polígonos',
+    polygonNotFound: 'Polígono no encontrado',
+    invalidSlice: 'Operación de corte inválida',
+    sliceSuccess: 'Polígono cortado exitosamente',
+    sliceFailed: 'Error al cortar el polígono',
+    instructions: {
+      slice: {
+        selectPolygon:
+          '1. Haz clic en un polígono para seleccionarlo para cortar',
+        placeFirstPoint: '2. Haz clic para colocar el primer punto de corte',
+        placeSecondPoint:
+          '3. Haz clic para colocar el segundo punto de corte y realizar el corte',
+        cancel: 'Presiona ESC para cancelar',
+      },
+      create: {
+        startPolygon: '1. Haz clic para comenzar a crear un polígono',
+        continuePoints:
+          '2. Continúa haciendo clic para agregar más puntos (se necesitan al menos 3)',
+        finishPolygon:
+          '3. Continúa agregando puntos o haz clic cerca del primer punto para cerrar el polígono',
+        holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
+        cancel: 'Presiona ESC para cancelar',
+      },
+      addPoints: {
+        clickVertex:
+          'Haz clic en cualquier vértice para comenzar a agregar puntos',
+        addPoints:
+          'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
+        holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
+        cancel: 'Presiona ESC para cancelar',
+      },
+      editVertices: {
+        selectPolygon: 'Haz clic en un polígono para seleccionarlo para editar',
+        dragVertices: 'Haz clic y arrastra vértices para moverlos',
+        addPoints: 'Mantén SHIFT y haz clic en un vértice para agregar puntos',
+        deleteVertex: 'Doble clic en un vértice para eliminarlo',
+      },
+      deletePolygon: {
+        clickToDelete: 'Haz clic en un polígono para eliminarlo',
+      },
+      view: {
+        selectPolygon: 'Haz clic en un polígono para seleccionarlo',
+        navigation: 'Arrastra para desplazar • Desplaza para acercar',
+      },
+      modes: {
+        slice: 'Modo cortar',
+        create: 'Modo crear polígono',
+        addPoints: 'Modo agregar puntos',
+        editVertices: 'Modo editar vértices',
+        deletePolygon: 'Modo eliminar polígono',
+        view: 'Modo vista',
+      },
+      shiftIndicator: '⚡ SHIFT: Agregando puntos automáticamente',
     },
     shortcuts: {
       buttonText: 'Atajos',
@@ -676,61 +745,6 @@ export default {
         'Esc sale del modo agregar',
       ],
     },
-    loading: 'Cargando segmentación...',
-    noPolygons: 'No se encontraron polígonos',
-    polygonNotFound: 'Polígono no encontrado',
-    invalidSlice: 'Operación de corte inválida',
-    sliceSuccess: 'Polígono cortado exitosamente',
-    sliceFailed: 'Error al cortar el polígono',
-    instructions: {
-      slice: {
-        selectPolygon:
-          '1. Haz clic en un polígono para seleccionarlo para cortar',
-        placeFirstPoint: '2. Haz clic para colocar el primer punto de corte',
-        placeSecondPoint:
-          '3. Haz clic para colocar el segundo punto de corte y realizar el corte',
-        cancel: 'Presiona ESC para cancelar',
-      },
-      create: {
-        startPolygon: '1. Haz clic para comenzar a crear un polígono',
-        continuePoints:
-          '2. Continúa haciendo clic para agregar más puntos (se necesitan al menos 3)',
-        finishPolygon:
-          '3. Continúa agregando puntos o haz clic cerca del primer punto para cerrar el polígono',
-        holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
-        cancel: 'Presiona ESC para cancelar',
-      },
-      addPoints: {
-        clickVertex:
-          'Haz clic en cualquier vértice para comenzar a agregar puntos',
-        addPoints:
-          'Haz clic para agregar puntos, luego haz clic en otro vértice para completar. Haz clic directamente en otro vértice sin agregar puntos para eliminar todos los puntos entre ellos.',
-        holdShift: 'Mantén SHIFT para agregar puntos automáticamente',
-        cancel: 'Presiona ESC para cancelar',
-      },
-      editVertices: {
-        selectPolygon: 'Haz clic en un polígono para seleccionarlo para editar',
-        dragVertices: 'Haz clic y arrastra vértices para moverlos',
-        addPoints: 'Mantén SHIFT y haz clic en un vértice para agregar puntos',
-        deleteVertex: 'Doble clic en un vértice para eliminarlo',
-      },
-      deletePolygon: {
-        clickToDelete: 'Haz clic en un polígono para eliminarlo',
-      },
-      view: {
-        selectPolygon: 'Haz clic en un polígono para seleccionarlo',
-        navigation: 'Arrastra para desplazar • Desplaza para acercar',
-      },
-      modes: {
-        slice: 'Modo cortar',
-        create: 'Modo crear polígono',
-        addPoints: 'Modo agregar puntos',
-        editVertices: 'Modo editar vértices',
-        deletePolygon: 'Modo eliminar polígono',
-        view: 'Modo vista',
-      },
-      shiftIndicator: '⚡ SHIFT: Agregando puntos automáticamente',
-    },
   },
   status: {
     segmented: 'Segmentado',
@@ -782,6 +796,12 @@ export default {
     somethingWentWrong: 'Algo salió mal. Por favor, inténtalo más tarde.',
     somethingWentWrongPage: 'Algo salió mal al cargar esta página.',
     returnToHome: 'Volver al Inicio',
+    // Segmentation error boundary
+    segmentationError: 'Error de Segmentación',
+    segmentationErrorDescription:
+      'Ocurrió un error al cargar los datos de segmentación. Esto podría deberse a problemas de red o del servidor.',
+    errorDetails: 'Detalles del Error',
+    tryAgain: 'Intentar de Nuevo',
     // Success messages
     operationCompleted: 'Operación completada exitosamente',
     dataSaved: 'Datos guardados exitosamente',
@@ -809,6 +829,8 @@ export default {
       notFound: 'Proyecto no encontrado',
       invalidResponse: 'La respuesta del servidor fue inválida',
       readyForImages: 'está listo para imágenes',
+      selected: '{{count}} seleccionado(s)',
+      deleteSelected: 'Eliminar seleccionados',
     },
     // Profile actions
     profile: {
@@ -848,7 +870,7 @@ export default {
     // Tabs
     general: 'General',
     visualization: 'Visualización',
-    formats: 'Formatos',
+    formatsTab: 'Formatos',
     // Content selection
     exportContents: 'Contenido de Exportación',
     selectContent:
@@ -927,6 +949,16 @@ export default {
     serverError: 'Error del servidor ocurrido',
     invalidSelection: 'Por favor seleccione al menos una imagen',
     noData: 'No hay datos disponibles para exportar',
+    segmentationData: 'Datos de Segmentación',
+    spheroidMetrics: 'Métricas de Esferoides',
+    cocoFormat: 'Formato COCO',
+    cocoFormatTitle: 'Exportación en Formato COCO',
+    downloadJson: 'Descargar JSON',
+    formats: {
+      yolo: 'Formato YOLO',
+      excel: 'Formato Excel',
+      json: 'Formato JSON',
+    },
   },
   // Standalone image action messages (used without prefix)
   imageDeleted: 'Imagen eliminada exitosamente',
@@ -1671,5 +1703,85 @@ export default {
     contactUs: 'Contáctanos',
     copyright:
       '© {{year}} SpheroSeg. Desarrollado en ÚTIA AV ČR (Instituto de Teoría de la Información y Automatización, Academia de Ciencias de la República Checa).',
+  },
+
+  // Project sharing
+  sharing: {
+    share: 'Compartir',
+    shareProject: 'Compartir proyecto',
+    shareDescription:
+      'Compartir proyecto "{{title}}" con colegas y colaboradores',
+    shareByEmail: 'Compartir por correo electrónico',
+    shareByLink: 'Compartir por enlace',
+    emailAddress: 'Dirección de correo electrónico',
+    enterEmailPlaceholder: 'Ingresa dirección de correo electrónico',
+    optionalMessage: 'Mensaje opcional',
+    messagePlaceholder: 'Añadir un mensaje personal a la invitación...',
+    sendInvitation: 'Enviar invitación',
+    sending: 'Enviando...',
+    emailSent: '¡Invitación por correo enviada!',
+    emailRequired: 'La dirección de correo electrónico es obligatoria',
+    emailShareFailed: 'Error al enviar la invitación por correo',
+
+    linkExpiry: 'Expiración del enlace',
+    neverExpires: 'Nunca expira',
+    hours: 'horas',
+    days: 'días',
+    generateLink: 'Generar enlace',
+    generating: 'Generando...',
+    linkGenerated: '¡Enlace de compartir creado!',
+    linkCopied: 'Enlace copiado al portapapeles',
+    linkCopyFailed: 'Error al copiar enlace',
+    linkShareFailed: 'Error al generar enlace de compartir',
+
+    emailInvitations: 'Invitaciones por correo',
+    shareLinks: 'Enlaces de compartir',
+    shareRevoked: 'El acceso compartido ha sido revocado',
+    acceptedUsers: 'Usuarios aceptados',
+    pendingInvitations: 'Invitaciones pendientes',
+    joinedViaLink: 'Se unió por enlace',
+    activeShareLinks: 'Enlaces de compartir activos',
+    joinedOn: 'Se unió',
+    sentOn: 'Enviado',
+    joinedViaLinkOn: 'Se unió por enlace',
+    resendInvitation: 'Reenviar invitación',
+    invitationResent: 'Invitación reenviada exitosamente',
+    resendFailed: 'Error al reenviar invitación',
+    revokeAccess: 'Revocar acceso',
+    cancelInvitation: 'Cancelar invitación',
+    reminderMessage:
+      'Este es un recordatorio de que has sido invitado a colaborar en un proyecto',
+    revokeShareFailed: 'Error al revocar el acceso compartido',
+    failedToLoadShares: 'Error al cargar los recursos compartidos',
+
+    status: {
+      pending: 'Pendiente',
+      accepted: 'Aceptado',
+      revoked: 'Revocado',
+    },
+
+    sharedWithYou: 'Compartido contigo',
+    sharedBy: 'Compartido por: {{email}}',
+    sharedProjects: 'Proyectos compartidos',
+    noSharedProjects: 'No se han compartido proyectos contigo',
+    acceptInvitation: 'Aceptar invitación',
+    invitationAccepted:
+      'Invitación aceptada! El proyecto ha sido añadido a tu panel de control.',
+    invitationExpired: 'Esta invitación ha expirado',
+    invitationInvalid: 'Invitación inválida',
+    loginToAccept: 'Por favor inicia sesión para aceptar esta invitación',
+    accepting: 'Aceptando',
+    redirectingToProject: 'Redirigiendo al proyecto',
+    redirectingToDashboard: 'Redirigiendo al panel de control',
+    invitedEmail: 'Correo electrónico invitado',
+    loadingShare: 'Cargando información de compartir...',
+    projectSharedBy: 'Proyecto compartido por',
+    signInRequired: 'Inicio de sesión requerido',
+    signInToAccept: 'Por favor inicia sesión para aceptar esta invitación',
+    signInButton: 'Iniciar sesión',
+    goToProject: 'Ir al Proyecto',
+    backToHome: 'Volver al Inicio',
+    acceptFailed: 'Error al aceptar invitación',
+    differentEmail: 'Esta invitación es para una dirección de correo diferente',
   },
 };

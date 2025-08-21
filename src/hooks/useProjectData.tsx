@@ -10,7 +10,7 @@ import { getErrorMessage } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 
 // Utility function to enrich images with segmentation results
-const enrichImagesWithSegmentation = async (
+export const enrichImagesWithSegmentation = async (
   images: ProjectImage[]
 ): Promise<ProjectImage[]> => {
   // Filter images that have completed segmentation
@@ -294,6 +294,13 @@ export const useProjectData = (
 
       const segmentationData = await apiClient.getSegmentationResults(imageId);
 
+      if (!segmentationData) {
+        logger.warn(
+          `⚠️ No segmentation data returned for image ${imageId.slice(0, 8)}`
+        );
+        return;
+      }
+
       logger.debug(
         `✅ Successfully refreshed segmentation for ${imageId.slice(0, 8)}: ${segmentationData.polygons?.length || 0} polygons, ${segmentationData.imageWidth}x${segmentationData.imageHeight}`
       );
@@ -301,8 +308,9 @@ export const useProjectData = (
       setImages(prevImages =>
         prevImages.map(img => {
           if (img.id === imageId) {
-            return {
+            const updatedImage = {
               ...img,
+              segmentationStatus: 'completed', // Ensure status is set to completed
               segmentationResult: {
                 polygons: segmentationData.polygons || [],
                 imageWidth: segmentationData.imageWidth || img.width || null,
@@ -310,8 +318,28 @@ export const useProjectData = (
                 modelUsed: segmentationData.modelUsed,
                 confidence: segmentationData.confidence,
                 processingTime: segmentationData.processingTime,
+                levelOfDetail: 'medium', // Set default level of detail for thumbnails
+                polygonCount: segmentationData.polygons?.length || 0,
+                pointCount:
+                  segmentationData.polygons?.reduce(
+                    (sum, p) => sum + p.points.length,
+                    0
+                  ) || 0,
+                compressionRatio: 1.0, // Default compression ratio
               },
             };
+
+            logger.debug(
+              `✨ Updated image ${imageId.slice(0, 8)} with segmentation result: ${segmentationData.polygons?.length || 0} polygons`,
+              {
+                imageId,
+                polygonCount: segmentationData.polygons?.length || 0,
+                hasSegmentationResult: !!updatedImage.segmentationResult,
+                segmentationStatus: updatedImage.segmentationStatus,
+              }
+            );
+
+            return updatedImage;
           }
           return img;
         })

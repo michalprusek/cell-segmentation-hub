@@ -19,12 +19,13 @@ import { QueueStatsPanel } from '@/components/project/QueueStatsPanel';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
-import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { usePagination } from '@/hooks/usePagination';
+import { useUnifiedSegmentationUpdate } from '@/hooks/useUnifiedSegmentationUpdate';
 import { motion } from 'framer-motion';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,10 +53,6 @@ const ProjectDetail = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
 
-  // Debouncing and deduplication for segmentation refresh
-  const debounceTimeoutRef = useRef<{ [imageId: string]: NodeJS.Timeout }>({});
-  const lastStatusRef = useRef<{ [imageId: string]: string }>({});
-
   // Fetch project data
   const {
     projectTitle,
@@ -65,41 +62,90 @@ const ProjectDetail = () => {
     refreshImageSegmentation,
   } = useProjectData(id, user?.id);
 
-  // Optimized refresh function for real-time updates
-  const debouncedRefreshSegmentation = useCallback(
-    (imageId: string, currentStatus: string) => {
-      // Clear existing timeout for this image
-      if (debounceTimeoutRef.current[imageId]) {
-        clearTimeout(debounceTimeoutRef.current[imageId]);
+  // Unified segmentation update handling - no dependency on queueStats
+  const handleUnifiedUpdate = useCallback((update: any) => {
+    logger.debug(
+      `🔄 Processing unified update for image ${update.imageId.slice(0, 8)}`,
+      {
+        status: update.status,
+        hasSegmentationResult: !!update.segmentationResult,
+        hasThumbnailData: !!update.thumbnailData,
       }
+    );
 
-      // Check if status actually changed
-      const lastStatus = lastStatusRef.current[imageId];
-      if (lastStatus === currentStatus) {
-        return;
-      }
+    // Normalize status for consistency
+    let normalizedStatus = update.status;
+    if (update.status === 'segmented') {
+      normalizedStatus = 'completed';
+    }
 
-      // Update last status
-      lastStatusRef.current[imageId] = currentStatus;
+    // Update the specific image with unified data - IMMEDIATELY
+    updateImagesRef.current(prevImages =>
+      prevImages.map(img => {
+        if (img.id === update.imageId) {
+          // Clear segmentation data if this is a re-segmentation being queued
+          const clearSegmentationData =
+            update.status === 'queued' &&
+            (img.segmentationStatus === 'completed' ||
+              img.segmentationStatus === 'segmented');
 
-      // For completed segmentation, refresh immediately for real-time updates
-      // For other statuses, use minimal debounce
-      const delay =
-        currentStatus === 'completed' || currentStatus === 'segmented'
-          ? 100
-          : 300;
+          const updatedImage = {
+            ...img,
+            segmentationStatus: normalizedStatus,
+            updatedAt: new Date(), // Update timestamp for tracking
+            // Update segmentation result with new data or clear if re-segmenting
+            segmentationResult: clearSegmentationData
+              ? undefined
+              : update.segmentationResult ||
+                update.thumbnailData ||
+                img.segmentationResult,
+            segmentationData: clearSegmentationData
+              ? undefined
+              : img.segmentationData,
+          };
 
-      debounceTimeoutRef.current[imageId] = setTimeout(() => {
-        refreshImageSegmentationRef.current(imageId);
-        delete debounceTimeoutRef.current[imageId];
-      }, delay);
-    },
-    []
-  );
+          logger.debug(
+            `✨ Updated image ${update.imageId.slice(0, 8)} with unified data`,
+            {
+              oldStatus: img.segmentationStatus,
+              newStatus: normalizedStatus,
+              hasResult: !!updatedImage.segmentationResult,
+              cleared: clearSegmentationData,
+            }
+          );
 
-  // Queue management - must be declared before using queueStats
+          return updatedImage;
+        }
+        return img;
+      })
+    );
+  }, []);
+
+  // Use unified segmentation update hook
   const { isConnected, queueStats, lastUpdate, requestQueueStats } =
-    useSegmentationQueue(id);
+    useUnifiedSegmentationUpdate({
+      projectId: id,
+      onImageUpdate: handleUnifiedUpdate,
+      enabled: !!id,
+    });
+
+  // Handle batch state reset separately when queue becomes empty
+  useEffect(() => {
+    if (
+      queueStats &&
+      queueStats.processing <= 1 &&
+      queueStats.queued === 0 &&
+      batchSubmitted
+    ) {
+      const timer = setTimeout(() => {
+        setBatchSubmitted(false);
+        // Force reconciliation to catch any missed updates
+        reconcileRef.current();
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [queueStats, batchSubmitted]);
 
   // Filtering and sorting with memoization
   const {
@@ -186,143 +232,6 @@ const ProjectDetail = () => {
   const updateImagesRef = useRef(updateImages);
   updateImagesRef.current = updateImages;
 
-  // Store refreshImageSegmentation function in ref to avoid dependency issues
-  const refreshImageSegmentationRef = useRef(refreshImageSegmentation);
-  refreshImageSegmentationRef.current = refreshImageSegmentation;
-
-  // Real-time image status updates with optimized dependencies
-  useEffect(() => {
-    if (!lastUpdate || lastUpdate.projectId !== id) {
-      return;
-    }
-
-    // Real-time update processing
-
-    // Normalize status to match frontend expectations, but validate segmented status
-    let normalizedStatus = lastUpdate.status;
-    if (lastUpdate.status === 'segmented') {
-      // Don't immediately set to completed - verify segmentation data exists first
-      normalizedStatus = 'processing'; // Keep as processing until we verify data
-    } else if (lastUpdate.status === 'no_segmentation') {
-      // Backend explicitly says no segmentation found
-      normalizedStatus = 'no_segmentation';
-    }
-
-    // Update the specific image status in the images array immediately
-    updateImagesRef.current(prevImages =>
-      prevImages.map(img => {
-        if (img.id === lastUpdate.imageId) {
-          // Clear segmentation data if this is a re-segmentation being queued
-          const clearSegmentationData =
-            lastUpdate.status === 'queued' &&
-            (img.segmentationStatus === 'completed' ||
-              img.segmentationStatus === 'segmented');
-
-          return {
-            ...img,
-            segmentationStatus: normalizedStatus,
-            updatedAt: new Date(), // Update timestamp for tracking and reconciliation
-            // Clear existing segmentation result if re-segmenting
-            segmentationResult: clearSegmentationData
-              ? undefined
-              : img.segmentationResult,
-            segmentationData: clearSegmentationData
-              ? undefined
-              : img.segmentationData,
-          };
-        }
-        return img;
-      })
-    );
-
-    // For completed segmentation, refresh immediately to get polygon data and validate
-    // Skip refresh if backend already says no_segmentation
-    if (
-      (lastUpdate.status === 'segmented' ||
-        lastUpdate.status === 'completed') &&
-      lastUpdate.status !== 'no_segmentation'
-    ) {
-      // Immediate refresh for completed status - this will also validate if polygons exist
-      refreshImageSegmentationRef
-        .current(lastUpdate.imageId)
-        .then(async () => {
-          // Wait a tick to ensure the state has been updated
-          await new Promise(resolve => setTimeout(resolve, 0));
-
-          // After refresh, check the updated segmentation data
-          updateImagesRef.current(prevImages =>
-            prevImages.map(img => {
-              if (img.id === lastUpdate.imageId) {
-                // Check if we have actual polygon data after refresh
-                const hasPolygons =
-                  img.segmentationResult &&
-                  img.segmentationResult.polygons &&
-                  img.segmentationResult.polygons.length > 0;
-
-                // If backend says 'segmented' but no polygons, mark as 'no_segmentation'
-                const finalStatus = hasPolygons
-                  ? 'completed'
-                  : 'no_segmentation';
-
-                return {
-                  ...img,
-                  segmentationStatus: finalStatus,
-                  updatedAt: new Date(),
-                };
-              }
-              return img;
-            })
-          );
-        })
-        .catch(() => {
-          // If refresh fails, mark as no_segmentation
-          updateImagesRef.current(prevImages =>
-            prevImages.map(img =>
-              img.id === lastUpdate.imageId
-                ? {
-                    ...img,
-                    segmentationStatus: 'no_segmentation',
-                    updatedAt: new Date(),
-                  }
-                : img
-            )
-          );
-        });
-    }
-
-    // Reset batch submitted state when queue becomes empty
-    if (lastUpdate.status === 'segmented' || lastUpdate.status === 'failed') {
-      // Trigger status reconciliation after a short delay
-      const timeoutId = setTimeout(() => {
-        const currentQueueStats = queueStats;
-        if (
-          currentQueueStats &&
-          currentQueueStats.processing <= 1 &&
-          currentQueueStats.queued === 0
-        ) {
-          setBatchSubmitted(false);
-          // Force reconciliation to catch any missed updates
-          reconcileRef.current();
-        }
-      }, 2000);
-
-      // Cleanup timeout if component unmounts
-      return () => clearTimeout(timeoutId);
-    }
-  }, [lastUpdate, id, queueStats, setBatchSubmitted]);
-
-  // Cleanup debounce timeouts on unmount
-  useEffect(() => {
-    const timeouts = debounceTimeoutRef.current;
-    return () => {
-      if (timeouts) {
-        for (const timeout of Object.values(timeouts)) {
-          clearTimeout(timeout);
-        }
-      }
-    };
-  }, []);
-
   const toggleUploader = () => {
     setShowUploader(!showUploader);
   };
@@ -331,13 +240,45 @@ const ProjectDetail = () => {
     // Hide the uploader first
     setShowUploader(false);
 
-    // Refresh the images data
+    // Refresh the images data - use the same enrichment process as initial load
     if (id && user?.id) {
       try {
-        const imagesResponse = await apiClient.getProjectImages(id);
-        const imagesData = imagesResponse.images;
+        // First fetch all images with pagination to ensure we get everything
+        let allImages: any[] = [];
+        let page = 1;
+        let hasMore = true;
+        const limit = 50;
 
-        const formattedImages = (imagesData || []).map(img => {
+        while (hasMore) {
+          try {
+            const imagesResponse = await apiClient.getProjectImages(id, {
+              limit,
+              page,
+            });
+
+            if (
+              !imagesResponse.images ||
+              !Array.isArray(imagesResponse.images)
+            ) {
+              console.error('Invalid images response format');
+              break;
+            }
+
+            allImages = [...allImages, ...imagesResponse.images];
+            hasMore = page * limit < imagesResponse.total;
+            page++;
+
+            if (page > 40) {
+              console.warn('Reached maximum pagination limit (2000 images)');
+              break;
+            }
+          } catch (error) {
+            console.error(`Error fetching images page ${page}:`, error);
+            break;
+          }
+        }
+
+        const formattedImages = (allImages || []).map(img => {
           // Normalize segmentation status from different backend field names
           let segmentationStatus =
             img.segmentationStatus || img.segmentation_status;
@@ -351,6 +292,8 @@ const ProjectDetail = () => {
             id: img.id,
             name: img.name,
             url: img.url || img.image_url,
+            width: img.width,
+            height: img.height,
             thumbnail_url: img.thumbnail_url,
             createdAt: new Date(img.created_at || img.createdAt),
             updatedAt: new Date(img.updated_at || img.updatedAt),
@@ -359,7 +302,16 @@ const ProjectDetail = () => {
           };
         });
 
-        updateImages(formattedImages);
+        // Import enrichImagesWithSegmentation function from useProjectData hook
+        const { enrichImagesWithSegmentation } = await import(
+          '@/hooks/useProjectData'
+        );
+
+        // Enrich images with segmentation results for completed images
+        const enrichedImages =
+          await enrichImagesWithSegmentation(formattedImages);
+
+        updateImages(enrichedImages);
       } catch (error) {
         toast.error(t('toast.upload.failed'));
       }

@@ -56,7 +56,8 @@ class WebSocketManager {
   private constructor() {
     this.eventListeners = {
       'segmentation-update': new Set(),
-      'queue-stats-update': new Set(),
+      'thumbnail:updated': new Set(),
+      queueStats: new Set(),
       notification: new Set(),
       'system-message': new Set(),
       connect: new Set(),
@@ -265,11 +266,18 @@ class WebSocketManager {
       this.emitToListeners('segmentation-update', update);
     });
 
-    this.socket.on('queue-stats-update', (stats: QueueStats) => {
+    this.socket.on('thumbnail:updated', (thumbnailUpdate: any) => {
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug('Thumbnail update received:', thumbnailUpdate);
+      }
+      this.emitToListeners('thumbnail:updated', thumbnailUpdate);
+    });
+
+    this.socket.on('queueStats', (stats: QueueStats) => {
       if (process.env.NODE_ENV === 'development') {
         logger.debug('Queue stats update received:', stats);
       }
-      this.emitToListeners('queue-stats-update', stats);
+      this.emitToListeners('queueStats', stats);
     });
 
     this.socket.on('notification', (notification: Notification) => {

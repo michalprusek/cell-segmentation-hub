@@ -936,10 +936,17 @@ class ApiClient {
     imageId: string
   ): Promise<SegmentationResultData | null> {
     try {
+      logger.debug(
+        `🔍 Fetching segmentation results for image ${imageId.slice(0, 8)}...`
+      );
+      const startTime = performance.now();
+
       const response = await this.instance.get(
         `/segmentation/images/${imageId}/results`
       );
       const data = this.extractData(response);
+
+      const duration = performance.now() - startTime;
 
       // Return the full segmentation result data as received from backend
       if (data && typeof data === 'object') {
@@ -955,6 +962,17 @@ class ApiClient {
           createdAt: data.createdAt,
           updatedAt: data.updatedAt,
         };
+
+        logger.debug(
+          `✅ Successfully fetched segmentation results for image ${imageId.slice(0, 8)}`,
+          {
+            polygonCount: result.polygons?.length || 0,
+            duration: `${duration.toFixed(1)}ms`,
+            hasImageDimensions: !!(result.imageWidth && result.imageHeight),
+            modelUsed: result.modelUsed,
+          }
+        );
+
         return result;
       }
 

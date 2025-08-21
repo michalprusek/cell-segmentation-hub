@@ -113,7 +113,11 @@ const SignUp = () => {
         <div className="max-w-md w-full glass-morphism rounded-2xl overflow-hidden shadow-glass-lg p-10 animate-scale-in">
           <div className="text-center mb-8">
             <Link to="/" className="inline-flex items-center justify-center">
-              <img src="/logo.svg" alt="SpheroSeg Logo" className="w-12 h-12" />
+              <img
+                src="/logo.svg"
+                alt={t('common.logoAlt')}
+                className="w-12 h-12"
+              />
             </Link>
             <h2 className="mt-4 text-3xl font-bold text-gray-900">
               {t('auth.createAccount')}

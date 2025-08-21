@@ -185,7 +185,7 @@ const Documentation = () => {
                       <div className="md:w-1/3">
                         <img
                           src="/lovable-uploads/8f483962-36d5-4bae-8c90-c9542f8cc2d8.png"
-                          alt="Segmented spheroid example"
+                          alt={t('common.spheroidExampleAlt')}
                           className="rounded-lg shadow-md w-full"
                         />
                       </div>
