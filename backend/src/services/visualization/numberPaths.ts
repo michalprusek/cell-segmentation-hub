@@ -318,7 +318,7 @@ export const NUMBER_PATHS = {
         recorder.stroke();
         break;
         
-      case 1:
+      case 1: {
         // Adjust position for number 1 to be properly centered
         const oneOffset = width * 0.1; // Slight offset to center the "1" better visually
         recorder.beginPath();
@@ -328,6 +328,7 @@ export const NUMBER_PATHS = {
         recorder.lineTo(centerX + oneOffset, top);
         recorder.stroke();
         break;
+      }
         
       case 2:
         recorder.beginPath();

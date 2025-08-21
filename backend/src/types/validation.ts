@@ -1,6 +1,92 @@
 import { z } from 'zod';
 
+// ============================================================================
+// Common validation schemas
+// ============================================================================
+
+/**
+ * UUID validation
+ */
+export const uuidSchema = z.string().uuid('Musí být platné UUID');
+
+/**
+ * Segmentation model validation
+ */
+export const segmentationModelSchema = z.enum(['hrnet', 'resunet_advanced', 'resunet_small'], {
+  errorMap: () => ({ message: 'Model musí být hrnet, resunet_advanced nebo resunet_small' })
+});
+
+/**
+ * Queue priority validation
+ */
+export const queuePrioritySchema = z.number()
+  .int('Priorita musí být celé číslo')
+  .min(0, 'Priorita musí být nejméně 0')
+  .max(10, 'Priorita může být maximálně 10');
+
+/**
+ * Segmentation threshold validation
+ */
+export const thresholdSchema = z.number()
+  .min(0.1, 'Threshold musí být nejméně 0.1')
+  .max(0.9, 'Threshold může být maximálně 0.9');
+
+// ============================================================================
+// Queue validation schemas
+// ============================================================================
+
+/**
+ * Schema for adding single image to queue
+ */
+export const addImageToQueueSchema = z.object({
+  model: segmentationModelSchema.optional().default('hrnet'),
+  threshold: thresholdSchema.optional().default(0.5),
+  priority: queuePrioritySchema.optional().default(0),
+  detectHoles: z.boolean().optional().default(true)
+});
+
+/**
+ * Schema for batch queue operations
+ */
+export const batchQueueSchema = z.object({
+  imageIds: z.array(uuidSchema)
+    .min(1, 'Musíte zadat alespoň jeden obrázek')
+    .max(100, 'Můžete zpracovat maximálně 100 obrázků najednou'),
+  projectId: uuidSchema,
+  model: segmentationModelSchema.optional().default('hrnet'),
+  threshold: thresholdSchema.optional().default(0.5),
+  priority: queuePrioritySchema.optional().default(0),
+  forceResegment: z.boolean().optional().default(false),
+  detectHoles: z.boolean().optional().default(true)
+});
+
+/**
+ * Schema for resetting stuck items
+ */
+export const resetStuckItemsSchema = z.object({
+  maxProcessingMinutes: z.number()
+    .int('Čas musí být celé číslo')
+    .min(1, 'Minimální čas je 1 minuta')
+    .max(60, 'Maximální čas je 60 minut')
+    .optional()
+    .default(15)
+});
+
+/**
+ * Schema for cleaning up old queue entries
+ */
+export const cleanupQueueSchema = z.object({
+  daysOld: z.number()
+    .int('Počet dní musí být celé číslo')
+    .min(1, 'Minimální počet dní je 1')
+    .max(30, 'Maximální počet dní je 30')
+    .optional()
+    .default(7)
+});
+
+// ============================================================================
 // Project validation schemas
+// ============================================================================
 
 /**
  * Schema for creating a new project
@@ -190,3 +276,12 @@ export type ShareByEmailData = z.infer<typeof shareByEmailSchema>;
 export type ShareByLinkData = z.infer<typeof shareByLinkSchema>;
 export type ShareIdParams = z.infer<typeof shareIdSchema>;
 export type ShareTokenParams = z.infer<typeof shareTokenSchema>;
+
+// ============================================================================
+// Type exports for queue schemas
+// ============================================================================
+
+export type AddImageToQueueData = z.infer<typeof addImageToQueueSchema>;
+export type BatchQueueData = z.infer<typeof batchQueueSchema>;
+export type ResetStuckItemsData = z.infer<typeof resetStuckItemsSchema>;
+export type CleanupQueueData = z.infer<typeof cleanupQueueSchema>;

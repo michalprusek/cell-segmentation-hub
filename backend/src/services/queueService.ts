@@ -538,7 +538,7 @@ export class QueueService {
             this.websocketService.emitSegmentationUpdate(item.userId, {
               imageId: item.imageId,
               projectId: item.projectId,
-              status: 'segmented',
+              status: 'completed',
               queueId: item.id
             });
             
