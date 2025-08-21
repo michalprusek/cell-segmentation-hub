@@ -221,7 +221,7 @@ describe('MetricsCalculator', () => {
     });
 
     it('should handle decimal scale values correctly', async () => {
-      const scale = 0.5; // 0.5 pixels per micrometer
+      const scale = 0.5; // 0.5 micrometers per pixel
       const metrics = await calculator.calculateAllMetrics([mockImage], scale);
 
       expect(metrics).toHaveLength(1);

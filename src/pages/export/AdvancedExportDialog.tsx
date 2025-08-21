@@ -219,14 +219,19 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
 
                           const numValue = parseFloat(value);
 
-                          // Validate input: reject NaN, enforce min 0.001 and max 1000
-                          if (
-                            !isNaN(numValue) &&
-                            numValue >= 0.001 &&
-                            numValue <= 1000
-                          ) {
+                          // Handle NaN case by not updating
+                          if (isNaN(numValue)) {
+                            return;
+                          }
+
+                          // Round to 3 decimal places to match input precision
+                          const roundedValue =
+                            Math.round(numValue * 1000) / 1000;
+
+                          // Validate rounded value: enforce min 0.001 and max 1000
+                          if (roundedValue >= 0.001 && roundedValue <= 1000) {
                             updateExportOptions({
-                              pixelToMicrometerScale: numValue,
+                              pixelToMicrometerScale: roundedValue,
                             });
                           }
                         }}

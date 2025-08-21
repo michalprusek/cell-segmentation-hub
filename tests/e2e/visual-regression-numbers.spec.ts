@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createCanvas, CanvasRenderingContext2D } from 'canvas';
 import { writeFile } from 'fs/promises';
+import { readFileSync } from 'fs';
 import path from 'path';
 
 /**
@@ -24,7 +25,10 @@ test.describe('Number Rendering Visual Regression', () => {
     const project = await projectResponse.json();
     testProjectId = project.id;
 
-    // Upload a test image
+    // Upload a test image using actual JPEG fixture
+    const testImagePath = path.join(__dirname, '../fixtures/test-image.jpg');
+    const testImageBuffer = readFileSync(testImagePath);
+
     const imageResponse = await request.post(
       `/api/projects/${testProjectId}/images`,
       {
@@ -32,7 +36,7 @@ test.describe('Number Rendering Visual Regression', () => {
           file: {
             name: 'test.jpg',
             mimeType: 'image/jpeg',
-            buffer: Buffer.from('test-image-data'),
+            buffer: testImageBuffer,
           },
         },
       }

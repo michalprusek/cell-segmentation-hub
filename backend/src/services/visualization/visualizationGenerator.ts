@@ -82,6 +82,7 @@ export class VisualizationGenerator {
         'VisualizationGenerator'
       );
       metrics.warningThresholdExceeded = true;
+      throw new Error(`Polygon count (${polygons.length}) exceeds maximum threshold (${this.ERROR_POLYGON_COUNT}). Visualization aborted to prevent performance issues.`);
     } else if (polygons.length > this.WARN_POLYGON_COUNT) {
       logger.warn(
         `High polygon count detected: ${polygons.length} polygons. Performance may be degraded.`,
@@ -143,6 +144,7 @@ export class VisualizationGenerator {
           new Error('Render timeout'),
           'VisualizationGenerator'
         );
+        throw new Error(`Render timeout: renderTime ${metrics.renderTime}ms exceeds threshold ${this.ERROR_RENDER_TIME_MS}ms`);
       } else if (metrics.renderTime > this.WARN_RENDER_TIME_MS) {
         logger.warn(
           `Slow render detected: ${metrics.renderTime}ms for ${polygons.length} polygons`,

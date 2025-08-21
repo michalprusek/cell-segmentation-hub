@@ -6,18 +6,40 @@ import { logger } from '../../utils/logger';
  * This approach works across all environments without font dependencies
  */
 
+// Configuration constants for better maintainability
+export const NUMBER_PATH_CONFIG = {
+  MAX_CACHE_SIZE: 100,
+  CACHE_LOG_INTERVAL: 100,
+  STROKE_WIDTH_RATIO: 0.12,
+  DIGIT_WIDTH_RATIO: 0.6,
+  MULTI_DIGIT_SCALE: 0.7,
+  DOT_SIZE_RATIO: 0.15,
+  DOT_RADIUS_RATIO: 0.3,
+  LARGE_NUMBER_FONT_RATIO: 0.3,
+  MIN_SIZE_FOR_TEXT: 30,
+} as const;
+
+// Type-safe canvas operation interface
+type CanvasMethodName = 'beginPath' | 'moveTo' | 'lineTo' | 'quadraticCurveTo' | 
+                        'stroke' | 'arc' | 'fill' | 'closePath';
+
+interface CanvasOperation {
+  type: CanvasMethodName;
+  args: number[];
+}
+
 // Cache for rendered number paths to improve performance
 interface CachedPath {
-  path: any | null; // Path2D not available in node-canvas, use null
-  operations: Array<{ type: string; args: any[] }>;
+  operations: CanvasOperation[];
   lastAccessed: number;
 }
 
 class NumberPathCache {
   private cache: Map<string, CachedPath> = new Map();
-  private maxCacheSize = 100; // Maximum number of cached entries
+  private maxCacheSize = NUMBER_PATH_CONFIG.MAX_CACHE_SIZE;
   private cacheHits = 0;
   private cacheMisses = 0;
+  private cleanupTimer: NodeJS.Timeout | null = null;
 
   /**
    * Generate cache key for a number at a specific size
@@ -31,7 +53,7 @@ class NumberPathCache {
   /**
    * Get cached path operations or null if not cached
    */
-  get(number: number, size: number): Array<{ type: string; args: any[] }> | null {
+  get(number: number, size: number): CanvasOperation[] | null {
     const key = this.getCacheKey(number, size);
     const cached = this.cache.get(key);
     
@@ -40,7 +62,7 @@ class NumberPathCache {
       this.cacheHits++;
       
       // Log cache performance periodically
-      if ((this.cacheHits + this.cacheMisses) % 100 === 0) {
+      if ((this.cacheHits + this.cacheMisses) % NUMBER_PATH_CONFIG.CACHE_LOG_INTERVAL === 0) {
         const hitRate = (this.cacheHits / (this.cacheHits + this.cacheMisses) * 100).toFixed(1);
         logger.debug(`Number path cache hit rate: ${hitRate}% (${this.cacheHits} hits, ${this.cacheMisses} misses)`, 'NumberPathCache');
       }
@@ -55,7 +77,7 @@ class NumberPathCache {
   /**
    * Store path operations in cache
    */
-  set(number: number, size: number, operations: Array<{ type: string; args: any[] }>): void {
+  set(number: number, size: number, operations: CanvasOperation[]): void {
     const key = this.getCacheKey(number, size);
     
     // Implement LRU eviction if cache is full
@@ -64,10 +86,46 @@ class NumberPathCache {
     }
     
     this.cache.set(key, {
-      path: null,
       operations: operations,
       lastAccessed: Date.now()
     });
+    
+    // Schedule periodic cleanup if not already scheduled
+    this.scheduleCleanup();
+  }
+  
+  /**
+   * Schedule periodic cache cleanup to remove stale entries
+   */
+  private scheduleCleanup(): void {
+    if (this.cleanupTimer) {
+      return; // Already scheduled
+    }
+    
+    // Clean up cache every 5 minutes
+    this.cleanupTimer = setTimeout(() => {
+      this.cleanupStaleEntries();
+      this.cleanupTimer = null;
+    }, 5 * 60 * 1000);
+  }
+  
+  /**
+   * Remove entries that haven't been accessed in the last hour
+   */
+  private cleanupStaleEntries(): void {
+    const staleThreshold = Date.now() - (60 * 60 * 1000); // 1 hour
+    let removedCount = 0;
+    
+    for (const [key, value] of this.cache.entries()) {
+      if (value.lastAccessed < staleThreshold) {
+        this.cache.delete(key);
+        removedCount++;
+      }
+    }
+    
+    if (removedCount > 0) {
+      logger.debug(`Cleaned up ${removedCount} stale cache entries`, 'NumberPathCache');
+    }
   }
 
   /**
@@ -119,7 +177,7 @@ const pathCache = new NumberPathCache();
  * Record canvas operations for caching
  */
 class OperationRecorder {
-  operations: Array<{ type: string; args: any[] }> = [];
+  operations: CanvasOperation[] = [];
 
   beginPath(): void {
     this.operations.push({ type: 'beginPath', args: [] });
@@ -150,15 +208,60 @@ class OperationRecorder {
   }
 
   /**
-   * Replay recorded operations on a canvas context
+   * Replay recorded operations on a canvas context with type safety and error handling
    */
   replay(ctx: CanvasRenderingContext2D): void {
-    for (const op of this.operations) {
-      const method = (ctx as any)[op.type];
-      if (typeof method === 'function') {
-        method.apply(ctx, op.args);
+    try {
+      for (const op of this.operations) {
+        this.executeOperation(ctx, op);
       }
+    } catch (error) {
+      logger.warn(`Failed to replay canvas operations: ${error}`, 'OperationRecorder');
+      // Fallback: try simple rendering
+      this.fallbackRender(ctx);
     }
+  }
+  
+  /**
+   * Execute a single canvas operation with type safety
+   */
+  private executeOperation(ctx: CanvasRenderingContext2D, op: CanvasOperation): void {
+    switch (op.type) {
+      case 'beginPath':
+        ctx.beginPath();
+        break;
+      case 'moveTo':
+        if (op.args.length >= 2) ctx.moveTo(op.args[0], op.args[1]);
+        break;
+      case 'lineTo':
+        if (op.args.length >= 2) ctx.lineTo(op.args[0], op.args[1]);
+        break;
+      case 'quadraticCurveTo':
+        if (op.args.length >= 4) ctx.quadraticCurveTo(op.args[0], op.args[1], op.args[2], op.args[3]);
+        break;
+      case 'stroke':
+        ctx.stroke();
+        break;
+      case 'arc':
+        if (op.args.length >= 5) ctx.arc(op.args[0], op.args[1], op.args[2], op.args[3], op.args[4]);
+        break;
+      case 'fill':
+        ctx.fill();
+        break;
+      case 'closePath':
+        ctx.closePath();
+        break;
+    }
+  }
+  
+  /**
+   * Fallback rendering if replay fails
+   */
+  private fallbackRender(ctx: CanvasRenderingContext2D): void {
+    // Draw a simple circle as fallback
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
@@ -170,22 +273,19 @@ export const NUMBER_PATHS = {
     // Check cache first
     const cachedOps = pathCache.get(digit, size);
     if (cachedOps) {
-      // Replay cached operations
-      for (const op of cachedOps) {
-        const method = (ctx as any)[op.type];
-        if (typeof method === 'function') {
-          method.apply(ctx, op.args);
-        }
-      }
+      // Replay cached operations with type safety
+      const tempRecorder = new OperationRecorder();
+      tempRecorder.operations = cachedOps;
+      tempRecorder.replay(ctx);
       return;
     }
 
     // Record operations for caching
     const recorder = new OperationRecorder();
     
-    const width = size * 0.6;
+    const width = size * NUMBER_PATH_CONFIG.DIGIT_WIDTH_RATIO;
     const height = size;
-    const strokeWidth = Math.max(2, size * 0.12);
+    const strokeWidth = Math.max(2, size * NUMBER_PATH_CONFIG.STROKE_WIDTH_RATIO);
     
     ctx.lineWidth = strokeWidth;
     ctx.lineCap = 'round';
@@ -325,12 +425,10 @@ export const NUMBER_PATHS = {
     // Check cache for large numbers too
     const cachedOps = pathCache.get(number, size);
     if (cachedOps) {
-      for (const op of cachedOps) {
-        const method = (ctx as any)[op.type];
-        if (typeof method === 'function') {
-          method.apply(ctx, op.args);
-        }
-      }
+      // Replay cached operations with type safety
+      const tempRecorder = new OperationRecorder();
+      tempRecorder.operations = cachedOps;
+      tempRecorder.replay(ctx);
       return;
     }
     
@@ -342,8 +440,8 @@ export const NUMBER_PATHS = {
       const leftDigit = Math.floor(number / 10);
       const rightDigit = number % 10;
       
-      NUMBER_PATHS.drawDigit(ctx, leftDigit, centerX - digitWidth * 0.6, centerY, size * 0.7);
-      NUMBER_PATHS.drawDigit(ctx, rightDigit, centerX + digitWidth * 0.6, centerY, size * 0.7);
+      NUMBER_PATHS.drawDigit(ctx, leftDigit, centerX - digitWidth * 0.6, centerY, size * NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE);
+      NUMBER_PATHS.drawDigit(ctx, rightDigit, centerX + digitWidth * 0.6, centerY, size * NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE);
     } else if (number <= 999) {
       // Draw three digits
       const digitWidth = size * 0.3;
@@ -356,10 +454,10 @@ export const NUMBER_PATHS = {
       NUMBER_PATHS.drawDigit(ctx, ones, centerX + digitWidth, centerY, size * 0.5);
     } else {
       // For very large numbers, use dot pattern
-      const dotSize = size * 0.15;
+      const dotSize = size * NUMBER_PATH_CONFIG.DOT_SIZE_RATIO;
       const dots = Math.min(Math.floor(Math.log10(number)) + 1, 12); // Number of digits, max 12
       const angleStep = (Math.PI * 2) / dots;
-      const dotRadius = size * 0.3;
+      const dotRadius = size * NUMBER_PATH_CONFIG.DOT_RADIUS_RATIO;
       
       ctx.fillStyle = 'rgba(0, 0, 0, 1.0)';
       for (let i = 0; i < dots; i++) {
@@ -372,25 +470,35 @@ export const NUMBER_PATHS = {
         recorder.fill();
       }
       
-      // Draw abbreviated number in center if space allows
+      // Optionally draw abbreviated number in center if fonts are available
+      // Fall back to dot pattern only if fonts are unavailable
       if (size > 30) {
-        ctx.save();
-        ctx.font = `${size * 0.3}px sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-        
-        let displayText = '';
-        if (number >= 1000000) {
-          displayText = `${Math.floor(number / 1000000)}M`;
-        } else if (number >= 1000) {
-          displayText = `${Math.floor(number / 1000)}K`;
-        } else {
-          displayText = String(number);
+        try {
+          ctx.save();
+          ctx.font = `${size * 0.3}px sans-serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+          
+          let displayText = '';
+          if (number >= 1000000) {
+            displayText = `${Math.floor(number / 1000000)}M`;
+          } else if (number >= 1000) {
+            displayText = `${Math.floor(number / 1000)}K`;
+          } else {
+            displayText = String(number);
+          }
+          
+          // Check if font is available by testing text measurement
+          const metrics = ctx.measureText(displayText);
+          if (metrics && metrics.width > 0) {
+            ctx.fillText(displayText, centerX, centerY);
+          }
+          ctx.restore();
+        } catch (error) {
+          // Font rendering failed, dot pattern already drawn as fallback
+          ctx.restore();
         }
-        
-        ctx.fillText(displayText, centerX, centerY);
-        ctx.restore();
       }
       
       // Cache operations for large numbers if they're common (e.g., 1000, 2000, etc.)
