@@ -842,10 +842,6 @@ export default {
       selected: '{{count}} vybráno',
       deleteSelected: 'Smazat vybrané',
     },
-    project: {
-      selected: '{{count}} vybráno',
-      deleteSelected: 'Smazat vybrané',
-    },
     // Profile messages
     profile: {
       loadFailed: 'Nepodařilo se načíst data profilu',
