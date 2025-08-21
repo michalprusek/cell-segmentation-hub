@@ -15,6 +15,14 @@ from .models import (
 from PIL import Image
 import io
 
+# Import new inference exception types
+try:
+    from ml.inference_executor import InferenceTimeoutError, InferenceError
+except ImportError:
+    # Fallback for backward compatibility
+    InferenceTimeoutError = TimeoutError
+    InferenceError = Exception
+
 logger = logging.getLogger(__name__)
 
 # Initialize router
@@ -150,15 +158,44 @@ async def segment_image(
         
     except HTTPException:
         raise
-    except TimeoutError as e:
+    except (InferenceTimeoutError, TimeoutError) as e:
+        # Handle timeout errors with detailed information
         processing_time = time.time() - start_time
-        logger.error(f"Segmentation timeout after {processing_time:.2f}s: {e}")
-        raise HTTPException(
-            status_code=504, 
-            detail={
+        logger.error(f"Segmentation timeout after {processing_time:.2f}s for model {model}: {e}")
+        
+        # Extract details from InferenceTimeoutError if available
+        if isinstance(e, InferenceTimeoutError):
+            error_detail = {
                 "error": "Model inference timeout",
                 "message": str(e),
+                "model": e.model_name,
+                "timeout": e.timeout,
+                "image_size": e.image_size,
+                "suggestion": f"Model '{e.model_name}' timed out after {e.timeout}s. Try: 1) Use 'hrnet' model instead, 2) Reduce image size, 3) Increase ML_INFERENCE_TIMEOUT environment variable",
+                "processing_time": processing_time
+            }
+        else:
+            # Legacy TimeoutError
+            error_detail = {
+                "error": "Model inference timeout",
+                "message": str(e),
+                "model": model,
                 "suggestion": "Try using a simpler model (hrnet) or reducing image size",
+                "processing_time": processing_time
+            }
+        
+        raise HTTPException(status_code=504, detail=error_detail)
+        
+    except InferenceError as e:
+        # Handle inference errors with context
+        processing_time = time.time() - start_time
+        logger.error(f"Inference error after {processing_time:.2f}s: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Inference failed",
+                "message": str(e),
+                "model": model,
                 "processing_time": processing_time
             }
         )
@@ -221,15 +258,44 @@ async def batch_segment_images(
                 
                 logger.info(f"Batch image {i+1} completed, found {len(result['polygons'])} polygons")
                 
-            except TimeoutError as e:
+            except (InferenceTimeoutError, TimeoutError) as e:
                 logger.error(f"Timeout processing batch image {i+1}: {file.filename}: {e}")
+                
+                # Extract timeout details
+                if isinstance(e, InferenceTimeoutError):
+                    error_msg = f"Timeout after {e.timeout}s for model '{e.model_name}'"
+                    error_detail = {
+                        "type": "timeout",
+                        "message": str(e),
+                        "model": e.model_name,
+                        "timeout": e.timeout,
+                        "image_size": e.image_size
+                    }
+                else:
+                    error_msg = "Inference timeout"
+                    error_detail = str(e)
                 
                 # Add timeout error result
                 results.append({
                     "filename": file.filename,
                     "batch_index": i,
                     "success": False,
-                    "error": "Inference timeout",
+                    "error": error_msg,
+                    "error_detail": error_detail,
+                    "polygons": [],
+                    "model_used": model,
+                    "threshold_used": threshold
+                })
+                
+            except InferenceError as e:
+                logger.error(f"Inference error processing batch image {i+1}: {file.filename}: {e}")
+                
+                # Add inference error result
+                results.append({
+                    "filename": file.filename,
+                    "batch_index": i,
+                    "success": False,
+                    "error": "Inference failed",
                     "error_detail": str(e),
                     "polygons": [],
                     "model_used": model,

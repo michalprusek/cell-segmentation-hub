@@ -9,15 +9,24 @@ import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 import cv2
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 import logging
 from pathlib import Path
+import time
+import uuid
 
 # Import model architectures using relative imports
-
 from models.hrnet import HRNetV2
 from models.resunet_advanced import AdvancedResUNet
 from models.resunet_small import ResUNetSmall
+
+# Import the new inference executor
+from .inference_executor import (
+    InferenceExecutor, 
+    InferenceTimeoutError,
+    InferenceError,
+    get_global_executor
+)
 
 logger = logging.getLogger(__name__)
 
@@ -213,8 +222,24 @@ class ModelLoader:
         
         return binary_mask
     
-    def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5, detect_holes: bool = True) -> Dict[str, Any]:
-        """Perform segmentation on an image"""
+    def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Perform segmentation on an image with improved timeout handling
+        
+        Args:
+            image: PIL Image to segment
+            model_name: Name of the model to use
+            threshold: Segmentation threshold
+            detect_holes: Whether to detect holes in segmentation
+            timeout: Optional timeout override (uses env variable if not specified)
+        
+        Returns:
+            Dictionary containing segmentation results
+            
+        Raises:
+            InferenceTimeoutError: If inference exceeds timeout
+            InferenceError: For other inference failures
+        """
         
         # Set processing state
         self.is_processing = True
@@ -232,47 +257,42 @@ class ModelLoader:
             input_tensor = self.preprocess_image(image)
             logger.info(f"Image preprocessed, tensor shape: {input_tensor.shape}, device: {input_tensor.device}")
             
-            # Check memory before inference
+            # Get the global inference executor
+            executor = get_global_executor()
+            
+            # Use environment variable for timeout if not specified
+            if timeout is None:
+                timeout = float(os.getenv("ML_INFERENCE_TIMEOUT", "60"))
+            
+            # Log resource usage before inference
             if self.device.type == 'cuda':
                 memory_before = torch.cuda.memory_allocated()
                 logger.info(f"GPU memory before inference: {memory_before / 1024**2:.1f} MB")
             
-            # Perform inference with timeout
-            logger.info(f"Starting inference with {model_name}")
-            import signal
-            import threading
+            # Perform inference with proper timeout handling
+            logger.info(f"Starting inference with {model_name}, timeout: {timeout}s")
             
-            output = None
-            inference_error = None
-            
-            def run_inference():
-                nonlocal output, inference_error
-                try:
-                    with torch.no_grad():
-                        output = model(input_tensor)
-                except Exception as e:
-                    inference_error = e
-            
-            # Run inference in a thread with timeout
-            inference_thread = threading.Thread(target=run_inference)
-            inference_thread.daemon = True
-            inference_thread.start()
-            
-            # Wait for inference with timeout (60 seconds for CPU inference)
-            timeout_seconds = 60
-            inference_thread.join(timeout=timeout_seconds)
-            
-            if inference_thread.is_alive():
-                logger.error(f"Inference timeout after {timeout_seconds}s for model {model_name}")
-                raise TimeoutError(f"Model inference timed out after {timeout_seconds} seconds. The model may be too complex for CPU inference.")
-            
-            if inference_error:
-                raise inference_error
+            try:
+                output = executor.execute_inference(
+                    model=model,
+                    input_tensor=input_tensor,
+                    model_name=model_name,
+                    timeout=timeout,
+                    image_size=original_size
+                )
+                logger.info(f"Inference completed, output shape: {output.shape if not isinstance(output, tuple) else [o.shape for o in output]}")
                 
-            if output is None:
-                raise RuntimeError("Inference failed to produce output")
+            except InferenceTimeoutError:
+                # Re-raise with additional context
+                self.is_processing = False
+                self.current_model = None
+                raise
                 
-            logger.info(f"Inference completed, output shape: {output.shape if not isinstance(output, tuple) else [o.shape for o in output]}")
+            except Exception as e:
+                # Wrap other exceptions
+                self.is_processing = False
+                self.current_model = None
+                raise InferenceError(f"Inference failed for {model_name}: {str(e)}") from e
             
             # Check memory after inference
             if self.device.type == 'cuda':

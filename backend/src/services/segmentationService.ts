@@ -206,14 +206,13 @@ export class SegmentationService {
         model,
         threshold,
         detectHoles,
-        detectHoles,
         mlServiceUrl: this.pythonServiceUrl
       });
 
       // Add model, threshold and detect_holes parameters to form data
       formData.append('model', model);
       formData.append('threshold', threshold.toString());
-      formData.append('detect_holes', detectHoles.toString());
+      formData.append('detect_holes', (detectHoles ?? true).toString());
 
       // Make request to Python segmentation service
       const response = await this.httpClient.post('/api/v1/segment', formData, {

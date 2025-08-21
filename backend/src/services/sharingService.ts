@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { logger } from '../utils/logger';
 import * as EmailService from './emailService';
 import { User, ProjectShare, Project } from '@prisma/client';
+import { ShareByEmailData, ShareByLinkData } from '../types/validation';
 
 /**
  * Escape HTML special characters to prevent XSS
@@ -19,16 +20,7 @@ function escapeHtml(str: string | null | undefined): string {
     '/': '&#x2F;'
   };
   
-  return str.replace(/[&<>"'\/]/g, char => htmlEscapeMap[char] || char);
-}
-
-export interface ShareByEmailData {
-  email: string;
-  message?: string;
-}
-
-export interface ShareByLinkData {
-  expiryHours?: number; // null means no expiry
+  return str.replace(/[&<>"'/]/g, char => htmlEscapeMap[char] || char);
 }
 
 export interface ShareWithDetails extends ProjectShare {
@@ -183,7 +175,7 @@ export async function shareProjectByLink(
 export async function acceptShareInvitation(
   token: string,
   userId?: string
-): Promise<{ share: ProjectShare; needsLogin: boolean }> {
+): Promise<{ share: any; needsLogin: boolean }> {
   try {
     // Find the share by token
     const share = await prisma.projectShare.findFirst({
@@ -455,7 +447,7 @@ export async function hasProjectAccess(
 /**
  * Validate a share token and return share info
  */
-export async function validateShareToken(token: string): Promise<ProjectShare | null> {
+export async function validateShareToken(token: string): Promise<any | null> {
   try {
     const share = await prisma.projectShare.findFirst({
       where: {
