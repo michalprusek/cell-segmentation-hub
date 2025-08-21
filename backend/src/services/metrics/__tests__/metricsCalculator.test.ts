@@ -321,8 +321,33 @@ describe('MetricsCalculator', () => {
       const outputPathMicrometers = '/tmp/test-micrometers.csv';
       await calculator.exportToCSV(mockMetrics, outputPathMicrometers, 2.0);
 
-      // Files should be created with appropriate units in headers
-      expect(true).toBe(true);
+      // Read and verify the CSV headers
+      const fs = require('fs').promises;
+      
+      try {
+        // Read pixels CSV header
+        const pixelsContent = await fs.readFile(outputPathPixels, 'utf-8');
+        const pixelsHeader = pixelsContent.split('\n')[0];
+        expect(pixelsHeader).toContain('px');
+        expect(pixelsHeader).toMatch(/area.*\(px/i);
+        expect(pixelsHeader).toMatch(/perimeter.*\(px/i);
+        
+        // Read micrometers CSV header
+        const micrometersContent = await fs.readFile(outputPathMicrometers, 'utf-8');
+        const micrometersHeader = micrometersContent.split('\n')[0];
+        expect(micrometersHeader).toContain('µm');
+        expect(micrometersHeader).toMatch(/area.*\(µm/i);
+        expect(micrometersHeader).toMatch(/perimeter.*\(µm/i);
+        
+        // Clean up temp files
+        await fs.unlink(outputPathPixels);
+        await fs.unlink(outputPathMicrometers);
+      } catch (error) {
+        // Clean up temp files even on failure
+        await fs.unlink(outputPathPixels).catch(() => {});
+        await fs.unlink(outputPathMicrometers).catch(() => {});
+        throw error;
+      }
     });
   });
 });

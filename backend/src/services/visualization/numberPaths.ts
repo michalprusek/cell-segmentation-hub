@@ -151,6 +151,11 @@ class NumberPathCache {
    * Clear the entire cache
    */
   clear(): void {
+    // Clear any pending cleanup timer to prevent memory leak
+    if (this.cleanupTimer) {
+      clearTimeout(this.cleanupTimer);
+      this.cleanupTimer = null;
+    }
     this.cache.clear();
     this.cacheHits = 0;
     this.cacheMisses = 0;
@@ -270,6 +275,11 @@ export const NUMBER_PATHS = {
    * Draw a single digit with caching support
    */
   drawDigit: (ctx: CanvasRenderingContext2D, digit: number, centerX: number, centerY: number, size: number): void => {
+    // Guard against null/undefined context
+    if (!ctx) {
+      throw new Error('Canvas context is required for drawing');
+    }
+    
     // Check cache first
     const cachedOps = pathCache.get(digit, size);
     if (cachedOps) {
@@ -435,23 +445,35 @@ export const NUMBER_PATHS = {
     const recorder = new OperationRecorder();
     
     if (number <= 99) {
-      // Draw two digits side by side
+      // Draw two digits side by side with scaling applied once
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.scale(NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE, NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE);
+      
       const digitWidth = size * 0.4;
       const leftDigit = Math.floor(number / 10);
       const rightDigit = number % 10;
       
-      NUMBER_PATHS.drawDigit(ctx, leftDigit, centerX - digitWidth * 0.6, centerY, size * NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE);
-      NUMBER_PATHS.drawDigit(ctx, rightDigit, centerX + digitWidth * 0.6, centerY, size * NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE);
+      NUMBER_PATHS.drawDigit(ctx, leftDigit, -digitWidth * 0.6, 0, size);
+      NUMBER_PATHS.drawDigit(ctx, rightDigit, digitWidth * 0.6, 0, size);
+      
+      ctx.restore();
     } else if (number <= 999) {
-      // Draw three digits
+      // Draw three digits with scaling applied once
+      ctx.save();
+      ctx.translate(centerX, centerY);
+      ctx.scale(0.5, 0.5);  // Scale down for three digits
+      
       const digitWidth = size * 0.3;
       const hundreds = Math.floor(number / 100);
       const tens = Math.floor((number % 100) / 10);
       const ones = number % 10;
       
-      NUMBER_PATHS.drawDigit(ctx, hundreds, centerX - digitWidth, centerY, size * 0.5);
-      NUMBER_PATHS.drawDigit(ctx, tens, centerX, centerY, size * 0.5);
-      NUMBER_PATHS.drawDigit(ctx, ones, centerX + digitWidth, centerY, size * 0.5);
+      NUMBER_PATHS.drawDigit(ctx, hundreds, -digitWidth, 0, size);
+      NUMBER_PATHS.drawDigit(ctx, tens, 0, 0, size);
+      NUMBER_PATHS.drawDigit(ctx, ones, digitWidth, 0, size);
+      
+      ctx.restore();
     } else {
       // For very large numbers, use dot pattern
       const dotSize = size * NUMBER_PATH_CONFIG.DOT_SIZE_RATIO;
