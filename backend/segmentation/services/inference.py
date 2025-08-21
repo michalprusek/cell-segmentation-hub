@@ -33,7 +33,7 @@ class InferenceService:
         self.target_size = (1024, 1024)
     
     async def segment_image(self, image_data: bytes, model_name: str, 
-                          threshold: float = 0.5) -> Dict[str, Any]:
+                          threshold: float = 0.5, detect_holes: bool = True) -> Dict[str, Any]:
         """
         Perform segmentation on image data
         
@@ -41,6 +41,7 @@ class InferenceService:
             image_data: Raw image bytes
             model_name: Name of the model to use
             threshold: Segmentation threshold
+            detect_holes: Whether to detect holes/internal structures
             
         Returns:
             Dictionary with polygons and metadata
@@ -76,7 +77,7 @@ class InferenceService:
             if mask.shape != original_size:
                 mask = cv2.resize(mask, original_size, interpolation=cv2.INTER_LINEAR)
             
-            polygons = self.postprocessing.mask_to_polygons(mask, threshold)
+            polygons = self.postprocessing.mask_to_polygons(mask, threshold, detect_holes)
             polygons = self.postprocessing.optimize_polygons(polygons)
             
             postprocess_time = time.time() - postprocess_start

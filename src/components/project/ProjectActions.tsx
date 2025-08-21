@@ -13,12 +13,17 @@ import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { getErrorMessage } from '@/types';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { ShareDialog } from '@/components/project/ShareDialog';
 
 interface ProjectActionsProps {
   projectId: string;
+  projectTitle?: string;
 }
 
-const ProjectActions = ({ projectId }: ProjectActionsProps) => {
+const ProjectActions = ({
+  projectId,
+  projectTitle = 'Unknown Project',
+}: ProjectActionsProps) => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
 
@@ -52,12 +57,7 @@ const ProjectActions = ({ projectId }: ProjectActionsProps) => {
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
-
-    // Copy the project URL to clipboard
-    const projectUrl = `${window.location.origin}/project/${projectId}`;
-    navigator.clipboard.writeText(projectUrl);
-
-    toast.success(t('toast.project.urlCopied'));
+    // ShareDialog will handle the sharing logic
   };
 
   return (
@@ -72,10 +72,16 @@ const ProjectActions = ({ projectId }: ProjectActionsProps) => {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={handleShare}>
-          <Share className="h-4 w-4 mr-2" />
-          {t('projects.shareProject')}
-        </DropdownMenuItem>
+        <ShareDialog
+          projectId={projectId}
+          projectTitle={projectTitle}
+          trigger={
+            <DropdownMenuItem onSelect={e => e.preventDefault()}>
+              <Share className="h-4 w-4 mr-2" />
+              {t('sharing.share')}
+            </DropdownMenuItem>
+          }
+        />
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-red-600"

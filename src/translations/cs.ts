@@ -355,6 +355,9 @@ export default {
     confidenceThreshold: 'Práh Spolehlivosti',
     confidenceThresholdDescription:
       'Minimální spolehlivost požadovaná pro predikce segmentace',
+    detectHoles: 'Detekce Děr',
+    detectHolesDescription:
+      'Povolit detekci vnitřních struktur a děr uvnitř buněk',
     currentThreshold: 'Současný práh',
     modelSelected: 'Model úspěšně vybrán',
     modelSettingsSaved: 'Nastavení modelu úspěšně uloženo',
@@ -819,8 +822,14 @@ export default {
       cannotDeleteVertex:
         'Nelze smazat vrchol - polygon potřebuje alespoň 3 body',
       vertexDeleted: 'Vrchol byl úspěšně smazán',
-      failed: 'Nepodařilo se uložit segmentaci',
+      failed: 'Segmentace selhala',
       saved: 'Segmentace byla úspěšně uložena',
+      started: 'Segmentace byla zahájena',
+      completed: 'Segmentace byla úspěšně dokončena',
+      completedWithCount: 'Segmentace dokončena! Nalezeno {{count}} objektů',
+      noPolygons: 'Nebyly nalezeny žádné polygony segmentace',
+      reloadFailed:
+        'Nepodařilo se načíst výsledky segmentace. Obnovte prosím stránku.',
     },
     autosaveFailed: 'Automatické ukládání selhalo - změny mohou být ztraceny',
     // Upload messages
@@ -1645,5 +1654,59 @@ export default {
     contactUs: 'Kontaktujte nás',
     copyright:
       '© {{year}} SpheroSeg. Vyvinuto na ÚTIA AV ČR (Ústav teorie informace a automatizace, Akademie věd České republiky).',
+  },
+
+  // Sdílení projektů
+  sharing: {
+    share: 'Sdílet',
+    shareProject: 'Sdílet projekt',
+    shareDescription: 'Sdílejte projekt "{{title}}" s kolegy a spolupracovníky',
+    shareByEmail: 'Sdílet emailem',
+    shareByLink: 'Sdílet odkazem',
+    emailAddress: 'Emailová adresa',
+    enterEmailPlaceholder: 'Zadejte emailovou adresu',
+    optionalMessage: 'Volitelná zpráva',
+    messagePlaceholder: 'Přidejte osobní zprávu k pozvánce...',
+    sendInvitation: 'Odeslat pozvánku',
+    sending: 'Odesílání...',
+    emailSent: 'Email pozvánka byla odeslána!',
+    emailRequired: 'Emailová adresa je povinná',
+    emailShareFailed: 'Nepodařilo se odeslat email pozvánku',
+
+    linkExpiry: 'Platnost odkazu',
+    neverExpires: 'Nikdy nevyprší',
+    hours: 'hodin',
+    days: 'dní',
+    generateLink: 'Vygenerovat odkaz',
+    generating: 'Generování...',
+    linkGenerated: 'Odkaz pro sdílení byl vytvořen!',
+    linkCopied: 'Odkaz zkopírován do schránky',
+    linkCopyFailed: 'Nepodařilo se zkopírovat odkaz',
+    linkShareFailed: 'Nepodařilo se vygenerovat odkaz',
+
+    emailInvitations: 'Emailové pozvánky',
+    shareLinks: 'Odkazy pro sdílení',
+    shareRevoked: 'Sdílení bylo zrušeno',
+    revokeShareFailed: 'Nepodařilo se zrušit sdílení',
+    failedToLoadShares: 'Nepodařilo se načíst seznam sdílení',
+
+    status: {
+      pending: 'Čekající',
+      accepted: 'Přijato',
+      revoked: 'Zrušeno',
+    },
+
+    sharedWithYou: 'Sdíleno s vámi',
+    sharedBy: 'Sdílel: {{email}}',
+    sharedProjects: 'Sdílené projekty',
+    noSharedProjects: 'Žádné projekty s vámi nejsou sdíleny',
+    acceptInvitation: 'Přijmout pozvánku',
+    invitationAccepted: 'Pozvánka byla přijata!',
+    invitationExpired: 'Tato pozvánka již expirovala',
+    invitationInvalid: 'Neplatná pozvánka',
+    loginToAccept: 'Pro přijetí pozvánky se přihlaste',
+    accepting: 'Přijímání',
+    redirectingToProject: 'Přesměrování na projekt',
+    invitedEmail: 'Pozvaný email',
   },
 };

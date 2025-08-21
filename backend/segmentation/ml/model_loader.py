@@ -213,7 +213,7 @@ class ModelLoader:
         
         return binary_mask
     
-    def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5) -> Dict[str, Any]:
+    def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5, detect_holes: bool = True) -> Dict[str, Any]:
         """Perform segmentation on an image"""
         
         # Set processing state
@@ -222,7 +222,7 @@ class ModelLoader:
         
         try:
             original_size = image.size  # (width, height)
-            logger.info(f"Starting prediction for {model_name}, image size: {original_size}")
+            logger.info(f"Starting prediction for {model_name}, image size: {original_size}, detect_holes: {detect_holes}")
             
             # Get model
             model = self.get_model(model_name)
@@ -255,8 +255,13 @@ class ModelLoader:
             # Postprocess
             binary_mask = self.postprocess_mask(output, original_size, threshold)
         
-            # Find contours for polygon extraction with hierarchy - use RETR_TREE to detect holes
-            contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            # Find contours for polygon extraction with hierarchy
+            if detect_holes:
+                # Use RETR_TREE to detect holes and internal structures
+                contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            else:
+                # Use RETR_EXTERNAL to detect only external boundaries
+                contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
             # Convert contours to polygons with hierarchy information
             polygons = []
@@ -282,11 +287,11 @@ class ModelLoader:
                     polygon_points.append({"x": float(x), "y": float(y)})
                 
                 if len(polygon_points) >= 3:  # Valid polygon needs at least 3 points
-                    # Determine polygon type based on hierarchy
+                    # Determine polygon type based on hierarchy and detect_holes setting
                     polygon_type = "external"
                     parent_id = None
                     
-                    if hierarchy is not None:
+                    if detect_holes and hierarchy is not None:
                         # hierarchy[i] = [next, previous, first_child, parent]
                         parent_idx = hierarchy[i][3]
                         if parent_idx != -1:

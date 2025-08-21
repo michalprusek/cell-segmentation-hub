@@ -32,6 +32,7 @@ const TermsOfService = lazy(() => import('./pages/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const Documentation = lazy(() => import('./pages/Documentation'));
 const ProjectExport = lazy(() => import('./pages/export/ProjectExport'));
+const ShareAccept = lazy(() => import('./pages/ShareAccept'));
 
 // Create a client for React Query
 const queryClient = new QueryClient({
@@ -132,6 +133,14 @@ const App = () => (
                             element={
                               <Suspense fallback={<PageLoadingFallback />}>
                                 <PrivacyPolicy />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/share/accept/:token"
+                            element={
+                              <Suspense fallback={<PageLoadingFallback />}>
+                                <ShareAccept />
                               </Suspense>
                             }
                           />

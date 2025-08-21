@@ -21,8 +21,10 @@ export interface ModelInfo {
 interface ModelContextType {
   selectedModel: ModelType;
   confidenceThreshold: number;
+  detectHoles: boolean;
   setSelectedModel: (model: ModelType) => void;
   setConfidenceThreshold: (threshold: number) => void;
+  setDetectHoles: (detectHoles: boolean) => void;
   getModelInfo: (modelId: ModelType) => ModelInfo;
   availableModels: ModelInfo[];
 }
@@ -32,8 +34,10 @@ const AVAILABLE_MODELS: ModelInfo[] = Object.values(BASIC_MODEL_INFO);
 const ModelContext = createContext<ModelContextType>({
   selectedModel: 'hrnet',
   confidenceThreshold: 0.5,
+  detectHoles: true,
   setSelectedModel: () => {},
   setConfidenceThreshold: () => {},
+  setDetectHoles: () => {},
   getModelInfo: () => AVAILABLE_MODELS[0],
   availableModels: AVAILABLE_MODELS,
 });
@@ -46,11 +50,13 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
   const [selectedModel, setSelectedModelState] = useState<ModelType>('hrnet');
   const [confidenceThreshold, setConfidenceThresholdState] =
     useState<number>(0.5);
+  const [detectHoles, setDetectHolesState] = useState<boolean>(true);
 
   // Load settings from localStorage on mount
   useEffect(() => {
     const savedModel = localStorage.getItem('selectedModel') as ModelType;
     const savedThreshold = localStorage.getItem('confidenceThreshold');
+    const savedDetectHoles = localStorage.getItem('detectHoles');
 
     if (savedModel && AVAILABLE_MODELS.some(m => m.id === savedModel)) {
       setSelectedModelState(savedModel);
@@ -61,6 +67,10 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
       if (threshold >= 0 && threshold <= 1) {
         setConfidenceThresholdState(threshold);
       }
+    }
+
+    if (savedDetectHoles !== null) {
+      setDetectHolesState(savedDetectHoles === 'true');
     }
   }, []);
 
@@ -76,6 +86,11 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
     localStorage.setItem('confidenceThreshold', normalizedThreshold.toString());
   };
 
+  const setDetectHoles = (detectHoles: boolean) => {
+    setDetectHolesState(detectHoles);
+    localStorage.setItem('detectHoles', detectHoles.toString());
+  };
+
   const getModelInfo = (modelId: ModelType): ModelInfo => {
     return (
       AVAILABLE_MODELS.find(model => model.id === modelId) ||
@@ -88,8 +103,10 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
       value={{
         selectedModel,
         confidenceThreshold,
+        detectHoles,
         setSelectedModel,
         setConfidenceThreshold,
+        setDetectHoles,
         getModelInfo,
         availableModels: AVAILABLE_MODELS,
       }}

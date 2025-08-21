@@ -45,20 +45,24 @@ export const useSegmentationQueue = (projectId?: string) => {
     // Show toast notifications for status changes
     if (update.status === 'segmented') {
       toast.success(
-        tRef.current('notifications.segmentationCompleted') ||
-          tRef.current('segmentationCompleted')
+        tRef.current('toast.segmentation.completed') ||
+          tRef.current('projects.segmentationCompleted')
       );
     } else if (update.status === 'no_segmentation') {
       toast.warning(
-        tRef.current('segmentationNoPolygons') ||
+        tRef.current('toast.segmentation.noPolygons') ||
           'No segmentation polygons detected'
       );
     } else if (update.status === 'failed') {
+      const errorMessage = update.error || tRef.current('errors.unknown');
       toast.error(
-        `${tRef.current('segmentationFailed')}: ${update.error || tRef.current('errors.unknown')}`
+        `${tRef.current('toast.segmentation.failed') || tRef.current('projects.segmentationFailed')}: ${errorMessage}`
       );
     } else if (update.status === 'processing') {
-      toast.info(tRef.current('segmentationStarted'));
+      toast.info(
+        tRef.current('toast.segmentation.started') ||
+          tRef.current('projects.segmentationStarted')
+      );
     }
   }, []); // No dependencies
 
@@ -74,9 +78,12 @@ export const useSegmentationQueue = (projectId?: string) => {
   const handleNotification = useCallback((notification: Notification) => {
     if (notification.type === 'segmentation-complete') {
       toast.success(
-        tRef.current('segmentationCompleteWithCount', {
+        tRef.current('toast.segmentation.completedWithCount', {
           count: notification.polygonCount,
-        }),
+        }) ||
+          tRef.current('projects.segmentationCompleteWithCount', {
+            count: notification.polygonCount,
+          }),
         { duration: 5000 }
       );
     }

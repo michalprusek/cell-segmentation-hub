@@ -21,6 +21,8 @@ model User {
   projects          Project[]
   segmentationQueue SegmentationQueue[]
   sessions          Session[]
+  sharedProjects    ProjectShare[]      @relation("SharedWith")
+  projectsSharedByMe ProjectShare[]     @relation("SharedBy")
 
   @@map("users")
 }
@@ -66,6 +68,7 @@ model Project {
   images            Image[]
   user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   segmentationQueue SegmentationQueue[]
+  shares            ProjectShare[]
 
   @@index([userId, updatedAt], map: "idx_project_user_updated")
   @@map("projects")
@@ -165,4 +168,26 @@ model Session {
 
   @@index([userId, isValid, expiresAt], map: "idx_session_user_valid")
   @@map("sessions")
+}
+
+model ProjectShare {
+  id           String    @id @default(uuid())
+  projectId    String
+  sharedById   String
+  sharedWithId String?   // null for link-based shares before acceptance
+  email        String?   // for email invitations
+  shareToken   String    @unique // for shareable links
+  tokenExpiry  DateTime? // optional expiry for share tokens
+  status       String    @default("pending") // pending, accepted, revoked
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sharedBy     User      @relation("SharedBy", fields: [sharedById], references: [id], onDelete: Cascade)
+  sharedWith   User?     @relation("SharedWith", fields: [sharedWithId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status], map: "idx_share_project_status")
+  @@index([shareToken], map: "idx_share_token")
+  @@index([email, status], map: "idx_share_email_status")
+  @@map("project_shares")
 }
