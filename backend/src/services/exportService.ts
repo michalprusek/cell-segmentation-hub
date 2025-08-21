@@ -619,6 +619,9 @@ export class ExportService {
     const readme = this.generateReadme(project, options);
     await fs.writeFile(path.join(docDir, 'README.md'), readme);
 
+    // Generate annotation format guides
+    await this.generateAnnotationGuides(exportDir, options);
+
     // Generate metadata
     const metadata = {
       projectId: project.id,
@@ -749,6 +752,234 @@ ${scaleInfo}
 4. For physical measurements, apply appropriate scale factor
 5. Metrics are calculated using OpenCV algorithms for accuracy
 `;
+  }
+
+  private async generateAnnotationGuides(exportDir: string, options: ExportOptions): Promise<void> {
+    const annotationsDir = path.join(exportDir, 'annotations');
+
+    // Only generate guides for formats that are being exported
+    if (options.annotationFormats?.includes('coco')) {
+      await this.generateCocoGuide(path.join(annotationsDir, 'coco'));
+    }
+    
+    if (options.annotationFormats?.includes('yolo')) {
+      await this.generateYoloGuide(path.join(annotationsDir, 'yolo'));
+    }
+    
+    if (options.annotationFormats?.includes('json')) {
+      await this.generateJsonGuide(path.join(annotationsDir, 'json'));
+    }
+
+    // Generate main annotations README
+    await this.generateMainAnnotationGuide(annotationsDir, options);
+  }
+
+  private async generateCocoGuide(cocoDir: string): Promise<void> {
+    const guide = `# COCO Format - Quick Setup Guide
+
+## CVAT Import Instructions
+
+1. **Create CVAT Project**:
+   - Name: "Cell Segmentation"
+   - Labels: Add "cell" (polygon) and "cell_hole" (polygon)
+
+2. **Upload Images**:
+   - Create new task in your project
+   - Upload the same images used in SpheroSeg
+
+3. **Import Annotations**:
+   - In task view: Actions → Upload annotations
+   - Format: "COCO 1.0"
+   - File: Select the annotations.json from this directory
+
+4. **Verify Import**:
+   - Check polygon boundaries match your expectations
+   - Verify all images have annotations loaded
+
+## Label Configuration for CVAT
+
+\`\`\`yaml
+Labels:
+  - name: "cell"
+    type: "polygon" 
+    color: "#FF0000"
+  - name: "cell_hole"
+    type: "polygon"
+    color: "#0000FF"
+\`\`\`
+
+For detailed instructions, see the full README.md in this directory.
+`;
+
+    await fs.writeFile(path.join(cocoDir, 'QUICK_SETUP.md'), guide);
+  }
+
+  private async generateYoloGuide(yoloDir: string): Promise<void> {
+    const guide = `# YOLO Format - Quick Setup Guide
+
+## Convert to COCO for CVAT
+
+Since CVAT doesn't directly import YOLO segmentation format:
+
+1. **Use conversion script** (see README.md in this directory)
+2. **Generate COCO file** from YOLO annotations
+3. **Import COCO file** to CVAT following COCO guide
+
+## Training with YOLOv8
+
+\`\`\`bash
+# Install YOLOv8
+pip install ultralytics
+
+# Train model
+yolo train data=data.yaml model=yolov8n-seg.pt epochs=100
+\`\`\`
+
+## Classes Configuration
+
+\`\`\`
+# classes.txt content:
+cell
+cell_hole
+\`\`\`
+
+For detailed conversion scripts and training setup, see the full README.md.
+`;
+
+    await fs.writeFile(path.join(yoloDir, 'QUICK_SETUP.md'), guide);
+  }
+
+  private async generateJsonGuide(jsonDir: string): Promise<void> {
+    const guide = `# JSON Format - Quick Setup Guide
+
+## Convert to COCO for CVAT
+
+1. **Use conversion script** (see README.md)
+2. **Convert JSON to COCO** format
+3. **Import to CVAT** as COCO format
+
+## Direct Analysis
+
+The JSON format preserves full SpheroSeg metadata:
+
+- Processing confidence scores
+- Model used for segmentation  
+- Detailed polygon metrics
+- Scale conversion information
+
+## Python Integration
+
+\`\`\`python
+import json
+
+# Load annotations
+with open('annotations.json') as f:
+    data = json.load(f)
+
+# Access polygon data
+for image in data['images']:
+    for polygon in image['polygons']:
+        confidence = polygon['processing']['confidence']
+        area = polygon['metrics']['area']
+        model = polygon['processing']['model']
+\`\`\`
+
+For detailed conversion and analysis scripts, see the full README.md.
+`;
+
+    await fs.writeFile(path.join(jsonDir, 'QUICK_SETUP.md'), guide);
+  }
+
+  private async generateMainAnnotationGuide(annotationsDir: string, options: ExportOptions): Promise<void> {
+    const exportedFormats = options.annotationFormats || [];
+    const scaleInfo = options.pixelToMicrometerScale 
+      ? `- **Scale**: ${options.pixelToMicrometerScale} µm/pixel (measurements in micrometers)`
+      : '- **Units**: All measurements in pixels';
+
+    const guide = `# Annotation Export Guide
+
+This export contains cell segmentation annotations in multiple formats for easy integration with annotation tools and ML pipelines.
+
+## Exported Formats
+
+${exportedFormats.map(format => `- **${format.toUpperCase()}**: See \`${format}/\` directory for format-specific instructions`).join('\n')}
+
+## Scale Information
+
+${scaleInfo}
+
+## Quick Start with CVAT
+
+### 1. Choose Your Format
+- **COCO**: Best for most annotation workflows ✅ Recommended
+- **YOLO**: For object detection training (requires conversion)
+- **JSON**: For custom analysis workflows
+
+### 2. CVAT Setup (COCO Format)
+
+1. **Create Project** in CVAT:
+   - Name: "Cell Segmentation - [Your Project Name]"
+   - Add labels: "cell" (polygon), "cell_hole" (polygon)
+
+2. **Create Task**:
+   - Upload your original images
+   - Ensure filenames match the exported annotations
+
+3. **Import Annotations**:
+   - Actions → Upload annotations
+   - Format: "COCO 1.0" 
+   - File: \`coco/annotations.json\`
+
+### 3. Verification Checklist
+
+- [ ] All images loaded correctly
+- [ ] Polygon boundaries appear accurate
+- [ ] Cell count matches expectations
+- [ ] Labels assigned correctly (cell vs cell_hole)
+
+## Format-Specific Instructions
+
+Each format directory contains:
+- **README.md**: Detailed setup instructions
+- **QUICK_SETUP.md**: Fast-track guide
+- **Conversion scripts**: For format conversion
+
+## Troubleshooting
+
+### Common Issues
+- **"No annotations imported"**: Check image filenames match exactly
+- **"Invalid format"**: Verify CVAT supports the annotation format version
+- **"Missing labels"**: Ensure labels are created in CVAT before import
+
+### Getting Help
+- Check format-specific README files
+- Verify image dimensions and file paths
+- Test with a single image first
+
+## Integration Examples
+
+### Research Workflow
+1. Export → COCO format
+2. Import → CVAT for manual review/editing
+3. Export → Enhanced COCO for training
+
+### Training Pipeline  
+1. Export → YOLO format
+2. Train → YOLOv8 segmentation model
+3. Deploy → Real-time cell detection
+
+### Analysis Pipeline
+1. Export → JSON format  
+2. Analyze → Custom Python scripts
+3. Visualize → Metrics and quality reports
+
+## Support
+
+For detailed instructions, see the README.md file in each format directory:
+${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
+`;
+
+    await fs.writeFile(path.join(annotationsDir, 'README.md'), guide);
   }
 
   private async createZipArchive(
