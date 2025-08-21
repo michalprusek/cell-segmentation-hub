@@ -362,6 +362,9 @@ export default {
     confidenceThreshold: 'Seuil de confiance',
     confidenceThresholdDescription:
       'Confiance minimale requise pour les prédictions de segmentation',
+    detectHoles: 'Détecter les Trous',
+    detectHolesDescription:
+      'Activer la détection des structures internes et des trous dans les cellules',
     currentThreshold: 'Seuil actuel',
     modelSelected: 'Modèle sélectionné avec succès',
     modelSettingsSaved: 'Paramètres du modèle enregistrés avec succès',
@@ -825,11 +828,17 @@ export default {
     // Segmentation actions
     segmentation: {
       saved: 'Segmentation sauvegardée avec succès',
-      failed: 'Échec de la sauvegarde de la segmentation',
+      failed: 'Échec de la segmentation',
       deleted: 'Polygone supprimé',
       cannotDeleteVertex:
         'Impossible de supprimer le sommet - le polygone a besoin d\u2019au moins 3 points',
       vertexDeleted: 'Sommet supprimé avec succès',
+      started: 'La segmentation a commencé',
+      completed: 'Segmentation terminée avec succès',
+      completedWithCount: 'Segmentation terminée ! {{count}} objets trouvés',
+      noPolygons: 'Aucun polygone de segmentation détecté',
+      reloadFailed:
+        'Échec du chargement des résultats de segmentation. Veuillez actualiser la page.',
     },
     autosaveFailed:
       'Échec de la sauvegarde automatique - les modifications peuvent être perdues',

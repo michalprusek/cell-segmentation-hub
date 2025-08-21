@@ -172,7 +172,7 @@ class SegmentationController {
    */
   batchSegment = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { imageIds, model = 'hrnet', threshold = 0.5 } = req.body;
+      const { imageIds, model = 'hrnet', threshold = 0.5, detectHoles = true } = req.body;
       
       // Validate user authentication
       const userId = this.validateUser(req, res);
@@ -205,6 +205,7 @@ class SegmentationController {
         imageCount: imageIds.length,
         model,
         threshold,
+        detectHoles,
         userId
       });
 
@@ -212,7 +213,8 @@ class SegmentationController {
         imageIds,
         model,
         threshold,
-        userId
+        userId,
+        detectHoles
       );
 
       ResponseHelper.success(res, result, 'Dávkové zpracování dokončeno');

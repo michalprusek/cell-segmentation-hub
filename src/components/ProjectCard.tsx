@@ -43,7 +43,7 @@ const ProjectCard = ({
             imageCount={imageCount}
           />
           <div className="absolute top-4 right-4 z-10">
-            <ProjectActions projectId={id} />
+            <ProjectActions projectId={id} projectTitle={title} />
           </div>
         </div>
       </CardHeader>

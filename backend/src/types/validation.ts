@@ -133,6 +133,49 @@ export const imageBatchDeleteSchema = z.object({
     .optional()
 });
 
+// Sharing validation schemas
+
+/**
+ * Schema for sharing project by email
+ */
+export const shareByEmailSchema = z.object({
+  email: z.string()
+    .email('Neplatná emailová adresa')
+    .max(255, 'Email může mít maximálně 255 znaků')
+    .trim(),
+  message: z.string()
+    .max(500, 'Zpráva může mít maximálně 500 znaků')
+    .trim()
+    .optional()
+});
+
+/**
+ * Schema for sharing project by link
+ */
+export const shareByLinkSchema = z.object({
+  expiryHours: z.number()
+    .int('Doba vypršení musí být celé číslo')
+    .min(1, 'Minimální doba vypršení je 1 hodina')
+    .max(8760, 'Maximální doba vypršení je 1 rok') // 365 * 24
+    .optional()
+});
+
+/**
+ * Schema for share ID parameter
+ */
+export const shareIdSchema = z.object({
+  shareId: z.string()
+    .uuid('Neplatné ID sdílení')
+});
+
+/**
+ * Schema for share token parameter
+ */
+export const shareTokenSchema = z.object({
+  token: z.string()
+    .uuid('Neplatný token sdílení')
+});
+
 // Export types
 export type CreateProjectData = z.infer<typeof createProjectSchema>;
 export type UpdateProjectData = z.infer<typeof updateProjectSchema>;
@@ -143,3 +186,7 @@ export type ImageQueryParams = z.infer<typeof imageQuerySchema>;
 export type ImageIdParams = z.infer<typeof imageIdSchema>;
 export type ProjectImageParams = z.infer<typeof projectImageParamsSchema>;
 export type ImageBatchDeleteData = z.infer<typeof imageBatchDeleteSchema>;
+export type ShareByEmailData = z.infer<typeof shareByEmailSchema>;
+export type ShareByLinkData = z.infer<typeof shareByLinkSchema>;
+export type ShareIdParams = z.infer<typeof shareIdSchema>;
+export type ShareTokenParams = z.infer<typeof shareTokenSchema>;

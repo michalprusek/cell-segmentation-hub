@@ -348,6 +348,9 @@ export default {
     confidenceThreshold: 'Umbral de Confianza',
     confidenceThresholdDescription:
       'Confianza mínima requerida para las predicciones de segmentación',
+    detectHoles: 'Detectar Agujeros',
+    detectHolesDescription:
+      'Habilitar la detección de estructuras internas y agujeros dentro de las células',
     currentThreshold: 'Umbral actual',
     modelSelected: 'Modelo seleccionado con éxito',
     modelSettingsSaved: 'Configuración de modelo guardada con éxito',
@@ -820,11 +823,18 @@ export default {
     // Segmentation actions
     segmentation: {
       saved: 'Segmentación guardada exitosamente',
-      failed: 'Error al guardar segmentación',
+      failed: 'La segmentación falló',
       deleted: 'Polígono eliminado',
       cannotDeleteVertex:
         'No se puede eliminar vértice - el polígono necesita al menos 3 puntos',
       vertexDeleted: 'Vértice eliminado exitosamente',
+      started: 'La segmentación ha comenzado',
+      completed: 'Segmentación completada exitosamente',
+      completedWithCount:
+        '¡Segmentación completa! Se encontraron {{count}} objetos',
+      noPolygons: 'No se detectaron polígonos de segmentación',
+      reloadFailed:
+        'Error al cargar los resultados de segmentación. Por favor, actualiza la página.',
     },
     autosaveFailed:
       'Error en guardado automático - los cambios pueden perderse',

@@ -6,6 +6,7 @@ import { updateImageProcessingStatus } from '@/lib/imageProcessingService';
 import type { ProjectImage, SegmentationData } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useModel } from '@/contexts/ModelContext';
 import { logger } from '@/lib/logger';
 
 interface UseProjectImageActionsProps {
@@ -22,6 +23,7 @@ export const useProjectImageActions = ({
   const navigate = useNavigate();
   const [processingImages, setProcessingImages] = useState<string[]>([]);
   const { t } = useLanguage();
+  const { selectedModel, confidenceThreshold, detectHoles } = useModel();
 
   // Create refs to avoid stale closure issues
   const imagesRef = useRef<ProjectImage[]>(images);
@@ -84,6 +86,9 @@ export const useProjectImageActions = ({
         projectId: projectId!,
         imageId: imageId,
         imageUrl: image.url,
+        model: selectedModel,
+        threshold: confidenceThreshold,
+        detectHoles: detectHoles,
         onComplete: (result: SegmentationData) => {
           // Update the local state with the result - use current ref
           const updatedImages = imagesRef.current.map(img =>

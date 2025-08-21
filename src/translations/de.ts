@@ -366,6 +366,9 @@ export default {
     confidenceThreshold: 'Vertrauensschwelle',
     confidenceThresholdDescription:
       'Mindestvertrauen für Segmentierungsvorhersagen erforderlich',
+    detectHoles: 'Löcher Erkennen',
+    detectHolesDescription:
+      'Erkennung von inneren Strukturen und Löchern in Zellen aktivieren',
     currentThreshold: 'Aktuelle Schwelle',
     modelSelected: 'Modell erfolgreich ausgewählt',
     modelSettingsSaved: 'Modelleinstellungen erfolgreich gespeichert',
@@ -833,11 +836,18 @@ export default {
     // Segmentation actions
     segmentation: {
       saved: 'Segmentierung erfolgreich gespeichert',
-      failed: 'Speichern der Segmentierung fehlgeschlagen',
+      failed: 'Segmentierung fehlgeschlagen',
       deleted: 'Polygon gelöscht',
       cannotDeleteVertex:
         'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
       vertexDeleted: 'Scheitelpunkt erfolgreich gelöscht',
+      started: 'Segmentierung hat begonnen',
+      completed: 'Segmentierung erfolgreich abgeschlossen',
+      completedWithCount:
+        'Segmentierung abgeschlossen! {{count}} Objekte gefunden',
+      noPolygons: 'Keine Segmentierungspolygone erkannt',
+      reloadFailed:
+        'Laden der Segmentierungsergebnisse fehlgeschlagen. Bitte Seite aktualisieren.',
     },
     autosaveFailed:
       'Automatisches Speichern fehlgeschlagen - Änderungen können verloren gehen',

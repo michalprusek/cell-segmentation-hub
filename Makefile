@@ -150,6 +150,29 @@ test:
 	@echo "🧪 Running unit tests in Docker..."
 	@$(DOCKER_COMPOSE) exec -T frontend npm run test
 
+# Test email configuration with MailHog
+test-email-mailhog:
+	@echo "📧 Testing email with MailHog..."
+	@echo "1. MailHog SMTP: http://localhost:1025"
+	@echo "2. MailHog Web UI: http://localhost:8025"
+	@echo "3. Configuration uses MailHog by default"
+	@echo "✅ Open http://localhost:8025 to see sent emails"
+
+# Test email configuration with UTIA SMTP
+test-email-utia:
+	@echo "📧 Testing email with UTIA SMTP..."
+	@echo "⚠️  First, update password in .env.utia file"
+	@echo "Then restart backend with: make restart-backend-utia"
+	@echo "API endpoint: http://localhost:3001/api/test-email/test-connection"
+
+# Restart backend with UTIA email config
+restart-backend-utia:
+	@echo "🔄 Restarting backend with UTIA email configuration..."
+	$(DOCKER_COMPOSE) stop backend
+	ENV_FILE=.env.utia $(DOCKER_COMPOSE) up -d backend
+	@echo "✅ Backend restarted with UTIA config"
+	@echo "Test connection: curl http://localhost:3001/api/test-email/test-connection"
+
 # Run unit tests with UI in Docker
 test-ui:
 	@echo "🧪 Running unit tests with UI in Docker..."

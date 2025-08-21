@@ -2,6 +2,7 @@ import { prisma } from '../db';
 import { CreateProjectData, UpdateProjectData, ProjectQueryParams } from '../types/validation';
 import { calculatePagination } from '../utils/response';
 import { logger } from '../utils/logger';
+import * as SharingService from './sharingService';
 import type { Project, Prisma } from '@prisma/client';
 
 /**
@@ -43,30 +44,45 @@ export async function createProject(userId: string, data: CreateProjectData): Pr
   }
 
   /**
-   * Get projects for a user with pagination and search
+   * Get projects for a user with pagination and search (includes owned and shared projects)
    */
 export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: Project[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     try {
       const { page, limit, search, sortBy, sortOrder } = options;
       
-      // Build where clause
+      // Get user email for shared project lookup
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Build where clause for owned and shared projects
       const where: Prisma.ProjectWhereInput = {
-        userId: userId
+        OR: [
+          // Owned projects
+          { userId: userId },
+          // Shared projects
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  { email: user.email, status: { in: ['pending', 'accepted'] } }
+                ]
+              }
+            }
+          }
+        ]
       };
 
       if (search) {
-        where.OR = [
-          {
-            title: {
-              contains: search
-            }
-          },
-          {
-            description: {
-              contains: search
-            }
-          }
-        ];
+        const searchCondition = {
+          OR: [
+            { title: { contains: search } },
+            { description: { contains: search } }
+          ]
+        };
+        where.AND = [searchCondition];
       }
 
       // Build order clause with type safety
@@ -85,7 +101,7 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       const total = await prisma.project.count({ where });
       const pagination = calculatePagination(page, limit, total);
 
-      // Get projects with image count and latest image for thumbnail
+      // Get projects with image count, latest image, and sharing info
       const projects = await prisma.project.findMany({
         where,
         orderBy,
@@ -107,11 +123,39 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
               originalPath: true,
               segmentationStatus: true
             }
+          },
+          user: {
+            select: {
+              id: true,
+              email: true
+            }
+          },
+          shares: {
+            where: {
+              OR: [
+                { sharedWithId: userId, status: 'accepted' },
+                { email: user.email, status: { in: ['pending', 'accepted'] } }
+              ]
+            },
+            select: {
+              id: true,
+              status: true,
+              createdAt: true
+            },
+            take: 1
           }
         }
       });
 
-      logger.info(`Retrieved ${projects.length} projects for user`, 'ProjectService', { 
+      // Add isShared flag to each project
+      const projectsWithMeta = projects.map(project => ({
+        ...project,
+        isShared: project.userId !== userId,
+        isOwner: project.userId === userId,
+        shareStatus: project.shares.length > 0 ? project.shares[0].status : null
+      }));
+
+      logger.info(`Retrieved ${projectsWithMeta.length} projects for user`, 'ProjectService', { 
         userId, 
         total, 
         page, 
@@ -119,7 +163,7 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       });
 
       return {
-        projects,
+        projects: projectsWithMeta as Project[],
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -134,14 +178,19 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
   }
 
   /**
-   * Get a specific project by ID (with ownership check)
+   * Get a specific project by ID (with ownership and share access check)
    */
 export async function getProjectById(projectId: string, userId: string): Promise<(Project & { _count: { images: number } }) | null> {
     try {
-      const project = await prisma.project.findFirst({
+      // Check if user has access to this project (owner or shared)
+      const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+      if (!accessCheck.hasAccess) {
+        return null;
+      }
+
+      const project = await prisma.project.findUnique({
         where: {
-          id: projectId,
-          userId: userId
+          id: projectId
         },
         include: {
           user: {

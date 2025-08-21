@@ -359,6 +359,9 @@ export default {
     confidenceThreshold: 'Confidence Threshold',
     confidenceThresholdDescription:
       'Minimum confidence required for segmentation predictions',
+    detectHoles: 'Detect Holes',
+    detectHolesDescription:
+      'Enable detection of internal structures and holes within cells',
     currentThreshold: 'Current threshold',
     modelSelected: 'Model selected successfully',
     modelSettingsSaved: 'Model settings saved successfully',
@@ -783,11 +786,17 @@ export default {
     // Segmentation actions
     segmentation: {
       saved: 'Segmentation saved successfully',
-      failed: 'Failed to save segmentation',
+      failed: 'Segmentation failed',
       deleted: 'Polygon deleted',
       cannotDeleteVertex:
         'Cannot delete vertex - polygon needs at least 3 points',
       vertexDeleted: 'Vertex deleted successfully',
+      started: 'Segmentation has started',
+      completed: 'Segmentation completed successfully',
+      completedWithCount: 'Segmentation complete! Found {{count}} objects',
+      noPolygons: 'No segmentation polygons detected',
+      reloadFailed:
+        'Failed to load segmentation results. Please refresh the page.',
     },
     autosaveFailed: 'Autosave failed - changes may be lost',
     // Success messages
@@ -1625,5 +1634,60 @@ export default {
     contactUs: 'Contact Us',
     copyright:
       '© {{year}} SpheroSeg. Developed at ÚTIA AV ČR (Institute of Information Theory and Automation, Czech Academy of Sciences).',
+  },
+
+  // Project sharing
+  sharing: {
+    share: 'Share',
+    shareProject: 'Share project',
+    shareDescription:
+      'Share project "{{title}}" with colleagues and collaborators',
+    shareByEmail: 'Share by email',
+    shareByLink: 'Share by link',
+    emailAddress: 'Email address',
+    enterEmailPlaceholder: 'Enter email address',
+    optionalMessage: 'Optional message',
+    messagePlaceholder: 'Add a personal message to the invitation...',
+    sendInvitation: 'Send invitation',
+    sending: 'Sending...',
+    emailSent: 'Email invitation sent!',
+    emailRequired: 'Email address is required',
+    emailShareFailed: 'Failed to send email invitation',
+
+    linkExpiry: 'Link expiry',
+    neverExpires: 'Never expires',
+    hours: 'hours',
+    days: 'days',
+    generateLink: 'Generate link',
+    generating: 'Generating...',
+    linkGenerated: 'Share link created!',
+    linkCopied: 'Link copied to clipboard',
+    linkCopyFailed: 'Failed to copy link',
+    linkShareFailed: 'Failed to generate share link',
+
+    emailInvitations: 'Email invitations',
+    shareLinks: 'Share links',
+    shareRevoked: 'Share has been revoked',
+    revokeShareFailed: 'Failed to revoke share',
+    failedToLoadShares: 'Failed to load shares',
+
+    status: {
+      pending: 'Pending',
+      accepted: 'Accepted',
+      revoked: 'Revoked',
+    },
+
+    sharedWithYou: 'Shared with you',
+    sharedBy: 'Shared by: {{email}}',
+    sharedProjects: 'Shared projects',
+    noSharedProjects: 'No projects have been shared with you',
+    acceptInvitation: 'Accept invitation',
+    invitationAccepted: 'Invitation accepted!',
+    invitationExpired: 'This invitation has expired',
+    invitationInvalid: 'Invalid invitation',
+    loginToAccept: 'Please log in to accept this invitation',
+    accepting: 'Accepting',
+    redirectingToProject: 'Redirecting to project',
+    invitedEmail: 'Invited email',
   },
 };

@@ -109,6 +109,7 @@ async def segment_image(
     file: UploadFile = File(...),
     model: str = Form("hrnet", description="Model to use for segmentation"),
     threshold: float = Form(0.5, ge=0.1, le=0.9, description="Segmentation threshold"),
+    detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):
     """Main segmentation endpoint"""
@@ -126,10 +127,10 @@ async def segment_image(
         image_data = await file.read()
         image = Image.open(io.BytesIO(image_data))
         
-        logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}")
+        logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
         
         # Perform segmentation
-        result = loader.predict(image, model, threshold)
+        result = loader.predict(image, model, threshold, detect_holes)
         
         processing_time = time.time() - start_time
         
@@ -162,6 +163,7 @@ async def batch_segment_images(
     files: list[UploadFile] = File(..., description="List of images to segment"),
     model: str = Form("hrnet", description="Model to use for segmentation"),
     threshold: float = Form(0.5, ge=0.1, le=0.9, description="Segmentation threshold"),
+    detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):
     """Batch segmentation endpoint for processing multiple images"""
@@ -193,10 +195,10 @@ async def batch_segment_images(
                 image_data = await file.read()
                 image = Image.open(io.BytesIO(image_data))
                 
-                logger.info(f"Processing batch image {i+1}/{len(files)}: {file.filename}, Model: {model}, Threshold: {threshold}")
+                logger.info(f"Processing batch image {i+1}/{len(files)}: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
                 
                 # Perform segmentation
-                result = loader.predict(image, model, threshold)
+                result = loader.predict(image, model, threshold, detect_holes)
                 
                 # Add file information to result
                 result["filename"] = file.filename
