@@ -20,7 +20,6 @@ interface PolygonVerticesProps {
   viewportBounds?: { x: number; y: number; width: number; height: number };
   isUndoRedoInProgress?: boolean;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
-  onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
 }
 
 const PolygonVertices = React.memo(
@@ -36,7 +35,6 @@ const PolygonVertices = React.memo(
     viewportBounds,
     isUndoRedoInProgress = false,
     onDeleteVertex,
-    onDuplicateVertex,
   }: PolygonVerticesProps) => {
     // Always show vertices for selected polygons to enable dragging
     const shouldShowVertices = isSelected;
@@ -98,7 +96,6 @@ const PolygonVertices = React.memo(
               polygonId={polygonId}
               vertexIndex={originalIndex}
               onDelete={() => onDeleteVertex?.(polygonId, originalIndex)}
-              onDuplicate={() => onDuplicateVertex?.(polygonId, originalIndex)}
             >
               <g>
                 <CanvasVertex

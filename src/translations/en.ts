@@ -783,7 +783,11 @@ export default {
       saved: 'Segmentation saved successfully',
       failed: 'Failed to save segmentation',
       deleted: 'Polygon deleted',
+      cannotDeleteVertex:
+        'Cannot delete vertex - polygon needs at least 3 points',
+      vertexDeleted: 'Vertex deleted successfully',
     },
+    autosaveFailed: 'Autosave failed - changes may be lost',
     // Success messages
     operationCompleted: 'Operation completed successfully',
     dataSaved: 'Data saved successfully',
@@ -1144,6 +1148,8 @@ export default {
           'Use the polygon panel on the right to manage visibility and properties',
         step5: 'Save your changes periodically or rely on auto-save',
       },
+      segmenting: 'Segmenting image...',
+      waitingInQueue: 'Waiting in queue',
     },
 
     // Export Features section

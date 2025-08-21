@@ -25,7 +25,7 @@ interface UseEnhancedSegmentationEditorProps {
   imageHeight: number;
   canvasWidth: number;
   canvasHeight: number;
-  onSave?: (polygons: Polygon[]) => Promise<void>;
+  onSave?: (polygons: Polygon[], imageId?: string) => Promise<void>;
   onPolygonsChange?: (polygons: Polygon[]) => void;
   imageId?: string; // Add imageId to detect image changes
   isFromGallery?: boolean; // Add flag to trigger auto-reset
@@ -87,6 +87,7 @@ export const useEnhancedSegmentationEditor = ({
   // Refs (declare before using)
   const canvasRef = useRef<HTMLDivElement>(null);
   const transformRef = useRef<TransformState>(transform);
+  const sliceProcessingRef = useRef<boolean>(false); // Prevent multiple slice attempts
 
   // Update transformRef whenever transform changes
   transformRef.current = transform;
@@ -122,72 +123,128 @@ export const useEnhancedSegmentationEditor = ({
   const initialPolygonsRef = useRef<Polygon[]>([]);
   const currentImageIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
+  const previousImageIdRef = useRef<string | undefined>(imageId);
 
-  useEffect(() => {
-    // Check if this is truly new data (different imageId, different length, or first load)
-    const imageChanged = currentImageIdRef.current !== imageId;
-    const lengthChanged =
-      initialPolygons.length !== initialPolygonsRef.current.length;
-    const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
+  // Autosave function - defined early to be used in useEffect
+  const autosaveBeforeReset = useCallback(async () => {
+    const currentImageId = imageId;
+    const previousImageId = previousImageIdRef.current;
 
-    if (isNewData) {
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug(
-          '🔄 Loading new polygon data:',
-          initialPolygons.length,
-          'polygons for image:',
-          imageId,
-          { imageChanged, lengthChanged, isFirstLoad: !hasInitialized.current }
-        );
-      }
+    // Only trigger autosave if:
+    // 1. We have initialized (not first load)
+    // 2. ImageId actually changed
+    // 3. There are unsaved changes
+    // 4. We have an onSave handler
+    if (
+      hasInitialized.current &&
+      previousImageId !== undefined &&
+      previousImageId !== currentImageId &&
+      hasUnsavedChanges &&
+      onSave
+    ) {
+      logger.debug(
+        '🔄 Autosaving before switching from image:',
+        previousImageId,
+        'to:',
+        currentImageId
+      );
 
-      // Reset all editor state when switching images
-      setPolygons(initialPolygons);
-      setSelectedPolygonId(null); // Clear selection
-      setEditMode(EditMode.View); // Reset to view mode
-      setTempPoints([]); // Clear temp points
-      setHoveredVertex(null); // Clear hover state
-      setCursorPosition(null); // Clear cursor
-      setVertexDragState({
-        isDragging: false,
-        polygonId: null,
-        vertexIndex: null,
-      }); // Reset drag state
+      // Save the polygons from the previous image
+      const polygonsToSave = history[historyIndex] || [];
 
-      // Reset interaction state
-      setInteractionState({
-        isDraggingVertex: false,
-        isPanning: false,
-        panStart: null,
-        draggedVertexInfo: null,
-        originalVertexPosition: null,
-        sliceStartPoint: null,
-        addPointStartVertex: null,
-        addPointEndVertex: null,
-        isAddingPoints: false,
-      });
-
-      // Reset history with new initial state
-      setHistory([initialPolygons]);
-      setHistoryIndex(0);
-      setSavedHistoryIndex(0); // Reset saved index when changing images
-      setHasUnsavedChanges(false);
-
-      // Update refs
-      initialPolygonsRef.current = initialPolygons;
-      currentImageIdRef.current = imageId;
-      hasInitialized.current = true;
-
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug(
-          '✅ Loaded',
-          initialPolygons.length,
-          'polygons for image:',
-          imageId
-        );
+      try {
+        await onSave(polygonsToSave, previousImageId);
+        logger.debug('✅ Autosave completed for image:', previousImageId);
+      } catch (error) {
+        logger.error('Autosave failed when switching images:', error);
+        toast.error(t('toast.autosaveFailed'));
       }
     }
-  }, [initialPolygons, imageId]);
+
+    // Update the ref for next comparison
+    previousImageIdRef.current = currentImageId;
+  }, [imageId, hasUnsavedChanges, onSave, history, historyIndex, t]);
+
+  useEffect(() => {
+    const loadNewData = async () => {
+      // Check if this is truly new data (different imageId, different length, or first load)
+      const imageChanged = currentImageIdRef.current !== imageId;
+      const lengthChanged =
+        initialPolygons.length !== initialPolygonsRef.current.length;
+      const isNewData =
+        !hasInitialized.current || imageChanged || lengthChanged;
+
+      if (isNewData) {
+        // First, handle autosave if imageId changed
+        if (imageChanged) {
+          await autosaveBeforeReset();
+        }
+
+        // Then proceed with resetting editor state
+        if (process.env.NODE_ENV === 'development') {
+          logger.debug(
+            '🔄 Loading new polygon data:',
+            initialPolygons.length,
+            'polygons for image:',
+            imageId,
+            {
+              imageChanged,
+              lengthChanged,
+              isFirstLoad: !hasInitialized.current,
+            }
+          );
+        }
+
+        // Reset all editor state when switching images
+        setPolygons(initialPolygons);
+        setSelectedPolygonId(null); // Clear selection
+        setEditMode(EditMode.View); // Reset to view mode
+        setTempPoints([]); // Clear temp points
+        setHoveredVertex(null); // Clear hover state
+        setCursorPosition(null); // Clear cursor
+        setVertexDragState({
+          isDragging: false,
+          polygonId: null,
+          vertexIndex: null,
+        }); // Reset drag state
+
+        // Reset interaction state
+        setInteractionState({
+          isDraggingVertex: false,
+          isPanning: false,
+          panStart: null,
+          draggedVertexInfo: null,
+          originalVertexPosition: null,
+          sliceStartPoint: null,
+          addPointStartVertex: null,
+          addPointEndVertex: null,
+          isAddingPoints: false,
+        });
+
+        // Reset history with new initial state
+        setHistory([initialPolygons]);
+        setHistoryIndex(0);
+        setSavedHistoryIndex(0); // Reset saved index when changing images
+        setHasUnsavedChanges(false);
+
+        // Update refs
+        initialPolygonsRef.current = initialPolygons;
+        currentImageIdRef.current = imageId;
+        hasInitialized.current = true;
+
+        if (process.env.NODE_ENV === 'development') {
+          logger.debug(
+            '✅ Loaded',
+            initialPolygons.length,
+            'polygons for image:',
+            imageId
+          );
+        }
+      }
+    };
+
+    loadNewData();
+  }, [initialPolygons, imageId, autosaveBeforeReset]);
 
   // Auto-reset view when opening image from gallery
   useEffect(() => {
@@ -216,6 +273,38 @@ export const useEnhancedSegmentationEditor = ({
     canvasWidth,
     canvasHeight,
   ]);
+
+  // Handle beforeunload - autosave when user leaves page/closes tab
+  useEffect(() => {
+    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges && onSave) {
+        // Try to save synchronously
+        try {
+          const polygonsToSave = history[historyIndex] || [];
+          logger.debug('🚪 Autosaving before page unload');
+
+          // Note: Modern browsers may not wait for async operations during beforeunload
+          // This is a best effort attempt
+          onSave(polygonsToSave, imageId).catch(error => {
+            logger.error('Autosave failed during page unload:', error);
+          });
+
+          // Show browser warning
+          event.preventDefault();
+          event.returnValue = '';
+          return '';
+        } catch (error) {
+          logger.error('Error during beforeunload autosave:', error);
+        }
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [hasUnsavedChanges, onSave, history, historyIndex]);
 
   // Update polygons with history tracking
   const updatePolygons = useCallback(
@@ -328,7 +417,7 @@ export const useEnhancedSegmentationEditor = ({
 
     setIsSaving(true);
     try {
-      await onSave(polygons);
+      await onSave(polygons, imageId);
       setHasUnsavedChanges(false);
       // Update the saved history index to current position
       setSavedHistoryIndex(historyIndex);
@@ -412,6 +501,39 @@ export const useEnhancedSegmentationEditor = ({
     [polygons, selectedPolygonId, updatePolygons, t]
   );
 
+  // Vertex operations
+  const handleDeleteVertex = useCallback(
+    (polygonId: string, vertexIndex: number) => {
+      const polygon = polygons.find(p => p.id === polygonId);
+      if (!polygon) return;
+
+      // Can't delete if polygon would have less than 3 vertices
+      if (polygon.points.length <= 3) {
+        toast.error(
+          t('toast.segmentation.cannotDeleteVertex') ||
+            'Cannot delete vertex - polygon needs at least 3 points'
+        );
+        return;
+      }
+
+      // Create new points array without the deleted vertex
+      const updatedPoints = polygon.points.filter(
+        (_, index) => index !== vertexIndex
+      );
+
+      // Update the polygon
+      const updatedPolygons = polygons.map(p =>
+        p.id === polygonId ? { ...p, points: updatedPoints } : p
+      );
+
+      updatePolygons(updatedPolygons);
+      toast.success(
+        t('toast.segmentation.vertexDeleted') || 'Vertex deleted successfully'
+      );
+    },
+    [polygons, updatePolygons, t]
+  );
+
   // Escape handler
   const handleEscape = useCallback(() => {
     // Reset all temporary state
@@ -427,6 +549,9 @@ export const useEnhancedSegmentationEditor = ({
       addPointEndVertex: null,
       isAddingPoints: false,
     });
+    // Reset slice processing flag
+    sliceProcessingRef.current = false;
+
     // If we have a selected polygon, go to EditVertices mode instead of View mode
     // This keeps the polygon selected when exiting other modes
     if (selectedPolygonId) {
@@ -469,20 +594,50 @@ export const useEnhancedSegmentationEditor = ({
 
   // Handle slice completion when two temp points are placed in slice mode
   useEffect(() => {
-    if (editMode === EditMode.Slice && tempPoints.length === 2) {
+    if (
+      editMode === EditMode.Slice &&
+      tempPoints.length === 2 &&
+      !sliceProcessingRef.current
+    ) {
+      // Set flag to prevent multiple simultaneous slice attempts
+      sliceProcessingRef.current = true;
+
       // Trigger slice action with error handling
       const executeSliceAction = async () => {
         try {
-          await slicing.handleSliceAction();
+          const success = await slicing.handleSliceAction();
+
+          // If slice failed, clear temp points to prevent infinite loop
+          if (!success) {
+            setTempPoints([]);
+            setInteractionState(prev => ({
+              ...prev,
+              sliceStartPoint: null,
+            }));
+          }
         } catch (error) {
           console.error('Failed to execute slice action:', error);
-          // TODO: Set error state or show user notification
-          // setSliceError(error) or toast.error('Slice operation failed')
+
+          // Clear temp points on error to prevent infinite loop
+          setTempPoints([]);
+          setInteractionState(prev => ({
+            ...prev,
+            sliceStartPoint: null,
+          }));
+        } finally {
+          // Reset the flag after processing
+          sliceProcessingRef.current = false;
         }
       };
       executeSliceAction();
     }
-  }, [editMode, tempPoints.length, slicing]);
+  }, [
+    editMode,
+    tempPoints.length,
+    slicing,
+    setTempPoints,
+    setInteractionState,
+  ]);
 
   // Enhanced wheel handler with non-passive event listener
   useEffect(() => {
@@ -714,6 +869,9 @@ export const useEnhancedSegmentationEditor = ({
 
     // Polygon operations
     handleDeletePolygon,
+
+    // Vertex operations
+    handleDeleteVertex,
 
     // Event handlers
     handleMouseDown: interactions.handleMouseDown,

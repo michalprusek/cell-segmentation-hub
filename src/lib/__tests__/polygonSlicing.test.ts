@@ -138,13 +138,15 @@ describe('Polygon Slicing', () => {
       );
       expect(noIntersectionResult).toBeNull();
 
-      // Slice that only touches one edge
+      // Slice that only touches one edge with segment, but infinite line intersects properly
+      // This now should work because infinite line intersects at (0,0) and (0,100)
       const oneIntersectionResult = slicePolygon(
         square,
         { x: 0, y: -10 },
         { x: 0, y: 0 }
       );
-      expect(oneIntersectionResult).toBeNull();
+      expect(oneIntersectionResult).not.toBeNull();
+      expect(oneIntersectionResult).toHaveLength(2);
 
       // Very short slice line
       const shortLineResult = slicePolygon(
@@ -232,14 +234,16 @@ describe('Polygon Slicing', () => {
         'Expected 2 intersections, found 0'
       );
 
-      // One intersection (tangent)
+      // One intersection with segment, but infinite line has two intersections
+      // This should now be valid with the infinite line extension
       const oneIntersectValidation = validateSliceLine(
         square,
         { x: 0, y: -10 },
         { x: 0, y: 10 }
       );
-      expect(oneIntersectValidation.isValid).toBe(false);
-      expect(oneIntersectValidation.intersectionCount).toBe(1);
+      expect(oneIntersectValidation.isValid).toBe(true);
+      expect(oneIntersectValidation.intersectionCount).toBe(2);
+      expect(oneIntersectValidation.extendedToInfiniteLine).toBe(true);
     });
 
     it('should reject very short slice lines', () => {

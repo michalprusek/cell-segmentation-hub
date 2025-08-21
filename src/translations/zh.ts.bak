@@ -525,7 +525,6 @@ export default {
       deletePolygon: '删除多边形',
       unknown: '未知',
     },
-    autosaveFailed: '自动保存失败 - 更改可能丢失',
     modeDescription: {
       view: '导航和选择多边形',
       edit: '移动和修改顶点',
@@ -760,7 +759,6 @@ export default {
       cannotDeleteVertex: '无法删除顶点 - 多边形至少需要3个点',
       vertexDeleted: '顶点删除成功',
     },
-    autosaveFailed: '自动保存失败 - 更改可能丢失',
   },
   export: {
     advancedExport: '高级导出',
@@ -1041,8 +1039,6 @@ export default {
         step4: '使用右侧面板',
         step5: '定期保存',
       },
-      segmenting: '正在分割图像...',
-      waitingInQueue: '在队列中等待',
     },
     exportFeatures: {
       title: '导出功能',

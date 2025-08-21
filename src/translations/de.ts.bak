@@ -577,7 +577,6 @@ export default {
       deletePolygon: 'Polygon löschen',
       unknown: 'Unbekannt',
     },
-    autosaveFailed: 'Autosave failed - changes may be lost',
     modeDescription: {
       view: 'Navigieren und Polygone auswählen',
       edit: 'Eckpunkte bewegen und modifizieren',
@@ -832,12 +831,9 @@ export default {
       saved: 'Segmentierung erfolgreich gespeichert',
       failed: 'Speichern der Segmentierung fehlgeschlagen',
       deleted: 'Polygon gelöscht',
-      cannotDeleteVertex:
-        'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
+      cannotDeleteVertex: 'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
       vertexDeleted: 'Scheitelpunkt erfolgreich gelöscht',
     },
-    autosaveFailed:
-      'Automatisches Speichern fehlgeschlagen - Änderungen können verloren gehen',
   },
   export: {
     advancedExport: 'Erweiterter Export',
@@ -1123,8 +1119,6 @@ export default {
         step4: 'Rechtes Panel verwenden',
         step5: 'Regelmäßig speichern',
       },
-      segmenting: 'Bild wird segmentiert...',
-      waitingInQueue: 'Wartend in der Warteschlange',
     },
     exportFeatures: {
       title: 'Export-Funktionen',
