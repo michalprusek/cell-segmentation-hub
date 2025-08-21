@@ -13,7 +13,10 @@ function validateEnvVar(name: string, value: string | undefined): string {
 }
 
 const config: AppConfig = {
-  apiBaseUrl: validateEnvVar('VITE_API_URL', import.meta.env.VITE_API_URL),
+  apiBaseUrl: validateEnvVar(
+    'VITE_API_BASE_URL',
+    import.meta.env.VITE_API_BASE_URL || `${import.meta.env.VITE_API_URL}/api`
+  ),
   mlServiceUrl: validateEnvVar(
     'VITE_ML_SERVICE_URL',
     import.meta.env.VITE_ML_SERVICE_URL

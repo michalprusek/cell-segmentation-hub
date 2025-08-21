@@ -20,13 +20,35 @@ services:
       - spheroseg-network
     restart: unless-stopped
 
+  # Redis cache service (like in blue build)
+  redis:
+    image: redis:7-alpine
+    container_name: spheroseg-redis
+    networks:
+      - spheroseg-network
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # Frontend service
   frontend:
     build:
       context: .
       dockerfile: docker/frontend.Dockerfile
     container_name: spheroseg-frontend
-    env_file: ${ENV_FILE:-.env.development}
+    environment:
+      - VITE_API_URL=http://localhost:3001
+      - VITE_API_BASE_URL=http://localhost:3001/api
+      - VITE_ML_SERVICE_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:3001
+      - NODE_ENV=development
     ports:
       - "3000:5173"
     volumes:
@@ -52,9 +74,20 @@ services:
     container_name: spheroseg-backend
     env_file: ${ENV_FILE:-.env.development}
     environment:
+      - NODE_ENV=development
+      - HOST=0.0.0.0
+      - PORT=3001
       - DATABASE_URL=postgresql://spheroseg:spheroseg_dev@postgres:5432/spheroseg
+      - REDIS_URL=redis://redis:6379
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - SEGMENTATION_SERVICE_URL=http://ml-service:8000
+      - ALLOWED_ORIGINS=http://localhost:3000
+      - WS_ALLOWED_ORIGINS=http://localhost:3000
+      - EMAIL_SERVICE=smtp
+      - FROM_EMAIL=${FROM_EMAIL}
+      - SMTP_HOST=mailhog
+      - SMTP_PORT=1025
     ports:
       - "3001:3001"
     volumes:
@@ -64,6 +97,8 @@ services:
       - backend-db:/app/data
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       ml-service:
         condition: service_started
@@ -156,6 +191,8 @@ networks:
 
 volumes:
   postgres-data:
+    driver: local
+  redis-data:
     driver: local
   ml-models:
     driver: local
