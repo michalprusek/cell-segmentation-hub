@@ -1,15 +1,15 @@
 # FastAPI and web framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+python-multipart==0.0.18
 
 # Deep learning frameworks
-torch==2.1.1
-torchvision==0.16.1
+torch==2.7.1
+torchvision==0.18.1
 
 # Image processing
 opencv-python-headless==4.8.1.78
-pillow==10.1.0
+pillow==10.3.0
 scikit-image==0.22.0
 
 # Scientific computing
@@ -31,4 +31,4 @@ httpx==0.25.2
 faker==20.1.0
 
 # Production deployment
-gunicorn==21.2.0
+gunicorn==23.0.0
