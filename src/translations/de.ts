@@ -747,6 +747,8 @@ export default {
     disconnected: 'Vom Server getrennt',
     error: 'ML-Service-Fehler',
     ready: 'Bereit für Segmentierung',
+    online: 'Online',
+    offline: 'Offline',
   },
   queue: {
     title: 'Segmentierungs-Warteschlange',
@@ -1488,6 +1490,8 @@ export default {
     reconnected: 'Verbindung zum Server wiederhergestellt',
     reconnectFailed: 'Wiederherstellung der Serververbindung fehlgeschlagen',
     connectionLost: 'Verbindung zum Server verloren',
+    connected: 'Mit Echtzeit-Updates verbunden',
+    disconnected: 'Von Echtzeit-Updates getrennt',
   },
 
   // Metriken-Anzeige

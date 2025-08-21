@@ -737,6 +737,8 @@ export default {
     disconnected: 'Déconnecté du serveur',
     error: 'Erreur du service ML',
     ready: 'Prêt pour la segmentation',
+    online: 'En ligne',
+    offline: 'Hors ligne',
     segmenting: "Segmentation de l'image...",
     waitingInQueue: 'En attente dans la file',
     reloadingSegmentation: 'Actualisation des données de segmentation...',
@@ -1475,6 +1477,8 @@ export default {
     reconnected: 'Connexion au serveur rétablie',
     reconnectFailed: 'Échec du rétablissement de la connexion au serveur',
     connectionLost: 'Connexion au serveur perdue',
+    connected: 'Connecté aux mises à jour en temps réel',
+    disconnected: 'Déconnecté des mises à jour en temps réel',
   },
 
   // Affichage des métriques

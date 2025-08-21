@@ -739,6 +739,8 @@ export default {
     disconnected: 'Odpojeno od serveru',
     error: 'Chyba ML služby',
     ready: 'Připraven k segmentaci',
+    online: 'Online',
+    offline: 'Offline',
   },
   queue: {
     title: 'Segmentační fronta',
@@ -1527,6 +1529,8 @@ export default {
     reconnected: 'Připojení k serveru obnoveno',
     reconnectFailed: 'Nepodařilo se obnovit připojení k serveru',
     connectionLost: 'Spojení se serverem ztraceno',
+    connected: 'Připojeno k aktualizacím v reálném čase',
+    disconnected: 'Odpojeno od aktualizací v reálném čase',
   },
 
   // Context menu

@@ -20,7 +20,11 @@ services:
       - spheroseg-network
     restart: unless-stopped
 
-  # Redis cache service (like in blue build)
+  # Redis cache service
+  # Used for:
+  # - Optional caching to improve performance (gracefully degrades if unavailable)
+  # - Future: Export queue management for large batch operations
+  # - Future: WebSocket session management across multiple backend instances
   redis:
     image: redis:7-alpine
     container_name: spheroseg-redis

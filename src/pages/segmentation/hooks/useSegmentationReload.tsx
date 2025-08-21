@@ -30,9 +30,50 @@ export function useSegmentationReload({
   maxRetries = 2,
 }: UseSegmentationReloadProps): UseSegmentationReloadReturn {
   const { t } = useLanguage();
-  const [isReloading, setIsReloading] = useState(false);
+
+  // Check for persisted loading state on mount
+  const getPersistedLoadingState = () => {
+    if (!imageId) return false;
+    const storageKey = `segmentation-reload-${imageId}`;
+    const stored = localStorage.getItem(storageKey);
+    if (stored) {
+      try {
+        const { timestamp, isLoading } = JSON.parse(stored);
+        // Only consider it valid if it's less than 5 minutes old
+        const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+        if (timestamp > fiveMinutesAgo && isLoading) {
+          return true;
+        }
+        // Clean up old entry
+        localStorage.removeItem(storageKey);
+      } catch {
+        localStorage.removeItem(storageKey);
+      }
+    }
+    return false;
+  };
+
+  const [isReloading, setIsReloading] = useState(getPersistedLoadingState);
   const reloadTimeoutRef = useRef<NodeJS.Timeout>();
   const abortControllerRef = useRef<AbortController>();
+
+  // Persist loading state changes
+  useEffect(() => {
+    if (!imageId) return;
+    const storageKey = `segmentation-reload-${imageId}`;
+
+    if (isReloading) {
+      localStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          timestamp: Date.now(),
+          isLoading: true,
+        })
+      );
+    } else {
+      localStorage.removeItem(storageKey);
+    }
+  }, [isReloading, imageId]);
 
   /**
    * Cleanup function for timeouts and abort controllers
@@ -169,7 +210,12 @@ export function useSegmentationReload({
         return true;
       } catch (error: any) {
         setIsReloading(false);
-        logger.error('Failed to reload segmentation:', error);
+        logger.error('Failed to reload segmentation:', {
+          error,
+          imageId,
+          retryCount,
+          maxRetries,
+        });
 
         // Retry logic with exponential backoff
         if (retryCount < maxRetries) {
@@ -179,10 +225,12 @@ export function useSegmentationReload({
           return false;
         }
 
-        // Show error after all retries failed
-        toast.error(
+        // Show error after all retries failed with context
+        const errorMessage =
           t('toast.segmentation.reloadFailed') ||
-            'Failed to load segmentation results. Please refresh the page.'
+          'Failed to load segmentation results. Please refresh the page.';
+        toast.error(
+          `${errorMessage} (Image: ${imageId}, Attempts: ${retryCount + 1})`
         );
         return false;
       }
@@ -202,6 +250,11 @@ export function useSegmentationReload({
   useEffect(() => {
     return () => {
       cleanupReloadOperations();
+      // Also clean up localStorage on unmount
+      if (imageId) {
+        const storageKey = `segmentation-reload-${imageId}`;
+        localStorage.removeItem(storageKey);
+      }
     };
   }, [imageId, cleanupReloadOperations]);
 

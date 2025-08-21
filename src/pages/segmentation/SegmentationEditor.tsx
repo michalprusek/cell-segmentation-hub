@@ -62,7 +62,11 @@ const SegmentationEditor = () => {
   } = useProjectData(projectId, user?.id, { fetchAll: true });
 
   // WebSocket connection for segmentation status updates
-  const { lastUpdate, queueStats } = useSegmentationQueue(projectId);
+  const {
+    lastUpdate,
+    queueStats,
+    isConnected: isWebSocketConnected,
+  } = useSegmentationQueue(projectId);
 
   // Debounce WebSocket updates to prevent rapid state changes
   const debouncedLastUpdate = useDebounce(lastUpdate, 300);
@@ -523,8 +527,9 @@ const SegmentationEditor = () => {
 
     // Auto-reload polygons when segmentation is completed
     if (
-      debouncedLastUpdate.status === 'segmented' ||
-      debouncedLastUpdate.status === 'completed'
+      !isReloading &&
+      (debouncedLastUpdate.status === 'segmented' ||
+        debouncedLastUpdate.status === 'completed')
     ) {
       logger.debug(
         '🎯 Segmentation completed via WebSocket, auto-reloading polygons:',
@@ -537,7 +542,9 @@ const SegmentationEditor = () => {
 
       // Add a small delay to ensure the API is ready
       setTimeout(() => {
-        reloadSegmentation();
+        if (!isReloading) {
+          reloadSegmentation();
+        }
       }, 500);
 
       return;
@@ -557,6 +564,7 @@ const SegmentationEditor = () => {
   }, [
     debouncedLastUpdate,
     imageId,
+    isReloading,
     reloadSegmentation,
     setSegmentationPolygons,
   ]);
@@ -756,6 +764,7 @@ const SegmentationEditor = () => {
           segmentationStatus={selectedImage?.segmentationStatus}
           lastUpdate={lastUpdate}
           queueStats={queueStats}
+          isWebSocketConnected={isWebSocketConnected}
         />
 
         {/* Main Content Area */}
