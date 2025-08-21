@@ -42,7 +42,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const { selectedModel, confidenceThreshold } = useModel();
+  const { selectedModel, confidenceThreshold, detectHoles } = useModel();
   const [showUploader, setShowUploader] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
@@ -552,7 +552,8 @@ const ProjectDetail = () => {
           selectedModel,
           confidenceThreshold,
           0, // priority
-          false // not force re-segment
+          false, // not force re-segment
+          detectHoles
         );
         totalQueued += response.queuedCount;
       }
@@ -565,7 +566,8 @@ const ProjectDetail = () => {
           selectedModel,
           confidenceThreshold,
           0, // priority
-          true // force re-segment
+          true, // force re-segment
+          detectHoles
         );
         totalQueued += response.queuedCount;
       }

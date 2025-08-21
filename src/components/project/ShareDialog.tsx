@@ -36,6 +36,10 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
+  Send,
+  UserCheck,
+  UserPlus,
+  RefreshCw,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
@@ -43,29 +47,38 @@ interface ShareDialogProps {
   projectId: string;
   projectTitle: string;
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface ProjectShare {
   id: string;
   email: string | null;
-  sharedWith: { id: string; email: string } | null;
+  sharedWith: { id: string; email: string; username?: string } | null;
   status: string;
   shareToken: string;
   shareUrl: string;
   tokenExpiry: string | null;
   createdAt: string;
+  sharedBy?: { id: string; email: string };
 }
 
 export function ShareDialog({
   projectId,
   projectTitle,
   trigger,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: ShareDialogProps) {
   const { t } = useLanguage();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('email');
   const [loading, setLoading] = useState(false);
   const [shares, setShares] = useState<ProjectShare[]>([]);
+
+  // Use controlled state if provided, otherwise use internal state
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen;
+  const setOpen = controlledOnOpenChange || setInternalOpen;
 
   // Email sharing state
   const [email, setEmail] = useState('');
@@ -128,6 +141,37 @@ export function ShareDialog({
         error?.response?.data?.message ||
         error?.message ||
         t('sharing.emailShareFailed');
+      toast({
+        title: t('error'),
+        description: errorMessage,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendInvitation = async (emailToResend: string) => {
+    setLoading(true);
+    try {
+      await apiClient.shareProjectByEmail(projectId, {
+        email: emailToResend,
+        message: t('sharing.reminderMessage'),
+      });
+
+      toast({
+        title: t('success'),
+        description: t('sharing.invitationResent'),
+      });
+
+      await loadShares(); // Refresh shares list
+    } catch (error: any) {
+      logger.error('Failed to resend invitation:', error);
+
+      const errorMessage =
+        error?.response?.data?.message ||
+        error?.message ||
+        t('sharing.resendFailed');
       toast({
         title: t('error'),
         description: errorMessage,
@@ -234,20 +278,43 @@ export function ShareDialog({
     return date.toLocaleString();
   };
 
-  const emailShares = shares.filter(share => share.email);
+  // Separate shares by type and status
+  const acceptedEmailShares = shares.filter(
+    share => share.email && share.status === 'accepted'
+  );
+  const pendingEmailShares = shares.filter(
+    share => share.email && share.status === 'pending'
+  );
   const linkShares = shares.filter(share => !share.email);
+  const acceptedLinkShares = linkShares.filter(
+    share => share.status === 'accepted' && share.sharedWith
+  );
+  const activeLinkShares = linkShares.filter(
+    share => share.status === 'accepted' && !share.sharedWith
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger || (
-          <Button variant="outline" size="sm">
-            <Share className="h-4 w-4 mr-2" />
-            {t('sharing.share')}
-          </Button>
-        )}
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      {/* Only render trigger if not controlled externally */}
+      {controlledOpen === undefined && (
+        <DialogTrigger asChild>
+          {trigger || (
+            <Button variant="outline" size="sm">
+              <Share className="h-4 w-4 mr-2" />
+              {t('sharing.share')}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
+      <DialogContent
+        className="max-w-2xl max-h-[80vh] overflow-y-auto"
+        onClick={e => {
+          e.stopPropagation();
+        }}
+        onPointerDownOutside={e => {
+          e.stopPropagation();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share className="h-5 w-5" />
@@ -303,35 +370,105 @@ export function ShareDialog({
               </Button>
             </div>
 
-            {emailShares.length > 0 && (
+            {/* Accepted Users */}
+            {acceptedEmailShares.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    {t('sharing.emailInvitations')} ({emailShares.length})
+                    <UserCheck className="h-4 w-4 text-green-600" />
+                    {t('sharing.acceptedUsers')} ({acceptedEmailShares.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {emailShares.map(share => (
+                  {acceptedEmailShares.map(share => (
                     <div
                       key={share.id}
-                      className="flex items-center justify-between p-2 border rounded"
+                      className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg"
                     >
-                      <div className="flex items-center gap-2">
-                        {getStatusIcon(share.status)}
-                        <span className="text-sm">{share.email}</span>
-                        <Badge variant="secondary" className="text-xs">
-                          {t(`sharing.status.${share.status}`)}
-                        </Badge>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-green-500 text-white flex items-center justify-center font-semibold">
+                          {(share.sharedWith?.username ||
+                            share.sharedWith?.email ||
+                            share.email ||
+                            '?')[0].toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {share.sharedWith?.username ||
+                              share.sharedWith?.email ||
+                              share.email}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {t('sharing.joinedOn')}:{' '}
+                            {new Date(share.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
                       </div>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => handleRevokeShare(share.id)}
                         disabled={loading}
+                        title={t('sharing.revokeAccess')}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4 text-red-500" />
                       </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Pending Invitations */}
+            {pendingEmailShares.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-yellow-600" />
+                    {t('sharing.pendingInvitations')} (
+                    {pendingEmailShares.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {pendingEmailShares.map(share => (
+                    <div
+                      key={share.id}
+                      className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-yellow-500 text-white flex items-center justify-center">
+                          <Mail className="h-5 w-5" />
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {share.email}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {t('sharing.sentOn')}:{' '}
+                            {new Date(share.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleResendInvitation(share.email!)}
+                          disabled={loading}
+                          title={t('sharing.resendInvitation')}
+                        >
+                          <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleRevokeShare(share.id)}
+                          disabled={loading}
+                          title={t('sharing.cancelInvitation')}
+                        >
+                          <XCircle className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </CardContent>
@@ -395,57 +532,45 @@ export function ShareDialog({
               )}
             </div>
 
-            {linkShares.length > 0 && (
+            {/* Users who joined via link */}
+            {acceptedLinkShares.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="text-sm flex items-center gap-2">
-                    <Link className="h-4 w-4" />
-                    {t('sharing.shareLinks')} ({linkShares.length})
+                    <UserCheck className="h-4 w-4 text-green-600" />
+                    {t('sharing.joinedViaLink')} ({acceptedLinkShares.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {linkShares.map(share => (
+                  {acceptedLinkShares.map(share => (
                     <div
                       key={share.id}
-                      className="p-3 border rounded space-y-2"
+                      className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg"
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-gray-500" />
-                          <span className="text-sm">
-                            {formatExpiry(share.tokenExpiry)}
-                          </span>
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-semibold">
+                          <Link className="h-5 w-5" />
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleRevokeShare(share.id)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">
+                            {share.sharedWith?.username ||
+                              share.sharedWith?.email}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {t('sharing.joinedViaLinkOn')}:{' '}
+                            {new Date(share.createdAt).toLocaleDateString()}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Input
-                          value={share.shareUrl}
-                          readOnly
-                          className="flex-1 text-xs"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleCopyLink(share.shareUrl)}
-                        >
-                          <Copy className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.open(share.shareUrl, '_blank')}
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRevokeShare(share.id)}
+                        disabled={loading}
+                        title={t('sharing.revokeAccess')}
+                      >
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
                     </div>
                   ))}
                 </CardContent>

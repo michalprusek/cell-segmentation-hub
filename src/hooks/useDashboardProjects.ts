@@ -36,12 +36,40 @@ export const useDashboardProjects = ({
       setLoading(true);
       setFetchError(null);
 
-      const response = await apiClient.getProjects();
-      const projectsData = response.projects;
+      // Fetch owned projects first
+      const ownedResponse = await apiClient.getProjects();
 
-      // No need for additional API calls - backend now includes image data
-      const projectsWithDetails = (projectsData || []).map(
-        (project: ApiProject) => {
+      // Try to fetch shared projects, but don't fail if it errors
+      let sharedResponse = [];
+      try {
+        sharedResponse = await apiClient.getSharedProjects();
+      } catch (shareError) {
+        logger.warn('Failed to fetch shared projects:', shareError);
+        // Continue with just owned projects
+      }
+
+      const ownedProjects = ownedResponse.projects || [];
+      const sharedProjects = sharedResponse || [];
+
+      // Combine owned and shared projects - mark shared ones
+      const allProjects = [
+        ...ownedProjects.map((p: ApiProject) => ({
+          ...p,
+          isOwned: true,
+          isShared: false,
+        })),
+        ...sharedProjects.map((p: any) => ({
+          ...p.project,
+          isOwned: false,
+          isShared: true,
+          sharedBy: p.sharedBy,
+          shareStatus: p.status,
+        })),
+      ];
+
+      // Process all projects
+      const projectsWithDetails = allProjects.map(
+        (project: ApiProject & { isOwned?: boolean; isShared?: boolean }) => {
           // Extract thumbnail from backend data (first image if available)
           let thumbnail = '/placeholder.svg';
           const imageCount = project.image_count || 0;

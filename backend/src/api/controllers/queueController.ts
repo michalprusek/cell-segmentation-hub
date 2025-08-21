@@ -35,7 +35,7 @@ class QueueController {
   addImageToQueue = async (req: Request, res: Response): Promise<void> => {
     try {
       const { imageId } = req.params;
-      const { model = 'hrnet', threshold = 0.5, priority = 0 } = req.body;
+      const { model = 'hrnet', threshold = 0.5, priority = 0, detectHoles = true } = req.body;
       
       const userId = this.validateUser(req, res);
       if (!userId) {
@@ -56,7 +56,8 @@ class QueueController {
         userId,
         model,
         threshold,
-        priority
+        priority,
+        detectHoles
       );
 
       // Emit WebSocket update
@@ -94,7 +95,18 @@ class QueueController {
    */
   addBatchToQueue = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { imageIds, projectId, model = 'hrnet', threshold = 0.5, priority = 0, forceResegment = false } = req.body;
+      const { imageIds, projectId, model = 'hrnet', threshold = 0.5, priority = 0, forceResegment = false, detectHoles = true } = req.body;
+      
+      // Debug log to see what's being received
+      logger.info('addBatchToQueue received request', 'QueueController', {
+        imageIds,
+        projectId,
+        model,
+        threshold,
+        detectHoles,
+        forceResegment,
+        requestBody: req.body
+      });
       
       const userId = this.validateUser(req, res);
       if (!userId) {
@@ -112,11 +124,31 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership
+      // Verify project ownership or sharing access
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
+        return;
+      }
+
       const project = await prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          OR: [
+            // Owned projects
+            { userId: userId },
+            // Shared projects
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    { email: user.email, status: { in: ['pending', 'accepted'] } }
+                  ]
+                }
+              }
+            }
+          ]
         }
       });
 
@@ -132,7 +164,8 @@ class QueueController {
         model,
         threshold,
         priority,
-        forceResegment
+        forceResegment,
+        detectHoles
       );
 
       // Emit WebSocket updates
@@ -185,11 +218,31 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership
+      // Verify project ownership or sharing access
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
+        return;
+      }
+
       const project = await prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          OR: [
+            // Owned projects
+            { userId: userId },
+            // Shared projects
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    { email: user.email, status: { in: ['pending', 'accepted'] } }
+                  ]
+                }
+              }
+            }
+          ]
         }
       });
 
@@ -226,11 +279,31 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership
+      // Verify project ownership or sharing access
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
+        return;
+      }
+
       const project = await prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          OR: [
+            // Owned projects
+            { userId: userId },
+            // Shared projects
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    { email: user.email, status: { in: ['pending', 'accepted'] } }
+                  ]
+                }
+              }
+            }
+          ]
         }
       });
 

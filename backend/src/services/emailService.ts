@@ -338,7 +338,7 @@ export async function testConnection(): Promise<boolean> {
 export async function initializeEmailService(): Promise<void> {
   if (process.env.NODE_ENV !== 'test' && (process.env.SMTP_HOST || process.env.SENDGRID_API_KEY)) {
     try {
-      await init();
+      init(); // Changed to sync call since init() is not async
       logger.info('Email service initialized successfully', 'EmailService');
     } catch (error) {
       logger.error('Failed to initialize email service', error as Error, 'EmailService');

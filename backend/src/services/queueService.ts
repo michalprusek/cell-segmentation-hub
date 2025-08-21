@@ -74,7 +74,8 @@ export class QueueService {
     userId: string,
     model = 'hrnet',
     threshold = 0.5,
-    priority = 0
+    priority = 0,
+    detectHoles = true
   ): Promise<SegmentationQueue> {
     try {
       // Check if image is already in queue
@@ -102,6 +103,7 @@ export class QueueService {
           userId,
           model,
           threshold,
+          detectHoles,
           priority,
           status: 'queued'
         }
@@ -140,7 +142,8 @@ export class QueueService {
     model = 'hrnet',
     threshold = 0.5,
     priority = 0,
-    forceResegment = false
+    forceResegment = false,
+    detectHoles = true
   ): Promise<SegmentationQueue[]> {
     try {
       const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -189,6 +192,7 @@ export class QueueService {
                 userId,
                 model,
                 threshold,
+                detectHoles,
                 priority,
                 status: 'queued',
                 batchId
@@ -479,7 +483,8 @@ export class QueueService {
           imageId: firstItem.imageId,
           model: model as 'hrnet' | 'resunet_advanced' | 'resunet_small',
           threshold: threshold,
-          userId: firstItem.userId
+          userId: firstItem.userId,
+          detectHoles: firstItem.detectHoles
         });
         results = [singleResult];
       } else {
@@ -487,7 +492,8 @@ export class QueueService {
         results = await this.segmentationService.requestBatchSegmentation(
           imageData,
           model,
-          threshold
+          threshold,
+          firstItem.detectHoles
         );
       }
 

@@ -24,7 +24,7 @@ interface ShareValidationData {
   needsLogin: boolean;
 }
 
-export function ShareAcceptPage() {
+function ShareAcceptPage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -35,6 +35,7 @@ export function ShareAcceptPage() {
   const [shareData, setShareData] = useState<ShareValidationData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
+  const [autoAccepting, setAutoAccepting] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -45,6 +46,24 @@ export function ShareAcceptPage() {
 
     validateToken();
   }, [token]);
+
+  // Auto-accept invitation if user is already logged in and matches email
+  useEffect(() => {
+    if (shareData && user && !accepted && !autoAccepting) {
+      if (!shareData.needsLogin && shareData.status === 'pending') {
+        // For email invitations, check if the logged-in user matches
+        if (shareData.email && user.email === shareData.email) {
+          setAutoAccepting(true);
+          handleAccept();
+        }
+        // For link invitations, auto-accept for any logged-in user
+        else if (!shareData.email) {
+          setAutoAccepting(true);
+          handleAccept();
+        }
+      }
+    }
+  }, [shareData, user, accepted, autoAccepting]);
 
   const validateToken = async () => {
     try {
@@ -79,7 +98,7 @@ export function ShareAcceptPage() {
           variant: 'default',
         });
         // Redirect to login with return URL
-        navigate(`/login?returnTo=/share/accept/${token}`);
+        navigate(`/sign-in?returnTo=/share/accept/${token}`);
         return;
       }
 
@@ -89,9 +108,9 @@ export function ShareAcceptPage() {
         description: t('sharing.invitationAccepted'),
       });
 
-      // Redirect to the project after a short delay
+      // Redirect to the dashboard after a short delay
       setTimeout(() => {
-        navigate(`/project/${result.project.id}`);
+        navigate('/dashboard');
       }, 2000);
     } catch (error: any) {
       logger.error('Failed to accept share invitation:', error);
@@ -111,7 +130,7 @@ export function ShareAcceptPage() {
   };
 
   const handleLogin = () => {
-    navigate(`/login?returnTo=/share/accept/${token}`);
+    navigate(`/sign-in?returnTo=/share/accept/${token}`);
   };
 
   if (loading) {
@@ -163,7 +182,7 @@ export function ShareAcceptPage() {
           <CardContent className="text-center space-y-4">
             <p>{t('sharing.invitationAccepted')}</p>
             <p className="text-sm text-muted-foreground">
-              {t('sharing.redirectingToProject')}...
+              {t('sharing.redirectingToDashboard')}...
             </p>
           </CardContent>
         </Card>
@@ -255,3 +274,5 @@ export function ShareAcceptPage() {
     </div>
   );
 }
+
+export default ShareAcceptPage;
