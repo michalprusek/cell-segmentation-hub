@@ -20,8 +20,8 @@ json/
   "format": "spheroseg_polygons",
   "export_date": "2025-08-21T12:00:00Z",
   "scale_conversion": {
-    "pixels_per_micrometer": 2.0,
-    "units": "micrometers"
+    "micrometers_per_pixel": 0.5,
+    "units": "µm/pixel"
   },
   "images": [
     {
