@@ -102,7 +102,26 @@ export const isPolygonClockwise = (points: Point[]): boolean => {
 };
 
 /**
- * Check if a point is inside a polygon using ray casting algorithm
+ * Check if a point is inside a polygon using the ray casting algorithm
+ *
+ * @param point - The point to test
+ * @param polygon - Array of points defining the polygon vertices
+ * @returns True if the point is inside the polygon, false otherwise
+ *
+ * @example
+ * const polygon = [
+ *   { x: 0, y: 0 },
+ *   { x: 10, y: 0 },
+ *   { x: 10, y: 10 },
+ *   { x: 0, y: 10 }
+ * ];
+ * const inside = isPointInPolygon({ x: 5, y: 5 }, polygon); // true
+ *
+ * Algorithm (Ray Casting):
+ * 1. Cast a horizontal ray from the point to infinity (right)
+ * 2. Count how many polygon edges the ray crosses
+ * 3. If odd number of crossings, point is inside; if even, outside
+ * 4. Handle edge cases: point on vertex, horizontal edges, etc.
  */
 export const isPointInPolygon = (
   point: Point,
@@ -236,6 +255,21 @@ export const pointSideOfLine = (
 
 /**
  * Find the closest vertex in a polygon to a given point
+ *
+ * @param point - The reference point
+ * @param polygonPoints - Array of polygon vertices to search
+ * @param maxDistance - Optional maximum distance threshold
+ * @returns Object with vertex index and distance, or null if none found within threshold
+ *
+ * @example
+ * const polygon = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }];
+ * const closest = findClosestVertex({ x: 1, y: 1 }, polygon, 5);
+ * // Returns { index: 0, distance: 1.414... }
+ *
+ * Use cases:
+ * - Vertex selection on mouse click (with maxDistance as click tolerance)
+ * - Snapping to vertices during editing
+ * - Finding attachment points for new edges
  */
 export const findClosestVertex = (
   point: Point,
@@ -274,7 +308,28 @@ export const findClosestVertex = (
 };
 
 /**
- * Find the closest segment in a polygon to a given point
+ * Find the closest edge segment in a polygon to a given point
+ *
+ * @param point - The reference point
+ * @param polygonPoints - Array of polygon vertices
+ * @param maxDistance - Optional maximum distance threshold
+ * @returns Object with segment index, distance, and closest point on segment
+ *
+ * @example
+ * const square = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }];
+ * const closest = findClosestSegment({ x: 5, y: -2 }, square);
+ * // Returns { index: 0, distance: 2, closestPoint: { x: 5, y: 0 } }
+ *
+ * Algorithm:
+ * 1. Iterate through all polygon edges
+ * 2. Calculate perpendicular distance to each edge
+ * 3. Track the minimum distance and corresponding edge
+ * 4. Return the closest point on the winning edge
+ *
+ * Use cases:
+ * - Adding vertices to edges on click
+ * - Edge selection and highlighting
+ * - Measuring clearances and proximity
  */
 export const findClosestSegment = (
   point: Point,
@@ -337,6 +392,23 @@ export const findClosestSegment = (
 /**
  * Calculate bounding box of a polygon
  */
+/**
+ * Calculate the axis-aligned bounding box (AABB) of a polygon
+ *
+ * @param points - Array of polygon vertices
+ * @returns Bounding box with min/max coordinates and dimensions
+ *
+ * @example
+ * const triangle = [{ x: 0, y: 0 }, { x: 10, y: 5 }, { x: 5, y: 10 }];
+ * const bbox = calculateBoundingBox(triangle);
+ * // Returns { minX: 0, maxX: 10, minY: 0, maxY: 10, width: 10, height: 10 }
+ *
+ * Use cases:
+ * - Collision detection (broad phase)
+ * - Viewport culling
+ * - Centering and scaling operations
+ * - Spatial indexing and partitioning
+ */
 export const calculateBoundingBox = (points: Point[]): BoundingBox => {
   if (points.length === 0) {
     return { minX: 0, maxX: 0, minY: 0, maxY: 0, width: 0, height: 0 };
@@ -386,9 +458,30 @@ export const getPolygonCentroid = (points: Point[]): Point => {
 };
 
 /**
- * Check if one polygon is inside another polygon
- * Uses centroid check - if the centroid of the inner polygon is inside the outer polygon,
- * we consider the inner polygon to be contained by the outer polygon
+ * Check if one polygon is inside another polygon (approximate)
+ *
+ * @param innerPoints - Vertices of the potentially inner polygon
+ * @param outerPoints - Vertices of the potentially outer polygon
+ * @returns True if inner polygon is inside outer polygon
+ *
+ * @example
+ * const inner = [{ x: 3, y: 3 }, { x: 7, y: 3 }, { x: 7, y: 7 }, { x: 3, y: 7 }];
+ * const outer = [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }];
+ * const isInside = isPolygonInsidePolygon(inner, outer); // true
+ *
+ * Algorithm:
+ * Uses centroid-based approximation:
+ * 1. Calculate centroid of inner polygon
+ * 2. Check if centroid is inside outer polygon
+ *
+ * Limitations:
+ * - Not accurate for concave polygons or partial overlaps
+ * - For exact containment, check all vertices + edge intersections
+ *
+ * Use cases:
+ * - Hierarchy detection in nested cells
+ * - Parent-child relationships in segmentation
+ * - Quick approximate containment checks
  */
 export const isPolygonInsidePolygon = (
   innerPoints: Point[],

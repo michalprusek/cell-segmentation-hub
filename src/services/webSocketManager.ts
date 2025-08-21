@@ -2,52 +2,28 @@ import { io, Socket } from 'socket.io-client';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import { webSocketEventEmitter } from '@/lib/websocketEvents';
+import type {
+  WebSocketEventMap,
+  SegmentationUpdate,
+  QueueStats,
+  SegmentationStatusMessage,
+  QueueStatsMessage,
+  SegmentationCompletedMessage,
+  SegmentationFailedMessage,
+  WebSocketConnectionOptions,
+  IWebSocketManager,
+} from '@/types/websocket';
 
-export interface QueueStats {
-  projectId: string;
-  queued: number;
-  processing: number;
-  total: number;
-}
-
-export interface SegmentationUpdate {
-  imageId: string;
-  projectId: string;
-  status: string;
-  queueId?: string;
-  progress?: number;
-  error?: string;
-}
-
-interface Notification {
-  type: string;
-  imageId: string;
-  projectId: string;
-  polygonCount: number;
-  timestamp: string;
-}
-
-interface SystemMessage {
-  type: 'info' | 'warning' | 'error';
-  message: string;
-  timestamp: string;
-}
+// Re-export types for backward compatibility
+export type { SegmentationUpdate, QueueStats } from '@/types/websocket';
 
 // Extend WebSocketManager class interface to include the private handler
 interface WebSocketManagerWithHandler {
   _beforeUnloadHandler?: () => void;
 }
 
-// Define specific event listener types for each event
-type SegmentationUpdateListener = (update: SegmentationUpdate) => void;
-type QueueStatsUpdateListener = (stats: QueueStats) => void;
-type NotificationListener = (notification: Notification) => void;
-type SystemMessageListener = (message: SystemMessage) => void;
-type ConnectionListener = () => void;
-type DisconnectionListener = (reason: string) => void;
-type ConnectionErrorListener = (error: Error) => void;
-
-// Union type for all possible event listeners
+// Define specific event listener types for backward compatibility
+type EventListener<T = any> = (data: T) => void;
 type EventListener =
   | SegmentationUpdateListener
   | QueueStatsUpdateListener
