@@ -304,7 +304,7 @@ export const useEnhancedSegmentationEditor = ({
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [hasUnsavedChanges, onSave, history, historyIndex]);
+  }, [hasUnsavedChanges, onSave, history, historyIndex, imageId]);
 
   // Update polygons with history tracking
   const updatePolygons = useCallback(
@@ -428,7 +428,7 @@ export const useEnhancedSegmentationEditor = ({
     } finally {
       setIsSaving(false);
     }
-  }, [onSave, hasUnsavedChanges, polygons, historyIndex, t]);
+  }, [onSave, hasUnsavedChanges, polygons, historyIndex, t, imageId]);
 
   // Transform operations with improved constraints
   const handleZoomIn = useCallback(() => {
