@@ -371,6 +371,8 @@ def count_original_polygons(data):
 
 ### 1. Quality Control Pipeline
 ```python
+import json
+
 # Automated quality checking
 def quality_control_check(json_file):
     """Run automated quality control on annotations"""
@@ -400,6 +402,8 @@ def quality_control_check(json_file):
 
 ### 2. Batch Processing
 ```python
+from pathlib import Path
+
 # Process multiple JSON exports
 def batch_convert_to_cvat(input_dir, output_dir):
     """Convert multiple SpheroSeg JSON exports for CVAT import"""
@@ -417,6 +421,9 @@ def batch_convert_to_cvat(input_dir, output_dir):
 
 ### LabelMe Integration
 ```python
+import json
+from pathlib import Path
+
 # Convert to LabelMe format
 def to_labelme_format(spheroseg_json, output_dir):
     """Convert to LabelMe individual JSON files"""

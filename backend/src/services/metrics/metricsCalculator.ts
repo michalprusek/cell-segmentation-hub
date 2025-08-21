@@ -694,6 +694,19 @@ export class MetricsCalculator {
    * Apply scale conversion to metrics
    */
   private applyScaleConversion(metrics: PolygonMetrics[], scale: number): PolygonMetrics[] {
+    // Validate scale parameter
+    if (!scale || scale <= 0 || !isFinite(scale)) {
+      this.logger.warn(`Invalid scale value: ${scale}. Using original pixel values.`, 'MetricsCalculator');
+      return metrics;
+    }
+    
+    // Warn if scale seems unrealistic
+    if (scale > 100) {
+      this.logger.warn(`Unusually high scale value: ${scale} pixels/µm. Please verify this is correct.`, 'MetricsCalculator');
+    } else if (scale < 0.01) {
+      this.logger.warn(`Unusually low scale value: ${scale} pixels/µm. Please verify this is correct.`, 'MetricsCalculator');
+    }
+    
     return metrics.map(metric => ({
       ...metric,
       // Convert area from px² to µm²
