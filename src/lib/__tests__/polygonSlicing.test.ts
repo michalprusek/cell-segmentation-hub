@@ -138,13 +138,15 @@ describe('Polygon Slicing', () => {
       );
       expect(noIntersectionResult).toBeNull();
 
-      // Slice that only touches one edge
+      // Slice that only touches one edge with segment, but infinite line intersects properly
+      // This now should work because infinite line intersects at (0,0) and (0,100)
       const oneIntersectionResult = slicePolygon(
         square,
         { x: 0, y: -10 },
         { x: 0, y: 0 }
       );
-      expect(oneIntersectionResult).toBeNull();
+      expect(oneIntersectionResult).not.toBeNull();
+      expect(oneIntersectionResult).toHaveLength(2);
 
       // Very short slice line
       const shortLineResult = slicePolygon(
@@ -232,14 +234,16 @@ describe('Polygon Slicing', () => {
         'Expected 2 intersections, found 0'
       );
 
-      // One intersection (tangent)
+      // One intersection with segment, but infinite line has two intersections
+      // This should now be valid with the infinite line extension
       const oneIntersectValidation = validateSliceLine(
         square,
         { x: 0, y: -10 },
         { x: 0, y: 10 }
       );
-      expect(oneIntersectValidation.isValid).toBe(false);
-      expect(oneIntersectValidation.intersectionCount).toBe(1);
+      expect(oneIntersectValidation.isValid).toBe(true);
+      expect(oneIntersectValidation.intersectionCount).toBe(2);
+      expect(oneIntersectValidation.extendedToInfiniteLine).toBe(true);
     });
 
     it('should reject very short slice lines', () => {
@@ -431,6 +435,109 @@ describe('Polygon Slicing', () => {
       }, 10);
 
       expect(performance.averageTime).toBeLessThan(50); // May be slower due to complexity
+    });
+  });
+
+  describe('Infinite Line Extension Tests', () => {
+    it('should handle slices where segment partially intersects but infinite line fully intersects', () => {
+      const square = testPolygonObjects.squarePolygon;
+
+      // Case 1: Start point outside, end point on edge
+      const edgeCase1 = slicePolygon(
+        square,
+        { x: 0, y: -50 }, // Outside polygon
+        { x: 0, y: 0 } // On vertex
+      );
+      expect(edgeCase1).not.toBeNull();
+      if (edgeCase1) {
+        const [poly1, poly2] = edgeCase1;
+        expect(poly1.points.length).toBeGreaterThanOrEqual(3);
+        expect(poly2.points.length).toBeGreaterThanOrEqual(3);
+
+        // Verify area conservation
+        const originalArea = calculatePolygonArea(square.points);
+        const area1 = calculatePolygonArea(poly1.points);
+        const area2 = calculatePolygonArea(poly2.points);
+        expect(area1 + area2).toBeCloseTo(originalArea, 1);
+      }
+
+      // Case 2: Both points inside polygon (infinite line should still work)
+      const edgeCase2 = slicePolygon(
+        square,
+        { x: 25, y: 25 }, // Inside polygon
+        { x: 75, y: 75 } // Inside polygon
+      );
+      expect(edgeCase2).not.toBeNull();
+
+      // Case 3: Start inside, end outside
+      const edgeCase3 = slicePolygon(
+        square,
+        { x: 50, y: 50 }, // Inside polygon
+        { x: 150, y: 150 } // Outside polygon
+      );
+      expect(edgeCase3).not.toBeNull();
+    });
+
+    it('should validate infinite line extension properly', () => {
+      const square = testPolygonObjects.squarePolygon;
+
+      // Should report when infinite line was used
+      const validation = validateSliceLine(
+        square,
+        { x: 0, y: -10 },
+        { x: 0, y: 10 }
+      );
+      expect(validation.isValid).toBe(true);
+      expect(validation.extendedToInfiniteLine).toBe(true);
+      expect(validation.intersectionCount).toBe(2);
+
+      // Regular segment intersection should not report extension
+      const regularValidation = validateSliceLine(
+        square,
+        { x: -10, y: 50 },
+        { x: 110, y: 50 }
+      );
+      expect(regularValidation.isValid).toBe(true);
+      expect(regularValidation.extendedToInfiniteLine).toBeUndefined();
+    });
+
+    it('should handle edge-aligned slices with infinite line extension', () => {
+      const square = testPolygonObjects.squarePolygon;
+
+      // Slice along left edge (x=0)
+      const leftEdgeSlice = slicePolygon(
+        square,
+        { x: 0, y: -50 },
+        { x: 0, y: 150 }
+      );
+      expect(leftEdgeSlice).not.toBeNull();
+
+      // Slice along top edge (y=0)
+      const topEdgeSlice = slicePolygon(
+        square,
+        { x: -50, y: 0 },
+        { x: 150, y: 0 }
+      );
+      expect(topEdgeSlice).not.toBeNull();
+    });
+
+    it('should handle diagonal slices with partial segment intersection', () => {
+      const square = testPolygonObjects.squarePolygon;
+
+      // Diagonal from outside to vertex
+      const diagonalSlice = slicePolygon(
+        square,
+        { x: -25, y: -25 }, // Outside
+        { x: 50, y: 50 } // Center
+      );
+      expect(diagonalSlice).not.toBeNull();
+      if (diagonalSlice) {
+        const [poly1, poly2] = diagonalSlice;
+        const area1 = calculatePolygonArea(poly1.points);
+        const area2 = calculatePolygonArea(poly2.points);
+        expect(area1).toBeGreaterThan(0);
+        expect(area2).toBeGreaterThan(0);
+      }
     });
   });
 

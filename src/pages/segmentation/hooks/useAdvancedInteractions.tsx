@@ -432,12 +432,36 @@ export const useAdvancedInteractions = ({
         return;
       }
 
-      // Right-click - always cancel current operation
+      // Right-click - handle step-by-step undo
       if (e.button === 2) {
-        if (editMode !== EditMode.View) {
-          setEditMode(EditMode.View);
-          setTempPoints([]);
+        // Special handling for slice mode - step-by-step undo
+        if (editMode === EditMode.Slice) {
+          if (tempPoints.length > 0) {
+            // There's a slice point placed - remove it and go back to polygon selection
+            setTempPoints([]);
+            setInteractionState({
+              ...interactionState,
+              sliceStartPoint: null,
+            });
+          } else if (selectedPolygonId) {
+            // Polygon is selected but no slice points - deselect polygon but stay in slice mode
+            setSelectedPolygonId(null);
+            setInteractionState({
+              ...interactionState,
+              sliceStartPoint: null,
+            });
+          } else {
+            // Nothing selected - exit slice mode to View mode
+            setEditMode(EditMode.View);
+          }
+        } else {
+          // For other modes - always cancel current operation
+          if (editMode !== EditMode.View) {
+            setEditMode(EditMode.View);
+            setTempPoints([]);
+          }
         }
+        e.preventDefault();
         e.stopPropagation();
         return;
       }
@@ -555,6 +579,7 @@ export const useAdvancedInteractions = ({
       interactionState,
       transform,
       selectedPolygonId,
+      tempPoints,
       getPolygons,
       setInteractionState,
       setVertexDragState,
@@ -821,7 +846,8 @@ export const useAdvancedInteractions = ({
 };
 
 /**
- * Helper function to insert points between vertices using CVAT-like algorithm
+ * Helper function to insert points between vertices using normalized path logic
+ * Ensures consistent behavior regardless of click order (A→B vs B→A)
  */
 function insertPointsBetweenVertices(
   originalPoints: Point[],
@@ -829,68 +855,70 @@ function insertPointsBetweenVertices(
   endVertexIndex: number,
   newPoints: Point[]
 ): Point[] | null {
-  // If no new points, remove points between vertices instead
-  if (newPoints.length === 0) {
-    return removePointsBetweenVertices(
-      originalPoints,
-      startVertexIndex,
-      endVertexIndex
-    );
-  }
+  // Note: This function handles both adding points and removing points (when newPoints is empty)
+  // using the same candidate selection logic for consistency
 
   const numPoints = originalPoints.length;
 
-  // Create two candidate polygons by replacing different paths
-  const candidate1Points: Point[] = [];
-  const candidate2Points: Point[] = [];
+  // Normalize vertices to ensure consistent behavior
+  // Always work with the smaller index as vertex1 and larger as vertex2
+  const vertex1 = Math.min(startVertexIndex, endVertexIndex);
+  const vertex2 = Math.max(startVertexIndex, endVertexIndex);
 
-  // Candidate 1: Replace the forward path
-  if (startVertexIndex < endVertexIndex) {
-    // No wrapping case
-    for (let i = 0; i <= startVertexIndex; i++) {
-      candidate1Points.push(originalPoints[i]);
-    }
-    candidate1Points.push(...newPoints);
-    for (let i = endVertexIndex; i < numPoints; i++) {
-      candidate1Points.push(originalPoints[i]);
-    }
-  } else {
-    // Wrapping case
-    for (let i = 0; i <= endVertexIndex; i++) {
-      candidate1Points.push(originalPoints[i]);
-    }
-    candidate1Points.push(...[...newPoints].reverse());
-    for (let i = startVertexIndex; i < numPoints; i++) {
-      candidate1Points.push(originalPoints[i]);
-    }
+  // If adjacent vertices and no points to add, nothing to do
+  if (
+    newPoints.length === 0 &&
+    (Math.abs(vertex1 - vertex2) === 1 ||
+      Math.abs(vertex1 - vertex2) === numPoints - 1)
+  ) {
+    return originalPoints;
   }
 
-  // Candidate 2: Replace the backward path
-  if (startVertexIndex < endVertexIndex) {
-    candidate2Points.push(originalPoints[startVertexIndex]);
-    candidate2Points.push(...newPoints);
-    candidate2Points.push(originalPoints[endVertexIndex]);
+  // Determine if the new points should be reversed based on original click order
+  const shouldReverseNewPoints = startVertexIndex > endVertexIndex;
+  const finalNewPoints = shouldReverseNewPoints
+    ? [...newPoints].reverse()
+    : newPoints;
 
-    let idx = (endVertexIndex + 1) % numPoints;
-    while (idx !== startVertexIndex) {
-      candidate2Points.push(originalPoints[idx]);
-      idx = (idx + 1) % numPoints;
-    }
-  } else {
-    candidate2Points.push(originalPoints[startVertexIndex]);
-    candidate2Points.push(...newPoints);
-    candidate2Points.push(originalPoints[endVertexIndex]);
+  // Calculate the two possible paths between vertices
+  // Path 1: Direct path from vertex1 to vertex2 (indices: vertex1 to vertex2)
+  const directPathLength = vertex2 - vertex1 - 1;
 
-    for (let i = endVertexIndex + 1; i < startVertexIndex; i++) {
-      candidate2Points.push(originalPoints[i]);
-    }
+  // Path 2: Wrapped path from vertex1 to vertex2 (going around the polygon)
+  const wrappedPathLength = numPoints - (vertex2 - vertex1) - 1;
+
+  // Create two candidate polygons
+  const candidate1Points: Point[] = []; // Replace direct path
+  const candidate2Points: Point[] = []; // Replace wrapped path
+
+  // Candidate 1: Replace direct path (vertex1 to vertex2)
+  // Keep: [0...vertex1] + newPoints + [vertex2...numPoints-1]
+  for (let i = 0; i <= vertex1; i++) {
+    candidate1Points.push(originalPoints[i]);
+  }
+  candidate1Points.push(...finalNewPoints);
+  for (let i = vertex2; i < numPoints; i++) {
+    candidate1Points.push(originalPoints[i]);
   }
 
-  // Calculate perimeters and choose the larger one (CVAT-like behavior)
+  // Candidate 2: Replace wrapped path (vertex2 to vertex1 going around)
+  // Keep only the direct path vertices and replace wrapped path with newPoints
+  candidate2Points.push(originalPoints[vertex1]);
+  candidate2Points.push(...finalNewPoints);
+  candidate2Points.push(originalPoints[vertex2]);
+
+  // Add the remaining points (wrapped path) by going from vertex2 to vertex1
+  let idx = (vertex2 + 1) % numPoints;
+  while (idx !== vertex1) {
+    candidate2Points.push(originalPoints[idx]);
+    idx = (idx + 1) % numPoints;
+  }
+
+  // Calculate perimeters and choose the one with smaller perimeter
   const perimeter1 = calculatePolygonPerimeter(candidate1Points);
   const perimeter2 = calculatePolygonPerimeter(candidate2Points);
 
-  return perimeter1 >= perimeter2 ? candidate1Points : candidate2Points;
+  return perimeter1 <= perimeter2 ? candidate1Points : candidate2Points;
 }
 
 /**
@@ -905,69 +933,4 @@ function calculatePolygonPerimeter(points: Point[]): number {
     perimeter += Math.sqrt(dx * dx + dy * dy);
   }
   return perimeter;
-}
-
-/**
- * Helper function to remove points between two vertices
- * Chooses the shorter path to maintain logical polygon shape
- */
-function removePointsBetweenVertices(
-  originalPoints: Point[],
-  startVertexIndex: number,
-  endVertexIndex: number
-): Point[] {
-  const numPoints = originalPoints.length;
-
-  // If adjacent vertices, no points to remove
-  if (
-    Math.abs(startVertexIndex - endVertexIndex) === 1 ||
-    Math.abs(startVertexIndex - endVertexIndex) === numPoints - 1
-  ) {
-    return originalPoints;
-  }
-
-  // Create two candidate polygons by keeping different paths
-  const candidate1Points: Point[] = [];
-  const candidate2Points: Point[] = [];
-
-  // Candidate 1: Keep the forward path from start to end
-  if (startVertexIndex < endVertexIndex) {
-    // Direct path (remove points between)
-    for (let i = 0; i <= startVertexIndex; i++) {
-      candidate1Points.push(originalPoints[i]);
-    }
-    for (let i = endVertexIndex; i < numPoints; i++) {
-      candidate1Points.push(originalPoints[i]);
-    }
-  } else {
-    // Wrapped path (remove points between, crossing zero)
-    for (let i = 0; i <= endVertexIndex; i++) {
-      candidate1Points.push(originalPoints[i]);
-    }
-    for (let i = startVertexIndex; i < numPoints; i++) {
-      candidate1Points.push(originalPoints[i]);
-    }
-  }
-
-  // Candidate 2: Keep the backward path from end to start
-  if (startVertexIndex < endVertexIndex) {
-    // Keep points from start to end (remove the rest)
-    for (let i = startVertexIndex; i <= endVertexIndex; i++) {
-      candidate2Points.push(originalPoints[i]);
-    }
-  } else {
-    // Keep wrapped path from start to end
-    for (let i = startVertexIndex; i < numPoints; i++) {
-      candidate2Points.push(originalPoints[i]);
-    }
-    for (let i = 0; i <= endVertexIndex; i++) {
-      candidate2Points.push(originalPoints[i]);
-    }
-  }
-
-  // Return the polygon with shorter perimeter (removes more points)
-  const perimeter1 = calculatePolygonPerimeter(candidate1Points);
-  const perimeter2 = calculatePolygonPerimeter(candidate2Points);
-
-  return perimeter1 <= perimeter2 ? candidate1Points : candidate2Points;
 }

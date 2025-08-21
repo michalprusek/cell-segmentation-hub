@@ -737,6 +737,11 @@ export default {
     disconnected: 'Déconnecté du serveur',
     error: 'Erreur du service ML',
     ready: 'Prêt pour la segmentation',
+    online: 'En ligne',
+    offline: 'Hors ligne',
+    segmenting: "Segmentation de l'image...",
+    waitingInQueue: 'En attente dans la file',
+    reloadingSegmentation: 'Actualisation des données de segmentation...',
   },
   queue: {
     title: 'File de Segmentation',
@@ -822,7 +827,12 @@ export default {
       saved: 'Segmentation sauvegardée avec succès',
       failed: 'Échec de la sauvegarde de la segmentation',
       deleted: 'Polygone supprimé',
+      cannotDeleteVertex:
+        'Impossible de supprimer le sommet - le polygone a besoin d\u2019au moins 3 points',
+      vertexDeleted: 'Sommet supprimé avec succès',
     },
+    autosaveFailed:
+      'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
   },
   export: {
     advancedExport: 'Export Avancé',
@@ -1467,6 +1477,8 @@ export default {
     reconnected: 'Connexion au serveur rétablie',
     reconnectFailed: 'Échec du rétablissement de la connexion au serveur',
     connectionLost: 'Connexion au serveur perdue',
+    connected: 'Connecté aux mises à jour en temps réel',
+    disconnected: 'Déconnecté des mises à jour en temps réel',
   },
 
   // Affichage des métriques

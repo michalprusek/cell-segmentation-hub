@@ -570,6 +570,8 @@ export default {
       deletePolygon: 'Eliminar polígono',
       unknown: 'Desconocido',
     },
+    autosaveFailed:
+      'Error en guardado automático - los cambios pueden perderse',
     modeDescription: {
       view: 'Navegar y seleccionar polígonos',
       edit: 'Mover y modificar vértices',
@@ -736,6 +738,8 @@ export default {
     disconnected: 'Desconectado del servidor',
     error: 'Error del servicio ML',
     ready: 'Listo para segmentación',
+    online: 'En línea',
+    offline: 'Fuera de línea',
   },
   queue: {
     title: 'Cola de Segmentación',
@@ -818,7 +822,12 @@ export default {
       saved: 'Segmentación guardada exitosamente',
       failed: 'Error al guardar segmentación',
       deleted: 'Polígono eliminado',
+      cannotDeleteVertex:
+        'No se puede eliminar vértice - el polígono necesita al menos 3 puntos',
+      vertexDeleted: 'Vértice eliminado exitosamente',
     },
+    autosaveFailed:
+      'Error en guardado automático - los cambios pueden perderse',
   },
   export: {
     advancedExport: 'Exportación Avanzada',
@@ -1166,6 +1175,9 @@ export default {
         step5:
           'Guarda tus cambios periódicamente o confía en el guardado automático',
       },
+      segmenting: 'Segmentando imagen...',
+      waitingInQueue: 'Esperando en la cola',
+      reloadingSegmentation: 'Actualizando datos de segmentación...',
     },
 
     // Export Features section
@@ -1545,6 +1557,8 @@ export default {
     reconnected: 'Conexión al servidor restaurada',
     reconnectFailed: 'Error al restaurar la conexión al servidor',
     connectionLost: 'Conexión al servidor perdida',
+    connected: 'Conectado a actualizaciones en tiempo real',
+    disconnected: 'Desconectado de actualizaciones en tiempo real',
   },
 
   // Visualización de métricas

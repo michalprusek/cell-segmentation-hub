@@ -525,6 +525,7 @@ export default {
       deletePolygon: '删除多边形',
       unknown: '未知',
     },
+    autosaveFailed: '自动保存失败 - 更改可能丢失',
     modeDescription: {
       view: '导航和选择多边形',
       edit: '移动和修改顶点',
@@ -678,6 +679,8 @@ export default {
     disconnected: '与服务器断开连接',
     error: 'ML服务错误',
     ready: '准备分割',
+    online: '在线',
+    offline: '离线',
   },
   queue: {
     title: '分割队列',
@@ -756,7 +759,10 @@ export default {
       saved: '分割保存成功',
       failed: '保存分割失败',
       deleted: '多边形已删除',
+      cannotDeleteVertex: '无法删除顶点 - 多边形至少需要3个点',
+      vertexDeleted: '顶点删除成功',
     },
+    autosaveFailed: '自动保存失败 - 更改可能丢失',
   },
   export: {
     advancedExport: '高级导出',
@@ -1037,6 +1043,9 @@ export default {
         step4: '使用右侧面板',
         step5: '定期保存',
       },
+      segmenting: '正在分割图像...',
+      waitingInQueue: '在队列中等待',
+      reloadingSegmentation: '刷新分割数据...',
     },
     exportFeatures: {
       title: '导出功能',
@@ -1389,6 +1398,8 @@ export default {
     reconnected: '服务器连接已恢复',
     reconnectFailed: '恢复服务器连接失败',
     connectionLost: '与服务器的连接丢失',
+    connected: '已连接到实时更新',
+    disconnected: '已断开实时更新',
   },
 
   // 指标显示

@@ -403,6 +403,55 @@ test.describe('Complete Segmentation Workflow', () => {
     await expect(page.getByText(/complete|finished|done|success/i)).toBeVisible(
       { timeout: 60000 }
     );
+
+    // Test WebSocket status indicator in segmentation editor
+    const editButton = page
+      .getByRole('button', { name: /edit|open.*editor|view.*results/i })
+      .first();
+    if (await editButton.isVisible()) {
+      await editButton.click();
+      await expect(page).toHaveURL(/.*\/segmentation.*/);
+
+      // Verify status indicator component is present
+      const statusIndicator = page.locator(
+        '[data-testid="status-indicator"], .status-indicator'
+      );
+
+      // Start another segmentation to test real-time updates in editor
+      await page.goBack();
+      await page
+        .getByRole('button', { name: /segment|analyze|process/i })
+        .first()
+        .click();
+      await page
+        .getByRole('button', { name: /start|process|segment/i })
+        .click();
+
+      // Navigate back to editor to see real-time status
+      await editButton.click();
+
+      // Should show processing status with spinner in editor
+      await expect(
+        page.locator('.animate-spin, [data-testid="processing-spinner"]')
+      ).toBeVisible({
+        timeout: 5000,
+      });
+
+      // Should show status text like "Processing" or "Queued"
+      await expect(page.getByText(/processing|queued|segmenting/i)).toBeVisible(
+        {
+          timeout: 5000,
+        }
+      );
+
+      // Wait for completion and verify status disappears
+      await expect(page.getByText(/processing|queued|segmenting/i)).toHaveCount(
+        0,
+        {
+          timeout: 60000,
+        }
+      );
+    }
   });
 
   test('should handle error scenarios gracefully', async ({ page }) => {

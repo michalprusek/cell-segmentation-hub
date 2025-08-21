@@ -185,6 +185,41 @@ Uses JWT-based authentication with access/refresh tokens. The `AuthContext` mana
 - **OpenAPI spec**: http://localhost:3001/api-docs/openapi.json
 - **Endpoint registry**: http://localhost:3001/api/endpoints
 
+### WebSocket Real-time Updates
+
+The application uses WebSocket (Socket.io) for real-time segmentation status updates and queue notifications.
+
+**WebSocket Events:**
+
+- `segmentationStatus` - Updates on segmentation processing status (queued, processing, completed, failed)
+- `queueStats` - Queue statistics including position and total items
+- `segmentationCompleted` - Fired when segmentation finishes successfully with polygon count
+- `segmentationFailed` - Fired when segmentation fails with error details
+- `connectionStatus` - WebSocket connection state changes
+
+**Key Features:**
+
+- **Auto-reconnection**: Automatically reconnects with exponential backoff
+- **Auto-refresh**: Polygons automatically reload when segmentation completes
+- **Visual indicators**: Real-time connection status shown in UI
+- **State persistence**: Loading states persist across page refreshes (5-minute TTL)
+- **Queue position**: Shows user's position in the processing queue
+
+**Usage in Components:**
+
+```typescript
+// Hook for WebSocket segmentation updates
+const { lastUpdate, queueStats, isConnected } = useSegmentationQueue(projectId);
+
+// Hook for reloading segmentation with retry logic
+const { isReloading, reloadSegmentation } = useSegmentationReload({
+  projectId,
+  imageId,
+  onPolygonsLoaded: setPolygons,
+  maxRetries: 2,
+});
+```
+
 ### Internationalization
 
 Multi-language support via `LanguageContext` with translations in `/src/translations/`. The system includes comprehensive validation to ensure translation completeness across all supported languages (EN, CS, ES, DE, FR, ZH).
