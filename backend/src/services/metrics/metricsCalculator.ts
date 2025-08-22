@@ -766,31 +766,31 @@ export class MetricsCalculator {
       
       // Log additional context for debugging
       this.logger.info(
-        `Scale conversion will proceed with ${scale} pixels/µm. ` +
-        `This will convert: 1 pixel = ${(1/scale).toFixed(4)} µm, ` +
-        `100x100 px area = ${(10000/(scale*scale)).toFixed(2)} µm²`,
+        `Scale conversion will proceed with ${scale} µm/pixel. ` +
+        `This will convert: 1 pixel = ${scale.toFixed(4)} µm, ` +
+        `100x100 px area = ${(10000 * scale * scale).toFixed(2)} µm²`,
         'MetricsCalculator'
       );
     } else {
       // Log normal scale application for valid common values
       this.logger.info(
-        `Applying scale conversion: ${scale} pixels/µm (1 pixel = ${(1/scale).toFixed(4)} µm)`,
+        `Applying scale conversion: ${scale} µm/pixel (1 pixel = ${scale.toFixed(4)} µm)`,
         'MetricsCalculator'
       );
     }
     
     return metrics.map(metric => ({
       ...metric,
-      // Convert area from px² to µm² (divide by scale²)
-      area: metric.area / (scale * scale),
-      // Convert linear measurements from px to µm (divide by scale)
-      perimeter: metric.perimeter / scale,
-      equivalentDiameter: metric.equivalentDiameter / scale,
-      feretDiameterMax: metric.feretDiameterMax / scale,
-      feretDiameterMaxOrthogonalDistance: metric.feretDiameterMaxOrthogonalDistance / scale,
-      feretDiameterMin: metric.feretDiameterMin / scale,
-      lengthMajorDiameterThroughCentroid: metric.lengthMajorDiameterThroughCentroid / scale,
-      lengthMinorDiameterThroughCentroid: metric.lengthMinorDiameterThroughCentroid / scale,
+      // Convert area from px² to µm² (multiply by scale²)
+      area: metric.area * (scale * scale),
+      // Convert linear measurements from px to µm (multiply by scale)
+      perimeter: metric.perimeter * scale,
+      equivalentDiameter: metric.equivalentDiameter * scale,
+      feretDiameterMax: metric.feretDiameterMax * scale,
+      feretDiameterMaxOrthogonalDistance: metric.feretDiameterMaxOrthogonalDistance * scale,
+      feretDiameterMin: metric.feretDiameterMin * scale,
+      lengthMajorDiameterThroughCentroid: metric.lengthMajorDiameterThroughCentroid * scale,
+      lengthMinorDiameterThroughCentroid: metric.lengthMinorDiameterThroughCentroid * scale,
       // Dimensionless ratios remain unchanged
       circularity: metric.circularity,
       feretAspectRatio: metric.feretAspectRatio,

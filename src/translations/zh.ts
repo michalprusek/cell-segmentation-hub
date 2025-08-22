@@ -815,7 +815,7 @@ export default {
     showLabels: '显示标签',
     scaleConversion: '比例转换',
     pixelToMicrometerScale: '像素到微米比例',
-    scaleDescription: '指定一个像素等于多少微米来转换测量值',
+    scaleDescription: '指定一个像素代表多少微米来转换测量值',
     scalePlaceholder: '例如 0.5 (1像素 = 0.5µm)',
     scaleUnit: 'µm/像素',
     scaleWarning: '注意：比例值似乎异常高。请验证。',

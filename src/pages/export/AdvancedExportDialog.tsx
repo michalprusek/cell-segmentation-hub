@@ -238,7 +238,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                         className="w-full"
                       />
                       {exportOptions.pixelToMicrometerScale &&
-                        exportOptions.pixelToMicrometerScale > 100 && (
+                        exportOptions.pixelToMicrometerScale > 1 && (
                           <p className="text-xs text-amber-600">
                             {t('export.scaleWarning')}
                           </p>

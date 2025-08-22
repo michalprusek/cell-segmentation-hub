@@ -901,11 +901,11 @@ export default {
     scaleConversion: 'Skalierungskonvertierung',
     pixelToMicrometerScale: 'Pixel-zu-Mikrometer-Verhältnis',
     scaleDescription:
-      'Geben Sie an, wie viele Mikrometer einem Pixel entsprechen, um Messungen umzurechnen',
+      'Geben Sie an, wie viele Mikrometer ein Pixel repräsentiert, um Messungen umzurechnen',
     scalePlaceholder: 'z.B. 0.5 (1 Pixel = 0.5 µm)',
     scaleUnit: 'µm/Pixel',
     scaleWarning:
-      'Hinweis: Der Skalierungswert scheint ungewöhnlich hoch zu sein. Bitte überprüfen.',
+      'Hinweis: Skalierungswert über 1 µm/Pixel deutet auf sehr geringe Vergrößerung hin. Bitte überprüfen.',
     outputSettings: 'Ausgabeeinstellungen',
     exportFormats: {
       yolo: 'YOLO-Format',

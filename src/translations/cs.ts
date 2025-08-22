@@ -891,11 +891,11 @@ export default {
     scaleConversion: 'Převod měřítka',
     pixelToMicrometerScale: 'Měřítko pixel na mikrometr',
     scaleDescription:
-      'Určete, kolik mikrometrů odpovídá jednomu pixelu pro převod měření',
+      'Určete, kolik mikrometrů představuje jeden pixel pro převod měření',
     scalePlaceholder: 'např. 0,5 (1 pixel = 0,5 µm)',
     scaleUnit: 'µm/pixel',
     scaleWarning:
-      'Poznámka: Hodnota měřítka se zdá být neobvykle vysoká. Prosím ověřte.',
+      'Poznámka: Hodnota měřítka nad 1 µm/pixel indikuje velmi nízkou magnifikaci. Prosím ověřte.',
     outputSettings: 'Nastavení výstupu',
     exportFormats: {
       yolo: 'YOLO Formát',

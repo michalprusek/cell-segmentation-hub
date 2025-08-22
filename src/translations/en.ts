@@ -881,10 +881,11 @@ export default {
     scaleConversion: 'Scale Conversion',
     pixelToMicrometerScale: 'Pixel to Micrometer Scale',
     scaleDescription:
-      'Specify how many micrometers equal one pixel to convert measurements',
+      'Specify how many micrometers one pixel represents to convert measurements',
     scalePlaceholder: 'e.g., 0.5 (1 pixel = 0.5 µm)',
     scaleUnit: 'µm/pixel',
-    scaleWarning: 'Note: Scale value seems unusually high. Please verify.',
+    scaleWarning:
+      'Note: Scale value above 1 µm/pixel indicates very low magnification. Please verify.',
     // Format options
     outputSettings: 'Output Settings',
     exportFormats: 'Export Formats',
