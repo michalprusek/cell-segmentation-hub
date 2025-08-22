@@ -22,6 +22,7 @@ export default [
       'src/App.tsx', // App.tsx contains only providers and routing, no translatable text
       'src/components/DashboardHeader.tsx', // Component names and structural JSX
       'src/components/DashboardActions.tsx', // Component names and structural JSX
+      'src/components/Features.tsx', // Feature titles are component names
       'src/components/ErrorBoundary.tsx', // Already uses translations properly with t() function
     ],
     languageOptions: {

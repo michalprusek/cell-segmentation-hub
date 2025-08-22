@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components */
 import { ReactElement } from 'react';
 import { render, RenderOptions, RenderResult } from '@testing-library/react';
 import { vi } from 'vitest';
