@@ -34,7 +34,9 @@ import {
   CleanupQueueRequest,
   QueueError,
   QueueTimeoutError,
-  MLServiceUnavailableError
+  MLServiceUnavailableError,
+  QueuePriority,
+  QueueStatus
 } from '../../types/queue';
 
 // Import WebSocket types
@@ -52,8 +54,8 @@ interface QueueEntryResponse {
   model: 'hrnet' | 'resunet_advanced' | 'resunet_small';
   threshold: number;
   detectHoles: boolean;
-  priority: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  priority: QueuePriority;
+  status: QueueStatus;
   createdAt: Date;
   updatedAt: Date;
   startedAt?: Date;
@@ -75,8 +77,8 @@ function mapQueueEntryToResponse(entry: any): QueueEntryResponse {
     model: entry.model,
     threshold: entry.threshold,
     detectHoles: entry.detectHoles ?? false,
-    priority: entry.priority,
-    status: entry.status,
+    priority: entry.priority as QueuePriority,
+    status: entry.status as QueueStatus,
     createdAt: entry.createdAt,
     updatedAt: entry.updatedAt || entry.createdAt,
     startedAt: entry.startedAt || undefined,
@@ -506,7 +508,7 @@ class QueueController {
    * Cleanup old queue entries
    * POST /api/queue/cleanup
    */
-  cleanupQueue = async (req: QueueCleanupRequest, res: Response): Promise<void> => {
+  cleanupQueue = async (req: CleanupQueueRequest, res: Response): Promise<void> => {
     try {
       const { daysOld } = req.body;
       
