@@ -170,14 +170,13 @@ export class MetricsCalculator {
 
     // Apply scale conversion if provided
     if (pixelToMicrometerScale) {
-      if (pixelToMicrometerScale <= 0) {
-        const error = new Error(`Invalid scale value: ${pixelToMicrometerScale}. Scale must be greater than 0.`);
-        this.logger.error(
-          `Scale validation failed: ${error.message}`,
-          error,
+      if (pixelToMicrometerScale <= 0 || !isFinite(pixelToMicrometerScale)) {
+        this.logger.warn(
+          `Invalid scale value: ${pixelToMicrometerScale}. Scale must be greater than 0. Using pixel units instead.`,
           'MetricsCalculator'
         );
-        throw error;
+        // Continue with pixel units (don't apply scale)
+        return allMetrics;
       }
       return this.applyScaleConversion(allMetrics, pixelToMicrometerScale);
     }

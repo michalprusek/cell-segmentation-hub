@@ -20,7 +20,7 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "test:integration": "jest --testPathPattern=integration",
+    "test:integration": "jest --config jest.integration.config.js",
     "test-api": "echo 'Testing API endpoints...' && curl -s http://localhost:3001/health | jq '.' && curl -s http://localhost:3001/api/endpoints | jq '.data.count' && curl -s http://localhost:3001/metrics | head -5",
     "docker:build": "docker build -f ../docker/backend.Dockerfile -t spheroseg-backend .",
     "docker:run": "docker run -p 3001:3001 --env-file .env spheroseg-backend",

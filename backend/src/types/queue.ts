@@ -352,8 +352,32 @@ export interface AuthenticatedRequest extends Request {
   user?: {
     id: string;
     email: string;
-    emailVerified?: boolean;
-    profile?: any;
+    emailVerified: boolean;
+    profile?: {
+      id: string;
+      userId: string;
+      username?: string | null;
+      avatarUrl?: string | null;
+      avatarPath?: string | null;
+      avatarMimeType?: string | null;
+      avatarSize?: number | null;
+      bio?: string | null;
+      organization?: string | null;
+      location?: string | null;
+      title?: string | null;
+      publicProfile: boolean;
+      preferredModel: string;
+      modelThreshold: number;
+      preferredLang: string;
+      preferredTheme: string;
+      emailNotifications: boolean;
+      consentToMLTraining: boolean;
+      consentToAlgorithmImprovement: boolean;
+      consentToFeatureDevelopment: boolean;
+      consentUpdatedAt?: Date | null;
+      createdAt: Date;
+      updatedAt: Date;
+    } | null;
   };
 }
 

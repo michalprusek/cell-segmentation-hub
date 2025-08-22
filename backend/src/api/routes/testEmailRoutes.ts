@@ -43,10 +43,11 @@ router.post('/send-test', authenticate, async (req: Request, res: Response) => {
     
     // Validate email parameter
     if (!to || typeof to !== 'string') {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         success: false, 
         message: 'Valid recipient email is required' 
       });
+      return;
     }
     
     // Trim and validate email format
@@ -54,10 +55,11 @@ router.post('/send-test', authenticate, async (req: Request, res: Response) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ 
+      res.status(400).json({ 
         success: false, 
         message: 'Invalid email format' 
       });
+      return;
     }
 
     await sendEmail({
