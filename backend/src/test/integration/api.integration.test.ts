@@ -13,13 +13,17 @@ describe('API Integration Tests', () => {
 
   beforeAll(async () => {
     // Use test database
-    prisma = new PrismaClient({
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL || process.env.TEST_DATABASE_URL || 'file:./test.db'
-        }
-      }
-    })
+    const databaseUrl = process.env.DATABASE_URL || process.env.TEST_DATABASE_URL || 'postgresql://postgres:testpass@localhost:5432/testdb'
+    
+    // For CI/CD environment, ensure we have a valid PostgreSQL URL
+    if (!databaseUrl.startsWith('postgresql://') && !databaseUrl.startsWith('postgres://')) {
+      console.warn('Invalid DATABASE_URL, using default PostgreSQL URL for tests')
+      process.env.DATABASE_URL = 'postgresql://postgres:testpass@localhost:5432/testdb'
+    } else {
+      process.env.DATABASE_URL = databaseUrl
+    }
+    
+    prisma = new PrismaClient()
 
     // Clean database
     await prisma.$transaction([
