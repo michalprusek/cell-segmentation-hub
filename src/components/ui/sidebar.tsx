@@ -743,5 +743,4 @@ export {
   SidebarTrigger,
 };
 
-// Export hook separately to avoid fast refresh warning
-export { useSidebar } from './sidebar-context';
+// useSidebar is exported from './exports' to avoid Fast Refresh warnings

@@ -1,26 +1,12 @@
-import React, { createContext, useContext, useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
-import { useAuth } from './AuthContext';
+import { useAuth } from './exports';
 import WebSocketManager from '@/services/webSocketManager';
 import { logger } from '@/lib/logger';
-
-interface WebSocketContextType {
-  manager: WebSocketManager | null;
-  socket: Socket | null;
-  isConnected: boolean;
-}
-
-const WebSocketContext = createContext<WebSocketContextType | undefined>(
-  undefined
-);
-
-const useWebSocket = () => {
-  const context = useContext(WebSocketContext);
-  if (!context) {
-    throw new Error('useWebSocket must be used within a WebSocketProvider');
-  }
-  return context;
-};
+import {
+  WebSocketContext,
+  type WebSocketContextType,
+} from './WebSocketContext.types';
 
 interface WebSocketProviderProps {
   children: React.ReactNode;
@@ -123,4 +109,4 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 };
 
 export default WebSocketProvider;
-export { useWebSocket };
+// useWebSocket is exported from './exports' to avoid Fast Refresh warnings

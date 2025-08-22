@@ -47,5 +47,17 @@ export default tseslint.config(
         },
       ],
     },
+  },
+  // Disable Fast Refresh warnings for test files
+  {
+    files: [
+      '**/test/**/*.{ts,tsx}',
+      '**/test-utils/**/*.{ts,tsx}',
+      '**/*.test.{ts,tsx}',
+      '**/*.spec.{ts,tsx}',
+    ],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
   }
 );

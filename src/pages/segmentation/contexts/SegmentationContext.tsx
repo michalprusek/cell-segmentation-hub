@@ -1,15 +1,11 @@
-import React, { createContext, useContext } from 'react';
+import React from 'react';
 import { SegmentationResult } from '@/lib/segmentation';
+import {
+  SegmentationContext,
+  type SegmentationContextType,
+} from './SegmentationContext.types';
 
-interface SegmentationContextType {
-  segmentation: SegmentationResult | null;
-}
-
-const SegmentationContext = createContext<SegmentationContextType>({
-  segmentation: null,
-});
-
-export const useSegmentationContext = () => useContext(SegmentationContext);
+// useSegmentationContext is exported from './useSegmentationContext' to avoid Fast Refresh warnings
 
 interface SegmentationProviderProps {
   children: React.ReactNode;

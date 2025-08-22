@@ -332,6 +332,7 @@ export function useOptimizedPolygonRendering(
     } finally {
       setIsLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     polygons,
     visibilityContext,
@@ -341,7 +342,7 @@ export function useOptimizedPolygonRendering(
     opts.enableBatching,
     opts.enableLOD,
     opts.lodThreshold,
-    // visibilityResult removed - it's updated inside the function, causing render loops
+    // visibilityResult intentionally excluded - it's updated inside the function, would cause render loops
   ]);
 
   // Process polygons when context changes

@@ -6,7 +6,7 @@ import es from '@/translations/es';
 import fr from '@/translations/fr';
 import de from '@/translations/de';
 import zh from '@/translations/zh';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/exports';
 import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 import { i18nLogger } from '@/lib/i18nLogger';
@@ -17,7 +17,7 @@ import {
   type LanguageContextType,
 } from './LanguageContext.types';
 
-export type { Language, Translations } from './LanguageContext.types';
+// Language and Translations types are exported from './exports' to avoid Fast Refresh warnings
 
 const translations = {
   en,
@@ -168,4 +168,4 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-export { useLanguage } from './useLanguage';
+// useLanguage is exported from './exports' to avoid Fast Refresh warnings
