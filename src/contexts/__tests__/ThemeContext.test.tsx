@@ -41,12 +41,17 @@ const mockBody = {
   style: {},
 };
 
-Object.defineProperty(window, 'document', {
-  value: {
-    documentElement: mockDocumentElement,
-    body: mockBody,
-  },
+// Preserve existing document methods and only override what we need
+Object.defineProperty(document, 'documentElement', {
+  value: mockDocumentElement,
   writable: true,
+  configurable: true,
+});
+
+Object.defineProperty(document, 'body', {
+  value: mockBody,
+  writable: true,
+  configurable: true,
 });
 
 // Mock apiClient
