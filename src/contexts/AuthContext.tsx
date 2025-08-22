@@ -1,42 +1,15 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient, { AuthResponse } from '@/lib/api';
 import { User, Profile, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 import { authEventEmitter } from '@/lib/authEvents';
 import { tokenRefreshManager } from '@/lib/tokenRefresh';
-
-interface ConsentOptions {
-  consentToMLTraining?: boolean;
-  consentToAlgorithmImprovement?: boolean;
-  consentToFeatureDevelopment?: boolean;
-}
-
-interface AuthContextType {
-  user: User | null;
-  profile: Profile | null;
-  token: string | null;
-  loading: boolean;
-  isAuthenticated: boolean;
-  signIn: (
-    email: string,
-    password: string,
-    rememberMe?: boolean
-  ) => Promise<void>;
-  signUp: (
-    email: string,
-    password: string,
-    consentOptions?: ConsentOptions,
-    username?: string
-  ) => Promise<void>;
-  signOut: () => Promise<void>;
-  deleteAccount: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
-}
-
-export const AuthContext = createContext<AuthContextType | undefined>(
-  undefined
-);
+import {
+  AuthContext,
+  type AuthContextType,
+  type ConsentOptions,
+} from './AuthContext.types';
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -419,10 +392,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-}
+export { useAuth } from './useAuth';

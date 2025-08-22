@@ -26,8 +26,8 @@ describe('DashboardActions', () => {
   it('renders grid and list view mode buttons', () => {
     render(<DashboardActions {...defaultProps} />);
 
-    const gridButton = screen.getByRole('button', { name: /grid/i });
-    const listButton = screen.getByRole('button', { name: /list/i });
+    const gridButton = screen.getByRole('button', { name: /grid view/i });
+    const listButton = screen.getByRole('button', { name: /list view/i });
 
     expect(gridButton).toBeInTheDocument();
     expect(listButton).toBeInTheDocument();
@@ -36,8 +36,8 @@ describe('DashboardActions', () => {
   it('shows grid button as selected when viewMode is grid', () => {
     render(<DashboardActions {...defaultProps} viewMode="grid" />);
 
-    const gridButton = screen.getByRole('button', { name: /grid/i });
-    const listButton = screen.getByRole('button', { name: /list/i });
+    const gridButton = screen.getByRole('button', { name: /grid view/i });
+    const listButton = screen.getByRole('button', { name: /list view/i });
 
     // Grid button should have "default" variant styling (selected)
     expect(gridButton).toHaveClass('bg-primary', 'text-primary-foreground');
@@ -48,8 +48,8 @@ describe('DashboardActions', () => {
   it('shows list button as selected when viewMode is list', () => {
     render(<DashboardActions {...defaultProps} viewMode="list" />);
 
-    const gridButton = screen.getByRole('button', { name: /grid/i });
-    const listButton = screen.getByRole('button', { name: /list/i });
+    const gridButton = screen.getByRole('button', { name: /grid view/i });
+    const listButton = screen.getByRole('button', { name: /list view/i });
 
     // List button should have "default" variant styling (selected)
     expect(listButton).toHaveClass('bg-primary', 'text-primary-foreground');
@@ -91,8 +91,8 @@ describe('DashboardActions', () => {
   it('buttons have proper styling classes', () => {
     render(<DashboardActions {...defaultProps} />);
 
-    const gridButton = screen.getByRole('button', { name: /grid/i });
-    const listButton = screen.getByRole('button', { name: /list/i });
+    const gridButton = screen.getByRole('button', { name: /grid view/i });
+    const listButton = screen.getByRole('button', { name: /list view/i });
 
     expect(gridButton).toHaveClass('h-9', 'px-2.5', 'rounded-r-none');
     expect(listButton).toHaveClass('h-9', 'px-2.5', 'rounded-l-none');
@@ -122,8 +122,8 @@ describe('DashboardActions', () => {
     const user = userEvent.setup();
     render(<DashboardActions {...defaultProps} />);
 
-    const gridButton = screen.getByRole('button', { name: /grid/i });
-    const listButton = screen.getByRole('button', { name: /list/i });
+    const gridButton = screen.getByRole('button', { name: /grid view/i });
+    const listButton = screen.getByRole('button', { name: /list view/i });
 
     // Click buttons rapidly
     await user.click(listButton);
