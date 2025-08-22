@@ -7,9 +7,8 @@ import AccountSection from '@/components/settings/AccountSection';
 import AppearanceSection from '@/components/settings/AppearanceSection';
 import UserProfileSection from '@/components/settings/UserProfileSection';
 import ModelSettingsSection from '@/components/settings/ModelSettingsSection';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage, useAuth } from '@/contexts/exports';
 import { motion } from 'framer-motion';
-import { useAuth } from '@/contexts/AuthContext';
 import apiClient from '@/lib/api';
 import { Profile } from '@/types';
 // Note: Settings functionality now uses AuthContext and API client

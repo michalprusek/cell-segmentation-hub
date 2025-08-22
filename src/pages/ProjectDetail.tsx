@@ -7,9 +7,7 @@ import React, {
 } from 'react';
 import { useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useModel } from '@/contexts/ModelContext';
+import { useAuth, useLanguage, useModel } from '@/contexts/exports';
 import ProjectHeader from '@/components/project/ProjectHeader';
 import ProjectToolbar from '@/components/project/ProjectToolbar';
 import EmptyState from '@/components/project/EmptyState';

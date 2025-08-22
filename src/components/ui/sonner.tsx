@@ -3,7 +3,7 @@ import { Toaster as Sonner } from 'sonner';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './button';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/exports';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 

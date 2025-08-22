@@ -7,8 +7,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { useTheme, Theme } from '@/contexts/ThemeContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useTheme, useLanguage } from '@/contexts/exports';
+import type { Theme } from '@/contexts/exports';
 
 const ThemeSwitcher = () => {
   const { theme, setTheme } = useTheme();

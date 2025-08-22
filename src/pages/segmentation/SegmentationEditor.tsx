@@ -6,8 +6,7 @@ import React, {
   useRef,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth, useLanguage } from '@/contexts/exports';
 import { useProjectData } from '@/hooks/useProjectData';
 import { sortImagesBySettings } from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';

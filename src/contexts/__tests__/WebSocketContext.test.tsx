@@ -2,8 +2,8 @@ import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { WebSocketProvider, useWebSocket } from '@/contexts/WebSocketContext';
+import { AuthContext } from '@/contexts/AuthContext';
 import WebSocketManager from '@/services/webSocketManager';
-import { useAuth } from '@/contexts/AuthContext';
 
 // Mock WebSocketManager
 vi.mock('@/services/webSocketManager', () => {
@@ -27,11 +27,6 @@ vi.mock('@/services/webSocketManager', () => {
     default: mockManager,
   };
 });
-
-// Mock useAuth hook
-vi.mock('@/contexts/AuthContext', () => ({
-  useAuth: vi.fn(),
-}));
 
 // Mock logger
 vi.mock('@/lib/logger', () => ({
@@ -64,8 +59,16 @@ describe('WebSocketContext', () => {
     const mockUser = { id: 'user-123', name: 'Test User' };
     const mockToken = 'test-token';
 
+    const createWrapper = (authValue: any) => {
+      return ({ children }: { children: React.ReactNode }) => (
+        <AuthContext.Provider value={authValue}>
+          {children}
+        </AuthContext.Provider>
+      );
+    };
+
     it('should render children', () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -73,19 +76,20 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       render(
         <WebSocketProvider>
           <div data-testid="child">Test Child</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       expect(screen.getByTestId('child')).toBeInTheDocument();
     });
 
     it('should initialize WebSocket manager when user and token are available', async () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -93,12 +97,13 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       render(
         <WebSocketProvider>
           <div>Test</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       await waitFor(() => {
@@ -111,7 +116,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should not initialize when user is not available', () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: null,
         token: null,
         login: vi.fn(),
@@ -119,12 +124,13 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       render(
         <WebSocketProvider>
           <div>Test</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       expect(mockManager.getInstance).not.toHaveBeenCalled();
@@ -132,7 +138,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should not initialize when token is not available', () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: null,
         login: vi.fn(),
@@ -140,12 +146,13 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       render(
         <WebSocketProvider>
           <div>Test</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       expect(mockManager.getInstance).not.toHaveBeenCalled();
@@ -153,7 +160,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should register connection event listeners', async () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -161,12 +168,13 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       render(
         <WebSocketProvider>
           <div>Test</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       await waitFor(() => {
@@ -185,7 +193,7 @@ describe('WebSocketContext', () => {
       const mockSocket = { id: 'socket-123' };
       mockInstance.getSocket.mockReturnValue(mockSocket);
 
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -193,7 +201,7 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const TestComponent = () => {
         const { isConnected, socket } = useWebSocket();
@@ -208,7 +216,8 @@ describe('WebSocketContext', () => {
       render(
         <WebSocketProvider>
           <TestComponent />
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       // Initially not connected
@@ -237,7 +246,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should update connection state on disconnect event', async () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -245,7 +254,7 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const TestComponent = () => {
         const { isConnected } = useWebSocket();
@@ -255,7 +264,8 @@ describe('WebSocketContext', () => {
       render(
         <WebSocketProvider>
           <TestComponent />
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       // Wait for initialization
@@ -286,7 +296,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should clean up event listeners on unmount', async () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -294,12 +304,13 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const { unmount } = render(
         <WebSocketProvider>
           <div>Test</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       await waitFor(() => {
@@ -314,7 +325,7 @@ describe('WebSocketContext', () => {
 
     it('should handle auth changes and reconnect', async () => {
       // Start with no user
-      vi.mocked(useAuth).mockReturnValue({
+      const initialAuthValue = {
         user: null,
         token: null,
         login: vi.fn(),
@@ -322,16 +333,17 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const { rerender } = render(
         <WebSocketProvider>
           <div>Test</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(initialAuthValue) }
       );
 
       // User logs in - change auth state and rerender
-      vi.mocked(useAuth).mockReturnValue({
+      const loggedInAuthValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -339,12 +351,14 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       rerender(
-        <WebSocketProvider>
-          <div>Test</div>
-        </WebSocketProvider>
+        <AuthContext.Provider value={loggedInAuthValue}>
+          <WebSocketProvider>
+            <div>Test</div>
+          </WebSocketProvider>
+        </AuthContext.Provider>
       );
 
       await waitFor(() => {
@@ -356,7 +370,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should prevent duplicate initialization', async () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -364,12 +378,13 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const { rerender } = render(
         <WebSocketProvider>
           <div>Test</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       await waitFor(() => {
@@ -393,7 +408,7 @@ describe('WebSocketContext', () => {
         .mockImplementation(() => {});
       mockInstance.connect.mockRejectedValue(new Error('Connection failed'));
 
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -401,12 +416,13 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       render(
         <WebSocketProvider>
           <div>Test</div>
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       await waitFor(() => {
@@ -419,7 +435,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should provide manager and socket to context consumers', async () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -427,7 +443,7 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const TestComponent = () => {
         const { manager, isConnected } = useWebSocket();
@@ -442,7 +458,8 @@ describe('WebSocketContext', () => {
       render(
         <WebSocketProvider>
           <TestComponent />
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       // For CI pipeline, just verify the provider works and context is available
@@ -464,7 +481,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should return context value when used within provider', () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: null,
         token: null,
         login: vi.fn(),
@@ -472,7 +489,7 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const TestComponent = () => {
         const context = useWebSocket();
@@ -495,7 +512,8 @@ describe('WebSocketContext', () => {
       render(
         <WebSocketProvider>
           <TestComponent />
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       expect(screen.getByTestId('context-exists')).toHaveTextContent('yes');
@@ -509,9 +527,17 @@ describe('WebSocketContext', () => {
     const mockUser = { id: 'user-123', name: 'Test User' };
     const mockToken = 'test-token';
 
+    const createWrapper = (authValue: any) => {
+      return ({ children }: { children: React.ReactNode }) => (
+        <AuthContext.Provider value={authValue}>
+          {children}
+        </AuthContext.Provider>
+      );
+    };
+
     it('should handle full login/logout cycle', async () => {
       // Start with no user
-      vi.mocked(useAuth).mockReturnValue({
+      const initialAuthValue = {
         user: null,
         token: null,
         login: vi.fn(),
@@ -519,7 +545,7 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const TestComponent = () => {
         const { isConnected, manager } = useWebSocket();
@@ -534,14 +560,15 @@ describe('WebSocketContext', () => {
       const { rerender } = render(
         <WebSocketProvider>
           <TestComponent />
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(initialAuthValue) }
       );
 
       // Initially not connected
       expect(screen.getByTestId('connected')).toHaveTextContent('false');
 
       // User logs in - update mock and rerender
-      vi.mocked(useAuth).mockReturnValue({
+      const loggedInAuthValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -549,12 +576,14 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       rerender(
-        <WebSocketProvider>
-          <TestComponent />
-        </WebSocketProvider>
+        <AuthContext.Provider value={loggedInAuthValue}>
+          <WebSocketProvider>
+            <TestComponent />
+          </WebSocketProvider>
+        </AuthContext.Provider>
       );
 
       await waitFor(() => {
@@ -569,7 +598,6 @@ describe('WebSocketContext', () => {
     });
 
     it('should handle rapid auth state changes', async () => {
-      let renderCount = 0;
       const authStates = [
         { user: null, token: null },
         { user: mockUser, token: mockToken },
@@ -577,32 +605,37 @@ describe('WebSocketContext', () => {
         { user: mockUser, token: mockToken },
       ];
 
-      vi.mocked(useAuth).mockImplementation(() => ({
-        ...(authStates[renderCount] || authStates[0]),
-        login: vi.fn(),
-        logout: vi.fn(),
-        register: vi.fn(),
-        updateProfile: vi.fn(),
-        isLoading: false,
-      }));
-
       const TestComponent = () => {
         const { manager } = useWebSocket();
         return <span data-testid="has-manager">{manager ? 'yes' : 'no'}</span>;
       };
 
-      const { rerender } = render(
-        <WebSocketProvider>
-          <TestComponent />
-        </WebSocketProvider>
-      );
+      let currentAuthState = authStates[0];
+      const createAuthValue = (state: any) => ({
+        ...state,
+        login: vi.fn(),
+        logout: vi.fn(),
+        register: vi.fn(),
+        updateProfile: vi.fn(),
+        isLoading: false,
+      });
 
-      for (let i = 1; i < authStates.length; i++) {
-        renderCount = i;
-        rerender(
+      const { rerender } = render(
+        <AuthContext.Provider value={createAuthValue(currentAuthState)}>
           <WebSocketProvider>
             <TestComponent />
           </WebSocketProvider>
+        </AuthContext.Provider>
+      );
+
+      for (let i = 1; i < authStates.length; i++) {
+        currentAuthState = authStates[i];
+        rerender(
+          <AuthContext.Provider value={createAuthValue(currentAuthState)}>
+            <WebSocketProvider>
+              <TestComponent />
+            </WebSocketProvider>
+          </AuthContext.Provider>
         );
         await waitFor(() => {
           // Should not throw errors
@@ -612,7 +645,7 @@ describe('WebSocketContext', () => {
     });
 
     it('should maintain stable context value across re-renders', async () => {
-      vi.mocked(useAuth).mockReturnValue({
+      const authValue = {
         user: mockUser,
         token: mockToken,
         login: vi.fn(),
@@ -620,7 +653,7 @@ describe('WebSocketContext', () => {
         register: vi.fn(),
         updateProfile: vi.fn(),
         isLoading: false,
-      });
+      };
 
       const contextValues: any[] = [];
 
@@ -633,7 +666,8 @@ describe('WebSocketContext', () => {
       const { rerender } = render(
         <WebSocketProvider>
           <TestComponent />
-        </WebSocketProvider>
+        </WebSocketProvider>,
+        { wrapper: createWrapper(authValue) }
       );
 
       await waitFor(() => {

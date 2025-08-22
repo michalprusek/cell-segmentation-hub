@@ -4,8 +4,7 @@ import { toast } from 'sonner';
 
 import DashboardHeader from '@/components/DashboardHeader';
 import StatsOverview from '@/components/StatsOverview';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth, useLanguage } from '@/contexts/exports';
 import ProjectToolbar from '@/components/project/ProjectToolbar';
 import ProjectsTab from '@/components/dashboard/ProjectsTab';
 import { useDashboardProjects } from '@/hooks/useDashboardProjects';
