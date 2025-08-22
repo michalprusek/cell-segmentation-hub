@@ -19,13 +19,6 @@ interface ApiProject extends Project {
   images?: ProjectImage[];
 }
 
-// Interface for shared project response
-interface SharedProjectResponse {
-  project: ApiProject;
-  sharedBy: { id: string; email: string };
-  status: string;
-}
-
 export const useDashboardProjects = ({
   sortField,
   sortDirection,
@@ -65,7 +58,7 @@ export const useDashboardProjects = ({
           isOwned: true,
           isShared: false,
         })),
-        ...sharedProjects.map((p: SharedProjectResponse) => ({
+        ...sharedProjects.map((p: any) => ({
           ...p.project,
           isOwned: false,
           isShared: true,

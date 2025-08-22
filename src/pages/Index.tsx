@@ -60,7 +60,7 @@ const Index = () => {
                 <div className="glass-morphism rounded-2xl overflow-hidden">
                   <img
                     src="/lovable-uploads/8f483962-36d5-4bae-8c90-c9542f8cc2d8.png"
-                    alt={t('common.segmentedSpheroidAlt')}
+                    alt="Segmented spheroid"
                     className="w-full h-auto"
                   />
                 </div>

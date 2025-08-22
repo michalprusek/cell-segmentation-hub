@@ -129,7 +129,7 @@ export const useSegmentationQueue = (projectId?: string) => {
       if (wsManagerRef.current) {
         const manager = wsManagerRef.current;
         manager.off('segmentation-update', handleSegmentationUpdate);
-        manager.off('queueStats', handleQueueStatsUpdate);
+        manager.off('queue-stats-update', handleQueueStatsUpdate);
         manager.off('notification', handleNotification);
         manager.off('system-message', handleSystemMessage);
         wsManagerRef.current = null;
@@ -143,7 +143,7 @@ export const useSegmentationQueue = (projectId?: string) => {
 
     // Register event listeners
     manager.on('segmentation-update', handleSegmentationUpdate);
-    manager.on('queueStats', handleQueueStatsUpdate);
+    manager.on('queue-stats-update', handleQueueStatsUpdate);
     manager.on('notification', handleNotification);
     manager.on('system-message', handleSystemMessage);
 
@@ -159,7 +159,7 @@ export const useSegmentationQueue = (projectId?: string) => {
 
       if (manager) {
         manager.off('segmentation-update', handleSegmentationUpdate);
-        manager.off('queueStats', handleQueueStatsUpdate);
+        manager.off('queue-stats-update', handleQueueStatsUpdate);
         manager.off('notification', handleNotification);
         manager.off('system-message', handleSystemMessage);
       }

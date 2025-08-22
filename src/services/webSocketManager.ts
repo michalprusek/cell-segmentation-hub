@@ -56,8 +56,7 @@ class WebSocketManager {
   private constructor() {
     this.eventListeners = {
       'segmentation-update': new Set(),
-      'thumbnail:updated': new Set(),
-      queueStats: new Set(),
+      'queue-stats-update': new Set(),
       notification: new Set(),
       'system-message': new Set(),
       connect: new Set(),
@@ -278,27 +277,11 @@ class WebSocketManager {
       this.emitToListeners('segmentation-update', update);
     });
 
-    this.socket.on('thumbnail:updated', (thumbnailUpdate: any) => {
-      // ENHANCED DEBUG LOGGING
-      logger.warn('🟢 THUMBNAIL UPDATE RECEIVED:', {
-        imageId: thumbnailUpdate.imageId,
-        hasThumbnailData: !!thumbnailUpdate.thumbnailData,
-        polygonCount: thumbnailUpdate.thumbnailData?.polygonCount,
-        levelOfDetail: thumbnailUpdate.thumbnailData?.levelOfDetail,
-        timestamp: new Date().toISOString(),
-      });
-
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug('Full thumbnail update:', thumbnailUpdate);
-      }
-      this.emitToListeners('thumbnail:updated', thumbnailUpdate);
-    });
-
-    this.socket.on('queueStats', (stats: QueueStats) => {
+    this.socket.on('queue-stats-update', (stats: QueueStats) => {
       if (process.env.NODE_ENV === 'development') {
         logger.debug('Queue stats update received:', stats);
       }
-      this.emitToListeners('queueStats', stats);
+      this.emitToListeners('queue-stats-update', stats);
     });
 
     this.socket.on('notification', (notification: Notification) => {

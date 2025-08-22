@@ -90,27 +90,6 @@ These only work for building static assets, but the app must run in Docker:
 - Example: `mcp__desktop-commander__start_process("docker compose build backend", 600000)`
 - Monitor with `mcp__desktop-commander__read_process_output` and `mcp__desktop-commander__interact_with_process`
 
-### ML Service Hanging Issues (RESOLVED)
-
-**Problem**: PyTorch model inference can hang indefinitely on certain inputs, particularly with large images or complex models.
-
-**Root Cause**: PyTorch operations at C++ level cannot be interrupted by Python timeout mechanisms.
-
-**Solution Implemented**:
-
-- ✅ **Input validation**: Maximum image size limits (2048x2048) to prevent hanging
-- ✅ **Automatic resizing**: Large images are resized while maintaining aspect ratio
-- ✅ **Monitoring endpoint**: `/health/inference` tests inference capability with small test image
-- ✅ **Graceful error handling**: Proper error responses and logging
-- ❌ **Timeout mechanism**: Complex ThreadPoolExecutor timeout was removed (not effective for PyTorch hanging)
-
-**Prevention Strategy**:
-
-- Use input size limits rather than complex timeout mechanisms
-- Monitor via `/health/inference` endpoint
-- Restart ML service if hanging is detected: `docker restart spheroseg-ml`
-- Prefer simpler models (hrnet) for large images
-
 ## Project Architecture
 
 This is a React-based cell segmentation application with a full-stack microservices architecture. The system consists of three main services running in Docker containers:

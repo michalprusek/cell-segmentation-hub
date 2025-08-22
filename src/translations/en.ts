@@ -72,13 +72,6 @@ export default {
     noImage: 'No Image',
     untitledImage: 'Untitled Image',
     rename: 'Rename',
-    // Alt text for accessibility
-    logoAlt: 'SpheroSeg Logo',
-    segmentedSpheroidAlt: 'Segmented spheroid',
-    segmentationTargetAlt: 'Segmentation target',
-    spheroidExampleAlt: 'Segmented spheroid example',
-    spheroidImageAlt: 'Spheroid microscopy image',
-    spheroidAnalysisImageAlt: 'Spheroid microscopy image with analysis',
   },
 
   landing: {
@@ -584,14 +577,6 @@ export default {
       },
       shiftIndicator: '⚡ SHIFT: Auto-adding points',
     },
-    status: {
-      polygons: 'Polygons',
-      selected: 'Selected',
-      vertices: 'vertices',
-      zoom: 'Zoom',
-      mode: 'Mode',
-      unsavedChanges: 'Unsaved changes',
-    },
   },
   auth: {
     signIn: 'Sign In',
@@ -712,10 +697,6 @@ export default {
     createdProject: 'Created project',
     completedSegmentation: 'Completed segmentation for',
     uploadedImage: 'Uploaded image',
-    noBioProvided: 'No bio provided',
-    notSpecified: 'Not specified',
-    defaultTitle: 'Researcher',
-    defaultOrganization: 'Research Institute',
     avatar: {
       uploadButton: 'Upload Avatar',
       selectFile: 'Select avatar image',
@@ -782,12 +763,6 @@ export default {
     somethingWentWrong: 'Something went wrong. Please try again later.',
     somethingWentWrongPage: 'Something went wrong while loading this page.',
     returnToHome: 'Return to Home',
-    // Segmentation error boundary
-    segmentationError: 'Segmentation Error',
-    segmentationErrorDescription:
-      'An error occurred while loading segmentation data. This might be due to network issues or server problems.',
-    errorDetails: 'Error Details',
-    tryAgain: 'Try Again',
     // Project actions
     project: {
       created: 'Project created successfully',
@@ -798,12 +773,6 @@ export default {
       notFound: 'Project not found',
       invalidResponse: 'Server response was invalid',
       readyForImages: 'is ready for images',
-      selected: '{{count}} selected',
-      deleteSelected: 'Delete Selected',
-    },
-    project: {
-      selected: '{{count}} selected',
-      deleteSelected: 'Delete Selected',
     },
     // Profile actions
     profile: {

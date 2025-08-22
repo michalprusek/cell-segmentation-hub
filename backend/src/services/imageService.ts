@@ -295,6 +295,9 @@ export class ImageService {
             }
           ]
         }
+      },
+      include: {
+        project: true
       }
     });
 

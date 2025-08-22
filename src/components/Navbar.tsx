@@ -43,11 +43,7 @@ const Navbar = () => {
           to="/"
           className="flex items-center gap-2 transition-opacity hover:opacity-80"
         >
-          <img
-            src="/logo.svg"
-            alt={t('common.logoAlt')}
-            className="w-10 h-10"
-          />
+          <img src="/logo.svg" alt="SpheroSeg Logo" className="w-10 h-10" />
           <span className="font-semibold text-lg">SpheroSeg</span>
         </Link>
 
