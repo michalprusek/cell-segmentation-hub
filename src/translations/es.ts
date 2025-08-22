@@ -230,13 +230,36 @@ export default {
       fieldRequired: 'Este campo es requerido',
     },
     operations: {
+      loadProject:
+        'No se pudo cargar el proyecto. Verifica tu conexión e inténtalo de nuevo.',
+      saveProject:
+        'No se pudieron guardar los cambios del proyecto. Inténtalo de nuevo.',
+      uploadImage:
+        'No se pudo subir la imagen. Verifica el formato y el tamaño del archivo.',
+      deleteImage:
+        'No se puede eliminar la imagen. Intenta actualizar la página y repetir la acción.',
+      processImage:
+        'El procesamiento de la imagen falló. Prueba con una imagen diferente o contacta al soporte.',
+      segmentation:
+        'La segmentación falló. Intenta usar un modelo diferente o ajustar la configuración.',
+      export:
+        'La exportación de datos falló. Verifica que los datos estén disponibles.',
+      login: 'Inicio de sesión falló. Verifica tu email y contraseña.',
+      logout: 'Cerrar sesión falló. Intenta cerrar el navegador.',
+      register: 'El registro falló. Este email podría estar ya en uso.',
+      updateProfile:
+        'No se pudo actualizar el perfil. Verifica la información proporcionada.',
+      changePassword:
+        'No se pudo cambiar la contraseña. Verifica tu contraseña actual.',
+      deleteAccount:
+        'No se pudo eliminar la cuenta. Contacta al soporte para asistencia.',
+      resetPassword:
+        'El restablecimiento de contraseña falló. Verifica la dirección de email proporcionada.',
+      updateConsent:
+        'No se pudieron actualizar las preferencias de consentimiento. Inténtalo de nuevo.',
       unshareProject:
         'No se pudo quitar el proyecto de los proyectos compartidos',
       deleteProject: 'No se pudo eliminar el proyecto',
-      changePassword: 'No se pudo cambiar la contraseña',
-      updateConsent:
-        'No se pudieron actualizar las preferencias de consentimiento',
-      updateProfile: 'No se pudo actualizar el perfil',
     },
     deleteImages: 'Error al eliminar las imágenes seleccionadas',
     contexts: {
@@ -765,6 +788,7 @@ export default {
     reconnecting: 'Reconectando al servidor...',
     reconnected: 'Conexión al servidor restaurada',
     connectionFailed: 'Error al restaurar la conexión al servidor',
+    autosaveFailed: 'Autoguardado falló - los cambios pueden perderse',
     segmentationRequested: 'Solicitud de segmentación enviada',
     segmentationCompleted: 'Segmentación de imagen completada',
     segmentationFailed: 'La segmentación falló',

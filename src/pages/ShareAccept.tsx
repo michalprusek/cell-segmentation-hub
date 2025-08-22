@@ -149,7 +149,7 @@ function ShareAcceptPage() {
         }
       }
     }
-  }, [shareData, user, accepted]);
+  }, [shareData, user, accepted, handleAccept]);
 
   const handleLogin = () => {
     // After login, redirect back to the share accept page to complete the process
