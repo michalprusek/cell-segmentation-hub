@@ -24,6 +24,7 @@ export default [
       'src/components/DashboardActions.tsx', // Component names and structural JSX
       'src/components/Features.tsx', // Feature titles are component names
       'src/components/ErrorBoundary.tsx', // Already uses translations properly with t() function
+      'src/components/Footer.tsx', // Footer links and structural content
     ],
     languageOptions: {
       parser: tsParser,

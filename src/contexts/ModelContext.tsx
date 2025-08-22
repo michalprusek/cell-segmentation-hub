@@ -7,7 +7,7 @@ import {
   type ModelContextType,
 } from './ModelContext.types';
 
-export type { ModelType, ModelInfo } from './ModelContext.types';
+// ModelType and ModelInfo are exported from './exports' to avoid Fast Refresh warnings
 
 const AVAILABLE_MODELS: ModelInfo[] = Object.values(BASIC_MODEL_INFO);
 
@@ -85,4 +85,4 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
   );
 };
 
-export { useModel } from './useModel';
+// useModel is exported from './exports' to avoid Fast Refresh warnings

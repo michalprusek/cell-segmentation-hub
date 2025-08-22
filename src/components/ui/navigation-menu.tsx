@@ -122,4 +122,4 @@ export {
   NavigationMenuViewport,
 };
 
-export { navigationMenuTriggerStyle } from './navigation-menu-variants';
+// navigationMenuTriggerStyle is exported from './exports' to avoid Fast Refresh warnings

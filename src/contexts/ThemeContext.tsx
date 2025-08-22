@@ -1,20 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import apiClient from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/exports';
 import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
-
-export type Theme = 'light' | 'dark' | 'system';
-
-interface ThemeContextType {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
-}
-
-const ThemeContext = createContext<ThemeContextType>({
-  theme: 'system',
-  setTheme: () => {},
-});
+import {
+  ThemeContext,
+  type Theme,
+  type ThemeContextType,
+} from './ThemeContext.types';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -166,10 +159,4 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
-  return context;
-};
+// useTheme is exported from './exports' to avoid Fast Refresh warnings

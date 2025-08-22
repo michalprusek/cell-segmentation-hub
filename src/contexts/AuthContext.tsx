@@ -392,4 +392,4 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export { useAuth } from './useAuth';
+// useAuth is exported from './exports' to avoid Fast Refresh warnings
