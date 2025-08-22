@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import apiClient from '@/lib/api';
 import en from '@/translations/en';
 import cs from '@/translations/cs';
@@ -10,16 +10,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 import { i18nLogger } from '@/lib/i18nLogger';
+import {
+  LanguageContext,
+  type Language,
+  type Translations,
+  type LanguageContextType,
+} from './LanguageContext.types';
 
-export type Language = 'en' | 'cs' | 'es' | 'fr' | 'de' | 'zh';
-export type Translations = typeof en;
-
-interface LanguageContextType {
-  language: Language;
-  setLanguage: (language: Language) => Promise<void>;
-  t: (key: string, options?: Record<string, unknown>) => string | string[];
-  translations: Translations;
-}
+export type { Language, Translations } from './LanguageContext.types';
 
 const translations = {
   en,
@@ -29,13 +27,6 @@ const translations = {
   de,
   zh,
 };
-
-const LanguageContext = createContext<LanguageContextType>({
-  language: 'en',
-  setLanguage: () => {},
-  t: key => key,
-  translations: en,
-});
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -177,10 +168,4 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 };
 
-export const useLanguage = () => {
-  const context = useContext(LanguageContext);
-  if (context === undefined) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
-  }
-  return context;
-};
+export { useLanguage } from './useLanguage';

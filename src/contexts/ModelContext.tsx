@@ -1,46 +1,15 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useEffect,
-  ReactNode,
-} from 'react';
+import React, { useState, useEffect, ReactNode } from 'react';
 import { BASIC_MODEL_INFO } from '@/lib/modelUtils';
+import {
+  ModelContext,
+  type ModelType,
+  type ModelInfo,
+  type ModelContextType,
+} from './ModelContext.types';
 
-export type ModelType = 'hrnet' | 'resunet_small' | 'resunet_advanced';
-
-export interface ModelInfo {
-  id: ModelType;
-  name: string;
-  displayName: string;
-  description: string;
-  size: 'small' | 'medium' | 'large';
-  defaultThreshold: number;
-}
-
-interface ModelContextType {
-  selectedModel: ModelType;
-  confidenceThreshold: number;
-  detectHoles: boolean;
-  setSelectedModel: (model: ModelType) => void;
-  setConfidenceThreshold: (threshold: number) => void;
-  setDetectHoles: (detectHoles: boolean) => void;
-  getModelInfo: (modelId: ModelType) => ModelInfo;
-  availableModels: ModelInfo[];
-}
+export type { ModelType, ModelInfo } from './ModelContext.types';
 
 const AVAILABLE_MODELS: ModelInfo[] = Object.values(BASIC_MODEL_INFO);
-
-const ModelContext = createContext<ModelContextType>({
-  selectedModel: 'hrnet',
-  confidenceThreshold: 0.5,
-  detectHoles: true,
-  setSelectedModel: () => {},
-  setConfidenceThreshold: () => {},
-  setDetectHoles: () => {},
-  getModelInfo: () => AVAILABLE_MODELS[0],
-  availableModels: AVAILABLE_MODELS,
-});
 
 interface ModelProviderProps {
   children: ReactNode;
@@ -116,10 +85,4 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
   );
 };
 
-export const useModel = () => {
-  const context = useContext(ModelContext);
-  if (context === undefined) {
-    throw new Error('useModel must be used within a ModelProvider');
-  }
-  return context;
-};
+export { useModel } from './useModel';

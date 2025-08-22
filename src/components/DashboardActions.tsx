@@ -33,6 +33,7 @@ const DashboardActions = ({
           size="sm"
           className="h-9 px-2.5 rounded-r-none"
           onClick={() => setViewMode('grid')}
+          aria-label="Grid view"
         >
           <Grid2X2 className="h-4 w-4" />
         </Button>
@@ -41,6 +42,7 @@ const DashboardActions = ({
           size="sm"
           className="h-9 px-2.5 rounded-l-none"
           onClick={() => setViewMode('list')}
+          aria-label="List view"
         >
           <ListIcon className="h-4 w-4" />
         </Button>
