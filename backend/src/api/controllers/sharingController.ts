@@ -203,7 +203,14 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
     }
     
     const formattedProjects = shares
-      .filter(share => share.project && share.sharedBy) // Filter out shares with missing data
+      .filter(share => 
+        share.project && 
+        share.sharedBy &&
+        share.project.id &&
+        share.project.title &&
+        share.sharedBy.id &&
+        share.sharedBy.email
+      ) // Filter out shares with missing data or incomplete nested properties
       .map(share => ({
       project: {
         id: share.project.id,

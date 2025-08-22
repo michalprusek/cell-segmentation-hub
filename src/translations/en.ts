@@ -238,8 +238,6 @@ export default {
       loadProject:
         'Could not load the project. Check your connection and try again.',
       saveProject: 'Could not save project changes. Please try again.',
-      deleteProject:
-        'Cannot delete project. Make sure you have the necessary permissions.',
       uploadImage: 'Could not upload image. Check the file format and size.',
       deleteImage:
         'Cannot delete image. Try refreshing the page and repeating the action.',
@@ -258,6 +256,8 @@ export default {
         'Could not delete account. Contact support for assistance.',
       resetPassword: 'Password reset failed. Check the email address provided.',
       updateConsent: 'Could not update consent preferences. Please try again.',
+      unshareProject: 'Failed to remove project from shared projects',
+      deleteProject: 'Failed to delete project',
     },
     contexts: {
       dashboard: 'Dashboard error',
@@ -268,13 +268,6 @@ export default {
       auth: 'Authentication error',
       profile: 'Profile error',
       settings: 'Settings error',
-    },
-    operations: {
-      unshareProject: 'Failed to remove project from shared projects',
-      deleteProject: 'Failed to delete project',
-      changePassword: 'Failed to change password',
-      updateConsent: 'Failed to update consent preferences',
-      updateProfile: 'Failed to update profile',
     },
     deleteImages: 'Failed to delete selected images',
   },

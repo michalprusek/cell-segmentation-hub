@@ -453,8 +453,10 @@ export function ShareDialog({
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => handleResendInvitation(share.email!)}
-                          disabled={loading}
+                          onClick={() =>
+                            share.email && handleResendInvitation(share.email)
+                          }
+                          disabled={loading || !share.email}
                           title={t('sharing.resendInvitation')}
                         >
                           <RefreshCw className="h-4 w-4" />

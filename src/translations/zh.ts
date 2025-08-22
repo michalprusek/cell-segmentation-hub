@@ -757,7 +757,6 @@ export default {
       reloadFailed: '加载分割结果失败。请刷新页面。',
       autosaveFailed: '自动保存失败 - 更改可能丢失',
     },
-    autosaveFailed: '自动保存失败 - 更改可能丢失',
   },
   project: {
     selected: '已选择{{count}}张图片',

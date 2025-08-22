@@ -206,19 +206,8 @@ export class ImageService {
       }
     });
     
-    // If not found, check if shared directly
     if (!project) {
-      const sharedProject = await this.prisma.projectShare.findFirst({
-        where: {
-          projectId,
-          sharedWithId: userId,
-          status: 'accepted'
-        }
-      });
-      
-      if (!sharedProject) {
-        throw new Error('Project not found or no access');
-      }
+      throw new Error('Project not found or no access');
     }
 
     const { page, limit, status, sortBy, sortOrder } = options;

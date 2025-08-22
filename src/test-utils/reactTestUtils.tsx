@@ -24,7 +24,26 @@ const MockLanguageProvider: React.FC<{ children: React.ReactNode }> = ({
 // eslint-disable-next-line react-refresh/only-export-components
 const MockThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
-}) => <ThemeProvider>{children}</ThemeProvider>;
+}) => {
+  // Mock window.matchMedia for tests
+  if (!window.matchMedia) {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: vi.fn().mockImplementation(query => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  }
+
+  return <ThemeProvider>{children}</ThemeProvider>;
+};
 
 // eslint-disable-next-line react-refresh/only-export-components
 const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -70,11 +89,11 @@ const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 const AllProviders: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => (
-  <MockLanguageProvider>
-    <MockThemeProvider>
-      <MockAuthProvider>{children}</MockAuthProvider>
-    </MockThemeProvider>
-  </MockLanguageProvider>
+  <MockAuthProvider>
+    <MockLanguageProvider>
+      <MockThemeProvider>{children}</MockThemeProvider>
+    </MockLanguageProvider>
+  </MockAuthProvider>
 );
 
 // Custom render function with providers

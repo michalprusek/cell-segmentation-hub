@@ -16,6 +16,7 @@ export interface Project {
   isShared?: boolean;
   sharedBy?: { email: string };
   owner?: { email: string; name?: string };
+  shareId?: string;
 }
 
 export interface ProjectsListProps {

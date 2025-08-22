@@ -192,7 +192,7 @@ export const useUnifiedSegmentationUpdate = ({
               tRef.current('projects.segmentationCompleted')
           );
         }
-      } else if (update.status === 'no_segmentation') {
+      } else if (update.status === 'no_polygons') {
         toast.warning(
           tRef.current('toast.segmentation.noPolygons') ||
             'No segmentation polygons detected'
