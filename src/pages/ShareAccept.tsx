@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -76,7 +76,7 @@ function ShareAcceptPage() {
 
       setAccepted(true);
       toast({
-        title: t('success'),
+        title: t('common.success'),
         description: t('sharing.invitationAccepted'),
       });
 
@@ -130,7 +130,8 @@ function ShareAcceptPage() {
   }, [shareData, user, accepted, autoAccepting, handleAccept]);
 
   const handleLogin = () => {
-    navigate(`/sign-in?returnTo=/share/accept/${token}`);
+    // After login, redirect to dashboard instead of back to share page
+    navigate(`/sign-in?returnTo=/dashboard`);
   };
 
   if (loading) {
@@ -160,9 +161,7 @@ function ShareAcceptPage() {
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <p className="text-muted-foreground">{error}</p>
-            <Button onClick={() => navigate('/dashboard')} variant="outline">
-              {t('common.back')} {t('common.dashboard')}
-            </Button>
+            {/* Removed back to dashboard button from error state */}
           </CardContent>
         </Card>
       </div>
@@ -176,13 +175,13 @@ function ShareAcceptPage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center space-x-2">
               <CheckCircle className="h-6 w-6 text-green-500" />
-              <span>{t('success')}</span>
+              <span>{t('common.success')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="text-center space-y-4">
             <p>{t('sharing.invitationAccepted')}</p>
             <p className="text-sm text-muted-foreground">
-              {t('sharing.redirectingToDashboard')}...
+              {t('common.redirectingToDashboard')}...
             </p>
           </CardContent>
         </Card>
@@ -261,13 +260,7 @@ function ShareAcceptPage() {
               </Button>
             )}
 
-            <Button
-              onClick={() => navigate('/dashboard')}
-              variant="outline"
-              className="w-full"
-            >
-              {t('common.back')} {t('common.dashboard')}
-            </Button>
+            {/* Removed back to dashboard button */}
           </div>
         </CardContent>
       </Card>

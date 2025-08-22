@@ -277,18 +277,59 @@ export async function getSharedProjects(userId: string): Promise<ShareWithDetail
       });
     }
     
+    logger.debug(`Fetching shared projects for user ${userId}`, 'SharingService', {
+      userId,
+      conditions: whereConditions
+    });
+    
     const shares = await prisma.projectShare.findMany({
       where: {
         OR: whereConditions
       },
       include: {
-        project: true,
+        project: {
+          include: {
+            _count: {
+              select: { images: true }
+            },
+            images: {
+              take: 1,
+              orderBy: { createdAt: 'desc' },
+              select: {
+                id: true,
+                name: true,
+                thumbnailPath: true,
+                originalPath: true
+              }
+            },
+            user: {
+              select: {
+                id: true,
+                email: true
+              }
+            }
+          }
+        },
         sharedBy: true,
         sharedWith: true
       },
       orderBy: {
         createdAt: 'desc'
       }
+    });
+    
+    logger.debug(`Found ${shares.length} shares for user`, 'SharingService', {
+      userId,
+      shareCount: shares.length,
+      shares: shares.map(s => ({ 
+        id: s.id, 
+        projectId: s.projectId, 
+        hasProject: !!s.project,
+        projectTitle: s.project?.title,
+        sharedById: s.sharedById,
+        sharedWithId: s.sharedWithId,
+        status: s.status
+      }))
     });
 
     return shares as ShareWithDetails[];
@@ -353,14 +394,39 @@ export async function getProjectShares(
 }
 
 /**
- * Revoke a project share
+ * Revoke a project share (called by project owner)
  */
 export async function revokeShare(
   shareId: string,
   ownerId: string
 ): Promise<void> {
   try {
-    // Verify the user owns the project
+    // Check if this is actually a request from the shared user to remove the project
+    // First, try to find if the user is the one the project is shared with
+    const shareAsRecipient = await prisma.projectShare.findFirst({
+      where: {
+        id: shareId,
+        sharedWithId: ownerId,
+        status: 'accepted'
+      }
+    });
+
+    if (shareAsRecipient) {
+      // User wants to remove a shared project from their list
+      // Mark it as removed/declined by the recipient
+      await prisma.projectShare.update({
+        where: { id: shareId },
+        data: { status: 'revoked' }
+      });
+
+      logger.info(`User removed shared project from their list: ${shareId}`, 'SharingService', {
+        shareId,
+        userId: ownerId
+      });
+      return;
+    }
+
+    // Otherwise, verify the user owns the project (original revoke logic)
     const share = await prisma.projectShare.findFirst({
       where: {
         id: shareId,
@@ -380,7 +446,7 @@ export async function revokeShare(
       data: { status: 'revoked' }
     });
 
-    logger.info(`Share revoked: ${shareId}`, 'SharingService', {
+    logger.info(`Share revoked by owner: ${shareId}`, 'SharingService', {
       shareId,
       ownerId
     });
@@ -419,6 +485,7 @@ export async function hasProjectAccess(
       return { hasAccess: false, isOwner: false };
     }
 
+    // Check direct shares first
     const share = await prisma.projectShare.findFirst({
       where: {
         projectId,
@@ -433,6 +500,8 @@ export async function hasProjectAccess(
     if (share) {
       return { hasAccess: true, isOwner: false, shareId: share.id };
     }
+
+    // No need for separate ShareLink check - all accepted shares are already checked above
 
     return { hasAccess: false, isOwner: false };
   } catch (error) {

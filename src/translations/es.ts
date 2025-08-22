@@ -808,6 +808,7 @@ export default {
       deleted: 'Proyecto eliminado exitosamente',
       deleteFailed: 'Error al eliminar el proyecto',
       urlCopied: 'URL del proyecto copiada al portapapeles',
+      unshared: 'Proyecto eliminado de compartidos',
       notFound: 'Proyecto no encontrado',
       invalidResponse: 'La respuesta del servidor fue inválida',
       readyForImages: 'está listo para imágenes',
@@ -1692,5 +1693,44 @@ export default {
     contactUs: 'Contáctanos',
     copyright:
       '© {{year}} SpheroSeg. Desarrollado en ÚTIA AV ČR (Instituto de Teoría de la Información y Automatización, Academia de Ciencias de la República Checa).',
+  },
+
+  // Compartir proyectos
+  sharing: {
+    share: 'Compartir',
+    shared: 'Compartido',
+    shareProject: 'Compartir proyecto',
+    shareDescription:
+      'Compartir proyecto "{{title}}" con colegas y colaboradores',
+    shareByEmail: 'Compartir por correo',
+    shareByLink: 'Compartir por enlace',
+    emailAddress: 'Dirección de correo',
+    enterEmailPlaceholder: 'Ingresar dirección de correo',
+    optionalMessage: 'Mensaje opcional',
+    messagePlaceholder: 'Añadir un mensaje personal a la invitación...',
+    sendInvitation: 'Enviar invitación',
+    sending: 'Enviando...',
+    emailSent: '¡Invitación por correo enviada!',
+    emailRequired: 'La dirección de correo es requerida',
+    emailShareFailed: 'Error al enviar la invitación por correo',
+
+    linkExpiry: 'Expiración del enlace',
+    neverExpires: 'Nunca expira',
+    hours: 'horas',
+    days: 'días',
+    week: 'semana',
+    generateLink: 'Generar enlace',
+    copyLink: 'Copiar enlace',
+    linkCopied: '¡Enlace copiado al portapapeles!',
+    linkGenerateFailed: 'Error al generar el enlace de compartir',
+
+    sharedWithYou: 'Compartido contigo',
+    sharedBy: 'Compartido por: {{email}}',
+    sharedProjects: 'Proyectos compartidos',
+    noSharedProjects: 'No se han compartido proyectos contigo',
+    removeFromShared: 'Quitar de compartidos',
+    acceptInvitation: 'Aceptar invitación',
+    invitationAccepted:
+      '¡Invitación aceptada! El proyecto ha sido añadido a tu panel.',
   },
 };

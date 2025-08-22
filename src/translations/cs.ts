@@ -812,6 +812,7 @@ export default {
       deleteFailed: 'Nepodařilo se smazat projekt',
       notFound: 'Projekt nebyl nalezen',
       urlCopied: 'URL projektu bylo zkopírováno do schránky',
+      unshared: 'Projekt byl odebrán ze sdílených',
       invalidResponse: 'Odpověď serveru byla neplatná',
       readyForImages: 'je připraven pro obrázky',
       selected: '{{count}} obrázek vybrán',
@@ -961,12 +962,6 @@ export default {
     cocoFormat: 'Formát COCO',
     cocoFormatTitle: 'Export formátu COCO',
     downloadJson: 'Stáhnout JSON',
-    exportFormats: {
-      yolo: 'Formát YOLO',
-      excel: 'Formát Excel',
-      json: 'Formát JSON',
-    },
-    formatsTab: 'Formáty',
   },
   docs: {
     // Header section
@@ -1685,6 +1680,7 @@ export default {
   // Sdílení projektů
   sharing: {
     share: 'Sdílet',
+    shared: 'Sdíleno',
     shareProject: 'Sdílet projekt',
     shareDescription: 'Sdílejte projekt "{{title}}" s kolegy a spolupracovníky',
     shareByEmail: 'Sdílet emailem',
@@ -1726,6 +1722,7 @@ export default {
     sharedBy: 'Sdílel:',
     sharedProjects: 'Sdílené projekty',
     noSharedProjects: 'Žádné projekty s vámi nejsou sdíleny',
+    removeFromShared: 'Odebrat ze sdílených',
     acceptInvitation: 'Přijmout pozvánku',
     invitationAccepted: 'Pozvánka byla přijata!',
     invitationExpired: 'Tato pozvánka již expirovala',

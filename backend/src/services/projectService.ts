@@ -44,35 +44,21 @@ export async function createProject(userId: string, data: CreateProjectData): Pr
   }
 
   /**
-   * Get projects for a user with pagination and search (includes owned and shared projects)
+   * Get projects for a user with pagination and search (only owned projects)
    */
 export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: Project[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     try {
       const { page, limit, search, sortBy, sortOrder } = options;
       
-      // Get user email for shared project lookup
+      // Get user for context
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (!user) {
         throw new Error('User not found');
       }
 
-      // Build where clause for owned and shared projects
+      // Build where clause for owned projects only
       const where: Prisma.ProjectWhereInput = {
-        OR: [
-          // Owned projects
-          { userId: userId },
-          // Shared projects
-          {
-            shares: {
-              some: {
-                OR: [
-                  { sharedWithId: userId, status: 'accepted' },
-                  { email: user.email, status: { in: ['pending', 'accepted'] } }
-                ]
-              }
-            }
-          }
-        ]
+        userId: userId
       };
 
       if (search) {
@@ -129,30 +115,16 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
               id: true,
               email: true
             }
-          },
-          shares: {
-            where: {
-              OR: [
-                { sharedWithId: userId, status: 'accepted' },
-                { email: user.email, status: { in: ['pending', 'accepted'] } }
-              ]
-            },
-            select: {
-              id: true,
-              status: true,
-              createdAt: true
-            },
-            take: 1
           }
         }
       });
 
-      // Add isShared flag to each project
+      // Add metadata to each project
       const projectsWithMeta = projects.map(project => ({
         ...project,
-        isShared: project.userId !== userId,
-        isOwner: project.userId === userId,
-        shareStatus: project.shares.length > 0 ? project.shares[0].status : null
+        isOwned: true,  // These are only owned projects now
+        isShared: false,
+        owner: project.user
       }));
 
       logger.info(`Retrieved ${projectsWithMeta.length} projects for user`, 'ProjectService', { 

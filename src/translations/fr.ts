@@ -744,9 +744,6 @@ export default {
     ready: 'Prêt pour la segmentation',
     online: 'En ligne',
     offline: 'Hors ligne',
-    segmenting: "Segmentation de l'image...",
-    waitingInQueue: 'En attente dans la file',
-    reloadingSegmentation: 'Actualisation des données de segmentation...',
   },
   queue: {
     title: 'File de Segmentation',
@@ -814,6 +811,7 @@ export default {
       deleted: 'Projet supprimé avec succès',
       deleteFailed: 'Échec de la suppression du projet',
       urlCopied: 'URL du projet copiée dans le presse-papiers',
+      unshared: 'Projet retiré des partagés',
       notFound: 'Projet introuvable',
       invalidResponse: 'La réponse du serveur était invalide',
       readyForImages: 'est prêt pour les images',
@@ -1156,6 +1154,9 @@ export default {
         step4: 'Utilisez le panneau de droite',
         step5: 'Sauvegardez périodiquement',
       },
+      segmenting: "Segmentation de l'image...",
+      waitingInQueue: 'En attente dans la file',
+      reloadingSegmentation: 'Actualisation des données de segmentation...',
     },
     exportFeatures: {
       title: "Fonctions d'Export",
@@ -1588,5 +1589,44 @@ export default {
     // Options de vue
     gridView: 'Vue en grille',
     listView: 'Vue en liste',
+  },
+
+  // Partage de projets
+  sharing: {
+    share: 'Partager',
+    shared: 'Partagé',
+    shareProject: 'Partager le projet',
+    shareDescription:
+      'Partager le projet "{{title}}" avec des collègues et collaborateurs',
+    shareByEmail: 'Partager par e-mail',
+    shareByLink: 'Partager par lien',
+    emailAddress: 'Adresse e-mail',
+    enterEmailPlaceholder: "Entrer l'adresse e-mail",
+    optionalMessage: 'Message optionnel',
+    messagePlaceholder: "Ajouter un message personnel à l'invitation...",
+    sendInvitation: "Envoyer l'invitation",
+    sending: 'Envoi en cours...',
+    emailSent: 'Invitation par e-mail envoyée !',
+    emailRequired: "L'adresse e-mail est requise",
+    emailShareFailed: "Échec de l'envoi de l'invitation par e-mail",
+
+    linkExpiry: 'Expiration du lien',
+    neverExpires: "N'expire jamais",
+    hours: 'heures',
+    days: 'jours',
+    week: 'semaine',
+    generateLink: 'Générer le lien',
+    copyLink: 'Copier le lien',
+    linkCopied: 'Lien copié dans le presse-papiers !',
+    linkGenerateFailed: 'Échec de la génération du lien de partage',
+
+    sharedWithYou: 'Partagé avec vous',
+    sharedBy: 'Partagé par : {{email}}',
+    sharedProjects: 'Projets partagés',
+    noSharedProjects: "Aucun projet n'a été partagé avec vous",
+    removeFromShared: 'Retirer des partagés',
+    acceptInvitation: "Accepter l'invitation",
+    invitationAccepted:
+      'Invitation acceptée ! Le projet a été ajouté à votre tableau de bord.',
   },
 };

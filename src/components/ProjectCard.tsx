@@ -5,8 +5,9 @@ import ProjectThumbnail from '@/components/project/ProjectThumbnail';
 import ProjectActions from '@/components/project/ProjectActions';
 import ProjectMetadata from '@/components/project/ProjectMetadata';
 import { Badge } from '@/components/ui/badge';
-import { Share2, Users } from 'lucide-react';
+import { Share2, Users, User } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ProjectCardProps {
   id: string;
@@ -18,6 +19,8 @@ interface ProjectCardProps {
   onClick?: () => void;
   isShared?: boolean;
   sharedBy?: { email: string };
+  owner?: { email: string; name?: string };
+  shareId?: string;
 }
 
 const ProjectCard = ({
@@ -30,8 +33,11 @@ const ProjectCard = ({
   onClick,
   isShared = false,
   sharedBy,
+  owner,
+  shareId,
 }: ProjectCardProps) => {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const handleCardClick = (e: React.MouseEvent) => {
@@ -79,6 +85,8 @@ const ProjectCard = ({
               projectId={id}
               projectTitle={title}
               onDialogStateChange={setIsDialogOpen}
+              isShared={isShared}
+              shareId={shareId}
             />
           </div>
         </div>
@@ -88,12 +96,21 @@ const ProjectCard = ({
           <h3 className="font-medium text-lg truncate pr-2" title={title}>
             {title}
           </h3>
+          {isShared && (
+            <Share2 className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          )}
         </div>
-        {isShared && sharedBy && (
-          <p className="text-xs text-blue-600 mb-2">
-            {t('sharing.sharedBy', { email: sharedBy.email })}
+
+        {/* Owner information */}
+        <div className="flex items-center gap-1 mb-2">
+          <User className="h-3 w-3 text-gray-400" />
+          <p className="text-xs text-gray-600 dark:text-gray-400">
+            {isShared && sharedBy
+              ? sharedBy.email
+              : owner?.email || user?.email || 'Unknown'}
           </p>
-        )}
+        </div>
+
         <p className="text-sm text-gray-500 line-clamp-2 mb-3">{description}</p>
         <ProjectMetadata date={date} imageCount={imageCount} />
       </CardContent>
