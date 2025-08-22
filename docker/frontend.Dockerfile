@@ -2,8 +2,8 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Install dumb-init and curl for proper signal handling and health check
-RUN apk add --no-cache dumb-init curl
+# Install dumb-init, curl for health check, and build dependencies for canvas
+RUN apk add --no-cache dumb-init curl python3 make g++ cairo-dev pango-dev jpeg-dev giflib-dev
 
 # Copy package files
 COPY package*.json ./

@@ -6,8 +6,7 @@ const MAX_PAGES = 40;
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Microscope, Image, FileUp, HardDrive } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth, useLanguage } from '@/contexts/exports';
 import { getErrorMessage } from '@/types';
 
 interface StatCardProps {

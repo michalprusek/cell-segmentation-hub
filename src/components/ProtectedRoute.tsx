@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth, useLanguage } from '@/contexts/exports';
 import apiClient from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 

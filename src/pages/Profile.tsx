@@ -6,9 +6,8 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { Clock, Edit, Mail, MapPin, Loader2, Camera } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, useLanguage } from '@/contexts/exports';
 // Note: Profile functionality now handled by AuthContext and Settings page
-import { useLanguage } from '@/contexts/LanguageContext';
 import AvatarUploadButton from '@/components/profile/AvatarUploadButton';
 import AvatarCropDialog from '@/components/profile/AvatarCropDialog';
 import { apiClient, Project, ProjectImage } from '@/lib/api';
