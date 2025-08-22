@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
-import { render } from '@/test-utils/reactTestUtils';
+import { render } from '@/test/utils/test-utils';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import * as router from 'react-router-dom';
 
