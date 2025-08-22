@@ -29,18 +29,18 @@ export const createMockSocket = () => {
     // Helper methods for testing
     __simulateConnect: () => {
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      const connectHandlers = mockSocket.on.mock.calls
+        .filter(call => call[0] === 'connect')
+        .map(call => call[1]);
+      connectHandlers.forEach(handler => handler?.());
     },
 
     __simulateDisconnect: (reason = 'transport close') => {
       mockSocket.connected = false;
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
-      disconnectHandler?.(reason);
+      const disconnectHandlers = mockSocket.on.mock.calls
+        .filter(call => call[0] === 'disconnect')
+        .map(call => call[1]);
+      disconnectHandlers.forEach(handler => handler?.(reason));
     },
 
     __simulateConnectionError: (error: Error) => {
@@ -60,14 +60,14 @@ export const createMockSocket = () => {
 
     __simulateSegmentationUpdate: (update: SegmentationUpdate) => {
       const handler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
+        call => call[0] === 'segmentationUpdate'
       )?.[1];
       handler?.(update);
     },
 
     __simulateQueueStatsUpdate: (stats: QueueStats) => {
       const handler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'queue-stats-update'
+        call => call[0] === 'queueStats'
       )?.[1];
       handler?.(stats);
     },

@@ -70,6 +70,7 @@ export function slicePolygon(
 
   // If we don't have exactly 2 intersections with the segment, try infinite line
   if (intersections.length !== 2) {
+    const segmentIntersectionCount = intersections.length;
     intersections.length = 0; // Clear array
 
     for (let i = 0; i < points.length; i++) {
@@ -84,6 +85,48 @@ export function slicePolygon(
       if (intersection) {
         computeAndPushIntersection(intersections, intersection, points, i);
       }
+    }
+  }
+
+  // Handle vertex intersections by deduplicating when we have more than 2 intersections
+  // Only deduplicate if we actually have duplicate points (when slice passes through vertices)
+  if (intersections.length > 2) {
+    const uniqueIntersections: Array<{
+      point: Point;
+      edgeIndex: number;
+      t: number;
+    }> = [];
+    const EPSILON = 1e-10;
+
+    for (const intersection of intersections) {
+      const existingIndex = uniqueIntersections.findIndex(
+        existing =>
+          Math.abs(existing.point.x - intersection.point.x) < EPSILON &&
+          Math.abs(existing.point.y - intersection.point.y) < EPSILON
+      );
+
+      if (existingIndex === -1) {
+        // New unique intersection
+        uniqueIntersections.push(intersection);
+      } else {
+        // Duplicate found at same spatial location - this means we hit a vertex
+        // For vertex intersections, prefer the edge with t closer to 0 (start of edge)
+        // This ensures more stable polygon construction
+        const existing = uniqueIntersections[existingIndex];
+        if (intersection.t < existing.t) {
+          uniqueIntersections[existingIndex] = intersection;
+        }
+      }
+    }
+
+    // Only replace intersections if deduplication actually reduced the count
+    // This prevents breaking cases where we legitimately have multiple distinct intersections
+    if (
+      uniqueIntersections.length < intersections.length &&
+      uniqueIntersections.length >= 2
+    ) {
+      intersections.length = 0;
+      intersections.push(...uniqueIntersections);
     }
   }
 
@@ -134,19 +177,32 @@ export function slicePolygon(
   const firstIntersection = intersectionsWithPosition[0];
   const secondIntersection = intersectionsWithPosition[1];
 
-  // First polygon: from first intersection to second intersection (clockwise)
+  // Build polygons by traversing vertices in order
+  // First polygon: from first intersection, through vertices, to second intersection
   polygon1Points.push(firstIntersection.point);
 
   let currentIndex = (firstIntersection.edgeIndex + 1) % points.length;
   let safetyCounter = 0;
   const maxIterations = points.length;
 
-  // Add all vertices between first and second intersection
+  // Add all vertices between first and second intersection (going clockwise)
   while (
     currentIndex !== (secondIntersection.edgeIndex + 1) % points.length &&
     safetyCounter < maxIterations
   ) {
-    polygon1Points.push(points[currentIndex]);
+    const vertex = points[currentIndex];
+    // Only add vertex if it's not identical to our intersection points
+    const VERTEX_EPSILON = 1e-10;
+    const isIdenticalToFirst =
+      Math.abs(vertex.x - firstIntersection.point.x) < VERTEX_EPSILON &&
+      Math.abs(vertex.y - firstIntersection.point.y) < VERTEX_EPSILON;
+    const isIdenticalToSecond =
+      Math.abs(vertex.x - secondIntersection.point.x) < VERTEX_EPSILON &&
+      Math.abs(vertex.y - secondIntersection.point.y) < VERTEX_EPSILON;
+
+    if (!isIdenticalToFirst && !isIdenticalToSecond) {
+      polygon1Points.push(vertex);
+    }
     currentIndex = (currentIndex + 1) % points.length;
     safetyCounter++;
   }
@@ -160,18 +216,30 @@ export function slicePolygon(
 
   polygon1Points.push(secondIntersection.point);
 
-  // Second polygon: from second intersection to first intersection (clockwise)
+  // Second polygon: from second intersection, through remaining vertices, to first intersection
   polygon2Points.push(secondIntersection.point);
 
   currentIndex = (secondIntersection.edgeIndex + 1) % points.length;
   safetyCounter = 0;
 
-  // Add all vertices between second and first intersection
+  // Add all vertices between second and first intersection (going clockwise)
   while (
     currentIndex !== (firstIntersection.edgeIndex + 1) % points.length &&
     safetyCounter < maxIterations
   ) {
-    polygon2Points.push(points[currentIndex]);
+    const vertex = points[currentIndex];
+    // Only add vertex if it's not identical to our intersection points
+    const VERTEX_EPSILON = 1e-10;
+    const isIdenticalToFirst =
+      Math.abs(vertex.x - firstIntersection.point.x) < VERTEX_EPSILON &&
+      Math.abs(vertex.y - firstIntersection.point.y) < VERTEX_EPSILON;
+    const isIdenticalToSecond =
+      Math.abs(vertex.x - secondIntersection.point.x) < VERTEX_EPSILON &&
+      Math.abs(vertex.y - secondIntersection.point.y) < VERTEX_EPSILON;
+
+    if (!isIdenticalToFirst && !isIdenticalToSecond) {
+      polygon2Points.push(vertex);
+    }
     currentIndex = (currentIndex + 1) % points.length;
     safetyCounter++;
   }
@@ -185,14 +253,78 @@ export function slicePolygon(
 
   polygon2Points.push(firstIntersection.point);
 
+  // Clean up any duplicate consecutive points that can occur when slicing through vertices
+  // Special handling for degenerate cases with too few unique points
+  const cleanPoints = (points: Point[]): Point[] => {
+    if (points.length <= 3) return points;
+
+    const cleaned: Point[] = [points[0]];
+    const EPSILON = 1e-10;
+
+    for (let i = 1; i < points.length; i++) {
+      const current = points[i];
+      const previous = cleaned[cleaned.length - 1];
+
+      // Skip if current point is too close to the previous point
+      if (
+        Math.abs(current.x - previous.x) > EPSILON ||
+        Math.abs(current.y - previous.y) > EPSILON
+      ) {
+        cleaned.push(current);
+      }
+    }
+
+    // Check if last point is too close to first point
+    if (cleaned.length > 3) {
+      const first = cleaned[0];
+      const last = cleaned[cleaned.length - 1];
+      if (
+        Math.abs(first.x - last.x) < EPSILON &&
+        Math.abs(first.y - last.y) < EPSILON
+      ) {
+        cleaned.pop(); // Remove duplicate last point
+      }
+    }
+
+    // For degenerate slices that result in line segments, create a minimal triangle
+    // by slightly offsetting one of the points to create a valid polygon
+    if (cleaned.length === 2) {
+      const p1 = cleaned[0];
+      const p2 = cleaned[1];
+
+      // Create a third point that's slightly offset perpendicular to the line
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const length = Math.sqrt(dx * dx + dy * dy);
+
+      if (length > 0) {
+        // Create perpendicular offset (very small)
+        const offsetDistance = Math.max(1e-6, length * 1e-6);
+        const perpX = (-dy / length) * offsetDistance;
+        const perpY = (dx / length) * offsetDistance;
+
+        // Add offset point at midpoint of the line
+        const midX = (p1.x + p2.x) / 2 + perpX;
+        const midY = (p1.y + p2.y) / 2 + perpY;
+
+        cleaned.splice(1, 0, { x: midX, y: midY });
+      }
+    }
+
+    return cleaned;
+  };
+
+  const cleanPolygon1Points = cleanPoints(polygon1Points);
+  const cleanPolygon2Points = cleanPoints(polygon2Points);
+
   // Ensure both polygons have at least 3 points
-  if (polygon1Points.length < 3 || polygon2Points.length < 3) {
+  if (cleanPolygon1Points.length < 3 || cleanPolygon2Points.length < 3) {
     return null;
   }
 
   // Create new polygon objects
-  const newPolygon1 = createPolygon(polygon1Points, polygon.color);
-  const newPolygon2 = createPolygon(polygon2Points, polygon.color);
+  const newPolygon1 = createPolygon(cleanPolygon1Points, polygon.color);
+  const newPolygon2 = createPolygon(cleanPolygon2Points, polygon.color);
 
   // Copy additional properties if they exist
   if (polygon.confidence !== undefined) {
