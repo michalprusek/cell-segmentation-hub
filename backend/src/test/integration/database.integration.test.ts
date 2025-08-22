@@ -128,7 +128,7 @@ describe('Database Integration Tests', () => {
       })
 
       expect(userProjects).toHaveLength(1)
-      expect(userProjects[0].id).toBe(testProject.id)
+      expect(userProjects[0]?.id).toBe(testProject.id)
     })
 
     it('should cascade delete projects when user is deleted', async () => {
@@ -226,7 +226,7 @@ describe('Database Integration Tests', () => {
       })
 
       expect(projectImages).toHaveLength(1)
-      expect(projectImages[0].id).toBe(testImage.id)
+      expect(projectImages[0]?.id).toBe(testImage.id)
     })
   })
 
@@ -310,7 +310,7 @@ describe('Database Integration Tests', () => {
       })
 
       expect(imageSegmentations).toHaveLength(1)
-      expect(imageSegmentations[0].id).toBe(testSegmentation.id)
+      expect(imageSegmentations[0]?.id).toBe(testSegmentation.id)
     })
 
     it('should update segmentation confidence', async () => {
@@ -359,14 +359,12 @@ describe('Database Integration Tests', () => {
                   height: 1000,
                   segmentationStatus: 'segmented',
                   segmentation: {
-                    create: [
-                      {
-                        model: 'hrnet',
-                        threshold: 0.5,
-                        polygons: JSON.stringify([{ points: [[0, 0], [10, 0], [10, 10], [0, 10]] }]),
-                        processingTime: 1000
-                      }
-                    ]
+                    create: {
+                      model: 'hrnet',
+                      threshold: 0.5,
+                      polygons: JSON.stringify([{ points: [[0, 0], [10, 0], [10, 10], [0, 10]] }]),
+                      processingTime: 1000
+                    }
                   }
                 },
                 {
@@ -422,8 +420,8 @@ describe('Database Integration Tests', () => {
       })
 
       expect(userWithData?.projects).toHaveLength(2)
-      expect(userWithData?.projects[0].images).toBeDefined()
-      expect(userWithData?.projects[0].images.some(img => Array.isArray(img.segmentation) && img.segmentation.length > 0)).toBe(true)
+      expect(userWithData?.projects?.[0]?.images).toBeDefined()
+      expect(userWithData?.projects?.[0]?.images?.some(img => Array.isArray(img.segmentation) && img.segmentation.length > 0)).toBe(true)
     })
 
     it('should count images by processing status', async () => {
@@ -453,9 +451,7 @@ describe('Database Integration Tests', () => {
           images: {
             some: {
               segmentation: {
-                some: {
-                  model: 'hrnet'
-                }
+                model: 'hrnet'
               }
             }
           }
@@ -463,18 +459,14 @@ describe('Database Integration Tests', () => {
         include: {
           images: {
             include: {
-              segmentation: {
-                where: {
-                  model: 'hrnet'
-                }
-              }
+              segmentation: true
             }
           }
         }
       })
 
       expect(projectsWithSegmentations).toHaveLength(1)
-      expect(projectsWithSegmentations[0].title).toBe('Project A')
+      expect(projectsWithSegmentations[0]?.title).toBe('Project A')
     })
   })
 

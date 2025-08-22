@@ -3,29 +3,26 @@ import swaggerUi from 'swagger-ui-express';
 import { Express } from 'express';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { logger } from '../utils/logger';
 
-// ES module equivalent for __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 // Build list of YAML candidate paths and pick the first that exists
+// Use process.cwd() as a more reliable base path
+const baseDir = path.join(process.cwd(), 'src');
 const yamlCandidates = [
-  path.join(__dirname, '../api/openapi.yaml'),
-  path.join(__dirname, '../api/openapi.yml'),
-  path.join(__dirname, '../../api/openapi.yaml'),
-  path.join(__dirname, '../../api/openapi.yml'),
+  path.join(baseDir, 'api/openapi.yaml'),
+  path.join(baseDir, 'api/openapi.yml'),
+  path.join(process.cwd(), 'api/openapi.yaml'),
+  path.join(process.cwd(), 'api/openapi.yml'),
 ];
 
 const resolvedYamlPath = yamlCandidates.find(candidate => fs.existsSync(candidate));
 
 // Construct apiGlobs that include both .ts and .js variants
 const apiGlobs = [
-  path.join(__dirname, '../api/routes/*.ts'),
-  path.join(__dirname, '../api/routes/*.js'),
-  path.join(__dirname, '../api/controllers/*.ts'),
-  path.join(__dirname, '../api/controllers/*.js'),
+  path.join(baseDir, 'api/routes/*.ts'),
+  path.join(baseDir, 'api/routes/*.js'),
+  path.join(baseDir, 'api/controllers/*.ts'),
+  path.join(baseDir, 'api/controllers/*.js'),
 ];
 
 // Include the resolved YAML path only if it exists
