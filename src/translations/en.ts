@@ -72,6 +72,7 @@ export default {
     noImage: 'No Image',
     untitledImage: 'Untitled Image',
     rename: 'Rename',
+    redirectingToDashboard: 'Redirecting to dashboard...',
   },
 
   landing: {
@@ -268,6 +269,14 @@ export default {
       profile: 'Profile error',
       settings: 'Settings error',
     },
+    operations: {
+      unshareProject: 'Failed to remove project from shared projects',
+      deleteProject: 'Failed to delete project',
+      changePassword: 'Failed to change password',
+      updateConsent: 'Failed to update consent preferences',
+      updateProfile: 'Failed to update profile',
+    },
+    deleteImages: 'Failed to delete selected images',
   },
   images: {
     uploadImages: 'Upload Images',
@@ -726,6 +735,7 @@ export default {
     ready: 'Ready for segmentation',
     online: 'Online',
     offline: 'Offline',
+    noPolygons: 'No polygons',
   },
   queue: {
     title: 'Segmentation Queue',
@@ -803,8 +813,8 @@ export default {
       noPolygons: 'No segmentation polygons detected',
       reloadFailed:
         'Failed to load segmentation results. Please refresh the page.',
+      autosaveFailed: 'Autosave failed - changes may be lost',
     },
-    autosaveFailed: 'Autosave failed - changes may be lost',
     // Success messages
     operationCompleted: 'Operation completed successfully',
     dataSaved: 'Data saved successfully',
@@ -813,6 +823,7 @@ export default {
     reconnecting: 'Reconnecting to server...',
     reconnected: 'Connection to server restored',
     connectionFailed: 'Failed to restore connection to server',
+    autosaveFailed: 'Autosave failed - changes may be lost',
     // Segmentation messages
     segmentationRequested: 'Segmentation request submitted',
     segmentationCompleted: 'Image segmentation completed',
@@ -1731,5 +1742,11 @@ export default {
     sentOn: 'Sent on',
     joinedViaLink: 'Joined via link',
     joinedViaLinkOn: 'Joined',
+  },
+  error: 'Error',
+  segmentationEditor: {
+    reloadingSegmentation: 'Reloading segmentation...',
+    segmenting: 'Segmenting...',
+    waitingInQueue: 'Waiting in queue...',
   },
 };

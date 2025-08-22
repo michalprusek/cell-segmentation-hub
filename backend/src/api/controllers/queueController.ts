@@ -43,6 +43,50 @@ import {
   QueueStatsData
 } from '../../types/websocket';
 
+// Queue entry response type definition
+interface QueueEntryResponse {
+  id: string;
+  imageId: string;
+  projectId: string;
+  userId: string;
+  model: 'hrnet' | 'resunet_advanced' | 'resunet_small';
+  threshold: number;
+  detectHoles: boolean;
+  priority: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  createdAt: Date;
+  updatedAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  error?: string;
+  retryCount: number;
+  batchId?: string;
+}
+
+/**
+ * Map queue entry from database to response format
+ */
+function mapQueueEntryToResponse(entry: any): QueueEntryResponse {
+  return {
+    id: entry.id,
+    imageId: entry.imageId,
+    projectId: entry.projectId,
+    userId: entry.userId,
+    model: entry.model,
+    threshold: entry.threshold,
+    detectHoles: entry.detectHoles ?? false,
+    priority: entry.priority,
+    status: entry.status,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt || entry.createdAt,
+    startedAt: entry.startedAt || undefined,
+    completedAt: entry.completedAt || undefined,
+    error: entry.error || undefined,
+    retryCount: entry.retryCount || 0,
+    batchId: entry.batchId || undefined
+  };
+}
+
 /**
  * Queue Controller
  * 
@@ -233,24 +277,7 @@ class QueueController {
       const response: BatchQueueResponse = {
         queuedCount: queueEntries.length,
         totalRequested: imageIds.length,
-        queueEntries: queueEntries.map(entry => ({
-          id: entry.id,
-          imageId: entry.imageId,
-          projectId: entry.projectId,
-          userId: entry.userId,
-          model: entry.model as any,
-          threshold: entry.threshold,
-          detectHoles: entry.detectHoles,
-          priority: entry.priority as any,
-          status: entry.status as any,
-          createdAt: entry.createdAt,
-          updatedAt: entry.createdAt,
-          startedAt: entry.startedAt || undefined,
-          completedAt: entry.completedAt || undefined,
-          error: entry.error || undefined,
-          retryCount: entry.retryCount,
-          batchId: entry.batchId || undefined
-        }))
+        queueEntries: queueEntries.map(entry => mapQueueEntryToResponse(entry))
       };
 
       ResponseHelper.success(res, response, `${queueEntries.length} obrázků přidáno do fronty pro segmentaci`);

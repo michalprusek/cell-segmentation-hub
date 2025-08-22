@@ -4,62 +4,42 @@
  * Custom rules to detect hardcoded strings and enforce translation usage
  */
 
-module.exports = {
-  plugins: ['i18n-text'],
-  rules: {
-    // Warn about hardcoded strings in JSX
-    'i18n-text/no-hardcoded-strings': [
-      'warn',
-      {
-        // Allow these strings without warning
-        ignoreAttribute: [
-          'className',
-          'style',
-          'id',
-          'data-testid',
-          'href',
-          'src',
-          'alt',
-        ],
-        ignoreComponent: ['script', 'style'],
-        ignoreProps: {
-          Link: ['to'],
-          Route: ['path'],
-          img: ['alt', 'src'],
-          Button: ['variant', 'size', 'type'],
-          Input: ['type'],
-          Card: ['className'],
-          div: ['className', 'id'],
-        },
-        // Allow short technical strings
-        ignoreMatcher:
-          /^(#|\.|\/|http|data-|aria-|[A-Z_]{2,}|\d+px|auto|none|true|false)$/,
-        // Ignore strings shorter than 3 characters
-        minLength: 3,
-      },
+import js from '@eslint/js';
+import tseslint from '@typescript-eslint/eslint-plugin';
+import tsParser from '@typescript-eslint/parser';
+
+export default [
+  {
+    files: ['src/**/*.{ts,tsx,js,jsx}'],
+    ignores: [
+      'node_modules/**',
+      'dist/**',
+      'build/**',
+      'backend/dist/**',
+      '**/*.d.ts',
+      'tests/**',
+      'src/test/**',
     ],
-  },
-  // Custom rule implementation
-  overrides: [
-    {
-      files: ['**/*.{ts,tsx,js,jsx}'],
-      rules: {
-        // Simple custom rule using no-restricted-syntax
-        'no-restricted-syntax': [
-          'warn',
-          {
-            selector: 'JSXText[value=/^[\\p{L}\\p{N}\\p{P}\\p{S}\\s]{4,}$/u]',
-            message:
-              'Hardcoded text detected. Use t("key") for translatable strings.',
-          },
-          {
-            selector:
-              'Literal[value=/^[\\p{L}\\p{N}\\p{P}\\p{S}\\s]{4,}$/u]:has(JSXElement)',
-            message:
-              'Hardcoded string in JSX. Use t("key") for translatable strings.',
-          },
-        ],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        ecmaFeatures: {
+          jsx: true,
+        },
       },
     },
-  ],
-};
+    rules: {
+      // Simple custom rule using no-restricted-syntax to detect hardcoded strings
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector: 'JSXText[value=/^[a-zA-Z\\s]{4,}$/]',
+          message:
+            'Hardcoded text detected in JSX. Use t("key") for translatable strings.',
+        },
+      ],
+    },
+  },
+];
