@@ -773,6 +773,9 @@ export default {
       notFound: 'Project not found',
       invalidResponse: 'Server response was invalid',
       readyForImages: 'is ready for images',
+      selected: '{{count}} image selected',
+      selected_other: '{{count}} images selected',
+      deleteSelected: 'Delete Selected',
     },
     // Profile actions
     profile: {
