@@ -869,127 +869,139 @@ describe('WebSocketManager', () => {
     it('should handle manual reconnection with exponential backoff', async () => {
       vi.useFakeTimers();
 
-      const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
-      await connectPromise;
+      try {
+        const connectPromise = wsManager.connect(mockUser);
+        mockSocket.connected = true;
+        const connectHandler = mockSocket.on.mock.calls.find(
+          call => call[0] === 'connect'
+        )?.[1];
+        connectHandler?.();
+        await connectPromise;
 
-      // Simulate server disconnect (triggers manual reconnect)
-      mockSocket.connected = false;
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
-      disconnectHandler?.('io server disconnect');
+        // Simulate server disconnect (triggers manual reconnect)
+        mockSocket.connected = false;
+        const disconnectHandler = mockSocket.on.mock.calls.find(
+          call => call[0] === 'disconnect'
+        )?.[1];
+        disconnectHandler?.('io server disconnect');
 
-      vi.clearAllMocks();
+        vi.clearAllMocks();
 
-      // Mock createConnection to track reconnection attempts
-      const createConnectionSpy = vi
-        .spyOn(wsManager as any, 'createConnection')
-        .mockImplementation(() => {
-          throw new Error('Reconnection failed');
-        });
+        // Mock createConnection to track reconnection attempts
+        const createConnectionSpy = vi
+          .spyOn(wsManager as any, 'createConnection')
+          .mockImplementation(() => {
+            throw new Error('Reconnection failed');
+          });
 
-      // Fast-forward to trigger reconnection attempts
-      // First attempt: 1000ms delay
-      vi.advanceTimersByTime(1000);
-      expect(createConnectionSpy).toHaveBeenCalledTimes(1);
+        // Fast-forward to trigger reconnection attempts
+        // First attempt: 1000ms delay
+        vi.advanceTimersByTime(1000);
+        expect(createConnectionSpy).toHaveBeenCalledTimes(1);
 
-      // Second attempt: 2000ms delay
-      vi.advanceTimersByTime(2000);
-      expect(createConnectionSpy).toHaveBeenCalledTimes(2);
+        // Second attempt: 2000ms delay
+        vi.advanceTimersByTime(2000);
+        expect(createConnectionSpy).toHaveBeenCalledTimes(2);
 
-      // Third attempt: 4000ms delay
-      vi.advanceTimersByTime(4000);
-      expect(createConnectionSpy).toHaveBeenCalledTimes(3);
+        // Third attempt: 4000ms delay
+        vi.advanceTimersByTime(4000);
+        expect(createConnectionSpy).toHaveBeenCalledTimes(3);
 
-      createConnectionSpy.mockRestore();
-      vi.useRealTimers();
+        createConnectionSpy.mockRestore();
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
     });
 
     it('should prevent max reconnection attempts overflow', async () => {
       vi.useFakeTimers();
 
-      const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
-      await connectPromise;
+      try {
+        const connectPromise = wsManager.connect(mockUser);
+        mockSocket.connected = true;
+        const connectHandler = mockSocket.on.mock.calls.find(
+          call => call[0] === 'connect'
+        )?.[1];
+        connectHandler?.();
+        await connectPromise;
 
-      // Simulate server disconnect
-      mockSocket.connected = false;
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
-      disconnectHandler?.('io server disconnect');
+        // Simulate server disconnect
+        mockSocket.connected = false;
+        const disconnectHandler = mockSocket.on.mock.calls.find(
+          call => call[0] === 'disconnect'
+        )?.[1];
+        disconnectHandler?.('io server disconnect');
 
-      // Mock createConnection to always fail
-      const createConnectionSpy = vi
-        .spyOn(wsManager as any, 'createConnection')
-        .mockImplementation(() => {
-          throw new Error('Reconnection failed');
+        // Mock createConnection to always fail
+        const createConnectionSpy = vi
+          .spyOn(wsManager as any, 'createConnection')
+          .mockImplementation(() => {
+            throw new Error('Reconnection failed');
+          });
+
+        // Trigger enough reconnection attempts to hit the max
+        for (let i = 0; i < 15; i++) {
+          vi.advanceTimersByTime(30000); // Max delay
+        }
+
+        // Should emit connection_lost after max attempts
+        expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
+          type: 'connection_lost',
         });
 
-      // Trigger enough reconnection attempts to hit the max
-      for (let i = 0; i < 15; i++) {
-        vi.advanceTimersByTime(30000); // Max delay
+        createConnectionSpy.mockRestore();
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
       }
-
-      // Should emit connection_lost after max attempts
-      expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
-        type: 'connection_lost',
-      });
-
-      createConnectionSpy.mockRestore();
-      vi.useRealTimers();
     });
 
     it('should reset reconnection attempts on successful connection', async () => {
       vi.useFakeTimers();
 
-      const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
-      await connectPromise;
+      try {
+        const connectPromise = wsManager.connect(mockUser);
+        mockSocket.connected = true;
+        const connectHandler = mockSocket.on.mock.calls.find(
+          call => call[0] === 'connect'
+        )?.[1];
+        connectHandler?.();
+        await connectPromise;
 
-      // First disconnect and reconnect
-      mockSocket.connected = false;
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
-      disconnectHandler?.('io server disconnect');
+        // First disconnect and reconnect
+        mockSocket.connected = false;
+        const disconnectHandler = mockSocket.on.mock.calls.find(
+          call => call[0] === 'disconnect'
+        )?.[1];
+        disconnectHandler?.('io server disconnect');
 
-      // Let one reconnection attempt happen
-      vi.advanceTimersByTime(1000);
+        // Let one reconnection attempt happen
+        vi.advanceTimersByTime(1000);
 
-      // Simulate successful reconnection
-      mockSocket.connected = true;
-      connectHandler?.();
+        // Simulate successful reconnection
+        mockSocket.connected = true;
+        connectHandler?.();
 
-      // Second disconnect should start from attempt 1 again
-      mockSocket.connected = false;
-      disconnectHandler?.('io server disconnect');
+        // Second disconnect should start from attempt 1 again
+        mockSocket.connected = false;
+        disconnectHandler?.('io server disconnect');
 
-      const createConnectionSpy = vi
-        .spyOn(wsManager as any, 'createConnection')
-        .mockImplementation(() => {
-          throw new Error('Reconnection failed');
-        });
+        const createConnectionSpy = vi
+          .spyOn(wsManager as any, 'createConnection')
+          .mockImplementation(() => {
+            throw new Error('Reconnection failed');
+          });
 
-      // Should start with 1000ms delay again (not 2000ms)
-      vi.advanceTimersByTime(1000);
-      expect(createConnectionSpy).toHaveBeenCalledTimes(1);
+        // Should start with 1000ms delay again (not 2000ms)
+        vi.advanceTimersByTime(1000);
+        expect(createConnectionSpy).toHaveBeenCalledTimes(1);
 
-      createConnectionSpy.mockRestore();
-      vi.useRealTimers();
+        createConnectionSpy.mockRestore();
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
     });
 
     it('should handle rapid user switching', async () => {
