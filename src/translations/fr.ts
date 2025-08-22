@@ -888,7 +888,7 @@ export default {
     showNumbers: 'Afficher les numéros de polygones',
     showLabels: 'Afficher les étiquettes',
     scaleConversion: "Conversion d'Échelle",
-    pixelToMicrometerScale: 'Échelle Pixel vers Micromètre',
+    pixelToMicrometerScale: 'Taille du Pixel',
     scaleDescription:
       'Spécifiez combien de micromètres un pixel représente pour convertir les mesures',
     scalePlaceholder: 'ex. 0,5 (1 pixel = 0,5 µm)',

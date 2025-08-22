@@ -899,7 +899,7 @@ export default {
     showNumbers: 'Polygon-Nummern anzeigen',
     showLabels: 'Beschriftungen anzeigen',
     scaleConversion: 'Skalierungskonvertierung',
-    pixelToMicrometerScale: 'Pixel-zu-Mikrometer-Verhältnis',
+    pixelToMicrometerScale: 'Pixelgröße',
     scaleDescription:
       'Geben Sie an, wie viele Mikrometer ein Pixel repräsentiert, um Messungen umzurechnen',
     scalePlaceholder: 'z.B. 0.5 (1 Pixel = 0.5 µm)',
