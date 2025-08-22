@@ -65,7 +65,7 @@ describe('DashboardHeader', () => {
 
   const mockFetchWithRetry = vi.fn();
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
 
     mockUseNavigate.mockReturnValue(mockNavigate);
