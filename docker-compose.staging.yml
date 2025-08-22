@@ -1,0 +1,201 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database for Staging
+  postgres-staging:
+    image: postgres:15-alpine
+    container_name: spheroseg-postgres-staging
+    environment:
+      POSTGRES_USER: spheroseg
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: spheroseg_staging
+    volumes:
+      - postgres_staging_data:/var/lib/postgresql/data
+    networks:
+      - staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spheroseg -d spheroseg_staging"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for Queue Management
+  redis-staging:
+    image: redis:7-alpine
+    container_name: spheroseg-redis-staging
+    networks:
+      - staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Frontend (React + Vite)
+  staging-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend
+    container_name: spheroseg-frontend-staging
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=https://spherosegapp.utia.cas.cz
+      - VITE_API_BASE_URL=https://spherosegapp.utia.cas.cz/api
+      - VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/ml
+    ports:
+      - "4000:3000"
+    networks:
+      - staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API (Node.js + Express)
+  staging-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: backend
+    container_name: spheroseg-backend-staging
+    env_file:
+      - .env.staging
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres-staging:5432/spheroseg_staging
+      - JWT_ACCESS_SECRET=${STAGING_JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${STAGING_JWT_REFRESH_SECRET}
+      - FROM_EMAIL=spheroseg@utia.cas.cz
+      - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz
+    volumes:
+      - ./backend/uploads/staging:/app/backend/uploads
+      - ./backend/data/staging:/app/backend/data
+    ports:
+      - "4001:3001"
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+      redis-staging:
+        condition: service_healthy
+    networks:
+      - staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ML Service (Python + FastAPI)
+  staging-ml:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ml
+    container_name: spheroseg-ml-staging
+    environment:
+      - ENVIRONMENT=staging
+      - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres-staging:5432/spheroseg_staging
+      - REDIS_URL=redis://redis-staging:6379
+    volumes:
+      - ./backend/segmentation/weights:/app/weights:ro
+      - ./backend/uploads/staging:/app/uploads
+    ports:
+      - "4008:8000"
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+      redis-staging:
+        condition: service_healthy
+    networks:
+      - staging-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy
+  nginx-staging:
+    image: nginx:alpine
+    container_name: spheroseg-nginx-staging
+    volumes:
+      - ./docker/nginx/nginx.staging.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/ssl:/etc/nginx/ssl:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - staging-frontend
+      - staging-backend
+      - staging-ml
+    networks:
+      - staging-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus for Monitoring
+  prometheus-staging:
+    image: prom/prometheus:latest
+    container_name: spheroseg-prometheus-staging
+    volumes:
+      - ./monitoring/staging-prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_staging_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9091:9090"
+    networks:
+      - staging-network
+    restart: unless-stopped
+
+  # Grafana for Visualization
+  grafana-staging:
+    image: grafana/grafana:latest
+    container_name: spheroseg-grafana-staging
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - grafana_staging_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    ports:
+      - "3031:3000"
+    depends_on:
+      - prometheus-staging
+    networks:
+      - staging-network
+    restart: unless-stopped
+
+networks:
+  staging-network:
+    driver: bridge
+    name: spheroseg-staging
+
+volumes:
+  postgres_staging_data:
+    name: spheroseg_postgres_staging
+  prometheus_staging_data:
+    name: spheroseg_prometheus_staging
+  grafana_staging_data:
+    name: spheroseg_grafana_staging

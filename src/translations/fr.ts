@@ -229,15 +229,36 @@ export default {
       fieldRequired: 'Ce champ est requis',
     },
     operations: {
-      deleteProject:
-        "Impossible de supprimer le projet. Assurez-vous d'avoir les permissions nécessaires.",
+      loadProject:
+        'Impossible de charger le projet. Vérifiez votre connexion et réessayez.',
+      saveProject:
+        'Impossible de sauvegarder les modifications du projet. Veuillez réessayer.',
+      uploadImage:
+        "Impossible de télécharger l'image. Vérifiez le format et la taille du fichier.",
+      deleteImage:
+        "Impossible de supprimer l'image. Essayez de rafraîchir la page et répéter l'action.",
+      processImage:
+        "Le traitement de l'image a échoué. Essayez avec une image différente ou contactez le support.",
+      segmentation:
+        "La segmentation a échoué. Essayez d'utiliser un modèle différent ou ajuster les paramètres.",
+      export:
+        "Échec de l'exportation des données. Vérifiez que les données sont disponibles.",
+      login: 'Échec de la connexion. Vérifiez votre email et mot de passe.',
+      logout: 'Échec de la déconnexion. Essayez de fermer votre navigateur.',
+      register: "Échec de l'inscription. Cet email pourrait déjà être utilisé.",
       updateProfile:
         'Impossible de mettre à jour le profil. Vérifiez les informations fournies.',
       changePassword:
         'Impossible de changer le mot de passe. Vérifiez votre mot de passe actuel.',
+      deleteAccount:
+        'Impossible de supprimer le compte. Contactez le support pour assistance.',
+      resetPassword:
+        "Échec de la réinitialisation du mot de passe. Vérifiez l'adresse email fournie.",
       updateConsent:
         'Impossible de mettre à jour les préférences de consentement. Veuillez réessayer.',
       unshareProject: 'Impossible de supprimer le projet des projets partagés',
+      deleteProject:
+        "Impossible de supprimer le projet. Assurez-vous d'avoir les permissions nécessaires.",
     },
     deleteImages: 'Erreur lors de la suppression des images sélectionnées',
     contexts: {

@@ -230,16 +230,40 @@ export default {
       fieldRequired: 'Dieses Feld ist erforderlich',
     },
     operations: {
-      deleteProject:
-        'Das Projekt kann nicht gelöscht werden. Stellen Sie sicher, dass Sie die erforderlichen Berechtigungen haben.',
+      loadProject:
+        'Das Projekt konnte nicht geladen werden. Überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
+      saveProject:
+        'Projektänderungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.',
+      uploadImage:
+        'Das Bild konnte nicht hochgeladen werden. Überprüfen Sie das Dateiformat und die Größe.',
+      deleteImage:
+        'Das Bild kann nicht gelöscht werden. Versuchen Sie die Seite zu aktualisieren und die Aktion zu wiederholen.',
+      processImage:
+        'Bildverarbeitung fehlgeschlagen. Versuchen Sie ein anderes Bild oder kontaktieren Sie den Support.',
+      segmentation:
+        'Segmentierung fehlgeschlagen. Versuchen Sie ein anderes Modell oder passen Sie die Einstellungen an.',
+      export:
+        'Datenexport fehlgeschlagen. Überprüfen Sie, ob Daten verfügbar sind.',
+      login:
+        'Anmeldung fehlgeschlagen. Überprüfen Sie Ihre E-Mail und Ihr Passwort.',
+      logout:
+        'Abmeldung fehlgeschlagen. Versuchen Sie, Ihren Browser zu schließen.',
+      register:
+        'Registrierung fehlgeschlagen. Diese E-Mail wird möglicherweise bereits verwendet.',
       updateProfile:
         'Das Profil konnte nicht aktualisiert werden. Überprüfen Sie die angegebenen Informationen.',
       changePassword:
         'Das Passwort konnte nicht geändert werden. Überprüfen Sie Ihr aktuelles Passwort.',
+      deleteAccount:
+        'Das Konto konnte nicht gelöscht werden. Kontaktieren Sie den Support für Hilfe.',
+      resetPassword:
+        'Passwort-Reset fehlgeschlagen. Überprüfen Sie die angegebene E-Mail-Adresse.',
       updateConsent:
         'Einwilligungseinstellungen konnten nicht aktualisiert werden. Bitte versuchen Sie es erneut.',
       unshareProject:
         'Projekt konnte nicht aus geteilten Projekten entfernt werden',
+      deleteProject:
+        'Das Projekt kann nicht gelöscht werden. Stellen Sie sicher, dass Sie die erforderlichen Berechtigungen haben.',
     },
     deleteImages: 'Fehler beim Löschen der ausgewählten Bilder',
     contexts: {

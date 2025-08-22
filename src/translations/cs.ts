@@ -233,11 +233,34 @@ export default {
       fieldRequired: 'Toto pole je povinné',
     },
     operations: {
+      loadProject:
+        'Nepodařilo se načíst projekt. Zkontrolujte připojení a zkuste to znovu.',
+      saveProject:
+        'Nepodařilo se uložit změny projektu. Zkuste to prosím znovu.',
+      uploadImage:
+        'Nepodařilo se nahrát obrázek. Zkontrolujte formát a velikost souboru.',
+      deleteImage:
+        'Nelze smazat obrázek. Zkuste obnovit stránku a opakovat akci.',
+      processImage:
+        'Zpracování obrázku selhalo. Zkuste jiný obrázek nebo kontaktujte podporu.',
+      segmentation:
+        'Segmentace selhala. Zkuste použít jiný model nebo upravit nastavení.',
+      export: 'Export dat selhal. Zkontrolujte, zda jsou data k dispozici.',
+      login: 'Přihlášení selhalo. Zkontrolujte email a heslo.',
+      logout: 'Odhlášení selhalo. Zkuste zavřít prohlížeč.',
+      register: 'Registrace selhala. Tento email možná již používá někdo jiný.',
+      updateProfile:
+        'Nepodařilo se aktualizovat profil. Zkontrolujte zadané údaje.',
+      changePassword:
+        'Nepodařilo se změnit heslo. Zkontrolujte současné heslo.',
+      deleteAccount:
+        'Nepodařilo se smazat účet. Kontaktujte podporu pro pomoc.',
+      resetPassword:
+        'Reset hesla selhal. Zkontrolujte zadanou emailovou adresu.',
+      updateConsent:
+        'Nepodařilo se aktualizovat nastavení souhlasu. Zkuste to prosím znovu.',
       unshareProject: 'Nepodařilo se odebrat projekt ze sdílených projektů',
       deleteProject: 'Nepodařilo se smazat projekt',
-      changePassword: 'Nepodařilo se změnit heslo',
-      updateConsent: 'Nepodařilo se aktualizovat nastavení souhlasu',
-      updateProfile: 'Nepodařilo se aktualizovat profil',
     },
     deleteImages: 'Nepodařilo se smazat vybrané obrázky',
     contexts: {

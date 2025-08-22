@@ -1,208 +1,133 @@
 #!/bin/bash
-set -euo pipefail
 
-# Staging Deployment Script
-# This script builds and deploys the staging environment
+# Staging Deployment Script for SpheroSeg
+# This script deploys the application to staging environment
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-COMPOSE_FILE="$PROJECT_ROOT/docker-compose.staging.yml"
-ENV_FILE="$PROJECT_ROOT/.env.staging"
+set -e
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Logging functions
-log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+# Configuration
+STAGING_DIR="/home/spheroseg/staging"
+BACKUP_DIR="/home/spheroseg/backups"
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+
+echo -e "${GREEN}=== SpheroSeg Staging Deployment ===${NC}"
+echo "Timestamp: $TIMESTAMP"
+
+# Function to check if command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
 }
 
-log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
-
-log_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Cleanup function
-cleanup() {
-    log_info "Cleaning up..."
-    # Remove any temporary files if needed
-}
-
-# Set trap for cleanup
-trap cleanup EXIT
-
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-    log_error "This script should not be run as root for security reasons."
-    exit 1
-fi
-
-# Change to project root
-cd "$PROJECT_ROOT"
-
-log_info "Starting staging deployment..."
-log_info "Project root: $PROJECT_ROOT"
-log_info "Compose file: $COMPOSE_FILE"
-log_info "Environment file: $ENV_FILE"
-
-# Check if required files exist
-if [[ ! -f "$COMPOSE_FILE" ]]; then
-    log_error "Compose file not found: $COMPOSE_FILE"
-    exit 1
-fi
-
-if [[ ! -f "$ENV_FILE" ]]; then
-    log_error "Environment file not found: $ENV_FILE"
-    exit 1
-fi
-
-# Check if Docker and Docker Compose are available
-if ! command -v docker &> /dev/null; then
-    log_error "Docker is not installed or not in PATH"
-    exit 1
-fi
-
-if ! docker compose version &> /dev/null; then
-    log_error "Docker Compose is not available"
-    exit 1
-fi
-
-# Check if production environment is running (to avoid conflicts)
-if docker ps --format "table {{.Names}}" | grep -q "spheroseg-nginx"; then
-    log_info "Production environment detected running - staging will run alongside"
-else
-    log_warning "Production environment not detected - make sure nginx configuration supports staging"
-fi
-
-# Create necessary directories
-log_info "Creating necessary directories..."
-# Use docker to create directories with correct permissions
-docker run --rm -v "$PROJECT_ROOT/backend/uploads:/uploads" alpine:latest sh -c "mkdir -p /uploads/staging && chmod 755 /uploads/staging" || true
-docker run --rm -v "$PROJECT_ROOT/scripts/db-backup:/backup" alpine:latest sh -c "mkdir -p /backup/staging && chmod 755 /backup/staging" || true
-mkdir -p monitoring/staging-dashboards || true
-
-# Backup current staging data (if exists)
-if docker ps -q -f name=staging-db | grep -q .; then
-    log_info "Backing up staging database..."
-    docker exec staging-db pg_dump -U spheroseg -d spheroseg_staging > "scripts/db-backup/staging/backup-$(date +%Y%m%d_%H%M%S).sql" || true
-fi
-
-# Stop staging services if running
-log_info "Stopping staging services..."
-docker compose -f "$COMPOSE_FILE" -p staging down --remove-orphans || true
-
-# Build staging images
-log_info "Building staging images..."
-docker compose -f "$COMPOSE_FILE" -p staging build --no-cache
-
-# Start staging services
-log_info "Starting staging services..."
-docker compose -f "$COMPOSE_FILE" -p staging up -d
-
-# Wait for services to be healthy
-log_info "Waiting for services to be healthy..."
-max_attempts=60
-attempt=0
-
-while [[ $attempt -lt $max_attempts ]]; do
-    if docker compose -f "$COMPOSE_FILE" -p staging ps | grep -q "unhealthy"; then
-        log_info "Some services are still starting... (attempt $((attempt + 1))/$max_attempts)"
-        sleep 10
-        attempt=$((attempt + 1))
-    else
-        break
+# Check prerequisites
+echo -e "${YELLOW}Checking prerequisites...${NC}"
+for cmd in docker docker-compose git; do
+    if ! command_exists $cmd; then
+        echo -e "${RED}Error: $cmd is not installed${NC}"
+        exit 1
     fi
 done
 
-if [[ $attempt -eq $max_attempts ]]; then
-    log_error "Services failed to become healthy within expected time"
-    log_info "Service status:"
-    docker compose -f "$COMPOSE_FILE" -p staging ps
+# Load environment variables
+if [ -f .env.staging ]; then
+    echo -e "${GREEN}Loading staging environment variables...${NC}"
+    export $(cat .env.staging | grep -v '^#' | xargs)
+else
+    echo -e "${RED}Error: .env.staging file not found${NC}"
     exit 1
 fi
 
-# Check service health
-log_info "Checking service health..."
-services_healthy=true
+# Validate required environment variables
+REQUIRED_VARS=(
+    "STAGING_JWT_ACCESS_SECRET"
+    "STAGING_JWT_REFRESH_SECRET"
+    "DB_PASSWORD"
+    "SMTP_PASSWORD"
+)
 
-# Check database connectivity
-if ! docker exec staging-backend curl -f http://localhost:3001/health >/dev/null 2>&1; then
-    log_error "Backend health check failed"
-    services_healthy=false
+for var in "${REQUIRED_VARS[@]}"; do
+    if [ -z "${!var}" ]; then
+        echo -e "${RED}Error: $var is not set in environment${NC}"
+        exit 1
+    fi
+done
+
+# Backup database if exists
+echo -e "${YELLOW}Backing up database...${NC}"
+if docker exec spheroseg-postgres-staging pg_dump -U spheroseg spheroseg_staging > /dev/null 2>&1; then
+    mkdir -p "$BACKUP_DIR"
+    docker exec spheroseg-postgres-staging pg_dump -U spheroseg spheroseg_staging | gzip > "$BACKUP_DIR/staging_db_$TIMESTAMP.sql.gz"
+    echo -e "${GREEN}Database backed up to $BACKUP_DIR/staging_db_$TIMESTAMP.sql.gz${NC}"
+else
+    echo -e "${YELLOW}No existing database to backup or backup failed${NC}"
 fi
 
-# Check ML service
-if ! docker exec staging-ml curl -f http://localhost:8000/health >/dev/null 2>&1; then
-    log_error "ML service health check failed"
-    services_healthy=false
-fi
+# Pull latest code
+echo -e "${YELLOW}Pulling latest code from main branch...${NC}"
+git fetch origin
+git checkout main
+git pull origin main
 
-# Check database
-if ! docker exec staging-db pg_isready -U spheroseg -d spheroseg_staging >/dev/null 2>&1; then
-    log_error "Database health check failed"
-    services_healthy=false
-fi
+# Build Docker images
+echo -e "${YELLOW}Building Docker images...${NC}"
+docker-compose -f docker-compose.staging.yml build --no-cache
 
-if [[ "$services_healthy" == false ]]; then
-    log_error "Some services are not healthy. Check logs:"
-    log_info "Backend logs:"
-    docker compose -f "$COMPOSE_FILE" -p staging logs --tail=20 backend
-    log_info "ML service logs:"
-    docker compose -f "$COMPOSE_FILE" -p staging logs --tail=20 ml-service
-    exit 1
-fi
+# Stop existing containers
+echo -e "${YELLOW}Stopping existing containers...${NC}"
+docker-compose -f docker-compose.staging.yml down
+
+# Start new containers
+echo -e "${YELLOW}Starting new containers...${NC}"
+docker-compose -f docker-compose.staging.yml up -d
+
+# Wait for services to be healthy
+echo -e "${YELLOW}Waiting for services to be healthy...${NC}"
+sleep 10
 
 # Run database migrations
-log_info "Running database migrations..."
-docker exec staging-backend npm run db:migrate || {
-    log_error "Database migration failed"
+echo -e "${YELLOW}Running database migrations...${NC}"
+docker exec spheroseg-backend-staging npx prisma migrate deploy
+
+# Verify deployment
+echo -e "${YELLOW}Verifying deployment...${NC}"
+SERVICES=("staging-frontend:4000" "staging-backend:4001" "staging-ml:4008")
+ALL_HEALTHY=true
+
+for service in "${SERVICES[@]}"; do
+    IFS=':' read -r container port <<< "$service"
+    if curl -f "http://localhost:$port/health" > /dev/null 2>&1; then
+        echo -e "${GREEN}✓ $container is healthy${NC}"
+    else
+        echo -e "${RED}✗ $container is not responding${NC}"
+        ALL_HEALTHY=false
+    fi
+done
+
+if $ALL_HEALTHY; then
+    echo -e "${GREEN}=== Deployment successful! ===${NC}"
+    echo "Access the staging environment at:"
+    echo "  Frontend: http://localhost:4000"
+    echo "  Backend API: http://localhost:4001/api"
+    echo "  ML Service: http://localhost:4008"
+    echo "  Grafana: http://localhost:3031"
+    echo "  Prometheus: http://localhost:9091"
+else
+    echo -e "${RED}=== Deployment completed with errors ===${NC}"
+    echo "Check logs with: docker-compose -f docker-compose.staging.yml logs"
     exit 1
-}
+fi
 
-# Display service information
-log_success "Staging deployment completed successfully!"
-echo ""
-log_info "Service URLs (internal):"
-echo "  - Backend API: http://staging-backend:3001"
-echo "  - ML Service: http://staging-ml:8000"
-echo "  - Grafana: http://localhost:3031"
-echo ""
-log_info "Public URLs (after nginx configuration):"
-echo "  - Frontend: https://staging.spherosegapp.utia.cas.cz"
-echo "  - API: https://staging.spherosegapp.utia.cas.cz/api"
-echo "  - ML API: https://staging.spherosegapp.utia.cas.cz/api/ml"
-echo "  - Grafana: https://staging.spherosegapp.utia.cas.cz/grafana"
-echo ""
+# Clean up old Docker images
+echo -e "${YELLOW}Cleaning up old Docker images...${NC}"
+docker image prune -f
 
-# Show running containers
-log_info "Staging containers status:"
-docker compose -f "$COMPOSE_FILE" -p staging ps
+# Display container status
+echo -e "${YELLOW}Container status:${NC}"
+docker-compose -f docker-compose.staging.yml ps
 
-# Show resource usage
-log_info "Resource usage:"
-docker stats --no-stream --format "table {{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}" | grep staging
-
-echo ""
-log_success "Staging environment is ready!"
-log_warning "Note: Make sure nginx includes staging configuration and SSL certificate covers staging.spherosegapp.utia.cas.cz"
-
-# Show next steps
-echo ""
-log_info "Next steps:"
-echo "  1. Update DNS to point staging.spherosegapp.utia.cas.cz to this server"
-echo "  2. Update SSL certificate to include staging subdomain"
-echo "  3. Test staging environment functionality"
-echo "  4. Use 'docker compose -f $COMPOSE_FILE -p staging logs -f' to monitor logs"
-
-exit 0
+echo -e "${GREEN}=== Staging deployment complete ===${NC}"
