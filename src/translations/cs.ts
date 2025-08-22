@@ -171,6 +171,10 @@ export default {
     errorAddingToQueue: 'Chyba při přidávání obrázků do fronty',
     imageAlreadyProcessing: 'Obrázek je již zpracováván',
     processImageFailed: 'Nepodařilo se zpracovat obrázek',
+    selected: '{{count}} obrázek vybrán',
+    selected_few: '{{count}} obrázky vybrány',
+    selected_other: '{{count}} obrázků vybráno',
+    deleteSelected: 'Smazat vybrané',
     segmentationCompleted: 'Segmentace dokončena pro obrázek',
     segmentationFailed: 'Segmentace selhala',
     segmentationStarted: 'Segmentace byla zahájena',
@@ -858,6 +862,12 @@ export default {
     selectNone: 'Odznačit vše',
     noImagesAvailable: 'Žádné obrázky nejsou k dispozici',
   },
+  project: {
+    selected: '{{count}} obrázek vybrán',
+    selected_other: '{{count}} obrázky vybrány',
+    selected_few: '{{count}} obrázků vybráno',
+    deleteSelected: 'Smazat vybrané',
+  },
   export: {
     // Dialog headers
     advancedExport: 'Pokročilý export',
@@ -951,11 +961,12 @@ export default {
     cocoFormat: 'Formát COCO',
     cocoFormatTitle: 'Export formátu COCO',
     downloadJson: 'Stáhnout JSON',
-    formats: {
+    exportFormats: {
       yolo: 'Formát YOLO',
       excel: 'Formát Excel',
       json: 'Formát JSON',
     },
+    formatsTab: 'Formáty',
   },
   docs: {
     // Header section

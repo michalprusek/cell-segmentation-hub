@@ -167,6 +167,8 @@ export default {
     errorAddingToQueue: 'Error al añadir imágenes a la cola',
     imageAlreadyProcessing: 'La imagen ya está siendo procesada',
     processImageFailed: 'Error al procesar la imagen',
+    selected: '{{count}} seleccionados',
+    deleteSelected: 'Eliminar seleccionados',
     segmentationCompleted: 'Segmentación completada para la imagen',
     segmentationFailed: 'La segmentación ha fallado',
     segmentationStarted: 'La segmentación ha comenzado',
@@ -842,6 +844,11 @@ export default {
     autosaveFailed:
       'Error en guardado automático - los cambios pueden perderse',
   },
+  project: {
+    selected: '{{count}} imagen seleccionada',
+    selected_other: '{{count}} imágenes seleccionadas',
+    deleteSelected: 'Eliminar Seleccionadas',
+  },
   export: {
     advancedExport: 'Exportación Avanzada',
     // Dialog headers
@@ -935,7 +942,7 @@ export default {
     cocoFormat: 'Formato COCO',
     cocoFormatTitle: 'Exportación de formato COCO',
     downloadJson: 'Descargar JSON',
-    formats: {
+    exportFormats: {
       yolo: 'Formato YOLO',
       excel: 'Formato Excel',
       json: 'Formato JSON',

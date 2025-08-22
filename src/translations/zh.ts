@@ -159,6 +159,8 @@ export default {
     errorAddingToQueue: '添加到队列时出错',
     imageAlreadyProcessing: '图像正在处理中',
     processImageFailed: '图像处理失败',
+    selected: '已选择 {{count}} 个',
+    deleteSelected: '删除所选',
     segmentationCompleted: '图像分割已完成',
     segmentationFailed: '分割失败',
     segmentationStarted: '分割已开始',
@@ -774,6 +776,11 @@ export default {
     },
     autosaveFailed: '自动保存失败 - 更改可能丢失',
   },
+  project: {
+    selected: '已选择{{count}}张图片',
+    selected_other: '已选择{{count}}张图片',
+    deleteSelected: '删除选中项',
+  },
   export: {
     advancedExport: '高级导出',
     // Dialog headers
@@ -863,7 +870,7 @@ export default {
     cocoFormat: 'COCO格式',
     cocoFormatTitle: 'COCO格式导出',
     downloadJson: '下载JSON',
-    formats: {
+    exportFormats: {
       yolo: 'YOLO格式',
       excel: 'Excel格式',
       json: 'JSON格式',
