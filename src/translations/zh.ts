@@ -818,7 +818,7 @@ export default {
     scaleDescription: '指定一个像素代表多少微米来转换测量值',
     scalePlaceholder: '例如 0.5 (1像素 = 0.5µm)',
     scaleUnit: 'µm/像素',
-    scaleWarning: '注意：比例值似乎异常高。请验证。',
+    scaleWarning: '注意：比例值高于1 µm/像素表示非常低的放大倍率。请验证。',
     outputSettings: '输出设置',
     exportFormats: {
       yolo: 'YOLO格式',
