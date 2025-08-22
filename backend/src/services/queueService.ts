@@ -484,7 +484,7 @@ export class QueueService {
           model: model as 'hrnet' | 'resunet_advanced' | 'resunet_small',
           threshold: threshold,
           userId: firstItem.userId,
-          detectHoles: firstItem.detectHoles
+          detectHoles: firstItem.detectHoles ?? false
         });
         results = [singleResult];
       } else {
@@ -493,7 +493,7 @@ export class QueueService {
           imageData,
           model,
           threshold,
-          firstItem.detectHoles
+          firstItem.detectHoles ?? false
         );
       }
 

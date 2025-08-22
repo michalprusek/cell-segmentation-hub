@@ -309,13 +309,8 @@ export class WebSocketService {
             {
               shares: {
                 some: {
-                  OR: [
-                    { sharedWithId: userId, status: 'accepted' },
-                    {
-                      sharedWith: { id: userId },
-                      status: 'accepted'
-                    }
-                  ]
+                  sharedWithId: userId,
+                  status: 'accepted'
                 }
               }
             }

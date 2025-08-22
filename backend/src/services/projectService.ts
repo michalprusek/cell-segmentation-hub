@@ -3,7 +3,14 @@ import { CreateProjectData, UpdateProjectData, ProjectQueryParams } from '../typ
 import { calculatePagination } from '../utils/response';
 import { logger } from '../utils/logger';
 import * as SharingService from './sharingService';
-import type { Project, Prisma } from '@prisma/client';
+import type { Project, Prisma, User } from '@prisma/client';
+
+// Extended project type with metadata
+export interface ProjectWithMeta extends Project {
+  isOwned: boolean;
+  isShared: boolean;
+  owner: Pick<User, 'id' | 'email'>;
+}
 
 /**
  * Service for managing projects
@@ -46,7 +53,7 @@ export async function createProject(userId: string, data: CreateProjectData): Pr
   /**
    * Get projects for a user with pagination and search (only owned projects)
    */
-export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: Project[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: ProjectWithMeta[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     try {
       const { page, limit, search, sortBy, sortOrder } = options;
       
@@ -135,7 +142,7 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       });
 
       return {
-        projects: projectsWithMeta as Project[],
+        projects: projectsWithMeta as ProjectWithMeta[],
         pagination: {
           page: pagination.page,
           limit: pagination.limit,

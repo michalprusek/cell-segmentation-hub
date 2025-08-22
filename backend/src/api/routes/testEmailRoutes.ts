@@ -41,15 +41,27 @@ router.post('/send-test', authenticate, async (req: Request, res: Response) => {
   try {
     const { to } = req.body;
     
-    if (!to) {
+    // Validate email parameter
+    if (!to || typeof to !== 'string') {
       return res.status(400).json({ 
         success: false, 
-        message: 'Recipient email is required' 
+        message: 'Valid recipient email is required' 
+      });
+    }
+    
+    // Trim and validate email format
+    const email = to.trim();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Invalid email format' 
       });
     }
 
     await sendEmail({
-      to,
+      to: email,
       subject: 'SpheroSeg Test Email',
       html: `
         <h2>Test Email from SpheroSeg Platform</h2>

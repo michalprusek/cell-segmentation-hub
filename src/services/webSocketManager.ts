@@ -14,6 +14,18 @@ import type {
   IWebSocketManager,
 } from '@/types/websocket';
 
+// Define internal message types for backward compatibility
+interface Notification {
+  type: string;
+  polygonCount?: number;
+  message?: string;
+}
+
+interface SystemMessage {
+  type: 'error' | 'warning' | 'info';
+  message: string;
+}
+
 // Re-export types for backward compatibility
 export type { SegmentationUpdate, QueueStats } from '@/types/websocket';
 

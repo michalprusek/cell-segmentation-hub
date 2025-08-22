@@ -345,7 +345,22 @@ const ProjectDetail = () => {
             });
           });
         }
-      })();
+      })().catch(err => {
+        console.error('Unhandled error in segmentation refresh IIFE:', err);
+        // Ensure state is updated even on unhandled rejection
+        updateImagesRef.current(prevImages =>
+          prevImages.map(prevImg => {
+            if (prevImg.id === lastUpdate.imageId) {
+              return {
+                ...prevImg,
+                segmentationStatus: 'error',
+                updatedAt: new Date(),
+              };
+            }
+            return prevImg;
+          })
+        );
+      });
     }
 
     // Reset batch submitted state when queue becomes empty

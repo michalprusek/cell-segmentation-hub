@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,18 +38,35 @@ function ShareAcceptPage() {
   const [autoAccepting, setAutoAccepting] = useState(false);
 
   const validateToken = useCallback(async () => {
+    if (!token) {
+      setError(t('sharing.invitationInvalid'));
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      const data = await apiClient.validateShareToken(token!);
+      const data = await apiClient.validateShareToken(token);
       setShareData(data);
       setError(null);
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('Failed to validate share token:', error);
 
-      const errorMessage =
-        error?.response?.data?.message ||
-        error?.message ||
-        t('sharing.invitationInvalid');
+      let errorMessage = t('sharing.invitationInvalid');
+      if (error && typeof error === 'object') {
+        if (
+          'response' in error &&
+          error.response &&
+          typeof error.response === 'object'
+        ) {
+          const resp = error.response as any;
+          if (resp.data?.message) {
+            errorMessage = resp.data.message;
+          }
+        } else if ('message' in error && typeof error.message === 'string') {
+          errorMessage = error.message;
+        }
+      }
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -111,27 +128,33 @@ function ShareAcceptPage() {
     validateToken();
   }, [token, t, validateToken]);
 
+  // Track if auto-accept has been triggered
+  const autoAcceptedRef = useRef(false);
+
   // Auto-accept invitation if user is already logged in and matches email
   useEffect(() => {
-    if (shareData && user && !accepted && !autoAccepting) {
+    if (shareData && user && !accepted && !autoAcceptedRef.current) {
       if (!shareData.needsLogin && shareData.status === 'pending') {
         // For email invitations, check if the logged-in user matches
         if (shareData.email && user.email === shareData.email) {
+          autoAcceptedRef.current = true;
           setAutoAccepting(true);
           handleAccept();
         }
         // For link invitations, auto-accept for any logged-in user
         else if (!shareData.email) {
+          autoAcceptedRef.current = true;
           setAutoAccepting(true);
           handleAccept();
         }
       }
     }
-  }, [shareData, user, accepted, autoAccepting, handleAccept]);
+  }, [shareData, user, accepted]);
 
   const handleLogin = () => {
-    // After login, redirect to dashboard instead of back to share page
-    navigate(`/sign-in?returnTo=/dashboard`);
+    // After login, redirect back to the share accept page to complete the process
+    const returnTo = `/share/accept/${token}`;
+    navigate(`/sign-in?returnTo=${encodeURIComponent(returnTo)}`);
   };
 
   if (loading) {

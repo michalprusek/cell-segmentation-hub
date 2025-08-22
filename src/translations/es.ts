@@ -811,7 +811,6 @@ export default {
       autosaveFailed:
         'Error en guardado automático - los cambios pueden perderse',
     },
-    autosaveFailed: 'Error de autoguardado - los cambios pueden perderse',
   },
   project: {
     selected: '{{count}} imagen seleccionada',

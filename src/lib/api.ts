@@ -933,11 +933,13 @@ class ApiClient {
   }
 
   async getSegmentationResults(
-    imageId: string
+    imageId: string,
+    options?: { signal?: AbortSignal }
   ): Promise<SegmentationResultData | null> {
     try {
       const response = await this.instance.get(
-        `/segmentation/images/${imageId}/results`
+        `/segmentation/images/${imageId}/results`,
+        { signal: options?.signal }
       );
       const data = this.extractData(response);
 

@@ -55,8 +55,8 @@ export const useDashboardProjects = ({
       const ownedProjects = ownedResponse.projects || [];
       const sharedProjects = sharedResponse || [];
 
-      console.log('Owned projects:', ownedProjects.length);
-      console.log('Shared projects:', sharedProjects);
+      logger.debug(`Owned projects count: ${ownedProjects.length}`);
+      logger.debug(`Shared projects count: ${sharedProjects.length}`);
 
       // Get current user info for owned projects
       const currentUser = { email: userEmail || 'Unknown' };
