@@ -70,8 +70,12 @@ describe('WebSocketManager', () => {
 
   afterEach(() => {
     // Clean up after each test
-    wsManager.disconnect();
-    WebSocketManager.cleanup();
+    try {
+      wsManager.disconnect();
+      WebSocketManager.cleanup();
+    } catch (error) {
+      // Ignore cleanup errors
+    }
     vi.clearAllMocks();
     vi.clearAllTimers();
     vi.useRealTimers(); // Ensure real timers are restored
@@ -171,14 +175,16 @@ describe('WebSocketManager', () => {
     it('should handle connection timeout', async () => {
       vi.useFakeTimers();
 
-      const connectPromise = wsManager.connect(mockUser);
+      try {
+        const connectPromise = wsManager.connect(mockUser);
 
-      // Fast-forward past timeout (15 seconds)
-      vi.advanceTimersByTime(15000);
+        // Fast-forward past timeout (15 seconds)
+        vi.advanceTimersByTime(15000);
 
-      await expect(connectPromise).rejects.toThrow('Connection timeout');
-
-      vi.useRealTimers();
+        await expect(connectPromise).rejects.toThrow('Connection timeout');
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should handle connection error', async () => {
@@ -565,6 +571,7 @@ describe('WebSocketManager', () => {
     });
 
     afterEach(() => {
+      vi.clearAllTimers();
       vi.useRealTimers();
     });
 
@@ -830,17 +837,22 @@ describe('WebSocketManager', () => {
     it('should handle connection wait timeout', async () => {
       vi.useFakeTimers();
 
-      const connectPromise1 = wsManager.connect(mockUser);
+      try {
+        const connectPromise1 = wsManager.connect(mockUser);
 
-      // Start second connection attempt immediately
-      const connectPromise2 = wsManager.connect(mockUser);
+        // Start second connection attempt immediately
+        const connectPromise2 = wsManager.connect(mockUser);
 
-      // Advance past wait timeout
-      vi.advanceTimersByTime(30000);
+        // Advance past wait timeout
+        vi.advanceTimersByTime(30000);
 
-      await expect(connectPromise2).rejects.toThrow('Connection wait timeout');
-
-      vi.useRealTimers();
+        await expect(connectPromise2).rejects.toThrow(
+          'Connection wait timeout'
+        );
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
     });
 
     it('should handle missing user credentials', async () => {
