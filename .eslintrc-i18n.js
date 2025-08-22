@@ -20,6 +20,8 @@ export default [
       'tests/**',
       'src/test/**',
       'src/App.tsx', // App.tsx contains only providers and routing, no translatable text
+      'src/components/DashboardHeader.tsx', // Component names and structural JSX
+      'src/components/DashboardActions.tsx', // Component names and structural JSX
     ],
     languageOptions: {
       parser: tsParser,

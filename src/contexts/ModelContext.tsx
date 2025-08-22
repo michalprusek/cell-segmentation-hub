@@ -116,7 +116,6 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
   );
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useModel = () => {
   const context = useContext(ModelContext);
   if (context === undefined) {
