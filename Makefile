@@ -208,16 +208,6 @@ type-check:
 	@echo "🔍 Running type checking in Docker..."
 	@$(DOCKER_COMPOSE) exec -T frontend npm run type-check
 
-# Run ML service unit tests
-test-ml:
-	@echo "🧪 Running ML service unit tests..."
-	@$(DOCKER_COMPOSE) exec -T ml-service python -m pytest tests/ -v --tb=short
-
-# Run ML timeout tests specifically
-test-ml-timeout:
-	@echo "⏱️ Running ML timeout mechanism tests..."
-	@$(DOCKER_COMPOSE) exec -T ml-service python -m pytest tests/test_inference_executor.py -v --tb=short
-
 # Development environment
 dev:
 	@echo "🚀 Starting development environment..."

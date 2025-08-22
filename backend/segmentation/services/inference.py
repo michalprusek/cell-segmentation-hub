@@ -11,31 +11,10 @@ from PIL import Image
 from typing import Dict, Any, List
 
 # Use relative imports instead of sys.path manipulation
-from ml.model_loader import ModelLoader as ModelManager
+from .model_loader import ModelManager
 from .postprocessing import PostprocessingService
 
 logger = logging.getLogger(__name__)
-
-
-class ModelNotFoundError(Exception):
-    """Raised when a requested model is not found or cannot be loaded"""
-    pass
-
-
-class InferenceError(Exception):
-    """Raised when model inference fails"""
-    pass
-
-
-class InferenceTimeoutError(Exception):
-    """Raised when model inference times out"""
-    
-    def __init__(self, message: str, timeout: float, model_name: str = None, image_size: tuple = None):
-        super().__init__(message)
-        self.timeout = timeout
-        self.model_name = model_name
-        self.image_size = image_size
-
 
 class InferenceService:
     """Service for performing image segmentation inference"""

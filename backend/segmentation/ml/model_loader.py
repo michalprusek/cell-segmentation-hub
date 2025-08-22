@@ -12,17 +12,21 @@ import cv2
 from typing import Dict, List, Tuple, Any, Optional
 import logging
 from pathlib import Path
+import time
+import uuid
 
 # Import model architectures using relative imports
 from models.hrnet import HRNetV2
 from models.resunet_advanced import AdvancedResUNet
 from models.resunet_small import ResUNetSmall
 
-# Constants for preventing hanging
-MAX_IMAGE_WIDTH = 2048
-MAX_IMAGE_HEIGHT = 2048
-MAX_MEMORY_GB = 4.0
-ML_FALLBACK_TIMEOUT = 300  # 5 minutes as absolute maximum safety net
+# Import the new inference executor
+from .inference_executor import (
+    InferenceExecutor, 
+    InferenceTimeoutError,
+    InferenceError,
+    get_global_executor
+)
 
 logger = logging.getLogger(__name__)
 
@@ -218,8 +222,24 @@ class ModelLoader:
         
         return binary_mask
     
-    def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5, detect_holes: bool = True) -> Dict[str, Any]:
-        """Perform segmentation on an image with input validation"""
+    def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Perform segmentation on an image with improved timeout handling
+        
+        Args:
+            image: PIL Image to segment
+            model_name: Name of the model to use
+            threshold: Segmentation threshold
+            detect_holes: Whether to detect holes in segmentation
+            timeout: Optional timeout override (uses env variable if not specified)
+        
+        Returns:
+            Dictionary containing segmentation results
+            
+        Raises:
+            InferenceTimeoutError: If inference exceeds timeout
+            InferenceError: For other inference failures
+        """
         
         # Set processing state
         self.is_processing = True
@@ -229,15 +249,6 @@ class ModelLoader:
             original_size = image.size  # (width, height)
             logger.info(f"Starting prediction for {model_name}, image size: {original_size}, detect_holes: {detect_holes}")
             
-            # Validate input image size to prevent hanging
-            if original_size[0] > MAX_IMAGE_WIDTH or original_size[1] > MAX_IMAGE_HEIGHT:
-                logger.warning(f"Image size {original_size} exceeds maximum allowed size ({MAX_IMAGE_WIDTH}x{MAX_IMAGE_HEIGHT})")
-                # Resize while maintaining aspect ratio
-                ratio = min(MAX_IMAGE_WIDTH / original_size[0], MAX_IMAGE_HEIGHT / original_size[1])
-                new_size = (int(original_size[0] * ratio), int(original_size[1] * ratio))
-                image = image.resize(new_size, Image.Resampling.LANCZOS)
-                logger.info(f"Resized image to {new_size} for processing")
-            
             # Get model
             model = self.get_model(model_name)
             logger.info(f"Model {model_name} loaded successfully")
@@ -246,16 +257,42 @@ class ModelLoader:
             input_tensor = self.preprocess_image(image)
             logger.info(f"Image preprocessed, tensor shape: {input_tensor.shape}, device: {input_tensor.device}")
             
-            # Check memory before inference
+            # Get the global inference executor
+            executor = get_global_executor()
+            
+            # Use environment variable for timeout if not specified
+            if timeout is None:
+                timeout = float(os.getenv("ML_INFERENCE_TIMEOUT", "60"))
+            
+            # Log resource usage before inference
             if self.device.type == 'cuda':
                 memory_before = torch.cuda.memory_allocated()
                 logger.info(f"GPU memory before inference: {memory_before / 1024**2:.1f} MB")
             
-            # Perform inference
-            logger.info(f"Starting inference with {model_name}")
-            with torch.no_grad():
-                output = model(input_tensor)
-            logger.info(f"Inference completed, output shape: {output.shape if not isinstance(output, tuple) else [o.shape for o in output]}")
+            # Perform inference with proper timeout handling
+            logger.info(f"Starting inference with {model_name}, timeout: {timeout}s")
+            
+            try:
+                output = executor.execute_inference(
+                    model=model,
+                    input_tensor=input_tensor,
+                    model_name=model_name,
+                    timeout=timeout,
+                    image_size=original_size
+                )
+                logger.info(f"Inference completed, output shape: {output.shape if not isinstance(output, tuple) else [o.shape for o in output]}")
+                
+            except InferenceTimeoutError:
+                # Re-raise with additional context
+                self.is_processing = False
+                self.current_model = None
+                raise
+                
+            except Exception as e:
+                # Wrap other exceptions
+                self.is_processing = False
+                self.current_model = None
+                raise InferenceError(f"Inference failed for {model_name}: {str(e)}") from e
             
             # Check memory after inference
             if self.device.type == 'cuda':

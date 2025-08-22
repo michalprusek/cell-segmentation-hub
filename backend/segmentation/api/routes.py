@@ -15,8 +15,13 @@ from .models import (
 from PIL import Image
 import io
 
-# Import ML exceptions
-from services.inference import InferenceTimeoutError, InferenceError
+# Import new inference exception types
+try:
+    from ml.inference_executor import InferenceTimeoutError, InferenceError
+except ImportError:
+    # Fallback for backward compatibility
+    InferenceTimeoutError = TimeoutError
+    InferenceError = Exception
 
 logger = logging.getLogger(__name__)
 
@@ -65,53 +70,6 @@ async def health_check():
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=500, detail="Health check failed")
-
-@router.get("/health/inference")
-async def inference_health_check(loader = Depends(get_model_loader)):
-    """Test inference capability with a small test image"""
-    try:
-        # Create a small test image (32x32 RGB)
-        import numpy as np
-        test_array = np.random.randint(0, 255, (32, 32, 3), dtype=np.uint8)
-        test_image = Image.fromarray(test_array)
-        
-        start_time = time.time()
-        
-        # Try a quick inference with the loaded model (hrnet by default)
-        # This will detect if inference is hanging
-        result = loader.predict(test_image, "hrnet", 0.5, False)
-        
-        inference_time = time.time() - start_time
-        
-        return {
-            "status": "healthy",
-            "timestamp": datetime.now().isoformat(),
-            "inference_test": {
-                "success": True,
-                "duration_seconds": round(inference_time, 3),
-                "polygons_found": len(result.get("polygons", [])),
-                "test_image_size": "32x32"
-            },
-            "current_state": {
-                "is_processing": getattr(loader, 'is_processing', False),
-                "current_model": getattr(loader, 'current_model', None)
-            }
-        }
-        
-    except Exception as e:
-        logger.error(f"Inference health check failed: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "status": "unhealthy",
-                "timestamp": datetime.now().isoformat(),
-                "error": str(e),
-                "inference_test": {
-                    "success": False,
-                    "error_type": type(e).__name__
-                }
-            }
-        )
 
 @router.get("/models")
 async def get_models(loader = Depends(get_model_loader)):
@@ -200,20 +158,47 @@ async def segment_image(
         
     except HTTPException:
         raise
-    except TimeoutError as e:
+    except (InferenceTimeoutError, TimeoutError) as e:
         # Handle timeout errors with detailed information
         processing_time = time.time() - start_time
         logger.error(f"Segmentation timeout after {processing_time:.2f}s for model {model}: {e}")
         
-        error_detail = {
-            "error": "Model inference timeout",
-            "message": str(e),
-            "model": model,
-            "suggestion": "Try using a simpler model (hrnet) or reducing image size",
-            "processing_time": processing_time
-        }
+        # Extract details from InferenceTimeoutError if available
+        if isinstance(e, InferenceTimeoutError):
+            error_detail = {
+                "error": "Model inference timeout",
+                "message": str(e),
+                "model": e.model_name,
+                "timeout": e.timeout,
+                "image_size": e.image_size,
+                "suggestion": f"Model '{e.model_name}' timed out after {e.timeout}s. Try: 1) Use 'hrnet' model instead, 2) Reduce image size, 3) Increase ML_INFERENCE_TIMEOUT environment variable",
+                "processing_time": processing_time
+            }
+        else:
+            # Legacy TimeoutError
+            error_detail = {
+                "error": "Model inference timeout",
+                "message": str(e),
+                "model": model,
+                "suggestion": "Try using a simpler model (hrnet) or reducing image size",
+                "processing_time": processing_time
+            }
         
         raise HTTPException(status_code=504, detail=error_detail)
+        
+    except InferenceError as e:
+        # Handle inference errors with context
+        processing_time = time.time() - start_time
+        logger.error(f"Inference error after {processing_time:.2f}s: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Inference failed",
+                "message": str(e),
+                "model": model,
+                "processing_time": processing_time
+            }
+        )
     except Exception as e:
         processing_time = time.time() - start_time
         logger.error(f"Segmentation failed after {processing_time:.2f}s: {e}")

@@ -82,9 +82,6 @@ const ProjectActions = ({
               variant="ghost"
               size="icon"
               className="h-8 w-8 bg-white/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white"
-              aria-label="More options"
-              aria-haspopup="menu"
-              aria-expanded={dropdownOpen}
               onClick={e => {
                 e.stopPropagation();
                 e.preventDefault();

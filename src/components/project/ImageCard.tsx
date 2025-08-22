@@ -200,30 +200,13 @@ export const ImageCard = ({
             image.segmentationResult.imageWidth &&
             image.segmentationResult.imageHeight;
 
-          // Debug logging for thumbnail rendering
-          if (process.env.NODE_ENV === 'development') {
-            console.debug(
-              `🖼️ ImageCard ${image.id.slice(0, 8)}: shouldShowSegmentation=${shouldShowSegmentation}`,
-              {
-                segmentationStatus: image.segmentationStatus,
-                hasPolygons: !!image.segmentationResult?.polygons,
-                polygonCount: image.segmentationResult?.polygons?.length || 0,
-                hasImageDimensions: !!(
-                  image.segmentationResult?.imageWidth &&
-                  image.segmentationResult?.imageHeight
-                ),
-              }
-            );
-          }
-
           return shouldShowSegmentation ? (
             <CanvasThumbnailRenderer
               thumbnailData={{
                 polygons: image.segmentationResult.polygons,
                 imageWidth: image.segmentationResult.imageWidth,
                 imageHeight: image.segmentationResult.imageHeight,
-                levelOfDetail:
-                  image.segmentationResult.levelOfDetail || 'medium',
+                levelOfDetail: image.segmentationResult.levelOfDetail || 'low',
                 polygonCount:
                   image.segmentationResult.polygonCount ||
                   image.segmentationResult.polygons.length,
@@ -236,7 +219,6 @@ export const ImageCard = ({
                 compressionRatio:
                   image.segmentationResult.compressionRatio || 1,
               }}
-              className="absolute inset-0 pointer-events-none"
             />
           ) : null;
         })()}

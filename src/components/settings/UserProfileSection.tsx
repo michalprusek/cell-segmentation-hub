@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
 import { Profile, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 
@@ -16,7 +15,6 @@ interface UserProfileSectionProps {
 
 const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
   const { t } = useLanguage();
-  const { refreshProfile } = useAuth();
 
   const [formData, setFormData] = useState({
     fullName: profile?.username || '',
@@ -24,15 +22,6 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
     bio: profile?.bio || '',
   });
   const [loading, setLoading] = useState(false);
-
-  // Update form data when profile prop changes
-  useEffect(() => {
-    setFormData({
-      fullName: profile?.username || '',
-      organization: profile?.organization || '',
-      bio: profile?.bio || '',
-    });
-  }, [profile]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,9 +36,6 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
       });
 
       toast.success(t('settings.profileUpdated'));
-
-      // Refresh profile data in context so it updates everywhere
-      await refreshProfile();
     } catch (error: unknown) {
       logger.error('Error saving profile:', error);
       const errorMessage =
@@ -90,6 +76,7 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
         </div>
 
         <div className="space-y-4">
+          <h3 className="text-lg font-medium">{t('settings.bio')}</h3>
           <div className="space-y-2">
             <Label htmlFor="bio">{t('settings.bio')}</Label>
             <Input

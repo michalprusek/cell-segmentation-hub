@@ -119,11 +119,6 @@ export class QueueService {
         queueId: queueEntry.id
       });
 
-      // Broadcast updated queue stats
-      if (this.websocketService) {
-        await this.getQueueStats(projectId, userId);
-      }
-
       // Processing will be handled by QueueWorker
 
       return queueEntry;
@@ -223,11 +218,6 @@ export class QueueService {
         queuedImages: queueEntries.length,
         model
       });
-
-      // Broadcast updated queue stats for the project
-      if (this.websocketService && queueEntries.length > 0) {
-        await this.getQueueStats(projectId, userId);
-      }
 
       // Processing will be handled by QueueWorker
 
@@ -357,11 +347,6 @@ export class QueueService {
         queueId,
         imageId: queueItem.imageId
       });
-
-      // Broadcast updated queue stats
-      if (this.websocketService) {
-        await this.getQueueStats(queueItem.projectId, userId);
-      }
     } catch (error) {
       logger.error('Failed to remove item from queue', error instanceof Error ? error : undefined, 'QueueService', {
         queueId,
@@ -479,18 +464,6 @@ export class QueueService {
       }
     }
 
-    // Broadcast updated queue stats when items start processing
-    if (this.websocketService) {
-      const projectUserPairs = batch.map(item => ({ projectId: item.projectId, userId: item.userId }));
-      const uniquePairs = Array.from(
-        new Map(projectUserPairs.map(pair => [`${pair.projectId}-${pair.userId}`, pair])).values()
-      );
-      
-      for (const { projectId, userId } of uniquePairs) {
-        await this.getQueueStats(projectId, userId);
-      }
-    }
-
     try {
       // Prepare images for batch processing
       const imageData = [];
@@ -560,71 +533,14 @@ export class QueueService {
             where: { id: item.id }
           });
 
-          // Get the saved segmentation to retrieve its ID for thumbnail generation
-          const savedSegmentation = await this.prisma.segmentation.findFirst({
-            where: { imageId: item.imageId },
-            orderBy: { createdAt: 'desc' },
-            include: {
-              image: {
-                select: {
-                  projectId: true
-                }
-              }
-            }
-          });
-
-          // Generate thumbnails synchronously to ensure they're ready
-          let thumbnailData = null;
-          if (savedSegmentation) {
-            try {
-              // Generate thumbnails for the saved segmentation
-              await (this as any).thumbnailService.generateThumbnails(savedSegmentation.id);
-              
-              // Get the generated thumbnail data
-              const thumbnails = await (this.prisma as any).thumbnailData.findMany({
-                where: { segmentationId: savedSegmentation.id },
-                orderBy: { levelOfDetail: 'asc' },
-                take: 1
-              });
-
-              if (thumbnails.length > 0) {
-                const thumbnail = thumbnails[0];
-                thumbnailData = {
-                  levelOfDetail: thumbnail.levelOfDetail as 'low' | 'medium' | 'high',
-                  polygons: result.polygons.slice(0, 100), // Send limited polygons for thumbnail
-                  polygonCount: result.polygons.length,
-                  pointCount: thumbnail.totalPoints,
-                  compressionRatio: thumbnail.averageCompressionRatio || 1
-                };
-              }
-            } catch (error) {
-              logger.warn('Failed to generate thumbnails immediately', 'QueueService', {
-                imageId: item.imageId,
-                error: error instanceof Error ? error.message : 'Unknown error'
-              });
-            }
-          }
-
-          // Emit comprehensive success notification via WebSocket with all data
+          // Emit success notification via WebSocket
           if (this.websocketService) {
-            // Send complete update with thumbnail data included
-            const completeUpdate = {
+            this.websocketService.emitSegmentationUpdate(item.userId, {
               imageId: item.imageId,
               projectId: item.projectId,
               status: 'completed',
-              queueId: item.id,
-              segmentationResult: {
-                polygons: thumbnailData?.polygons || [],
-                polygonCount: result.polygons.length,
-                imageWidth: result.image_size?.width || image.width,
-                imageHeight: result.image_size?.height || image.height,
-                levelOfDetail: thumbnailData?.levelOfDetail || 'low',
-                pointCount: thumbnailData?.pointCount || 0,
-                compressionRatio: thumbnailData?.compressionRatio || 1
-              }
-            };
-
-            this.websocketService.emitSegmentationUpdate(item.userId, completeUpdate as any);
+              queueId: item.id
+            });
             
             this.websocketService.emitSegmentationComplete(
               item.userId,
@@ -632,17 +548,6 @@ export class QueueService {
               item.projectId,
               result.polygons.length
             );
-
-            // Also broadcast thumbnail update for compatibility
-            if (thumbnailData && savedSegmentation) {
-              const thumbnailUpdate = {
-                imageId: item.imageId,
-                projectId: item.projectId,
-                segmentationId: savedSegmentation.id,
-                thumbnailData
-              };
-              this.websocketService.broadcastThumbnailUpdate(item.projectId, thumbnailUpdate);
-            }
           }
 
           logger.info('Batch item processed successfully and removed from queue', 'QueueService', {

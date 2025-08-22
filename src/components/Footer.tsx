@@ -34,25 +34,11 @@ const Footer = () => {
               </p>
               <p className="text-gray-600">
                 <strong>{t('footer.institution')}:</strong>{' '}
-                <a
-                  href="https://www.utia.cas.cz"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  {t('footer.institutionName')}
-                </a>
+                {t('footer.institutionName')}
               </p>
               <p className="text-gray-600">
                 <strong>{t('footer.address')}:</strong>{' '}
-                <a
-                  href="https://maps.google.com/?q=Pod+Vod%C3%A1renskou+v%C4%9B%C5%BE%C3%AD+4%2C+182+08+Praha+8"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  {t('footer.addressText')}
-                </a>
+                {t('footer.addressText')}
               </p>
             </div>
           </div>
@@ -66,9 +52,6 @@ const Footer = () => {
                 <Link
                   to="/documentation"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
-                  onClick={() =>
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                  }
                 >
                   {t('footer.documentation')}
                 </Link>
@@ -80,6 +63,22 @@ const Footer = () => {
                 >
                   {t('footer.features')}
                 </a>
+              </li>
+              <li>
+                <Link
+                  to="#"
+                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
+                >
+                  {t('footer.tutorials')}
+                </Link>
+              </li>
+              <li>
+                <Link
+                  to="#"
+                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
+                >
+                  {t('footer.research')}
+                </Link>
               </li>
             </ul>
           </div>
@@ -93,9 +92,6 @@ const Footer = () => {
                 <Link
                   to="/terms-of-service"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
-                  onClick={() =>
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                  }
                 >
                   {t('footer.termsOfService')}
                 </Link>
@@ -104,9 +100,6 @@ const Footer = () => {
                 <Link
                   to="/privacy-policy"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
-                  onClick={() =>
-                    window.scrollTo({ top: 0, behavior: 'smooth' })
-                  }
                 >
                   {t('footer.privacyPolicy')}
                 </Link>

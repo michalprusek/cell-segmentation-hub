@@ -9,7 +9,6 @@ import CanvasPolygon from './canvas/CanvasPolygon';
 import CanvasVertex from './canvas/CanvasVertex';
 import ModeInstructions from './canvas/ModeInstructions';
 import CanvasTemporaryGeometryLayer from './canvas/CanvasTemporaryGeometryLayer';
-import { useLanguage } from '@/contexts/LanguageContext';
 
 interface EnhancedSegmentationEditorProps {
   imageUrl: string;
@@ -34,7 +33,6 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
   onPolygonsChange,
   className = '',
 }) => {
-  const { t } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
@@ -133,7 +131,7 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
               src={imageUrl}
               width={imageWidth}
               height={imageHeight}
-              alt={t('common.segmentationTargetAlt')}
+              alt="Segmentation target"
             />
 
             {/* SVG Overlay for polygon rendering */}
@@ -225,31 +223,22 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
       {/* Status Bar */}
       <div className="flex items-center justify-between px-4 py-2 bg-gray-50 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
         <div className="flex items-center gap-4">
-          <span>
-            {t('segmentation.status.polygons')}: {editor.polygons.length}
-          </span>
+          <span>Polygons: {editor.polygons.length}</span>
           {editor.selectedPolygon && (
             <span>
-              {t('segmentation.status.selected')}:{' '}
-              {editor.selectedPolygon.points.length}{' '}
-              {t('segmentation.status.vertices')}
+              Selected: {editor.selectedPolygon.points.length} vertices
             </span>
           )}
-          <span>
-            {t('segmentation.status.zoom')}:{' '}
-            {Math.round(editor.transform.zoom * 100)}%
-          </span>
+          <span>Zoom: {Math.round(editor.transform.zoom * 100)}%</span>
         </div>
 
         <div className="flex items-center gap-4">
           {editor.hasUnsavedChanges && (
             <span className="text-amber-600 dark:text-amber-400">
-              {t('segmentation.status.unsavedChanges')}
+              Unsaved changes
             </span>
           )}
-          <span>
-            {t('segmentation.status.mode')}: {editor.editMode}
-          </span>
+          <span>Mode: {editor.editMode}</span>
         </div>
       </div>
     </div>

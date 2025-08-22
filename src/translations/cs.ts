@@ -53,7 +53,7 @@ export default {
     documentation: 'Dokumentace',
     changePassword: 'Změnit heslo',
     deleteAccount: 'Smazat účet',
-    termsOfService: 'Podmínky použití',
+    termsOfService: 'Podmínky služby',
     privacyPolicy: 'Zásady ochrany osobních údajů',
     createAccount: 'Vytvořit účet',
     signInToAccount: 'Přihlásit se k účtu',
@@ -68,17 +68,9 @@ export default {
     // Navigation
     next: 'Další',
     copy: 'Kopírovat',
-    close: 'Zavřít',
     noImage: 'Žádný obrázek',
     untitledImage: 'Nepojmenovaný obrázek',
     rename: 'Přejmenovat',
-    // Alt text for accessibility
-    logoAlt: 'SpheroSeg Logo',
-    segmentedSpheroidAlt: 'Segmentovaný sféroid',
-    segmentationTargetAlt: 'Cíl segmentace',
-    spheroidExampleAlt: 'Příklad segmentovaného sféroidu',
-    spheroidImageAlt: 'Mikroskopický obrázek sféroidu',
-    spheroidAnalysisImageAlt: 'Mikroskopický obrázek sféroidu s analýzou',
   },
 
   landing: {
@@ -200,8 +192,6 @@ export default {
     },
     selectProject: 'Vybrat projekt',
     projectSelection: 'Výběr projektu',
-    selected: '{{count}} vybráno',
-    deleteSelected: 'Smazat vybrané',
     selectProjectHeader: 'Vybrat projekt',
   },
   errors: {
@@ -605,14 +595,6 @@ export default {
       },
       shiftIndicator: '⚡ SHIFT: Automatické přidávání bodů',
     },
-    status: {
-      polygons: 'Polygony',
-      selected: 'Vybráno',
-      vertices: 'vrcholy',
-      zoom: 'Přiblížení',
-      mode: 'Režim',
-      unsavedChanges: 'Neuložené změny',
-    },
   },
   auth: {
     signIn: 'Přihlásit se',
@@ -660,7 +642,7 @@ export default {
     confirmationRequired:
       'Potvrzovací text je povinný a musí se shodovat s vaší e-mailovou adresou',
     agreeToTerms: 'Přihlášením souhlasíte s našimi',
-    termsOfService: 'Podmínkami použití',
+    termsOfService: 'Podmínkami služby',
     and: 'a',
     privacyPolicy: 'Zásadami ochrany osobních údajů',
     // SignUp page specific
@@ -690,7 +672,6 @@ export default {
     backToSignIn: 'Zpět na přihlášení',
     didntReceiveEmail: 'Nedostali jste email?',
     rememberPassword: 'Vzpomněli jste si na heslo?',
-    tryAgain: 'Zkusit znovu',
   },
   profile: {
     title: 'Profil',
@@ -735,10 +716,6 @@ export default {
     createdProject: 'Vytvořil projekt',
     completedSegmentation: 'Dokončil segmentaci pro',
     uploadedImage: 'Nahrál obrázek',
-    noBioProvided: 'Žádná biografie nebyla poskytnuta',
-    notSpecified: 'Nespecifikováno',
-    defaultTitle: 'Výzkumník',
-    defaultOrganization: 'Výzkumný ústav',
     avatar: {
       uploadButton: 'Nahrát Avatar',
       selectFile: 'Vybrat obrázek avatara',
@@ -806,12 +783,6 @@ export default {
     somethingWentWrong: 'Něco se pokazilo. Zkuste to prosím později.',
     somethingWentWrongPage: 'Něco se pokazilo při načítání této stránky.',
     returnToHome: 'Návrat domů',
-    // Segmentation error boundary
-    segmentationError: 'Chyba segmentace',
-    segmentationErrorDescription:
-      'Došlo k chybě při načítání dat segmentace. Může to být způsobeno problémy se sítí nebo serverem.',
-    errorDetails: 'Podrobnosti chyby',
-    tryAgain: 'Zkusit znovu',
     // Success messages
     operationCompleted: 'Operace byla úspěšně dokončena',
     dataSaved: 'Data byla úspěšně uložena',
@@ -839,8 +810,6 @@ export default {
       urlCopied: 'URL projektu bylo zkopírováno do schránky',
       invalidResponse: 'Odpověď serveru byla neplatná',
       readyForImages: 'je připraven pro obrázky',
-      selected: '{{count}} vybráno',
-      deleteSelected: 'Smazat vybrané',
     },
     // Profile messages
     profile: {
@@ -895,7 +864,7 @@ export default {
     // Tabs
     general: 'Obecné',
     visualization: 'Vizualizace',
-    formatsTab: 'Formáty',
+    formats: 'Formáty',
     // Content selection
     exportContents: 'Obsah exportu',
     selectContent: 'Vyberte typy obsahu k zahrnutí do exportu',
@@ -973,16 +942,6 @@ export default {
     serverError: 'Nastala chyba serveru',
     invalidSelection: 'Vyberte prosím alespoň jeden obrázek',
     noData: 'Žádná data k exportu nejsou k dispozici',
-    segmentationData: 'Data segmentace',
-    spheroidMetrics: 'Metriky sféroidů',
-    cocoFormat: 'Formát COCO',
-    cocoFormatTitle: 'Export ve formátu COCO',
-    downloadJson: 'Stáhnout JSON',
-    formats: {
-      yolo: 'Formát YOLO',
-      excel: 'Formát Excel',
-      json: 'Formát JSON',
-    },
   },
   docs: {
     // Header section
@@ -1690,7 +1649,7 @@ export default {
     tutorials: 'Návody',
     research: 'Výzkum',
     legal: 'Právní',
-    termsOfService: 'Podmínky použití',
+    termsOfService: 'Podmínky služby',
     privacyPolicy: 'Zásady ochrany osobních údajů',
     contactUs: 'Kontaktujte nás',
     copyright:
@@ -1728,20 +1687,6 @@ export default {
     emailInvitations: 'Emailové pozvánky',
     shareLinks: 'Odkazy pro sdílení',
     shareRevoked: 'Sdílení bylo zrušeno',
-    acceptedUsers: 'Přijatí uživatelé',
-    pendingInvitations: 'Čekající pozvánky',
-    joinedViaLink: 'Připojil se prostřednictvím odkazu',
-    activeShareLinks: 'Aktivní odkazy pro sdílení',
-    joinedOn: 'Připojil se',
-    sentOn: 'Odesláno',
-    joinedViaLinkOn: 'Připojil se prostřednictvím odkazu',
-    resendInvitation: 'Znovu odeslat pozvánku',
-    invitationResent: 'Pozvánka byla znovu odeslána',
-    resendFailed: 'Nepodařilo se znovu odeslat pozvánku',
-    revokeAccess: 'Zrušit přístup',
-    cancelInvitation: 'Zrušit pozvánku',
-    reminderMessage:
-      'Toto je připomínka, že jste byli pozváni ke spolupráci na projektu',
     revokeShareFailed: 'Nepodařilo se zrušit sdílení',
     failedToLoadShares: 'Nepodařilo se načíst seznam sdílení',
 
@@ -1762,7 +1707,6 @@ export default {
     loginToAccept: 'Pro přijetí pozvánky se přihlaste',
     accepting: 'Přijímání',
     redirectingToProject: 'Přesměrování na projekt',
-    redirectingToDashboard: 'Přesměrování na dashboard',
     invitedEmail: 'Pozvaný email',
     pendingInvitations: 'Čekající pozvánky',
     sentOn: 'Odesláno',
@@ -1777,9 +1721,5 @@ export default {
     backToHome: 'Zpět domů',
     acceptFailed: 'Nepodařilo se přijmout pozvánku',
     differentEmail: 'Tato pozvánka je pro jinou emailovou adresu',
-    pendingInvitations: 'Čekající pozvánky',
-    sentOn: 'Odesláno dne',
-    joinedViaLink: 'Připojil se prostřednictvím odkazu',
-    joinedViaLinkOn: 'Připojil se',
   },
 };
