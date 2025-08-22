@@ -881,7 +881,7 @@ export default {
     showNumbers: 'Mostrar números de polígonos',
     showLabels: 'Mostrar etiquetas',
     scaleConversion: 'Conversión de Escala',
-    pixelToMicrometerScale: 'Escala Píxel a Micrómetro',
+    pixelToMicrometerScale: 'Tamaño del Píxel',
     scaleDescription:
       'Especifique cuántos micrómetros representa un píxel para convertir mediciones',
     scalePlaceholder: 'ej. 0,5 (1 píxel = 0,5 µm)',

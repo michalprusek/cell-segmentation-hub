@@ -879,7 +879,7 @@ export default {
     showLabels: 'Show labels',
     // Scale conversion
     scaleConversion: 'Scale Conversion',
-    pixelToMicrometerScale: 'Pixel to Micrometer Scale',
+    pixelToMicrometerScale: 'Pixel Size',
     scaleDescription:
       'Specify how many micrometers one pixel represents to convert measurements',
     scalePlaceholder: 'e.g., 0.5 (1 pixel = 0.5 µm)',

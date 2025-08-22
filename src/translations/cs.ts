@@ -889,7 +889,7 @@ export default {
     showNumbers: 'Zobrazit čísla polygonů',
     showLabels: 'Zobrazit popisky',
     scaleConversion: 'Převod měřítka',
-    pixelToMicrometerScale: 'Měřítko pixel na mikrometr',
+    pixelToMicrometerScale: 'Velikost pixelu',
     scaleDescription:
       'Určete, kolik mikrometrů představuje jeden pixel pro převod měření',
     scalePlaceholder: 'např. 0,5 (1 pixel = 0,5 µm)',

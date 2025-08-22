@@ -814,7 +814,7 @@ export default {
     showNumbers: '显示多边形编号',
     showLabels: '显示标签',
     scaleConversion: '比例转换',
-    pixelToMicrometerScale: '像素到微米比例',
+    pixelToMicrometerScale: '像素大小',
     scaleDescription: '指定一个像素代表多少微米来转换测量值',
     scalePlaceholder: '例如 0.5 (1像素 = 0.5µm)',
     scaleUnit: 'µm/像素',
