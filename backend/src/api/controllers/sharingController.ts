@@ -15,6 +15,11 @@ export const shareProjectByEmail = asyncHandler(async (req: Request, res: Respon
   }
 
   const projectId = req.params.id;
+  if (!projectId) {
+    ResponseHelper.badRequest(res, 'Project ID is required');
+    return;
+  }
+
   const data: ShareByEmailData = req.body;
 
   try {
@@ -60,6 +65,11 @@ export const shareProjectByLink = asyncHandler(async (req: Request, res: Respons
   }
 
   const projectId = req.params.id;
+  if (!projectId) {
+    ResponseHelper.badRequest(res, 'Project ID is required');
+    return;
+  }
+
   const data: ShareByLinkData = req.body;
 
   try {
@@ -105,6 +115,10 @@ export const getProjectShares = asyncHandler(async (req: Request, res: Response)
   }
 
   const projectId = req.params.id;
+  if (!projectId) {
+    ResponseHelper.badRequest(res, 'Project ID is required');
+    return;
+  }
 
   try {
     const shares = await SharingService.getProjectShares(projectId, req.user!.id);
@@ -154,6 +168,10 @@ export const revokeProjectShare = asyncHandler(async (req: Request, res: Respons
   }
 
   const { shareId } = req.params;
+  if (!shareId) {
+    ResponseHelper.badRequest(res, 'Share ID is required');
+    return;
+  }
 
   try {
     await SharingService.revokeShare(shareId, req.user!.id);
@@ -223,8 +241,8 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
           id: share.sharedBy.id,
           email: share.sharedBy.email
         },
-        image_count: share.project._count?.images || 0,
-        images: share.project.images || [],
+        image_count: (share.project as any)._count?.images || 0,
+        images: (share.project as any).images || [],
         updated_at: share.project.updatedAt
       },
       sharedBy: {
@@ -257,6 +275,10 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
  */
 export const validateShareToken = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { token } = req.params;
+  if (!token) {
+    ResponseHelper.badRequest(res, 'Token is required');
+    return;
+  }
 
   try {
     const share = await SharingService.validateShareToken(token);
@@ -298,6 +320,10 @@ export const validateShareToken = asyncHandler(async (req: Request, res: Respons
  */
 export const acceptShareInvitation = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   const { token } = req.params;
+  if (!token) {
+    ResponseHelper.badRequest(res, 'Token is required');
+    return;
+  }
 
   try {
     const result = await SharingService.acceptShareInvitation(token, req.user?.id);

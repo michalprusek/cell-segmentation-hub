@@ -62,7 +62,7 @@ router.get(
 router.delete(
   '/projects/:id/shares/:shareId',
   authenticate,
-  validateParams({ ...projectIdSchema, ...shareIdSchema }),
+  validateParams(projectIdSchema.merge(shareIdSchema)),
   revokeProjectShare
 );
 
