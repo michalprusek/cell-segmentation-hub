@@ -86,7 +86,7 @@ services:
       - SEGMENTATION_SERVICE_URL=http://ml-service-test:8000
       - ALLOWED_ORIGINS=http://localhost:3000,http://frontend-test:5173
       - WS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend-test:5173
-      - EMAIL_SERVICE=mock
+      - EMAIL_SERVICE=smtp
       - FROM_EMAIL=test@spheroseg.test
       - SMTP_HOST=localhost
       - SMTP_PORT=1025
