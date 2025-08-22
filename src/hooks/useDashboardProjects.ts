@@ -12,6 +12,7 @@ export interface DashboardProjectsOptions {
   sortField: string;
   sortDirection: 'asc' | 'desc';
   userId: string | undefined;
+  userEmail?: string;
 }
 
 // Interface for project data from API including optional images
@@ -23,6 +24,7 @@ export const useDashboardProjects = ({
   sortField,
   sortDirection,
   userId,
+  userEmail,
 }: DashboardProjectsOptions) => {
   const { t } = useLanguage();
   const [projects, setProjects] = useState<Project[]>([]);
@@ -36,12 +38,72 @@ export const useDashboardProjects = ({
       setLoading(true);
       setFetchError(null);
 
-      const response = await apiClient.getProjects();
-      const projectsData = response.projects;
+      // Fetch owned projects first
+      const ownedResponse = await apiClient.getProjects();
 
-      // No need for additional API calls - backend now includes image data
-      const projectsWithDetails = (projectsData || []).map(
-        (project: ApiProject) => {
+      // Try to fetch shared projects, but don't fail if it errors
+      let sharedResponse = [];
+      try {
+        sharedResponse = await apiClient.getSharedProjects();
+        console.log('Shared projects response:', sharedResponse);
+      } catch (shareError) {
+        console.error('Failed to fetch shared projects:', shareError);
+        logger.warn('Failed to fetch shared projects:', shareError);
+        // Continue with just owned projects
+      }
+
+      const ownedProjects = ownedResponse.projects || [];
+      const sharedProjects = sharedResponse || [];
+
+      logger.debug(`Owned projects count: ${ownedProjects.length}`);
+      logger.debug(`Shared projects count: ${sharedProjects.length}`);
+
+      // Get current user info for owned projects
+      const currentUser = { email: userEmail || 'Unknown' };
+
+      // Create a map to track unique projects and avoid duplicates
+      const projectMap = new Map();
+
+      // Add owned projects first
+      ownedProjects.forEach((p: ApiProject) => {
+        projectMap.set(p.id, {
+          ...p,
+          isOwned: true,
+          isShared: false,
+          owner: p.owner || currentUser, // Use owner from backend or current user
+        });
+      });
+
+      // Add shared projects (skip if already in owned)
+      sharedProjects.forEach((p: any) => {
+        const projectId = p.project?.id || p.id;
+        // Only add if not already owned by the user
+        if (!projectMap.has(projectId)) {
+          projectMap.set(projectId, {
+            ...p.project,
+            isOwned: false,
+            isShared: true,
+            sharedBy: p.sharedBy,
+            owner: p.project?.owner || p.sharedBy, // Use project owner or sharedBy as fallback
+            shareStatus: p.status,
+            shareId: p.shareId, // Add shareId for unshare functionality
+          });
+        }
+      });
+
+      // Convert map back to array
+      const allProjects = Array.from(projectMap.values());
+
+      // Process all projects
+      const projectsWithDetails = allProjects.map(
+        (
+          project: ApiProject & {
+            isOwned?: boolean;
+            isShared?: boolean;
+            sharedBy?: { email: string };
+            owner?: { email: string; name?: string };
+          }
+        ) => {
           // Extract thumbnail from backend data (first image if available)
           let thumbnail = '/placeholder.svg';
           const imageCount = project.image_count || 0;
@@ -71,6 +133,11 @@ export const useDashboardProjects = ({
             thumbnail,
             date: formatDate(project.updated_at),
             imageCount,
+            isOwned: project.isOwned,
+            isShared: project.isShared,
+            sharedBy: project.sharedBy,
+            owner: project.owner,
+            shareId: project.shareId, // Pass through shareId for unshare functionality
           };
         }
       );
@@ -147,7 +214,7 @@ export const useDashboardProjects = ({
     } finally {
       setLoading(false);
     }
-  }, [userId, sortField, sortDirection, t]);
+  }, [userId, userEmail, sortField, sortDirection, t]);
 
   useEffect(() => {
     if (userId) {

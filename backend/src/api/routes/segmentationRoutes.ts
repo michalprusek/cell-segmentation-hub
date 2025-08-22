@@ -103,7 +103,11 @@ router.post(
     body('threshold')
       .optional()
       .isFloat({ min: 0.1, max: 0.9 })
-      .withMessage('Threshold musí být mezi 0.1 a 0.9')
+      .withMessage('Threshold musí být mezi 0.1 a 0.9'),
+    body('detectHoles')
+      .optional()
+      .isBoolean()
+      .withMessage('Detect holes musí být boolean hodnota')
   ],
   handleValidation,
   segmentationController.batchSegment

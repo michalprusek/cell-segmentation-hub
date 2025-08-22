@@ -21,7 +21,7 @@ const ProjectThumbnail = ({
 
   useEffect(() => {
     const fetchFirstImage = async () => {
-      if (imageCount > 0) {
+      if (imageCount > 0 && projectId) {
         try {
           const response = await apiClient.getProjectImages(projectId, {
             limit: 1,
@@ -41,13 +41,18 @@ const ProjectThumbnail = ({
             setImageUrl(null);
           }
         } catch (error: unknown) {
-          const errorMessage =
-            getErrorMessage(error) || 'Failed to fetch thumbnail';
-          logger.error(
-            'Error fetching project thumbnail:',
-            errorMessage,
-            error
-          );
+          // Only log errors for non-404 responses (404 is expected for projects without images)
+          if (error && typeof error === 'object' && 'response' in error) {
+            const response = (error as any).response;
+            if (response?.status !== 404) {
+              const errorMessage =
+                getErrorMessage(error) || 'Failed to fetch thumbnail';
+              logger.warn(
+                `Thumbnail fetch failed for project ${projectId}:`,
+                errorMessage
+              );
+            }
+          }
           // Clear stale imageUrl on fetch error
           setImageUrl(null);
         }

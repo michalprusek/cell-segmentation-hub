@@ -683,6 +683,97 @@ class ApiClient {
     await this.instance.delete(`/projects/${id}`);
   }
 
+  // Sharing methods
+  async shareProjectByEmail(
+    projectId: string,
+    data: { email: string; message?: string }
+  ): Promise<{
+    id: string;
+    email: string;
+    status: string;
+    createdAt: string;
+  }> {
+    const response = await this.instance.post(
+      `/projects/${projectId}/share/email`,
+      data
+    );
+    return this.extractData(response);
+  }
+
+  async shareProjectByLink(
+    projectId: string,
+    data: { expiryHours?: number } = {}
+  ): Promise<{
+    id: string;
+    shareToken: string;
+    shareUrl: string;
+    tokenExpiry: string | null;
+    createdAt: string;
+  }> {
+    const response = await this.instance.post(
+      `/projects/${projectId}/share/link`,
+      data
+    );
+    return this.extractData(response);
+  }
+
+  async getProjectShares(projectId: string): Promise<
+    Array<{
+      id: string;
+      email: string | null;
+      sharedWith: { id: string; email: string } | null;
+      status: string;
+      shareToken: string;
+      shareUrl: string;
+      tokenExpiry: string | null;
+      createdAt: string;
+    }>
+  > {
+    const response = await this.instance.get(`/projects/${projectId}/shares`);
+    return this.extractData(response);
+  }
+
+  async revokeProjectShare(projectId: string, shareId: string): Promise<void> {
+    await this.instance.delete(`/projects/${projectId}/shares/${shareId}`);
+  }
+
+  async getSharedProjects(): Promise<
+    Array<{
+      id: string;
+      title: string;
+      description: string | null;
+      createdAt: string;
+      updatedAt: string;
+      owner: { id: string; email: string };
+      share: { id: string; status: string; sharedAt: string };
+      isShared: true;
+    }>
+  > {
+    const response = await this.instance.get('/shared/projects');
+    return this.extractData(response);
+  }
+
+  async validateShareToken(token: string): Promise<{
+    project: { id: string; title: string; description: string | null };
+    sharedBy: { email: string };
+    status: string;
+    email: string | null;
+    needsLogin: boolean;
+  }> {
+    const response = await this.instance.get(`/share/validate/${token}`);
+    return this.extractData(response);
+  }
+
+  async acceptShareInvitation(token: string): Promise<{
+    project: { id: string; title: string; description: string | null };
+    sharedBy?: { email: string };
+    needsLogin: boolean;
+    accepted?: boolean;
+  }> {
+    const response = await this.instance.post(`/share/accept/${token}`);
+    return this.extractData(response);
+  }
+
   // Image methods
   /**
    * Get project images with optimized thumbnail data
@@ -829,22 +920,26 @@ class ApiClient {
   async requestBatchSegmentation(
     imageIds: string[],
     model?: string,
-    threshold?: number
+    threshold?: number,
+    detectHoles?: boolean
   ): Promise<SegmentationResult> {
     const response = await this.instance.post(`/segmentation/batch`, {
       imageIds,
       model: model || 'hrnet',
       threshold: threshold || 0.5,
+      detectHoles: detectHoles,
     });
     return this.extractData(response);
   }
 
   async getSegmentationResults(
-    imageId: string
+    imageId: string,
+    options?: { signal?: AbortSignal }
   ): Promise<SegmentationResultData | null> {
     try {
       const response = await this.instance.get(
-        `/segmentation/images/${imageId}/results`
+        `/segmentation/images/${imageId}/results`,
+        { signal: options?.signal }
       );
       const data = this.extractData(response);
 
@@ -1109,12 +1204,14 @@ class ApiClient {
     imageId: string,
     model?: string,
     threshold?: number,
-    priority?: number
+    priority?: number,
+    detectHoles?: boolean
   ): Promise<AddToQueueResponse> {
     const response = await this.instance.post(`/queue/images/${imageId}`, {
       model,
       threshold,
       priority,
+      detectHoles,
     });
     return this.extractData<AddToQueueResponse>(response);
   }
@@ -1125,7 +1222,8 @@ class ApiClient {
     model?: string,
     threshold?: number,
     priority?: number,
-    forceResegment?: boolean
+    forceResegment?: boolean,
+    detectHoles?: boolean
   ): Promise<BatchQueueResponse> {
     const response = await this.instance.post('/queue/batch', {
       imageIds,
@@ -1134,6 +1232,7 @@ class ApiClient {
       threshold,
       priority,
       forceResegment,
+      detectHoles,
     });
     return this.extractData<BatchQueueResponse>(response);
   }

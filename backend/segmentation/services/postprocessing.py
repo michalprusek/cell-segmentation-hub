@@ -16,13 +16,14 @@ class PostprocessingService:
         self.min_area = 50  # Minimum polygon area in pixels - lowered for better small cell detection
         self.simplification_tolerance = 0.1  # Douglas-Peucker tolerance - reduced for higher precision
     
-    def mask_to_polygons(self, mask: np.ndarray, threshold: float = 0.5) -> List[Dict[str, Any]]:
+    def mask_to_polygons(self, mask: np.ndarray, threshold: float = 0.5, detect_holes: bool = True) -> List[Dict[str, Any]]:
         """
         Convert segmentation mask to polygons
         
         Args:
             mask: Numpy array of shape (H, W) with values 0-1
             threshold: Threshold for binarizing the mask
+            detect_holes: Whether to detect holes/internal structures
             
         Returns:
             List of polygon dictionaries with points, area, and confidence
@@ -53,7 +54,7 @@ class PostprocessingService:
                 region_mask = (labeled_mask == region.label).astype(np.uint8)
                 
                 # Convert region to polygon
-                polygon_data = self._region_to_polygon(region_mask, mask, region)
+                polygon_data = self._region_to_polygon(region_mask, mask, region, detect_holes)
                 
                 if polygon_data:
                     polygons.append(polygon_data)
@@ -74,13 +75,20 @@ class PostprocessingService:
     
     
     def _region_to_polygon(self, region_mask: np.ndarray, original_mask: np.ndarray, 
-                          region: Any) -> Dict[str, Any]:
+                          region: Any, detect_holes: bool = True) -> Dict[str, Any]:
         """Convert a single region to polygon format"""
         try:
-            # Find contours with hierarchy - use RETR_TREE to detect holes
-            contours, hierarchy = cv2.findContours(
-                region_mask.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
-            )
+            # Find contours with hierarchy
+            if detect_holes:
+                # Use RETR_TREE to detect holes and internal structures
+                contours, hierarchy = cv2.findContours(
+                    region_mask.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
+                )
+            else:
+                # Use RETR_EXTERNAL to detect only external boundaries
+                contours, hierarchy = cv2.findContours(
+                    region_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                )
             
             if not contours:
                 return None

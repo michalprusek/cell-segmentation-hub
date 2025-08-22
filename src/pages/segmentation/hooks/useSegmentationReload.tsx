@@ -92,84 +92,95 @@ export function useSegmentationReload({
   /**
    * Fetch segmentation data from API
    */
-  const fetchSegmentationData = async (
-    signal: AbortSignal
-  ): Promise<{
-    polygons: SegmentationPolygon[] | null;
-    imageWidth?: number;
-    imageHeight?: number;
-  } | null> => {
-    try {
-      const data = await apiClient.getSegmentationResults(imageId!, { signal });
+  const fetchSegmentationData = useCallback(
+    async (
+      signal: AbortSignal
+    ): Promise<{
+      polygons: SegmentationPolygon[] | null;
+      imageWidth?: number;
+      imageHeight?: number;
+    } | null> => {
+      try {
+        const data = await apiClient.getSegmentationResults(imageId!, {
+          signal,
+        });
 
-      if (signal.aborted) {
-        logger.debug('Segmentation fetch was aborted:', { imageId });
-        return null;
-      }
+        if (signal.aborted) {
+          logger.debug('Segmentation fetch was aborted:', { imageId });
+          return null;
+        }
 
-      if (!data || !data.polygons) {
-        logger.debug('No segmentation data found:', imageId);
-        return { polygons: null };
-      }
+        if (!data || !data.polygons) {
+          logger.debug('No segmentation data found:', imageId);
+          return { polygons: null };
+        }
 
-      return {
-        polygons: data.polygons,
-        imageWidth: data.imageWidth,
-        imageHeight: data.imageHeight,
-      };
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        logger.debug('Segmentation fetch was aborted:', { imageId });
-        return null;
+        return {
+          polygons: data.polygons,
+          imageWidth: data.imageWidth,
+          imageHeight: data.imageHeight,
+        };
+      } catch (error: any) {
+        if (error.name === 'AbortError') {
+          logger.debug('Segmentation fetch was aborted:', { imageId });
+          return null;
+        }
+        throw error;
       }
-      throw error;
-    }
-  };
+    },
+    [imageId]
+  );
 
   /**
    * Process fetched segmentation data
    */
-  const processSegmentationData = (data: {
-    polygons: SegmentationPolygon[] | null;
-    imageWidth?: number;
-    imageHeight?: number;
-  }) => {
-    // Update dimensions if available
-    if (data.imageWidth && data.imageHeight && onDimensionsUpdated) {
-      logger.debug('📐 Updating image dimensions from segmentation data:', {
-        width: data.imageWidth,
-        height: data.imageHeight,
-      });
-      onDimensionsUpdated({
-        width: data.imageWidth,
-        height: data.imageHeight,
-      });
-    }
-
-    // Update polygons
-    if (onPolygonsLoaded) {
-      if (data.polygons) {
-        logger.debug('✅ Successfully loaded segmentation polygons:', {
-          imageId,
-          polygonCount: data.polygons.length,
+  const processSegmentationData = useCallback(
+    (data: {
+      polygons: SegmentationPolygon[] | null;
+      imageWidth?: number;
+      imageHeight?: number;
+    }) => {
+      // Update dimensions if available
+      if (data.imageWidth && data.imageHeight && onDimensionsUpdated) {
+        logger.debug('📐 Updating image dimensions from segmentation data:', {
+          width: data.imageWidth,
+          height: data.imageHeight,
+        });
+        onDimensionsUpdated({
+          width: data.imageWidth,
+          height: data.imageHeight,
         });
       }
-      onPolygonsLoaded(data.polygons);
-    }
-  };
+
+      // Update polygons
+      if (onPolygonsLoaded) {
+        if (data.polygons) {
+          logger.debug('✅ Successfully loaded segmentation polygons:', {
+            imageId,
+            polygonCount: data.polygons.length,
+          });
+        }
+        onPolygonsLoaded(data.polygons);
+      }
+    },
+    [onPolygonsLoaded, onDimensionsUpdated, imageId]
+  );
 
   /**
    * Schedule a retry with exponential backoff
    */
-  const scheduleRetry = (retryCount: number, reloadFn: () => void) => {
-    const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-    logger.debug(`Retrying segmentation reload in ${delay}ms:`, {
-      imageId,
-      retryCount: retryCount + 1,
-    });
+  const scheduleRetry = useCallback(
+    (retryCount: number, reloadFn: () => void) => {
+      const delay = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
+      logger.debug(`Retrying segmentation reload in ${delay}ms:`, {
+        imageId,
+        retryCount: retryCount + 1,
+      });
 
-    reloadTimeoutRef.current = setTimeout(reloadFn, delay);
-  };
+      reloadTimeoutRef.current = setTimeout(reloadFn, delay);
+    },
+    [imageId]
+  );
 
   /**
    * Main reload function with retry logic
@@ -239,10 +250,11 @@ export function useSegmentationReload({
       projectId,
       imageId,
       cleanupReloadOperations,
-      onPolygonsLoaded,
-      onDimensionsUpdated,
       maxRetries,
       t,
+      fetchSegmentationData,
+      processSegmentationData,
+      scheduleRetry,
     ]
   );
 

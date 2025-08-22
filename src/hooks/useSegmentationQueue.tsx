@@ -45,20 +45,24 @@ export const useSegmentationQueue = (projectId?: string) => {
     // Show toast notifications for status changes
     if (update.status === 'segmented') {
       toast.success(
-        tRef.current('notifications.segmentationCompleted') ||
-          tRef.current('segmentationCompleted')
+        tRef.current('toast.segmentation.completed') ||
+          tRef.current('projects.segmentationCompleted')
       );
     } else if (update.status === 'no_segmentation') {
       toast.warning(
-        tRef.current('segmentationNoPolygons') ||
+        tRef.current('toast.segmentation.noPolygons') ||
           'No segmentation polygons detected'
       );
     } else if (update.status === 'failed') {
+      const errorMessage = update.error || tRef.current('errors.unknown');
       toast.error(
-        `${tRef.current('segmentationFailed')}: ${update.error || tRef.current('errors.unknown')}`
+        `${tRef.current('toast.segmentation.failed') || tRef.current('projects.segmentationFailed')}: ${errorMessage}`
       );
     } else if (update.status === 'processing') {
-      toast.info(tRef.current('segmentationStarted'));
+      toast.info(
+        tRef.current('toast.segmentation.started') ||
+          tRef.current('projects.segmentationStarted')
+      );
     }
   }, []); // No dependencies
 
@@ -74,9 +78,12 @@ export const useSegmentationQueue = (projectId?: string) => {
   const handleNotification = useCallback((notification: Notification) => {
     if (notification.type === 'segmentation-complete') {
       toast.success(
-        tRef.current('segmentationCompleteWithCount', {
+        tRef.current('toast.segmentation.completedWithCount', {
           count: notification.polygonCount,
-        }),
+        }) ||
+          tRef.current('projects.segmentationCompleteWithCount', {
+            count: notification.polygonCount,
+          }),
         { duration: 5000 }
       );
     }
@@ -97,10 +104,26 @@ export const useSegmentationQueue = (projectId?: string) => {
     currentProjectRef.current = isDisabled ? undefined : projectId;
   }, [projectId, isDisabled]);
 
-  // Update connection status based on context
+  // Update connection status based on context and request initial stats
   useEffect(() => {
     setIsConnected(contextIsConnected);
-  }, [contextIsConnected]);
+
+    // When connection is established, immediately request queue stats
+    if (
+      contextIsConnected &&
+      wsManagerRef.current &&
+      projectId &&
+      !isDisabled
+    ) {
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug(
+          'Connection established, requesting initial queue stats for project:',
+          projectId
+        );
+      }
+      wsManagerRef.current.requestQueueStats(projectId);
+    }
+  }, [contextIsConnected, projectId, isDisabled]);
 
   // Initialize event listeners - use context manager if available, fallback to singleton
   useEffect(() => {
@@ -178,7 +201,20 @@ export const useSegmentationQueue = (projectId?: string) => {
       logger.debug('Joining project room:', projectId);
     }
     wsManagerRef.current.joinProject(projectId);
+
+    // Request queue stats immediately and set up periodic refresh
     wsManagerRef.current.requestQueueStats(projectId);
+
+    // Request queue stats every 5 seconds to ensure we have fresh data
+    const intervalId = setInterval(() => {
+      if (wsManagerRef.current && isConnected && projectId) {
+        wsManagerRef.current.requestQueueStats(projectId);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [projectId, isConnected, isDisabled]);
 
   // Functions for interacting with the queue

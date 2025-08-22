@@ -62,9 +62,27 @@ export class ImageService {
     const storage = getStorageProvider();
     const uploadedImages: ImageWithUrls[] = [];
 
-    // Verify project ownership
+    // Verify project ownership or share access
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, userId }
+      where: {
+        id: projectId,
+        OR: [
+          { userId }, // User owns the project
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  {
+                    sharedWith: { id: userId },
+                    status: 'accepted'
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
     });
 
     if (!project) {
@@ -165,11 +183,29 @@ export class ImageService {
     userId: string,
     options: ImageQueryParams
   ): Promise<PaginatedImages> {
-    // Verify project ownership
+    // Verify project ownership or share access
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, userId }
+      where: {
+        id: projectId,
+        OR: [
+          { userId }, // User owns the project
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  {
+                    sharedWith: { id: userId },
+                    status: 'accepted'
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
     });
-
+    
     if (!project) {
       throw new Error('Project not found or no access');
     }
@@ -242,7 +278,22 @@ export class ImageService {
       where: {
         id: imageId,
         project: {
-          userId
+          OR: [
+            { userId }, // User owns the project
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    {
+                      sharedWith: { id: userId },
+                      status: 'accepted'
+                    }
+                  ]
+                }
+              }
+            }
+          ]
         }
       },
       include: {
@@ -273,12 +324,27 @@ export class ImageService {
    * Delete image with storage cleanup
    */
   async deleteImage(imageId: string, userId: string): Promise<void> {
-    // Find image with permission check
+    // Find image with permission check - allow both owners and shared users
     const image = await this.prisma.image.findFirst({
       where: {
         id: imageId,
         project: {
-          userId
+          OR: [
+            { userId }, // User owns the project
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    {
+                      sharedWith: { id: userId },
+                      status: 'accepted'
+                    }
+                  ]
+                }
+              }
+            }
+          ]
         }
       }
     });
@@ -337,11 +403,26 @@ export class ImageService {
       count: imageIds.length
     });
 
-    // Verify project ownership first
+    // Verify project ownership or shared access first
     const project = await this.prisma.project.findFirst({
       where: {
         id: projectId,
-        userId
+        OR: [
+          { userId }, // User owns the project
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  {
+                    sharedWith: { id: userId },
+                    status: 'accepted'
+                  }
+                ]
+              }
+            }
+          }
+        ]
       }
     });
 
@@ -349,13 +430,28 @@ export class ImageService {
       throw new Error('Project not found or no access');
     }
 
-    // Get all images that exist and belong to the user
+    // Get all images that exist and belong to the project (owner or shared)
     const imagesToDelete = await this.prisma.image.findMany({
       where: {
         id: { in: imageIds },
         projectId,
         project: {
-          userId
+          OR: [
+            { userId }, // User owns the project
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    {
+                      sharedWith: { id: userId },
+                      status: 'accepted'
+                    }
+                  ]
+                }
+              }
+            }
+          ]
         }
       }
     });
@@ -430,9 +526,27 @@ export class ImageService {
    * Get image statistics for a project
    */
   async getImageStats(projectId: string, userId: string): Promise<ImageStats> {
-    // Verify project ownership
+    // Verify project ownership or share access
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, userId }
+      where: {
+        id: projectId,
+        OR: [
+          { userId }, // User owns the project
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  {
+                    sharedWith: { id: userId },
+                    status: 'accepted'
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
     });
 
     if (!project) {

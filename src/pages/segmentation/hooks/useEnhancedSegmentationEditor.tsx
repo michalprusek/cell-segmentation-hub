@@ -274,28 +274,17 @@ export const useEnhancedSegmentationEditor = ({
     canvasHeight,
   ]);
 
-  // Handle beforeunload - autosave when user leaves page/closes tab
+  // Handle beforeunload - show warning when user leaves page with unsaved changes
+  // DISABLED AUTOSAVE: Was causing unwanted saves, now only shows warning
   useEffect(() => {
-    const handleBeforeUnload = async (event: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges && onSave) {
-        // Try to save synchronously
-        try {
-          const polygonsToSave = history[historyIndex] || [];
-          logger.debug('🚪 Autosaving before page unload');
-
-          // Note: Modern browsers may not wait for async operations during beforeunload
-          // This is a best effort attempt
-          onSave(polygonsToSave, imageId).catch(error => {
-            logger.error('Autosave failed during page unload:', error);
-          });
-
-          // Show browser warning
-          event.preventDefault();
-          event.returnValue = '';
-          return '';
-        } catch (error) {
-          logger.error('Error during beforeunload autosave:', error);
-        }
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        // Only show browser warning, don't try to autosave
+        // User must manually save or will lose changes
+        event.preventDefault();
+        event.returnValue =
+          'You have unsaved changes. Are you sure you want to leave?';
+        return event.returnValue;
       }
     };
 
@@ -304,7 +293,7 @@ export const useEnhancedSegmentationEditor = ({
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [hasUnsavedChanges, onSave, history, historyIndex]);
+  }, [hasUnsavedChanges]);
 
   // Update polygons with history tracking
   const updatePolygons = useCallback(
@@ -319,6 +308,12 @@ export const useEnhancedSegmentationEditor = ({
         setHistoryIndex(newHistory.length - 1);
       }
 
+      // Note: onPolygonsChange is intentionally not called here
+      // to prevent any automatic saving on polygon changes.
+      // Saving only happens on:
+      // 1. Manual save (Ctrl+S or Save button)
+      // 2. Switching images
+      // 3. Leaving the editor
       if (onPolygonsChange) {
         onPolygonsChange(newPolygons);
       }
@@ -413,7 +408,23 @@ export const useEnhancedSegmentationEditor = ({
 
   // Save operation
   const handleSave = useCallback(async () => {
-    if (!onSave || !hasUnsavedChanges) return;
+    if (!onSave || !hasUnsavedChanges) {
+      logger.debug('💾 Save skipped', {
+        hasOnSave: !!onSave,
+        hasUnsavedChanges,
+        reason: !onSave ? 'No save handler' : 'No unsaved changes',
+      });
+      return;
+    }
+
+    // Add detailed logging to track save triggers
+    const saveContext = new Error().stack?.split('\n').slice(1, 4).join(' → ');
+    logger.debug('💾 Save initiated', {
+      imageId,
+      polygonCount: polygons.length,
+      hasUnsavedChanges,
+      triggerContext: saveContext,
+    });
 
     setIsSaving(true);
     try {
@@ -422,13 +433,14 @@ export const useEnhancedSegmentationEditor = ({
       // Update the saved history index to current position
       setSavedHistoryIndex(historyIndex);
       toast.success(t('toast.segmentation.saved'));
+      logger.debug('✅ Save completed successfully');
     } catch (error) {
       toast.error(t('toast.segmentation.failed'));
       logger.error('Save error:', error);
     } finally {
       setIsSaving(false);
     }
-  }, [onSave, hasUnsavedChanges, polygons, historyIndex, t]);
+  }, [onSave, hasUnsavedChanges, polygons, historyIndex, t, imageId]);
 
   // Transform operations with improved constraints
   const handleZoomIn = useCallback(() => {

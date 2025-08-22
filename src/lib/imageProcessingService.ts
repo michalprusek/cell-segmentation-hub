@@ -8,6 +8,9 @@ interface ProcessImageParams {
   projectId: string;
   imageId: string;
   imageUrl: string;
+  model?: string;
+  threshold?: number;
+  detectHoles?: boolean;
   onComplete?: (result: SegmentationData) => void;
   onError?: (error: Error) => void;
 }
@@ -16,6 +19,9 @@ export const updateImageProcessingStatus = async ({
   projectId,
   imageId,
   imageUrl,
+  model,
+  threshold,
+  detectHoles,
   onComplete,
   onError,
 }: ProcessImageParams) => {
@@ -34,7 +40,12 @@ export const updateImageProcessingStatus = async ({
 
   try {
     // Request segmentation through the batch API (more efficient)
-    await apiClient.requestBatchSegmentation([imageId]);
+    await apiClient.requestBatchSegmentation(
+      [imageId],
+      model,
+      threshold,
+      detectHoles
+    );
 
     toast.success('Segmentation request submitted');
 

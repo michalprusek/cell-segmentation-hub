@@ -57,18 +57,19 @@ export default {
     signInToAccount: 'Connectez-vous à votre compte',
     sort: 'Trier',
     no_preview: 'Aucun aperçu',
-    // Navigation and UI
     openMenu: 'Ouvrir le menu',
     logOut: 'Se déconnecter',
-    // Error pages
     pageNotFound: 'Oups ! Page introuvable',
     returnToHome: "Retour à l'accueil",
-    // Navigation
     next: 'Suivant',
     copy: 'Copier',
     noImage: 'Aucune image',
     untitledImage: 'Image sans titre',
     rename: 'Renommer',
+    getStarted: 'Commencer',
+    learnMore: 'En savoir plus',
+    close: 'Fermer',
+    redirectingToDashboard: 'Redirection vers le tableau de bord...',
   },
   landing: {
     hero: {
@@ -120,7 +121,6 @@ export default {
     name: 'Nom',
     lastChange: 'Dernière modification',
     status: 'Statut',
-    // Stats overview
     stats: {
       totalProjects: 'Total des projets',
       totalProjectsDesc: 'Études actives de sphéroïdes',
@@ -168,12 +168,13 @@ export default {
     errorAddingToQueue: "Erreur lors de l'ajout à la file",
     imageAlreadyProcessing: "L'image est déjà en cours de traitement",
     processImageFailed: "Échec du traitement de l'image",
+    selected: '{{count}} sélectionnés',
+    deleteSelected: 'Supprimer la sélection',
     segmentationCompleted: "Segmentation terminée pour l'image",
     segmentationFailed: 'Échec de la segmentation',
     segmentationStarted: 'La segmentation a commencé',
     segmentationCompleteWithCount:
       'Segmentation terminée ! {{count}} objets trouvés',
-    // Project management errors and messages
     failedToLoadProjects: 'Échec du chargement des projets',
     projectNameRequired: 'Veuillez saisir un nom de projet',
     mustBeLoggedIn: 'Vous devez être connecté pour créer un projet',
@@ -228,37 +229,17 @@ export default {
       fieldRequired: 'Ce champ est requis',
     },
     operations: {
-      loadProject:
-        'Impossible de charger le projet. Vérifiez votre connexion et réessayez.',
-      saveProject:
-        'Impossible de sauvegarder les modifications du projet. Veuillez réessayer.',
       deleteProject:
         "Impossible de supprimer le projet. Assurez-vous d'avoir les permissions nécessaires.",
-      uploadImage:
-        "Impossible de télécharger l'image. Vérifiez le format et la taille du fichier.",
-      deleteImage:
-        "Impossible de supprimer l'image. Essayez de rafraîchir la page et de recommencer.",
-      processImage:
-        "Le traitement de l'image a échoué. Essayez avec une image différente ou contactez le support.",
-      segmentation:
-        "La segmentation a échoué. Essayez d'utiliser un modèle différent ou ajustez la configuration.",
-      export:
-        "L'exportation des données a échoué. Vérifiez que les données sont disponibles.",
-      login: 'Erreur de connexion. Vérifiez votre e-mail et mot de passe.',
-      logout: 'Erreur de déconnexion. Essayez de fermer votre navigateur.',
-      register:
-        "L'inscription a échoué. Cet e-mail est peut-être déjà utilisé.",
       updateProfile:
         'Impossible de mettre à jour le profil. Vérifiez les informations fournies.',
       changePassword:
         'Impossible de changer le mot de passe. Vérifiez votre mot de passe actuel.',
-      resetPassword:
-        "La réinitialisation du mot de passe a échoué. Vérifiez l'adresse e-mail fournie.",
-      deleteAccount:
-        "Impossible de supprimer le compte. Contactez le support pour obtenir de l'aide.",
       updateConsent:
         'Impossible de mettre à jour les préférences de consentement. Veuillez réessayer.',
+      unshareProject: 'Impossible de supprimer le projet des projets partagés',
     },
+    deleteImages: 'Erreur lors de la suppression des images sélectionnées',
     contexts: {
       dashboard: 'Erreur du tableau de bord',
       project: 'Erreur de projet',
@@ -362,6 +343,9 @@ export default {
     confidenceThreshold: 'Seuil de confiance',
     confidenceThresholdDescription:
       'Confiance minimale requise pour les prédictions de segmentation',
+    detectHoles: 'Détecter les Trous',
+    detectHolesDescription:
+      'Activer la détection des structures internes et des trous dans les cellules',
     currentThreshold: 'Seuil actuel',
     modelSelected: 'Modèle sélectionné avec succès',
     modelSettingsSaved: 'Paramètres du modèle enregistrés avec succès',
@@ -420,6 +404,10 @@ export default {
     light: 'Clair',
     dark: 'Sombre',
     system: 'Système',
+    pageTitle: 'Settings',
+    profile: 'Profile',
+    account: 'Account',
+    models: 'Models',
   },
   auth: {
     signIn: 'Se connecter',
@@ -445,7 +433,6 @@ export default {
     checkingAuthentication: "Vérification de l'authentification...",
     loadingAccount: 'Chargement de votre compte...',
     processingRequest: 'Traitement de votre demande...',
-    // SignIn page specific
     signInToAccount: 'Connectez-vous à votre compte',
     accessPlatform: 'Accédez à la plateforme de segmentation de sphéroïdes',
     emailAddress: 'Adresse e-mail',
@@ -455,7 +442,6 @@ export default {
     signingIn: 'Connexion en cours...',
     redirectingToDashboard: 'Redirection vers le tableau de bord...',
     fillAllFields: 'Veuillez remplir tous les champs',
-    // Toast messages
     signInSuccess: 'Connexion réussie',
     signInFailed: 'Échec de la connexion',
     registrationSuccess: 'Inscription réussie',
@@ -469,7 +455,6 @@ export default {
     termsOfService: 'Conditions de service',
     and: 'et',
     privacyPolicy: 'Politique de confidentialité',
-    // SignUp page specific
     createAccount: 'Créez votre compte',
     signUpPlatform:
       'Inscrivez-vous pour utiliser la plateforme de segmentation de sphéroïdes',
@@ -483,7 +468,6 @@ export default {
     alreadySignedUp: 'Vous êtes déjà inscrit et connecté.',
     goToDashboard: 'Aller au tableau de bord',
     signUpFailed: "Échec de l'inscription",
-    // Forgot Password specific
     enterEmailForReset: 'Entrez votre email pour réinitialiser le mot de passe',
     sending: 'Envoi...',
     sendNewPassword: 'Envoyer nouveau mot de passe',
@@ -496,6 +480,8 @@ export default {
     backToSignIn: 'Retour à la connexion',
     didntReceiveEmail: "Vous n'avez pas reçu l'email ?",
     rememberPassword: 'Vous vous souvenez de votre mot de passe ?',
+    redirectingToSignIn: 'Redirecting to sign-in...',
+    tryAgain: 'Réessayer',
   },
   profile: {
     title: 'Profil',
@@ -613,6 +599,8 @@ export default {
       noPolygons: 'Aucun polygone',
       startCreating: 'Commencez par créer un polygone',
       polygonList: 'Liste des Polygones',
+      external: 'External',
+      internal: 'Internal',
     },
     shortcuts: {
       buttonText: 'Raccourcis',
@@ -739,9 +727,7 @@ export default {
     ready: 'Prêt pour la segmentation',
     online: 'En ligne',
     offline: 'Hors ligne',
-    segmenting: "Segmentation de l'image...",
-    waitingInQueue: 'En attente dans la file',
-    reloadingSegmentation: 'Actualisation des données de segmentation...',
+    noPolygons: 'Aucun polygone',
   },
   queue: {
     title: 'File de Segmentation',
@@ -766,32 +752,26 @@ export default {
       '{{new}} nouvelles images seront segmentées, {{resegment}} images sélectionnées seront re-segmentées',
   },
   toast: {
-    // Generic messages
     error: "Une erreur s'est produite",
     success: 'Opération réussie',
     info: 'Information',
     warning: 'Avertissement',
     loading: 'Chargement...',
-    // Common errors
     failedToUpdate: 'Échec de la mise à jour des données. Veuillez réessayer.',
     fillAllFields: 'Veuillez remplir tous les champs',
     operationFailed: "L'opération a échoué. Veuillez réessayer.",
-    // Error boundary
     unexpectedError: 'Erreur Inattendue',
     somethingWentWrong:
       "Quelque chose s'est mal passé. Veuillez réessayer plus tard.",
     somethingWentWrongPage:
       "Quelque chose s'est mal passé lors du chargement de cette page.",
     returnToHome: "Retour à l'Accueil",
-    // Success messages
     operationCompleted: 'Opération terminée avec succès',
     dataSaved: 'Données sauvegardées avec succès',
     dataUpdated: 'Données mises à jour avec succès',
-    // Connection messages
     reconnecting: 'Reconnexion au serveur...',
     reconnected: 'Connexion au serveur rétablie',
     connectionFailed: 'Échec du rétablissement de la connexion au serveur',
-    // Segmentation messages
     segmentationRequested: 'Demande de segmentation soumise',
     segmentationCompleted: "Segmentation d'image terminée",
     segmentationFailed: 'La segmentation a échoué',
@@ -799,52 +779,60 @@ export default {
       "Échec de l'obtention du résultat de segmentation",
     segmentationStatusFailed:
       'Échec de la vérification du statut de segmentation',
-    // Export messages
     exportCompleted: 'Exportation terminée avec succès !',
     exportFailed: "L'exportation a échoué. Veuillez réessayer.",
-    // Project actions
     project: {
       created: 'Projet créé avec succès',
       createFailed: 'Échec de la création du projet',
       deleted: 'Projet supprimé avec succès',
       deleteFailed: 'Échec de la suppression du projet',
       urlCopied: 'URL du projet copiée dans le presse-papiers',
+      unshared: 'Projet retiré des partagés',
       notFound: 'Projet introuvable',
       invalidResponse: 'La réponse du serveur était invalide',
       readyForImages: 'est prêt pour les images',
+      selected: '{{count}} image sélectionnée',
+      selected_other: '{{count}} images sélectionnées',
+      deleteSelected: 'Supprimer la sélection',
     },
-    // Profile actions
     profile: {
       consentUpdated: 'Préférences de consentement mises à jour avec succès',
       loadFailed: 'Échec du chargement des données de profil',
     },
-    // Upload actions
     upload: {
       failed: "Échec de l'actualisation des images après téléchargement",
     },
-    // Segmentation actions
     segmentation: {
       saved: 'Segmentation sauvegardée avec succès',
-      failed: 'Échec de la sauvegarde de la segmentation',
+      failed: 'Échec de la segmentation',
       deleted: 'Polygone supprimé',
       cannotDeleteVertex:
-        'Impossible de supprimer le sommet - le polygone a besoin d\u2019au moins 3 points',
+        'Impossible de supprimer le sommet - le polygone a besoin d’au moins 3 points',
       vertexDeleted: 'Sommet supprimé avec succès',
+      started: 'La segmentation a commencé',
+      completed: 'Segmentation terminée avec succès',
+      completedWithCount: 'Segmentation terminée ! {{count}} objets trouvés',
+      noPolygons: 'Aucun polygone de segmentation détecté',
+      reloadFailed:
+        'Échec du chargement des résultats de segmentation. Veuillez actualiser la page.',
+      autosaveFailed:
+        'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
     },
     autosaveFailed:
       'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
   },
+  project: {
+    selected: '{{count}} image sélectionnée',
+    selected_other: '{{count}} images sélectionnées',
+    deleteSelected: 'Supprimer la sélection',
+  },
   export: {
     advancedExport: 'Export Avancé',
-    // Dialog headers
     advancedOptions: "Options d'Exportation Avancées",
     configureSettings:
       "Configurez vos paramètres d'exportation pour créer un package de données complet",
-    // Tabs
     general: 'Général',
     visualization: 'Visualisation',
-    formats: 'Formats',
-    // Content selection
     exportContents: "Contenu d'Exportation",
     selectContent:
       'Sélectionnez les types de contenu à inclure dans votre exportation',
@@ -852,7 +840,6 @@ export default {
     includeVisualizations:
       'Inclure les visualisations avec polygones numérotés',
     includeDocumentation: 'Inclure la documentation et les métadonnées',
-    // Image selection
     selectedImages: 'Images Sélectionnées',
     imagesSelected: '{{count}} sur {{total}} images sélectionnées',
     selectAll: 'Tout Sélectionner',
@@ -868,12 +855,10 @@ export default {
     },
     showingImages: 'Affichage {{start}}-{{end}} sur {{total}}',
     noImagesFound: 'Aucune image trouvée',
-    // Quality settings
     qualitySettings: 'Paramètres de Qualité',
     imageQuality: "Qualité d'Image",
     compressionLevel: 'Niveau de Compression',
     outputResolution: 'Résolution de Sortie',
-    // Visualization settings
     colorSettings: 'Paramètres de Couleur',
     backgroundColor: "Couleur d'Arrière-plan",
     strokeColor: 'Couleur de Trait',
@@ -881,7 +866,6 @@ export default {
     fontSize: 'Taille de Police',
     showNumbers: 'Afficher les numéros de polygones',
     showLabels: 'Afficher les étiquettes',
-    // Scale conversion
     scaleConversion: "Conversion d'Échelle",
     pixelToMicrometerScale: 'Échelle Pixel vers Micromètre',
     scaleDescription:
@@ -890,31 +874,30 @@ export default {
     scaleUnit: 'µm/pixel',
     scaleWarning:
       "Remarque: La valeur d'échelle semble inhabituellement élevée. Veuillez vérifier.",
-    // Format options
     outputSettings: 'Paramètres de Sortie',
-    exportFormats: "Formats d'Exportation",
+    exportFormats: {
+      yolo: 'Format YOLO',
+      excel: 'Format Excel',
+      json: 'Format JSON',
+    },
     exportToZip: 'Exporter vers archive ZIP',
     generateExcel: 'Générer les métriques Excel',
     includeCocoFormat: 'Inclure les annotations au format COCO',
     includeJsonMetadata: 'Inclure les métadonnées JSON',
-    // Progress and status
     preparing: "Préparation de l'exportation...",
     processing: 'Traitement {{current}} sur {{total}}',
     packaging: 'Création du package...',
     completed: 'Exportation terminée',
     downloading: 'Téléchargement...',
     cancelled: 'Exportation annulée',
-    // Connection status
     connected: 'Connecté',
     disconnected: 'Déconnecté',
     reconnecting: 'Reconnexion...',
-    // Buttons
     startExport: "Démarrer l'Exportation",
     cancel: 'Annuler',
     download: 'Télécharger',
     retry: 'Réessayer',
     close: 'Fermer',
-    // Error messages
     exportError: "L'exportation a échoué",
     exportFailed: 'Exportation échouée',
     exportComplete: 'Exportation terminée',
@@ -923,14 +906,18 @@ export default {
     serverError: 'Erreur serveur survenue',
     invalidSelection: 'Veuillez sélectionner au moins une image',
     noData: "Aucune donnée disponible pour l'exportation",
+    segmentationData: 'Données de segmentation',
+    spheroidMetrics: 'Métriques des sphéroïdes',
+    cocoFormat: 'Format COCO',
+    cocoFormatTitle: 'Export format COCO',
+    downloadJson: 'Télécharger JSON',
+    formatsTab: 'Formats',
   },
-  // Standalone image action messages (used without prefix)
   imageDeleted: 'Image supprimée avec succès',
   deleteImageFailed: "Échec de la suppression de l'image",
   deleteImageError: "Erreur lors de la suppression de l'image",
   imageAlreadyProcessing: "L'image est déjà en cours de traitement",
   processImageFailed: "Échec du traitement de l'image",
-
   exportDialog: {
     title: "Options d'Exportation",
     includeMetadata: 'Inclure les métadonnées',
@@ -1126,6 +1113,9 @@ export default {
         step4: 'Utilisez le panneau de droite',
         step5: 'Sauvegardez périodiquement',
       },
+      segmenting: "Segmentation de l'image...",
+      waitingInQueue: 'En attente dans la file',
+      reloadingSegmentation: 'Actualisation des données de segmentation...',
     },
     exportFeatures: {
       title: "Fonctions d'Export",
@@ -1467,8 +1457,6 @@ export default {
       },
     },
   },
-
-  // Menu contextuel
   contextMenu: {
     editPolygon: 'Modifier le polygone',
     splitPolygon: 'Diviser le polygone',
@@ -1479,8 +1467,6 @@ export default {
     duplicateVertex: 'Dupliquer le sommet',
     deleteVertex: 'Supprimer le sommet',
   },
-
-  // WebSocket messages
   websocket: {
     reconnecting: 'Reconnexion au serveur...',
     reconnected: 'Connexion au serveur rétablie',
@@ -1489,8 +1475,6 @@ export default {
     connected: 'Connecté aux mises à jour en temps réel',
     disconnected: 'Déconnecté des mises à jour en temps réel',
   },
-
-  // Affichage des métriques
   metrics: {
     info: 'Les métriques sont évaluées uniquement pour les polygones externes. Les surfaces des polygones internes (trous) sont automatiquement soustraites des polygones externes correspondants.',
     spheroid: 'Sphéroïde',
@@ -1507,8 +1491,6 @@ export default {
     feretAspectRatio: "Rapport d'Aspect de Feret",
     noPolygonsFound: "Aucun polygone trouvé pour l'analyse",
   },
-
-  // Raccourcis clavier
   keyboardShortcuts: {
     title: 'Raccourcis Clavier',
     buttonLabel: 'Raccourcis',
@@ -1529,34 +1511,126 @@ export default {
     helperText:
       "Ces raccourcis fonctionnent dans l'éditeur de segmentation pour un travail plus rapide et plus pratique.",
   },
-
-  // Accessibilité et étiquettes pour lecteurs d'écran
   accessibility: {
-    // Navigation
     toggleSidebar: 'Basculer la barre latérale',
     toggleMenu: 'Basculer le menu',
     selectLanguage: 'Sélectionner la langue',
     selectTheme: 'Sélectionner le thème',
     breadcrumb: "fil d'Ariane",
     pagination: 'pagination',
-
-    // Actions
     close: 'Fermer',
     more: 'Plus',
-
-    // Pagination
     goToPreviousPage: 'Aller à la page précédente',
     goToNextPage: 'Aller à la page suivante',
     previousPage: 'Précédent',
     nextPage: 'Suivant',
     morePages: 'Plus de pages',
-
-    // Carrousel
     previousSlide: 'Diapositive précédente',
     nextSlide: 'Diapositive suivante',
-
-    // Options de vue
     gridView: 'Vue en grille',
     listView: 'Vue en liste',
+  },
+  sharing: {
+    share: 'Partager',
+    shared: 'Partagé',
+    shareProject: 'Partager le projet',
+    shareDescription:
+      'Partager le projet "{{title}}" avec des collègues et collaborateurs',
+    shareByEmail: 'Partager par e-mail',
+    shareByLink: 'Partager par lien',
+    emailAddress: 'Adresse e-mail',
+    enterEmailPlaceholder: "Entrer l'adresse e-mail",
+    optionalMessage: 'Message optionnel',
+    messagePlaceholder: "Ajouter un message personnel à l'invitation...",
+    sendInvitation: "Envoyer l'invitation",
+    sending: 'Envoi en cours...',
+    emailSent: 'Invitation par e-mail envoyée !',
+    emailRequired: "L'adresse e-mail est requise",
+    emailShareFailed: "Échec de l'envoi de l'invitation par e-mail",
+    linkExpiry: 'Expiration du lien',
+    neverExpires: "N'expire jamais",
+    hours: 'heures',
+    days: 'jours',
+    generateLink: 'Générer le lien',
+    linkCopied: 'Lien copié dans le presse-papiers !',
+    sharedWithYou: 'Partagé avec vous',
+    sharedBy: 'Partagé par : {{email}}',
+    sharedProjects: 'Projets partagés',
+    noSharedProjects: "Aucun projet n'a été partagé avec vous",
+    removeFromShared: 'Retirer des partagés',
+    acceptInvitation: "Accepter l'invitation",
+    invitationAccepted:
+      'Invitation acceptée ! Le projet a été ajouté à votre tableau de bord.',
+    generating: 'Generating...',
+    linkGenerated: 'Share link created!',
+    linkCopyFailed: 'Failed to copy link',
+    linkShareFailed: 'Failed to generate share link',
+    emailInvitations: 'Email invitations',
+    shareLinks: 'Share links',
+    shareRevoked: 'Share has been revoked',
+    acceptedUsers: 'Accepted users',
+    pendingInvitations: 'Pending invitations',
+    joinedViaLink: 'Joined via link',
+    activeShareLinks: 'Active share links',
+    joinedOn: 'Joined',
+    sentOn: 'Sent on',
+    joinedViaLinkOn: 'Joined',
+    resendInvitation: 'Resend invitation',
+    invitationResent: 'Invitation resent successfully',
+    resendFailed: 'Failed to resend invitation',
+    revokeAccess: 'Revoke access',
+    cancelInvitation: 'Cancel invitation',
+    reminderMessage:
+      'This is a reminder that you have been invited to collaborate on a project',
+    revokeShareFailed: 'Failed to revoke share',
+    failedToLoadShares: 'Failed to load shares',
+    status: {
+      pending: 'Pending',
+      accepted: 'Accepted',
+      revoked: 'Revoked',
+    },
+    invitationExpired: 'This invitation has expired',
+    invitationInvalid: 'Invalid invitation',
+    loginToAccept: 'Please log in to accept this invitation',
+    accepting: 'Accepting',
+    redirectingToProject: 'Redirecting to project',
+    redirectingToDashboard: 'Redirecting to dashboard',
+    invitedEmail: 'Invited email',
+    loadingShare: 'Loading share information...',
+    projectSharedBy: 'Project shared by',
+    signInRequired: 'Sign in required',
+    signInToAccept: 'Please sign in to accept this invitation',
+    signInButton: 'Sign in',
+    goToProject: 'Go to Project',
+    backToHome: 'Back to Home',
+    acceptFailed: 'Failed to accept invitation',
+    differentEmail: 'This invitation is for a different email address',
+  },
+  error: 'Erreur',
+  segmentationEditor: {
+    reloadingSegmentation: 'Rechargement de la segmentation...',
+    segmenting: 'Segmentation en cours...',
+    waitingInQueue: 'En attente dans la file...',
+  },
+  footer: {
+    appName: 'SpheroSeg',
+    description:
+      'Advanced spheroid segmentation and analysis platform for biomedical researchers, providing AI-powered tools for microscopic cell image analysis.',
+    contact: 'Contact',
+    institution: 'Institution',
+    institutionName: 'ÚTIA AV ČR',
+    address: 'Address',
+    addressText: 'Pod Vodárenskou věží 4, 182 08 Prague 8',
+    resources: 'Resources',
+    documentation: 'Documentation',
+    features: 'Features',
+    tutorials: 'Tutorials',
+    research: 'Research',
+    legal: 'Legal',
+    termsOfService: 'Terms of Service',
+    privacyPolicy: 'Privacy Policy',
+    contactUs: 'Contact Us',
+    copyright:
+      '© {{year}} SpheroSeg. Developed at ÚTIA AV ČR (Institute of Information Theory and Automation, Czech Academy of Sciences).',
   },
 };

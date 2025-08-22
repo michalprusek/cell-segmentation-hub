@@ -185,16 +185,23 @@ export const useStatusReconciliation = ({
     };
   }, [projectId, isConnected, images, queueStats, reconcileImageStatuses]);
 
+  // Track previous queue state to detect transitions
+  const prevQueueStatsRef = useRef<{ processing: number; queued: number }>();
+
   // Trigger reconciliation when queue becomes empty (but with longer delay)
   useEffect(() => {
     if (!queueStats) return;
 
     const isNowEmpty = queueStats.processing === 0 && queueStats.queued === 0;
+    const wasNotEmpty =
+      prevQueueStatsRef.current &&
+      (prevQueueStatsRef.current.processing > 0 ||
+        prevQueueStatsRef.current.queued > 0);
 
-    // If queue just became empty, do reconciliation with longer delay
-    if (isNowEmpty) {
+    // Only schedule reconciliation when transitioning from non-empty to empty
+    if (isNowEmpty && wasNotEmpty) {
       logger.debug(
-        '🎯 Queue became empty, scheduling delayed status reconciliation'
+        '🎯 Queue just became empty, scheduling delayed status reconciliation'
       );
 
       // Clear any existing timeout before setting a new one
@@ -206,6 +213,12 @@ export const useStatusReconciliation = ({
         reconcileImageStatuses();
       }, 5000); // Longer delay to let all WebSocket updates arrive and settle
     }
+
+    // Update previous queue state
+    prevQueueStatsRef.current = {
+      processing: queueStats.processing,
+      queued: queueStats.queued,
+    };
   }, [queueStats, reconcileImageStatuses]);
 
   // Cleanup on unmount

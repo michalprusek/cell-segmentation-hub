@@ -492,3 +492,64 @@ sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/green/
 - `/images`
 - `/thumbnails`
 - `/temp`
+
+## Email Service Configuration
+
+### Local Development - MailHog
+
+The project includes MailHog for local email testing. All emails are captured locally and viewable through web UI.
+
+**Configuration (automatic with `make up`):**
+
+- SMTP Server: mailhog:1025
+- Web UI: http://localhost:8025
+- Sender: spheroseg@utia.cas.cz
+- All emails are captured locally, not sent externally
+
+**View sent emails:**
+
+```bash
+open http://localhost:8025
+```
+
+### Production - UTIA SMTP Server
+
+For production or real email testing, use UTIA SMTP configuration:
+
+**Configuration file:** `.env.utia`
+
+- Host: mail.utia.cas.cz
+- Port: 465 (SSL/TLS)
+- Sender: spheroseg@utia.cas.cz
+- Authentication: Required (add password to SMTP_PASS)
+
+**Activate UTIA config:**
+
+```bash
+# 1. Add password to .env.utia
+# 2. Restart backend with UTIA config
+make restart-backend-utia
+```
+
+### Testing Email Service
+
+**Test endpoints (development only):**
+
+- `GET /api/test-email/test-connection` - Test SMTP connection
+- `POST /api/test-email/send-test` - Send test email
+
+**Features using email service:**
+
+- Password reset - sends reset link via email
+- Project sharing - sends invitation emails
+- Both properly configured and tested ✅
+
+### Makefile Commands
+
+```bash
+make test-email-mailhog    # Info about MailHog testing
+make test-email-utia       # Info about UTIA SMTP testing
+make restart-backend-utia  # Restart backend with UTIA config
+```
+
+- vždy používej desktop commander k získání logs!

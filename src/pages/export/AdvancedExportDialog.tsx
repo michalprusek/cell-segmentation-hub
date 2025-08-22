@@ -480,11 +480,9 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <FileJson className="h-4 w-4" />
-                      {t('export.exportFormats')}
+                      {t('export.formatsTab')}
                     </CardTitle>
-                    <CardDescription>
-                      {t('export.exportFormats')}
-                    </CardDescription>
+                    <CardDescription>{t('export.formatsTab')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-center space-x-2">
@@ -523,7 +521,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                         }}
                       />
                       <Label htmlFor="yolo-format">
-                        {t('export.formats.yolo')}
+                        {t('export.exportFormats.yolo')}
                       </Label>
                     </div>
 
@@ -576,7 +574,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                         }}
                       />
                       <Label htmlFor="excel-metrics">
-                        {t('export.formats.excel')}
+                        {t('export.exportFormats.excel')}
                       </Label>
                     </div>
 
@@ -612,7 +610,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                         }}
                       />
                       <Label htmlFor="json-metrics">
-                        {t('export.formats.json')}
+                        {t('export.exportFormats.json')}
                       </Label>
                     </div>
                   </CardContent>

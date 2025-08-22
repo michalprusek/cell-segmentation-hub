@@ -59,20 +59,18 @@ export default {
     signInToAccount: 'Přihlásit se k účtu',
     sort: 'Řadit',
     no_preview: 'Žádný náhled',
-    // Navigation and UI
     openMenu: 'Otevřít menu',
     logOut: 'Odhlásit se',
-    // Error pages
     pageNotFound: 'Ojoj! Stránka nebyla nalezena',
     returnToHome: 'Návrat domů',
-    // Navigation
     next: 'Další',
     copy: 'Kopírovat',
+    close: 'Zavřít',
     noImage: 'Žádný obrázek',
     untitledImage: 'Nepojmenovaný obrázek',
     rename: 'Přejmenovat',
+    redirectingToDashboard: 'Přesměrování na přehled...',
   },
-
   landing: {
     hero: {
       badge: 'Pokročilá platforma pro segmentaci sféroidů',
@@ -104,7 +102,6 @@ export default {
       createAccount: 'Vytvořit účet',
     },
   },
-
   dashboard: {
     manageProjects: 'Spravujte své výzkumné projekty a analýzy',
     projectGallery: 'Galerie Projektů',
@@ -125,7 +122,6 @@ export default {
     name: 'Název',
     lastChange: 'Poslední změna',
     status: 'Stav',
-    // Stats overview
     stats: {
       totalProjects: 'Celkem projektů',
       totalProjectsDesc: 'Aktivní studie sféroidů',
@@ -171,12 +167,13 @@ export default {
     errorAddingToQueue: 'Chyba při přidávání obrázků do fronty',
     imageAlreadyProcessing: 'Obrázek je již zpracováván',
     processImageFailed: 'Nepodařilo se zpracovat obrázek',
+    selected: '{{count}} obrázek vybrán',
+    deleteSelected: 'Smazat vybrané',
     segmentationCompleted: 'Segmentace dokončena pro obrázek',
     segmentationFailed: 'Segmentace selhala',
     segmentationStarted: 'Segmentace byla zahájena',
     segmentationCompleteWithCount:
       'Segmentace dokončena! Nalezeno {{count}} objektů',
-    // Project management errors and messages
     failedToLoadProjects: 'Nepodařilo se načíst projekty',
     projectNameRequired: 'Zadejte prosím název projektu',
     mustBeLoggedIn: 'Pro vytvoření projektu se musíte přihlásit',
@@ -236,34 +233,13 @@ export default {
       fieldRequired: 'Toto pole je povinné',
     },
     operations: {
-      loadProject:
-        'Projekt se nepodařilo načíst. Zkontrolujte připojení a zkuste to znovu.',
-      saveProject:
-        'Změny projektu se nepodařilo uložit. Zkuste to prosím znovu.',
-      deleteProject:
-        'Projekt nelze smazat. Ujistěte se, že máte potřebná oprávnění.',
-      uploadImage:
-        'Obrázek se nepodařilo nahrát. Zkontrolujte formát a velikost souboru.',
-      deleteImage:
-        'Obrázek nelze smazat. Zkuste obnovit stránku a opakovat akci.',
-      processImage:
-        'Zpracování obrázku selhalo. Zkuste jiný obrázek nebo kontaktujte podporu.',
-      segmentation:
-        'Segmentace se nezdařila. Zkuste použít jiný model nebo upravit nastavení.',
-      export: 'Export dat selhal. Zkontrolujte, zda jsou data k dispozici.',
-      login: 'Přihlášení se nezdařilo. Zkontrolujte e-mail a heslo.',
-      logout: 'Odhlášení se nezdařilo. Zkuste zavřít prohlížeč.',
-      register: 'Registrace se nezdařila. Tento e-mail může být již použit.',
-      updateProfile:
-        'Profil se nepodařilo aktualizovat. Zkontrolujte zadané údaje.',
-      changePassword:
-        'Heslo se nepodařilo změnit. Zkontrolujte současné heslo.',
-      deleteAccount:
-        'Účet se nepodařilo smazat. Kontaktujte podporu pro pomoc.',
-      resetPassword: 'Obnovení hesla selhalo. Zkontrolujte zadaný e-mail.',
-      updateConsent:
-        'Nastavení souhlasu se nepodařilo aktualizovat. Zkuste to prosím znovu.',
+      unshareProject: 'Nepodařilo se odebrat projekt ze sdílených projektů',
+      deleteProject: 'Nepodařilo se smazat projekt',
+      changePassword: 'Nepodařilo se změnit heslo',
+      updateConsent: 'Nepodařilo se aktualizovat nastavení souhlasu',
+      updateProfile: 'Nepodařilo se aktualizovat profil',
     },
+    deleteImages: 'Nepodařilo se smazat vybrané obrázky',
     contexts: {
       dashboard: 'Chyba dashboardu',
       project: 'Chyba projektu',
@@ -355,6 +331,9 @@ export default {
     confidenceThreshold: 'Práh Spolehlivosti',
     confidenceThresholdDescription:
       'Minimální spolehlivost požadovaná pro predikce segmentace',
+    detectHoles: 'Detekce Děr',
+    detectHolesDescription:
+      'Povolit detekci vnitřních struktur a děr uvnitř buněk',
     currentThreshold: 'Současný práh',
     modelSelected: 'Model úspěšně vybrán',
     modelSettingsSaved: 'Nastavení modelu úspěšně uloženo',
@@ -617,7 +596,6 @@ export default {
     checkingAuthentication: 'Kontrola ověření...',
     loadingAccount: 'Načítání vašeho účtu...',
     processingRequest: 'Zpracování vašeho požadavku...',
-    // SignIn page specific
     signInToAccount: 'Přihlaste se ke svému účtu',
     accessPlatform: 'Přístup k platformě pro segmentaci sféroidů',
     emailAddress: 'E-mailová adresa',
@@ -628,7 +606,6 @@ export default {
     redirectingToDashboard: 'Přesměrování na dashboard...',
     redirectingToSignIn: 'Přesměrování k přihlášení...',
     fillAllFields: 'Vyplňte prosím všechna pole',
-    // Toast messages
     signInSuccess: 'Úspěšně přihlášen',
     signInFailed: 'Přihlášení selhalo',
     registrationSuccess: 'Registrace úspěšná',
@@ -642,7 +619,6 @@ export default {
     termsOfService: 'Podmínkami služby',
     and: 'a',
     privacyPolicy: 'Zásadami ochrany osobních údajů',
-    // SignUp page specific
     createAccount: 'Vytvořte svůj účet',
     signUpPlatform:
       'Zaregistrujte se pro použití platformy pro segmentaci sféroidů',
@@ -656,7 +632,6 @@ export default {
     alreadySignedUp: 'Již jste zaregistrováni a přihlášeni.',
     goToDashboard: 'Přejít na Dashboard',
     signUpFailed: 'Registrace selhala',
-    // Forgot Password specific
     enterEmailForReset: 'Zadejte svou e-mailovou adresu pro reset hesla',
     sending: 'Odesílání...',
     sendNewPassword: 'Odeslat nové heslo',
@@ -669,6 +644,7 @@ export default {
     backToSignIn: 'Zpět na přihlášení',
     didntReceiveEmail: 'Nedostali jste email?',
     rememberPassword: 'Vzpomněli jste si na heslo?',
+    tryAgain: 'Zkusit znovu',
   },
   profile: {
     title: 'Profil',
@@ -741,6 +717,7 @@ export default {
     ready: 'Připraven k segmentaci',
     online: 'Online',
     offline: 'Offline',
+    noPolygons: 'Žádné polygony',
   },
   queue: {
     title: 'Segmentační fronta',
@@ -765,39 +742,31 @@ export default {
     addingToQueue: 'Přidáváno do fronty...',
   },
   toast: {
-    // Generic messages
     error: 'Došlo k chybě',
     success: 'Operace úspěšná',
     info: 'Informace',
     warning: 'Varování',
     loading: 'Načítání...',
-    // Common errors
     failedToUpdate: 'Nepodařilo se aktualizovat data. Zkuste to prosím znovu.',
     fillAllFields: 'Vyplňte prosím všechna pole',
     operationFailed: 'Operace selhala. Zkuste to prosím znovu.',
-    // Error boundary
     unexpectedError: 'Neočekávaná chyba',
     somethingWentWrong: 'Něco se pokazilo. Zkuste to prosím později.',
     somethingWentWrongPage: 'Něco se pokazilo při načítání této stránky.',
     returnToHome: 'Návrat domů',
-    // Success messages
     operationCompleted: 'Operace byla úspěšně dokončena',
     dataSaved: 'Data byla úspěšně uložena',
     dataUpdated: 'Data byla úspěšně aktualizována',
-    // Connection messages
     reconnecting: 'Znovu se připojuji k serveru...',
     reconnected: 'Připojení k serveru obnoveno',
     connectionFailed: 'Nepodařilo se obnovit připojení k serveru',
-    // Segmentation messages
     segmentationRequested: 'Požadavek na segmentaci odeslán',
     segmentationCompleted: 'Segmentace obrázku dokončena',
     segmentationFailed: 'Segmentace selhala',
     segmentationResultFailed: 'Nepodařilo se získat výsledek segmentace',
     segmentationStatusFailed: 'Nepodařilo se zkontrolovat stav segmentace',
-    // Export messages
     exportCompleted: 'Export byl úspěšně dokončen!',
     exportFailed: 'Export selhal. Zkuste to prosím znovu.',
-    // Project messages
     project: {
       created: 'Projekt byl úspěšně vytvořen',
       createFailed: 'Nepodařilo se vytvořit projekt',
@@ -805,36 +774,42 @@ export default {
       deleteFailed: 'Nepodařilo se smazat projekt',
       notFound: 'Projekt nebyl nalezen',
       urlCopied: 'URL projektu bylo zkopírováno do schránky',
+      unshared: 'Projekt byl odebrán ze sdílených',
       invalidResponse: 'Odpověď serveru byla neplatná',
       readyForImages: 'je připraven pro obrázky',
+      selected: '{{count}} obrázek vybrán',
+      selected_other: '{{count}} obrázky vybrány',
+      deleteSelected: 'Smazat vybrané',
     },
-    // Profile messages
     profile: {
       loadFailed: 'Nepodařilo se načíst data profilu',
       consentUpdated: 'Předvolby souhlasu byly úspěšně aktualizovány',
     },
-    // Segmentation messages
     segmentation: {
       deleted: 'Polygon byl smazán',
       cannotDeleteVertex:
         'Nelze smazat vrchol - polygon potřebuje alespoň 3 body',
       vertexDeleted: 'Vrchol byl úspěšně smazán',
-      failed: 'Nepodařilo se uložit segmentaci',
+      failed: 'Segmentace selhala',
       saved: 'Segmentace byla úspěšně uložena',
+      started: 'Segmentace byla zahájena',
+      completed: 'Segmentace byla úspěšně dokončena',
+      completedWithCount: 'Segmentace dokončena! Nalezeno {{count}} objektů',
+      noPolygons: 'Nebyly nalezeny žádné polygony segmentace',
+      reloadFailed:
+        'Nepodařilo se načíst výsledky segmentace. Obnovte prosím stránku.',
+      autosaveFailed: 'Automatické ukládání selhalo - změny mohou být ztraceny',
     },
-    autosaveFailed: 'Automatické ukládání selhalo - změny mohou být ztraceny',
-    // Upload messages
     upload: {
       failed: 'Nepodařilo se obnovit obrázky po nahrání',
     },
+    autosaveFailed: 'Automatické ukládání selhalo - změny mohou být ztraceny',
   },
-  // Standalone image action messages (used without prefix)
   imageDeleted: 'Obrázek byl úspěšně smazán',
   deleteImageFailed: 'Smazání obrázku selhalo',
   deleteImageError: 'Chyba při mazání obrázku',
   imageAlreadyProcessing: 'Obrázek se již zpracovává',
   processImageFailed: 'Zpracování obrázku selhalo',
-
   exportDialog: {
     title: 'Možnosti exportu',
     includeMetadata: 'Zahrnout metadata',
@@ -846,23 +821,24 @@ export default {
     selectNone: 'Odznačit vše',
     noImagesAvailable: 'Žádné obrázky nejsou k dispozici',
   },
+  project: {
+    selected: '{{count}} obrázek vybrán',
+    selected_other: '{{count}} obrázky vybrány',
+    deleteSelected: 'Smazat vybrané',
+  },
   export: {
-    // Dialog headers
     advancedExport: 'Pokročilý export',
     advancedOptions: 'Pokročilé možnosti exportu',
     configureSettings:
       'Nakonfigurujte nastavení exportu pro vytvoření komplexního balíčku dat',
-    // Tabs
     general: 'Obecné',
     visualization: 'Vizualizace',
-    formats: 'Formáty',
-    // Content selection
+    formatsTab: 'Formáty',
     exportContents: 'Obsah exportu',
     selectContent: 'Vyberte typy obsahu k zahrnutí do exportu',
     includeOriginal: 'Zahrnout původní obrázky',
     includeVisualizations: 'Zahrnout vizualizace s očíslovanými polygony',
     includeDocumentation: 'Zahrnout dokumentaci a metadata',
-    // Image selection
     selectedImages: 'Vybrané obrázky',
     imagesSelected: '{{count}} z {{total}} obrázků vybráno',
     selectAll: 'Vybrat vše',
@@ -878,12 +854,10 @@ export default {
     },
     showingImages: 'Zobrazeno {{start}}-{{end}} z {{total}}',
     noImagesFound: 'Žádné obrázky nenalezeny',
-    // Quality settings
     qualitySettings: 'Nastavení kvality',
     imageQuality: 'Kvalita obrázku',
     compressionLevel: 'Úroveň komprese',
     outputResolution: 'Výstupní rozlišení',
-    // Visualization settings
     colorSettings: 'Nastavení barev',
     backgroundColor: 'Barva pozadí',
     strokeColor: 'Barva obrysu',
@@ -891,7 +865,6 @@ export default {
     fontSize: 'Velikost písma',
     showNumbers: 'Zobrazit čísla polygonů',
     showLabels: 'Zobrazit popisky',
-    // Scale conversion
     scaleConversion: 'Převod měřítka',
     pixelToMicrometerScale: 'Měřítko pixel na mikrometr',
     scaleDescription:
@@ -900,31 +873,30 @@ export default {
     scaleUnit: 'µm/pixel',
     scaleWarning:
       'Poznámka: Hodnota měřítka se zdá být neobvykle vysoká. Prosím ověřte.',
-    // Format options
     outputSettings: 'Nastavení výstupu',
-    exportFormats: 'Formáty exportu',
+    exportFormats: {
+      yolo: 'YOLO Formát',
+      excel: 'Excel Formát',
+      json: 'JSON Formát',
+    },
     exportToZip: 'Exportovat do ZIP archívu',
     generateExcel: 'Generovat Excel metriky',
     includeCocoFormat: 'Zahrnout anotace ve formátu COCO',
     includeJsonMetadata: 'Zahrnout JSON metadata',
-    // Progress and status
     preparing: 'Příprava exportu...',
     processing: 'Zpracování {{current}} z {{total}}',
     packaging: 'Vytváření balíčku...',
     completed: 'Export dokončen',
     downloading: 'Stahování...',
     cancelled: 'Export zrušen',
-    // Connection status
     connected: 'Připojeno',
     disconnected: 'Odpojeno',
     reconnecting: 'Připojování...',
-    // Buttons
     startExport: 'Spustit export',
     cancel: 'Zrušit',
     download: 'Stáhnout',
     retry: 'Opakovat',
     close: 'Zavřít',
-    // Error messages
     exportError: 'Export selhal',
     exportFailed: 'Export selhal',
     exportComplete: 'Export dokončen',
@@ -933,19 +905,19 @@ export default {
     serverError: 'Nastala chyba serveru',
     invalidSelection: 'Vyberte prosím alespoň jeden obrázek',
     noData: 'Žádná data k exportu nejsou k dispozici',
+    segmentationData: 'Data segmentace',
+    spheroidMetrics: 'Metriky sféroidů',
+    cocoFormat: 'Formát COCO',
+    cocoFormatTitle: 'Export formátu COCO',
+    downloadJson: 'Stáhnout JSON',
   },
   docs: {
-    // Header section
     badge: 'Dokumentace',
     title: 'Dokumentace SpheroSeg',
     subtitle:
       'Komplexní průvodce používáním naší platformy pro segmentaci sféroidů',
     backTo: 'Zpět na {{page}}',
-
-    // Navigation
     navigation: 'Navigace',
-
-    // Navigation items
     nav: {
       introduction: 'Úvod',
       gettingStarted: 'Začínáme',
@@ -955,8 +927,6 @@ export default {
       segmentationEditor: 'Editor segmentace',
       exportFeatures: 'Funkce exportu',
     },
-
-    // Introduction section
     introduction: {
       title: 'Úvod',
       whatIs: 'Co je SpheroSeg?',
@@ -967,8 +937,6 @@ export default {
       addresses:
         'SpheroSeg řeší náročný úkol přesné identifikace a segmentace hranic sféroidů v mikroskopických snímcích, což je kritický krok v mnoha biomedicínských výzkumných pracovních postupech zahrnujících 3D kultury buněk.',
     },
-
-    // Getting Started section
     gettingStarted: {
       title: 'Začínáme',
       accountCreation: 'Vytvoření účtu',
@@ -992,8 +960,6 @@ export default {
         step4: 'Klikněte na "Vytvořit projekt" pro pokračování',
       },
     },
-
-    // Upload Images section
     uploadImages: {
       title: 'Nahrávání obrázků',
       description:
@@ -1010,8 +976,6 @@ export default {
       noteText:
         'Pro optimální výsledky zajistěte, aby vaše mikroskopické snímky měly dobrý kontrast mezi sféroidem a pozadím.',
     },
-
-    // Model Selection section
     modelSelection: {
       title: 'Výběr modelu',
       description:
@@ -1053,8 +1017,6 @@ export default {
       tipText:
         'Začněte s CBAM-ResUNet pro většinu případů. Použijte HRNet pro rychlé prototypování a MA-ResUNet, když potřebujete nejvyšší možnou přesnost pro výzkum nebo publikaci.',
     },
-
-    // Segmentation Process section
     segmentationProcess: {
       title: 'Proces segmentace',
       description:
@@ -1096,8 +1058,6 @@ export default {
       processingTimes:
         'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Vyberte podle vašich požadavků na přesnost a časová omezení.',
     },
-
-    // Segmentation Editor section
     segmentationEditor: {
       title: 'Editor segmentace',
       description:
@@ -1178,8 +1138,6 @@ export default {
       waitingInQueue: 'Čekání ve frontě',
       reloadingSegmentation: 'Obnovování dat segmentace...',
     },
-
-    // Export Features section
     exportFeatures: {
       title: 'Funkce exportu',
       description:
@@ -1260,8 +1218,6 @@ export default {
       exportNoteText:
         'Každý export obsahuje dokumentaci, metadata a všechny vybrané typy obsahu organizované v přehledné struktuře složek pro snadné použití.',
     },
-
-    // Footer navigation
     footer: {
       backToHome: 'Zpět domů',
       backToTop: 'Zpět nahoru',
@@ -1531,8 +1487,6 @@ export default {
       },
     },
   },
-
-  // WebSocket messages
   websocket: {
     reconnecting: 'Znovu se připojuji k serveru...',
     reconnected: 'Připojení k serveru obnoveno',
@@ -1541,8 +1495,6 @@ export default {
     connected: 'Připojeno k aktualizacím v reálném čase',
     disconnected: 'Odpojeno od aktualizací v reálném čase',
   },
-
-  // Context menu
   contextMenu: {
     editPolygon: 'Upravit polygon',
     splitPolygon: 'Rozdělit polygon',
@@ -1553,8 +1505,6 @@ export default {
     duplicateVertex: 'Duplikovat bod',
     deleteVertex: 'Smazat bod',
   },
-
-  // Zobrazení metrik
   metrics: {
     info: 'Metriky jsou vyhodnocovány pouze pro externí polygony. Plochy interních polygonů (děr) jsou automaticky odečteny od příslušných externích polygonů.',
     spheroid: 'Sféroid',
@@ -1571,8 +1521,6 @@ export default {
     feretAspectRatio: 'Feretův poměr stran',
     noPolygonsFound: 'Nebyly nalezeny žádné polygony pro analýzu',
   },
-
-  // Klávesové zkratky
   keyboardShortcuts: {
     title: 'Klávesové zkratky',
     buttonLabel: 'Zkratky',
@@ -1593,38 +1541,25 @@ export default {
     helperText:
       'Tyto zkratky fungují v editoru segmentace pro rychlejší a pohodlnější práci.',
   },
-
-  // Přístupnost a popisky pro čtečky obrazovky
   accessibility: {
-    // Navigace
     toggleSidebar: 'Přepnout boční panel',
     toggleMenu: 'Přepnout menu',
     selectLanguage: 'Vybrat jazyk',
     selectTheme: 'Vybrat téma',
     breadcrumb: 'drobečková navigace',
     pagination: 'stránkování',
-
-    // Akce
     close: 'Zavřít',
     more: 'Více',
-
-    // Stránkování
     goToPreviousPage: 'Jít na předchozí stránku',
     goToNextPage: 'Jít na další stránku',
     previousPage: 'Předchozí',
     nextPage: 'Další',
     morePages: 'Více stránek',
-
-    // Karusel
     previousSlide: 'Předchozí snímek',
     nextSlide: 'Další snímek',
-
-    // Možnosti zobrazení
     gridView: 'Mřížkové zobrazení',
     listView: 'Seznamové zobrazení',
   },
-
-  // Zápatí
   footer: {
     appName: 'SpheroSeg',
     description:
@@ -1645,5 +1580,85 @@ export default {
     contactUs: 'Kontaktujte nás',
     copyright:
       '© {{year}} SpheroSeg. Vyvinuto na ÚTIA AV ČR (Ústav teorie informace a automatizace, Akademie věd České republiky).',
+  },
+  sharing: {
+    share: 'Sdílet',
+    shared: 'Sdíleno',
+    shareProject: 'Sdílet projekt',
+    shareDescription: 'Sdílejte projekt "{{title}}" s kolegy a spolupracovníky',
+    shareByEmail: 'Sdílet emailem',
+    shareByLink: 'Sdílet odkazem',
+    emailAddress: 'Emailová adresa',
+    enterEmailPlaceholder: 'Zadejte emailovou adresu',
+    optionalMessage: 'Volitelná zpráva',
+    messagePlaceholder: 'Přidejte osobní zprávu k pozvánce...',
+    sendInvitation: 'Odeslat pozvánku',
+    sending: 'Odesílání...',
+    emailSent: 'Email pozvánka byla odeslána!',
+    emailRequired: 'Emailová adresa je povinná',
+    emailShareFailed: 'Nepodařilo se odeslat email pozvánku',
+    linkExpiry: 'Platnost odkazu',
+    neverExpires: 'Nikdy nevyprší',
+    hours: 'hodin',
+    days: 'dní',
+    generateLink: 'Vygenerovat odkaz',
+    generating: 'Generování...',
+    linkGenerated: 'Odkaz pro sdílení byl vytvořen!',
+    linkCopied: 'Odkaz zkopírován do schránky',
+    linkCopyFailed: 'Nepodařilo se zkopírovat odkaz',
+    linkShareFailed: 'Nepodařilo se vygenerovat odkaz',
+    emailInvitations: 'Emailové pozvánky',
+    shareLinks: 'Odkazy pro sdílení',
+    shareRevoked: 'Sdílení bylo zrušeno',
+    revokeShareFailed: 'Nepodařilo se zrušit sdílení',
+    failedToLoadShares: 'Nepodařilo se načíst seznam sdílení',
+    status: {
+      pending: 'Čekající',
+      accepted: 'Přijato',
+      revoked: 'Zrušeno',
+    },
+    sharedWithYou: 'Sdíleno s vámi',
+    sharedBy: 'Sdílel:',
+    sharedProjects: 'Sdílené projekty',
+    noSharedProjects: 'Žádné projekty s vámi nejsou sdíleny',
+    removeFromShared: 'Odebrat ze sdílených',
+    acceptInvitation: 'Přijmout pozvánku',
+    invitationAccepted: 'Pozvánka byla přijata!',
+    invitationExpired: 'Tato pozvánka již expirovala',
+    invitationInvalid: 'Neplatná pozvánka',
+    loginToAccept: 'Pro přijetí pozvánky se přihlaste',
+    accepting: 'Přijímání',
+    redirectingToProject: 'Přesměrování na projekt',
+    invitedEmail: 'Pozvaný email',
+    pendingInvitations: 'Čekající pozvánky',
+    sentOn: 'Odesláno',
+    joinedViaLink: 'Připojeni přes odkaz',
+    joinedViaLinkOn: 'Připojeno',
+    loadingShare: 'Načítání informací o sdílení...',
+    projectSharedBy: 'Projekt sdílel',
+    signInRequired: 'Vyžadováno přihlášení',
+    signInToAccept: 'Pro přijetí pozvánky se prosím přihlaste',
+    signInButton: 'Přihlásit se',
+    goToProject: 'Přejít na projekt',
+    backToHome: 'Zpět domů',
+    acceptFailed: 'Nepodařilo se přijmout pozvánku',
+    differentEmail: 'Tato pozvánka je pro jinou emailovou adresu',
+    acceptedUsers: 'Přijatí uživatelé',
+    activeShareLinks: 'Aktivní odkazy pro sdílení',
+    joinedOn: 'Připojeno',
+    resendInvitation: 'Odeslat pozvánku znovu',
+    invitationResent: 'Pozvánka byla odeslána znovu',
+    resendFailed: 'Nepodařilo se odeslat pozvánku znovu',
+    revokeAccess: 'Zrušit přístup',
+    cancelInvitation: 'Zrušit pozvánku',
+    reminderMessage:
+      'Toto je připomínka, že jste byli pozváni ke spolupráci na projektu',
+    redirectingToDashboard: 'Přesměrování na přehled...',
+  },
+  error: 'Chyba',
+  segmentationEditor: {
+    reloadingSegmentation: 'Obnovování segmentace...',
+    segmenting: 'Segmentování...',
+    waitingInQueue: 'Čekání ve frontě...',
   },
 };

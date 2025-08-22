@@ -42,7 +42,7 @@ const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const { t } = useLanguage();
-  const { selectedModel, confidenceThreshold } = useModel();
+  const { selectedModel, confidenceThreshold, detectHoles } = useModel();
   const [showUploader, setShowUploader] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
@@ -197,15 +197,29 @@ const ProjectDetail = () => {
     }
 
     // Real-time update processing
+    console.log('📡 Real-time WebSocket update received:', {
+      imageId: lastUpdate.imageId,
+      status: lastUpdate.status,
+      projectId: lastUpdate.projectId,
+    });
 
     // Normalize status to match frontend expectations, but validate segmented status
     let normalizedStatus = lastUpdate.status;
-    if (lastUpdate.status === 'segmented') {
-      // Don't immediately set to completed - verify segmentation data exists first
-      normalizedStatus = 'processing'; // Keep as processing until we verify data
+    if (
+      lastUpdate.status === 'segmented' ||
+      lastUpdate.status === 'completed'
+    ) {
+      // Set to completed, we'll refresh the segmentation data to verify
+      normalizedStatus = 'completed';
     } else if (lastUpdate.status === 'no_segmentation') {
       // Backend explicitly says no segmentation found
       normalizedStatus = 'no_segmentation';
+    } else if (lastUpdate.status === 'failed') {
+      normalizedStatus = 'failed';
+    } else if (lastUpdate.status === 'queued') {
+      normalizedStatus = 'queued';
+    } else if (lastUpdate.status === 'processing') {
+      normalizedStatus = 'processing';
     }
 
     // Update the specific image status in the images array immediately
@@ -218,6 +232,10 @@ const ProjectDetail = () => {
             (img.segmentationStatus === 'completed' ||
               img.segmentationStatus === 'segmented');
 
+          console.log(
+            `📝 Updating image ${img.id} status from ${img.segmentationStatus} to ${normalizedStatus}`
+          );
+
           return {
             ...img,
             segmentationStatus: normalizedStatus,
@@ -229,6 +247,10 @@ const ProjectDetail = () => {
             segmentationData: clearSegmentationData
               ? undefined
               : img.segmentationData,
+            // Clear thumbnail when starting new segmentation
+            thumbnail_url: clearSegmentationData
+              ? img.url // Reset to original image URL
+              : img.thumbnail_url,
           };
         }
         return img;
@@ -243,51 +265,102 @@ const ProjectDetail = () => {
       lastUpdate.status !== 'no_segmentation'
     ) {
       // Immediate refresh for completed status - this will also validate if polygons exist
-      refreshImageSegmentationRef
-        .current(lastUpdate.imageId)
-        .then(async () => {
-          // Wait a tick to ensure the state has been updated
-          await new Promise(resolve => setTimeout(resolve, 0));
+      (async () => {
+        console.log(
+          `🔄 Refreshing segmentation data for image ${lastUpdate.imageId}`
+        );
 
-          // After refresh, check the updated segmentation data
-          updateImagesRef.current(prevImages =>
-            prevImages.map(img => {
-              if (img.id === lastUpdate.imageId) {
-                // Check if we have actual polygon data after refresh
-                const hasPolygons =
-                  img.segmentationResult &&
-                  img.segmentationResult.polygons &&
-                  img.segmentationResult.polygons.length > 0;
+        try {
+          // refreshImageSegmentation already updates the state with segmentation data
+          await refreshImageSegmentationRef.current(lastUpdate.imageId);
 
-                // If backend says 'segmented' but no polygons, mark as 'no_segmentation'
+          // Wait a bit for the state to be updated
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Now also fetch the updated image for thumbnail URL
+          const img = await apiClient.getImage(id, lastUpdate.imageId);
+          console.log('🖼️ Updated image data:', {
+            id: img.id,
+            hasThumbnail: !!img.thumbnail_url,
+            thumbnailUrl: img.thumbnail_url,
+            segmentationStatus: img.segmentationStatus,
+          });
+
+          // Get the current segmentation data from state after refresh
+          updateImagesRef.current(prevImages => {
+            const currentImg = prevImages.find(
+              i => i.id === lastUpdate.imageId
+            );
+            const hasPolygons =
+              currentImg?.segmentationResult?.polygons &&
+              currentImg.segmentationResult.polygons.length > 0;
+
+            console.log(
+              `✅ Image ${lastUpdate.imageId} has ${hasPolygons ? currentImg.segmentationResult.polygons.length : 0} polygons`
+            );
+
+            return prevImages.map(prevImg => {
+              if (prevImg.id === lastUpdate.imageId) {
                 const finalStatus = hasPolygons
                   ? 'completed'
                   : 'no_segmentation';
 
                 return {
-                  ...img,
+                  ...prevImg,
                   segmentationStatus: finalStatus,
+                  // Keep the segmentation data that was already updated by refreshImageSegmentation
+                  // Update thumbnail URL with cache-busting timestamp
+                  thumbnail_url: img?.thumbnail_url
+                    ? `${img.thumbnail_url}?t=${Date.now()}`
+                    : prevImg.thumbnail_url,
                   updatedAt: new Date(),
                 };
               }
-              return img;
-            })
-          );
-        })
-        .catch(() => {
-          // If refresh fails, mark as no_segmentation
-          updateImagesRef.current(prevImages =>
-            prevImages.map(img =>
-              img.id === lastUpdate.imageId
-                ? {
-                    ...img,
-                    segmentationStatus: 'no_segmentation',
-                    updatedAt: new Date(),
-                  }
-                : img
-            )
-          );
-        });
+              return prevImg;
+            });
+          });
+        } catch (error) {
+          console.error('Failed to refresh image data:', error);
+
+          // Even if refresh fails, ensure correct status based on segmentation data
+          updateImagesRef.current(prevImages => {
+            const currentImg = prevImages.find(
+              i => i.id === lastUpdate.imageId
+            );
+            const hasPolygons =
+              currentImg?.segmentationResult?.polygons &&
+              currentImg.segmentationResult.polygons.length > 0;
+
+            return prevImages.map(prevImg => {
+              if (prevImg.id === lastUpdate.imageId) {
+                return {
+                  ...prevImg,
+                  segmentationStatus: hasPolygons
+                    ? 'completed'
+                    : 'no_segmentation',
+                  updatedAt: new Date(),
+                };
+              }
+              return prevImg;
+            });
+          });
+        }
+      })().catch(err => {
+        console.error('Unhandled error in segmentation refresh IIFE:', err);
+        // Ensure state is updated even on unhandled rejection
+        updateImagesRef.current(prevImages =>
+          prevImages.map(prevImg => {
+            if (prevImg.id === lastUpdate.imageId) {
+              return {
+                ...prevImg,
+                segmentationStatus: 'error',
+                updatedAt: new Date(),
+              };
+            }
+            return prevImg;
+          })
+        );
+      });
     }
 
     // Reset batch submitted state when queue becomes empty
@@ -552,7 +625,8 @@ const ProjectDetail = () => {
           selectedModel,
           confidenceThreshold,
           0, // priority
-          false // not force re-segment
+          false, // not force re-segment
+          detectHoles
         );
         totalQueued += response.queuedCount;
       }
@@ -565,7 +639,8 @@ const ProjectDetail = () => {
           selectedModel,
           confidenceThreshold,
           0, // priority
-          true // force re-segment
+          true, // force re-segment
+          detectHoles
         );
         totalQueued += response.queuedCount;
       }

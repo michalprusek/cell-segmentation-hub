@@ -72,6 +72,7 @@ export default {
     noImage: 'No Image',
     untitledImage: 'Untitled Image',
     rename: 'Rename',
+    redirectingToDashboard: 'Redirecting to dashboard...',
   },
 
   landing: {
@@ -172,6 +173,8 @@ export default {
     errorAddingToQueue: 'Error adding images to queue',
     imageAlreadyProcessing: 'Image is already being processed',
     processImageFailed: 'Failed to process image',
+    selected: '{{count}} selected',
+    deleteSelected: 'Delete Selected',
     segmentationCompleted: 'Segmentation completed for image',
     segmentationFailed: 'Segmentation failed',
     segmentationStarted: 'Segmentation has started',
@@ -235,8 +238,6 @@ export default {
       loadProject:
         'Could not load the project. Check your connection and try again.',
       saveProject: 'Could not save project changes. Please try again.',
-      deleteProject:
-        'Cannot delete project. Make sure you have the necessary permissions.',
       uploadImage: 'Could not upload image. Check the file format and size.',
       deleteImage:
         'Cannot delete image. Try refreshing the page and repeating the action.',
@@ -255,6 +256,8 @@ export default {
         'Could not delete account. Contact support for assistance.',
       resetPassword: 'Password reset failed. Check the email address provided.',
       updateConsent: 'Could not update consent preferences. Please try again.',
+      unshareProject: 'Failed to remove project from shared projects',
+      deleteProject: 'Failed to delete project',
     },
     contexts: {
       dashboard: 'Dashboard error',
@@ -266,6 +269,7 @@ export default {
       profile: 'Profile error',
       settings: 'Settings error',
     },
+    deleteImages: 'Failed to delete selected images',
   },
   images: {
     uploadImages: 'Upload Images',
@@ -359,6 +363,9 @@ export default {
     confidenceThreshold: 'Confidence Threshold',
     confidenceThresholdDescription:
       'Minimum confidence required for segmentation predictions',
+    detectHoles: 'Detect Holes',
+    detectHolesDescription:
+      'Enable detection of internal structures and holes within cells',
     currentThreshold: 'Current threshold',
     modelSelected: 'Model selected successfully',
     modelSettingsSaved: 'Model settings saved successfully',
@@ -721,6 +728,7 @@ export default {
     ready: 'Ready for segmentation',
     online: 'Online',
     offline: 'Offline',
+    noPolygons: 'No polygons',
   },
   queue: {
     title: 'Segmentation Queue',
@@ -767,9 +775,13 @@ export default {
       deleted: 'Project deleted successfully',
       deleteFailed: 'Failed to delete project',
       urlCopied: 'Project URL copied to clipboard',
+      unshared: 'Project removed from shared',
       notFound: 'Project not found',
       invalidResponse: 'Server response was invalid',
       readyForImages: 'is ready for images',
+      selected: '{{count}} image selected',
+      selected_other: '{{count}} images selected',
+      deleteSelected: 'Delete Selected',
     },
     // Profile actions
     profile: {
@@ -783,13 +795,19 @@ export default {
     // Segmentation actions
     segmentation: {
       saved: 'Segmentation saved successfully',
-      failed: 'Failed to save segmentation',
+      failed: 'Segmentation failed',
       deleted: 'Polygon deleted',
       cannotDeleteVertex:
         'Cannot delete vertex - polygon needs at least 3 points',
       vertexDeleted: 'Vertex deleted successfully',
+      started: 'Segmentation has started',
+      completed: 'Segmentation completed successfully',
+      completedWithCount: 'Segmentation complete! Found {{count}} objects',
+      noPolygons: 'No segmentation polygons detected',
+      reloadFailed:
+        'Failed to load segmentation results. Please refresh the page.',
+      autosaveFailed: 'Autosave failed - changes may be lost',
     },
-    autosaveFailed: 'Autosave failed - changes may be lost',
     // Success messages
     operationCompleted: 'Operation completed successfully',
     dataSaved: 'Data saved successfully',
@@ -798,6 +816,7 @@ export default {
     reconnecting: 'Reconnecting to server...',
     reconnected: 'Connection to server restored',
     connectionFailed: 'Failed to restore connection to server',
+    autosaveFailed: 'Autosave failed - changes may be lost',
     // Segmentation messages
     segmentationRequested: 'Segmentation request submitted',
     segmentationCompleted: 'Image segmentation completed',
@@ -807,6 +826,11 @@ export default {
     // Export messages
     exportCompleted: 'Export completed successfully!',
     exportFailed: 'Export failed. Please try again.',
+  },
+  project: {
+    selected: '{{count}} image selected',
+    selected_other: '{{count}} images selected',
+    deleteSelected: 'Delete Selected',
   },
   export: {
     // Dialog headers
@@ -899,7 +923,7 @@ export default {
     cocoFormat: 'COCO Format',
     cocoFormatTitle: 'COCO Format Export',
     downloadJson: 'Download JSON',
-    formats: {
+    exportFormats: {
       yolo: 'YOLO Format',
       excel: 'Excel Format',
       json: 'JSON Format',
@@ -1625,5 +1649,97 @@ export default {
     contactUs: 'Contact Us',
     copyright:
       '© {{year}} SpheroSeg. Developed at ÚTIA AV ČR (Institute of Information Theory and Automation, Czech Academy of Sciences).',
+  },
+
+  // Project sharing
+  sharing: {
+    share: 'Share',
+    shared: 'Shared',
+    shareProject: 'Share project',
+    shareDescription:
+      'Share project "{{title}}" with colleagues and collaborators',
+    shareByEmail: 'Share by email',
+    shareByLink: 'Share by link',
+    emailAddress: 'Email address',
+    enterEmailPlaceholder: 'Enter email address',
+    optionalMessage: 'Optional message',
+    messagePlaceholder: 'Add a personal message to the invitation...',
+    sendInvitation: 'Send invitation',
+    sending: 'Sending...',
+    emailSent: 'Email invitation sent!',
+    emailRequired: 'Email address is required',
+    emailShareFailed: 'Failed to send email invitation',
+
+    linkExpiry: 'Link expiry',
+    neverExpires: 'Never expires',
+    hours: 'hours',
+    days: 'days',
+    generateLink: 'Generate link',
+    generating: 'Generating...',
+    linkGenerated: 'Share link created!',
+    linkCopied: 'Link copied to clipboard',
+    linkCopyFailed: 'Failed to copy link',
+    linkShareFailed: 'Failed to generate share link',
+
+    emailInvitations: 'Email invitations',
+    shareLinks: 'Share links',
+    shareRevoked: 'Share has been revoked',
+    acceptedUsers: 'Accepted users',
+    pendingInvitations: 'Pending invitations',
+    joinedViaLink: 'Joined via link',
+    activeShareLinks: 'Active share links',
+    joinedOn: 'Joined',
+    sentOn: 'Sent',
+    joinedViaLinkOn: 'Joined via link',
+    resendInvitation: 'Resend invitation',
+    invitationResent: 'Invitation resent successfully',
+    resendFailed: 'Failed to resend invitation',
+    revokeAccess: 'Revoke access',
+    cancelInvitation: 'Cancel invitation',
+    reminderMessage:
+      'This is a reminder that you have been invited to collaborate on a project',
+    revokeShareFailed: 'Failed to revoke share',
+    failedToLoadShares: 'Failed to load shares',
+
+    status: {
+      pending: 'Pending',
+      accepted: 'Accepted',
+      revoked: 'Revoked',
+    },
+
+    sharedWithYou: 'Shared with you',
+    sharedBy: 'Shared by: {{email}}',
+    sharedProjects: 'Shared projects',
+    noSharedProjects: 'No projects have been shared with you',
+    removeFromShared: 'Remove from shared',
+    acceptInvitation: 'Accept invitation',
+    invitationAccepted:
+      'Invitation accepted! The project has been added to your dashboard.',
+    invitationExpired: 'This invitation has expired',
+    invitationInvalid: 'Invalid invitation',
+    loginToAccept: 'Please log in to accept this invitation',
+    accepting: 'Accepting',
+    redirectingToProject: 'Redirecting to project',
+    redirectingToDashboard: 'Redirecting to dashboard',
+    invitedEmail: 'Invited email',
+    loadingShare: 'Loading share information...',
+    projectSharedBy: 'Project shared by',
+    signInRequired: 'Sign in required',
+    signInToAccept: 'Please sign in to accept this invitation',
+    signInButton: 'Sign in',
+    goToProject: 'Go to Project',
+    backToHome: 'Back to Home',
+    acceptFailed: 'Failed to accept invitation',
+    differentEmail: 'This invitation is for a different email address',
+    pendingInvitations: 'Pending invitations',
+    sentOn: 'Sent on',
+    joinedViaLink: 'Joined via link',
+    joinedViaLinkOn: 'Joined',
+  },
+  error: 'Error',
+  segmentationEditor: {
+    reloadingSegmentation: 'Reloading segmentation...',
+    segmenting: 'Segmenting...',
+    waitingInQueue: 'Waiting in queue...',
   },
 };
