@@ -180,9 +180,7 @@ const CanvasPolygon = React.memo(
           data-testid={id}
           className={cn(
             'polygon-group',
-            type === 'internal' ? 'internal' : 'external',
-            isSelected && 'selected',
-            isHovered && 'hovered'
+            type === 'internal' ? 'internal' : 'external'
           )}
           tabIndex={0}
           role="button"
