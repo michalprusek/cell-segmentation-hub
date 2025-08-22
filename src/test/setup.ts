@@ -123,9 +123,13 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-// Mock localStorage
+// Mock localStorage with specific return values for contexts
 const localStorageMock = {
-  getItem: vi.fn(),
+  getItem: vi.fn((key: string) => {
+    if (key === 'theme') return 'system';
+    if (key === 'language') return 'en';
+    return null;
+  }),
   setItem: vi.fn(),
   removeItem: vi.fn(),
   clear: vi.fn(),
@@ -234,7 +238,10 @@ vi.mock('@/lib/api', () => ({
     refreshAccessToken: vi.fn(),
 
     // User profile methods
-    getUserProfile: vi.fn(),
+    getUserProfile: vi.fn().mockResolvedValue({
+      preferred_theme: 'system',
+      preferredLang: 'en',
+    }),
     updateUserProfile: vi.fn(),
     changePassword: vi.fn(),
     getUserStorageStats: vi.fn(),
@@ -293,7 +300,10 @@ vi.mock('@/lib/api', () => ({
     logout: vi.fn(),
     register: vi.fn(),
     refreshAccessToken: vi.fn(),
-    getUserProfile: vi.fn(),
+    getUserProfile: vi.fn().mockResolvedValue({
+      preferred_theme: 'system',
+      preferredLang: 'en',
+    }),
     updateUserProfile: vi.fn(),
     changePassword: vi.fn(),
     getUserStorageStats: vi.fn(),

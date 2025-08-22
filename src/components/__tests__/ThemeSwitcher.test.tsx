@@ -353,7 +353,9 @@ describe('ThemeSwitcher', () => {
   it('handles setTheme errors gracefully', async () => {
     const failingSetTheme = vi
       .fn()
-      .mockRejectedValue(new Error('Theme change failed'));
+      .mockImplementation(() =>
+        Promise.reject(new Error('Theme change failed'))
+      );
     mockThemeContext.setTheme = failingSetTheme;
 
     const user = userEvent.setup();
