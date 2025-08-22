@@ -4,9 +4,10 @@ import React from 'react';
 import { usePolygonSlicing } from '../usePolygonSlicing';
 import { EditMode } from '../../types';
 import {
-  renderHook,
   createMockInteractionState,
+  mockBrowserAPIs,
 } from '@/test-utils/reactTestUtils';
+import { renderHook } from '@testing-library/react';
 import {
   createTestPolygons,
   createTestPolygonObjects,
@@ -23,15 +24,19 @@ vi.mock('sonner', () => ({
 }));
 
 vi.mock('@/contexts/LanguageContext', () => ({
-  useLanguage: () => ({
+  useLanguage: vi.fn(() => ({
     t: (key: string) => key, // Return the key for testing
-  }),
+  })),
   LanguageProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock('@/lib/polygonSlicing', () => ({
   slicePolygon: vi.fn(),
   validateSliceLine: vi.fn(),
+}));
+
+vi.mock('@/lib/errorUtils', () => ({
+  getLocalizedErrorMessage: vi.fn((key: string) => key),
 }));
 
 import { slicePolygon, validateSliceLine } from '@/lib/polygonSlicing';
@@ -52,6 +57,9 @@ describe('usePolygonSlicing', () => {
   };
 
   beforeEach(() => {
+    // Setup browser APIs for testing
+    mockBrowserAPIs();
+
     testPolygons = createTestPolygons();
     testPolygonObjects = createTestPolygonObjects();
 
@@ -72,6 +80,20 @@ describe('usePolygonSlicing', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  describe('hook initialization', () => {
+    it('should return a valid hook object', () => {
+      const { result } = renderHook(() => usePolygonSlicing(mockProps));
+
+      expect(result.current).not.toBeNull();
+      expect(result.current).toBeDefined();
+      expect(typeof result.current).toBe('object');
+      expect(typeof result.current.handleSliceAction).toBe('function');
+      expect(typeof result.current.startSlicing).toBe('function');
+      expect(typeof result.current.cancelSlicing).toBe('function');
+      expect(typeof result.current.handleSlicePointClick).toBe('function');
+    });
   });
 
   describe('handleSliceAction', () => {
