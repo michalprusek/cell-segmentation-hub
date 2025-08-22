@@ -236,19 +236,36 @@ class OperationRecorder {
         ctx.beginPath();
         break;
       case 'moveTo':
-        if (op.args.length >= 2) ctx.moveTo(op.args[0], op.args[1]);
+        if (op.args.length >= 2 && op.args[0] !== undefined && op.args[1] !== undefined) {
+          ctx.moveTo(op.args[0], op.args[1]);
+        }
         break;
       case 'lineTo':
-        if (op.args.length >= 2) ctx.lineTo(op.args[0], op.args[1]);
+        if (op.args.length >= 2 && op.args[0] !== undefined && op.args[1] !== undefined) {
+          ctx.lineTo(op.args[0], op.args[1]);
+        }
         break;
       case 'quadraticCurveTo':
-        if (op.args.length >= 4) ctx.quadraticCurveTo(op.args[0], op.args[1], op.args[2], op.args[3]);
+        if (op.args.length >= 4 && 
+            op.args[0] !== undefined && 
+            op.args[1] !== undefined && 
+            op.args[2] !== undefined && 
+            op.args[3] !== undefined) {
+          ctx.quadraticCurveTo(op.args[0], op.args[1], op.args[2], op.args[3]);
+        }
         break;
       case 'stroke':
         ctx.stroke();
         break;
       case 'arc':
-        if (op.args.length >= 5) ctx.arc(op.args[0], op.args[1], op.args[2], op.args[3], op.args[4]);
+        if (op.args.length >= 5 && 
+            op.args[0] !== undefined && 
+            op.args[1] !== undefined && 
+            op.args[2] !== undefined && 
+            op.args[3] !== undefined && 
+            op.args[4] !== undefined) {
+          ctx.arc(op.args[0], op.args[1], op.args[2], op.args[3], op.args[4]);
+        }
         break;
       case 'fill':
         ctx.fill();

@@ -100,8 +100,9 @@ export class SegmentationService {
       maxContentLength: Infinity
     });
 
-    // Add request/response interceptors for logging
-    this.httpClient.interceptors.request.use(
+    // Add request/response interceptors for logging (only if httpClient is properly initialized)
+    if (this.httpClient && this.httpClient.interceptors) {
+      this.httpClient.interceptors.request.use(
       (config) => {
         logger.info('Sending request to Python service', 'SegmentationService', {
           url: config.url,
@@ -114,9 +115,9 @@ export class SegmentationService {
         logger.error('Request interceptor error', error instanceof Error ? error : undefined, 'SegmentationService');
         return Promise.reject(error);
       }
-    );
+      );
 
-    this.httpClient.interceptors.response.use(
+      this.httpClient.interceptors.response.use(
       (response) => {
         logger.info('Received response from Python service', 'SegmentationService', {
           status: response.status,
@@ -131,7 +132,8 @@ export class SegmentationService {
         });
         return Promise.reject(error);
       }
-    );
+      );
+    }
   }
 
   /**
