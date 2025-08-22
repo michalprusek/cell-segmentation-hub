@@ -174,6 +174,7 @@ export class MetricsCalculator {
         const error = new Error(`Invalid scale value: ${pixelToMicrometerScale}. Scale must be greater than 0.`);
         this.logger.error(
           `Scale validation failed: ${error.message}`,
+          error,
           'MetricsCalculator'
         );
         throw error;
