@@ -17,6 +17,7 @@ vi.mock('@/contexts/ThemeContext', () => ({
     DARK: 'dark',
     SYSTEM: 'system',
   },
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 describe('ThemeSwitcher', () => {
