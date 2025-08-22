@@ -85,10 +85,12 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
     const root = window.document.documentElement;
 
     if (theme === 'system') {
-      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
-        .matches
-        ? 'dark'
-        : 'light';
+      const systemTheme =
+        typeof window !== 'undefined' && window.matchMedia
+          ? window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light'
+          : 'light';
 
       root.classList.remove('light', 'dark');
       root.classList.add(systemTheme);

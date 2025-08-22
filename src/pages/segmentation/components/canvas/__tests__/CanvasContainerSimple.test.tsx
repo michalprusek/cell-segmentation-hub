@@ -19,6 +19,7 @@ vi.mock('@/contexts/ThemeContext', () => ({
   useTheme: () => ({
     theme: 'light',
   }),
+  ThemeProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 describe('CanvasContainer - Core Functionality', () => {
