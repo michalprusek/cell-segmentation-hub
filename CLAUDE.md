@@ -551,3 +551,5 @@ make test-email-mailhog    # Info about MailHog testing
 make test-email-utia       # Info about UTIA SMTP testing
 make restart-backend-utia  # Restart backend with UTIA config
 ```
+
+- vždy používej desktop commander k získání logs!

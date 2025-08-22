@@ -127,7 +127,7 @@ export function ShareDialog({
       });
 
       toast({
-        title: t('success'),
+        title: t('common.success'),
         description: t('sharing.emailSent'),
       });
 
@@ -160,7 +160,7 @@ export function ShareDialog({
       });
 
       toast({
-        title: t('success'),
+        title: t('common.success'),
         description: t('sharing.invitationResent'),
       });
 
@@ -192,7 +192,7 @@ export function ShareDialog({
       setGeneratedLink(result.shareUrl);
 
       toast({
-        title: t('success'),
+        title: t('common.success'),
         description: t('sharing.linkGenerated'),
       });
 
@@ -218,7 +218,7 @@ export function ShareDialog({
     try {
       await navigator.clipboard.writeText(url);
       toast({
-        title: t('success'),
+        title: t('common.success'),
         description: t('sharing.linkCopied'),
       });
     } catch (error) {
@@ -237,7 +237,7 @@ export function ShareDialog({
       await apiClient.revokeProjectShare(projectId, shareId);
 
       toast({
-        title: t('success'),
+        title: t('common.success'),
         description: t('sharing.shareRevoked'),
       });
 

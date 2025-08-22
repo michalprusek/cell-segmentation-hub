@@ -191,6 +191,11 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
   try {
     const shares = await SharingService.getSharedProjects(req.user!.id);
     
+    logger.info(`Found ${shares?.length || 0} shared projects for user`, 'SharingController', {
+      userId: req.user!.id,
+      shareCount: shares?.length || 0
+    });
+    
     // Handle case when no shares exist
     if (!shares || shares.length === 0) {
       ResponseHelper.success(res, [], 'No shared projects found');
@@ -207,6 +212,13 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
         description: share.project.description,
         createdAt: share.project.createdAt,
         updatedAt: share.project.updatedAt,
+        owner: {
+          id: share.sharedBy.id,
+          email: share.sharedBy.email
+        },
+        image_count: share.project._count?.images || 0,
+        images: share.project.images || [],
+        updated_at: share.project.updatedAt
       },
       sharedBy: {
         id: share.sharedBy.id,

@@ -12,6 +12,10 @@ export interface Project {
   thumbnail: string;
   date: string;
   imageCount: number;
+  isOwned?: boolean;
+  isShared?: boolean;
+  sharedBy?: { email: string };
+  owner?: { email: string; name?: string };
 }
 
 export interface ProjectsListProps {
@@ -66,6 +70,10 @@ const ProjectsList = ({
         date={project.date}
         imageCount={project.imageCount}
         onClick={() => onOpenProject(project.id)}
+        isShared={project.isShared}
+        sharedBy={project.sharedBy}
+        owner={project.owner}
+        shareId={project.shareId}
       />
     ));
 
@@ -103,6 +111,10 @@ const ProjectsList = ({
       date={project.date}
       imageCount={project.imageCount}
       onClick={() => onOpenProject(project.id)}
+      isShared={project.isShared}
+      sharedBy={project.sharedBy}
+      owner={project.owner}
+      shareId={project.shareId}
     />
   ));
 

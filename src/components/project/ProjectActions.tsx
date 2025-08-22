@@ -1,7 +1,7 @@
 import { logger } from '@/lib/logger';
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { MoreVertical, Trash, Share } from 'lucide-react';
+import { MoreVertical, Trash, Share, UserMinus } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,12 +19,16 @@ interface ProjectActionsProps {
   projectId: string;
   projectTitle?: string;
   onDialogStateChange?: (isOpen: boolean) => void;
+  isShared?: boolean;
+  shareId?: string;
 }
 
 const ProjectActions = ({
   projectId,
   projectTitle = 'Unknown Project',
   onDialogStateChange,
+  isShared = false,
+  shareId,
 }: ProjectActionsProps) => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
@@ -73,6 +77,36 @@ const ProjectActions = ({
     }, 100);
   };
 
+  const handleUnshare = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+
+    setLoading(true);
+
+    try {
+      // Remove shared project from user's list
+      // This doesn't delete the project, just removes the share
+      if (shareId) {
+        await apiClient.revokeProjectShare(projectId, shareId);
+      }
+
+      toast.success(t('toast.project.unshared'));
+
+      // Refresh projects list
+      const event = new CustomEvent('project-unshared', {
+        detail: { projectId, shareId },
+      });
+      window.dispatchEvent(event);
+    } catch (error: unknown) {
+      logger.error('Error unsharing project:', error);
+      const errorMessage =
+        getErrorMessage(error, t) || t('errors.operations.unshareProject');
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <>
       <div onClick={e => e.stopPropagation()}>
@@ -95,22 +129,39 @@ const ProjectActions = ({
             className="w-48"
             onClick={e => e.stopPropagation()}
           >
-            <DropdownMenuItem onClick={handleShare}>
-              <Share className="h-4 w-4 mr-2" />
-              {t('sharing.share')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-red-600"
-              onClick={e => {
-                e.stopPropagation();
-                handleDeleteProject(e);
-              }}
-              disabled={loading}
-            >
-              <Trash className="h-4 w-4 mr-2" />
-              {t('common.delete')}
-            </DropdownMenuItem>
+            {!isShared && (
+              <>
+                <DropdownMenuItem onClick={handleShare}>
+                  <Share className="h-4 w-4 mr-2" />
+                  {t('sharing.share')}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  className="text-red-600"
+                  onClick={e => {
+                    e.stopPropagation();
+                    handleDeleteProject(e);
+                  }}
+                  disabled={loading}
+                >
+                  <Trash className="h-4 w-4 mr-2" />
+                  {t('common.delete')}
+                </DropdownMenuItem>
+              </>
+            )}
+            {isShared && (
+              <DropdownMenuItem
+                className="text-red-600"
+                onClick={e => {
+                  e.stopPropagation();
+                  handleUnshare(e);
+                }}
+                disabled={loading}
+              >
+                <UserMinus className="h-4 w-4 mr-2" />
+                {t('sharing.removeFromShared')}
+              </DropdownMenuItem>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

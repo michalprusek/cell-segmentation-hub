@@ -304,7 +304,22 @@ export class WebSocketService {
       const project = await this.prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          OR: [
+            { userId: userId }, // User owns the project
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    {
+                      sharedWith: { id: userId },
+                      status: 'accepted'
+                    }
+                  ]
+                }
+              }
+            }
+          ]
         }
       });
       

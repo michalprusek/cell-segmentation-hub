@@ -822,6 +822,7 @@ export default {
       deleted: 'Projekt erfolgreich gelöscht',
       deleteFailed: 'Projekt konnte nicht gelöscht werden',
       urlCopied: 'Projekt-URL in die Zwischenablage kopiert',
+      unshared: 'Projekt aus Geteilten entfernt',
       notFound: 'Projekt nicht gefunden',
       invalidResponse: 'Serverantwort war ungültig',
       readyForImages: 'ist bereit für Bilder',
@@ -1602,5 +1603,45 @@ export default {
     // Ansichtsoptionen
     gridView: 'Rasteransicht',
     listView: 'Listenansicht',
+  },
+
+  // Projekt teilen
+  sharing: {
+    share: 'Teilen',
+    shared: 'Geteilt',
+    shareProject: 'Projekt teilen',
+    shareDescription:
+      'Projekt "{{title}}" mit Kollegen und Mitarbeitern teilen',
+    shareByEmail: 'Per E-Mail teilen',
+    shareByLink: 'Per Link teilen',
+    emailAddress: 'E-Mail-Adresse',
+    enterEmailPlaceholder: 'E-Mail-Adresse eingeben',
+    optionalMessage: 'Optionale Nachricht',
+    messagePlaceholder:
+      'Fügen Sie der Einladung eine persönliche Nachricht hinzu...',
+    sendInvitation: 'Einladung senden',
+    sending: 'Wird gesendet...',
+    emailSent: 'E-Mail-Einladung gesendet!',
+    emailRequired: 'E-Mail-Adresse ist erforderlich',
+    emailShareFailed: 'Fehler beim Senden der E-Mail-Einladung',
+
+    linkExpiry: 'Link-Ablauf',
+    neverExpires: 'Läuft nie ab',
+    hours: 'Stunden',
+    days: 'Tage',
+    week: 'Woche',
+    generateLink: 'Link generieren',
+    copyLink: 'Link kopieren',
+    linkCopied: 'Link in die Zwischenablage kopiert!',
+    linkGenerateFailed: 'Fehler beim Generieren des Freigabelinks',
+
+    sharedWithYou: 'Mit Ihnen geteilt',
+    sharedBy: 'Geteilt von: {{email}}',
+    sharedProjects: 'Geteilte Projekte',
+    noSharedProjects: 'Es wurden keine Projekte mit Ihnen geteilt',
+    removeFromShared: 'Aus Geteilten entfernen',
+    acceptInvitation: 'Einladung annehmen',
+    invitationAccepted:
+      'Einladung angenommen! Das Projekt wurde zu Ihrem Dashboard hinzugefügt.',
   },
 };

@@ -23,6 +23,7 @@ const Dashboard = () => {
       sortField,
       sortDirection,
       userId: user?.id,
+      userEmail: user?.email,
     }
   );
 
@@ -30,13 +31,16 @@ const Dashboard = () => {
     // Poslouchej události pro aktualizaci seznamu projektů
     const handleProjectCreated = () => fetchProjects();
     const handleProjectDeleted = () => fetchProjects();
+    const handleProjectUnshared = () => fetchProjects();
 
     window.addEventListener('project-created', handleProjectCreated);
     window.addEventListener('project-deleted', handleProjectDeleted);
+    window.addEventListener('project-unshared', handleProjectUnshared);
 
     return () => {
       window.removeEventListener('project-created', handleProjectCreated);
       window.removeEventListener('project-deleted', handleProjectDeleted);
+      window.removeEventListener('project-unshared', handleProjectUnshared);
     };
   }, [fetchProjects]);
 

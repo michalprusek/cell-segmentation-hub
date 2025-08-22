@@ -772,6 +772,7 @@ export default {
       deleted: 'Project deleted successfully',
       deleteFailed: 'Failed to delete project',
       urlCopied: 'Project URL copied to clipboard',
+      unshared: 'Project removed from shared',
       notFound: 'Project not found',
       invalidResponse: 'Server response was invalid',
       readyForImages: 'is ready for images',
@@ -1649,6 +1650,7 @@ export default {
   // Project sharing
   sharing: {
     share: 'Share',
+    shared: 'Shared',
     shareProject: 'Share project',
     shareDescription:
       'Share project "{{title}}" with colleagues and collaborators',
@@ -1705,6 +1707,7 @@ export default {
     sharedBy: 'Shared by: {{email}}',
     sharedProjects: 'Shared projects',
     noSharedProjects: 'No projects have been shared with you',
+    removeFromShared: 'Remove from shared',
     acceptInvitation: 'Accept invitation',
     invitationAccepted:
       'Invitation accepted! The project has been added to your dashboard.',
