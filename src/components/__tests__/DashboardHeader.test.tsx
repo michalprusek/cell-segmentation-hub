@@ -1,3 +1,4 @@
+import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -15,10 +16,23 @@ vi.mock('react-router-dom', async () => {
   };
 });
 
-vi.mock('@/contexts/AuthContext');
-vi.mock('@/hooks/useLocalizedModels');
-vi.mock('@/hooks/useSegmentationQueue');
-vi.mock('@/lib/httpUtils');
+vi.mock('@/contexts/AuthContext', () => ({
+  useAuth: vi.fn(),
+  AuthProvider: ({ children }: { children: React.ReactNode }) => children,
+}));
+
+vi.mock('@/hooks/useLocalizedModels', () => ({
+  useLocalizedModels: vi.fn(),
+}));
+
+vi.mock('@/hooks/useSegmentationQueue', () => ({
+  useSegmentationQueue: vi.fn(),
+}));
+
+vi.mock('@/lib/httpUtils', () => ({
+  fetchWithRetry: vi.fn(),
+}));
+
 vi.mock('@/lib/logger');
 
 // Mock child components
