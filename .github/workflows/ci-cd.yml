@@ -318,7 +318,7 @@ jobs:
           fi
 
           echo "All services are healthy!"
-          docker compose -f docker-compose.test.yml ps
+          docker compose -f docker-compose.test.yml ps || true
 
       - name: Run E2E tests
         run: npm run test:e2e
