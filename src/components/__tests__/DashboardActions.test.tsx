@@ -4,6 +4,15 @@ import userEvent from '@testing-library/user-event';
 import { render } from '@/test/utils/test-utils';
 import DashboardActions from '@/components/DashboardActions';
 
+// Mock LanguageContext
+vi.mock('@/contexts/LanguageContext', () => ({
+  useLanguage: () => ({
+    t: (key: string) => key,
+    language: 'en',
+    setLanguage: vi.fn(),
+  }),
+}));
+
 describe('DashboardActions', () => {
   const mockSetViewMode = vi.fn();
   const mockOnSort = vi.fn();
