@@ -16,9 +16,9 @@ import type { VertexDragState } from '@/pages/segmentation/types';
 
 // Mock the heavy dependencies
 vi.mock('../PolygonVertices', () => ({
-  default: ({ polygon, onVertexClick, onVertexMouseDown }: any) => (
-    <g data-testid={`polygon-vertices-${polygon.id}`}>
-      {polygon.points.map((point: any, index: number) => (
+  default: ({ polygonId, points, onVertexClick, onVertexMouseDown }: any) => (
+    <g data-testid={`polygon-vertices-${polygonId}`}>
+      {points?.map((point: any, index: number) => (
         <circle
           key={index}
           data-testid={`vertex-${index}`}
@@ -28,25 +28,19 @@ vi.mock('../PolygonVertices', () => ({
           onClick={() => onVertexClick?.(0)}
           onMouseDown={() => onVertexMouseDown?.(0)}
         />
-      ))}
+      )) || null}
     </g>
   ),
 }));
 
-vi.mock('../context-menu/PolygonContextMenu', () => ({
-  default: ({ children, polygon, onDelete, onSlice, onEdit }: any) => (
+vi.mock('../../context-menu/PolygonContextMenu', () => ({
+  default: ({ children, polygonId, onDelete, onSlice, onEdit }: any) => (
     <g>
       {children}
-      <g data-testid={`context-menu-${polygon.id}`} style={{ display: 'none' }}>
-        <rect
-          data-testid="delete-button"
-          onClick={() => onDelete?.(polygon.id)}
-        />
-        <rect
-          data-testid="slice-button"
-          onClick={() => onSlice?.(polygon.id)}
-        />
-        <rect data-testid="edit-button" onClick={() => onEdit?.(polygon.id)} />
+      <g data-testid={`context-menu-${polygonId}`} style={{ display: 'none' }}>
+        <rect data-testid="delete-button" onClick={() => onDelete?.()} />
+        <rect data-testid="slice-button" onClick={() => onSlice?.()} />
+        <rect data-testid="edit-button" onClick={() => onEdit?.()} />
       </g>
     </g>
   ),
@@ -92,7 +86,7 @@ describe('CanvasPolygon', () => {
 
   // Helper to render polygon in SVG context
   const renderPolygonInSvg = (polygonElement: React.ReactElement) => {
-    return customRender(
+    return render(
       <svg width="800" height="600" viewBox="0 0 800 600">
         {polygonElement}
       </svg>
@@ -100,8 +94,39 @@ describe('CanvasPolygon', () => {
   };
 
   describe('Rendering', () => {
+    it('renders polygon with basic render function', () => {
+      // Use basic render instead of customRender to avoid context issues
+      const result = render(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} />
+        </svg>
+      );
+
+      console.log(
+        'CanvasPolygon with basic render:',
+        result.container.innerHTML
+      );
+
+      const polygonElement = screen.getByTestId('test-polygon');
+      expect(polygonElement).toBeInTheDocument();
+
+      // Check that the polygon path is rendered
+      const polygonPath = polygonElement.querySelector('path');
+      expect(polygonPath).toBeInTheDocument();
+    });
+
     it('renders polygon with correct basic structure', () => {
-      renderPolygonInSvg(<CanvasPolygon {...defaultProps} />);
+      const result = renderPolygonInSvg(<CanvasPolygon {...defaultProps} />);
+
+      // Debug: log what's actually rendered
+      console.log('Rendered HTML:', result.container.innerHTML);
+
+      // Try to find the element by its ID as well
+      const polygonByTestId = screen.queryByTestId('test-polygon');
+      const polygonById = document.getElementById('test-polygon');
+
+      console.log('Found by testid:', polygonByTestId);
+      console.log('Found by id:', polygonById);
 
       const polygonElement = screen.getByTestId('test-polygon');
       expect(polygonElement).toBeInTheDocument();
@@ -112,21 +137,21 @@ describe('CanvasPolygon', () => {
     });
 
     it('applies correct CSS classes for selected state', () => {
-      customRender(<CanvasPolygon {...defaultProps} isSelected={true} />);
+      renderPolygonInSvg(<CanvasPolygon {...defaultProps} isSelected={true} />);
 
       const polygonElement = screen.getByTestId('test-polygon');
       expect(polygonElement).toHaveClass('selected');
     });
 
     it('applies correct CSS classes for hovered state', () => {
-      customRender(<CanvasPolygon {...defaultProps} isHovered={true} />);
+      renderPolygonInSvg(<CanvasPolygon {...defaultProps} isHovered={true} />);
 
       const polygonElement = screen.getByTestId('test-polygon');
       expect(polygonElement).toHaveClass('hovered');
     });
 
     it('renders vertices when not hidden', () => {
-      customRender(<CanvasPolygon {...defaultProps} isSelected={true} />);
+      renderPolygonInSvg(<CanvasPolygon {...defaultProps} isSelected={true} />);
 
       expect(
         screen.getByTestId(`polygon-vertices-${mockPolygon.id}`)
@@ -134,7 +159,9 @@ describe('CanvasPolygon', () => {
     });
 
     it('hides vertices when hideVertices is true', () => {
-      customRender(<CanvasPolygon {...defaultProps} hideVertices={true} />);
+      renderPolygonInSvg(
+        <CanvasPolygon {...defaultProps} hideVertices={true} />
+      );
 
       expect(
         screen.queryByTestId(`polygon-vertices-${mockPolygon.id}`)
@@ -145,13 +172,17 @@ describe('CanvasPolygon', () => {
       const externalPolygon = { ...mockPolygon, type: 'external' as const };
       const internalPolygon = { ...mockPolygon, type: 'internal' as const };
 
-      const { rerender } = customRender(
+      const { rerender } = renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} polygon={externalPolygon} />
       );
 
       expect(screen.getByTestId('test-polygon')).toHaveClass('external');
 
-      rerender(<CanvasPolygon {...defaultProps} polygon={internalPolygon} />);
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} polygon={internalPolygon} />
+        </svg>
+      );
 
       expect(screen.getByTestId('test-polygon')).toHaveClass('internal');
     });
@@ -160,30 +191,32 @@ describe('CanvasPolygon', () => {
   describe('Interaction', () => {
     it('calls onSelectPolygon when polygon is clicked', () => {
       const onSelectPolygon = vi.fn();
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} onSelectPolygon={onSelectPolygon} />
       );
 
       const polygonElement = screen.getByTestId('test-polygon');
-      fireEvent.click(polygonElement);
+      const pathElement = polygonElement.querySelector('path');
+      fireEvent.click(pathElement!);
 
       expect(onSelectPolygon).toHaveBeenCalledWith('test-polygon');
     });
 
     it('handles double-click for polygon editing', () => {
       const onEditPolygon = vi.fn();
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} onEditPolygon={onEditPolygon} />
       );
 
       const polygonElement = screen.getByTestId('test-polygon');
-      fireEvent.doubleClick(polygonElement);
+      const pathElement = polygonElement.querySelector('path');
+      fireEvent.doubleClick(pathElement!);
 
       expect(onEditPolygon).toHaveBeenCalledWith('test-polygon');
     });
 
     it('shows context menu on right-click', async () => {
-      customRender(<CanvasPolygon {...defaultProps} isSelected={true} />);
+      renderPolygonInSvg(<CanvasPolygon {...defaultProps} isSelected={true} />);
 
       const polygonElement = screen.getByTestId('test-polygon');
       fireEvent.contextMenu(polygonElement);
@@ -200,7 +233,7 @@ describe('CanvasPolygon', () => {
       const onSlicePolygon = vi.fn();
       const onEditPolygon = vi.fn();
 
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon
           {...defaultProps}
           isSelected={true}
@@ -236,14 +269,20 @@ describe('CanvasPolygon', () => {
       const onSelectPolygon = vi.fn();
       const parentClickHandler = vi.fn();
 
-      customRender(
+      render(
         <div onClick={parentClickHandler}>
-          <CanvasPolygon {...defaultProps} onSelectPolygon={onSelectPolygon} />
+          <svg width="800" height="600" viewBox="0 0 800 600">
+            <CanvasPolygon
+              {...defaultProps}
+              onSelectPolygon={onSelectPolygon}
+            />
+          </svg>
         </div>
       );
 
       const polygonElement = screen.getByTestId('test-polygon');
-      fireEvent.click(polygonElement);
+      const pathElement = polygonElement.querySelector('path');
+      fireEvent.click(pathElement!);
 
       expect(onSelectPolygon).toHaveBeenCalled();
       expect(parentClickHandler).not.toHaveBeenCalled();
@@ -264,7 +303,7 @@ describe('CanvasPolygon', () => {
         vertexIndex: 0,
       };
 
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon
           {...defaultProps}
           isSelected={true}
@@ -278,7 +317,7 @@ describe('CanvasPolygon', () => {
 
     it('handles vertex deletion', () => {
       const onDeleteVertex = vi.fn();
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon
           {...defaultProps}
           isSelected={true}
@@ -297,7 +336,7 @@ describe('CanvasPolygon', () => {
 
     it('handles vertex duplication', () => {
       const onDuplicateVertex = vi.fn();
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon
           {...defaultProps}
           isSelected={true}
@@ -315,7 +354,7 @@ describe('CanvasPolygon', () => {
         vertexIndex: 1,
       };
 
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon
           {...defaultProps}
           isSelected={true}
@@ -330,7 +369,9 @@ describe('CanvasPolygon', () => {
 
   describe('Performance and Optimization', () => {
     it('memoizes polygon rendering', () => {
-      const { rerender } = customRender(<CanvasPolygon {...defaultProps} />);
+      const { rerender } = renderPolygonInSvg(
+        <CanvasPolygon {...defaultProps} />
+      );
 
       // Re-render with same props should not cause re-render of memoized component
       rerender(<CanvasPolygon {...defaultProps} />);
@@ -346,7 +387,7 @@ describe('CanvasPolygon', () => {
         height: 100,
       };
 
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} viewportBounds={viewportBounds} />
       );
 
@@ -363,7 +404,7 @@ describe('CanvasPolygon', () => {
       });
 
       const startTime = performance.now();
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} polygon={complexPolygon} />
       );
       const renderTime = performance.now() - startTime;
@@ -373,12 +414,20 @@ describe('CanvasPolygon', () => {
     });
 
     it('updates efficiently when zoom changes', () => {
-      const { rerender } = customRender(
+      const { rerender } = renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} zoom={1} />
       );
 
-      rerender(<CanvasPolygon {...defaultProps} zoom={2} />);
-      rerender(<CanvasPolygon {...defaultProps} zoom={0.5} />);
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} zoom={2} />
+        </svg>
+      );
+      rerender(
+        <svg width="800" height="600" viewBox="0 0 800 600">
+          <CanvasPolygon {...defaultProps} zoom={0.5} />
+        </svg>
+      );
 
       expect(screen.getByTestId('test-polygon')).toBeInTheDocument();
     });
@@ -391,7 +440,9 @@ describe('CanvasPolygon', () => {
         points: [],
       });
 
-      customRender(<CanvasPolygon {...defaultProps} polygon={emptyPolygon} />);
+      renderPolygonInSvg(
+        <CanvasPolygon {...defaultProps} polygon={emptyPolygon} />
+      );
 
       const polygonElement = screen.getByTestId('empty-polygon');
       expect(polygonElement).toBeInTheDocument();
@@ -403,7 +454,7 @@ describe('CanvasPolygon', () => {
         points: [{ x: 25, y: 25 }],
       });
 
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} polygon={singlePointPolygon} />
       );
 
@@ -421,7 +472,7 @@ describe('CanvasPolygon', () => {
         ],
       });
 
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} polygon={duplicatePointsPolygon} />
       );
 
@@ -441,7 +492,7 @@ describe('CanvasPolygon', () => {
         ],
       });
 
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} polygon={tinyPolygon} zoom={100} />
       );
 
@@ -459,7 +510,7 @@ describe('CanvasPolygon', () => {
         ],
       });
 
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} polygon={largePolygon} zoom={0.01} />
       );
 
@@ -478,7 +529,7 @@ describe('CanvasPolygon', () => {
       });
 
       expect(() => {
-        customRender(
+        renderPolygonInSvg(
           <CanvasPolygon {...defaultProps} polygon={extremePolygon} />
         );
       }).not.toThrow();
@@ -487,7 +538,7 @@ describe('CanvasPolygon', () => {
 
   describe('Accessibility', () => {
     it('provides keyboard navigation support', () => {
-      customRender(<CanvasPolygon {...defaultProps} />);
+      renderPolygonInSvg(<CanvasPolygon {...defaultProps} />);
 
       const polygonElement = screen.getByTestId('test-polygon');
 
@@ -497,7 +548,7 @@ describe('CanvasPolygon', () => {
     });
 
     it('provides screen reader labels', () => {
-      customRender(<CanvasPolygon {...defaultProps} />);
+      renderPolygonInSvg(<CanvasPolygon {...defaultProps} />);
 
       const polygonElement = screen.getByTestId('test-polygon');
       // Check if aria-label exists and is not empty
@@ -507,7 +558,7 @@ describe('CanvasPolygon', () => {
 
     it('handles keyboard interactions', () => {
       const onSelectPolygon = vi.fn();
-      customRender(
+      renderPolygonInSvg(
         <CanvasPolygon {...defaultProps} onSelectPolygon={onSelectPolygon} />
       );
 
@@ -537,7 +588,7 @@ describe('CanvasPolygon', () => {
         })),
       });
 
-      customRender(<CanvasPolygon {...defaultProps} />);
+      renderPolygonInSvg(<CanvasPolygon {...defaultProps} />);
 
       const polygonElement = screen.getByTestId('test-polygon');
       expect(polygonElement).toBeInTheDocument();

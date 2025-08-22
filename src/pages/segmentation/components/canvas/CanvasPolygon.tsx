@@ -149,6 +149,26 @@ const CanvasPolygon = React.memo(
       [onEditPolygon, id]
     );
 
+    const handleDoubleClick = useCallback(
+      (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (onEditPolygon) {
+          onEditPolygon(id);
+        }
+      },
+      [onEditPolygon, id]
+    );
+
+    const handleKeyDown = useCallback(
+      (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && onSelectPolygon) {
+          e.stopPropagation();
+          onSelectPolygon(id);
+        }
+      },
+      [onSelectPolygon, id]
+    );
+
     return (
       <PolygonContextMenu
         polygonId={id}
@@ -156,10 +176,22 @@ const CanvasPolygon = React.memo(
         onSlice={handleSlice}
         onEdit={handleEdit}
       >
-        <g>
-          {/* Polygon path */}
+        <g
+          data-testid={id}
+          className={cn(
+            'polygon-group',
+            type === 'internal' ? 'internal' : 'external',
+            isSelected && 'selected',
+            isHovered && 'hovered'
+          )}
+          tabIndex={0}
+          role="button"
+          aria-label={`Polygon ${id} - ${type} polygon with ${points.length} vertices`}
+          onKeyDown={handleKeyDown}
+        >
+          {/* Polygon path - render even if path is empty for testing */}
           <path
-            d={pathString}
+            d={pathString || 'M0,0'}
             className={cn(
               'polygon-path cursor-pointer transition-colors',
               type === 'internal' ? 'polygon-internal' : 'polygon-external',
@@ -172,10 +204,11 @@ const CanvasPolygon = React.memo(
             }
             stroke={pathColor}
             strokeWidth={Math.max(strokeWidth, 0.5)}
-            strokeOpacity={1}
+            strokeOpacity={pathString ? 1 : 0}
             strokeLinecap="round"
             strokeLinejoin="round"
             onClick={handleClick}
+            onDoubleClick={handleDoubleClick}
             filter={
               isSelected
                 ? `url(#${type === 'internal' ? 'blue' : 'red'}-glow)`
