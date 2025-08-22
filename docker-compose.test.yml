@@ -81,8 +81,8 @@ services:
       - PORT=3001
       - DATABASE_URL=postgresql://postgres:testpass@postgres-test:5432/testdb
       - REDIS_URL=redis://redis-test:6379
-      - JWT_ACCESS_SECRET=test-access-secret-32-chars-long-for-testing-purposes
-      - JWT_REFRESH_SECRET=test-refresh-secret-32-chars-long-for-testing-purposes
+      - JWT_ACCESS_SECRET=793cf11a915163ea3cf88e5861acdbef60cb8a25d14f59653751322c12e918f8
+      - JWT_REFRESH_SECRET=a9e4f2c8d3b6a1e7f5c2b8d4e9f3a7c5b2d8e4f1a3c7b9d5e2f8a4c1b7d3e9f5
       - SEGMENTATION_SERVICE_URL=http://ml-service-test:8000
       - ALLOWED_ORIGINS=http://localhost:3000,http://frontend-test:5173
       - WS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend-test:5173
