@@ -5,29 +5,27 @@ import { ToastEventProvider } from '@/components/AuthToastProvider';
 import { authEventEmitter } from '@/lib/authEvents';
 import { toast } from 'sonner';
 
-// Mock the hooks
-vi.mock('@/hooks/useAuthToasts');
-vi.mock('@/hooks/useWebSocketToasts');
+// Mock the hooks at module level
+vi.mock('@/hooks/useAuthToasts', () => ({
+  useAuthToasts: vi.fn(),
+}));
+
+vi.mock('@/hooks/useWebSocketToasts', () => ({
+  useWebSocketToasts: vi.fn(),
+}));
+
 vi.mock('sonner');
 
 describe('ToastEventProvider', () => {
-  const mockUseAuthToasts = vi.fn();
-  const mockUseWebSocketToasts = vi.fn();
   const mockToast = {
     success: vi.fn(),
     error: vi.fn(),
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(toast).success = mockToast.success;
     vi.mocked(toast).error = mockToast.error;
-
-    // Import and mock the hooks after clearing
-    const { useAuthToasts } = await import('@/hooks/useAuthToasts');
-    const { useWebSocketToasts } = await import('@/hooks/useWebSocketToasts');
-    vi.mocked(useAuthToasts).mockImplementation(mockUseAuthToasts);
-    vi.mocked(useWebSocketToasts).mockImplementation(mockUseWebSocketToasts);
   });
 
   afterEach(() => {
@@ -47,35 +45,42 @@ describe('ToastEventProvider', () => {
     expect(screen.getByText('Test Content')).toBeInTheDocument();
   });
 
-  it('calls useAuthToasts hook', () => {
+  it('calls useAuthToasts hook', async () => {
+    const { useAuthToasts } = await import('@/hooks/useAuthToasts');
+
     render(
       <ToastEventProvider>
         <div>Test</div>
       </ToastEventProvider>
     );
 
-    expect(mockUseAuthToasts).toHaveBeenCalledTimes(1);
+    expect(useAuthToasts).toHaveBeenCalledTimes(1);
   });
 
-  it('calls useWebSocketToasts hook', () => {
+  it('calls useWebSocketToasts hook', async () => {
+    const { useWebSocketToasts } = await import('@/hooks/useWebSocketToasts');
+
     render(
       <ToastEventProvider>
         <div>Test</div>
       </ToastEventProvider>
     );
 
-    expect(mockUseWebSocketToasts).toHaveBeenCalledTimes(1);
+    expect(useWebSocketToasts).toHaveBeenCalledTimes(1);
   });
 
-  it('calls both hooks when rendered', () => {
+  it('calls both hooks when rendered', async () => {
+    const { useAuthToasts } = await import('@/hooks/useAuthToasts');
+    const { useWebSocketToasts } = await import('@/hooks/useWebSocketToasts');
+
     render(
       <ToastEventProvider>
         <div>Test</div>
       </ToastEventProvider>
     );
 
-    expect(mockUseAuthToasts).toHaveBeenCalledTimes(1);
-    expect(mockUseWebSocketToasts).toHaveBeenCalledTimes(1);
+    expect(useAuthToasts).toHaveBeenCalledTimes(1);
+    expect(useWebSocketToasts).toHaveBeenCalledTimes(1);
   });
 
   it('renders multiple children correctly', () => {
