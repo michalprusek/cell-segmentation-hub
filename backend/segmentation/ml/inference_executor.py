@@ -326,8 +326,33 @@ class InferenceExecutor:
             for session in self._sessions.values():
                 session.update_status(InferenceStatus.CANCELLED)
         
-        # Shutdown executor
-        self.executor.shutdown(wait=wait, timeout=timeout)
+        # Shutdown executor with timeout handling
+        if wait and timeout:
+            # Get pending futures before shutdown
+            pending_futures = []
+            with self._global_lock:
+                for session in self._sessions.values():
+                    if hasattr(session, '_future') and session._future:
+                        pending_futures.append(session._future)
+            
+            if pending_futures:
+                # Wait for futures with timeout
+                import concurrent.futures
+                done, not_done = concurrent.futures.wait(
+                    pending_futures, 
+                    timeout=timeout,
+                    return_when=concurrent.futures.ALL_COMPLETED
+                )
+                
+                # Cancel any remaining futures
+                for future in not_done:
+                    future.cancel()
+            
+            # Now shutdown without timeout parameter
+            self.executor.shutdown(wait=True)
+        else:
+            # Regular shutdown without timeout
+            self.executor.shutdown(wait=wait)
         
         # Clear CUDA cache
         if torch.cuda.is_available():

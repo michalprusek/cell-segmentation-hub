@@ -57,18 +57,19 @@ export default {
     signInToAccount: '登录到您的账户',
     sort: '排序',
     no_preview: '无预览',
-    // Navigation and UI
     openMenu: '打开菜单',
     logOut: '退出登录',
-    // Error pages
     pageNotFound: '哎呀！页面未找到',
     returnToHome: '返回主页',
-    // Navigation
     next: '下一个',
     copy: '复制',
     noImage: '无图像',
     untitledImage: '无标题图像',
     rename: '重命名',
+    getStarted: '开始使用',
+    learnMore: '了解更多',
+    close: '关闭',
+    redirectingToDashboard: '正在重定向到仪表板...',
   },
   landing: {
     hero: {
@@ -116,7 +117,6 @@ export default {
     name: '名称',
     lastChange: '最后修改',
     status: '状态',
-    // Stats overview
     stats: {
       totalProjects: '项目总数',
       totalProjectsDesc: '活跃的球体研究',
@@ -165,7 +165,6 @@ export default {
     segmentationFailed: '分割失败',
     segmentationStarted: '分割已开始',
     segmentationCompleteWithCount: '分割完成！找到 {{count}} 个对象',
-    // Project management errors and messages
     failedToLoadProjects: '加载项目失败',
     projectNameRequired: '请输入项目名称',
     mustBeLoggedIn: '您必须登录才能创建项目',
@@ -211,23 +210,13 @@ export default {
       fieldRequired: '此字段是必需的',
     },
     operations: {
-      loadProject: '无法加载项目。请检查您的连接并重试。',
-      saveProject: '无法保存项目更改。请重试。',
       deleteProject: '无法删除项目。请确保您有必要的权限。',
-      uploadImage: '无法上传图像。请检查文件格式和大小。',
-      deleteImage: '无法删除图像。请尝试刷新页面并重复操作。',
-      processImage: '图像处理失败。请尝试使用不同的图像或联系支持。',
-      segmentation: '分割失败。请尝试使用不同的模型或调整配置。',
-      export: '数据导出失败。请验证数据是否可用。',
-      login: '登录错误。请验证您的邮箱和密码。',
-      logout: '登出错误。请尝试关闭浏览器。',
-      register: '注册失败。该邮箱可能已被使用。',
       updateProfile: '无法更新个人资料。请验证提供的信息。',
       changePassword: '无法更改密码。请验证您的当前密码。',
-      resetPassword: '密码重置失败。请验证提供的邮箱地址。',
-      deleteAccount: '无法删除账户。请联系支持获取帮助。',
       updateConsent: '无法更新同意偏好设置。请重试。',
+      unshareProject: '无法从共享项目中移除项目',
     },
+    deleteImages: '删除所选图像失败',
     contexts: {
       dashboard: '仪表板错误',
       project: '项目错误',
@@ -383,6 +372,10 @@ export default {
     light: '浅色',
     dark: '深色',
     system: '系统',
+    pageTitle: 'Settings',
+    profile: 'Profile',
+    account: 'Account',
+    models: 'Models',
   },
   auth: {
     signIn: '登录',
@@ -408,7 +401,6 @@ export default {
     checkingAuthentication: '验证身份中...',
     loadingAccount: '加载您的账户...',
     processingRequest: '处理您的请求...',
-    // SignIn page specific
     signInToAccount: '登录您的账户',
     accessPlatform: '访问球状体分割平台',
     emailAddress: '邮箱地址',
@@ -418,7 +410,6 @@ export default {
     signingIn: '登录中...',
     redirectingToDashboard: '正在跳转到仪表板...',
     fillAllFields: '请填写所有字段',
-    // Toast messages
     signInSuccess: '登录成功',
     signInFailed: '登录失败',
     registrationSuccess: '注册成功',
@@ -431,7 +422,6 @@ export default {
     termsOfService: '服务条款',
     and: '和',
     privacyPolicy: '隐私政策',
-    // SignUp page specific
     createAccount: '创建您的账户',
     signUpPlatform: '注册以使用球状体分割平台',
     confirmPassword: '确认密码',
@@ -444,18 +434,18 @@ export default {
     alreadySignedUp: '您已经注册并登录了。',
     goToDashboard: '前往仪表板',
     signUpFailed: '注册失败',
-    // Forgot Password specific
     enterEmailForReset: '输入邮箱地址重置密码',
     sending: '发送中...',
     sendNewPassword: '发送新密码',
     emailSent: '邮件已发送',
     checkEmailForNewPassword: '请检查您的邮箱获取新密码',
     resetPasswordEmailSent: '密码重置邮件已发送',
-    resetPasswordEmailSubject: '密码重置请求',
     resetPasswordError: '重置密码时出错',
     backToSignIn: '返回登录',
     didntReceiveEmail: '没有收到邮件？',
     rememberPassword: '想起密码了？',
+    redirectingToSignIn: 'Redirecting to sign-in...',
+    tryAgain: '重试',
   },
   profile: {
     title: '个人资料',
@@ -529,7 +519,6 @@ export default {
       deletePolygon: '删除多边形',
       unknown: '未知',
     },
-    autosaveFailed: '自动保存失败 - 更改可能丢失',
     modeDescription: {
       view: '导航和选择多边形',
       edit: '移动和修改顶点',
@@ -572,6 +561,8 @@ export default {
       noPolygons: '无多边形',
       startCreating: '开始创建多边形',
       polygonList: '多边形列表',
+      external: 'External',
+      internal: 'Internal',
     },
     shortcuts: {
       buttonText: '快捷键',
@@ -685,6 +676,7 @@ export default {
     ready: '准备分割',
     online: '在线',
     offline: '离线',
+    noPolygons: '无多边形',
   },
   queue: {
     title: '分割队列',
@@ -706,39 +698,31 @@ export default {
       '{{new}} 个新图像将被分割，{{resegment}} 个选中图像将被重新分割',
   },
   toast: {
-    // Generic messages
     error: '发生错误',
     success: '操作成功',
     info: '信息',
     warning: '警告',
     loading: '加载中...',
-    // Common errors
     failedToUpdate: '更新数据失败。请重试。',
     fillAllFields: '请填写所有字段',
     operationFailed: '操作失败。请重试。',
-    // Error boundary
     unexpectedError: '意外错误',
     somethingWentWrong: '出现了问题。请稍后重试。',
     somethingWentWrongPage: '加载此页面时出现问题。',
     returnToHome: '返回首页',
-    // Success messages
     operationCompleted: '操作成功完成',
     dataSaved: '数据保存成功',
     dataUpdated: '数据更新成功',
-    // Connection messages
     reconnecting: '正在重新连接服务器...',
     reconnected: '服务器连接已恢复',
     connectionFailed: '恢复服务器连接失败',
-    // Segmentation messages
     segmentationRequested: '已提交分割请求',
     segmentationCompleted: '图像分割完成',
     segmentationFailed: '分割失败',
     segmentationResultFailed: '获取分割结果失败',
     segmentationStatusFailed: '检查分割状态失败',
-    // Export messages
     exportCompleted: '导出成功完成！',
     exportFailed: '导出失败。请重试。',
-    // Project actions
     project: {
       created: '项目创建成功',
       createFailed: '创建项目失败',
@@ -753,16 +737,13 @@ export default {
       selected_other: '已选择{{count}}张图片',
       deleteSelected: '删除选中项',
     },
-    // Profile actions
     profile: {
       consentUpdated: '同意偏好设置更新成功',
       loadFailed: '加载个人资料数据失败',
     },
-    // Upload actions
     upload: {
       failed: '上传后刷新图像失败',
     },
-    // Segmentation actions
     segmentation: {
       saved: '分割保存成功',
       failed: '分割失败',
@@ -774,6 +755,7 @@ export default {
       completedWithCount: '分割完成！找到 {{count}} 个对象',
       noPolygons: '未检测到分割多边形',
       reloadFailed: '加载分割结果失败。请刷新页面。',
+      autosaveFailed: '自动保存失败 - 更改可能丢失',
     },
     autosaveFailed: '自动保存失败 - 更改可能丢失',
   },
@@ -784,20 +766,15 @@ export default {
   },
   export: {
     advancedExport: '高级导出',
-    // Dialog headers
     advancedOptions: '高级导出选项',
     configureSettings: '配置您的导出设置以创建全面的数据包',
-    // Tabs
     general: '常规',
     visualization: '可视化',
-    formats: '格式',
-    // Content selection
     exportContents: '导出内容',
     selectContent: '选择要包含在导出中的内容类型',
     includeOriginal: '包含原始图像',
     includeVisualizations: '包含带编号多边形的可视化',
     includeDocumentation: '包含文档和元数据',
-    // Image selection
     selectedImages: '已选择图像',
     imagesSelected: '已选择 {{count}} 张图像，共 {{total}} 张',
     selectAll: '全选',
@@ -813,12 +790,10 @@ export default {
     },
     showingImages: '显示 {{start}}-{{end}}，共 {{total}}',
     noImagesFound: '未找到图像',
-    // Quality settings
     qualitySettings: '质量设置',
     imageQuality: '图像质量',
     compressionLevel: '压缩级别',
     outputResolution: '输出分辨率',
-    // Visualization settings
     colorSettings: '颜色设置',
     backgroundColor: '背景色',
     strokeColor: '描边颜色',
@@ -826,38 +801,36 @@ export default {
     fontSize: '字体大小',
     showNumbers: '显示多边形编号',
     showLabels: '显示标签',
-    // Scale conversion
     scaleConversion: '比例转换',
     pixelToMicrometerScale: '像素到微米比例',
     scaleDescription: '指定一个像素等于多少微米来转换测量值',
     scalePlaceholder: '例如 0.5 (1像素 = 0.5µm)',
     scaleUnit: 'µm/像素',
     scaleWarning: '注意：比例值似乎异常高。请验证。',
-    // Format options
     outputSettings: '输出设置',
-    exportFormats: '导出格式',
+    exportFormats: {
+      yolo: 'YOLO格式',
+      excel: 'Excel格式',
+      json: 'JSON格式',
+    },
     exportToZip: '导出为ZIP存档',
     generateExcel: '生成Excel指标',
     includeCocoFormat: '包含COCO格式注释',
     includeJsonMetadata: '包含JSON元数据',
-    // Progress and status
     preparing: '准备导出中...',
     processing: '处理 {{current}} / {{total}}',
     packaging: '创建包中...',
     completed: '导出完成',
     downloading: '下载中...',
     cancelled: '导出已取消',
-    // Connection status
     connected: '已连接',
     disconnected: '已断开',
     reconnecting: '重新连接中...',
-    // Buttons
     startExport: '开始导出',
     cancel: '取消',
     download: '下载',
     retry: '重试',
     close: '关闭',
-    // Error messages
     exportError: '导出失败',
     exportFailed: '导出失败',
     exportComplete: '导出完成',
@@ -871,20 +844,13 @@ export default {
     cocoFormat: 'COCO格式',
     cocoFormatTitle: 'COCO格式导出',
     downloadJson: '下载JSON',
-    exportFormats: {
-      yolo: 'YOLO格式',
-      excel: 'Excel格式',
-      json: 'JSON格式',
-    },
     formatsTab: '格式',
   },
-  // Standalone image action messages (used without prefix)
   imageDeleted: '图像删除成功',
   deleteImageFailed: '删除图像失败',
   deleteImageError: '删除图像时出错',
   imageAlreadyProcessing: '图像正在处理中',
   processImageFailed: '图像处理失败',
-
   exportDialog: {
     title: '导出选项',
     includeMetadata: '包含元数据',
@@ -1416,8 +1382,6 @@ export default {
       },
     },
   },
-
-  // 上下文菜单
   contextMenu: {
     editPolygon: '编辑多边形',
     splitPolygon: '分割多边形',
@@ -1427,8 +1391,6 @@ export default {
     duplicateVertex: '复制顶点',
     deleteVertex: '删除顶点',
   },
-
-  // WebSocket messages
   websocket: {
     reconnecting: '正在重新连接服务器...',
     reconnected: '服务器连接已恢复',
@@ -1437,8 +1399,6 @@ export default {
     connected: '已连接到实时更新',
     disconnected: '已断开实时更新',
   },
-
-  // 指标显示
   metrics: {
     info: '指标仅针对外部多边形进行评估。内部多边形（孔洞）的面积会自动从相应的外部多边形中减去。',
     spheroid: '球体',
@@ -1455,8 +1415,6 @@ export default {
     feretAspectRatio: 'Feret纵横比',
     noPolygonsFound: '未找到可分析的多边形',
   },
-
-  // 键盘快捷键
   keyboardShortcuts: {
     title: '键盘快捷键',
     buttonLabel: '快捷键',
@@ -1476,38 +1434,25 @@ export default {
     resetView: '重置视图',
     helperText: '这些快捷键在分割编辑器中工作，以便更快、更方便地工作。',
   },
-
-  // 无障碍访问和屏幕阅读器标签
   accessibility: {
-    // 导航
     toggleSidebar: '切换侧边栏',
     toggleMenu: '切换菜单',
     selectLanguage: '选择语言',
     selectTheme: '选择主题',
     breadcrumb: '面包屑导航',
     pagination: '分页',
-
-    // 操作
     close: '关闭',
     more: '更多',
-
-    // 分页
     goToPreviousPage: '转到上一页',
     goToNextPage: '转到下一页',
     previousPage: '上一页',
     nextPage: '下一页',
     morePages: '更多页面',
-
-    // 轮播图
     previousSlide: '上一张幻灯片',
     nextSlide: '下一张幻灯片',
-
-    // 视图选项
     gridView: '网格视图',
     listView: '列表视图',
   },
-
-  // 项目分享
   sharing: {
     share: '分享',
     shared: '已分享',
@@ -1524,17 +1469,12 @@ export default {
     emailSent: '邮件邀请已发送！',
     emailRequired: '邮箱地址为必填项',
     emailShareFailed: '发送邮件邀请失败',
-
     linkExpiry: '链接过期时间',
     neverExpires: '永不过期',
     hours: '小时',
     days: '天',
-    week: '周',
     generateLink: '生成链接',
-    copyLink: '复制链接',
     linkCopied: '链接已复制到剪贴板！',
-    linkGenerateFailed: '生成分享链接失败',
-
     sharedWithYou: '与您分享',
     sharedBy: '分享者：{{email}}',
     sharedProjects: '共享项目',
@@ -1542,5 +1482,76 @@ export default {
     removeFromShared: '从共享中移除',
     acceptInvitation: '接受邀请',
     invitationAccepted: '邀请已接受！项目已添加到您的仪表板。',
+    generating: 'Generating...',
+    linkGenerated: 'Share link created!',
+    linkCopyFailed: 'Failed to copy link',
+    linkShareFailed: 'Failed to generate share link',
+    emailInvitations: 'Email invitations',
+    shareLinks: 'Share links',
+    shareRevoked: 'Share has been revoked',
+    acceptedUsers: 'Accepted users',
+    pendingInvitations: 'Pending invitations',
+    joinedViaLink: 'Joined via link',
+    activeShareLinks: 'Active share links',
+    joinedOn: 'Joined',
+    sentOn: 'Sent on',
+    joinedViaLinkOn: 'Joined',
+    resendInvitation: 'Resend invitation',
+    invitationResent: 'Invitation resent successfully',
+    resendFailed: 'Failed to resend invitation',
+    revokeAccess: 'Revoke access',
+    cancelInvitation: 'Cancel invitation',
+    reminderMessage:
+      'This is a reminder that you have been invited to collaborate on a project',
+    revokeShareFailed: 'Failed to revoke share',
+    failedToLoadShares: 'Failed to load shares',
+    status: {
+      pending: 'Pending',
+      accepted: 'Accepted',
+      revoked: 'Revoked',
+    },
+    invitationExpired: 'This invitation has expired',
+    invitationInvalid: 'Invalid invitation',
+    loginToAccept: 'Please log in to accept this invitation',
+    accepting: 'Accepting',
+    redirectingToProject: 'Redirecting to project',
+    redirectingToDashboard: 'Redirecting to dashboard',
+    invitedEmail: 'Invited email',
+    loadingShare: 'Loading share information...',
+    projectSharedBy: 'Project shared by',
+    signInRequired: 'Sign in required',
+    signInToAccept: 'Please sign in to accept this invitation',
+    signInButton: 'Sign in',
+    goToProject: 'Go to Project',
+    backToHome: 'Back to Home',
+    acceptFailed: 'Failed to accept invitation',
+    differentEmail: 'This invitation is for a different email address',
+  },
+  error: '错误',
+  segmentationEditor: {
+    reloadingSegmentation: '重新加载分割...',
+    segmenting: '分割中...',
+    waitingInQueue: '队列中等待...',
+  },
+  footer: {
+    appName: 'SpheroSeg',
+    description:
+      'Advanced spheroid segmentation and analysis platform for biomedical researchers, providing AI-powered tools for microscopic cell image analysis.',
+    contact: 'Contact',
+    institution: 'Institution',
+    institutionName: 'ÚTIA AV ČR',
+    address: 'Address',
+    addressText: 'Pod Vodárenskou věží 4, 182 08 Prague 8',
+    resources: 'Resources',
+    documentation: 'Documentation',
+    features: 'Features',
+    tutorials: 'Tutorials',
+    research: 'Research',
+    legal: 'Legal',
+    termsOfService: 'Terms of Service',
+    privacyPolicy: 'Privacy Policy',
+    contactUs: 'Contact Us',
+    copyright:
+      '© {{year}} SpheroSeg. Developed at ÚTIA AV ČR (Institute of Information Theory and Automation, Czech Academy of Sciences).',
   },
 };
