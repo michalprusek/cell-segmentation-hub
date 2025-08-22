@@ -1,0 +1,165 @@
+version: '3.8'
+
+# Docker Compose configuration for CI/CD testing environment
+# This file is specifically designed for automated testing in GitHub Actions
+# - Uses ephemeral storage (no persistent volumes)
+# - PostgreSQL for testing (matching production environment)
+# - Health checks for all services
+# - Test-specific environment variables
+
+services:
+  # PostgreSQL Database for Testing
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: spheroseg-postgres-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: testpass
+      POSTGRES_DB: testdb
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d testdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data:rw,noexec,nosuid,size=256m
+    # No persistent volumes - data is ephemeral for testing
+
+  # Redis Cache for Testing
+  redis-test:
+    image: redis:7-alpine
+    container_name: spheroseg-redis-test
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    tmpfs:
+      - /data:rw,noexec,nosuid,size=64m
+    # No persistent volumes - data is ephemeral for testing
+
+  # Frontend Service for Testing
+  frontend-test:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    container_name: spheroseg-frontend-test
+    environment:
+      - NODE_ENV=test
+      - VITE_API_URL=http://localhost:3001
+      - VITE_API_BASE_URL=http://localhost:3001/api
+      - VITE_ML_SERVICE_URL=http://localhost:8000
+      - VITE_WS_URL=ws://localhost:3001
+    ports:
+      - "3000:5173"
+    depends_on:
+      backend-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5173 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # No volumes - uses built-in code for testing
+
+  # Backend Service for Testing
+  backend-test:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: spheroseg-backend-test
+    environment:
+      - NODE_ENV=test
+      - HOST=0.0.0.0
+      - PORT=3001
+      - DATABASE_URL=postgresql://postgres:testpass@postgres-test:5432/testdb
+      - REDIS_URL=redis://redis-test:6379
+      - JWT_ACCESS_SECRET=test-access-secret-32-chars-long-for-testing-purposes
+      - JWT_REFRESH_SECRET=test-refresh-secret-32-chars-long-for-testing-purposes
+      - SEGMENTATION_SERVICE_URL=http://ml-service-test:8000
+      - ALLOWED_ORIGINS=http://localhost:3000,http://frontend-test:5173
+      - WS_ALLOWED_ORIGINS=http://localhost:3000,http://frontend-test:5173
+      - EMAIL_SERVICE=mock
+      - FROM_EMAIL=test@spheroseg.test
+      - SMTP_HOST=localhost
+      - SMTP_PORT=1025
+      - RATE_LIMIT_ENABLED=false
+      - LOG_LEVEL=warn
+      - PROMETHEUS_ENABLED=false
+      - UPLOAD_DIR=/tmp/uploads
+      - EXPORT_DIR=/tmp/exports
+      - STORAGE_TYPE=local
+      - ML_INFERENCE_TIMEOUT=60000
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+      redis-test:
+        condition: service_healthy
+      ml-service-test:
+        condition: service_healthy
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+    tmpfs:
+      - /tmp/uploads:rw,noexec,nosuid,size=128m
+      - /tmp/exports:rw,noexec,nosuid,size=64m
+      - /app/data:rw,noexec,nosuid,size=32m
+    # No persistent volumes - all data is ephemeral for testing
+
+  # ML Service for Testing
+  ml-service-test:
+    build:
+      context: ./backend/segmentation
+      dockerfile: ../../docker/ml.Dockerfile
+    container_name: spheroseg-ml-test
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DISPLAY=:99
+      - QT_QPA_PLATFORM=offscreen
+      - MODEL_CACHE_SIZE=1
+      - INFERENCE_TIMEOUT=60
+      - LOG_LEVEL=ERROR
+    ports:
+      - "8000:8000"
+    networks:
+      - test-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=256m
+    # No persistent volumes for model weights - using built-in models for testing
+
+networks:
+  test-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+
+# No volumes section - all data is ephemeral for testing
+# This ensures clean state for each test run and prevents data persistence issues
