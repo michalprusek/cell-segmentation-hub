@@ -11,6 +11,7 @@ vi.mock('@/contexts/LanguageContext', () => ({
     language: 'en',
     setLanguage: vi.fn(),
   }),
+  LanguageProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 describe('DashboardActions', () => {
