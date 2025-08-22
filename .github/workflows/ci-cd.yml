@@ -175,7 +175,7 @@ jobs:
       - name: Run database migrations
         working-directory: ./backend
         env:
-          DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb  # PŘIDAT TYTO 2 ŘÁDKY
+          DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
         run: npx prisma migrate deploy
 
       - name: Run integration tests
