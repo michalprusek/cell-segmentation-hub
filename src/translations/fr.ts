@@ -894,7 +894,7 @@ export default {
     scalePlaceholder: 'ex. 0,5 (1 pixel = 0,5 µm)',
     scaleUnit: 'µm/pixel',
     scaleWarning:
-      "Remarque: La valeur d'échelle semble inhabituellement élevée. Veuillez vérifier.",
+      "Remarque: Valeur d'échelle supérieure à 1 µm/pixel indique un très faible grossissement. Veuillez vérifier.",
     outputSettings: 'Paramètres de Sortie',
     exportFormats: {
       yolo: 'Format YOLO',
