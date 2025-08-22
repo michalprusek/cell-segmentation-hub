@@ -258,7 +258,8 @@ class WebSocketManager {
     });
 
     // Data events
-    this.socket.on('segmentation-update', (update: SegmentationUpdate) => {
+    // Backend emits 'segmentationUpdate', we need to listen for that
+    this.socket.on('segmentationUpdate', (update: SegmentationUpdate) => {
       // ENHANCED DEBUG LOGGING
       logger.warn('🔴 SEGMENTATION UPDATE RECEIVED:', {
         imageId: update.imageId,
@@ -274,14 +275,46 @@ class WebSocketManager {
       if (process.env.NODE_ENV === 'development') {
         logger.debug('Full segmentation update:', update);
       }
+      // Keep emitting with hyphenated name for backward compatibility
       this.emitToListeners('segmentation-update', update);
     });
 
-    this.socket.on('queue-stats-update', (stats: QueueStats) => {
+    // Backend emits 'queueStats', we need to listen for that
+    this.socket.on('queueStats', (stats: QueueStats) => {
       if (process.env.NODE_ENV === 'development') {
         logger.debug('Queue stats update received:', stats);
       }
+      // Keep emitting with hyphenated name for backward compatibility
       this.emitToListeners('queue-stats-update', stats);
+    });
+
+    // Also listen for 'segmentationCompleted' event from backend
+    this.socket.on(
+      'segmentationCompleted',
+      (data: SegmentationCompletedMessage) => {
+        if (process.env.NODE_ENV === 'development') {
+          logger.debug('Segmentation completed event received:', data);
+        }
+        // Convert to notification format for backward compatibility
+        const notification: Notification = {
+          type: 'segmentation-complete',
+          polygonCount: data.polygonCount || 0,
+        };
+        this.emitToListeners('notification', notification);
+      }
+    );
+
+    // Also listen for 'segmentationFailed' event from backend
+    this.socket.on('segmentationFailed', (data: SegmentationFailedMessage) => {
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug('Segmentation failed event received:', data);
+      }
+      // Convert to system message for backward compatibility
+      const message: SystemMessage = {
+        type: 'error',
+        message: data.error || 'Segmentation failed',
+      };
+      this.emitToListeners('system-message', message);
     });
 
     this.socket.on('notification', (notification: Notification) => {

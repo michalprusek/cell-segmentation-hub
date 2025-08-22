@@ -172,6 +172,8 @@ export default {
     errorAddingToQueue: 'Error adding images to queue',
     imageAlreadyProcessing: 'Image is already being processed',
     processImageFailed: 'Failed to process image',
+    selected: '{{count}} selected',
+    deleteSelected: 'Delete Selected',
     segmentationCompleted: 'Segmentation completed for image',
     segmentationFailed: 'Segmentation failed',
     segmentationStarted: 'Segmentation has started',
@@ -820,6 +822,11 @@ export default {
     exportCompleted: 'Export completed successfully!',
     exportFailed: 'Export failed. Please try again.',
   },
+  project: {
+    selected: '{{count}} image selected',
+    selected_other: '{{count}} images selected',
+    deleteSelected: 'Delete Selected',
+  },
   export: {
     // Dialog headers
     advancedExport: 'Advanced Export',
@@ -911,7 +918,7 @@ export default {
     cocoFormat: 'COCO Format',
     cocoFormatTitle: 'COCO Format Export',
     downloadJson: 'Download JSON',
-    formats: {
+    exportFormats: {
       yolo: 'YOLO Format',
       excel: 'Excel Format',
       json: 'JSON Format',

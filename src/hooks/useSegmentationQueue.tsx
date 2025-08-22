@@ -104,10 +104,26 @@ export const useSegmentationQueue = (projectId?: string) => {
     currentProjectRef.current = isDisabled ? undefined : projectId;
   }, [projectId, isDisabled]);
 
-  // Update connection status based on context
+  // Update connection status based on context and request initial stats
   useEffect(() => {
     setIsConnected(contextIsConnected);
-  }, [contextIsConnected]);
+
+    // When connection is established, immediately request queue stats
+    if (
+      contextIsConnected &&
+      wsManagerRef.current &&
+      projectId &&
+      !isDisabled
+    ) {
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug(
+          'Connection established, requesting initial queue stats for project:',
+          projectId
+        );
+      }
+      wsManagerRef.current.requestQueueStats(projectId);
+    }
+  }, [contextIsConnected, projectId, isDisabled]);
 
   // Initialize event listeners - use context manager if available, fallback to singleton
   useEffect(() => {
@@ -185,7 +201,20 @@ export const useSegmentationQueue = (projectId?: string) => {
       logger.debug('Joining project room:', projectId);
     }
     wsManagerRef.current.joinProject(projectId);
+
+    // Request queue stats immediately and set up periodic refresh
     wsManagerRef.current.requestQueueStats(projectId);
+
+    // Request queue stats every 5 seconds to ensure we have fresh data
+    const intervalId = setInterval(() => {
+      if (wsManagerRef.current && isConnected && projectId) {
+        wsManagerRef.current.requestQueueStats(projectId);
+      }
+    }, 5000);
+
+    return () => {
+      clearInterval(intervalId);
+    };
   }, [projectId, isConnected, isDisabled]);
 
   // Functions for interacting with the queue

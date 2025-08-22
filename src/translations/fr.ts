@@ -168,6 +168,8 @@ export default {
     errorAddingToQueue: "Erreur lors de l'ajout à la file",
     imageAlreadyProcessing: "L'image est déjà en cours de traitement",
     processImageFailed: "Échec du traitement de l'image",
+    selected: '{{count}} sélectionnés',
+    deleteSelected: 'Supprimer la sélection',
     segmentationCompleted: "Segmentation terminée pour l'image",
     segmentationFailed: 'Échec de la segmentation',
     segmentationStarted: 'La segmentation a commencé',
@@ -846,6 +848,11 @@ export default {
     autosaveFailed:
       'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
   },
+  project: {
+    selected: '{{count}} image sélectionnée',
+    selected_other: '{{count}} images sélectionnées',
+    deleteSelected: 'Supprimer la sélection',
+  },
   export: {
     advancedExport: 'Export Avancé',
     // Dialog headers
@@ -940,7 +947,7 @@ export default {
     cocoFormat: 'Format COCO',
     cocoFormatTitle: 'Export format COCO',
     downloadJson: 'Télécharger JSON',
-    formats: {
+    exportFormats: {
       yolo: 'Format YOLO',
       excel: 'Format Excel',
       json: 'Format JSON',

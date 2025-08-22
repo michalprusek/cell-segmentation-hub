@@ -168,6 +168,8 @@ export default {
     errorAddingToQueue: 'Fehler beim Hinzufügen zur Warteschlange',
     imageAlreadyProcessing: 'Bild wird bereits verarbeitet',
     processImageFailed: 'Bildverarbeitung fehlgeschlagen',
+    selected: '{{count}} ausgewählt',
+    deleteSelected: 'Ausgewählte löschen',
     segmentationCompleted: 'Segmentierung für Bild abgeschlossen',
     segmentationFailed: 'Segmentierung fehlgeschlagen',
     segmentationStarted: 'Segmentierung hat begonnen',
@@ -855,6 +857,11 @@ export default {
     autosaveFailed:
       'Automatisches Speichern fehlgeschlagen - Änderungen können verloren gehen',
   },
+  project: {
+    selected: '{{count}} Bild ausgewählt',
+    selected_other: '{{count}} Bilder ausgewählt',
+    deleteSelected: 'Ausgewählte löschen',
+  },
   export: {
     advancedExport: 'Erweiterter Export',
     // Dialog headers
@@ -950,7 +957,7 @@ export default {
     cocoFormat: 'COCO-Format',
     cocoFormatTitle: 'COCO-Format-Export',
     downloadJson: 'JSON herunterladen',
-    formats: {
+    exportFormats: {
       yolo: 'YOLO-Format',
       excel: 'Excel-Format',
       json: 'JSON-Format',
