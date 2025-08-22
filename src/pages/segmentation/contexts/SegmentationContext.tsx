@@ -9,7 +9,6 @@ const SegmentationContext = createContext<SegmentationContextType>({
   segmentation: null,
 });
 
-// eslint-disable-next-line react-refresh/only-export-components
 export const useSegmentationContext = () => useContext(SegmentationContext);
 
 interface SegmentationProviderProps {

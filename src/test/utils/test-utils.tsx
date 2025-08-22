@@ -32,7 +32,6 @@ const customRender = (
 ): RenderResult => render(ui, { wrapper: AllProviders, ...options });
 
 // Re-export everything
-// eslint-disable-next-line react-refresh/only-export-components
 export * from '@testing-library/react';
 
 // Override render method

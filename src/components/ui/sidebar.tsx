@@ -761,5 +761,4 @@ export {
 };
 
 // Export hook separately to avoid fast refresh warning
-// eslint-disable-next-line react-refresh/only-export-components
 export { useSidebar };

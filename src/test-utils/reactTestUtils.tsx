@@ -16,12 +16,10 @@ import type {
 } from '@/pages/segmentation/types';
 
 // Mock contexts for testing
-// eslint-disable-next-line react-refresh/only-export-components
 const MockLanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => <LanguageProvider>{children}</LanguageProvider>;
 
-// eslint-disable-next-line react-refresh/only-export-components
 const MockThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -45,7 +43,6 @@ const MockThemeProvider: React.FC<{ children: React.ReactNode }> = ({
   return <ThemeProvider>{children}</ThemeProvider>;
 };
 
-// eslint-disable-next-line react-refresh/only-export-components
 const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -85,7 +82,6 @@ const MockAuthProvider: React.FC<{ children: React.ReactNode }> = ({
 };
 
 // All providers wrapper for testing
-// eslint-disable-next-line react-refresh/only-export-components
 const AllProviders: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => (
@@ -388,5 +384,4 @@ export const createMockFile = (
 
 export { customRender as render, customRenderHook as renderHook };
 
-// eslint-disable-next-line react-refresh/only-export-components
 export * from '@testing-library/react';
