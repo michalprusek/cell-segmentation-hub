@@ -719,7 +719,7 @@ describe('API Client - Advanced Features', () => {
         },
       };
 
-      const logger = require('@/lib/logger').logger;
+      const { logger } = await import('@/lib/logger');
       mockAxiosInstance.get.mockResolvedValue(mockResponse);
 
       const result = await apiClient.getImageWithSegmentation('1');
