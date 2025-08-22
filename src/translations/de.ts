@@ -823,6 +823,9 @@ export default {
       notFound: 'Projekt nicht gefunden',
       invalidResponse: 'Serverantwort war ungültig',
       readyForImages: 'ist bereit für Bilder',
+      selected: '{{count}} Bild ausgewählt',
+      selected_other: '{{count}} Bilder ausgewählt',
+      deleteSelected: 'Ausgewählte löschen',
     },
     // Profile actions
     profile: {
@@ -942,6 +945,17 @@ export default {
     serverError: 'Server-Fehler aufgetreten',
     invalidSelection: 'Bitte wählen Sie mindestens ein Bild aus',
     noData: 'Keine Daten für Export verfügbar',
+    segmentationData: 'Segmentierungsdaten',
+    spheroidMetrics: 'Sphäroid-Metriken',
+    cocoFormat: 'COCO-Format',
+    cocoFormatTitle: 'COCO-Format-Export',
+    downloadJson: 'JSON herunterladen',
+    formats: {
+      yolo: 'YOLO-Format',
+      excel: 'Excel-Format',
+      json: 'JSON-Format',
+    },
+    formatsTab: 'Formate',
   },
   // Standalone image action messages (used without prefix)
   imageDeleted: 'Bild erfolgreich gelöscht',

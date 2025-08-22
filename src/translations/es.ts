@@ -809,6 +809,9 @@ export default {
       notFound: 'Proyecto no encontrado',
       invalidResponse: 'La respuesta del servidor fue inválida',
       readyForImages: 'está listo para imágenes',
+      selected: '{{count}} imagen seleccionada',
+      selected_other: '{{count}} imágenes seleccionadas',
+      deleteSelected: 'Eliminar Seleccionadas',
     },
     // Profile actions
     profile: {
@@ -927,6 +930,17 @@ export default {
     serverError: 'Error del servidor ocurrido',
     invalidSelection: 'Por favor seleccione al menos una imagen',
     noData: 'No hay datos disponibles para exportar',
+    segmentationData: 'Datos de segmentación',
+    spheroidMetrics: 'Métricas de esferoides',
+    cocoFormat: 'Formato COCO',
+    cocoFormatTitle: 'Exportación de formato COCO',
+    downloadJson: 'Descargar JSON',
+    formats: {
+      yolo: 'Formato YOLO',
+      excel: 'Formato Excel',
+      json: 'Formato JSON',
+    },
+    formatsTab: 'Formatos',
   },
   // Standalone image action messages (used without prefix)
   imageDeleted: 'Imagen eliminada exitosamente',

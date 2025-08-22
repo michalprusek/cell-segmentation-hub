@@ -810,6 +810,9 @@ export default {
       urlCopied: 'URL projektu bylo zkopírováno do schránky',
       invalidResponse: 'Odpověď serveru byla neplatná',
       readyForImages: 'je připraven pro obrázky',
+      selected: '{{count}} obrázek vybrán',
+      selected_other: '{{count}} obrázky vybrány',
+      deleteSelected: 'Smazat vybrané',
     },
     // Profile messages
     profile: {
@@ -865,6 +868,7 @@ export default {
     general: 'Obecné',
     visualization: 'Vizualizace',
     formats: 'Formáty',
+    formatsTab: 'Formáty',
     // Content selection
     exportContents: 'Obsah exportu',
     selectContent: 'Vyberte typy obsahu k zahrnutí do exportu',
@@ -942,6 +946,16 @@ export default {
     serverError: 'Nastala chyba serveru',
     invalidSelection: 'Vyberte prosím alespoň jeden obrázek',
     noData: 'Žádná data k exportu nejsou k dispozici',
+    segmentationData: 'Data segmentace',
+    spheroidMetrics: 'Metriky sféroidů',
+    cocoFormat: 'Formát COCO',
+    cocoFormatTitle: 'Export formátu COCO',
+    downloadJson: 'Stáhnout JSON',
+    formats: {
+      yolo: 'Formát YOLO',
+      excel: 'Formát Excel',
+      json: 'Formát JSON',
+    },
   },
   docs: {
     // Header section
@@ -1211,6 +1225,7 @@ export default {
         coco: 'Formát COCO: Common Objects in Context - standardní formát pro frameworky detekce objektů jako PyTorch a TensorFlow',
         yolo: 'Formát YOLO: You Only Look Once - optimalizovaný formát pro modely detekce založené na YOLO',
         json: 'Vlastní JSON: Strukturovaný JSON formát s podrobnými souřadnicemi polygonů a metadaty',
+        excel: 'Formát Excel',
       },
       calculatedMetrics: 'Vypočítané metriky',
       metricsDescription:

@@ -746,6 +746,9 @@ export default {
       notFound: '项目未找到',
       invalidResponse: '服务器响应无效',
       readyForImages: '已准备好接收图片',
+      selected: '已选择{{count}}张图片',
+      selected_other: '已选择{{count}}张图片',
+      deleteSelected: '删除选中项',
     },
     // Profile actions
     profile: {
@@ -855,6 +858,17 @@ export default {
     serverError: '服务器错误发生',
     invalidSelection: '请至少选择一张图像',
     noData: '没有可用于导出的数据',
+    segmentationData: '分割数据',
+    spheroidMetrics: '球体指标',
+    cocoFormat: 'COCO格式',
+    cocoFormatTitle: 'COCO格式导出',
+    downloadJson: '下载JSON',
+    formats: {
+      yolo: 'YOLO格式',
+      excel: 'Excel格式',
+      json: 'JSON格式',
+    },
+    formatsTab: '格式',
   },
   // Standalone image action messages (used without prefix)
   imageDeleted: '图像删除成功',
