@@ -46,7 +46,12 @@ const ThemeSwitcher = () => {
   };
 
   const handleThemeChange = async (newTheme: Theme) => {
-    await setTheme(newTheme);
+    try {
+      await setTheme(newTheme);
+    } catch (error) {
+      // Silently handle theme change errors
+      console.warn('Failed to change theme:', error);
+    }
   };
 
   const CurrentIcon = getCurrentThemeIcon();
