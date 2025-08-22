@@ -890,7 +890,7 @@ export default {
     scaleConversion: "Conversion d'Échelle",
     pixelToMicrometerScale: 'Échelle Pixel vers Micromètre',
     scaleDescription:
-      'Spécifiez combien de micromètres équivalent à un pixel pour convertir les mesures',
+      'Spécifiez combien de micromètres un pixel représente pour convertir les mesures',
     scalePlaceholder: 'ex. 0,5 (1 pixel = 0,5 µm)',
     scaleUnit: 'µm/pixel',
     scaleWarning:

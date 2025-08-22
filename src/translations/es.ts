@@ -883,11 +883,11 @@ export default {
     scaleConversion: 'Conversión de Escala',
     pixelToMicrometerScale: 'Escala Píxel a Micrómetro',
     scaleDescription:
-      'Especifique cuántos micrómetros equivalen a un píxel para convertir mediciones',
+      'Especifique cuántos micrómetros representa un píxel para convertir mediciones',
     scalePlaceholder: 'ej. 0,5 (1 píxel = 0,5 µm)',
     scaleUnit: 'µm/píxel',
     scaleWarning:
-      'Nota: El valor de escala parece inusualmente alto. Por favor verifique.',
+      'Nota: Valor de escala superior a 1 µm/píxel indica magnificación muy baja. Por favor verifique.',
     outputSettings: 'Configuración de Salida',
     exportFormats: {
       yolo: 'Formato YOLO',

@@ -186,6 +186,7 @@ const CanvasPolygon = React.memo(
           role="button"
           aria-label={`Polygon ${id} - ${type} polygon with ${points.length} vertices`}
           onKeyDown={handleKeyDown}
+          style={{ outline: 'none' }}
         >
           {/* Polygon path - render even if path is empty for testing */}
           <path
