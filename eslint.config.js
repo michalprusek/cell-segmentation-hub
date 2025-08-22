@@ -6,7 +6,18 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['dist', '**/dist/**', '**/*.d.ts', 'characteristic_functions.py'],
+    ignores: [
+      'dist',
+      '**/dist/**',
+      '**/*.d.ts',
+      'characteristic_functions.py',
+      // Migrated from .eslintignore
+      'src/types/globals.d.ts',
+      'build/',
+      'node_modules/',
+      '*.generated.ts',
+      '*.d.ts.map',
+    ],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

@@ -1,5 +1,41 @@
 import { vi, expect } from 'vitest';
 
+// Mock localStorage for test environment
+const localStorageMock = {
+  getItem: vi.fn((key: string) => {
+    if (key === 'theme') return 'system';
+    if (key === 'language') return 'en';
+    return null;
+  }),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+Object.defineProperty(window, 'localStorage', {
+  value: localStorageMock,
+});
+
+// Mock window.matchMedia for ThemeContext
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(), // Deprecated
+    removeListener: vi.fn(), // Deprecated
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })),
+});
+
+// Mock navigator.language for LanguageContext
+Object.defineProperty(navigator, 'language', {
+  writable: true,
+  value: 'en-US',
+});
+
 // Mock ImageData for Node.js test environment
 global.ImageData = class MockImageData {
   public data: Uint8ClampedArray;
@@ -34,6 +70,17 @@ if (!('memory' in performance)) {
     },
   });
 }
+
+// Mock API client to prevent network calls in tests
+vi.mock('@/lib/api', () => ({
+  default: {
+    getUserProfile: vi.fn().mockResolvedValue({
+      preferred_theme: 'system',
+      preferredLang: 'en',
+    }),
+    updateUserProfile: vi.fn().mockResolvedValue({}),
+  },
+}));
 
 // Setup global test utilities
 (globalThis as any).expect = expect;

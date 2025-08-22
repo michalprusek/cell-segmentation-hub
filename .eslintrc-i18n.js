@@ -19,6 +19,7 @@ export default [
       '**/*.d.ts',
       'tests/**',
       'src/test/**',
+      'src/App.tsx', // App.tsx contains only providers and routing, no translatable text
     ],
     languageOptions: {
       parser: tsParser,
