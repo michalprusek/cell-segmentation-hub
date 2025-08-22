@@ -9,15 +9,24 @@ import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 import cv2
-from typing import Dict, List, Tuple, Any
+from typing import Dict, List, Tuple, Any, Optional
 import logging
 from pathlib import Path
+import time
+import uuid
 
 # Import model architectures using relative imports
-
 from models.hrnet import HRNetV2
 from models.resunet_advanced import AdvancedResUNet
 from models.resunet_small import ResUNetSmall
+
+# Import the new inference executor
+from .inference_executor import (
+    InferenceExecutor, 
+    InferenceTimeoutError,
+    InferenceError,
+    get_global_executor
+)
 
 logger = logging.getLogger(__name__)
 
@@ -213,8 +222,24 @@ class ModelLoader:
         
         return binary_mask
     
-    def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5) -> Dict[str, Any]:
-        """Perform segmentation on an image"""
+    def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> Dict[str, Any]:
+        """
+        Perform segmentation on an image with improved timeout handling
+        
+        Args:
+            image: PIL Image to segment
+            model_name: Name of the model to use
+            threshold: Segmentation threshold
+            detect_holes: Whether to detect holes in segmentation
+            timeout: Optional timeout override (uses env variable if not specified)
+        
+        Returns:
+            Dictionary containing segmentation results
+            
+        Raises:
+            InferenceTimeoutError: If inference exceeds timeout
+            InferenceError: For other inference failures
+        """
         
         # Set processing state
         self.is_processing = True
@@ -222,7 +247,7 @@ class ModelLoader:
         
         try:
             original_size = image.size  # (width, height)
-            logger.info(f"Starting prediction for {model_name}, image size: {original_size}")
+            logger.info(f"Starting prediction for {model_name}, image size: {original_size}, detect_holes: {detect_holes}")
             
             # Get model
             model = self.get_model(model_name)
@@ -232,16 +257,42 @@ class ModelLoader:
             input_tensor = self.preprocess_image(image)
             logger.info(f"Image preprocessed, tensor shape: {input_tensor.shape}, device: {input_tensor.device}")
             
-            # Check memory before inference
+            # Get the global inference executor
+            executor = get_global_executor()
+            
+            # Use environment variable for timeout if not specified
+            if timeout is None:
+                timeout = float(os.getenv("ML_INFERENCE_TIMEOUT", "60"))
+            
+            # Log resource usage before inference
             if self.device.type == 'cuda':
                 memory_before = torch.cuda.memory_allocated()
                 logger.info(f"GPU memory before inference: {memory_before / 1024**2:.1f} MB")
             
-            # Perform inference
-            logger.info(f"Starting inference with {model_name}")
-            with torch.no_grad():
-                output = model(input_tensor)
-            logger.info(f"Inference completed, output shape: {output.shape if not isinstance(output, tuple) else [o.shape for o in output]}")
+            # Perform inference with proper timeout handling
+            logger.info(f"Starting inference with {model_name}, timeout: {timeout}s")
+            
+            try:
+                output = executor.execute_inference(
+                    model=model,
+                    input_tensor=input_tensor,
+                    model_name=model_name,
+                    timeout=timeout,
+                    image_size=original_size
+                )
+                logger.info(f"Inference completed, output shape: {output.shape if not isinstance(output, tuple) else [o.shape for o in output]}")
+                
+            except InferenceTimeoutError:
+                # Re-raise with additional context
+                self.is_processing = False
+                self.current_model = None
+                raise
+                
+            except Exception as e:
+                # Wrap other exceptions
+                self.is_processing = False
+                self.current_model = None
+                raise InferenceError(f"Inference failed for {model_name}: {str(e)}") from e
             
             # Check memory after inference
             if self.device.type == 'cuda':
@@ -255,8 +306,29 @@ class ModelLoader:
             # Postprocess
             binary_mask = self.postprocess_mask(output, original_size, threshold)
         
-            # Find contours for polygon extraction with hierarchy - use RETR_TREE to detect holes
-            contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            # If detect_holes is False, fill all holes in the binary mask
+            if not detect_holes:
+                # Create filled mask by flood-filling from edges
+                h, w = binary_mask.shape
+                filled_mask = binary_mask.copy()
+                
+                # Find all contours
+                temp_contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                
+                # Fill all contours (this fills holes)
+                for contour in temp_contours:
+                    cv2.fillPoly(filled_mask, [contour], 255)
+                
+                binary_mask = filled_mask
+                logger.info("Holes detection disabled - filled all holes in binary mask")
+            
+            # Find contours for polygon extraction with hierarchy
+            if detect_holes:
+                # Use RETR_TREE to detect holes and internal structures
+                contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+            else:
+                # Use RETR_EXTERNAL to detect only external boundaries (holes already filled)
+                contours, hierarchy = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
             
             # Convert contours to polygons with hierarchy information
             polygons = []
@@ -282,11 +354,11 @@ class ModelLoader:
                     polygon_points.append({"x": float(x), "y": float(y)})
                 
                 if len(polygon_points) >= 3:  # Valid polygon needs at least 3 points
-                    # Determine polygon type based on hierarchy
+                    # Determine polygon type based on hierarchy and detect_holes setting
                     polygon_type = "external"
                     parent_id = None
                     
-                    if hierarchy is not None:
+                    if detect_holes and hierarchy is not None:
                         # hierarchy[i] = [next, previous, first_child, parent]
                         parent_idx = hierarchy[i][3]
                         if parent_idx != -1:

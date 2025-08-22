@@ -48,6 +48,8 @@ export default {
     notifications: 'Notificaciones',
     passwordConfirm: 'Confirmar contraseña',
     manageAccount: 'Administrar tu cuenta',
+    getStarted: 'Comenzar',
+    learnMore: 'Saber más',
     documentation: 'Documentación',
     changePassword: 'Cambiar contraseña',
     deleteAccount: 'Eliminar cuenta',
@@ -57,18 +59,17 @@ export default {
     signInToAccount: 'Iniciar sesión en tu cuenta',
     sort: 'Ordenar',
     no_preview: 'Sin vista previa',
-    // Navigation and UI
     openMenu: 'Abrir menú',
     logOut: 'Cerrar sesión',
-    // Error pages
     pageNotFound: '¡Ups! Página no encontrada',
     returnToHome: 'Volver al inicio',
-    // Navigation
     next: 'Siguiente',
     copy: 'Copiar',
+    close: 'Cerrar',
     noImage: 'Sin imagen',
     untitledImage: 'Imagen sin título',
     rename: 'Renombrar',
+    redirectingToDashboard: 'Redirigiendo al panel de control...',
   },
   landing: {
     hero: {
@@ -120,7 +121,6 @@ export default {
     name: 'Nombre',
     lastChange: 'Último cambio',
     status: 'Estado',
-    // Stats overview
     stats: {
       totalProjects: 'Total de proyectos',
       totalProjectsDesc: 'Estudios activos de esferoides',
@@ -167,12 +167,13 @@ export default {
     errorAddingToQueue: 'Error al añadir imágenes a la cola',
     imageAlreadyProcessing: 'La imagen ya está siendo procesada',
     processImageFailed: 'Error al procesar la imagen',
+    selected: '{{count}} seleccionados',
+    deleteSelected: 'Eliminar seleccionados',
     segmentationCompleted: 'Segmentación completada para la imagen',
     segmentationFailed: 'La segmentación ha fallado',
     segmentationStarted: 'La segmentación ha comenzado',
     segmentationCompleteWithCount:
       'Segmentación completa! Se encontraron {{count}} objetos',
-    // Project management errors and messages
     failedToLoadProjects: 'Error al cargar proyectos',
     projectNameRequired: 'Por favor ingrese un nombre de proyecto',
     mustBeLoggedIn: 'Debe estar conectado para crear un proyecto',
@@ -229,36 +230,15 @@ export default {
       fieldRequired: 'Este campo es requerido',
     },
     operations: {
-      loadProject:
-        'No se pudo cargar el proyecto. Verifica tu conexión e intenta de nuevo.',
-      saveProject:
-        'No se pudieron guardar los cambios del proyecto. Por favor intenta de nuevo.',
-      deleteProject:
-        'No se puede eliminar el proyecto. Asegúrate de tener los permisos necesarios.',
-      uploadImage:
-        'No se pudo subir la imagen. Verifica el formato y tamaño del archivo.',
-      deleteImage:
-        'No se puede eliminar la imagen. Intenta actualizar la página y repetir la acción.',
-      processImage:
-        'El procesamiento de imagen falló. Prueba con una imagen diferente o contacta soporte.',
-      segmentation:
-        'La segmentación falló. Intenta usar un modelo diferente o ajustar la configuración.',
-      export:
-        'La exportación de datos falló. Verifica que los datos estén disponibles.',
-      login: 'Error al iniciar sesión. Verifica tu correo y contraseña.',
-      logout: 'Error al cerrar sesión. Intenta cerrar tu navegador.',
-      register: 'El registro falló. Este correo puede ya estar en uso.',
-      updateProfile:
-        'No se pudo actualizar el perfil. Verifica la información proporcionada.',
-      changePassword:
-        'No se pudo cambiar la contraseña. Verifica tu contraseña actual.',
-      resetPassword:
-        'El restablecimiento de contraseña falló. Verifica la dirección de correo proporcionada.',
-      deleteAccount:
-        'No se pudo eliminar la cuenta. Contacta soporte para asistencia.',
+      unshareProject:
+        'No se pudo quitar el proyecto de los proyectos compartidos',
+      deleteProject: 'No se pudo eliminar el proyecto',
+      changePassword: 'No se pudo cambiar la contraseña',
       updateConsent:
-        'No se pudieron actualizar las preferencias de consentimiento. Por favor intenta de nuevo.',
+        'No se pudieron actualizar las preferencias de consentimiento',
+      updateProfile: 'No se pudo actualizar el perfil',
     },
+    deleteImages: 'Error al eliminar las imágenes seleccionadas',
     contexts: {
       dashboard: 'Error del dashboard',
       project: 'Error del proyecto',
@@ -348,6 +328,9 @@ export default {
     confidenceThreshold: 'Umbral de Confianza',
     confidenceThresholdDescription:
       'Confianza mínima requerida para las predicciones de segmentación',
+    detectHoles: 'Detectar Agujeros',
+    detectHolesDescription:
+      'Habilitar la detección de estructuras internas y agujeros dentro de las células',
     currentThreshold: 'Umbral actual',
     modelSelected: 'Modelo seleccionado con éxito',
     modelSettingsSaved: 'Configuración de modelo guardada con éxito',
@@ -419,6 +402,10 @@ export default {
     light: 'Claro',
     dark: 'Oscuro',
     system: 'Sistema',
+    pageTitle: 'Settings',
+    profile: 'Profile',
+    account: 'Account',
+    models: 'Models',
   },
   auth: {
     signIn: 'Iniciar sesión',
@@ -445,7 +432,6 @@ export default {
     checkingAuthentication: 'Verificando autenticación...',
     loadingAccount: 'Cargando tu cuenta...',
     processingRequest: 'Procesando tu solicitud...',
-    // SignIn page specific
     signInToAccount: 'Inicia sesión en tu cuenta',
     accessPlatform: 'Accede a la plataforma de segmentación de esferoides',
     emailAddress: 'Dirección de correo electrónico',
@@ -456,7 +442,6 @@ export default {
     redirectingToDashboard: 'Redirigiendo al panel...',
     redirectingToSignIn: 'Redirigiendo al inicio de sesión...',
     fillAllFields: 'Por favor, completa todos los campos',
-    // Toast messages
     signInSuccess: 'Inicio de sesión exitoso',
     signInFailed: 'Error en el inicio de sesión',
     registrationSuccess: 'Registro exitoso',
@@ -470,7 +455,6 @@ export default {
     termsOfService: 'Términos de Servicio',
     and: 'y',
     privacyPolicy: 'Política de Privacidad',
-    // SignUp page specific
     createAccount: 'Crea tu cuenta',
     signUpPlatform:
       'Regístrate para usar la plataforma de segmentación de esferoides',
@@ -484,7 +468,6 @@ export default {
     alreadySignedUp: 'Ya te has registrado e iniciado sesión.',
     goToDashboard: 'Ir al Panel',
     signUpFailed: 'Error en el registro',
-    // Forgot Password specific
     enterEmailForReset: 'Ingresa tu email para restablecer contraseña',
     sending: 'Enviando...',
     sendNewPassword: 'Enviar nueva contraseña',
@@ -495,6 +478,7 @@ export default {
     backToSignIn: 'Volver al inicio de sesión',
     didntReceiveEmail: '¿No recibiste el email?',
     rememberPassword: '¿Recordaste tu contraseña?',
+    tryAgain: 'Intentar de nuevo',
   },
   profile: {
     title: 'Perfil',
@@ -570,8 +554,6 @@ export default {
       deletePolygon: 'Eliminar polígono',
       unknown: 'Desconocido',
     },
-    autosaveFailed:
-      'Error en guardado automático - los cambios pueden perderse',
     modeDescription: {
       view: 'Navegar y seleccionar polígonos',
       edit: 'Mover y modificar vértices',
@@ -740,6 +722,7 @@ export default {
     ready: 'Listo para segmentación',
     online: 'En línea',
     offline: 'Fuera de línea',
+    noPolygons: 'Sin polígonos',
   },
   queue: {
     title: 'Cola de Segmentación',
@@ -764,89 +747,89 @@ export default {
     addingToQueue: 'Añadiendo a la cola...',
   },
   toast: {
-    // Generic messages
     error: 'Ha ocurrido un error',
     success: 'Operación exitosa',
     info: 'Información',
     warning: 'Advertencia',
     loading: 'Cargando...',
-    // Common errors
     failedToUpdate: 'Error al actualizar datos. Inténtalo de nuevo.',
     fillAllFields: 'Por favor, completa todos los campos',
     operationFailed: 'La operación falló. Inténtalo de nuevo.',
-    // Error boundary
     unexpectedError: 'Error Inesperado',
     somethingWentWrong: 'Algo salió mal. Por favor, inténtalo más tarde.',
     somethingWentWrongPage: 'Algo salió mal al cargar esta página.',
     returnToHome: 'Volver al Inicio',
-    // Success messages
     operationCompleted: 'Operación completada exitosamente',
     dataSaved: 'Datos guardados exitosamente',
     dataUpdated: 'Datos actualizados exitosamente',
-    // Connection messages
     reconnecting: 'Reconectando al servidor...',
     reconnected: 'Conexión al servidor restaurada',
     connectionFailed: 'Error al restaurar la conexión al servidor',
-    // Segmentation messages
     segmentationRequested: 'Solicitud de segmentación enviada',
     segmentationCompleted: 'Segmentación de imagen completada',
     segmentationFailed: 'La segmentación falló',
     segmentationResultFailed: 'Error al obtener el resultado de segmentación',
     segmentationStatusFailed: 'Error al verificar el estado de segmentación',
-    // Export messages
     exportCompleted: '¡Exportación completada exitosamente!',
     exportFailed: 'La exportación falló. Inténtalo de nuevo.',
-    // Project actions
     project: {
       created: 'Proyecto creado exitosamente',
       createFailed: 'Error al crear el proyecto',
       deleted: 'Proyecto eliminado exitosamente',
       deleteFailed: 'Error al eliminar el proyecto',
       urlCopied: 'URL del proyecto copiada al portapapeles',
+      unshared: 'Proyecto eliminado de compartidos',
       notFound: 'Proyecto no encontrado',
       invalidResponse: 'La respuesta del servidor fue inválida',
       readyForImages: 'está listo para imágenes',
+      selected: '{{count}} imagen seleccionada',
+      selected_other: '{{count}} imágenes seleccionadas',
+      deleteSelected: 'Eliminar Seleccionadas',
     },
-    // Profile actions
     profile: {
       consentUpdated:
         'Preferencias de consentimiento actualizadas exitosamente',
       loadFailed: 'Error al cargar datos del perfil',
     },
-    // Upload actions
     upload: {
       failed: 'Error al actualizar imágenes después de la carga',
     },
-    // Segmentation actions
     segmentation: {
       saved: 'Segmentación guardada exitosamente',
-      failed: 'Error al guardar segmentación',
+      failed: 'La segmentación falló',
       deleted: 'Polígono eliminado',
       cannotDeleteVertex:
         'No se puede eliminar vértice - el polígono necesita al menos 3 puntos',
       vertexDeleted: 'Vértice eliminado exitosamente',
+      started: 'La segmentación ha comenzado',
+      completed: 'Segmentación completada exitosamente',
+      completedWithCount:
+        '¡Segmentación completa! Se encontraron {{count}} objetos',
+      noPolygons: 'No se detectaron polígonos de segmentación',
+      reloadFailed:
+        'Error al cargar los resultados de segmentación. Por favor, actualiza la página.',
+      autosaveFailed:
+        'Error en guardado automático - los cambios pueden perderse',
     },
-    autosaveFailed:
-      'Error en guardado automático - los cambios pueden perderse',
+  },
+  project: {
+    selected: '{{count}} imagen seleccionada',
+    selected_other: '{{count}} imágenes seleccionadas',
+    deleteSelected: 'Eliminar Seleccionadas',
   },
   export: {
     advancedExport: 'Exportación Avanzada',
-    // Dialog headers
     advancedOptions: 'Opciones Avanzadas de Exportación',
     configureSettings:
       'Configure los ajustes de exportación para crear un paquete de datos integral',
-    // Tabs
     general: 'General',
     visualization: 'Visualización',
-    formats: 'Formatos',
-    // Content selection
     exportContents: 'Contenido de Exportación',
     selectContent:
       'Seleccione qué tipos de contenido incluir en su exportación',
     includeOriginal: 'Incluir imágenes originales',
     includeVisualizations: 'Incluir visualizaciones con polígonos numerados',
     includeDocumentation: 'Incluir documentación y metadatos',
-    // Image selection
     selectedImages: 'Imágenes Seleccionadas',
     imagesSelected: '{{count}} de {{total}} imágenes seleccionadas',
     selectAll: 'Seleccionar Todo',
@@ -862,12 +845,10 @@ export default {
     },
     showingImages: 'Mostrando {{start}}-{{end}} de {{total}}',
     noImagesFound: 'No se encontraron imágenes',
-    // Quality settings
     qualitySettings: 'Configuración de Calidad',
     imageQuality: 'Calidad de Imagen',
     compressionLevel: 'Nivel de Compresión',
     outputResolution: 'Resolución de Salida',
-    // Visualization settings
     colorSettings: 'Configuración de Color',
     backgroundColor: 'Color de Fondo',
     strokeColor: 'Color de Trazo',
@@ -875,7 +856,6 @@ export default {
     fontSize: 'Tamaño de Fuente',
     showNumbers: 'Mostrar números de polígonos',
     showLabels: 'Mostrar etiquetas',
-    // Scale conversion
     scaleConversion: 'Conversión de Escala',
     pixelToMicrometerScale: 'Escala Píxel a Micrómetro',
     scaleDescription:
@@ -884,31 +864,30 @@ export default {
     scaleUnit: 'µm/píxel',
     scaleWarning:
       'Nota: El valor de escala parece inusualmente alto. Por favor verifique.',
-    // Format options
     outputSettings: 'Configuración de Salida',
-    exportFormats: 'Formatos de Exportación',
+    exportFormats: {
+      yolo: 'Formato YOLO',
+      excel: 'Formato Excel',
+      json: 'Formato JSON',
+    },
     exportToZip: 'Exportar a archivo ZIP',
     generateExcel: 'Generar métricas de Excel',
     includeCocoFormat: 'Incluir anotaciones en formato COCO',
     includeJsonMetadata: 'Incluir metadatos JSON',
-    // Progress and status
     preparing: 'Preparando exportación...',
     processing: 'Procesando {{current}} de {{total}}',
     packaging: 'Creando paquete...',
     completed: 'Exportación completada',
     downloading: 'Descargando...',
     cancelled: 'Exportación cancelada',
-    // Connection status
     connected: 'Conectado',
     disconnected: 'Desconectado',
     reconnecting: 'Reconectando...',
-    // Buttons
     startExport: 'Iniciar Exportación',
     cancel: 'Cancelar',
     download: 'Descargar',
     retry: 'Reintentar',
     close: 'Cerrar',
-    // Error messages
     exportError: 'La exportación falló',
     exportFailed: 'Exportación fallida',
     exportComplete: 'Exportación completada',
@@ -917,14 +896,18 @@ export default {
     serverError: 'Error del servidor ocurrido',
     invalidSelection: 'Por favor seleccione al menos una imagen',
     noData: 'No hay datos disponibles para exportar',
+    segmentationData: 'Datos de segmentación',
+    spheroidMetrics: 'Métricas de esferoides',
+    cocoFormat: 'Formato COCO',
+    cocoFormatTitle: 'Exportación de formato COCO',
+    downloadJson: 'Descargar JSON',
+    formatsTab: 'Formatos',
   },
-  // Standalone image action messages (used without prefix)
   imageDeleted: 'Imagen eliminada exitosamente',
   deleteImageFailed: 'Error al eliminar imagen',
   deleteImageError: 'Error al eliminar imagen',
   imageAlreadyProcessing: 'La imagen ya está siendo procesada',
   processImageFailed: 'Error al procesar la imagen',
-
   exportDialog: {
     title: 'Opciones de Exportación',
     includeMetadata: 'Incluir metadatos',
@@ -937,17 +920,12 @@ export default {
     noImagesAvailable: 'No hay imágenes disponibles',
   },
   docs: {
-    // Header section
     badge: 'Documentación',
     title: 'Documentación de SpheroSeg',
     subtitle:
       'Guía completa para usar nuestra plataforma de segmentación de esferoides',
     backTo: 'Volver a {{page}}',
-
-    // Navigation
     navigation: 'Navegación',
-
-    // Navigation items
     nav: {
       introduction: 'Introducción',
       gettingStarted: 'Comenzando',
@@ -957,8 +935,6 @@ export default {
       segmentationEditor: 'Editor de Segmentación',
       exportFeatures: 'Características de Exportación',
     },
-
-    // Introduction section
     introduction: {
       title: 'Introducción',
       whatIs: '¿Qué es SpheroSeg?',
@@ -969,8 +945,6 @@ export default {
       addresses:
         'SpheroSeg aborda la tarea desafiante de identificar y segmentar con precisión los límites de esferoides en imágenes microscópicas, un paso crítico en muchos flujos de trabajo de investigación biomédica que involucran modelos de cultivo celular 3D.',
     },
-
-    // Getting Started section
     gettingStarted: {
       title: 'Comenzando',
       accountCreation: 'Creación de Cuenta',
@@ -995,8 +969,6 @@ export default {
         step4: 'Haz clic en "Crear Proyecto" para continuar',
       },
     },
-
-    // Upload Images section
     uploadImages: {
       title: 'Subir Imágenes',
       description:
@@ -1014,8 +986,6 @@ export default {
       noteText:
         'Para resultados óptimos, asegúrate de que tus imágenes microscópicas tengan buen contraste entre el esferoide y el fondo.',
     },
-
-    // Model Selection section
     modelSelection: {
       title: 'Selección de Modelo',
       description:
@@ -1059,8 +1029,6 @@ export default {
       tipText:
         'Comienza con CBAM-ResUNet para la mayoría de casos. Usa HRNet para prototipado rápido y MA-ResUNet cuando necesites la mayor precisión posible para investigación o publicación.',
     },
-
-    // Segmentation Process section
     segmentationProcess: {
       title: 'Proceso de Segmentación',
       description:
@@ -1104,8 +1072,6 @@ export default {
       processingTimes:
         'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Elige según tus requisitos de precisión y restricciones de tiempo.',
     },
-
-    // Segmentation Editor section
     segmentationEditor: {
       title: 'Editor de Segmentación',
       description:
@@ -1188,8 +1154,6 @@ export default {
       waitingInQueue: 'Esperando en la cola',
       reloadingSegmentation: 'Actualizando datos de segmentación...',
     },
-
-    // Export Features section
     exportFeatures: {
       title: 'Características de Exportación',
       description:
@@ -1273,8 +1237,6 @@ export default {
       exportNoteText:
         'Cada exportación incluye documentación, metadatos y todos los tipos de contenido seleccionados organizados en una estructura de carpetas clara para uso fácil.',
     },
-
-    // Footer navigation
     footer: {
       backToHome: 'Volver al Inicio',
       backToTop: 'Volver Arriba',
@@ -1546,8 +1508,6 @@ export default {
       },
     },
   },
-
-  // Context menu
   contextMenu: {
     editPolygon: 'Editar polígono',
     splitPolygon: 'Dividir polígono',
@@ -1559,8 +1519,6 @@ export default {
     duplicateVertex: 'Duplicar vértice',
     deleteVertex: 'Eliminar vértice',
   },
-
-  // WebSocket messages
   websocket: {
     reconnecting: 'Reconectando al servidor...',
     reconnected: 'Conexión al servidor restaurada',
@@ -1569,8 +1527,6 @@ export default {
     connected: 'Conectado a actualizaciones en tiempo real',
     disconnected: 'Desconectado de actualizaciones en tiempo real',
   },
-
-  // Visualización de métricas
   metrics: {
     info: 'Las métricas se evalúan solo para polígonos externos. Las áreas de polígonos internos (agujeros) se restan automáticamente de los polígonos externos correspondientes.',
     spheroid: 'Esferoide',
@@ -1587,8 +1543,6 @@ export default {
     feretAspectRatio: 'Relación de Aspecto de Feret',
     noPolygonsFound: 'No se encontraron polígonos para análisis',
   },
-
-  // Atajos de teclado
   keyboardShortcuts: {
     title: 'Atajos de Teclado',
     buttonLabel: 'Atajos',
@@ -1609,38 +1563,25 @@ export default {
     helperText:
       'Estos atajos funcionan dentro del editor de segmentación para un trabajo más rápido y conveniente.',
   },
-
-  // Accesibilidad y etiquetas para lectores de pantalla
   accessibility: {
-    // Navegación
     toggleSidebar: 'Alternar barra lateral',
     toggleMenu: 'Alternar menú',
     selectLanguage: 'Seleccionar idioma',
     selectTheme: 'Seleccionar tema',
     breadcrumb: 'navegación de migas de pan',
     pagination: 'paginación',
-
-    // Acciones
     close: 'Cerrar',
     more: 'Más',
-
-    // Paginación
     goToPreviousPage: 'Ir a la página anterior',
     goToNextPage: 'Ir a la página siguiente',
     previousPage: 'Anterior',
     nextPage: 'Siguiente',
     morePages: 'Más páginas',
-
-    // Carrusel
     previousSlide: 'Diapositiva anterior',
     nextSlide: 'Siguiente diapositiva',
-
-    // Opciones de vista
     gridView: 'Vista de cuadrícula',
     listView: 'Vista de lista',
   },
-
-  // Pie de página
   footer: {
     appName: 'SpheroSeg',
     description:
@@ -1661,5 +1602,87 @@ export default {
     contactUs: 'Contáctanos',
     copyright:
       '© {{year}} SpheroSeg. Desarrollado en ÚTIA AV ČR (Instituto de Teoría de la Información y Automatización, Academia de Ciencias de la República Checa).',
+  },
+  sharing: {
+    share: 'Compartir',
+    shared: 'Compartido',
+    shareProject: 'Compartir proyecto',
+    shareDescription:
+      'Compartir proyecto "{{title}}" con colegas y colaboradores',
+    shareByEmail: 'Compartir por correo',
+    shareByLink: 'Compartir por enlace',
+    emailAddress: 'Dirección de correo',
+    enterEmailPlaceholder: 'Ingresar dirección de correo',
+    optionalMessage: 'Mensaje opcional',
+    messagePlaceholder: 'Añadir un mensaje personal a la invitación...',
+    sendInvitation: 'Enviar invitación',
+    sending: 'Enviando...',
+    emailSent: '¡Invitación por correo enviada!',
+    emailRequired: 'La dirección de correo es requerida',
+    emailShareFailed: 'Error al enviar la invitación por correo',
+    linkExpiry: 'Expiración del enlace',
+    neverExpires: 'Nunca expira',
+    hours: 'horas',
+    days: 'días',
+    generateLink: 'Generar enlace',
+    linkCopied: '¡Enlace copiado al portapapeles!',
+    sharedWithYou: 'Compartido contigo',
+    sharedBy: 'Compartido por: {{email}}',
+    sharedProjects: 'Proyectos compartidos',
+    noSharedProjects: 'No se han compartido proyectos contigo',
+    removeFromShared: 'Quitar de compartidos',
+    acceptInvitation: 'Aceptar invitación',
+    invitationAccepted:
+      '¡Invitación aceptada! El proyecto ha sido añadido a tu panel.',
+    generating: 'Generating...',
+    linkGenerated: 'Share link created!',
+    linkCopyFailed: 'Failed to copy link',
+    linkShareFailed: 'Failed to generate share link',
+    emailInvitations: 'Email invitations',
+    shareLinks: 'Share links',
+    shareRevoked: 'Share has been revoked',
+    acceptedUsers: 'Accepted users',
+    pendingInvitations: 'Pending invitations',
+    joinedViaLink: 'Joined via link',
+    activeShareLinks: 'Active share links',
+    joinedOn: 'Joined',
+    sentOn: 'Sent on',
+    joinedViaLinkOn: 'Joined',
+    resendInvitation: 'Resend invitation',
+    invitationResent: 'Invitation resent successfully',
+    resendFailed: 'Failed to resend invitation',
+    revokeAccess: 'Revoke access',
+    cancelInvitation: 'Cancel invitation',
+    reminderMessage:
+      'This is a reminder that you have been invited to collaborate on a project',
+    revokeShareFailed: 'Failed to revoke share',
+    failedToLoadShares: 'Failed to load shares',
+    status: {
+      pending: 'Pending',
+      accepted: 'Accepted',
+      revoked: 'Revoked',
+    },
+    invitationExpired: 'This invitation has expired',
+    invitationInvalid: 'Invalid invitation',
+    loginToAccept: 'Please log in to accept this invitation',
+    accepting: 'Accepting',
+    redirectingToProject: 'Redirecting to project',
+    redirectingToDashboard: 'Redirecting to dashboard',
+    invitedEmail: 'Invited email',
+    loadingShare: 'Loading share information...',
+    projectSharedBy: 'Project shared by',
+    signInRequired: 'Sign in required',
+    signInToAccept: 'Please sign in to accept this invitation',
+    signInButton: 'Sign in',
+    goToProject: 'Go to Project',
+    backToHome: 'Back to Home',
+    acceptFailed: 'Failed to accept invitation',
+    differentEmail: 'This invitation is for a different email address',
+  },
+  error: 'Error',
+  segmentationEditor: {
+    reloadingSegmentation: 'Recargando segmentación...',
+    segmenting: 'Segmentando...',
+    waitingInQueue: 'Esperando en cola...',
   },
 };

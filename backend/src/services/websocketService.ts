@@ -6,19 +6,30 @@ import { PrismaClient } from '@prisma/client';
 import { QueueService } from './queueService';
 import { SegmentationPolygon } from './segmentationService';
 
+// Import WebSocket types
+import {
+  WebSocketEvent,
+  SegmentationUpdateData,
+  SegmentationCompletedData,
+  SegmentationFailedData,
+  SegmentationProgressData,
+  QueueStatsData,
+  QueuePositionData,
+  ConnectionStatusData,
+  AuthenticationErrorData,
+  getUserRoom,
+  getProjectRoom,
+  getBatchRoom
+} from '../types/websocket';
+
 interface AuthenticatedSocket extends Socket {
   userId?: string;
   userEmail?: string;
 }
 
-export interface SegmentationUpdate {
-  imageId: string;
-  projectId: string;
-  status: string;
-  queueId?: string;
-  progress?: number;
-  error?: string;
-}
+// Legacy exports for backward compatibility (will be removed in future)
+export type SegmentationUpdate = SegmentationUpdateData;
+export type QueueStatsUpdate = QueueStatsData;
 
 export interface ThumbnailUpdate {
   imageId: string;
@@ -31,13 +42,6 @@ export interface ThumbnailUpdate {
     pointCount: number;
     compressionRatio: number;
   };
-}
-
-export interface QueueStatsUpdate {
-  projectId: string;
-  queued: number;
-  processing: number;
-  total: number;
 }
 
 type WebSocketEventData = unknown;
@@ -300,7 +304,17 @@ export class WebSocketService {
       const project = await this.prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          OR: [
+            { userId: userId }, // User owns the project
+            {
+              shares: {
+                some: {
+                  sharedWithId: userId,
+                  status: 'accepted'
+                }
+              }
+            }
+          ]
         }
       });
       
@@ -317,10 +331,10 @@ export class WebSocketService {
   /**
    * Emit segmentation status update to specific user
    */
-  public emitSegmentationUpdate(userId: string, update: SegmentationUpdate): void {
+  public emitSegmentationUpdate(userId: string, update: SegmentationUpdateData): void {
     try {
       // Only emit to user room to avoid duplicates (user is already in project room)
-      this.io.to(`user:${userId}`).emit('segmentation-update', update);
+      this.io.to(getUserRoom(userId)).emit(WebSocketEvent.SEGMENTATION_UPDATE, update);
 
       logger.debug('Segmentation update emitted', 'WebSocketService', {
         userId,
@@ -338,9 +352,9 @@ export class WebSocketService {
   /**
    * Emit queue statistics update to project subscribers
    */
-  public emitQueueStatsUpdate(projectId: string, stats: QueueStatsUpdate): void {
+  public emitQueueStatsUpdate(projectId: string, stats: QueueStatsData): void {
     try {
-      this.io.to(`project:${projectId}`).emit('queue-stats-update', stats);
+      this.io.to(getProjectRoom(projectId)).emit(WebSocketEvent.QUEUE_STATS, stats);
       
       logger.debug('Queue stats update emitted', 'WebSocketService', {
         projectId,

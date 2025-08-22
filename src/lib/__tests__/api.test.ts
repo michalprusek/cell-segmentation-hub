@@ -94,8 +94,8 @@ describe('API Client', () => {
     const { apiClient: freshApiClient } = await import('../api');
     apiClient = freshApiClient;
 
-    // Mock the internal instance through proper API
-    vi.spyOn(apiClient, 'getInstance').mockReturnValue(mockAxiosInstance);
+    // Mock the internal instance property directly
+    (apiClient as any).instance = mockAxiosInstance;
   });
 
   afterEach(() => {
@@ -109,7 +109,7 @@ describe('API Client', () => {
     });
 
     test('should have axios instance configured', () => {
-      expect(apiClient.instance || mockAxiosInstance).toBeDefined();
+      expect((apiClient as any).instance).toBeDefined();
     });
   });
 
@@ -524,7 +524,7 @@ describe('API Client', () => {
         });
 
         expect(mockAxiosInstance.put).toHaveBeenCalledWith('/projects/1', {
-          name: 'Updated Project',
+          name: undefined, // Remove name to avoid backend confusion
           description: 'Updated description',
           title: 'Updated Project', // Converted to title
         });

@@ -278,7 +278,12 @@ const SegmentationEditor = () => {
         toast.error(t('toast.operationFailed'));
       }
     },
-    // Removed onPolygonsChange to prevent circular updates
+    // IMPORTANT: onPolygonsChange is intentionally NOT provided
+    // to prevent any automatic saving when polygons change.
+    // Saving only happens on:
+    // 1. Manual save (Ctrl+S or Save button)
+    // 2. Switching images (autosaveBeforeReset)
+    // 3. Leaving the editor (unmount autosave)
   });
 
   // Wrapper for handling polygon selection that automatically switches to EditVertices mode
@@ -709,19 +714,20 @@ const SegmentationEditor = () => {
     [editor.editMode]
   );
 
-  // Autosave on component unmount (when leaving the editor completely)
+  // DISABLED: Autosave on unmount was causing issues with frequent re-renders
+  // The component was unmounting/remounting too often, triggering unwanted saves
+  // Autosave now only happens when:
+  // 1. Switching to a different image
+  // 2. Leaving the editor page completely (handled by EditorHeader navigation)
+  // 3. Manual save (Ctrl+S or Save button)
+
+  /* Commenting out problematic unmount autosave
   useEffect(() => {
     return () => {
-      // Cleanup function - called when component unmounts
-      if (editor.hasUnsavedChanges && editor.handleSave) {
-        logger.debug('🧹 Autosaving on editor unmount');
-        // Note: This may not always complete due to component unmounting
-        editor.handleSave().catch(error => {
-          logger.error('Failed to autosave on unmount:', error);
-        });
-      }
+      // This was triggering too often due to component re-renders
     };
-  }, []); // Empty dependency array means this runs only on unmount
+  }, [editor]);
+  */
 
   const currentImageIndex =
     projectImages?.findIndex(img => img.id === imageId) ?? -1;

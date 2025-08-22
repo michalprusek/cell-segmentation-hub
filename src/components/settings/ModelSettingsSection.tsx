@@ -2,6 +2,7 @@ import React from 'react';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
+import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Card,
@@ -22,8 +23,10 @@ const ModelSettingsSection = () => {
   const {
     selectedModel,
     confidenceThreshold,
+    detectHoles,
     setSelectedModel,
     setConfidenceThreshold,
+    setDetectHoles,
     availableModels,
   } = useLocalizedModels();
 
@@ -37,6 +40,11 @@ const ModelSettingsSection = () => {
   };
 
   const handleThresholdCommit = (value: number[]) => {
+    toast.success(t('settings.modelSettingsSaved'));
+  };
+
+  const handleDetectHolesChange = (checked: boolean) => {
+    setDetectHoles(checked);
     toast.success(t('settings.modelSettingsSaved'));
   };
 
@@ -135,6 +143,24 @@ const ModelSettingsSection = () => {
             onValueChange={handleThresholdChange}
             onValueCommit={handleThresholdCommit}
             className="w-full"
+          />
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="space-y-0.5">
+            <Label htmlFor="detectHoles" className="text-base font-medium">
+              {t('settings.detectHoles')}
+            </Label>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {t('settings.detectHolesDescription')}
+            </p>
+          </div>
+          <Switch
+            id="detectHoles"
+            checked={detectHoles}
+            onCheckedChange={handleDetectHolesChange}
           />
         </div>
       </div>

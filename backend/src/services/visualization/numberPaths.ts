@@ -318,14 +318,17 @@ export const NUMBER_PATHS = {
         recorder.stroke();
         break;
         
-      case 1:
+      case 1: {
+        // Adjust position for number 1 to be properly centered
+        const oneOffset = width * 0.1; // Slight offset to center the "1" better visually
         recorder.beginPath();
-        recorder.moveTo(centerX, top);
-        recorder.lineTo(centerX, bottom);
-        recorder.moveTo(centerX - width * 0.2, top + height * 0.15);
-        recorder.lineTo(centerX, top);
+        recorder.moveTo(centerX + oneOffset, top);
+        recorder.lineTo(centerX + oneOffset, bottom);
+        recorder.moveTo(centerX + oneOffset - width * 0.2, top + height * 0.15);
+        recorder.lineTo(centerX + oneOffset, top);
         recorder.stroke();
         break;
+      }
         
       case 2:
         recorder.beginPath();

@@ -15,6 +15,14 @@ from .models import (
 from PIL import Image
 import io
 
+# Import new inference exception types
+try:
+    from ml.inference_executor import InferenceTimeoutError, InferenceError
+except ImportError:
+    # Fallback for backward compatibility
+    InferenceTimeoutError = TimeoutError
+    InferenceError = Exception
+
 logger = logging.getLogger(__name__)
 
 # Initialize router
@@ -109,6 +117,7 @@ async def segment_image(
     file: UploadFile = File(...),
     model: str = Form("hrnet", description="Model to use for segmentation"),
     threshold: float = Form(0.5, ge=0.1, le=0.9, description="Segmentation threshold"),
+    detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):
     """Main segmentation endpoint"""
@@ -126,10 +135,10 @@ async def segment_image(
         image_data = await file.read()
         image = Image.open(io.BytesIO(image_data))
         
-        logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}")
+        logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
         
         # Perform segmentation
-        result = loader.predict(image, model, threshold)
+        result = loader.predict(image, model, threshold, detect_holes)
         
         processing_time = time.time() - start_time
         
@@ -149,6 +158,47 @@ async def segment_image(
         
     except HTTPException:
         raise
+    except (InferenceTimeoutError, TimeoutError) as e:
+        # Handle timeout errors with detailed information
+        processing_time = time.time() - start_time
+        logger.error(f"Segmentation timeout after {processing_time:.2f}s for model {model}: {e}")
+        
+        # Extract details from InferenceTimeoutError if available
+        if isinstance(e, InferenceTimeoutError):
+            error_detail = {
+                "error": "Model inference timeout",
+                "message": str(e),
+                "model": e.model_name,
+                "timeout": e.timeout,
+                "image_size": e.image_size,
+                "suggestion": f"Model '{e.model_name}' timed out after {e.timeout}s. Try: 1) Use 'hrnet' model instead, 2) Reduce image size, 3) Increase ML_INFERENCE_TIMEOUT environment variable",
+                "processing_time": processing_time
+            }
+        else:
+            # Legacy TimeoutError
+            error_detail = {
+                "error": "Model inference timeout",
+                "message": str(e),
+                "model": model,
+                "suggestion": "Try using a simpler model (hrnet) or reducing image size",
+                "processing_time": processing_time
+            }
+        
+        raise HTTPException(status_code=504, detail=error_detail)
+        
+    except InferenceError as e:
+        # Handle inference errors with context
+        processing_time = time.time() - start_time
+        logger.error(f"Inference error after {processing_time:.2f}s: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "Inference failed",
+                "message": str(e),
+                "model": model,
+                "processing_time": processing_time
+            }
+        )
     except Exception as e:
         processing_time = time.time() - start_time
         logger.error(f"Segmentation failed after {processing_time:.2f}s: {e}")
@@ -162,6 +212,7 @@ async def batch_segment_images(
     files: list[UploadFile] = File(..., description="List of images to segment"),
     model: str = Form("hrnet", description="Model to use for segmentation"),
     threshold: float = Form(0.5, ge=0.1, le=0.9, description="Segmentation threshold"),
+    detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):
     """Batch segmentation endpoint for processing multiple images"""
@@ -193,10 +244,10 @@ async def batch_segment_images(
                 image_data = await file.read()
                 image = Image.open(io.BytesIO(image_data))
                 
-                logger.info(f"Processing batch image {i+1}/{len(files)}: {file.filename}, Model: {model}, Threshold: {threshold}")
+                logger.info(f"Processing batch image {i+1}/{len(files)}: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
                 
                 # Perform segmentation
-                result = loader.predict(image, model, threshold)
+                result = loader.predict(image, model, threshold, detect_holes)
                 
                 # Add file information to result
                 result["filename"] = file.filename
@@ -207,6 +258,49 @@ async def batch_segment_images(
                 
                 logger.info(f"Batch image {i+1} completed, found {len(result['polygons'])} polygons")
                 
+            except (InferenceTimeoutError, TimeoutError) as e:
+                logger.error(f"Timeout processing batch image {i+1}: {file.filename}: {e}")
+                
+                # Extract timeout details
+                if isinstance(e, InferenceTimeoutError):
+                    error_msg = f"Timeout after {e.timeout}s for model '{e.model_name}'"
+                    error_detail = {
+                        "type": "timeout",
+                        "message": str(e),
+                        "model": e.model_name,
+                        "timeout": e.timeout,
+                        "image_size": e.image_size
+                    }
+                else:
+                    error_msg = "Inference timeout"
+                    error_detail = str(e)
+                
+                # Add timeout error result
+                results.append({
+                    "filename": file.filename,
+                    "batch_index": i,
+                    "success": False,
+                    "error": error_msg,
+                    "error_detail": error_detail,
+                    "polygons": [],
+                    "model_used": model,
+                    "threshold_used": threshold
+                })
+                
+            except InferenceError as e:
+                logger.error(f"Inference error processing batch image {i+1}: {file.filename}: {e}")
+                
+                # Add inference error result
+                results.append({
+                    "filename": file.filename,
+                    "batch_index": i,
+                    "success": False,
+                    "error": "Inference failed",
+                    "error_detail": str(e),
+                    "polygons": [],
+                    "model_used": model,
+                    "threshold_used": threshold
+                })
             except Exception as e:
                 logger.error(f"Failed to process batch image {i+1}: {file.filename}: {e}")
                 

@@ -7,6 +7,91 @@ import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
 
+// Import validation types
+import { 
+  AddImageToQueueData,
+  BatchQueueData,
+  CleanupQueueData,
+  ResetStuckItemsData
+} from '../../types/validation';
+
+// Import queue-specific types
+import {
+  ImageIdParams,
+  ProjectIdParams,
+  QueueIdParams,
+  BatchQueueResponse,
+  QueueStatsResponse,
+  QueueHealthResponse,
+  ResetStuckItemsResponse,
+  CleanupResponse,
+  AddImageToQueueRequest,
+  BatchQueueRequest,
+  GetQueueStatsRequest,
+  GetQueueItemsRequest,
+  RemoveFromQueueRequest,
+  ResetStuckItemsRequest,
+  CleanupQueueRequest,
+  QueueError,
+  QueueTimeoutError,
+  MLServiceUnavailableError
+} from '../../types/queue';
+
+// Import WebSocket types
+import {
+  SegmentationUpdateData,
+  QueueStatsData
+} from '../../types/websocket';
+
+// Queue entry response type definition
+interface QueueEntryResponse {
+  id: string;
+  imageId: string;
+  projectId: string;
+  userId: string;
+  model: 'hrnet' | 'resunet_advanced' | 'resunet_small';
+  threshold: number;
+  detectHoles: boolean;
+  priority: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed' | 'cancelled';
+  createdAt: Date;
+  updatedAt: Date;
+  startedAt?: Date;
+  completedAt?: Date;
+  error?: string;
+  retryCount: number;
+  batchId?: string;
+}
+
+/**
+ * Map queue entry from database to response format
+ */
+function mapQueueEntryToResponse(entry: any): QueueEntryResponse {
+  return {
+    id: entry.id,
+    imageId: entry.imageId,
+    projectId: entry.projectId,
+    userId: entry.userId,
+    model: entry.model,
+    threshold: entry.threshold,
+    detectHoles: entry.detectHoles ?? false,
+    priority: entry.priority,
+    status: entry.status,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt || entry.createdAt,
+    startedAt: entry.startedAt || undefined,
+    completedAt: entry.completedAt || undefined,
+    error: entry.error || undefined,
+    retryCount: entry.retryCount || 0,
+    batchId: entry.batchId || undefined
+  };
+}
+
+/**
+ * Queue Controller
+ * 
+ * Handles all queue-related HTTP endpoints with full TypeScript typing
+ */
 class QueueController {
   private queueService: QueueService;
   private imageService: ImageService;
@@ -20,7 +105,7 @@ class QueueController {
   /**
    * Validate that req.user exists and return userId
    */
-  private validateUser(req: Request, res: Response): string | null {
+  private validateUser(req: { user?: { id: string; email: string } }, res: Response): string | null {
     if (!req.user || !req.user.id) {
       ResponseHelper.unauthorized(res, 'User authentication required');
       return null;
@@ -32,10 +117,10 @@ class QueueController {
    * Add single image to segmentation queue
    * POST /api/queue/images/:imageId
    */
-  addImageToQueue = async (req: Request, res: Response): Promise<void> => {
+  addImageToQueue = async (req: AddImageToQueueRequest, res: Response): Promise<void> => {
     try {
       const { imageId } = req.params;
-      const { model = 'hrnet', threshold = 0.5, priority = 0 } = req.body;
+      const { model, threshold, priority, detectHoles } = req.body;
       
       const userId = this.validateUser(req, res);
       if (!userId) {
@@ -43,7 +128,7 @@ class QueueController {
       }
 
       // Get image to validate ownership and get projectId
-      const image = await this.imageService.getImageById(imageId as string, userId);
+      const image = await this.imageService.getImageById(imageId, userId);
       
       if (!image) {
         ResponseHelper.notFound(res, 'Obrázek nenalezen nebo nemáte oprávnění');
@@ -51,29 +136,32 @@ class QueueController {
       }
 
       const queueEntry = await this.queueService.addToQueue(
-        imageId as string,
+        imageId,
         image.projectId,
         userId,
-        model,
-        threshold,
-        priority
+        model || 'hrnet',
+        threshold || 0.5,
+        priority || 0,
+        detectHoles !== undefined ? detectHoles : true
       );
 
-      // Emit WebSocket update
+      // Emit WebSocket update with proper typing
       const websocketService = WebSocketService.getInstance();
-      websocketService.emitSegmentationUpdate(userId, {
-        imageId: imageId as string,
+      const segmentationUpdate: SegmentationUpdateData = {
+        imageId: imageId,
         projectId: image.projectId,
         status: 'queued',
         queueId: queueEntry.id
-      });
+      };
+      websocketService.emitSegmentationUpdate(userId, segmentationUpdate);
 
       // Emit queue stats update
       const stats = await this.queueService.getQueueStats(image.projectId, userId);
-      websocketService.emitQueueStatsUpdate(image.projectId, {
+      const queueStatsUpdate: QueueStatsData = {
         projectId: image.projectId,
         ...stats
-      });
+      };
+      websocketService.emitQueueStatsUpdate(image.projectId, queueStatsUpdate);
 
       ResponseHelper.success(res, queueEntry, 'Obrázek přidán do fronty pro segmentaci');
 
@@ -92,16 +180,24 @@ class QueueController {
    * Add multiple images to segmentation queue in batch
    * POST /api/queue/batch
    */
-  addBatchToQueue = async (req: Request, res: Response): Promise<void> => {
+  addBatchToQueue = async (req: BatchQueueRequest, res: Response): Promise<void> => {
     try {
-      const { imageIds, projectId, model = 'hrnet', threshold = 0.5, priority = 0, forceResegment = false } = req.body;
+      const { 
+        imageIds, 
+        projectId, 
+        model = 'hrnet', 
+        threshold = 0.5, 
+        priority = 0, 
+        forceResegment = false, 
+        detectHoles = true 
+      } = req.body;
       
       const userId = this.validateUser(req, res);
       if (!userId) {
         return;
       }
 
-      // Validate input
+      // Input validation is handled by Zod schema, but keep runtime checks for safety
       if (!Array.isArray(imageIds) || imageIds.length === 0) {
         ResponseHelper.validationError(res, 'Musíte zadat alespoň jeden obrázek');
         return;
@@ -112,11 +208,31 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership
+      // Verify project ownership or sharing access
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
+        return;
+      }
+
       const project = await prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          OR: [
+            // Owned projects
+            { userId: userId },
+            // Shared projects
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    { email: user.email, status: { in: ['pending', 'accepted'] } }
+                  ]
+                }
+              }
+            }
+          ]
         }
       });
 
@@ -132,7 +248,8 @@ class QueueController {
         model,
         threshold,
         priority,
-        forceResegment
+        forceResegment,
+        detectHoles
       );
 
       // Emit WebSocket updates
@@ -140,26 +257,30 @@ class QueueController {
       
       // Emit individual image updates with re-segmentation context
       for (const entry of queueEntries) {
-        websocketService.emitSegmentationUpdate(userId, {
+        const segmentationUpdate: SegmentationUpdateData = {
           imageId: entry.imageId,
           projectId: entry.projectId,
           status: 'queued',
           queueId: entry.id
-        });
+        };
+        websocketService.emitSegmentationUpdate(userId, segmentationUpdate);
       }
 
       // Emit queue stats update
       const stats = await this.queueService.getQueueStats(projectId, userId);
-      websocketService.emitQueueStatsUpdate(projectId, {
+      const queueStatsUpdate: QueueStatsData = {
         projectId,
         ...stats
-      });
+      };
+      websocketService.emitQueueStatsUpdate(projectId, queueStatsUpdate);
 
-      ResponseHelper.success(res, {
+      const response: BatchQueueResponse = {
         queuedCount: queueEntries.length,
         totalRequested: imageIds.length,
-        queueEntries
-      }, `${queueEntries.length} obrázků přidáno do fronty pro segmentaci`);
+        queueEntries: queueEntries.map(entry => mapQueueEntryToResponse(entry))
+      };
+
+      ResponseHelper.success(res, response, `${queueEntries.length} obrázků přidáno do fronty pro segmentaci`);
 
     } catch (error) {
       logger.error('Failed to add batch to queue', error instanceof Error ? error : undefined, 'QueueController', {
@@ -176,7 +297,7 @@ class QueueController {
    * Get queue statistics for project
    * GET /api/queue/projects/:projectId/stats
    */
-  getQueueStats = async (req: Request, res: Response): Promise<void> => {
+  getQueueStats = async (req: GetQueueStatsRequest, res: Response): Promise<void> => {
     try {
       const { projectId } = req.params;
       
@@ -185,11 +306,31 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership
+      // Verify project ownership or sharing access
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
+        return;
+      }
+
       const project = await prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          OR: [
+            // Owned projects
+            { userId: userId },
+            // Shared projects
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    { email: user.email, status: { in: ['pending', 'accepted'] } }
+                  ]
+                }
+              }
+            }
+          ]
         }
       });
 
@@ -217,7 +358,7 @@ class QueueController {
    * Get queue items for project
    * GET /api/queue/projects/:projectId/items
    */
-  getQueueItems = async (req: Request, res: Response): Promise<void> => {
+  getQueueItems = async (req: GetQueueItemsRequest, res: Response): Promise<void> => {
     try {
       const { projectId } = req.params;
       
@@ -226,11 +367,31 @@ class QueueController {
         return;
       }
 
-      // Verify project ownership
+      // Verify project ownership or sharing access
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
+        return;
+      }
+
       const project = await prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          OR: [
+            // Owned projects
+            { userId: userId },
+            // Shared projects
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    { email: user.email, status: { in: ['pending', 'accepted'] } }
+                  ]
+                }
+              }
+            }
+          ]
         }
       });
 
@@ -258,7 +419,7 @@ class QueueController {
    * Remove item from queue
    * DELETE /api/queue/items/:queueId
    */
-  removeFromQueue = async (req: Request, res: Response): Promise<void> => {
+  removeFromQueue = async (req: RemoveFromQueueRequest, res: Response): Promise<void> => {
     try {
       const { queueId } = req.params;
       
@@ -288,18 +449,20 @@ class QueueController {
 
       // Emit WebSocket updates
       const websocketService = WebSocketService.getInstance();
-      websocketService.emitSegmentationUpdate(userId, {
+      const segmentationUpdate: SegmentationUpdateData = {
         imageId: queueItem.imageId,
         projectId: queueItem.projectId,
         status: 'no_segmentation'
-      });
+      };
+      websocketService.emitSegmentationUpdate(userId, segmentationUpdate);
 
       // Emit queue stats update
       const stats = await this.queueService.getQueueStats(queueItem.projectId, userId);
-      websocketService.emitQueueStatsUpdate(queueItem.projectId, {
+      const queueStatsUpdate: QueueStatsData = {
         projectId: queueItem.projectId,
         ...stats
-      });
+      };
+      websocketService.emitQueueStatsUpdate(queueItem.projectId, queueStatsUpdate);
 
       ResponseHelper.success(res, undefined, 'Položka odebrána z fronty');
 
@@ -343,9 +506,9 @@ class QueueController {
    * Cleanup old queue entries
    * POST /api/queue/cleanup
    */
-  cleanupQueue = async (req: Request, res: Response): Promise<void> => {
+  cleanupQueue = async (req: QueueCleanupRequest, res: Response): Promise<void> => {
     try {
-      const { daysOld = 7 } = req.body;
+      const { daysOld } = req.body;
       
       const userId = this.validateUser(req, res);
       if (!userId) {
@@ -399,9 +562,9 @@ class QueueController {
    * Reset stuck queue items
    * POST /api/queue/reset-stuck
    */
-  resetStuckItems = async (req: Request, res: Response): Promise<void> => {
+  resetStuckItems = async (req: ResetStuckItemsRequest, res: Response): Promise<void> => {
     try {
-      const { maxProcessingMinutes = 10 } = req.body;
+      const { maxProcessingMinutes } = req.body;
       
       const userId = this.validateUser(req, res);
       if (!userId) {

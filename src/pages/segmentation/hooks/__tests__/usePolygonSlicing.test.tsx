@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { act } from '@testing-library/react';
+import React from 'react';
 import { usePolygonSlicing } from '../usePolygonSlicing';
 import { EditMode } from '../../types';
 import {
@@ -25,6 +26,7 @@ vi.mock('@/contexts/LanguageContext', () => ({
   useLanguage: () => ({
     t: (key: string) => key, // Return the key for testing
   }),
+  LanguageProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
 vi.mock('@/lib/polygonSlicing', () => ({

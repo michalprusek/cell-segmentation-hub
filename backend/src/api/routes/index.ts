@@ -6,6 +6,8 @@ import imageRoutes from './imageRoutes';
 import { segmentationRoutes } from './segmentationRoutes';
 import { queueRoutes } from './queueRoutes';
 import { exportRoutes } from './exportRoutes';
+import sharingRoutes from './sharingRoutes';
+import testEmailRoutes from './testEmailRoutes';
 
 interface RouteInfo {
   path: string;
@@ -48,6 +50,12 @@ export function setupRoutes(app: Express): void {
   app.use('/api/segmentation', segmentationRoutes);
   app.use('/api/queue', queueRoutes);
   app.use('/api', exportRoutes); // Export routes
+  app.use('/api', sharingRoutes); // Sharing routes
+  
+  // Test email routes (only in development)
+  if (process.env.NODE_ENV === 'development') {
+    app.use('/api/test-email', testEmailRoutes);
+  }
 
   // Manuální registrace známých routes
   registerKnownRoutes();
@@ -172,6 +180,56 @@ function registerKnownRoutes(): void {
     method: 'DELETE',
     description: 'Smazání projektu',
     authenticated: true
+  });
+
+  // Sharing endpoints
+  registerRoute({
+    path: '/api/projects/:id/share/email',
+    method: 'POST',
+    description: 'Sdílení projektu přes email',
+    authenticated: true
+  });
+
+  registerRoute({
+    path: '/api/projects/:id/share/link',
+    method: 'POST',
+    description: 'Generování sdíleného odkazu',
+    authenticated: true
+  });
+
+  registerRoute({
+    path: '/api/projects/:id/shares',
+    method: 'GET',
+    description: 'Seznam sdílení projektu',
+    authenticated: true
+  });
+
+  registerRoute({
+    path: '/api/projects/:id/shares/:shareId',
+    method: 'DELETE',
+    description: 'Zrušení sdílení projektu',
+    authenticated: true
+  });
+
+  registerRoute({
+    path: '/api/projects/shared',
+    method: 'GET',
+    description: 'Projekty sdílené se mnou',
+    authenticated: true
+  });
+
+  registerRoute({
+    path: '/api/share/validate/:token',
+    method: 'GET',
+    description: 'Validace tokenu sdílení',
+    authenticated: false
+  });
+
+  registerRoute({
+    path: '/api/share/accept/:token',
+    method: 'POST',
+    description: 'Přijetí pozvánky ke sdílení',
+    authenticated: false
   });
 
   // Image endpoints

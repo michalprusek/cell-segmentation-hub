@@ -2,7 +2,15 @@ import { prisma } from '../db';
 import { CreateProjectData, UpdateProjectData, ProjectQueryParams } from '../types/validation';
 import { calculatePagination } from '../utils/response';
 import { logger } from '../utils/logger';
-import type { Project, Prisma } from '@prisma/client';
+import * as SharingService from './sharingService';
+import type { Project, Prisma, User } from '@prisma/client';
+
+// Extended project type with metadata
+export interface ProjectWithMeta extends Project {
+  isOwned: boolean;
+  isShared: boolean;
+  owner: Pick<User, 'id' | 'email'>;
+}
 
 /**
  * Service for managing projects
@@ -43,30 +51,31 @@ export async function createProject(userId: string, data: CreateProjectData): Pr
   }
 
   /**
-   * Get projects for a user with pagination and search
+   * Get projects for a user with pagination and search (only owned projects)
    */
-export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: Project[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
+export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: ProjectWithMeta[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     try {
       const { page, limit, search, sortBy, sortOrder } = options;
       
-      // Build where clause
+      // Get user for context
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        throw new Error('User not found');
+      }
+
+      // Build where clause for owned projects only
       const where: Prisma.ProjectWhereInput = {
         userId: userId
       };
 
       if (search) {
-        where.OR = [
-          {
-            title: {
-              contains: search
-            }
-          },
-          {
-            description: {
-              contains: search
-            }
-          }
-        ];
+        const searchCondition = {
+          OR: [
+            { title: { contains: search } },
+            { description: { contains: search } }
+          ]
+        };
+        where.AND = [searchCondition];
       }
 
       // Build order clause with type safety
@@ -85,7 +94,7 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       const total = await prisma.project.count({ where });
       const pagination = calculatePagination(page, limit, total);
 
-      // Get projects with image count and latest image for thumbnail
+      // Get projects with image count, latest image, and sharing info
       const projects = await prisma.project.findMany({
         where,
         orderBy,
@@ -107,11 +116,25 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
               originalPath: true,
               segmentationStatus: true
             }
+          },
+          user: {
+            select: {
+              id: true,
+              email: true
+            }
           }
         }
       });
 
-      logger.info(`Retrieved ${projects.length} projects for user`, 'ProjectService', { 
+      // Add metadata to each project
+      const projectsWithMeta = projects.map(project => ({
+        ...project,
+        isOwned: true,  // These are only owned projects now
+        isShared: false,
+        owner: project.user
+      }));
+
+      logger.info(`Retrieved ${projectsWithMeta.length} projects for user`, 'ProjectService', { 
         userId, 
         total, 
         page, 
@@ -119,7 +142,7 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       });
 
       return {
-        projects,
+        projects: projectsWithMeta as ProjectWithMeta[],
         pagination: {
           page: pagination.page,
           limit: pagination.limit,
@@ -134,14 +157,19 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
   }
 
   /**
-   * Get a specific project by ID (with ownership check)
+   * Get a specific project by ID (with ownership and share access check)
    */
 export async function getProjectById(projectId: string, userId: string): Promise<(Project & { _count: { images: number } }) | null> {
     try {
-      const project = await prisma.project.findFirst({
+      // Check if user has access to this project (owner or shared)
+      const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+      if (!accessCheck.hasAccess) {
+        return null;
+      }
+
+      const project = await prisma.project.findUnique({
         where: {
-          id: projectId,
-          userId: userId
+          id: projectId
         },
         include: {
           user: {

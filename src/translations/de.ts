@@ -57,18 +57,19 @@ export default {
     signInToAccount: 'Bei Ihrem Konto anmelden',
     sort: 'Sortieren',
     no_preview: 'Keine Vorschau',
-    // Navigation and UI
     openMenu: 'Menü öffnen',
     logOut: 'Abmelden',
-    // Error pages
     pageNotFound: 'Ups! Seite nicht gefunden',
     returnToHome: 'Zurück zur Startseite',
-    // Navigation
     next: 'Weiter',
     copy: 'Kopieren',
     noImage: 'Kein Bild',
     untitledImage: 'Unbenanntes Bild',
     rename: 'Umbenennen',
+    getStarted: 'Erste Schritte',
+    learnMore: 'Mehr erfahren',
+    close: 'Schließen',
+    redirectingToDashboard: 'Weiterleitung zum Dashboard...',
   },
   landing: {
     hero: {
@@ -120,7 +121,6 @@ export default {
     name: 'Name',
     lastChange: 'Letzte Änderung',
     status: 'Status',
-    // Stats overview
     stats: {
       totalProjects: 'Projekte gesamt',
       totalProjectsDesc: 'Aktive Sphäroid-Studien',
@@ -168,12 +168,13 @@ export default {
     errorAddingToQueue: 'Fehler beim Hinzufügen zur Warteschlange',
     imageAlreadyProcessing: 'Bild wird bereits verarbeitet',
     processImageFailed: 'Bildverarbeitung fehlgeschlagen',
+    selected: '{{count}} ausgewählt',
+    deleteSelected: 'Ausgewählte löschen',
     segmentationCompleted: 'Segmentierung für Bild abgeschlossen',
     segmentationFailed: 'Segmentierung fehlgeschlagen',
     segmentationStarted: 'Segmentierung hat begonnen',
     segmentationCompleteWithCount:
       'Segmentierung abgeschlossen! {{count}} Objekte gefunden',
-    // Project management errors and messages
     failedToLoadProjects: 'Laden der Projekte fehlgeschlagen',
     projectNameRequired: 'Bitte geben Sie einen Projektnamen ein',
     mustBeLoggedIn: 'Sie müssen angemeldet sein, um ein Projekt zu erstellen',
@@ -229,37 +230,18 @@ export default {
       fieldRequired: 'Dieses Feld ist erforderlich',
     },
     operations: {
-      loadProject:
-        'Das Projekt konnte nicht geladen werden. Überprüfen Sie Ihre Verbindung und versuchen Sie es erneut.',
-      saveProject:
-        'Projektänderungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.',
       deleteProject:
         'Das Projekt kann nicht gelöscht werden. Stellen Sie sicher, dass Sie die erforderlichen Berechtigungen haben.',
-      uploadImage:
-        'Das Bild konnte nicht hochgeladen werden. Überprüfen Sie Format und Dateigröße.',
-      deleteImage:
-        'Das Bild kann nicht gelöscht werden. Versuchen Sie, die Seite zu aktualisieren und den Vorgang zu wiederholen.',
-      processImage:
-        'Die Bildverarbeitung ist fehlgeschlagen. Versuchen Sie es mit einem anderen Bild oder kontaktieren Sie den Support.',
-      segmentation:
-        'Die Segmentierung ist fehlgeschlagen. Versuchen Sie ein anderes Modell oder passen Sie die Konfiguration an.',
-      export:
-        'Der Datenexport ist fehlgeschlagen. Überprüfen Sie, ob die Daten verfügbar sind.',
-      login: 'Anmeldefehler. Überprüfen Sie Ihre E-Mail und Ihr Passwort.',
-      logout: 'Abmeldefehler. Versuchen Sie, Ihren Browser zu schließen.',
-      register:
-        'Die Registrierung ist fehlgeschlagen. Diese E-Mail-Adresse wird möglicherweise bereits verwendet.',
       updateProfile:
         'Das Profil konnte nicht aktualisiert werden. Überprüfen Sie die angegebenen Informationen.',
       changePassword:
         'Das Passwort konnte nicht geändert werden. Überprüfen Sie Ihr aktuelles Passwort.',
-      resetPassword:
-        'Das Zurücksetzen des Passworts ist fehlgeschlagen. Überprüfen Sie die angegebene E-Mail-Adresse.',
-      deleteAccount:
-        'Das Konto konnte nicht gelöscht werden. Wenden Sie sich für Unterstützung an den Support.',
       updateConsent:
         'Einwilligungseinstellungen konnten nicht aktualisiert werden. Bitte versuchen Sie es erneut.',
+      unshareProject:
+        'Projekt konnte nicht aus geteilten Projekten entfernt werden',
     },
+    deleteImages: 'Fehler beim Löschen der ausgewählten Bilder',
     contexts: {
       dashboard: 'Dashboard-Fehler',
       project: 'Projekt-Fehler',
@@ -366,6 +348,9 @@ export default {
     confidenceThreshold: 'Vertrauensschwelle',
     confidenceThresholdDescription:
       'Mindestvertrauen für Segmentierungsvorhersagen erforderlich',
+    detectHoles: 'Löcher Erkennen',
+    detectHolesDescription:
+      'Erkennung von inneren Strukturen und Löchern in Zellen aktivieren',
     currentThreshold: 'Aktuelle Schwelle',
     modelSelected: 'Modell erfolgreich ausgewählt',
     modelSettingsSaved: 'Modelleinstellungen erfolgreich gespeichert',
@@ -449,7 +434,6 @@ export default {
     checkingAuthentication: 'Authentifizierung prüfen...',
     loadingAccount: 'Ihr Konto wird geladen...',
     processingRequest: 'Ihre Anfrage wird bearbeitet...',
-    // SignIn page specific
     signInToAccount: 'Bei Ihrem Konto anmelden',
     accessPlatform: 'Zugang zur Sphäroid-Segmentierungsplattform',
     emailAddress: 'E-Mail-Adresse',
@@ -459,7 +443,6 @@ export default {
     signingIn: 'Anmeldung läuft...',
     redirectingToDashboard: 'Weiterleitung zum Dashboard...',
     fillAllFields: 'Bitte füllen Sie alle Felder aus',
-    // Toast messages
     signInSuccess: 'Erfolgreich angemeldet',
     signInFailed: 'Anmeldung fehlgeschlagen',
     registrationSuccess: 'Registrierung erfolgreich',
@@ -473,7 +456,6 @@ export default {
     termsOfService: 'Nutzungsbedingungen',
     and: 'und',
     privacyPolicy: 'Datenschutzrichtlinie',
-    // SignUp page specific
     createAccount: 'Erstellen Sie Ihr Konto',
     signUpPlatform:
       'Registrieren Sie sich, um die Sphäroid-Segmentierungsplattform zu nutzen',
@@ -488,7 +470,6 @@ export default {
     alreadySignedUp: 'Sie sind bereits registriert und angemeldet.',
     goToDashboard: 'Zum Dashboard gehen',
     signUpFailed: 'Registrierung fehlgeschlagen',
-    // Forgot Password specific
     enterEmailForReset: 'E-Mail-Adresse für Passwort-Reset eingeben',
     sending: 'Senden...',
     sendNewPassword: 'Neues Passwort senden',
@@ -500,6 +481,8 @@ export default {
     backToSignIn: 'Zurück zur Anmeldung',
     didntReceiveEmail: 'E-Mail nicht erhalten?',
     rememberPassword: 'Passwort wieder eingefallen?',
+    redirectingToSignIn: 'Redirecting to sign-in...',
+    tryAgain: 'Erneut versuchen',
   },
   profile: {
     title: 'Profil',
@@ -577,8 +560,6 @@ export default {
       deletePolygon: 'Polygon löschen',
       unknown: 'Unbekannt',
     },
-    autosaveFailed:
-      'Automatisches Speichern fehlgeschlagen – Änderungen können verloren gehen',
     modeDescription: {
       view: 'Navigieren und Polygone auswählen',
       edit: 'Eckpunkte bewegen und modifizieren',
@@ -621,6 +602,8 @@ export default {
       noPolygons: 'Keine Polygone',
       startCreating: 'Beginnen Sie mit der Erstellung eines Polygons',
       polygonList: 'Polygon-Liste',
+      external: 'External',
+      internal: 'Internal',
     },
     shortcuts: {
       buttonText: 'Tastenkürzel',
@@ -749,6 +732,7 @@ export default {
     ready: 'Bereit für Segmentierung',
     online: 'Online',
     offline: 'Offline',
+    noPolygons: 'Keine Polygone',
   },
   queue: {
     title: 'Segmentierungs-Warteschlange',
@@ -773,33 +757,27 @@ export default {
       '{{new}} neue Bilder werden segmentiert, {{resegment}} ausgewählte Bilder werden re-segmentiert',
   },
   toast: {
-    // Generic messages
     error: 'Ein Fehler ist aufgetreten',
     success: 'Operation erfolgreich',
     info: 'Information',
     warning: 'Warnung',
     loading: 'Lädt...',
-    // Common errors
     failedToUpdate:
       'Aktualisierung der Daten fehlgeschlagen. Bitte erneut versuchen.',
     fillAllFields: 'Bitte füllen Sie alle Felder aus',
     operationFailed: 'Operation fehlgeschlagen. Bitte erneut versuchen.',
-    // Error boundary
     unexpectedError: 'Unerwarteter Fehler',
     somethingWentWrong:
       'Etwas ist schiefgelaufen. Bitte versuchen Sie es später erneut.',
     somethingWentWrongPage:
       'Beim Laden dieser Seite ist ein Fehler aufgetreten.',
     returnToHome: 'Zurück zur Startseite',
-    // Success messages
     operationCompleted: 'Operation erfolgreich abgeschlossen',
     dataSaved: 'Daten erfolgreich gespeichert',
     dataUpdated: 'Daten erfolgreich aktualisiert',
-    // Connection messages
     reconnecting: 'Verbinde erneut mit Server...',
     reconnected: 'Verbindung zum Server wiederhergestellt',
     connectionFailed: 'Wiederherstellung der Serververbindung fehlgeschlagen',
-    // Segmentation messages
     segmentationRequested: 'Segmentierungsanfrage übermittelt',
     segmentationCompleted: 'Bildsegmentierung abgeschlossen',
     segmentationFailed: 'Segmentierung fehlgeschlagen',
@@ -807,52 +785,61 @@ export default {
       'Abrufen des Segmentierungsergebnisses fehlgeschlagen',
     segmentationStatusFailed:
       'Überprüfung des Segmentierungsstatus fehlgeschlagen',
-    // Export messages
     exportCompleted: 'Export erfolgreich abgeschlossen!',
     exportFailed: 'Export fehlgeschlagen. Bitte erneut versuchen.',
-    // Project actions
     project: {
       created: 'Projekt erfolgreich erstellt',
       createFailed: 'Projekt konnte nicht erstellt werden',
       deleted: 'Projekt erfolgreich gelöscht',
       deleteFailed: 'Projekt konnte nicht gelöscht werden',
       urlCopied: 'Projekt-URL in die Zwischenablage kopiert',
+      unshared: 'Projekt aus Geteilten entfernt',
       notFound: 'Projekt nicht gefunden',
       invalidResponse: 'Serverantwort war ungültig',
       readyForImages: 'ist bereit für Bilder',
+      selected: '{{count}} Bild ausgewählt',
+      selected_other: '{{count}} Bilder ausgewählt',
+      deleteSelected: 'Ausgewählte löschen',
     },
-    // Profile actions
     profile: {
       consentUpdated: 'Einverständniseinstellungen erfolgreich aktualisiert',
       loadFailed: 'Laden der Profildaten fehlgeschlagen',
     },
-    // Upload actions
     upload: {
       failed: 'Aktualisierung der Bilder nach Upload fehlgeschlagen',
     },
-    // Segmentation actions
     segmentation: {
       saved: 'Segmentierung erfolgreich gespeichert',
-      failed: 'Speichern der Segmentierung fehlgeschlagen',
+      failed: 'Segmentierung fehlgeschlagen',
       deleted: 'Polygon gelöscht',
       cannotDeleteVertex:
         'Kann Scheitelpunkt nicht löschen - Polygon benötigt mindestens 3 Punkte',
       vertexDeleted: 'Scheitelpunkt erfolgreich gelöscht',
+      started: 'Segmentierung hat begonnen',
+      completed: 'Segmentierung erfolgreich abgeschlossen',
+      completedWithCount:
+        'Segmentierung abgeschlossen! {{count}} Objekte gefunden',
+      noPolygons: 'Keine Segmentierungspolygone erkannt',
+      reloadFailed:
+        'Laden der Segmentierungsergebnisse fehlgeschlagen. Bitte Seite aktualisieren.',
+      autosaveFailed:
+        'Automatisches Speichern fehlgeschlagen - Änderungen können verloren gehen',
     },
     autosaveFailed:
       'Automatisches Speichern fehlgeschlagen - Änderungen können verloren gehen',
   },
+  project: {
+    selected: '{{count}} Bild ausgewählt',
+    selected_other: '{{count}} Bilder ausgewählt',
+    deleteSelected: 'Ausgewählte löschen',
+  },
   export: {
     advancedExport: 'Erweiterter Export',
-    // Dialog headers
     advancedOptions: 'Erweiterte Export-Optionen',
     configureSettings:
       'Konfigurieren Sie Ihre Export-Einstellungen, um ein umfassendes Datenpaket zu erstellen',
-    // Tabs
     general: 'Allgemein',
     visualization: 'Visualisierung',
-    formats: 'Formate',
-    // Content selection
     exportContents: 'Export-Inhalte',
     selectContent:
       'Wählen Sie aus, welche Inhaltstypen in Ihren Export einbezogen werden sollen',
@@ -860,7 +847,6 @@ export default {
     includeVisualizations:
       'Visualisierungen mit nummerierten Polygonen einschließen',
     includeDocumentation: 'Dokumentation und Metadaten einschließen',
-    // Image selection
     selectedImages: 'Ausgewählte Bilder',
     imagesSelected: '{{count}} von {{total}} Bildern ausgewählt',
     selectAll: 'Alle Auswählen',
@@ -877,12 +863,10 @@ export default {
     },
     showingImages: 'Zeige {{start}}-{{end}} von {{total}}',
     noImagesFound: 'Keine Bilder gefunden',
-    // Quality settings
     qualitySettings: 'Qualitätseinstellungen',
     imageQuality: 'Bildqualität',
     compressionLevel: 'Komprimierungsgrad',
     outputResolution: 'Ausgabeauflösung',
-    // Visualization settings
     colorSettings: 'Farbeinstellungen',
     backgroundColor: 'Hintergrundfarbe',
     strokeColor: 'Strichfarbe',
@@ -890,7 +874,6 @@ export default {
     fontSize: 'Schriftgröße',
     showNumbers: 'Polygon-Nummern anzeigen',
     showLabels: 'Beschriftungen anzeigen',
-    // Scale conversion
     scaleConversion: 'Skalierungskonvertierung',
     pixelToMicrometerScale: 'Pixel-zu-Mikrometer-Verhältnis',
     scaleDescription:
@@ -899,31 +882,30 @@ export default {
     scaleUnit: 'µm/Pixel',
     scaleWarning:
       'Hinweis: Der Skalierungswert scheint ungewöhnlich hoch zu sein. Bitte überprüfen.',
-    // Format options
     outputSettings: 'Ausgabeeinstellungen',
-    exportFormats: 'Export-Formate',
+    exportFormats: {
+      yolo: 'YOLO-Format',
+      excel: 'Excel-Format',
+      json: 'JSON-Format',
+    },
     exportToZip: 'Als ZIP-Archiv exportieren',
     generateExcel: 'Excel-Metriken generieren',
     includeCocoFormat: 'COCO-Format-Annotationen einschließen',
     includeJsonMetadata: 'JSON-Metadaten einschließen',
-    // Progress and status
     preparing: 'Export wird vorbereitet...',
     processing: 'Verarbeitung {{current}} von {{total}}',
     packaging: 'Paket wird erstellt...',
     completed: 'Export abgeschlossen',
     downloading: 'Herunterladen...',
     cancelled: 'Export abgebrochen',
-    // Connection status
     connected: 'Verbunden',
     disconnected: 'Getrennt',
     reconnecting: 'Verbinde neu...',
-    // Buttons
     startExport: 'Export Starten',
     cancel: 'Abbrechen',
     download: 'Herunterladen',
     retry: 'Wiederholen',
     close: 'Schließen',
-    // Error messages
     exportError: 'Export fehlgeschlagen',
     exportFailed: 'Export fehlgeschlagen',
     exportComplete: 'Export abgeschlossen',
@@ -932,14 +914,18 @@ export default {
     serverError: 'Server-Fehler aufgetreten',
     invalidSelection: 'Bitte wählen Sie mindestens ein Bild aus',
     noData: 'Keine Daten für Export verfügbar',
+    segmentationData: 'Segmentierungsdaten',
+    spheroidMetrics: 'Sphäroid-Metriken',
+    cocoFormat: 'COCO-Format',
+    cocoFormatTitle: 'COCO-Format-Export',
+    downloadJson: 'JSON herunterladen',
+    formatsTab: 'Formate',
   },
-  // Standalone image action messages (used without prefix)
   imageDeleted: 'Bild erfolgreich gelöscht',
   deleteImageFailed: 'Löschen des Bildes fehlgeschlagen',
   deleteImageError: 'Fehler beim Löschen des Bildes',
   imageAlreadyProcessing: 'Bild wird bereits verarbeitet',
   processImageFailed: 'Bildverarbeitung fehlgeschlagen',
-
   exportDialog: {
     title: 'Export-Optionen',
     includeMetadata: 'Metadaten einschließen',
@@ -1479,8 +1465,6 @@ export default {
       },
     },
   },
-
-  // Context menu
   contextMenu: {
     editPolygon: 'Polygon bearbeiten',
     splitPolygon: 'Polygon teilen',
@@ -1492,8 +1476,6 @@ export default {
     duplicateVertex: 'Eckpunkt duplizieren',
     deleteVertex: 'Eckpunkt löschen',
   },
-
-  // WebSocket messages
   websocket: {
     reconnecting: 'Verbinde erneut mit Server...',
     reconnected: 'Verbindung zum Server wiederhergestellt',
@@ -1502,8 +1484,6 @@ export default {
     connected: 'Mit Echtzeit-Updates verbunden',
     disconnected: 'Von Echtzeit-Updates getrennt',
   },
-
-  // Metriken-Anzeige
   metrics: {
     info: 'Metriken werden nur für externe Polygone ausgewertet. Flächen interner Polygone (Löcher) werden automatisch von den entsprechenden externen Polygonen abgezogen.',
     spheroid: 'Sphäroid',
@@ -1520,8 +1500,6 @@ export default {
     feretAspectRatio: 'Feret-Seitenverhältnis',
     noPolygonsFound: 'Keine Polygone zur Analyse gefunden',
   },
-
-  // Tastaturkürzel
   keyboardShortcuts: {
     title: 'Tastaturkürzel',
     buttonLabel: 'Kürzel',
@@ -1542,34 +1520,127 @@ export default {
     helperText:
       'Diese Kürzel funktionieren im Segmentierungseditor für schnellere und bequemere Arbeit.',
   },
-
-  // Barrierefreiheit und Bildschirmleser-Labels
   accessibility: {
-    // Navigation
     toggleSidebar: 'Seitenleiste umschalten',
     toggleMenu: 'Menü umschalten',
     selectLanguage: 'Sprache auswählen',
     selectTheme: 'Theme auswählen',
     breadcrumb: 'Brotkrümel-Navigation',
     pagination: 'Seitennummerierung',
-
-    // Aktionen
     close: 'Schließen',
     more: 'Mehr',
-
-    // Seitennummerierung
     goToPreviousPage: 'Zur vorherigen Seite gehen',
     goToNextPage: 'Zur nächsten Seite gehen',
     previousPage: 'Vorherige',
     nextPage: 'Nächste',
     morePages: 'Weitere Seiten',
-
-    // Karussell
     previousSlide: 'Vorherige Folie',
     nextSlide: 'Nächste Folie',
-
-    // Ansichtsoptionen
     gridView: 'Rasteransicht',
     listView: 'Listenansicht',
+  },
+  sharing: {
+    share: 'Teilen',
+    shared: 'Geteilt',
+    shareProject: 'Projekt teilen',
+    shareDescription:
+      'Projekt "{{title}}" mit Kollegen und Mitarbeitern teilen',
+    shareByEmail: 'Per E-Mail teilen',
+    shareByLink: 'Per Link teilen',
+    emailAddress: 'E-Mail-Adresse',
+    enterEmailPlaceholder: 'E-Mail-Adresse eingeben',
+    optionalMessage: 'Optionale Nachricht',
+    messagePlaceholder:
+      'Fügen Sie der Einladung eine persönliche Nachricht hinzu...',
+    sendInvitation: 'Einladung senden',
+    sending: 'Wird gesendet...',
+    emailSent: 'E-Mail-Einladung gesendet!',
+    emailRequired: 'E-Mail-Adresse ist erforderlich',
+    emailShareFailed: 'Fehler beim Senden der E-Mail-Einladung',
+    linkExpiry: 'Link-Ablauf',
+    neverExpires: 'Läuft nie ab',
+    hours: 'Stunden',
+    days: 'Tage',
+    generateLink: 'Link generieren',
+    linkCopied: 'Link in die Zwischenablage kopiert!',
+    sharedWithYou: 'Mit Ihnen geteilt',
+    sharedBy: 'Geteilt von: {{email}}',
+    sharedProjects: 'Geteilte Projekte',
+    noSharedProjects: 'Es wurden keine Projekte mit Ihnen geteilt',
+    removeFromShared: 'Aus Geteilten entfernen',
+    acceptInvitation: 'Einladung annehmen',
+    invitationAccepted:
+      'Einladung angenommen! Das Projekt wurde zu Ihrem Dashboard hinzugefügt.',
+    generating: 'Generating...',
+    linkGenerated: 'Share link created!',
+    linkCopyFailed: 'Failed to copy link',
+    linkShareFailed: 'Failed to generate share link',
+    emailInvitations: 'Email invitations',
+    shareLinks: 'Share links',
+    shareRevoked: 'Share has been revoked',
+    acceptedUsers: 'Accepted users',
+    pendingInvitations: 'Pending invitations',
+    joinedViaLink: 'Joined via link',
+    activeShareLinks: 'Active share links',
+    joinedOn: 'Joined',
+    sentOn: 'Sent on',
+    joinedViaLinkOn: 'Joined',
+    resendInvitation: 'Resend invitation',
+    invitationResent: 'Invitation resent successfully',
+    resendFailed: 'Failed to resend invitation',
+    revokeAccess: 'Revoke access',
+    cancelInvitation: 'Cancel invitation',
+    reminderMessage:
+      'This is a reminder that you have been invited to collaborate on a project',
+    revokeShareFailed: 'Failed to revoke share',
+    failedToLoadShares: 'Failed to load shares',
+    status: {
+      pending: 'Pending',
+      accepted: 'Accepted',
+      revoked: 'Revoked',
+    },
+    invitationExpired: 'This invitation has expired',
+    invitationInvalid: 'Invalid invitation',
+    loginToAccept: 'Please log in to accept this invitation',
+    accepting: 'Accepting',
+    redirectingToProject: 'Redirecting to project',
+    redirectingToDashboard: 'Redirecting to dashboard',
+    invitedEmail: 'Invited email',
+    loadingShare: 'Loading share information...',
+    projectSharedBy: 'Project shared by',
+    signInRequired: 'Sign in required',
+    signInToAccept: 'Please sign in to accept this invitation',
+    signInButton: 'Sign in',
+    goToProject: 'Go to Project',
+    backToHome: 'Back to Home',
+    acceptFailed: 'Failed to accept invitation',
+    differentEmail: 'This invitation is for a different email address',
+  },
+  error: 'Fehler',
+  segmentationEditor: {
+    reloadingSegmentation: 'Segmentierung wird neu geladen...',
+    segmenting: 'Segmentierung läuft...',
+    waitingInQueue: 'Warten in der Warteschlange...',
+  },
+  footer: {
+    appName: 'SpheroSeg',
+    description:
+      'Advanced spheroid segmentation and analysis platform for biomedical researchers, providing AI-powered tools for microscopic cell image analysis.',
+    contact: 'Contact',
+    institution: 'Institution',
+    institutionName: 'ÚTIA AV ČR',
+    address: 'Address',
+    addressText: 'Pod Vodárenskou věží 4, 182 08 Prague 8',
+    resources: 'Resources',
+    documentation: 'Documentation',
+    features: 'Features',
+    tutorials: 'Tutorials',
+    research: 'Research',
+    legal: 'Legal',
+    termsOfService: 'Terms of Service',
+    privacyPolicy: 'Privacy Policy',
+    contactUs: 'Contact Us',
+    copyright:
+      '© {{year}} SpheroSeg. Developed at ÚTIA AV ČR (Institute of Information Theory and Automation, Czech Academy of Sciences).',
   },
 };
