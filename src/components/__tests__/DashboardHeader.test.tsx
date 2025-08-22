@@ -366,7 +366,7 @@ describe('DashboardHeader', () => {
     expect(global.clearInterval).toHaveBeenCalled();
   });
 
-  it('handles user without email gracefully', () => {
+  it('handles user without email gracefully', async () => {
     const { useAuth } = await import('@/contexts/AuthContext');
     vi.mocked(useAuth).mockReturnValue({
       ...mockAuthContext,
