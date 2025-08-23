@@ -282,7 +282,7 @@ jobs:
               all_healthy=true
               
               # Backend health check
-              if ! check_service_health "Backend" "http://localhost:3001/health" "\"status\":\"ok\""; then
+              if ! check_service_health "Backend" "http://localhost:3001/health" "\"status\":\"healthy\""; then
                 all_healthy=false
               fi
               
