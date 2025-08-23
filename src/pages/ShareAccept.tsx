@@ -5,14 +5,15 @@ import { Button } from '@/components/ui/button';
 import { toast } from '@/hooks/use-toast';
 import { apiClient } from '@/lib/api';
 import { logger } from '@/lib/logger';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/useLanguage';
+import { useAuth } from '@/contexts/useAuth';
 import {
   Share,
   CheckCircle,
   AlertCircle,
   ExternalLink,
   LogIn,
+  UserPlus,
   Loader2,
 } from 'lucide-react';
 
@@ -86,8 +87,10 @@ function ShareAcceptPage() {
           description: t('sharing.loginToAccept'),
           variant: 'default',
         });
-        // Redirect to login with return URL
-        navigate(`/sign-in?returnTo=/share/accept/${token}`);
+        // Store the share token in localStorage to process after login
+        localStorage.setItem('pendingShareToken', token);
+        // Redirect to login and then to dashboard
+        navigate(`/sign-in?returnTo=/dashboard`);
         return;
       }
 
@@ -152,9 +155,21 @@ function ShareAcceptPage() {
   }, [shareData, user, accepted, handleAccept]);
 
   const handleLogin = () => {
-    // After login, redirect back to the share accept page to complete the process
-    const returnTo = `/share/accept/${token}`;
-    navigate(`/sign-in?returnTo=${encodeURIComponent(returnTo)}`);
+    // Store the share token in localStorage to process after login
+    if (token) {
+      localStorage.setItem('pendingShareToken', token);
+    }
+    // After login, redirect directly to dashboard
+    navigate(`/sign-in?returnTo=/dashboard`);
+  };
+
+  const handleSignUp = () => {
+    // Store the share token in localStorage to process after registration
+    if (token) {
+      localStorage.setItem('pendingShareToken', token);
+    }
+    // After registration, user will be auto-logged in and redirected to dashboard
+    navigate('/sign-up');
   };
 
   if (loading) {
@@ -261,6 +276,14 @@ function ShareAcceptPage() {
                 <Button onClick={handleLogin} className="w-full">
                   <LogIn className="h-4 w-4 mr-2" />
                   {t('auth.signIn')}
+                </Button>
+                <Button
+                  onClick={handleSignUp}
+                  className="w-full"
+                  variant="outline"
+                >
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  {t('auth.signUp')}
                 </Button>
               </div>
             ) : (

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { SlidersHorizontal, Package, Trash2 } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   DropdownMenu,

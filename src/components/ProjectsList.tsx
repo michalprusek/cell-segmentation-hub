@@ -3,7 +3,7 @@ import ProjectCard from '@/components/ProjectCard';
 import ProjectListItem from '@/components/ProjectListItem';
 import NewProjectCard from '@/components/NewProjectCard';
 import NewProjectListItem from '@/components/NewProjectListItem';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 export interface Project {
   id: string;

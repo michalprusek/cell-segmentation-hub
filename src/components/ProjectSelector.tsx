@@ -9,8 +9,8 @@ import {
 } from '@/components/ui/select';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/useAuth';
+import { useLanguage } from '@/contexts/useLanguage';
 import { Project, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 

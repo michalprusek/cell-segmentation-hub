@@ -23,7 +23,7 @@ import {
 import { ExportImageCard } from './ExportImageCard';
 import { useImageSelection, SortOption } from '../hooks/useImageSelection';
 import { ProjectImage } from '@/types';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { cn } from '@/lib/utils';
 
 interface ImageSelectionGridProps {

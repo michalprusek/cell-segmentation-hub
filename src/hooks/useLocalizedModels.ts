@@ -1,5 +1,5 @@
-import { useModel } from '@/contexts/ModelContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useModel } from '@/contexts/useModel';
+import { useLanguage } from '@/contexts/useLanguage';
 import { getLocalizedModelInfo, getAllLocalizedModels } from '@/lib/modelUtils';
 import { ModelType, ModelInfo } from '@/contexts/ModelContext';
 

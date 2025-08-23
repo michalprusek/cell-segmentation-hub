@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import ImageUploader from '@/components/ImageUploader';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface ProjectUploaderSectionProps {
   onCancel: () => void;

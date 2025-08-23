@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Eye, EyeOff, Edit3, Trash2, MoreVertical } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {

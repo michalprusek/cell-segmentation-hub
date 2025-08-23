@@ -33,8 +33,17 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
 
     if (savedThreshold) {
       const threshold = parseFloat(savedThreshold);
-      if (threshold >= 0 && threshold <= 1) {
+      // Ensure loaded threshold is within valid range (0.1 to 0.9)
+      if (threshold >= 0.1 && threshold <= 0.9) {
         setConfidenceThresholdState(threshold);
+      } else if (threshold > 0 && threshold < 0.1) {
+        // If old value is below minimum, set to minimum
+        setConfidenceThresholdState(0.1);
+        localStorage.setItem('confidenceThreshold', '0.1');
+      } else if (threshold > 0.9 && threshold <= 1) {
+        // If old value is above maximum, set to maximum
+        setConfidenceThresholdState(0.9);
+        localStorage.setItem('confidenceThreshold', '0.9');
       }
     }
 
@@ -49,8 +58,8 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
   };
 
   const setConfidenceThreshold = (threshold: number) => {
-    // Ensure threshold is between 0 and 1
-    const normalizedThreshold = Math.max(0, Math.min(1, threshold));
+    // Ensure threshold is between 0.1 and 0.9 (10% to 90%)
+    const normalizedThreshold = Math.max(0.1, Math.min(0.9, threshold));
     setConfidenceThresholdState(normalizedThreshold);
     localStorage.setItem('confidenceThreshold', normalizedThreshold.toString());
   };

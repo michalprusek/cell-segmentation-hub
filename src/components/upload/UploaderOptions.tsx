@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Info } from 'lucide-react';
 import ProjectSelector from '@/components/ProjectSelector';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface UploaderOptionsProps {
   showProjectSelector: boolean;

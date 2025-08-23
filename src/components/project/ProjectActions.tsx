@@ -12,7 +12,7 @@ import {
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { getErrorMessage } from '@/types';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { ShareDialog } from '@/components/project/ShareDialog';
 
 interface ProjectActionsProps {

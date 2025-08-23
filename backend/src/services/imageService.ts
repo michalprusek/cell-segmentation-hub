@@ -183,6 +183,16 @@ export class ImageService {
     userId: string,
     options: ImageQueryParams
   ): Promise<PaginatedImages> {
+    // Get user email for share checking
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true }
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
     // Verify project ownership or share access
     const project = await this.prisma.project.findFirst({
       where: {
@@ -192,12 +202,10 @@ export class ImageService {
           {
             shares: {
               some: {
+                status: 'accepted',
                 OR: [
-                  { sharedWithId: userId, status: 'accepted' },
-                  {
-                    sharedWith: { id: userId },
-                    status: 'accepted'
-                  }
+                  { sharedWithId: userId },
+                  { email: user.email }
                 ]
               }
             }
@@ -274,6 +282,16 @@ export class ImageService {
    * Get single image by ID with permission check
    */
   async getImageById(imageId: string, userId: string): Promise<ImageWithUrls | null> {
+    // Get user email for share checking
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true }
+    });
+
+    if (!user) {
+      return null;
+    }
+
     const image = await this.prisma.image.findFirst({
       where: {
         id: imageId,
@@ -283,12 +301,10 @@ export class ImageService {
             {
               shares: {
                 some: {
+                  status: 'accepted',
                   OR: [
-                    { sharedWithId: userId, status: 'accepted' },
-                    {
-                      sharedWith: { id: userId },
-                      status: 'accepted'
-                    }
+                    { sharedWithId: userId },
+                    { email: user.email }
                   ]
                 }
               }

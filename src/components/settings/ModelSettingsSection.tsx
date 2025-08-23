@@ -13,8 +13,8 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { ModelType } from '@/contexts/ModelContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { ModelType } from '@/contexts/useModel';
+import { useLanguage } from '@/contexts/useLanguage';
 import { useLocalizedModels } from '@/hooks/useLocalizedModels';
 import { Cpu, Zap, Target } from 'lucide-react';
 
@@ -125,19 +125,21 @@ const ModelSettingsSection = () => {
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-sm text-gray-600 dark:text-gray-400">0%</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              10%
+            </span>
             <span className="text-sm font-medium">
               {Math.round(confidenceThreshold * 100)}%
             </span>
             <span className="text-sm text-gray-600 dark:text-gray-400">
-              100%
+              90%
             </span>
           </div>
 
           <Slider
             id="threshold"
-            min={0}
-            max={100}
+            min={10}
+            max={90}
             step={1}
             value={[confidenceThreshold * 100]}
             onValueChange={handleThresholdChange}

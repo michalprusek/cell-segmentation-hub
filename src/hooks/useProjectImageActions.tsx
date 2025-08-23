@@ -5,8 +5,8 @@ import { toast } from 'sonner';
 import { updateImageProcessingStatus } from '@/lib/imageProcessingService';
 import type { ProjectImage, SegmentationData } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useModel } from '@/contexts/ModelContext';
+import { useLanguage } from '@/contexts/useLanguage';
+import { useModel } from '@/contexts/useModel';
 import { logger } from '@/lib/logger';
 
 interface UseProjectImageActionsProps {

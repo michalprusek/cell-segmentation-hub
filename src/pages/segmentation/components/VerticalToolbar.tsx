@@ -11,7 +11,7 @@ import {
   ZoomOut,
   Maximize2,
 } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { EditMode } from '../types';
 
 interface VerticalToolbarProps {

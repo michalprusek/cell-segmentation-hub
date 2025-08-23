@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { ChevronLeft, ChevronRight, MoreHorizontal } from 'lucide-react';
 
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { cn } from '@/lib/utils';
 import { ButtonProps } from '@/components/ui/button';
 import { buttonVariants } from '@/components/ui/button-exports';

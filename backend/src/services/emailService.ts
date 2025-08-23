@@ -65,20 +65,41 @@ export function init(): void {
           host: config.smtp.host,
           port: config.smtp.port,
           secure: config.smtp.secure,
-          tls: {
-            // Certificate validation enabled by default, only disable with explicit flag
-            rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true'
-          }
+          ignoreTLS: process.env.SMTP_IGNORE_TLS === 'true', // Option to completely ignore TLS
+          requireTLS: process.env.SMTP_REQUIRE_TLS === 'true' && process.env.SMTP_IGNORE_TLS !== 'true',
+          connectionTimeout: 10000, // 10 seconds connection timeout
+          greetingTimeout: 10000,   // 10 seconds greeting timeout
+          socketTimeout: 10000,     // 10 seconds socket timeout
         };
+        
+        // Only add TLS config if not ignoring TLS
+        if (process.env.SMTP_IGNORE_TLS !== 'true') {
+          transportConfig.tls = {
+            // Certificate validation enabled by default, only disable with explicit flag
+            rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true',
+            // Support STARTTLS
+            minVersion: 'TLSv1.2'
+          };
+        }
 
-        // Only include auth if credentials are provided
-        if (config.smtp.user && config.smtp.pass) {
+        // Only include auth if explicitly enabled and credentials are provided
+        // Check SMTP_AUTH environment variable to disable auth when not needed
+        if (process.env.SMTP_AUTH !== 'false' && config.smtp.user && config.smtp.pass) {
           transportConfig.auth = {
             user: config.smtp.user,
             pass: config.smtp.pass
           };
         }
 
+        logger.info('SMTP Transport Config', 'EmailService', {
+          host: transportConfig.host,
+          port: transportConfig.port,
+          secure: transportConfig.secure,
+          requireTLS: transportConfig.requireTLS,
+          hasAuth: !!transportConfig.auth,
+          authDisabled: process.env.SMTP_AUTH === 'false'
+        });
+        
         _transporter = nodemailer.createTransport(transportConfig);
       } else if (config.service === 'sendgrid') {
         config.sendgrid = {
@@ -113,6 +134,15 @@ export function init(): void {
    */
 export async function sendEmail(options: EmailServiceOptions): Promise<void> {
     try {
+      // TEMPORARY: Skip email sending due to SMTP timeout issues
+      if (process.env.SKIP_EMAIL_SEND === 'true') {
+        logger.warn('Email sending skipped (SKIP_EMAIL_SEND=true)', 'EmailService', {
+          to: options.to,
+          subject: options.subject
+        });
+        return;
+      }
+      
       ensureInitialized();
       
       if (!_transporter || !_config) {
@@ -128,7 +158,24 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
         attachments: options.attachments
       };
 
-      const result = await _transporter.sendMail(mailOptions);
+      // Wrap sendMail in a timeout promise
+      const sendMailWithTimeout = new Promise((resolve, reject) => {
+        const timeoutId = setTimeout(() => {
+          reject(new Error('Email send timeout after 10 seconds'));
+        }, 10000);
+        
+        _transporter!.sendMail(mailOptions)
+          .then(result => {
+            clearTimeout(timeoutId);
+            resolve(result);
+          })
+          .catch(error => {
+            clearTimeout(timeoutId);
+            reject(error);
+          });
+      });
+      
+      const result = await sendMailWithTimeout as any;
       
       logger.info('Email sent successfully', 'EmailService', { 
         to: options.to,
@@ -148,6 +195,15 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
    * Send password reset email with secure token link
    */
 export async function sendPasswordResetEmail(userEmail: string, resetToken: string, expiresAt: Date): Promise<void> {
+    // TEMPORARY: Skip email sending due to SMTP timeout issues
+    if (process.env.SKIP_EMAIL_SEND === 'true') {
+      logger.warn('Password reset email skipped (SKIP_EMAIL_SEND=true)', 'EmailService', {
+        userEmail,
+        tokenExpiry: expiresAt
+      });
+      return;
+    }
+    
     try {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;

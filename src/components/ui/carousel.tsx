@@ -4,7 +4,7 @@ import useEmblaCarousel, {
 } from 'embla-carousel-react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 

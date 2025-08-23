@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   # Green Frontend (port 5000)
-  frontend-green:
+  green-frontend:
     build:
       context: .
       dockerfile: docker/frontend.prod.Dockerfile
@@ -25,7 +25,7 @@ services:
       retries: 3
 
   # Green Backend API (port 5001)
-  backend-green:
+  green-backend:
     build:
       context: ./backend
       dockerfile: ../docker/backend.prod.Dockerfile
@@ -39,11 +39,28 @@ services:
         condition: service_healthy
       redis-green:
         condition: service_healthy
-    env_file: .env.production
+    env_file: .env.green
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://spheroseg:spheroseg@green-db:5432/spheroseg_green
-      - REDIS_URL=redis://green-redis:6379
+      - HOST=0.0.0.0
+      - API_BASE_URL=https://spherosegapp.utia.cas.cz
+      - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres-green:5432/spheroseg_green
+      - REDIS_URL=redis://redis-green:6379
+      - JWT_ACCESS_SECRET=1c4fb341de6e2812f81b0cd5287652d38518287b64289fb21346305bba6fe87d
+      - JWT_REFRESH_SECRET=fb5a22af8446e7ac670ea277715ec4bdf9e233efd55f5ddac749edd8f2e9562b
+      - FROM_EMAIL=spheroseg@utia.cas.cz
+      - SEGMENTATION_SERVICE_URL=http://green-ml:8000
+      - CORS_ORIGIN=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
+      - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,wss://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
+      - ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
+      - FRONTEND_URL=https://spherosegapp.utia.cas.cz
+      # Email configuration - UTIA SMTP
+      - EMAIL_SERVICE=smtp
+      - SMTP_HOST=mail.utia.cas.cz
+      - SMTP_PORT=25
+      - SMTP_SECURE=false
+      - SMTP_AUTH=false
+      - SMTP_REQUIRE_TLS=true
     volumes:
       - ./backend/uploads/green:/app/uploads
       - green-backend-logs:/app/logs
@@ -57,7 +74,7 @@ services:
   # Green PostgreSQL Database
   postgres-green:
     image: postgres:15-alpine
-    container_name: green-db
+    container_name: postgres-green
     networks:
       - green-network
     environment:
@@ -76,7 +93,7 @@ services:
   # Green Redis Cache
   redis-green:
     image: redis:7-alpine
-    container_name: green-redis
+    container_name: redis-green
     networks:
       - green-network
     volumes:
@@ -89,7 +106,7 @@ services:
       retries: 5
 
   # Green ML Service (port 5008)
-  ml-green:
+  green-ml:
     build:
       context: ./backend/segmentation
       dockerfile: ../../docker/ml.Dockerfile
@@ -108,6 +125,29 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy (using unified config)
+  nginx-green:
+    image: nginx:alpine
+    container_name: nginx-green
+    volumes:
+      - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - green-frontend
+      - green-backend
+      - green-ml
+    networks:
+      - green-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
       interval: 30s
       timeout: 10s
       retries: 3

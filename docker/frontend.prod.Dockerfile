@@ -1,6 +1,17 @@
 # Multi-stage build for production frontend
 FROM node:20-alpine AS builder
 
+# Install build dependencies for canvas
+RUN apk add --no-cache \
+    python3 \
+    make \
+    g++ \
+    cairo-dev \
+    jpeg-dev \
+    pango-dev \
+    giflib-dev \
+    pixman-dev
+
 WORKDIR /app
 
 # Copy package files and configs

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EditMode, InteractionState } from '../../types';
 import { Point } from '@/lib/segmentation';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface ModeInstructionsProps {
   editMode: EditMode;

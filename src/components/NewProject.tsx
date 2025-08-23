@@ -14,8 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { PlusCircle } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/useAuth';
+import { useLanguage } from '@/contexts/useLanguage';
 import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 

@@ -694,8 +694,8 @@ export class SegmentationService {
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
-      logger.warn('Image not found or no access', 'SegmentationService', { imageId, userId });
-      throw new Error('Image not found or no access');
+      logger.debug('Image not found or no access', 'SegmentationService', { imageId, userId });
+      return null; // Return null instead of throwing error, controller will handle 404
     }
 
     // Get segmentation data

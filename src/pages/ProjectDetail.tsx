@@ -430,7 +430,93 @@ const ProjectDetail = () => {
           };
         });
 
-        updateImages(formattedImages);
+        // Merge new images with existing ones, preserving segmentation results
+        updateImages(prevImages => {
+          // Create a map of existing images by ID for quick lookup with their segmentation results
+          const existingImagesMap = new Map(
+            prevImages.map(img => [img.id, img])
+          );
+
+          // Process all images from the backend
+          const mergedImages = formattedImages.map(newImg => {
+            const existingImg = existingImagesMap.get(newImg.id);
+
+            // If this image existed before and had segmentation results, preserve them
+            if (existingImg && existingImg.segmentationResult) {
+              return {
+                ...newImg,
+                segmentationResult: existingImg.segmentationResult,
+                // Also preserve the segmentation status if it was completed
+                segmentationStatus:
+                  existingImg.segmentationStatus === 'completed' ||
+                  existingImg.segmentationStatus === 'segmented'
+                    ? existingImg.segmentationStatus
+                    : newImg.segmentationStatus,
+              };
+            }
+
+            // For new images or images without segmentation, return as-is
+            return newImg;
+          });
+
+          // For images with completed status but no segmentation result yet, fetch them
+          const needsEnrichment = mergedImages.filter(
+            img =>
+              (img.segmentationStatus === 'completed' ||
+                img.segmentationStatus === 'segmented') &&
+              !img.segmentationResult
+          );
+
+          if (needsEnrichment.length > 0) {
+            // Fetch segmentation results for these images asynchronously
+            Promise.all(
+              needsEnrichment.map(async img => {
+                try {
+                  const segmentationData =
+                    await apiClient.getSegmentationResults(img.id);
+                  if (segmentationData) {
+                    // Update the specific image with its segmentation result
+                    updateImages(prevImgs =>
+                      prevImgs.map(prevImg =>
+                        prevImg.id === img.id
+                          ? {
+                              ...prevImg,
+                              segmentationResult: {
+                                polygons: segmentationData.polygons || [],
+                                imageWidth: segmentationData.imageWidth || null,
+                                imageHeight:
+                                  segmentationData.imageHeight || null,
+                                modelUsed: segmentationData.modelUsed,
+                                confidence: segmentationData.confidence,
+                                processingTime: segmentationData.processingTime,
+                                levelOfDetail: 'medium',
+                                polygonCount:
+                                  segmentationData.polygons?.length || 0,
+                                pointCount:
+                                  segmentationData.polygons?.reduce(
+                                    (sum, p) => sum + p.points.length,
+                                    0
+                                  ) || 0,
+                                compressionRatio: 1.0,
+                              },
+                            }
+                          : prevImg
+                      )
+                    );
+                  }
+                } catch (error) {
+                  // Silently fail for individual images - they'll be fetched later if needed
+                  console.debug(
+                    `Could not fetch segmentation for image ${img.id}:`,
+                    error
+                  );
+                }
+              })
+            );
+          }
+
+          return mergedImages;
+        });
       } catch (error) {
         toast.error(t('toast.upload.failed'));
       }

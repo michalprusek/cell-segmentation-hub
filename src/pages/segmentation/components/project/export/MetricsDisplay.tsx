@@ -7,7 +7,7 @@ import {
   formatNumber,
 } from '../../../utils/metricCalculations';
 import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface MetricsDisplayProps {
   segmentation: SegmentationResult;

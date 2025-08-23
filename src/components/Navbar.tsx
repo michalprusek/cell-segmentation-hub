@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 const Navbar = () => {
   const { t } = useLanguage();

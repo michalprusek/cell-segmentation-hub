@@ -1,6 +1,6 @@
 import React from 'react';
 import { Calendar, Image } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface ProjectMetadataProps {
   date: string;

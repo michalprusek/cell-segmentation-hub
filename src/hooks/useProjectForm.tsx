@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { getErrorMessage } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { logger } from '@/lib/logger';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface UseProjectFormProps {
   onSuccess?: (projectId: string) => void;

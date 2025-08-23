@@ -886,7 +886,7 @@ export default {
       'Note: Scale value above 1 µm/pixel indicates very low magnification. Please verify.',
     // Format options
     outputSettings: 'Output Settings',
-    exportFormats: 'Export Formats',
+    exportFormatsLabel: 'Export Formats',
     exportToZip: 'Export to ZIP archive',
     generateExcel: 'Generate Excel metrics',
     includeCocoFormat: 'Include COCO format annotations',
@@ -1729,10 +1729,6 @@ export default {
     backToHome: 'Back to Home',
     acceptFailed: 'Failed to accept invitation',
     differentEmail: 'This invitation is for a different email address',
-    pendingInvitations: 'Pending invitations',
-    sentOn: 'Sent on',
-    joinedViaLink: 'Joined via link',
-    joinedViaLinkOn: 'Joined',
   },
   error: 'Error',
   segmentationEditor: {

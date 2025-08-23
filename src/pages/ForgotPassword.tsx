@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { Loader2, ArrowLeft, Mail, CheckCircle } from 'lucide-react';
 import { logger } from '@/lib/logger';

@@ -332,12 +332,20 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
       logger.info('Password reset token generated', 'AuthService', { email: data.email });
 
       // Send email with reset link
-      try {
-        await EmailService.sendPasswordResetEmail(data.email, resetToken, resetTokenExpiry);
-        logger.info('Password reset email sent successfully', 'AuthService', { email: data.email });
-      } catch (emailError) {
-        logger.error('Failed to send password reset email:', emailError as Error, 'AuthService', { email: data.email });
-        // Continue without throwing error - token has already been generated
+      // TEMPORARY: Skip email sending due to SMTP timeout issues
+      if (process.env.SKIP_EMAIL_SEND === 'true') {
+        logger.warn('Password reset email skipped (SKIP_EMAIL_SEND=true)', 'AuthService', { 
+          email: data.email,
+          tokenExpiry: resetTokenExpiry 
+        });
+      } else {
+        try {
+          await EmailService.sendPasswordResetEmail(data.email, resetToken, resetTokenExpiry);
+          logger.info('Password reset email sent successfully', 'AuthService', { email: data.email });
+        } catch (emailError) {
+          logger.error('Failed to send password reset email:', emailError as Error, 'AuthService', { email: data.email });
+          // Continue without throwing error - token has already been generated
+        }
       }
 
       const response: { message: string; resetToken?: string } = {

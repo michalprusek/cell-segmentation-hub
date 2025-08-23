@@ -3,7 +3,7 @@ import { SegmentationResult } from '@/lib/segmentation';
 import { CheckCircle, Clipboard, DownloadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { convertToCOCO } from '../../../utils/cocoConverter';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface CocoTabProps {
   segmentation: SegmentationResult;

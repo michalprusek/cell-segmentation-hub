@@ -7,7 +7,7 @@ import {
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
 import { Trash } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface VertexContextMenuProps {
   children: React.ReactNode;

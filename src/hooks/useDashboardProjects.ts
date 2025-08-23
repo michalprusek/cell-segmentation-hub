@@ -5,7 +5,7 @@ import apiClient from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import config from '@/lib/config';
 
 export interface DashboardProjectsOptions {

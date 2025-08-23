@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/card';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { Profile, getErrorMessage } from '@/types';
 import { Info } from 'lucide-react';
 import { logger } from '@/lib/logger';

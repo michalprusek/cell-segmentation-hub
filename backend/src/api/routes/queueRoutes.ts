@@ -49,7 +49,12 @@ router.post(
     body('priority')
       .optional()
       .isInt({ min: 0, max: 10 })
-      .withMessage('Priorita musí být mezi 0 a 10')
+      .withMessage('Priorita musí být mezi 0 a 10'),
+    body('detectHoles')
+      .optional()
+      .isBoolean()
+      .withMessage('detectHoles musí být boolean')
+      .toBoolean()
   ],
   handleValidation,
   queueController.addImageToQueue
@@ -88,6 +93,11 @@ router.post(
       .optional()
       .isBoolean()
       .withMessage('forceResegment musí být boolean')
+      .toBoolean(),
+    body('detectHoles')
+      .optional()
+      .isBoolean()
+      .withMessage('detectHoles musí být boolean')
       .toBoolean()
   ],
   handleValidation,

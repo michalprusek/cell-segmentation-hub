@@ -21,8 +21,8 @@ import {
   Layers,
 } from 'lucide-react';
 import { useActiveSection } from '@/hooks/useActiveSection';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/useLanguage';
+import { useAuth } from '@/contexts/useAuth';
 import { Button } from '@/components/ui/button';
 
 const Documentation = () => {

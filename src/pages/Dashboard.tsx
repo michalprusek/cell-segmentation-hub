@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -8,6 +8,8 @@ import { useAuth, useLanguage } from '@/contexts/exports';
 import ProjectToolbar from '@/components/project/ProjectToolbar';
 import ProjectsTab from '@/components/dashboard/ProjectsTab';
 import { useDashboardProjects } from '@/hooks/useDashboardProjects';
+import { apiClient } from '@/lib/api';
+import { logger } from '@/lib/logger';
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -25,6 +27,62 @@ const Dashboard = () => {
       userEmail: user?.email,
     }
   );
+
+  // Process pending share invitation after login or registration
+  const processPendingShareInvitation = useCallback(async () => {
+    const pendingToken = localStorage.getItem('pendingShareToken');
+    if (!pendingToken || !user) return;
+
+    try {
+      logger.debug(
+        'Processing pending share invitation with token:',
+        pendingToken
+      );
+
+      // Show loading toast
+      const loadingToastId = toast.loading(t('sharing.processingInvitation'));
+
+      const result = await apiClient.acceptShareInvitation(pendingToken);
+
+      // Dismiss loading toast
+      toast.dismiss(loadingToastId);
+
+      if (!result.needsLogin) {
+        toast.success(t('sharing.invitationAccepted'), {
+          description: result.project?.title
+            ? `${t('common.project')}: ${result.project.title}`
+            : undefined,
+        });
+        // Refresh projects list to show the newly shared project
+        await fetchProjects();
+      }
+    } catch (error: any) {
+      logger.error('Failed to process pending share invitation:', error);
+
+      // Check if the error is because invitation was already accepted
+      if (
+        error?.response?.status === 409 ||
+        error?.response?.data?.message?.includes('already')
+      ) {
+        // Invitation was already accepted, just refresh the projects
+        await fetchProjects();
+      } else if (error?.response?.status === 404) {
+        // Invalid or expired invitation
+        toast.error(t('sharing.invitationInvalid'));
+      }
+      // For other errors, don't show toast as it might confuse the user
+    } finally {
+      // Always remove the pending token after processing
+      localStorage.removeItem('pendingShareToken');
+    }
+  }, [user, t, fetchProjects]);
+
+  useEffect(() => {
+    // Process pending share invitation when user is authenticated
+    if (user) {
+      processPendingShareInvitation();
+    }
+  }, [user, processPendingShareInvitation]);
 
   useEffect(() => {
     // Poslouchej události pro aktualizaci seznamu projektů

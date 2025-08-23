@@ -1,9 +1,9 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { WebSocketProvider } from '@/contexts/WebSocketContext';
+import WebSocketProvider from '@/contexts/WebSocketContext';
 import { useWebSocket } from '@/contexts/exports';
-import { AuthContext } from '@/contexts/AuthContext';
+import { AuthContext } from '@/contexts/useAuth';
 import WebSocketManager from '@/services/webSocketManager';
 
 // Mock WebSocketManager

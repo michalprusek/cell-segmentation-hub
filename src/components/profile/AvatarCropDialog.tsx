@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Loader2, X, Check } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { cropImageToCircle } from '@/lib/cropImage';
 import { toast } from '@/hooks/use-toast';
 
