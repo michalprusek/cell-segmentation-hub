@@ -1,18 +1,35 @@
 import { vi, expect } from 'vitest';
 
-// Mock localStorage for test environment
-const localStorageMock = {
-  getItem: vi.fn((key: string) => {
-    if (key === 'theme') return 'system';
-    if (key === 'language') return 'en';
-    return null;
-  }),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
+// Mock localStorage for test environment with in-memory storage
+const createLocalStorageMock = () => {
+  let store: Record<string, string> = {
+    theme: 'system',
+    language: 'en',
+  };
+
+  return {
+    getItem: vi.fn((key: string) => store[key] || null),
+    setItem: vi.fn((key: string, value: string) => {
+      store[key] = String(value);
+    }),
+    removeItem: vi.fn((key: string) => {
+      delete store[key];
+    }),
+    clear: vi.fn(() => {
+      store = {
+        theme: 'system',
+        language: 'en',
+      };
+    }),
+  };
 };
+
+const localStorageMock = createLocalStorageMock();
+
 Object.defineProperty(window, 'localStorage', {
   value: localStorageMock,
+  writable: true,
+  configurable: true,
 });
 
 // Mock window.matchMedia for ThemeContext

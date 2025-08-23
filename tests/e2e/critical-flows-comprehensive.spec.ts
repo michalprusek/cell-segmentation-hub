@@ -479,17 +479,30 @@ test.describe('Critical User Flows - Comprehensive', () => {
         page.locator('text=/invalid|supported|image/i')
       ).toBeVisible();
 
-      // Try to upload oversized file (mock)
+      // Try to upload oversized file using DataTransfer API
       await page.evaluate(() => {
         const input = document.querySelector(
           'input[type="file"]'
         ) as HTMLInputElement;
-        Object.defineProperty(input.files![0], 'size', {
-          value: 100 * 1024 * 1024,
-        }); // 100MB
+
+        // Create a large file using Blob
+        const largeContent = new Uint8Array(100 * 1024 * 1024); // 100MB
+        const largeBlob = new Blob([largeContent], { type: 'image/jpeg' });
+        const largeFile = new File([largeBlob], 'large-image.jpg', {
+          type: 'image/jpeg',
+          lastModified: Date.now(),
+        });
+
+        // Use DataTransfer to set the file
+        const dataTransfer = new DataTransfer();
+        dataTransfer.items.add(largeFile);
+        input.files = dataTransfer.files;
+
+        // Dispatch change event
+        const changeEvent = new Event('change', { bubbles: true });
+        input.dispatchEvent(changeEvent);
       });
 
-      await page.dispatchEvent('input[type="file"]', 'change');
       await expect(page.locator('text=/size|large|limit/i')).toBeVisible();
     });
   });
@@ -605,14 +618,82 @@ test.describe('Critical User Flows - Comprehensive', () => {
         await page.touchscreen.tap(box.x + 50, box.y + 50);
         await page.waitForTimeout(100);
 
-        // Simulate pinch zoom
-        await page.evaluate(() => {
-          const event = new WheelEvent('wheel', {
-            deltaY: -100,
-            ctrlKey: true,
+        // Simulate pinch zoom with proper touch events
+        await page.evaluate(boxCoords => {
+          const canvas = document.querySelector('canvas');
+          if (!canvas) return;
+
+          const rect = canvas.getBoundingClientRect();
+          const centerX = rect.left + rect.width / 2;
+          const centerY = rect.top + rect.height / 2;
+
+          // Create two touch points
+          const touch1 = new Touch({
+            identifier: 0,
+            target: canvas,
+            clientX: centerX - 50,
+            clientY: centerY,
+            pageX: centerX - 50,
+            pageY: centerY,
           });
-          document.querySelector('canvas')?.dispatchEvent(event);
-        });
+
+          const touch2 = new Touch({
+            identifier: 1,
+            target: canvas,
+            clientX: centerX + 50,
+            clientY: centerY,
+            pageX: centerX + 50,
+            pageY: centerY,
+          });
+
+          // Start touch
+          const touchStart = new TouchEvent('touchstart', {
+            touches: [touch1, touch2],
+            targetTouches: [touch1, touch2],
+            changedTouches: [touch1, touch2],
+            bubbles: true,
+            cancelable: true,
+          });
+          canvas.dispatchEvent(touchStart);
+
+          // Move touches apart (pinch out to zoom in)
+          const touch1Moved = new Touch({
+            identifier: 0,
+            target: canvas,
+            clientX: centerX - 100,
+            clientY: centerY,
+            pageX: centerX - 100,
+            pageY: centerY,
+          });
+
+          const touch2Moved = new Touch({
+            identifier: 1,
+            target: canvas,
+            clientX: centerX + 100,
+            clientY: centerY,
+            pageX: centerX + 100,
+            pageY: centerY,
+          });
+
+          const touchMove = new TouchEvent('touchmove', {
+            touches: [touch1Moved, touch2Moved],
+            targetTouches: [touch1Moved, touch2Moved],
+            changedTouches: [touch1Moved, touch2Moved],
+            bubbles: true,
+            cancelable: true,
+          });
+          canvas.dispatchEvent(touchMove);
+
+          // End touch
+          const touchEnd = new TouchEvent('touchend', {
+            touches: [],
+            targetTouches: [],
+            changedTouches: [touch1Moved, touch2Moved],
+            bubbles: true,
+            cancelable: true,
+          });
+          canvas.dispatchEvent(touchEnd);
+        }, box);
 
         await page.waitForTimeout(100);
 

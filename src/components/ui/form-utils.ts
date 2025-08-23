@@ -26,14 +26,17 @@ export const useFormField = () => {
   const itemContext = React.useContext(FormItemContext);
   const { getFieldState, formState } = useFormContext();
 
+  // Always call useId hook (React Hooks rule)
+  const fallbackId = React.useId();
+
   if (!fieldContext) {
     throw new Error('useFormField should be used within <FormField>');
   }
 
   const fieldState = getFieldState(fieldContext.name, formState);
 
-  // Use React.useId() as fallback if no itemContext
-  const id = itemContext?.id || React.useId();
+  // Use itemContext id if available, otherwise use fallback
+  const id = itemContext?.id || fallbackId;
 
   return {
     id,

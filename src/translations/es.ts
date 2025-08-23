@@ -830,6 +830,8 @@ export default {
       noPolygons: 'No se detectaron polígonos de segmentación',
       reloadFailed:
         'Error al cargar los resultados de segmentación. Por favor, actualiza la página.',
+      autosaveFailed:
+        'Error en guardado automático - los cambios pueden perderse',
     },
   },
   project: {
