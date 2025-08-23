@@ -3,7 +3,11 @@ import axios from 'axios';
 import type { AxiosResponse, AxiosError } from 'axios';
 
 // Mock axios completely
-vi.mock('axios');
+vi.mock('axios', () => ({
+  default: {
+    create: vi.fn(),
+  },
+}));
 const mockAxios = axios as any;
 
 // Mock localStorage and sessionStorage
@@ -62,7 +66,9 @@ describe('API Client - Advanced Features', () => {
       },
     };
 
-    mockAxios.create.mockReturnValue(mockAxiosInstance);
+    if (mockAxios && mockAxios.create) {
+      mockAxios.create.mockReturnValue(mockAxiosInstance);
+    }
 
     // Reset storage mocks
     localStorageMock.getItem.mockReturnValue(null);
@@ -74,7 +80,9 @@ describe('API Client - Advanced Features', () => {
     apiClient = freshApiClient;
 
     // Mock the internal instance property directly
-    (apiClient as any).instance = mockAxiosInstance;
+    if (apiClient) {
+      (apiClient as any).instance = mockAxiosInstance;
+    }
   });
 
   afterEach(() => {

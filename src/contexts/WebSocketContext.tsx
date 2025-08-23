@@ -109,4 +109,6 @@ export const WebSocketProvider: React.FC<WebSocketProviderProps> = ({
 };
 
 export default WebSocketProvider;
+export { WebSocketProvider };
+export { WebSocketContext } from './WebSocketContext.types';
 // useWebSocket is exported from './exports' to avoid Fast Refresh warnings
