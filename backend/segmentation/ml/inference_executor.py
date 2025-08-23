@@ -241,6 +241,19 @@ class InferenceExecutor:
                 # Submit inference task to executor
                 future = self.executor.submit(_run_inference)
                 
+                # Store future on session for shutdown handling
+                session._future = future
+                
+                # Add callback to clear future reference when done
+                def clear_future_ref(f):
+                    try:
+                        if hasattr(session, '_future'):
+                            session._future = None
+                    except Exception as e:
+                        logger.debug(f"Failed to clear future reference: {e}")
+                
+                future.add_done_callback(clear_future_ref)
+                
                 # Wait for result with timeout
                 try:
                     result = future.result(timeout=timeout)

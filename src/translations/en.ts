@@ -614,7 +614,6 @@ export default {
     password: 'Password',
     passwordPlaceholder: '••••••••',
     signingIn: 'Signing in...',
-    redirectingToDashboard: 'Redirecting to dashboard...',
     redirectingToSignIn: 'Redirecting to sign-in...',
     fillAllFields: 'Please fill in all fields',
     // Toast messages
@@ -816,7 +815,6 @@ export default {
     reconnecting: 'Reconnecting to server...',
     reconnected: 'Connection to server restored',
     connectionFailed: 'Failed to restore connection to server',
-    autosaveFailed: 'Autosave failed - changes may be lost',
     // Segmentation messages
     segmentationRequested: 'Segmentation request submitted',
     segmentationCompleted: 'Image segmentation completed',
@@ -1721,7 +1719,6 @@ export default {
     loginToAccept: 'Please log in to accept this invitation',
     accepting: 'Accepting',
     redirectingToProject: 'Redirecting to project',
-    redirectingToDashboard: 'Redirecting to dashboard',
     invitedEmail: 'Invited email',
     loadingShare: 'Loading share information...',
     projectSharedBy: 'Project shared by',

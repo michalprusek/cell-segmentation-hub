@@ -445,6 +445,15 @@ describe('WebSocketManager', () => {
       await connectPromise;
     });
 
+    afterEach(() => {
+      // Clean up connection
+      try {
+        wsManager.disconnect();
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    });
+
     it('should join project room', () => {
       wsManager.joinProject('project-123');
       expect(mockSocket.emit).toHaveBeenCalledWith(
@@ -844,11 +853,19 @@ describe('WebSocketManager', () => {
         const connectPromise2 = wsManager.connect(mockUser);
 
         // Advance past wait timeout
-        vi.advanceTimersByTime(30000);
+        await vi.advanceTimersByTimeAsync(30000);
 
         await expect(connectPromise2).rejects.toThrow(
           'Connection wait timeout'
         );
+
+        // Clean up the first promise
+        mockSocket.connected = true;
+        const connectHandler = mockSocket.on.mock.calls.find(
+          call => call[0] === 'connect'
+        )?.[1];
+        connectHandler?.();
+        await connectPromise1;
       } finally {
         vi.clearAllTimers();
         vi.useRealTimers();

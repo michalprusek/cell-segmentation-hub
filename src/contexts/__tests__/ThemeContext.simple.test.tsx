@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { ThemeProvider, useTheme } from '@/contexts/ThemeContext';
+import { ThemeProvider } from '@/contexts/ThemeContext';
+import { useTheme } from '@/contexts/exports';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ReactNode } from 'react';
 

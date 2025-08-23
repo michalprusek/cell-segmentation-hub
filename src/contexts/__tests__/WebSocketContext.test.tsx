@@ -528,14 +528,6 @@ describe('WebSocketContext', () => {
     const mockUser = { id: 'user-123', name: 'Test User' };
     const mockToken = 'test-token';
 
-    const createWrapper = (authValue: any) => {
-      return ({ children }: { children: React.ReactNode }) => (
-        <AuthContext.Provider value={authValue}>
-          {children}
-        </AuthContext.Provider>
-      );
-    };
-
     it('should handle full login/logout cycle', async () => {
       // Start with no user
       const initialAuthValue = {

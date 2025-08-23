@@ -341,12 +341,11 @@ describe('API Client - Advanced Features', () => {
 
     test('should apply jitter to backoff delays', async () => {
       // Mock Math.random to return predictable values for testing
-      const originalRandom = Math.random;
       let randomCallCount = 0;
-      Math.random = () => {
+      const mockRandom = vi.spyOn(Math, 'random').mockImplementation(() => {
         randomCallCount++;
         return 0.5; // Return consistent value for testing
-      };
+      });
 
       const originalRequest = { url: '/jitter-test' };
       const rateLimitError = {
@@ -370,8 +369,8 @@ describe('API Client - Advanced Features', () => {
       await vi.advanceTimersByTimeAsync(2000);
       await retryPromise;
 
-      // Restore original Math.random
-      Math.random = originalRandom;
+      // Restore Math.random mock
+      mockRandom.mockRestore();
     });
   });
 

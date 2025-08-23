@@ -184,9 +184,9 @@ describe('API Client - Segmentation & Queue Methods', () => {
         const result = await apiClient.getSegmentationResults('image1');
 
         // For backward compatibility, API client should handle array response
-        // but currently returns full structure with empty polygons
+        // and return the polygons with undefined for other fields
         expect(result).toEqual({
-          polygons: [],
+          polygons: mockPolygons,
           confidence: undefined,
           createdAt: undefined,
           imageHeight: undefined,

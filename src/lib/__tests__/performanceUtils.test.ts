@@ -132,8 +132,13 @@ describe('Performance Utils', () => {
       throttled('first');
       expect(global.requestAnimationFrame).toHaveBeenCalledTimes(1);
 
-      // For CI pipeline, just verify basic throttling function works
-      expect(typeof throttled).toBe('function');
+      // Test multiple rapid calls - should be throttled based on interval
+      throttled('second');
+      throttled('third');
+
+      // Verify throttling is working (callback called but not excessively)
+      expect(callback).toHaveBeenCalledWith('first');
+      expect(callback.mock.calls.length).toBeLessThanOrEqual(2);
     });
 
     test('should use default 16ms interval', async () => {
@@ -616,9 +621,11 @@ describe('Performance Utils', () => {
       );
 
       throttledViewportUpdate();
-      // For CI pipeline, just verify the function was created and can be called
+
+      // Verify viewport update function can be called and RAF is triggered
       expect(typeof throttledViewportUpdate).toBe('function');
-      // The RAF implementation details are tested elsewhere
+      expect(viewportUpdate).toHaveBeenCalled();
+      expect(global.requestAnimationFrame).toHaveBeenCalled();
     });
 
     test('should handle complex performance optimization scenario', () => {

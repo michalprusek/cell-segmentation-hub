@@ -626,7 +626,6 @@ export default {
     password: 'Heslo',
     passwordPlaceholder: '••••••••',
     signingIn: 'Přihlašování...',
-    redirectingToDashboard: 'Přesměrování na dashboard...',
     redirectingToSignIn: 'Přesměrování k přihlášení...',
     fillAllFields: 'Vyplňte prosím všechna pole',
     signInSuccess: 'Úspěšně přihlášen',
@@ -826,7 +825,6 @@ export default {
     upload: {
       failed: 'Nepodařilo se obnovit obrázky po nahrání',
     },
-    autosaveFailed: 'Automatické ukládání selhalo - změny mohou být ztraceny',
   },
   imageDeleted: 'Obrázek byl úspěšně smazán',
   deleteImageFailed: 'Smazání obrázku selhalo',
@@ -889,7 +887,7 @@ export default {
     showNumbers: 'Zobrazit čísla polygonů',
     showLabels: 'Zobrazit popisky',
     scaleConversion: 'Převod měřítka',
-    pixelToMicrometerScale: 'Velikost pixelu',
+    pixelToMicrometerScale: 'Kalibrace pixel na mikrometry',
     scaleDescription:
       'Určete, kolik mikrometrů představuje jeden pixel pro převod měření',
     scalePlaceholder: 'např. 0,5 (1 pixel = 0,5 µm)',
@@ -1676,7 +1674,6 @@ export default {
     cancelInvitation: 'Zrušit pozvánku',
     reminderMessage:
       'Toto je připomínka, že jste byli pozváni ke spolupráci na projektu',
-    redirectingToDashboard: 'Přesměrování na přehled...',
   },
   error: 'Chyba',
   segmentationEditor: {

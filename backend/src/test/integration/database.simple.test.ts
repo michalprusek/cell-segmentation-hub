@@ -26,8 +26,12 @@ describe('Database Connection Tests', () => {
     it('should have JWT secrets configured', () => {
       expect(process.env.JWT_ACCESS_SECRET).toBeDefined()
       expect(process.env.JWT_REFRESH_SECRET).toBeDefined()
-      expect(process.env.JWT_ACCESS_SECRET!.length).toBeGreaterThan(30)
-      expect(process.env.JWT_REFRESH_SECRET!.length).toBeGreaterThan(30)
+      
+      const accessSecret = process.env.JWT_ACCESS_SECRET
+      const refreshSecret = process.env.JWT_REFRESH_SECRET
+      
+      expect(accessSecret?.length).toBeGreaterThan(30)
+      expect(refreshSecret?.length).toBeGreaterThan(30)
     })
 
     it('should have required environment variables', () => {
