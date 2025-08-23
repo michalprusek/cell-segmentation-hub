@@ -89,11 +89,15 @@ class TestInferenceExecutor:
 
     def test_inference_timeout(self, executor, sample_input):
         """Test inference timeout handling"""
-        # Create a model that sleeps longer than timeout
+        import threading
+        
+        # Create a model that blocks indefinitely
         slow_model = Mock()
+        block_event = threading.Event()
         
         def slow_inference(x):
-            time.sleep(2)  # Sleep longer than timeout
+            # Block indefinitely on event that never gets set
+            block_event.wait()
             return torch.randn(1, 1, 256, 256)
         
         slow_model.side_effect = slow_inference

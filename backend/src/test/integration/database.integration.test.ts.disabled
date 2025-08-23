@@ -25,18 +25,24 @@ describe('Database Integration Tests', () => {
     // Clean database - delete in correct order to avoid FK constraints
     try {
       await prisma.$transaction(async (tx) => {
-        await tx.segmentationQueue.deleteMany().catch(() => {
-          // Ignore if table doesn't exist in this test environment
-        });
-        await tx.segmentation.deleteMany().catch(() => {});
-        await tx.image.deleteMany().catch(() => {});
-        await tx.project.deleteMany().catch(() => {});
-        await tx.session.deleteMany().catch(() => {});
-        await tx.profile.deleteMany().catch(() => {});
-        await tx.user.deleteMany().catch(() => {});
+        // Delete in order respecting foreign key constraints
+        await tx.segmentationQueue.deleteMany();
+        await tx.segmentation.deleteMany();
+        await tx.image.deleteMany();
+        await tx.session.deleteMany();
+        await tx.project.deleteMany();
+        await tx.profile.deleteMany();
+        await tx.user.deleteMany();
       });
     } catch (error) {
-      console.warn('Database cleanup failed, continuing with tests:', error)
+      // Log full error details for debugging
+      console.error('Database cleanup failed during setup:', {
+        message: error.message,
+        stack: error.stack,
+        code: error.code
+      });
+      // Rethrow to fail the test setup
+      throw new Error(`Failed to clean database: ${error.message}`);
     }
   })
 
@@ -439,7 +445,13 @@ describe('Database Integration Tests', () => {
 
       expect(userWithData?.projects).toHaveLength(2)
       expect(userWithData?.projects?.[0]?.images).toBeDefined()
-      expect(userWithData?.projects?.[0]?.images?.some(img => Array.isArray(img.segmentation) && img.segmentation.length > 0)).toBe(true)
+      // Check that at least one image has a segmentation object (not array)
+      const hasSegmentation = userWithData?.projects?.[0]?.images?.some(img => 
+        img.segmentation !== null && 
+        typeof img.segmentation === 'object' && 
+        !Array.isArray(img.segmentation)
+      )
+      expect(hasSegmentation).toBe(true)
     })
 
     it('should count images by processing status', async () => {

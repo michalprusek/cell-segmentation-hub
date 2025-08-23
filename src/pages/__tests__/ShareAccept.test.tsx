@@ -7,19 +7,15 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ShareAccept from '../ShareAccept';
 import { acceptShare } from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth, useLanguage } from '@/contexts/exports';
 
 // Mock modules
 vi.mock('@/lib/api', () => ({
   acceptShare: vi.fn(),
 }));
 
-vi.mock('@/contexts/AuthContext', () => ({
+vi.mock('@/contexts/exports', () => ({
   useAuth: vi.fn(),
-}));
-
-vi.mock('@/contexts/LanguageContext', () => ({
   useLanguage: vi.fn(),
 }));
 

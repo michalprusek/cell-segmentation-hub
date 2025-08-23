@@ -17,7 +17,7 @@ import {
   constrainTransform,
 } from '@/lib/coordinateUtils';
 import { rafThrottle } from '@/lib/performanceUtils';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/exports';
 
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];

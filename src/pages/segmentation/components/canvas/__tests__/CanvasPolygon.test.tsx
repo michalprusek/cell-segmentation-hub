@@ -102,11 +102,6 @@ describe('CanvasPolygon', () => {
         </svg>
       );
 
-      console.log(
-        'CanvasPolygon with basic render:',
-        result.container.innerHTML
-      );
-
       const polygonElement = screen.getByTestId('test-polygon');
       expect(polygonElement).toBeInTheDocument();
 
@@ -118,15 +113,9 @@ describe('CanvasPolygon', () => {
     it('renders polygon with correct basic structure', () => {
       const result = renderPolygonInSvg(<CanvasPolygon {...defaultProps} />);
 
-      // Debug: log what's actually rendered
-      console.log('Rendered HTML:', result.container.innerHTML);
-
       // Try to find the element by its ID as well
       const polygonByTestId = screen.queryByTestId('test-polygon');
       const polygonById = document.getElementById('test-polygon');
-
-      console.log('Found by testid:', polygonByTestId);
-      console.log('Found by id:', polygonById);
 
       const polygonElement = screen.getByTestId('test-polygon');
       expect(polygonElement).toBeInTheDocument();

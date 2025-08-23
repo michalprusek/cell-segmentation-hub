@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { render } from '@/test/utils/test-utils';
 import StatsOverview from '@/components/StatsOverview';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/exports';
 
 // Mock the API client
 vi.mock('@/lib/api', () => ({
@@ -14,8 +14,8 @@ vi.mock('@/lib/api', () => ({
 }));
 
 // Mock the auth context
-vi.mock('@/contexts/AuthContext', async () => {
-  const actual = await vi.importActual('@/contexts/AuthContext');
+vi.mock('@/contexts/exports', async () => {
+  const actual = await vi.importActual('@/contexts/exports');
   return {
     ...actual,
     useAuth: () => ({
@@ -210,8 +210,8 @@ describe('StatsOverview', () => {
 
   it('does not fetch stats when user is not available', async () => {
     // Temporarily mock the auth context to return no user
-    vi.doMock('@/contexts/AuthContext', async () => {
-      const actual = await vi.importActual('@/contexts/AuthContext');
+    vi.doMock('@/contexts/exports', async () => {
+      const actual = await vi.importActual('@/contexts/exports');
       return {
         ...actual,
         useAuth: () => ({

@@ -440,6 +440,12 @@ describe('API Integration Tests', () => {
 
       // All should succeed after token refresh
       expect(results).toHaveLength(3);
+
+      // Verify refresh endpoint was called only once (de-duplication)
+      const refreshCalls = mock.history.post.filter(
+        call => call.url === '/api/auth/refresh'
+      );
+      expect(refreshCalls).toHaveLength(1);
     });
   });
 });

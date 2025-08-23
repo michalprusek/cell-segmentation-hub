@@ -113,3 +113,4 @@ docs/api/generated/
 .vscode/settings.json
 
 .eslintcache
+.github/workflows/ci-cd.yml

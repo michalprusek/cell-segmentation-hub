@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/exports';
 import apiClient from '@/lib/api';
 import { ReactNode } from 'react';
 import React from 'react';

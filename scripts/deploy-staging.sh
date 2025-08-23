@@ -33,10 +33,23 @@ for cmd in docker docker-compose git; do
     fi
 done
 
-# Load environment variables
+# Load environment variables safely
 if [ -f .env.staging ]; then
     echo -e "${GREEN}Loading staging environment variables...${NC}"
-    export $(cat .env.staging | grep -v '^#' | xargs)
+    # Safe line-by-line parsing to avoid command injection
+    set -o allexport
+    while IFS='=' read -r key value; do
+        # Skip empty lines and comments
+        [[ -z "$key" || "$key" =~ ^# ]] && continue
+        # Remove surrounding quotes from value if present
+        value="${value#\"}"  
+        value="${value%\"}"
+        value="${value#\'}"  
+        value="${value%\'}"
+        # Export the variable
+        export "$key=$value"
+    done < .env.staging
+    set +o allexport
 else
     echo -e "${RED}Error: .env.staging file not found${NC}"
     exit 1
@@ -59,12 +72,14 @@ done
 
 # Backup database if exists
 echo -e "${YELLOW}Backing up database...${NC}"
-if docker exec spheroseg-postgres-staging pg_dump -U spheroseg spheroseg_staging > /dev/null 2>&1; then
+# First check if database is accessible and capture any errors
+DB_CHECK_ERROR=$(docker exec spheroseg-postgres-staging pg_dump -U spheroseg spheroseg_staging --schema-only 2>&1 > /dev/null)
+if [ $? -eq 0 ]; then
     mkdir -p "$BACKUP_DIR"
     docker exec spheroseg-postgres-staging pg_dump -U spheroseg spheroseg_staging | gzip > "$BACKUP_DIR/staging_db_$TIMESTAMP.sql.gz"
     echo -e "${GREEN}Database backed up to $BACKUP_DIR/staging_db_$TIMESTAMP.sql.gz${NC}"
 else
-    echo -e "${YELLOW}No existing database to backup or backup failed${NC}"
+    echo -e "${YELLOW}No existing database to backup or backup failed: $DB_CHECK_ERROR${NC}"
 fi
 
 # Pull latest code
