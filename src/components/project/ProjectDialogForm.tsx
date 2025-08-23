@@ -9,7 +9,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { useProjectForm } from '@/hooks/useProjectForm';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface ProjectDialogFormProps {
   onSuccess?: (projectId: string) => void;

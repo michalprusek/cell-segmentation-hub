@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger';
 import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import apiClient, { SegmentationResultData } from '@/lib/api';
 import type { SegmentationData } from '@/types';
 import type { ProjectImage } from '@/types';

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Polygon } from '@/lib/segmentation';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { EditMode } from '../types';
 import {
   Shapes,

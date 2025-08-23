@@ -1,6 +1,6 @@
 import { useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { logger } from '@/lib/logger';
 
 const NotFound = () => {

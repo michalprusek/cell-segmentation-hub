@@ -2,7 +2,7 @@ import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { useProjectData } from '@/hooks/useProjectData';
 import ProjectHeader from '@/components/project/ProjectHeader';
 import ExportOptionsCard from './components/ExportOptionsCard';

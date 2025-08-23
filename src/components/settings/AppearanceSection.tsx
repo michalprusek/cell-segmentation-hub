@@ -1,7 +1,7 @@
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/useAuth';
+import { useTheme } from '@/contexts/useTheme';
+import { useLanguage } from '@/contexts/useLanguage';
 import {
   Card,
   CardContent,

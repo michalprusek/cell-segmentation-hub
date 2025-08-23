@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { ProjectImage, SpheroidMetric, PolygonData } from '@/types';
 import { calculateMetrics } from '@/pages/segmentation/utils/metricCalculations';
 import { logger } from '@/lib/logger';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
 import { createExcelExport } from '@/services/excelExportService';
 

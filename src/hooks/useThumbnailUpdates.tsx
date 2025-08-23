@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useWebSocket } from '@/contexts/useWebSocket';
 import { thumbnailCache } from '@/lib/thumbnailCache';
 import { logger } from '@/lib/logger';
 

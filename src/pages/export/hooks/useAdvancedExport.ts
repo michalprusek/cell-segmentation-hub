@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import apiClient from '@/lib/api';
-import { useWebSocket } from '@/contexts/WebSocketContext';
+import { useWebSocket } from '@/contexts/useWebSocket';
 import { logger } from '@/lib/logger';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 

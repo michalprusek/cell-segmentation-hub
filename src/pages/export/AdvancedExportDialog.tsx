@@ -44,7 +44,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { useAdvancedExport } from './hooks/useAdvancedExport';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { ProjectImage } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';

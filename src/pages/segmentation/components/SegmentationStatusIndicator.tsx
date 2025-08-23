@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import type { SegmentationUpdate } from '@/hooks/useSegmentationQueue';
 
 interface SegmentationStatusIndicatorProps {

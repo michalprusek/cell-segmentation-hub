@@ -3,7 +3,7 @@ import { logger } from '@/lib/logger';
 import React, { useState, useEffect } from 'react';
 import apiClient from '@/lib/api';
 import { getErrorMessage } from '@/types';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface ProjectThumbnailProps {
   projectId: string;

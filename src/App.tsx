@@ -7,7 +7,7 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { ModelProvider } from '@/contexts/ModelContext';
-import { WebSocketProvider } from '@/contexts/WebSocketContext';
+import WebSocketProvider from '@/contexts/WebSocketContext';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { logger } from '@/lib/logger';
 import ErrorBoundary from '@/components/ErrorBoundary';

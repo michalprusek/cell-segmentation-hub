@@ -37,8 +37,7 @@ services:
   staging-frontend:
     build:
       context: .
-      dockerfile: Dockerfile
-      target: frontend
+      dockerfile: docker/frontend.prod.Dockerfile
     container_name: spheroseg-frontend-staging
     environment:
       - NODE_ENV=production
@@ -59,19 +58,28 @@ services:
   # Backend API (Node.js + Express)
   staging-backend:
     build:
-      context: .
-      dockerfile: Dockerfile
-      target: backend
+      context: ./backend
+      dockerfile: ../docker/backend.prod.Dockerfile
     container_name: spheroseg-backend-staging
-    env_file:
-      - .env.staging
     environment:
       - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3001
       - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres-staging:5432/spheroseg_staging
       - JWT_ACCESS_SECRET=${STAGING_JWT_ACCESS_SECRET}
       - JWT_REFRESH_SECRET=${STAGING_JWT_REFRESH_SECRET}
       - FROM_EMAIL=spheroseg@utia.cas.cz
       - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz
+      - FRONTEND_URL=https://spherosegapp.utia.cas.cz
+      - SEGMENTATION_SERVICE_URL=http://staging-ml:8000
+      - REDIS_URL=redis://redis-staging:6379
+      # Email configuration - UTIA SMTP
+      - EMAIL_SERVICE=smtp
+      - SMTP_HOST=mail.utia.cas.cz
+      - SMTP_PORT=25
+      - SMTP_SECURE=false
+      - SMTP_AUTH=false
+      - SMTP_REQUIRE_TLS=true
     volumes:
       - ./backend/uploads/staging:/app/backend/uploads
       - ./backend/data/staging:/app/backend/data
@@ -94,9 +102,8 @@ services:
   # ML Service (Python + FastAPI)
   staging-ml:
     build:
-      context: .
-      dockerfile: Dockerfile
-      target: ml
+      context: ./backend/segmentation
+      dockerfile: ../../docker/ml.Dockerfile
     container_name: spheroseg-ml-staging
     environment:
       - ENVIRONMENT=staging

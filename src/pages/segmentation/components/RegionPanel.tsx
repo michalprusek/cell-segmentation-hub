@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Circle } from 'lucide-react';
 import { Polygon } from '@/lib/segmentation';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { motion } from 'framer-motion';
 import PolygonItem from './PolygonItem';
 import { isPointInPolygon, getPolygonCentroid } from '@/lib/polygonGeometry';

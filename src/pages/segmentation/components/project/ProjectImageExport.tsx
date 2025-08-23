@@ -7,7 +7,7 @@ import { SegmentationResult } from '@/lib/segmentation';
 import LazyExcelExporter from './export/LazyExcelExporter';
 import MetricsDisplay from './export/MetricsDisplay';
 import CocoTab from './export/CocoTab';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface ProjectImageExportProps {
   segmentation: SegmentationResult | null;

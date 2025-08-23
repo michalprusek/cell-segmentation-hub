@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { useWebSocket } from '@/contexts/WebSocketContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/useAuth';
+import { useWebSocket } from '@/contexts/useWebSocket';
+import { useLanguage } from '@/contexts/useLanguage';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { logger } from '@/lib/logger';

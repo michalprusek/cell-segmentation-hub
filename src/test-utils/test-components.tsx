@@ -6,7 +6,7 @@ import * as React from 'react';
 import { vi } from 'vitest';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
-import { AuthContext } from '@/contexts/AuthContext';
+import { AuthContext } from '@/contexts/useAuth';
 import type { User, Profile } from '@/types';
 
 // Mock contexts for testing

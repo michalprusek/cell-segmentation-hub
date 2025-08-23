@@ -1,9 +1,9 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import DropZone from '@/components/upload/DropZone';
 import FileList, { FileWithPreview } from '@/components/upload/FileList';
 import UploaderOptions from '@/components/upload/UploaderOptions';

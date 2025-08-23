@@ -1,7 +1,7 @@
 import React from 'react';
 import { Grid2X2, List as ListIcon, ArrowUpDown } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from './ui/button';
 import {
   DropdownMenu,

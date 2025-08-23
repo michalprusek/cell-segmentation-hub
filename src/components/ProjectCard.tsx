@@ -6,8 +6,8 @@ import ProjectActions from '@/components/project/ProjectActions';
 import ProjectMetadata from '@/components/project/ProjectMetadata';
 import { Badge } from '@/components/ui/badge';
 import { Share2, Users, User } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/useLanguage';
+import { useAuth } from '@/contexts/useAuth';
 
 interface ProjectCardProps {
   id: string;

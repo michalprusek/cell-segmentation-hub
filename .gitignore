@@ -25,6 +25,9 @@ dist-ssr
 .env.staging
 .env.test
 .env.utia
+.env.sendgrid
+.sendgrid-recovery
+SECURE_CREDENTIALS.md
 
 # SSL certificates and keys
 **/docker/nginx/ssl/*.key

@@ -11,8 +11,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { AlertTriangle } from 'lucide-react';
-import { useLanguage } from '@/contexts/LanguageContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/useLanguage';
+import { useAuth } from '@/contexts/useAuth';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
 

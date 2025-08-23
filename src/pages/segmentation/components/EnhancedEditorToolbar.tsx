@@ -16,7 +16,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { EditMode } from '../types';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useLanguage } from '@/contexts/useLanguage';
 
 interface EnhancedEditorToolbarProps {
   // Current state
