@@ -845,6 +845,8 @@ export default {
       noPolygons: 'Keine Segmentierungspolygone erkannt',
       reloadFailed:
         'Laden der Segmentierungsergebnisse fehlgeschlagen. Bitte Seite aktualisieren.',
+      autosaveFailed:
+        'Automatisches Speichern fehlgeschlagen - Änderungen können verloren gehen',
     },
   },
   project: {

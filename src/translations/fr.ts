@@ -835,6 +835,8 @@ export default {
       noPolygons: 'Aucun polygone de segmentation détecté',
       reloadFailed:
         'Échec du chargement des résultats de segmentation. Veuillez actualiser la page.',
+      autosaveFailed:
+        'Échec de la sauvegarde automatique - les modifications peuvent être perdues',
     },
   },
   project: {
