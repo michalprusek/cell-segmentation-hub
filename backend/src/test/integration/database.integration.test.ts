@@ -160,8 +160,7 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'temp@example.com',
           password: 'password',
-          // firstName: 'Temp', // Field doesn't exist in current schema
-          // lastName: 'User' // Field doesn't exist in current schema
+          // Note: firstName/lastName moved to Profile model
         }
       })
 
@@ -265,8 +264,7 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'seg-test@example.com',
           password: await bcrypt.hash('password', 10),
-          // firstName: 'Segmentation', // Field doesn't exist in current schema
-          // lastName: 'Test' // Field doesn't exist in current schema
+          // Note: firstName/lastName moved to Profile model
         }
       })
 
@@ -360,8 +358,7 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'complex-test@example.com',
           password: await bcrypt.hash('password', 10),
-          // firstName: 'Complex', // Field doesn't exist in current schema
-          // lastName: 'Test' // Field doesn't exist in current schema
+          // Note: firstName/lastName moved to Profile model
         }
       })
 
@@ -508,8 +505,7 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'transaction-test@example.com',
           password: await bcrypt.hash('password', 10),
-          // firstName: 'Transaction', // Field doesn't exist in current schema
-          // lastName: 'Test' // Field doesn't exist in current schema
+          // Note: firstName/lastName moved to Profile model
         }
       })
     })
@@ -584,8 +580,7 @@ describe('Database Integration Tests', () => {
         data: {
           email: 'bulk-test@example.com',
           password: await bcrypt.hash('password', 10),
-          // firstName: 'Bulk', // Field doesn't exist in current schema
-          // lastName: 'Test' // Field doesn't exist in current schema
+          // Note: firstName/lastName moved to Profile model
         }
       })
 
