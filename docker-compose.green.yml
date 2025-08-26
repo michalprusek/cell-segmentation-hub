@@ -44,7 +44,7 @@ services:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - API_BASE_URL=https://spherosegapp.utia.cas.cz
-      - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres-green:5432/spheroseg_green
+      - DATABASE_URL=postgresql://spheroseg:spheroseg@postgres-green:5432/spheroseg_green
       - REDIS_URL=redis://redis-green:6379
       - JWT_ACCESS_SECRET=1c4fb341de6e2812f81b0cd5287652d38518287b64289fb21346305bba6fe87d
       - JWT_REFRESH_SECRET=fb5a22af8446e7ac670ea277715ec4bdf9e233efd55f5ddac749edd8f2e9562b
@@ -125,29 +125,6 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-
-  # Nginx Reverse Proxy (using unified config)
-  nginx-green:
-    image: nginx:alpine
-    container_name: nginx-green
-    volumes:
-      - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - green-frontend
-      - green-backend
-      - green-ml
-    networks:
-      - green-network
-    restart: always
-    healthcheck:
-      test: ["CMD", "nginx", "-t"]
       interval: 30s
       timeout: 10s
       retries: 3
