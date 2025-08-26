@@ -18,6 +18,7 @@ import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
+import { logger } from '@/lib/logger';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { usePagination } from '@/hooks/usePagination';
 import { motion } from 'framer-motion';
@@ -195,7 +196,7 @@ const ProjectDetail = () => {
     }
 
     // Real-time update processing
-    console.log('📡 Real-time WebSocket update received:', {
+    logger.debug('Real-time WebSocket update received', 'ProjectDetail', {
       imageId: lastUpdate.imageId,
       status: lastUpdate.status,
       projectId: lastUpdate.projectId,
@@ -230,9 +231,11 @@ const ProjectDetail = () => {
             (img.segmentationStatus === 'completed' ||
               img.segmentationStatus === 'segmented');
 
-          console.log(
-            `📝 Updating image ${img.id} status from ${img.segmentationStatus} to ${normalizedStatus}`
-          );
+          logger.debug('Updating image status', 'ProjectDetail', {
+            imageId: img.id,
+            fromStatus: img.segmentationStatus,
+            toStatus: normalizedStatus,
+          });
 
           return {
             ...img,
@@ -264,9 +267,9 @@ const ProjectDetail = () => {
     ) {
       // Immediate refresh for completed status - this will also validate if polygons exist
       (async () => {
-        console.log(
-          `🔄 Refreshing segmentation data for image ${lastUpdate.imageId}`
-        );
+        logger.debug('Refreshing segmentation data', 'ProjectDetail', {
+          imageId: lastUpdate.imageId,
+        });
 
         try {
           // refreshImageSegmentation already updates the state with segmentation data
@@ -277,7 +280,7 @@ const ProjectDetail = () => {
 
           // Now also fetch the updated image for thumbnail URL
           const img = await apiClient.getImage(id, lastUpdate.imageId);
-          console.log('🖼️ Updated image data:', {
+          logger.debug('Updated image data', 'ProjectDetail', {
             id: img.id,
             hasThumbnail: !!img.thumbnail_url,
             thumbnailUrl: img.thumbnail_url,
@@ -293,9 +296,12 @@ const ProjectDetail = () => {
               currentImg?.segmentationResult?.polygons &&
               currentImg.segmentationResult.polygons.length > 0;
 
-            console.log(
-              `✅ Image ${lastUpdate.imageId} has ${hasPolygons ? currentImg.segmentationResult.polygons.length : 0} polygons`
-            );
+            logger.debug('Image polygon count', 'ProjectDetail', {
+              imageId: lastUpdate.imageId,
+              polygonCount: hasPolygons
+                ? currentImg.segmentationResult.polygons.length
+                : 0,
+            });
 
             return prevImages.map(prevImg => {
               if (prevImg.id === lastUpdate.imageId) {

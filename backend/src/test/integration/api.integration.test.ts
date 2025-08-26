@@ -50,8 +50,7 @@ describe('API Integration Tests', () => {
       const userData = {
         email: 'integration@test.com',
         password: 'password123',
-        // firstName: 'Integration', // Field doesn't exist in current schema
-        // lastName: 'Test' // Field doesn't exist in current schema
+        // Note: firstName/lastName moved to Profile model
       }
 
       const response = await request(app)
@@ -73,8 +72,7 @@ describe('API Integration Tests', () => {
       const userData = {
         email: 'integration@test.com', // Same email
         password: 'password123',
-        // firstName: 'Another', // Field doesn't exist in current schema
-        // lastName: 'User' // Field doesn't exist in current schema
+        // Note: firstName/lastName moved to Profile model
       }
 
       await request(app)
@@ -187,8 +185,7 @@ describe('API Integration Tests', () => {
         data: {
           email: 'another@test.com',
           password: await bcrypt.hash('password', 10),
-          // firstName: 'Another', // Field doesn't exist in current schema
-          // lastName: 'User' // Field doesn't exist in current schema
+          // Note: firstName/lastName moved to Profile model
         }
       })
 
