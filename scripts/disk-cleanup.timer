@@ -1,0 +1,24 @@
+[Unit]
+Description=Daily Automatic Disk Cleanup Timer
+Documentation=https://github.com/your-org/cell-segmentation-hub
+Requires=disk-cleanup.service
+
+[Timer]
+# Run daily at 3:00 AM (low activity time)
+OnCalendar=daily
+OnCalendar=*-*-* 03:00:00
+
+# Run immediately if system was powered down at scheduled time
+Persistent=true
+
+# Randomize start time by up to 30 minutes to avoid load spikes
+RandomizedDelaySec=1800
+
+# Run on boot if more than 24h since last run
+OnBootSec=10min
+
+# Log when timer triggers
+Unit=disk-cleanup.service
+
+[Install]
+WantedBy=timers.target

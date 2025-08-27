@@ -44,18 +44,30 @@ export const useDashboardProjects = ({
       // Try to fetch shared projects, but don't fail if it errors
       let sharedResponse = [];
       try {
-        sharedResponse = await apiClient.getSharedProjects();
+        const response = await apiClient.getSharedProjects();
+        // Handle both array and wrapped response formats
+        if (Array.isArray(response)) {
+          sharedResponse = response;
+        } else if (response && typeof response === 'object') {
+          // Check for data property or projects property
+          sharedResponse = response.data || response.projects || [];
+        } else {
+          sharedResponse = [];
+        }
         logger.debug('Shared projects response loaded', 'Dashboard', {
-          count: sharedResponse.data.length,
+          count: Array.isArray(sharedResponse) ? sharedResponse.length : 0,
         });
       } catch (shareError) {
         console.error('Failed to fetch shared projects:', shareError);
         logger.warn('Failed to fetch shared projects:', shareError);
+        sharedResponse = [];
         // Continue with just owned projects
       }
 
       const ownedProjects = ownedResponse.projects || [];
-      const sharedProjects = sharedResponse || [];
+      const sharedProjects = Array.isArray(sharedResponse)
+        ? sharedResponse
+        : [];
 
       logger.debug(`Owned projects count: ${ownedProjects.length}`);
       logger.debug(`Shared projects count: ${sharedProjects.length}`);
