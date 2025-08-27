@@ -361,7 +361,7 @@ export function getBatchRoom(batchId: string): string {
  * Type guard for SegmentationStatusData
  */
 export function isSegmentationStatusData(data: unknown): data is SegmentationStatusData {
-  if (typeof data !== 'object' || data === null) return false;
+  if (typeof data !== 'object' || data === null) {return false;}
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -374,7 +374,7 @@ export function isSegmentationStatusData(data: unknown): data is SegmentationSta
  * Type guard for SegmentationUpdateData
  */
 export function isSegmentationUpdateData(data: unknown): data is SegmentationUpdateData {
-  if (typeof data !== 'object' || data === null) return false;
+  if (typeof data !== 'object' || data === null) {return false;}
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -388,7 +388,7 @@ export function isSegmentationUpdateData(data: unknown): data is SegmentationUpd
  * Type guard for QueueStatsData
  */
 export function isQueueStatsData(data: unknown): data is QueueStatsData {
-  if (typeof data !== 'object' || data === null) return false;
+  if (typeof data !== 'object' || data === null) {return false;}
   const d = data as Record<string, unknown>;
   return (
     typeof d.queued === 'number' &&
@@ -401,7 +401,7 @@ export function isQueueStatsData(data: unknown): data is QueueStatsData {
  * Type guard for SegmentationCompletedData
  */
 export function isSegmentationCompletedData(data: unknown): data is SegmentationCompletedData {
-  if (typeof data !== 'object' || data === null) return false;
+  if (typeof data !== 'object' || data === null) {return false;}
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -418,7 +418,7 @@ export function isSegmentationCompletedData(data: unknown): data is Segmentation
  * Type guard for SegmentationFailedData
  */
 export function isSegmentationFailedData(data: unknown): data is SegmentationFailedData {
-  if (typeof data !== 'object' || data === null) return false;
+  if (typeof data !== 'object' || data === null) {return false;}
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -434,7 +434,7 @@ export function isSegmentationFailedData(data: unknown): data is SegmentationFai
  * Type guard for WebSocketMessage
  */
 export function isWebSocketMessage(data: unknown): data is WebSocketMessage {
-  if (typeof data !== 'object' || data === null) return false;
+  if (typeof data !== 'object' || data === null) {return false;}
   const d = data as Record<string, unknown>;
   return (
     typeof d.event === 'string' &&
