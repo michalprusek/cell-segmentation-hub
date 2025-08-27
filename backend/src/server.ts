@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config, getOrigins } from './utils/config';
 import { logger, createRequestLogger } from './utils/logger';
+import { requireValidEnvironment } from './utils/envValidator';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { ResponseHelper } from './utils/response';
 import { initializeDatabase, disconnectDatabase, checkDatabaseHealth } from './db';
@@ -125,6 +126,10 @@ app.use(errorHandler);
 // Start server
 const startServer = async (): Promise<void> => {
   try {
+    // Environment validation - MUST run first
+    logger.info('Validating environment configuration...');
+    requireValidEnvironment();
+    
     // JWT Security validation - MUST run before any other initialization
     const jwtAccessSecret = process.env.JWT_ACCESS_SECRET || '';
     const jwtRefreshSecret = process.env.JWT_REFRESH_SECRET || '';

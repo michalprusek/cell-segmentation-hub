@@ -1,6 +1,8 @@
 import nodemailer, { Transporter, SendMailOptions } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from '../utils/logger';
+import { getNumericEnvVar, getBooleanEnvVar } from '../utils/envValidator';
+import { sendEmailWithRetry, parseEmailTimeout, updateEmailMetrics } from './emailRetryService';
 import { generatePasswordResetEmailHTML, generatePasswordResetEmailText, PasswordResetEmailData } from '../templates/passwordResetEmail';
 import { generateVerificationEmailHTML } from '../templates/verificationEmail';
 import { escapeHtml, sanitizeUrl } from '../utils/escapeHtml';
@@ -65,13 +67,13 @@ export function init(): void {
           host: config.smtp.host,
           port: config.smtp.port,
           secure: config.smtp.secure,
-          ignoreTLS: process.env.SMTP_IGNORE_TLS === 'true', // Option to completely ignore TLS
-          requireTLS: process.env.SMTP_REQUIRE_TLS === 'true' && process.env.SMTP_IGNORE_TLS !== 'true',
-          connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT_MS || process.env.EMAIL_TIMEOUT || '60000', 10) || 60000,
-          greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT_MS || process.env.EMAIL_TIMEOUT || '60000', 10) || 60000,
-          socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT_MS || process.env.EMAIL_TIMEOUT || '60000', 10) || 60000,
-          logger: process.env.SMTP_DEBUG === 'true' || process.env.EMAIL_DEBUG === 'true',
-          debug: process.env.SMTP_DEBUG === 'true' || process.env.EMAIL_DEBUG === 'true'
+          ignoreTLS: getBooleanEnvVar('SMTP_IGNORE_TLS', false),
+          requireTLS: getBooleanEnvVar('SMTP_REQUIRE_TLS', true) && !getBooleanEnvVar('SMTP_IGNORE_TLS', false),
+          connectionTimeout: parseEmailTimeout('SMTP_CONNECTION_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 60000)),
+          greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 60000)),
+          socketTimeout: parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 60000)),
+          logger: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
+          debug: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false)
         };
         
         // Only add TLS config if not ignoring TLS
@@ -135,9 +137,11 @@ export function init(): void {
    * Send email
    */
 export async function sendEmail(options: EmailServiceOptions): Promise<void> {
+    const retryCount = 0;
+    
     try {
-      // TEMPORARY: Skip email sending due to SMTP timeout issues
-      if (process.env.SKIP_EMAIL_SEND === 'true') {
+      // Skip email sending in test/dev environments if configured
+      if (getBooleanEnvVar('SKIP_EMAIL_SEND', false)) {
         logger.warn('Email sending skipped (SKIP_EMAIL_SEND=true)', 'EmailService', {
           to: options.to,
           subject: options.subject
@@ -150,42 +154,17 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
       if (!_transporter || !_config) {
         throw new Error('Email service not properly initialized.');
       }
-
-      const mailOptions: SendMailOptions = {
-        from: `"${_config.from.name}" <${_config.from.email}>`,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-        attachments: options.attachments
-      };
-
-      // Wrap sendMail in a timeout promise
-      const EMAIL_TIMEOUT = parseInt(process.env.EMAIL_TIMEOUT || '60000', 10) || 60000; // Default 60 seconds
-      const sendMailWithTimeout = new Promise<SMTPTransport.SentMessageInfo>((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-          reject(new Error(`Email send timeout after ${EMAIL_TIMEOUT/1000} seconds`));
-        }, EMAIL_TIMEOUT);
-        
-        _transporter!.sendMail(mailOptions)
-          .then(result => {
-            clearTimeout(timeoutId);
-            resolve(result);
-          })
-          .catch(error => {
-            clearTimeout(timeoutId);
-            reject(error);
-          });
-      });
       
-      const result = await sendMailWithTimeout;
+      // Use retry logic for email sending
+      const result = await sendEmailWithRetry(_transporter, _config, options);
       
-      logger.info('Email sent successfully', 'EmailService', { 
-        to: options.to,
-        subject: options.subject,
-        messageId: result.messageId
-      });
+      // Update metrics for successful send
+      updateEmailMetrics(true, retryCount);
+      
     } catch (error) {
+      // Update metrics for failed send
+      updateEmailMetrics(false, retryCount, error as Error);
+      
       logger.error('Failed to send email:', error as Error, 'EmailService', {
         to: options.to,
         subject: options.subject
