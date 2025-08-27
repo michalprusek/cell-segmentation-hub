@@ -23,17 +23,17 @@ RUN npm install --frozen-lockfile
 # Copy all source code
 COPY . .
 
-# Build arguments for environment variables
-ARG VITE_API_BASE_URL=https://spherosegapp.utia.cas.cz/api
-ARG VITE_API_URL=https://spherosegapp.utia.cas.cz/api
-ARG VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/api/ml
-ARG VITE_WS_URL=wss://spherosegapp.utia.cas.cz
+# Build arguments for environment variables (no defaults!)
+ARG VITE_API_BASE_URL
+ARG VITE_API_URL
+ARG VITE_ML_SERVICE_URL
+ARG VITE_WS_URL
 
 # Set environment variables for build
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ENV VITE_API_URL=$VITE_API_URL
-ENV VITE_ML_SERVICE_URL=$VITE_ML_SERVICE_URL
-ENV VITE_WS_URL=$VITE_WS_URL
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL:-/api}
+ENV VITE_API_URL=${VITE_API_URL:-/api}
+ENV VITE_ML_SERVICE_URL=${VITE_ML_SERVICE_URL:-/api/ml}
+ENV VITE_WS_URL=${VITE_WS_URL}
 
 # Build the application
 RUN npm run build

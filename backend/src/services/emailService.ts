@@ -54,8 +54,8 @@ export function init(): void {
 
       if (config.service === 'smtp') {
         config.smtp = {
-          host: process.env.SMTP_HOST || 'localhost',
-          port: parseInt(process.env.SMTP_PORT || '587'),
+          host: process.env.SMTP_HOST || 'mailhog',
+          port: parseInt(process.env.SMTP_PORT || '1025'),
           secure: process.env.SMTP_SECURE === 'true',
           user: process.env.SMTP_USER || '',
           pass: process.env.SMTP_PASS || ''
@@ -67,18 +67,20 @@ export function init(): void {
           secure: config.smtp.secure,
           ignoreTLS: process.env.SMTP_IGNORE_TLS === 'true', // Option to completely ignore TLS
           requireTLS: process.env.SMTP_REQUIRE_TLS === 'true' && process.env.SMTP_IGNORE_TLS !== 'true',
-          connectionTimeout: 10000, // 10 seconds connection timeout
-          greetingTimeout: 10000,   // 10 seconds greeting timeout
-          socketTimeout: 10000,     // 10 seconds socket timeout
+          connectionTimeout: 30000, // 30 seconds connection timeout for UTIA SMTP
+          greetingTimeout: 30000,   // 30 seconds greeting timeout
+          socketTimeout: 30000,     // 30 seconds socket timeout
         };
         
-        // Only add TLS config if not ignoring TLS
+        // Configure TLS settings for UTIA SMTP (port 465 with SSL)
         if (process.env.SMTP_IGNORE_TLS !== 'true') {
           transportConfig.tls = {
             // Certificate validation enabled by default, only disable with explicit flag
             rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true',
-            // Support STARTTLS
-            minVersion: 'TLSv1.2'
+            // Support STARTTLS and direct SSL connections
+            minVersion: 'TLSv1.2',
+            // Use secure default ciphers for modern mail servers
+            secureProtocol: 'TLS_method'
           };
         }
 
@@ -97,7 +99,8 @@ export function init(): void {
           secure: transportConfig.secure,
           requireTLS: transportConfig.requireTLS,
           hasAuth: !!transportConfig.auth,
-          authDisabled: process.env.SMTP_AUTH === 'false'
+          authDisabled: process.env.SMTP_AUTH === 'false',
+          isUTIAConfig: config.smtp.host === 'mail.utia.cas.cz'
         });
         
         _transporter = nodemailer.createTransport(transportConfig);

@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useTheme, useLanguage } from '@/contexts/exports';
 import type { Theme } from '@/contexts/exports';
+import { logger } from '@/lib/logger';
 
 const ThemeSwitcher = () => {
   const { theme, setTheme } = useTheme();
@@ -50,7 +51,7 @@ const ThemeSwitcher = () => {
       await setTheme(newTheme);
     } catch (error) {
       // Silently handle theme change errors
-      console.warn('Failed to change theme:', error);
+      logger.warn('Failed to change theme', error);
     }
   };
 

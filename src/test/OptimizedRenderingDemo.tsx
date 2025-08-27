@@ -387,15 +387,21 @@ const OptimizedRenderingDemo: React.FC = () => {
         isShiftPressed={false}
         isZooming={false}
         onSelectPolygon={handlePolygonSelect}
-        onDeletePolygon={id => console.log('Delete:', id)}
-        onSlicePolygon={id => console.log('Slice:', id)}
-        onEditPolygon={id => console.log('Edit:', id)}
-        onDeleteVertex={(polygonId, vertexIndex) =>
-          console.log('Delete vertex:', polygonId, vertexIndex)
-        }
-        onDuplicateVertex={(polygonId, vertexIndex) =>
-          console.log('Duplicate vertex:', polygonId, vertexIndex)
-        }
+        onDeletePolygon={id => {
+          /* Test handler */
+        }}
+        onSlicePolygon={id => {
+          /* Test handler */
+        }}
+        onEditPolygon={id => {
+          /* Test handler */
+        }}
+        onDeleteVertex={(polygonId, vertexIndex) => {
+          /* Test handler */
+        }}
+        onDuplicateVertex={(polygonId, vertexIndex) => {
+          /* Test handler */
+        }}
         pointAddingTempPoints={[]}
         selectedVertexIndex={null}
         selectedPolygonPoints={null}

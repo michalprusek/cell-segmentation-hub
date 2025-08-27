@@ -154,7 +154,15 @@ class WebSocketManager {
       throw new Error('No user credentials provided');
     }
 
-    const serverUrl = config.apiBaseUrl.replace('/api', '');
+    // For relative API URLs, use the current location origin
+    let serverUrl: string;
+    if (config.apiBaseUrl.startsWith('/')) {
+      // Use current location for relative URLs
+      serverUrl = window.location.origin;
+    } else {
+      // Use absolute URL, removing /api suffix
+      serverUrl = config.apiBaseUrl.replace('/api', '');
+    }
 
     logger.info('Creating WebSocket connection to:', serverUrl);
 
@@ -565,4 +573,9 @@ if (typeof window !== 'undefined') {
   )._beforeUnloadHandler = handleBeforeUnload;
 }
 
-export default WebSocketManager;
+// Export the original manager (now deprecated - use webSocketManagerImproved instead)
+// export default WebSocketManager;
+
+// Use the improved version with better memory management and reliability
+import ImprovedWebSocketManager from './webSocketManagerImproved';
+export default ImprovedWebSocketManager.getInstance();

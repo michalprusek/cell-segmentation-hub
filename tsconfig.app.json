@@ -1,12 +1,16 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
   "compilerOptions": {
+    "composite": true,
+    // Build Configuration
     "target": "ES2020",
     "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "skipLibCheck": true,
 
-    /* Bundler mode */
+    // Bundler Configuration (Vite)
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "isolatedModules": true,
@@ -14,20 +18,35 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
-    /* Linting - Gradually enable stricter settings */
-    "strict": false, // Keep false for now, but enable specific checks below
-    "noUnusedLocals": false, // Keep false to avoid breaking existing code
-    "noUnusedParameters": false, // Keep false to avoid breaking existing code
-    "noImplicitAny": true, // Enable - helps catch undefined types
-    "noFallthroughCasesInSwitch": true, // Enable - prevents switch fallthrough bugs
-    "strictNullChecks": true, // Enable - helps catch null/undefined bugs
-    "noImplicitReturns": true, // Enable - ensures all code paths return
-    "noImplicitThis": true, // Enable - catches 'this' context issues
+    // Type Safety - Graduated Strict Mode (Phase 1)
+    "strict": false, // Keep false - using granular control instead
 
+    // Core Safety (ENABLED - Required for production)
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "strictBindCallApply": true,
+    "strictFunctionTypes": true,
+
+    // Advanced Safety (Phase 2 - TODO)
+    "noUncheckedIndexedAccess": false, // Enable after fixing existing code
+    "exactOptionalPropertyTypes": false, // Enable after DOM lib compatibility check
+    "noPropertyAccessFromIndexSignature": false, // Enable after refactoring dynamic access
+
+    // Code Quality (Phase 3 - TODO)
+    "noUnusedLocals": false, // Enable after cleanup
+    "noUnusedParameters": false, // Enable after cleanup
+    "allowUnusedLabels": false,
+    "allowUnreachableCode": false,
+
+    // Path Configuration
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.js", "src/**/*.jsx"],
+  "exclude": ["node_modules", "dist", "**/*.test.*", "**/*.spec.*"]
 }

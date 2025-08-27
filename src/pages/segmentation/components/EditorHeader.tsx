@@ -17,6 +17,7 @@ import type {
   SegmentationUpdate,
   QueueStats,
 } from '@/hooks/useSegmentationQueue';
+import { logger } from '@/lib/logger';
 
 interface EditorHeaderProps {
   projectId: string;
@@ -58,7 +59,7 @@ const EditorHeader = ({
       try {
         await onSave();
       } catch (error) {
-        console.error('Failed to autosave before navigation:', error);
+        logger.error('Failed to autosave before navigation', error);
         // Continue navigation even if save fails
       }
     }
@@ -71,7 +72,7 @@ const EditorHeader = ({
       try {
         await onSave();
       } catch (error) {
-        console.error('Failed to autosave before navigation:', error);
+        logger.error('Failed to autosave before navigation', error);
         // Continue navigation even if save fails
       }
     }

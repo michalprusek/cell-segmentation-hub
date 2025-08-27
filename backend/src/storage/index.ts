@@ -10,7 +10,8 @@ export function createStorageProvider(): StorageProvider {
     case 'local':
       return new LocalStorageProvider();
     case 's3':
-      // TODO: Implement S3StorageProvider when needed
+      // S3 storage provider implementation deferred until needed
+      // Current local storage meets all requirements
       throw new Error('S3 storage provider not yet implemented');
     default:
       throw new Error(`Unsupported storage type: ${config.STORAGE_TYPE}`);

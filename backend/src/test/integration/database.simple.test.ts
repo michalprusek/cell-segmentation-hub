@@ -6,7 +6,7 @@ describe('Database Connection Tests', () => {
     // Verify database URL is set for CI/CD
     const databaseUrl = process.env.DATABASE_URL || process.env.TEST_DATABASE_URL
     expect(databaseUrl).toBeDefined()
-    console.log('Database URL configured:', databaseUrl?.replace(/password=([^&\s]+)/, 'password=***'))
+    // Database URL configured for testing
   })
 
   afterAll(async () => {

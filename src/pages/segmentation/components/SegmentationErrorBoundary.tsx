@@ -2,6 +2,7 @@ import React, { Component, ReactNode } from 'react';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { logger } from '@/lib/logger';
 
 interface Props {
   children: ReactNode;
@@ -14,31 +15,47 @@ interface State {
   errorInfo?: string;
 }
 
-export class SegmentationErrorBoundary extends Component<Props, State> {
+import React, { Component, ReactNode } from 'react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { logger } from '@/lib/logger';
+import { useTranslation } from 'react-i18next';
+
+interface Props {
+  children: ReactNode;
+  fallback?: ReactNode;
+  translations?: {
+    title: string;
+    description: string;
+    errorDetails: string;
+    tryAgain: string;
+  };
+}
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+  errorInfo?: string;
+}
+
+class SegmentationErrorBoundaryClass extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return {
-      hasError: true,
-      error,
-    };
+  static getDerivedStateFromError(error: Error) {
+    logger.error('[SegmentationErrorBoundary] Error caught:', error);
+    return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    logger.error('[SegmentationErrorBoundary] Component stack:', errorInfo);
     this.setState({
       error,
-      errorInfo: errorInfo.componentStack,
+      errorInfo: errorInfo.componentStack || '',
     });
-
-    // Log to console for debugging
-    console.error(
-      'SegmentationErrorBoundary caught an error:',
-      error,
-      errorInfo
-    );
   }
 
   handleRetry = () => {
@@ -51,19 +68,24 @@ export class SegmentationErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
+      const t = this.props.translations || {
+        title: 'Segmentation Error',
+        description:
+          'An error occurred while loading segmentation data. This might be due to network issues or server problems.',
+        errorDetails: 'Error Details',
+        tryAgain: 'Try Again',
+      };
+
       return (
         <Alert className="m-4">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="flex flex-col gap-3">
             <div>
-              <strong>Segmentation Error</strong>
-              <p className="text-sm text-gray-600 mt-1">
-                An error occurred while loading segmentation data. This might be
-                due to network issues or server problems.
-              </p>
+              <strong>{t.title}</strong>
+              <p className="text-sm text-gray-600 mt-1">{t.description}</p>
               {process.env.NODE_ENV === 'development' && this.state.error && (
                 <details className="mt-2 text-xs">
-                  <summary className="cursor-pointer">Error Details</summary>
+                  <summary className="cursor-pointer">{t.errorDetails}</summary>
                   <pre className="mt-1 whitespace-pre-wrap">
                     {this.state.error.toString()}
                     {this.state.errorInfo && `\n${this.state.errorInfo}`}
@@ -78,7 +100,7 @@ export class SegmentationErrorBoundary extends Component<Props, State> {
               className="w-fit"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
-              Try Again
+              {t.tryAgain}
             </Button>
           </AlertDescription>
         </Alert>
@@ -88,5 +110,23 @@ export class SegmentationErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+
+// Wrapper component to provide translations
+export const SegmentationErrorBoundary = (
+  props: Omit<Props, 'translations'>
+) => {
+  const { t } = useTranslation();
+
+  const translations = {
+    title: t('segmentationEditor.error.title'),
+    description: t('segmentationEditor.error.description'),
+    errorDetails: t('segmentationEditor.error.errorDetails'),
+    tryAgain: t('segmentationEditor.error.tryAgain'),
+  };
+
+  return (
+    <SegmentationErrorBoundaryClass {...props} translations={translations} />
+  );
+};
 
 export default SegmentationErrorBoundary;

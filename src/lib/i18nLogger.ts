@@ -86,7 +86,7 @@ class I18nLogger {
 
         if (i === parts.length - 1) {
           // Last part - set the value
-          current[part] = `TODO: Translate "${key}"`;
+          current[part] = `Missing translation for: ${key}`;
         } else {
           // Intermediate part - create nested object
           if (!current[part]) {

@@ -1,6 +1,7 @@
 /**
  * WebSocket events system to avoid circular dependency issues
  */
+import { logger } from './logger';
 
 export interface WebSocketEvent {
   type: 'reconnecting' | 'reconnected' | 'reconnect_failed' | 'connection_lost';
@@ -21,10 +22,7 @@ class WebSocketEventEmitter {
         listener(event);
       } catch (error) {
         // Log error but continue with other listeners
-        console.error(
-          `WebSocket event listener error for ${event.type}:`,
-          error
-        );
+        logger.error(`WebSocket event listener error for ${event.type}`, error);
       }
     });
   }
