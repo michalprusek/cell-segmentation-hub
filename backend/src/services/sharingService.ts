@@ -9,7 +9,7 @@ import { ShareByEmailData, ShareByLinkData } from '../types/validation';
  * Escape HTML special characters to prevent XSS
  */
 function escapeHtml(str: string | null | undefined): string {
-  if (!str) return '';
+  if (!str) {return '';}
   
   const htmlEscapeMap: Record<string, string> = {
     '&': '&amp;',
