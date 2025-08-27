@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-01-27",
+  "gpu": "NVIDIA RTX A5000",
+  "recommendations": {
+    "hrnet": {
+      "optimal_batch_size": 8,
+      "max_safe_batch_size": 16,
+      "optimal_throughput": 7.89,
+      "optimal_time_per_img": 0.127,
+      "optimal_memory_mb": 6362,
+      "single_throughput": 5.03,
+      "speedup": 1.6
+    },
+    "resunet_small": {
+      "optimal_batch_size": 3,
+      "max_safe_batch_size": 16,
+      "optimal_throughput": 6.55,
+      "optimal_time_per_img": 0.153,
+      "optimal_memory_mb": 9436,
+      "single_throughput": 4.54,
+      "speedup": 1.4
+    },
+    "resunet_advanced": {
+      "optimal_batch_size": 1,
+      "max_safe_batch_size": 16,
+      "optimal_throughput": 2.34,
+      "optimal_time_per_img": 0.428,
+      "optimal_memory_mb": 9436,
+      "single_throughput": 2.34,
+      "speedup": 1.0
+    }
+  }
+}

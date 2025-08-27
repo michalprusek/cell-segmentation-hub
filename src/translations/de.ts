@@ -1022,20 +1022,20 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet (Klein)',
-          inferenceTime: 'Inferenzzeit: ~3,1 Sekunden',
+          inferenceTime: 'Inferenzzeit: ~0,18 Sekunden (GPU-beschleunigt)',
           bestFor: 'Optimal für: Echtzeit-Verarbeitung',
           description: 'Schnelles und effizientes Modell.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Mittel)',
-          inferenceTime: 'Inferenzzeit: ~6,9 Sekunden',
+          inferenceTime: 'Inferenzzeit: ~0,20 Sekunden (GPU-beschleunigt)',
           bestFor: 'Optimal für: Ausgewogene Geschwindigkeit',
           description:
             'Optimale Balance zwischen Geschwindigkeit und Qualität.',
         },
         ma: {
           name: 'MA-ResUNet (Groß)',
-          inferenceTime: 'Inferenzzeit: ~18,1 Sekunden',
+          inferenceTime: 'Inferenzzeit: ~1,2 Sekunden (GPU-beschleunigt)',
           bestFor: 'Optimal für: Maximale Präzision',
           description: 'Genauestes Modell mit Aufmerksamkeitsmechanismen.',
         },

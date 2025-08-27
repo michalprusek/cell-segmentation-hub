@@ -67,9 +67,11 @@ export function init(): void {
           secure: config.smtp.secure,
           ignoreTLS: process.env.SMTP_IGNORE_TLS === 'true', // Option to completely ignore TLS
           requireTLS: process.env.SMTP_REQUIRE_TLS === 'true' && process.env.SMTP_IGNORE_TLS !== 'true',
-          connectionTimeout: 10000, // 10 seconds connection timeout
-          greetingTimeout: 10000,   // 10 seconds greeting timeout
-          socketTimeout: 10000,     // 10 seconds socket timeout
+          connectionTimeout: 60000, // 60 seconds
+          greetingTimeout: 60000,   // 60 seconds
+          socketTimeout: 60000,     // 60 seconds
+          logger: true,            // Enable debug logging
+          debug: true              // Enable SMTP debug
         };
         
         // Only add TLS config if not ignoring TLS
@@ -159,10 +161,11 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
       };
 
       // Wrap sendMail in a timeout promise
+      const emailTimeout = 60000; // 60 seconds
       const sendMailWithTimeout = new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => {
-          reject(new Error('Email send timeout after 10 seconds'));
-        }, 10000);
+          reject(new Error(`Email send timeout after ${emailTimeout/1000} seconds`));
+        }, emailTimeout);
         
         _transporter!.sendMail(mailOptions)
           .then(result => {

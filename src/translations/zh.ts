@@ -935,19 +935,19 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet（小型）',
-          inferenceTime: '推理时间：约3.1秒',
+          inferenceTime: '推理时间：约0.18秒 (GPU加速)',
           bestFor: '最适合：实时处理',
           description: '快速高效的模型。',
         },
         cbam: {
           name: 'CBAM-ResUNet（中型）',
-          inferenceTime: '推理时间：约6.9秒',
+          inferenceTime: '推理时间：约0.20秒 (GPU加速)',
           bestFor: '最适合：平衡速度和精度',
           description: '速度和质量的最佳平衡。',
         },
         ma: {
           name: 'MA-ResUNet（大型）',
-          inferenceTime: '推理时间：约18.1秒',
+          inferenceTime: '推理时间：约1.2秒 (GPU加速)',
           bestFor: '最适合：最高精度',
           description: '具有注意力机制的最精确模型。',
         },

@@ -1,0 +1,589 @@
+{
+  "optimization_timestamp": "2025-08-27 16:39:25",
+  "gpu_info": {
+    "device_name": "NVIDIA RTX A5000",
+    "total_memory_gb": 23.55780029296875,
+    "driver_version": "12.1"
+  },
+  "batch_configurations": {
+    "hrnet": {
+      "optimal_batch_size": 8,
+      "max_safe_batch_size": 16,
+      "expected_throughput": 7.89,
+      "memory_limit_mb": 6362
+    },
+    "resunet_small": {
+      "optimal_batch_size": 3,
+      "max_safe_batch_size": 16,
+      "expected_throughput": 6.55,
+      "memory_limit_mb": 9436
+    },
+    "resunet_advanced": {
+      "optimal_batch_size": 1,
+      "max_safe_batch_size": 16,
+      "expected_throughput": 2.34,
+      "memory_limit_mb": 9436
+    }
+  },
+  "detailed_results": {
+    "hrnet": {
+      "optimization_result": {
+        "model_name": "hrnet",
+        "optimal_batch_size": 12,
+        "max_throughput": 17.790374255792532,
+        "max_safe_batch_size": 16,
+        "memory_limit_mb": 21710.86875,
+        "test_results": [
+          {
+            "model_name": "hrnet",
+            "batch_size": 1,
+            "throughput_imgs_per_sec": 15.644894833567767,
+            "avg_inference_time_ms": 63.9186143875122,
+            "peak_memory_mb": 267.86669921875,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 2,
+            "throughput_imgs_per_sec": 15.640697247097462,
+            "avg_inference_time_ms": 63.935768604278564,
+            "peak_memory_mb": 282.12744140625,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 3,
+            "throughput_imgs_per_sec": 15.90024940428932,
+            "avg_inference_time_ms": 62.89209524790446,
+            "peak_memory_mb": 297.60986328125,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 4,
+            "throughput_imgs_per_sec": 17.3365736129938,
+            "avg_inference_time_ms": 57.68152475357056,
+            "peak_memory_mb": 312.86865234375,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 5,
+            "throughput_imgs_per_sec": 17.52454386425538,
+            "avg_inference_time_ms": 57.06282615661621,
+            "peak_memory_mb": 328.68359375,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 6,
+            "throughput_imgs_per_sec": 17.49756022537427,
+            "avg_inference_time_ms": 57.150824864705406,
+            "peak_memory_mb": 343.16259765625,
+            "memory_usage_mb": -0.447265625,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 7,
+            "throughput_imgs_per_sec": 17.58071600267518,
+            "avg_inference_time_ms": 56.880504744393484,
+            "peak_memory_mb": 358.421875,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 8,
+            "throughput_imgs_per_sec": 17.722851530695596,
+            "avg_inference_time_ms": 56.424328684806824,
+            "peak_memory_mb": 374.12744140625,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 9,
+            "throughput_imgs_per_sec": 17.748839539663848,
+            "avg_inference_time_ms": 56.3417116800944,
+            "peak_memory_mb": 388.939453125,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 10,
+            "throughput_imgs_per_sec": 17.724302775241238,
+            "avg_inference_time_ms": 56.41970872879028,
+            "peak_memory_mb": 404.19775390625,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 11,
+            "throughput_imgs_per_sec": 16.768517103091174,
+            "avg_inference_time_ms": 59.63556549765847,
+            "peak_memory_mb": 419.57177734375,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 12,
+            "throughput_imgs_per_sec": 17.790374255792532,
+            "avg_inference_time_ms": 56.21017217636109,
+            "peak_memory_mb": 435.38623046875,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 13,
+            "throughput_imgs_per_sec": 17.781577492049873,
+            "avg_inference_time_ms": 56.23798003563514,
+            "peak_memory_mb": 451.201171875,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 14,
+            "throughput_imgs_per_sec": 15.68682061696595,
+            "avg_inference_time_ms": 63.747780663626536,
+            "peak_memory_mb": 467.015625,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 15,
+            "throughput_imgs_per_sec": 14.255011119507563,
+            "avg_inference_time_ms": 70.15076955159505,
+            "peak_memory_mb": 480.83056640625,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "hrnet",
+            "batch_size": 16,
+            "throughput_imgs_per_sec": 14.797716575116693,
+            "avg_inference_time_ms": 67.5779938697815,
+            "peak_memory_mb": 496.64501953125,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          }
+        ]
+      },
+      "all_test_results": [
+        {
+          "model_name": "hrnet",
+          "batch_size": 1,
+          "throughput_imgs_per_sec": 15.644894833567767,
+          "avg_inference_time_ms": 63.9186143875122,
+          "peak_memory_mb": 267.86669921875,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 2,
+          "throughput_imgs_per_sec": 15.640697247097462,
+          "avg_inference_time_ms": 63.935768604278564,
+          "peak_memory_mb": 282.12744140625,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 3,
+          "throughput_imgs_per_sec": 15.90024940428932,
+          "avg_inference_time_ms": 62.89209524790446,
+          "peak_memory_mb": 297.60986328125,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 4,
+          "throughput_imgs_per_sec": 17.3365736129938,
+          "avg_inference_time_ms": 57.68152475357056,
+          "peak_memory_mb": 312.86865234375,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 5,
+          "throughput_imgs_per_sec": 17.52454386425538,
+          "avg_inference_time_ms": 57.06282615661621,
+          "peak_memory_mb": 328.68359375,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 6,
+          "throughput_imgs_per_sec": 17.49756022537427,
+          "avg_inference_time_ms": 57.150824864705406,
+          "peak_memory_mb": 343.16259765625,
+          "memory_usage_mb": -0.447265625,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 7,
+          "throughput_imgs_per_sec": 17.58071600267518,
+          "avg_inference_time_ms": 56.880504744393484,
+          "peak_memory_mb": 358.421875,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 8,
+          "throughput_imgs_per_sec": 17.722851530695596,
+          "avg_inference_time_ms": 56.424328684806824,
+          "peak_memory_mb": 374.12744140625,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 9,
+          "throughput_imgs_per_sec": 17.748839539663848,
+          "avg_inference_time_ms": 56.3417116800944,
+          "peak_memory_mb": 388.939453125,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 10,
+          "throughput_imgs_per_sec": 17.724302775241238,
+          "avg_inference_time_ms": 56.41970872879028,
+          "peak_memory_mb": 404.19775390625,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 11,
+          "throughput_imgs_per_sec": 16.768517103091174,
+          "avg_inference_time_ms": 59.63556549765847,
+          "peak_memory_mb": 419.57177734375,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 12,
+          "throughput_imgs_per_sec": 17.790374255792532,
+          "avg_inference_time_ms": 56.21017217636109,
+          "peak_memory_mb": 435.38623046875,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 13,
+          "throughput_imgs_per_sec": 17.781577492049873,
+          "avg_inference_time_ms": 56.23798003563514,
+          "peak_memory_mb": 451.201171875,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 14,
+          "throughput_imgs_per_sec": 15.68682061696595,
+          "avg_inference_time_ms": 63.747780663626536,
+          "peak_memory_mb": 467.015625,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 15,
+          "throughput_imgs_per_sec": 14.255011119507563,
+          "avg_inference_time_ms": 70.15076955159505,
+          "peak_memory_mb": 480.83056640625,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "hrnet",
+          "batch_size": 16,
+          "throughput_imgs_per_sec": 14.797716575116693,
+          "avg_inference_time_ms": 67.5779938697815,
+          "peak_memory_mb": 496.64501953125,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        }
+      ]
+    },
+    "resunet_small": {
+      "optimization_result": {
+        "model_name": "resunet_small",
+        "optimal_batch_size": 4,
+        "max_throughput": 12.503355338071037,
+        "max_safe_batch_size": 8,
+        "memory_limit_mb": 21710.86875,
+        "test_results": [
+          {
+            "model_name": "resunet_small",
+            "batch_size": 1,
+            "throughput_imgs_per_sec": 11.406730897626163,
+            "avg_inference_time_ms": 87.66753673553467,
+            "peak_memory_mb": 248.794921875,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "resunet_small",
+            "batch_size": 2,
+            "throughput_imgs_per_sec": 11.57004216249214,
+            "avg_inference_time_ms": 86.4301085472107,
+            "peak_memory_mb": 262.8203125,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "resunet_small",
+            "batch_size": 3,
+            "throughput_imgs_per_sec": 11.655251856350123,
+            "avg_inference_time_ms": 85.79823176066081,
+            "peak_memory_mb": 278.07958984375,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "resunet_small",
+            "batch_size": 4,
+            "throughput_imgs_per_sec": 12.503355338071037,
+            "avg_inference_time_ms": 79.9785315990448,
+            "peak_memory_mb": 294.271484375,
+            "memory_usage_mb": 0.7099609375,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "resunet_small",
+            "batch_size": 5,
+            "throughput_imgs_per_sec": 8.488707861750706,
+            "avg_inference_time_ms": 117.8035593032837,
+            "peak_memory_mb": 309.37646484375,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "resunet_small",
+            "batch_size": 6,
+            "throughput_imgs_per_sec": 7.548366603748175,
+            "avg_inference_time_ms": 132.47899214426675,
+            "peak_memory_mb": 324.0791015625,
+            "memory_usage_mb": 0.2236328125,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "resunet_small",
+            "batch_size": 7,
+            "throughput_imgs_per_sec": 6.017099801690699,
+            "avg_inference_time_ms": 166.19302204677038,
+            "peak_memory_mb": 339.11474609375,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          },
+          {
+            "model_name": "resunet_small",
+            "batch_size": 8,
+            "throughput_imgs_per_sec": 5.120027812651082,
+            "avg_inference_time_ms": 195.311439037323,
+            "peak_memory_mb": 354.8203125,
+            "memory_usage_mb": 0.0,
+            "success": true,
+            "error": null
+          }
+        ]
+      },
+      "all_test_results": [
+        {
+          "model_name": "resunet_small",
+          "batch_size": 1,
+          "throughput_imgs_per_sec": 11.406730897626163,
+          "avg_inference_time_ms": 87.66753673553467,
+          "peak_memory_mb": 248.794921875,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "resunet_small",
+          "batch_size": 2,
+          "throughput_imgs_per_sec": 11.57004216249214,
+          "avg_inference_time_ms": 86.4301085472107,
+          "peak_memory_mb": 262.8203125,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "resunet_small",
+          "batch_size": 3,
+          "throughput_imgs_per_sec": 11.655251856350123,
+          "avg_inference_time_ms": 85.79823176066081,
+          "peak_memory_mb": 278.07958984375,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "resunet_small",
+          "batch_size": 4,
+          "throughput_imgs_per_sec": 12.503355338071037,
+          "avg_inference_time_ms": 79.9785315990448,
+          "peak_memory_mb": 294.271484375,
+          "memory_usage_mb": 0.7099609375,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "resunet_small",
+          "batch_size": 5,
+          "throughput_imgs_per_sec": 8.488707861750706,
+          "avg_inference_time_ms": 117.8035593032837,
+          "peak_memory_mb": 309.37646484375,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "resunet_small",
+          "batch_size": 6,
+          "throughput_imgs_per_sec": 7.548366603748175,
+          "avg_inference_time_ms": 132.47899214426675,
+          "peak_memory_mb": 324.0791015625,
+          "memory_usage_mb": 0.2236328125,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "resunet_small",
+          "batch_size": 7,
+          "throughput_imgs_per_sec": 6.017099801690699,
+          "avg_inference_time_ms": 166.19302204677038,
+          "peak_memory_mb": 339.11474609375,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        },
+        {
+          "model_name": "resunet_small",
+          "batch_size": 8,
+          "throughput_imgs_per_sec": 5.120027812651082,
+          "avg_inference_time_ms": 195.311439037323,
+          "peak_memory_mb": 354.8203125,
+          "memory_usage_mb": 0.0,
+          "success": true,
+          "error": null
+        }
+      ]
+    },
+    "resunet_advanced": {
+      "optimization_result": {
+        "model_name": "resunet_advanced",
+        "optimal_batch_size": 1,
+        "max_throughput": 0.0,
+        "max_safe_batch_size": 1,
+        "memory_limit_mb": 0.0,
+        "test_results": [
+          {
+            "model_name": "resunet_advanced",
+            "batch_size": 1,
+            "throughput_imgs_per_sec": 0.0,
+            "avg_inference_time_ms": 0.0,
+            "peak_memory_mb": 0.0,
+            "memory_usage_mb": 0.0,
+            "success": false,
+            "error": "The size of tensor a (124) must match the size of tensor b (125) at non-singleton dimension 3"
+          },
+          {
+            "model_name": "resunet_advanced",
+            "batch_size": 2,
+            "throughput_imgs_per_sec": 0.0,
+            "avg_inference_time_ms": 0.0,
+            "peak_memory_mb": 0.0,
+            "memory_usage_mb": 0.0,
+            "success": false,
+            "error": "The size of tensor a (124) must match the size of tensor b (125) at non-singleton dimension 3"
+          }
+        ]
+      },
+      "all_test_results": [
+        {
+          "model_name": "resunet_advanced",
+          "batch_size": 1,
+          "throughput_imgs_per_sec": 0.0,
+          "avg_inference_time_ms": 0.0,
+          "peak_memory_mb": 0.0,
+          "memory_usage_mb": 0.0,
+          "success": false,
+          "error": "The size of tensor a (124) must match the size of tensor b (125) at non-singleton dimension 3"
+        },
+        {
+          "model_name": "resunet_advanced",
+          "batch_size": 2,
+          "throughput_imgs_per_sec": 0.0,
+          "avg_inference_time_ms": 0.0,
+          "peak_memory_mb": 0.0,
+          "memory_usage_mb": 0.0,
+          "success": false,
+          "error": "The size of tensor a (124) must match the size of tensor b (125) at non-singleton dimension 3"
+        }
+      ]
+    }
+  }
+}
