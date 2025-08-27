@@ -129,6 +129,7 @@ class ModelLoader:
         self.is_processing = False
         self.current_model = None
         self.queue_length = 0
+        self.last_batch_size = 1  # Track last used batch size for reporting
         
         logger.info(f"ModelLoader initialized with device: {self.device}")
         logger.info(f"Batch processing enabled with config: {batch_config_path.exists()}")
@@ -576,6 +577,9 @@ class ModelLoader:
             logger.warning(f"Requested batch size {batch_size} exceeds safe limit {max_safe_batch}, using safe limit")
             batch_size = max_safe_batch
         
+        # Store batch size for reporting
+        self.last_batch_size = batch_size
+        
         logger.info(f"Starting batch prediction for {len(images)} images with {model_name}, batch_size: {batch_size}")
         
         # Set processing state
@@ -616,7 +620,7 @@ class ModelLoader:
                     memory_before = torch.cuda.memory_allocated()
                     logger.info(f"GPU memory before batch inference: {memory_before / 1024**2:.1f} MB")
                 
-                # Perform batch inference
+                # Perform batch inference with GPU OOM handling
                 try:
                     batch_output = executor.execute_inference(
                         model=model,
@@ -626,6 +630,32 @@ class ModelLoader:
                         image_size=batch_original_sizes[0]  # Representative size
                     )
                     logger.info(f"Batch inference completed, output shape: {batch_output.shape}")
+                    
+                except torch.cuda.OutOfMemoryError as e:
+                    logger.warning(f"GPU OOM with batch size {current_batch_size}, attempting recovery...")
+                    torch.cuda.empty_cache()
+                    
+                    # Try with batch size 1 as fallback
+                    if current_batch_size > 1:
+                        logger.info(f"Retrying with batch size 1...")
+                        batch_results = []
+                        for single_image in batch_images:
+                            single_tensor = self.preprocess_image_batch([single_image])
+                            single_output = executor.execute_inference(
+                                model=model,
+                                input_tensor=single_tensor,
+                                model_name=model_name,
+                                timeout=timeout,
+                                image_size=single_image.size
+                            )
+                            batch_results.append(single_output)
+                        batch_output = torch.cat(batch_results, dim=0)
+                        logger.info(f"Successfully processed batch with single-image fallback")
+                    else:
+                        raise InferenceError(
+                            model_name=model_name,
+                            error=f"GPU out of memory even with batch size 1: {str(e)}"
+                        )
                     
                 except InferenceTimeoutError as e:
                     self.is_processing = False

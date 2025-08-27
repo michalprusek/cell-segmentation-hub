@@ -1,7 +1,11 @@
 # GPU Override for Green Environment
 services:
   green-ml:
-    runtime: nvidia
+    # Modern GPU configuration for Docker Compose
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility

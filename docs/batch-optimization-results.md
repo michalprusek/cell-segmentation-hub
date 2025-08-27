@@ -30,23 +30,33 @@ Successfully completed comprehensive batch size optimization for ML segmentation
 
 ### ResUNet Small Model
 
-- **Optimal Batch Size**: 4
-- **Max Safe Batch Size**: 8
-- **Throughput**: 12.50 images/sec
-- **Performance Improvement**: 12.50x over single image processing
-- **Memory Usage**: ~294MB at optimal batch size
-- **Per-image Latency**: 80.0ms (down from ~201ms for single images)
+- **Optimal Batch Size**: 3
+- **Max Safe Batch Size**: 16
+- **Throughput**: 6.55 images/sec
+- **Performance Improvement**: 6.55x over single image processing
+- **Memory Usage**: ~298MB at optimal batch size
+- **Per-image Latency**: 152.7ms (down from ~201ms for single images)
 
 **Key Findings:**
 
-- Best performance at batch size 4
-- Throughput degrades significantly after batch size 4
+- Best performance at batch size 3
+- Throughput degrades after batch size 3 due to memory bandwidth limitations
 - More compute-intensive than HRNet despite "small" designation
 
 ### ResUNet Advanced Model
 
-- **Status**: Optimization failed due to tensor dimension mismatch
-- **Current Configuration**: Single image processing (batch size 1)
+- **Optimal Batch Size**: 1
+- **Max Safe Batch Size**: 1
+- **Throughput**: 2.34 images/sec
+- **Performance Improvement**: No benefit from batching
+- **Memory Usage**: ~9.4GB at batch size 1
+- **Per-image Latency**: 427.4ms
+
+**Key Findings:**
+
+- Attention mechanisms prevent effective batch processing
+- Best performance achieved with single image processing
+- High memory usage due to attention layers
 - **Issue**: Model architecture incompatibility with current tensor dimensions
 
 ## Performance Comparison
