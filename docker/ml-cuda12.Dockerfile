@@ -3,13 +3,16 @@ FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
 
 WORKDIR /app
 
-# Install Python and pip
+# Install Python 3.11 and ensure pip uses the correct version
 RUN apt-get update && apt-get install -y \
     python3.11 \
-    python3-pip \
-    python3-dev \
-    && ln -s /usr/bin/python3.11 /usr/bin/python \
-    && rm -rf /var/lib/apt/lists/*
+    python3.11-venv \
+    python3.11-dev \
+    python3.11-distutils \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.11
 
 # Set CUDA environment variables
 ENV CUDA_HOME=/usr/local/cuda
@@ -43,15 +46,15 @@ RUN groupadd -r -g 1001 appuser && useradd -r -g appuser -u 1001 appuser
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Install PyTorch with CUDA support first
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
+# Install PyTorch with CUDA support first using explicit Python interpreter
+RUN python3 -m pip install --no-cache-dir --upgrade pip && \
+    python3 -m pip install --no-cache-dir \
         torch==2.3.1+cu121 \
         torchvision==0.18.1+cu121 \
         --extra-index-url https://download.pytorch.org/whl/cu121
 
 # Install other dependencies
-RUN pip install --no-cache-dir \
+RUN python3 -m pip install --no-cache-dir \
         fastapi==0.104.1 \
         uvicorn[standard]==0.24.0 \
         python-multipart==0.0.18 \

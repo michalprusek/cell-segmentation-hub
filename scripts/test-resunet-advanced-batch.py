@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Test batch sizes for ResUNet Advanced model"""
 
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+project_root = Path(__file__).resolve().parent.parent / "backend" / "segmentation"
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import torch
 import numpy as np
 from PIL import Image
@@ -49,7 +57,8 @@ def test_resunet_advanced_batch():
             # Clear cache before test
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-                torch.cuda.synchronize()
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
             
             # Time the batch prediction
             start_time = time.time()
@@ -83,8 +92,13 @@ def test_resunet_advanced_batch():
                 peak_memory = 0
                 current_memory = 0
             
-            # Calculate throughput
-            throughput = batch_size / inference_time
+            # Calculate throughput with division by zero protection
+            if inference_time > 0 and batch_size > 0:
+                throughput = batch_size / inference_time
+                time_per_img = inference_time / batch_size
+            else:
+                throughput = 0
+                time_per_img = float('inf')
             time_per_img = inference_time / batch_size
             
             results.append({

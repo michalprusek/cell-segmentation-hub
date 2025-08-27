@@ -165,7 +165,7 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
       const sendMailWithTimeout = new Promise<SMTPTransport.SentMessageInfo>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
           reject(new Error(`Email send timeout after ${EMAIL_TIMEOUT/1000} seconds`));
-        }, emailTimeout);
+        }, EMAIL_TIMEOUT);
         
         _transporter!.sendMail(mailOptions)
           .then(result => {

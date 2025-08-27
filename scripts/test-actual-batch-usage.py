@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Test that models actually use the configured batch sizes"""
 
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+project_root = Path(__file__).resolve().parent.parent / "backend" / "segmentation"
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import torch
 import numpy as np
 from PIL import Image
@@ -67,9 +75,22 @@ def test_actual_batch_usage():
         processing_time = time.time() - start_time
         
         # Analysis
-        print(f"\n✅ Results:")
+        print(f"\n✅ Results for {model_name}:")
+        print(f"   Total time: {processing_time:.2f}s")
         print(f"   Total time: {processing_time:.2f}s")
         print(f"   Time per image: {processing_time/len(test_images):.2f}s")
+        print(f"   Configured batch size: {batch_size}")
+        
+        # Verify batch size usage
+        if hasattr(loader, 'actual_batch_size_used'):
+            actual_batch = loader.actual_batch_size_used
+            print(f"   Actual batch size used: {actual_batch}")
+            if actual_batch != batch_size:
+                print(f"   ⚠️ WARNING: Batch size mismatch! Expected {batch_size}, got {actual_batch}")
+            else:
+                print(f"   ✅ Batch size correctly applied")
+        else:
+            print(f"   ⚠️ Unable to verify actual batch size used")
         
         if batch_size == 1:
             print(f"   ℹ️ Batch size is 1 - no batching expected")

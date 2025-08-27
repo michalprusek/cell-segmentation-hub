@@ -20,7 +20,7 @@
     },
     "resunet_advanced": {
       "optimal_batch_size": 1,
-      "max_safe_batch_size": 16,
+      "max_safe_batch_size": 1,
       "expected_throughput": 2.34,
       "memory_limit_mb": 9436
     }
