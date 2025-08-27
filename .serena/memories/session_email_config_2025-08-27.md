@@ -29,7 +29,7 @@ Fixed production site (spherosegapp.utia.cas.cz) that was showing ERR_CONNECTION
 ### 4. Password Reset Workaround
 
 - **Issue**: Email service not working for password resets
-- **Workaround**: Manually reset password for prusemic@cvut.cz to "password123"
+- **Workaround**: Manually reset password for user (temporary password redacted - use secure channel)
 - **Status**: ✅ User can log in without email functionality
 
 ## Email Service Configuration Attempts
@@ -37,8 +37,8 @@ Fixed production site (spherosegapp.utia.cas.cz) that was showing ERR_CONNECTION
 ### SMTP Credentials Provided
 
 - Host: mail.utia.cas.cz
-- User: prusek@utia.cas.cz
-- Password: M1i2c3h4a5l6
+- User: your-email@example.com
+- Password: <SMTP_PASSWORD_PLACEHOLDER>
 
 ### Configuration Attempts
 
@@ -71,8 +71,8 @@ Fixed production site (spherosegapp.utia.cas.cz) that was showing ERR_CONNECTION
 - SMTP_SECURE=true
 - SMTP_AUTH=true
 - SMTP_REQUIRE_TLS=false
-- SMTP_USER=prusek@utia.cas.cz
-- SMTP_PASS=M1i2c3h4a5l6
+- SMTP_USER=<SMTP_USER_PLACEHOLDER>
+- SMTP_PASS=<SMTP_PASSWORD_PLACEHOLDER>
 - SKIP_EMAIL_SEND=false
 - EMAIL_ALLOW_INSECURE=true
 - EMAIL_TIMEOUT=30000
@@ -112,13 +112,13 @@ Fixed production site (spherosegapp.utia.cas.cz) that was showing ERR_CONNECTION
 -- Accept project share
 UPDATE "ProjectShare"
 SET accepted = true,
-    sharedWithId = '6da17190-4a23-47e6-beed-c4f29a4701e6'
-WHERE shareToken = '3306dca3-4d91-4bc8-8155-cabf570d63ed';
+    sharedWithId = '<SHARED_WITH_ID_PLACEHOLDER>'
+WHERE shareToken = '<SHARE_TOKEN_PLACEHOLDER>';
 
 -- Reset password
 UPDATE "User"
-SET password = '$2a$10$VZq6rV6zikJp2rBH0yQmReEzxJFnVPBHoGMFZv8GVEGvzqN0jTwXu'
-WHERE email = 'prusemic@cvut.cz';
+SET password = '<BCRYPT_HASH_PLACEHOLDER>'
+WHERE email = 'user@example.com';
 ```
 
 ## Lessons Learned

@@ -221,7 +221,7 @@ class BatchSizeOptimizer:
                 throughput_imgs_per_sec=throughput,
                 avg_inference_time_ms=avg_time_per_image * 1000,
                 peak_memory_mb=peak_memory["allocated_mb"],
-                memory_usage_mb=peak_memory["allocated_mb"] - initial_memory["allocated_mb"],
+                memory_usage_mb=max(0, peak_memory["allocated_mb"] - initial_memory["allocated_mb"]),  # Ensure non-negative
                 success=True
             )
             

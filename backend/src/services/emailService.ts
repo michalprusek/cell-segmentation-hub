@@ -67,11 +67,11 @@ export function init(): void {
           secure: config.smtp.secure,
           ignoreTLS: process.env.SMTP_IGNORE_TLS === 'true', // Option to completely ignore TLS
           requireTLS: process.env.SMTP_REQUIRE_TLS === 'true' && process.env.SMTP_IGNORE_TLS !== 'true',
-          connectionTimeout: 60000, // 60 seconds
-          greetingTimeout: 60000,   // 60 seconds
-          socketTimeout: 60000,     // 60 seconds
-          logger: true,            // Enable debug logging
-          debug: true              // Enable SMTP debug
+          connectionTimeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'), // Default 60 seconds
+          greetingTimeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'),   // Default 60 seconds
+          socketTimeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'),     // Default 60 seconds
+          logger: process.env.EMAIL_DEBUG === 'true',            // Only enable debug logging when needed
+          debug: process.env.EMAIL_DEBUG === 'true'              // Only enable SMTP debug when needed
         };
         
         // Only add TLS config if not ignoring TLS
@@ -161,7 +161,7 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
       };
 
       // Wrap sendMail in a timeout promise
-      const emailTimeout = 60000; // 60 seconds
+      const emailTimeout = parseInt(process.env.EMAIL_TIMEOUT || '60000'); // Default 60 seconds
       const sendMailWithTimeout = new Promise((resolve, reject) => {
         const timeoutId = setTimeout(() => {
           reject(new Error(`Email send timeout after ${emailTimeout/1000} seconds`));

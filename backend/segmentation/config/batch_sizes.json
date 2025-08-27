@@ -7,9 +7,9 @@
   },
   "batch_configurations": {
     "hrnet": {
-      "optimal_batch_size": 8,
+      "optimal_batch_size": 12,
       "max_safe_batch_size": 16,
-      "expected_throughput": 7.89,
+      "expected_throughput": 17.79,
       "memory_limit_mb": 6362
     },
     "resunet_small": {
