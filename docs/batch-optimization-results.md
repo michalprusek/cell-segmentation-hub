@@ -17,10 +17,11 @@ Successfully completed comprehensive batch size optimization for ML segmentation
 
 - **Optimal Batch Size**: 12
 - **Max Safe Batch Size**: 16
-- **Throughput**: 17.79 images/sec
-- **Performance Improvement**: 17.79x over single image processing
+- **Throughput**: 17.79 images/sec (with batch size 12)
+- **Single Image Throughput**: 15.64 images/sec
+- **Performance Improvement**: 1.14x from batching (17.79/15.64)
 - **Memory Usage**: ~435MB at optimal batch size
-- **Per-image Latency**: 56.2ms (down from ~176ms for single images)
+- **Per-image Latency**: 64ms (single image)
 
 **Key Findings:**
 
@@ -32,10 +33,10 @@ Successfully completed comprehensive batch size optimization for ML segmentation
 
 - **Optimal Batch Size**: 3
 - **Max Safe Batch Size**: 16
-- **Throughput**: 6.55 images/sec
-- **Performance Improvement**: 6.55x over single image processing
+- **Throughput**: 11.4 images/sec (single image)
+- **Performance Improvement**: Batch processing doesn't improve throughput
 - **Memory Usage**: ~298MB at optimal batch size
-- **Per-image Latency**: 152.7ms (down from ~201ms for single images)
+- **Per-image Latency**: 88ms (single image)
 
 **Key Findings:**
 

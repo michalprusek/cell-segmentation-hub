@@ -10,7 +10,7 @@ Successfully enabled GPU acceleration for ML segmentation on NVIDIA RTX A5000 (2
 
 - **Problem**: Application running on CPU despite powerful GPU hardware
 - **Solution**: Fixed NVIDIA driver/library mismatch, configured Docker Compose with GPU support
-- **Result**: 34.4x speedup for ResUNet Small, 17.7x for HRNet
+- **Result**: 78.4x speedup for ResUNet Small, 48.4x for HRNet, 42.1x for ResUNet Advanced
 
 ### 2. Docker GPU Configuration
 
@@ -37,8 +37,8 @@ environment:
 
 | Model            | CPU Time | GPU Time | Speedup |
 | ---------------- | -------- | -------- | ------- |
-| HRNet            | 3.1s     | 0.18s    | 17.7x   |
-| ResUNet Small    | 6.9s     | 0.20s    | 34.4x   |
+| HRNet            | 3.1s     | 0.064s   | 48.4x   |
+| ResUNet Small    | 6.9s     | 0.088s   | 78.4x   |
 | ResUNet Advanced | 18.1s    | 0.43s    | 42.1x   |
 
 ## Technical Solutions

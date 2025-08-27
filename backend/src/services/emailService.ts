@@ -67,11 +67,11 @@ export function init(): void {
           secure: config.smtp.secure,
           ignoreTLS: process.env.SMTP_IGNORE_TLS === 'true', // Option to completely ignore TLS
           requireTLS: process.env.SMTP_REQUIRE_TLS === 'true' && process.env.SMTP_IGNORE_TLS !== 'true',
-          connectionTimeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'), // Default 60 seconds
-          greetingTimeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'),   // Default 60 seconds
-          socketTimeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'),     // Default 60 seconds
-          logger: process.env.EMAIL_DEBUG === 'true',            // Only enable debug logging when needed
-          debug: process.env.EMAIL_DEBUG === 'true'              // Only enable SMTP debug when needed
+          connectionTimeout: parseInt(process.env.SMTP_CONNECTION_TIMEOUT_MS || process.env.EMAIL_TIMEOUT || '60000', 10) || 60000,
+          greetingTimeout: parseInt(process.env.SMTP_GREETING_TIMEOUT_MS || process.env.EMAIL_TIMEOUT || '60000', 10) || 60000,
+          socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT_MS || process.env.EMAIL_TIMEOUT || '60000', 10) || 60000,
+          logger: process.env.SMTP_DEBUG === 'true' || process.env.EMAIL_DEBUG === 'true',
+          debug: process.env.SMTP_DEBUG === 'true' || process.env.EMAIL_DEBUG === 'true'
         };
         
         // Only add TLS config if not ignoring TLS
@@ -161,10 +161,10 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
       };
 
       // Wrap sendMail in a timeout promise
-      const emailTimeout = parseInt(process.env.EMAIL_TIMEOUT || '60000'); // Default 60 seconds
-      const sendMailWithTimeout = new Promise((resolve, reject) => {
+      const EMAIL_TIMEOUT = parseInt(process.env.EMAIL_TIMEOUT || '60000', 10) || 60000; // Default 60 seconds
+      const sendMailWithTimeout = new Promise<SMTPTransport.SentMessageInfo>((resolve, reject) => {
         const timeoutId = setTimeout(() => {
-          reject(new Error(`Email send timeout after ${emailTimeout/1000} seconds`));
+          reject(new Error(`Email send timeout after ${EMAIL_TIMEOUT/1000} seconds`));
         }, emailTimeout);
         
         _transporter!.sendMail(mailOptions)
@@ -178,7 +178,7 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
           });
       });
       
-      const result = await sendMailWithTimeout as any;
+      const result = await sendMailWithTimeout;
       
       logger.info('Email sent successfully', 'EmailService', { 
         to: options.to,

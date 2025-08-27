@@ -82,8 +82,8 @@ docker exec green-ml python -c "import torch; print(f'CUDA available: {torch.cud
 
 | Model            | CPU Time | GPU Time | Speedup | Optimal Batch Size |
 | ---------------- | -------- | -------- | ------- | ------------------ |
-| HRNet            | 3.1s     | 0.18s    | 17.7x   | 12                 |
-| ResUNet Small    | 6.9s     | 0.20s    | 34.4x   | 3                  |
+| HRNet            | 3.1s     | 0.064s   | 48.4x   | 12                 |
+| ResUNet Small    | 6.9s     | 0.088s   | 78.4x   | 3                  |
 | ResUNet Advanced | 18.1s    | 0.43s    | 42.1x   | 1                  |
 
 _Note: Actual performance depends on image size and GPU model_

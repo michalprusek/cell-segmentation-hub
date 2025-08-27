@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """GPU vs CPU Benchmark for ML Segmentation"""
 
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+project_root = Path(__file__).resolve().parent.parent / "backend" / "segmentation"
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import torch
 import time
 import numpy as np
@@ -31,7 +39,12 @@ def benchmark_inference(device='cuda'):
         
         # Warm-up run (first run is slower)
         print("  Warm-up run...")
-        _ = loader.predict(test_image, model_name=model_name, threshold=0.5)
+        try:
+            _ = loader.predict(test_image, model_name=model_name, threshold=0.5)
+        except Exception as e:
+            print(f"  ⚠️ Error during warm-up for {model_name}: {str(e)}")
+            print(f"  Skipping {model_name} benchmark...")
+            continue
         
         # Benchmark runs
         times = []
