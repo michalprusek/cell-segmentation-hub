@@ -2,7 +2,7 @@
  * Escapes HTML special characters to prevent XSS attacks
  */
 export function escapeHtml(str: string): string {
-  if (!str) return '';
+  if (!str) {return '';}
   
   const htmlEscapeMap: Record<string, string> = {
     '&': '&amp;',
@@ -20,7 +20,7 @@ export function escapeHtml(str: string): string {
  * Validates and sanitizes a URL
  */
 export function sanitizeUrl(url: string): string {
-  if (!url) return '';
+  if (!url) {return '';}
   
   try {
     const parsed = new URL(url);
