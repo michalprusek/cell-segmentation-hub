@@ -39,7 +39,7 @@ environment:
 | ---------------- | -------- | -------- | ------- |
 | HRNet            | 3.1s     | 0.18s    | 17.7x   |
 | ResUNet Small    | 6.9s     | 0.20s    | 34.4x   |
-| ResUNet Advanced | 18.1s    | 1.2s     | 15.1x   |
+| ResUNet Advanced | 18.1s    | 0.43s    | 42.1x   |
 
 ## Technical Solutions
 

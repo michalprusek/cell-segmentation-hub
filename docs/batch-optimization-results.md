@@ -50,7 +50,7 @@ Successfully completed comprehensive batch size optimization for ML segmentation
 - **Throughput**: 2.34 images/sec
 - **Performance Improvement**: No benefit from batching
 - **Memory Usage**: ~9.4GB at batch size 1
-- **Per-image Latency**: 427.4ms
+- **Per-image Latency**: 428ms
 
 **Key Findings:**
 
