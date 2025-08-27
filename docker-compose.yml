@@ -116,7 +116,11 @@ services:
       context: ./backend/segmentation
       dockerfile: ../../docker/ml.Dockerfile
     container_name: spheroseg-ml
-    runtime: nvidia
+    # Modern GPU configuration for Docker Compose
+    device_requests:
+      - driver: nvidia
+        count: 1
+        capabilities: [gpu]
     env_file: ${ENV_FILE:-.env.development}
     ports:
       - "8000:8000"
@@ -132,16 +136,13 @@ services:
       - CUDA_VISIBLE_DEVICES=0
     networks:
       - spheroseg-network
+    # Resource limits for memory
     deploy:
       resources:
         limits:
           memory: 8G
         reservations:
           memory: 2G
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     restart: unless-stopped
 
   # Prometheus monitoring
