@@ -14,6 +14,16 @@ import logging
 from pathlib import Path
 import time
 import uuid
+import sys
+
+# Add monitoring module to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    from monitoring.gpu_monitor import get_gpu_monitor, GPUMonitor
+    gpu_monitor_available = True
+except ImportError:
+    gpu_monitor_available = False
+    GPUMonitor = None
 
 # Import model architectures using relative imports
 from models.hrnet import HRNetV2
@@ -124,6 +134,16 @@ class ModelLoader:
         # Load batch processing configuration
         batch_config_path = self.base_path / "config" / "batch_sizes.json"
         self.batch_config = BatchConfig(str(batch_config_path) if batch_config_path.exists() else None)
+        
+        # Initialize GPU monitoring if available
+        self.gpu_monitor: Optional[GPUMonitor] = None
+        if gpu_monitor_available and torch.cuda.is_available():
+            try:
+                self.gpu_monitor = get_gpu_monitor()
+                logger.info("GPU monitoring enabled")
+            except Exception as e:
+                logger.warning(f"Could not initialize GPU monitoring: {e}")
+                self.gpu_monitor = None
         
         # Processing state tracking
         self.is_processing = False
@@ -615,10 +635,22 @@ class ModelLoader:
                 if timeout is None:
                     timeout = float(os.getenv("ML_INFERENCE_TIMEOUT", "60"))
                 
+                # Track GPU metrics if monitoring is available
+                start_time = time.time()
+                memory_before = torch.cuda.memory_allocated() if self.device.type == 'cuda' else 0
+                
                 # Log resource usage before inference
                 if self.device.type == 'cuda':
-                    memory_before = torch.cuda.memory_allocated()
                     logger.info(f"GPU memory before batch inference: {memory_before / 1024**2:.1f} MB")
+                    
+                    # Check if we should reduce batch size based on memory pressure
+                    if self.gpu_monitor and self.gpu_monitor.should_reduce_batch_size():
+                        if current_batch_size > 1:
+                            logger.warning(f"Memory pressure detected, reducing batch size from {current_batch_size} to {current_batch_size // 2}")
+                            current_batch_size = max(1, current_batch_size // 2)
+                            batch_images = batch_images[:current_batch_size]
+                            batch_original_sizes = batch_original_sizes[:current_batch_size]
+                            batch_tensor = self.preprocess_image_batch(batch_images)
                 
                 # Perform batch inference with GPU OOM handling
                 try:
@@ -671,10 +703,28 @@ class ModelLoader:
                     self.current_model = None
                     raise InferenceError(f"Batch inference failed for {model_name}: {str(e)}") from e
                 
-                # Check memory after inference
+                # Check memory after inference and record metrics
                 if self.device.type == 'cuda':
                     memory_after = torch.cuda.memory_allocated()
-                    logger.info(f"GPU memory after batch inference: {memory_after / 1024**2:.1f} MB")
+                    memory_delta = max(0, memory_after - memory_before)  # Fix negative memory with max(0, ...)
+                    logger.info(f"GPU memory after batch inference: {memory_after / 1024**2:.1f} MB (delta: {memory_delta / 1024**2:.1f} MB)")
+                    
+                    # Record batch processing metrics if monitoring is available
+                    if self.gpu_monitor:
+                        success = True
+                        error_msg = None
+                        try:
+                            metrics = self.gpu_monitor.record_batch_processing(
+                                model_name=model_name,
+                                batch_size=current_batch_size,
+                                start_time=start_time,
+                                memory_before=memory_before,
+                                success=success,
+                                error_message=error_msg
+                            )
+                            logger.debug(f"Batch metrics recorded: throughput={metrics.throughput_imgs_sec:.2f} imgs/sec")
+                        except Exception as e:
+                            logger.warning(f"Could not record batch metrics: {e}")
                 
                 # Handle different output formats
                 if isinstance(batch_output, tuple):
