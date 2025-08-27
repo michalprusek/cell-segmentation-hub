@@ -5,8 +5,17 @@ import sys
 import os
 import json
 
-# Add parent directory to path
-sys.path.insert(0, '/app')
+# Add parent directory to path dynamically
+from pathlib import Path
+
+if os.path.exists('/app'):
+    # Running in Docker
+    sys.path.insert(0, '/app')
+else:
+    # Running locally
+    project_root = Path(__file__).resolve().parent.parent / "backend" / "segmentation"
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
 from ml.model_loader import ModelLoader
 
@@ -17,8 +26,10 @@ def verify_batch_config():
     print("🔍 VERIFYING BATCH CONFIGURATION")
     print("="*60)
     
-    # Load configuration file directly
-    config_path = "/app/config/batch_sizes.json"
+    # Load configuration file dynamically
+    config_path = os.environ.get("BATCH_CONFIG_PATH", 
+                                 "/app/config/batch_sizes.json" if os.path.exists('/app') 
+                                 else str(Path(__file__).resolve().parent.parent / "backend" / "segmentation" / "config" / "batch_sizes.json"))
     print(f"\n📁 Loading config from: {config_path}")
     
     if os.path.exists(config_path):

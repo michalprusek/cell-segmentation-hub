@@ -173,6 +173,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Don't fail the sign in if profile loading fails
       }
 
+      // Process pending share invitation if exists
+      const pendingToken = localStorage.getItem('pendingShareToken');
+      if (pendingToken) {
+        try {
+          logger.debug('Processing pending share invitation after sign in');
+          const result = await apiClient.acceptShareInvitation(pendingToken);
+          if (!result.needsLogin) {
+            logger.info('Share invitation accepted after sign in');
+            localStorage.removeItem('pendingShareToken');
+          }
+        } catch (error) {
+          logger.error(
+            'Failed to process share invitation after sign in:',
+            error
+          );
+          // Don't fail navigation, let Dashboard handle it
+        }
+      }
+
       navigate('/dashboard');
     } catch (error: unknown) {
       const errorMessage = getErrorMessage(error) || 'Sign in failed';
@@ -234,6 +253,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch (profileError) {
         logger.error('Failed to load profile after sign up:', profileError);
         // Don't fail the sign up if profile loading fails
+      }
+
+      // Process pending share invitation if exists
+      const pendingToken = localStorage.getItem('pendingShareToken');
+      if (pendingToken) {
+        try {
+          logger.debug('Processing pending share invitation after sign up');
+          const result = await apiClient.acceptShareInvitation(pendingToken);
+          if (!result.needsLogin) {
+            logger.info('Share invitation accepted after sign up');
+            localStorage.removeItem('pendingShareToken');
+          }
+        } catch (error) {
+          logger.error(
+            'Failed to process share invitation after sign up:',
+            error
+          );
+          // Don't fail navigation, let Dashboard handle it
+        }
       }
 
       navigate('/dashboard');

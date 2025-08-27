@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """Comprehensive batch size testing for all ML models"""
 
+import sys
+from pathlib import Path
+
+# Add project root to path for imports
+project_root = Path(__file__).resolve().parent.parent / "backend" / "segmentation"
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import torch
 import numpy as np
 from PIL import Image
@@ -30,11 +38,12 @@ def test_model_batch_sizes(model_name, max_batch_size=16):
         print(f"\n  Batch size {batch_size}: ", end='')
         
         try:
-            # Create batch of test images (1000x1000)
+            # Create batch of test images with consistent size
+            # Use a fixed size that's compatible with all models (divisible by 32)
             test_images = []
             for i in range(batch_size):
-                # Randomize slightly to avoid caching effects
-                size = 1000 + np.random.randint(-50, 50)
+                # Use fixed size of 1024x1024 (divisible by 32 for most CNN architectures)
+                size = 1024  # Fixed size for model compatibility
                 test_array = np.random.randint(100, 200, (size, size, 3), dtype=np.uint8)
                 test_image = Image.fromarray(test_array, 'RGB')
                 test_images.append(test_image)
@@ -187,7 +196,15 @@ def main():
             print(f"  💾 Max safe batch: {max_safe['batch_size']} (up to {max_safe['peak_memory_mb']:.0f} MB)")
     
     # Save recommendations
-    config_path = '/home/cvat/cell-segmentation-hub/scripts/recommended_batch_sizes.json'
+    # Get config path from environment or use relative path
+    import os
+    config_path = os.environ.get('TEST_BATCH_CONFIG', 
+                                 Path(__file__).resolve().parent / 'recommended_batch_sizes.json')
+    
+    # Ensure path exists
+    if not Path(config_path).exists():
+        print(f"⚠️ Config file not found: {config_path}")
+        config_path = None
     with open(config_path, 'w') as f:
         json.dump({
             'timestamp': time.strftime('%Y-%m-%d %H:%M:%S'),

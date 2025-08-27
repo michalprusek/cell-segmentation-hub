@@ -11,8 +11,19 @@ from PIL import Image
 import numpy as np
 from pathlib import Path
 
-# Add the segmentation module to path
-sys.path.append('/app')
+# Add the segmentation module to path dynamically
+import os
+from pathlib import Path
+
+# Try to find the project root
+if os.path.exists('/app'):
+    # Running in Docker
+    sys.path.append('/app')
+else:
+    # Running locally - add backend/segmentation to path
+    project_root = Path(__file__).resolve().parent.parent / "backend" / "segmentation"
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
 
 from ml.model_loader import ModelLoader
 
@@ -47,7 +58,9 @@ def main():
     print("=" * 60)
     
     # Initialize model loader
-    model_loader = ModelLoader(base_path="/app")
+    # Use dynamic base path
+    base_path = "/app" if os.path.exists("/app") else str(Path(__file__).resolve().parent.parent / "backend" / "segmentation")
+    model_loader = ModelLoader(base_path=base_path)
     
     # Create test images
     print("Creating test images...")
@@ -95,13 +108,30 @@ def main():
     print(f"Average per image: {batch_time/len(test_images):.2f} seconds")
     print(f"Speedup: {single_time/3 / (batch_time/len(test_images)):.2f}x")
     
-    # Verify results
+    # Verify results with defensive error handling
     print(f"Processed {len(batch_results)} images in batch")
     for i, result in enumerate(batch_results):
-        batch_size = result['processing_info'].get('batch_size', 'unknown')
-        batch_pos = result['processing_info'].get('batch_position', 'unknown')
-        polygons = len(result['polygons'])
-        print(f"  Image {i+1}: {polygons} polygons (batch_size={batch_size}, pos={batch_pos})")
+        try:
+            # Safely get processing info
+            processing_info = result.get('processing_info')
+            if processing_info:
+                batch_size = processing_info.get('batch_size', 'unknown')
+                batch_pos = processing_info.get('batch_position', 'unknown')
+            else:
+                batch_size = 'unknown'
+                batch_pos = 'unknown'
+            
+            # Safely get polygon count
+            polygons_data = result.get('polygons', [])
+            if isinstance(polygons_data, (list, tuple)):
+                polygons = len(polygons_data)
+            else:
+                polygons = 0
+            
+            print(f"  Image {i+1}: {polygons} polygons (batch_size={batch_size}, pos={batch_pos})")
+        except Exception as e:
+            print(f"  Image {i+1}: Error processing result: {str(e)}")
+            continue
     
     # Test custom batch size
     print("\nTesting with custom batch size (4)...")

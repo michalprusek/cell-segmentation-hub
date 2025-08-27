@@ -29,9 +29,11 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser
 # Copy requirements first for better caching
 COPY requirements.txt .
 
-# Upgrade pip and install Python dependencies (PyTorch is already installed)
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Upgrade pip and install Python dependencies (exclude PyTorch to preserve CUDA version)
+RUN python -m pip install --no-cache-dir --upgrade pip && \
+    grep -v "^torch\|^torchvision" requirements.txt > requirements_no_torch.txt && \
+    python -m pip install --no-cache-dir -r requirements_no_torch.txt && \
+    rm requirements_no_torch.txt
 
 # Copy application code
 COPY . .

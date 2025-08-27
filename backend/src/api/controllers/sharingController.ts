@@ -355,6 +355,9 @@ export const acceptShareInvitation = asyncHandler(async (req: Request, res: Resp
           title: result.share.project.title,
           description: result.share.project.description
         },
+        shareId: result.share.id,
+        sharedWithId: result.share.sharedWithId,
+        status: result.share.status,
         accepted: true
       },
       'Share invitation accepted successfully'

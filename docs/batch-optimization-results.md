@@ -73,7 +73,7 @@ Successfully completed comprehensive batch size optimization for ML segmentation
 ### Configuration File Location
 
 ```
-/home/cvat/cell-segmentation-hub/backend/segmentation/config/batch_sizes.json
+backend/segmentation/config/batch_sizes.json
 ```
 
 ### New Model Loader Methods
@@ -120,6 +120,10 @@ The optimization results show excellent GPU memory efficiency:
 ### Automatic Optimal Batching
 
 ```python
+# Import and initialize the model loader
+from ml.model_loader import ModelLoader
+model_loader = ModelLoader()
+
 # Load multiple images
 images = [Image.open(f"image_{i}.jpg") for i in range(20)]
 

@@ -53,6 +53,10 @@ const Dashboard = () => {
             ? `${t('common.project')}: ${result.project.title}`
             : undefined,
         });
+
+        // Small delay to ensure database propagation
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         // Refresh projects list to show the newly shared project
         await fetchProjects();
       }
