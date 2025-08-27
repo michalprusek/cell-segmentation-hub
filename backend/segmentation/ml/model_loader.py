@@ -1,6 +1,6 @@
 """
 Model Loader for Spheroid Segmentation Models
-Loads pretrained models and provides inference functionality
+Loads pretrained models and provides inference functionality with batch processing support
 """
 import os
 import json
@@ -9,7 +9,7 @@ import torch.nn.functional as F
 from PIL import Image
 import numpy as np
 import cv2
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Optional, Union
 import logging
 from pathlib import Path
 import time
@@ -31,6 +31,55 @@ from .inference_executor import (
 logger = logging.getLogger(__name__)
 
 
+class BatchConfig:
+    """Configuration for batch processing"""
+    
+    def __init__(self, config_path: str = None):
+        """Load batch size configuration from file"""
+        if config_path and Path(config_path).exists():
+            with open(config_path, 'r') as f:
+                self.config = json.load(f)
+                logger.info(f"Loaded batch configuration from {config_path}")
+        else:
+            # Default fallback configuration
+            self.config = {
+                "batch_configurations": {
+                    "hrnet": {
+                        "optimal_batch_size": 4,
+                        "max_safe_batch_size": 8,
+                        "expected_throughput": 2.5,
+                        "memory_limit_mb": 8000
+                    },
+                    "resunet_small": {
+                        "optimal_batch_size": 2,
+                        "max_safe_batch_size": 4,
+                        "expected_throughput": 1.8,
+                        "memory_limit_mb": 10000
+                    },
+                    "resunet_advanced": {
+                        "optimal_batch_size": 1,
+                        "max_safe_batch_size": 2,
+                        "expected_throughput": 1.0,
+                        "memory_limit_mb": 15000
+                    }
+                }
+            }
+            if config_path:
+                logger.warning(f"Batch config not found at {config_path}, using defaults")
+    
+    def get_optimal_batch_size(self, model_name: str) -> int:
+        """Get optimal batch size for model"""
+        return self.config.get("batch_configurations", {}).get(model_name, {}).get("optimal_batch_size", 1)
+    
+    def get_max_safe_batch_size(self, model_name: str) -> int:
+        """Get maximum safe batch size for model"""
+        return self.config.get("batch_configurations", {}).get(model_name, {}).get("max_safe_batch_size", 1)
+    
+    def get_expected_throughput(self, model_name: str) -> float:
+        """Get expected throughput for model"""
+        return self.config.get("batch_configurations", {}).get(model_name, {}).get("expected_throughput", 1.0)
+
+
 class ModelConfig:
     """Configuration for a specific model"""
     
@@ -43,7 +92,7 @@ class ModelConfig:
 
 
 class ModelLoader:
-    """Loads and manages pretrained segmentation models"""
+    """Loads and manages pretrained segmentation models with batch processing support"""
     
     AVAILABLE_MODELS = {
         'hrnet': {
@@ -72,12 +121,17 @@ class ModelLoader:
         self.model_configs: Dict[str, ModelConfig] = {}
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         
+        # Load batch processing configuration
+        batch_config_path = self.base_path / "config" / "batch_sizes.json"
+        self.batch_config = BatchConfig(str(batch_config_path) if batch_config_path.exists() else None)
+        
         # Processing state tracking
         self.is_processing = False
         self.current_model = None
         self.queue_length = 0
         
         logger.info(f"ModelLoader initialized with device: {self.device}")
+        logger.info(f"Batch processing enabled with config: {batch_config_path.exists()}")
     
     def load_model(self, model_name: str, use_finetuned: bool = True) -> torch.nn.Module:
         """Load a specific model with pretrained weights"""
@@ -186,7 +240,7 @@ class ModelLoader:
         return self.loaded_models[model_name]
     
     def preprocess_image(self, image: Image.Image, target_size: Tuple[int, int] = (1024, 1024)) -> torch.Tensor:
-        """Preprocess image for model inference"""
+        """Preprocess single image for model inference"""
         
         # Convert to RGB if needed
         if image.mode != 'RGB':
@@ -202,6 +256,31 @@ class ModelLoader:
         image_tensor = torch.from_numpy(image_np.transpose(2, 0, 1)).unsqueeze(0)
         
         return image_tensor.to(self.device)
+    
+    def preprocess_image_batch(self, images: List[Image.Image], target_size: Tuple[int, int] = (1024, 1024)) -> torch.Tensor:
+        """Preprocess batch of images for model inference"""
+        
+        batch_tensors = []
+        
+        for image in images:
+            # Convert to RGB if needed
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            
+            # Resize image
+            image = image.resize(target_size, Image.Resampling.LANCZOS)
+            
+            # Convert to numpy array and normalize
+            image_np = np.array(image).astype(np.float32) / 255.0
+            
+            # Convert to tensor (no batch dimension yet)
+            image_tensor = torch.from_numpy(image_np.transpose(2, 0, 1))
+            batch_tensors.append(image_tensor)
+        
+        # Stack into batch tensor
+        batch_tensor = torch.stack(batch_tensors, dim=0)
+        
+        return batch_tensor.to(self.device)
     
     def postprocess_mask(self, mask: torch.Tensor, original_size: Tuple[int, int], 
                         threshold: float = 0.5) -> np.ndarray:
@@ -221,6 +300,39 @@ class ModelLoader:
         binary_mask = (mask_resized > threshold).astype(np.uint8)
         
         return binary_mask
+    
+    def postprocess_mask_batch(self, masks: torch.Tensor, original_sizes: List[Tuple[int, int]], 
+                              threshold: float = 0.5) -> List[np.ndarray]:
+        """Postprocess batch of model outputs to create binary masks"""
+        
+        # Apply sigmoid activation if needed
+        if masks.min() < 0 or masks.max() > 1:
+            masks = torch.sigmoid(masks)
+        
+        # Remove channel dimension (keep batch dimension)
+        if masks.dim() == 4 and masks.size(1) == 1:
+            masks = masks.squeeze(1)  # Remove channel dimension
+        
+        masks_cpu = masks.cpu().numpy()
+        processed_masks = []
+        
+        for i, (mask, original_size) in enumerate(zip(masks_cpu, original_sizes)):
+            # Resize back to original size
+            mask_resized = cv2.resize(mask, original_size, interpolation=cv2.INTER_LINEAR)
+            
+            # Apply threshold
+            binary_mask = (mask_resized > threshold).astype(np.uint8)
+            processed_masks.append(binary_mask)
+        
+        return processed_masks
+    
+    def get_optimal_batch_size(self, model_name: str) -> int:
+        """Get optimal batch size for a model"""
+        return self.batch_config.get_optimal_batch_size(model_name)
+    
+    def get_max_safe_batch_size(self, model_name: str) -> int:
+        """Get maximum safe batch size for a model"""
+        return self.batch_config.get_max_safe_batch_size(model_name)
     
     def predict(self, image: Image.Image, model_name: str, threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> Dict[str, Any]:
         """
@@ -418,11 +530,226 @@ class ModelLoader:
                 "processing_info": {
                     "device": str(self.device),
                     "num_polygons": len(polygons),
-                    "confidence_scores": [p["confidence"] for p in polygons]
+                    "confidence_scores": [p["confidence"] for p in polygons],
+                    "batch_size": 1  # Single image processing
                 }
             }
             
             return result
+            
+        finally:
+            # Reset processing state
+            self.is_processing = False
+            self.current_model = None
+    
+    def predict_batch(self, images: List[Image.Image], model_name: str, batch_size: Optional[int] = None, 
+                     threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> List[Dict[str, Any]]:
+        """
+        Perform batch segmentation on multiple images with automatic batching
+        
+        Args:
+            images: List of PIL Images to segment
+            model_name: Name of the model to use
+            batch_size: Batch size to use (uses optimal if None)
+            threshold: Segmentation threshold
+            detect_holes: Whether to detect holes in segmentation
+            timeout: Optional timeout override per batch
+        
+        Returns:
+            List of dictionaries containing segmentation results
+            
+        Raises:
+            InferenceTimeoutError: If inference exceeds timeout
+            InferenceError: For other inference failures
+        """
+        
+        if not images:
+            return []
+            
+        # Determine batch size
+        if batch_size is None:
+            batch_size = self.get_optimal_batch_size(model_name)
+        
+        # Ensure batch size doesn't exceed safe limit
+        max_safe_batch = self.get_max_safe_batch_size(model_name)
+        if batch_size > max_safe_batch:
+            logger.warning(f"Requested batch size {batch_size} exceeds safe limit {max_safe_batch}, using safe limit")
+            batch_size = max_safe_batch
+        
+        logger.info(f"Starting batch prediction for {len(images)} images with {model_name}, batch_size: {batch_size}")
+        
+        # Set processing state
+        self.is_processing = True
+        self.current_model = model_name
+        
+        try:
+            # Get model
+            model = self.get_model(model_name)
+            
+            # Store original sizes
+            original_sizes = [img.size for img in images]
+            
+            # Process images in batches
+            all_results = []
+            
+            for batch_start in range(0, len(images), batch_size):
+                batch_end = min(batch_start + batch_size, len(images))
+                batch_images = images[batch_start:batch_end]
+                batch_original_sizes = original_sizes[batch_start:batch_end]
+                current_batch_size = len(batch_images)
+                
+                logger.info(f"Processing batch {batch_start//batch_size + 1}/{(len(images) + batch_size - 1)//batch_size} "
+                           f"(images {batch_start}-{batch_end-1})")
+                
+                # Preprocess batch
+                batch_tensor = self.preprocess_image_batch(batch_images)
+                
+                # Get the global inference executor
+                executor = get_global_executor()
+                
+                # Use environment variable for timeout if not specified
+                if timeout is None:
+                    timeout = float(os.getenv("ML_INFERENCE_TIMEOUT", "60"))
+                
+                # Log resource usage before inference
+                if self.device.type == 'cuda':
+                    memory_before = torch.cuda.memory_allocated()
+                    logger.info(f"GPU memory before batch inference: {memory_before / 1024**2:.1f} MB")
+                
+                # Perform batch inference
+                try:
+                    batch_output = executor.execute_inference(
+                        model=model,
+                        input_tensor=batch_tensor,
+                        model_name=model_name,
+                        timeout=timeout * current_batch_size,  # Scale timeout with batch size
+                        image_size=batch_original_sizes[0]  # Representative size
+                    )
+                    logger.info(f"Batch inference completed, output shape: {batch_output.shape}")
+                    
+                except InferenceTimeoutError as e:
+                    self.is_processing = False
+                    self.current_model = None
+                    raise InferenceTimeoutError(
+                        model_name=model_name,
+                        timeout=timeout,
+                        image_size=f"batch_{current_batch_size}_images"
+                    )
+                    
+                except Exception as e:
+                    self.is_processing = False
+                    self.current_model = None
+                    raise InferenceError(f"Batch inference failed for {model_name}: {str(e)}") from e
+                
+                # Check memory after inference
+                if self.device.type == 'cuda':
+                    memory_after = torch.cuda.memory_allocated()
+                    logger.info(f"GPU memory after batch inference: {memory_after / 1024**2:.1f} MB")
+                
+                # Handle different output formats
+                if isinstance(batch_output, tuple):
+                    batch_output = batch_output[0]  # Take main output
+                
+                # Postprocess batch
+                batch_masks = self.postprocess_mask_batch(batch_output, batch_original_sizes, threshold)
+                
+                # Process each mask in the batch to extract polygons
+                for i, (mask, original_size, image) in enumerate(zip(batch_masks, batch_original_sizes, batch_images)):
+                    
+                    # If detect_holes is False, fill all holes
+                    if not detect_holes:
+                        h, w = mask.shape
+                        filled_mask = mask.copy()
+                        temp_contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                        for contour in temp_contours:
+                            cv2.fillPoly(filled_mask, [contour], 255)
+                        mask = filled_mask
+                    
+                    # Find contours
+                    if detect_holes:
+                        contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+                    else:
+                        contours, hierarchy = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    
+                    # Convert contours to polygons
+                    polygons = []
+                    filtered_count = 0
+                    polygon_id_counter = 1
+                    
+                    if hierarchy is not None:
+                        hierarchy = hierarchy[0]
+                    
+                    for j, contour in enumerate(contours):
+                        if cv2.contourArea(contour) < 50:
+                            filtered_count += 1
+                            continue
+                        
+                        original_points = len(contour)
+                        polygon_points = []
+                        
+                        for point in contour:
+                            x, y = point[0]
+                            polygon_points.append({"x": float(x), "y": float(y)})
+                        
+                        if len(polygon_points) >= 3:
+                            polygon_type = "external"
+                            parent_id = None
+                            
+                            if detect_holes and hierarchy is not None:
+                                parent_idx = hierarchy[j][3]
+                                if parent_idx != -1:
+                                    polygon_type = "internal"
+                                    # Find parent polygon ID
+                                    for k, existing_polygon in enumerate(polygons):
+                                        if existing_polygon.get("contour_index") == parent_idx:
+                                            parent_id = existing_polygon["id"]
+                                            break
+                            
+                            # Get confidence from the specific mask output
+                            mask_output = batch_output[i] if batch_output.dim() > 3 else batch_output
+                            confidence = float(torch.sigmoid(mask_output).max().item())
+                            
+                            polygon_data = {
+                                "id": f"polygon_{polygon_id_counter}",
+                                "points": polygon_points,
+                                "type": polygon_type,
+                                "class": "spheroid",
+                                "confidence": confidence,
+                                "vertices_count": original_points,
+                                "contour_index": j
+                            }
+                            
+                            if parent_id:
+                                polygon_data["parent_id"] = parent_id
+                            
+                            polygons.append(polygon_data)
+                            polygon_id_counter += 1
+                    
+                    # Remove temporary contour_index field
+                    for polygon in polygons:
+                        polygon.pop("contour_index", None)
+                    
+                    # Create result for this image
+                    result = {
+                        "model_used": model_name,
+                        "threshold_used": threshold,
+                        "image_size": {"width": original_size[0], "height": original_size[1]},
+                        "polygons": polygons,
+                        "processing_info": {
+                            "device": str(self.device),
+                            "num_polygons": len(polygons),
+                            "confidence_scores": [p["confidence"] for p in polygons],
+                            "batch_size": current_batch_size,
+                            "batch_position": i + 1
+                        }
+                    }
+                    
+                    all_results.append(result)
+                    
+                    logger.info(f"  Image {batch_start + i + 1}: {len(polygons)} polygons extracted")
+            
+            logger.info(f"Batch processing completed: {len(images)} images processed in batches of {batch_size}")
+            return all_results
             
         finally:
             # Reset processing state
@@ -434,7 +761,7 @@ class ModelLoader:
         return list(self.AVAILABLE_MODELS.keys())
     
     def get_model_info(self) -> Dict[str, Dict[str, Any]]:
-        """Get information about all available models"""
+        """Get information about all available models including batch configuration"""
         info = {}
         for name, config in self.AVAILABLE_MODELS.items():
             info[name] = {
@@ -442,7 +769,10 @@ class ModelLoader:
                 "description": f"{name.upper()} model for spheroid segmentation",
                 "has_pretrained": (self.base_path / config['pretrained_path']).exists(),
                 "has_finetuned": (self.base_path / config['finetuned_path']).exists(),
-                "recommended_threshold": 0.5
+                "recommended_threshold": 0.5,
+                "optimal_batch_size": self.get_optimal_batch_size(name),
+                "max_safe_batch_size": self.get_max_safe_batch_size(name),
+                "expected_throughput": self.batch_config.get_expected_throughput(name)
             }
         return info
     
@@ -486,10 +816,6 @@ class ModelLoader:
             return None
     
     def get_batch_limit(self, model_name: str) -> int:
-        """Get batch size limit for a specific model based on memory requirements"""
-        batch_limits = {
-            'hrnet': 8,
-            'resunet_small': 2,  # Reduced from 4 to 2 for CBAM-ResUNet stability
-            'resunet_advanced': 1  # Keep at 1 for MA-ResUNet due to high memory usage
-        }
-        return batch_limits.get(model_name, 1)
+        """Get batch size limit for a specific model based on memory requirements (legacy method)"""
+        # Use the new batch configuration system
+        return self.get_max_safe_batch_size(model_name)

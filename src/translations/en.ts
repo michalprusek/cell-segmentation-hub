@@ -1029,21 +1029,21 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet (Small)',
-          inferenceTime: 'Inference time: ~3.1 seconds',
+          inferenceTime: 'Inference time: ~0.18 seconds (GPU accelerated)',
           bestFor: 'Best for: Real-time processing and quick results',
           description:
             'Fast and efficient model ideal for rapid segmentation when speed is prioritized over maximum accuracy.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Medium)',
-          inferenceTime: 'Inference time: ~6.9 seconds',
+          inferenceTime: 'Inference time: ~0.20 seconds (GPU accelerated)',
           bestFor: 'Best for: Balanced speed and accuracy',
           description:
             'Optimal balance between processing speed and segmentation quality for most use cases.',
         },
         ma: {
           name: 'MA-ResUNet (Large)',
-          inferenceTime: 'Inference time: ~18.1 seconds',
+          inferenceTime: 'Inference time: ~1.2 seconds (GPU accelerated)',
           bestFor: 'Best for: Maximum precision',
           description:
             'Highest accuracy model with attention mechanisms for the most precise spheroid boundary detection.',

@@ -48,7 +48,7 @@ services:
       - REDIS_URL=redis://redis-green:6379
       - JWT_ACCESS_SECRET=1c4fb341de6e2812f81b0cd5287652d38518287b64289fb21346305bba6fe87d
       - JWT_REFRESH_SECRET=fb5a22af8446e7ac670ea277715ec4bdf9e233efd55f5ddac749edd8f2e9562b
-      - FROM_EMAIL=spheroseg@utia.cas.cz
+      - FROM_EMAIL=prusek@utia.cas.cz
       - SEGMENTATION_SERVICE_URL=http://green-ml:8000
       - CORS_ORIGIN=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
       - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,wss://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
@@ -57,10 +57,15 @@ services:
       # Email configuration - UTIA SMTP
       - EMAIL_SERVICE=smtp
       - SMTP_HOST=mail.utia.cas.cz
-      - SMTP_PORT=25
-      - SMTP_SECURE=false
-      - SMTP_AUTH=false
-      - SMTP_REQUIRE_TLS=true
+      - SMTP_PORT=465
+      - SMTP_SECURE=true
+      - SMTP_AUTH=true
+      - SMTP_REQUIRE_TLS=false
+      - SMTP_USER=prusek@utia.cas.cz
+      - SMTP_PASS=M1i2c3h4a5l6
+      - SKIP_EMAIL_SEND=false
+      - EMAIL_ALLOW_INSECURE=true
+      - EMAIL_TIMEOUT=30000
     volumes:
       - ./backend/uploads/green:/app/uploads
       - green-backend-logs:/app/logs
@@ -105,7 +110,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Green ML Service (port 5008)
+  # Green ML Service (port 5008) with GPU support
   green-ml:
     build:
       context: ./backend/segmentation
@@ -115,9 +120,22 @@ services:
       - "5008:8000"
     networks:
       - green-network
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+        limits:
+          memory: 8G
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=production
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - CUDA_DEVICE_ORDER=PCI_BUS_ID
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
     volumes:
       - ./backend/segmentation/weights:/app/weights
       - ./backend/uploads/green:/app/uploads
@@ -126,8 +144,9 @@ services:
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
-      timeout: 10s
-      retries: 3
+      timeout: 20s
+      retries: 5
+      start_period: 120s
 
   # Nginx Reverse Proxy (using unified config)
   nginx-green:

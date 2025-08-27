@@ -137,13 +137,20 @@ async def segment_image(
         
         logger.info(f"Processing image: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
         
-        # Perform segmentation
+        # Perform segmentation with timing
+        inference_start = time.time()
         result = loader.predict(image, model, threshold, detect_holes)
+        inference_time = time.time() - inference_start
         
         processing_time = time.time() - start_time
         
-        # Add processing time to result
+        # Add detailed timing and performance metrics
         result["processing_time"] = processing_time
+        result["inference_time"] = inference_time
+        result["preprocessing_time"] = processing_time - inference_time
+        result["device"] = str(loader.device)
+        result["gpu_enabled"] = torch.cuda.is_available()
+        result["batch_size_used"] = getattr(loader, 'last_batch_size', 1)
         result["success"] = True
         
         # Add warning metadata if no polygons detected
