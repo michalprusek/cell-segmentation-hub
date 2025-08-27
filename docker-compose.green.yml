@@ -54,6 +54,7 @@ services:
       - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,wss://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
       - ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
       - FRONTEND_URL=https://spherosegapp.utia.cas.cz
+      - UPLOAD_DIR=/app/uploads
       # Email configuration - uses environment variables
       - EMAIL_SERVICE=${EMAIL_SERVICE:-smtp}
       - SMTP_HOST=${SMTP_HOST:-localhost}
@@ -84,7 +85,7 @@ services:
       - green-network
     environment:
       - POSTGRES_USER=spheroseg
-      - POSTGRES_PASSWORD=spheroseg
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_DB=spheroseg_green
     volumes:
       - green-postgres-data:/var/lib/postgresql/data
