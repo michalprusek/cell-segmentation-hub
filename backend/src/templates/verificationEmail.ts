@@ -96,12 +96,12 @@ export function generateVerificationEmailHTML(data: VerificationEmailData): {
   // Validate and escape verification URL for security
   let safeUrl;
   try {
-    const url = new URL(data.verificationUrl);
+    const url = new globalThis.URL(data.verificationUrl);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       throw new Error('Invalid protocol');
     }
     safeUrl = escapeHtml(data.verificationUrl);
-  } catch (error) {
+  } catch {
     // Fall back to safe default if URL is invalid
     safeUrl = escapeHtml('#');
   }

@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma as _Prisma, PrismaClient } from '@prisma/client';
 
 /**
  * Secure Prisma model validation utility
@@ -75,12 +75,12 @@ export function validateFieldName(fieldName: string): string | null {
  * @param where - The where clause object
  * @returns Sanitized where clause or empty object if invalid
  */
-export function sanitizeWhereClause(where: any): any {
+export function sanitizeWhereClause(where: Record<string, unknown>): Record<string, unknown> {
   if (!where || typeof where !== 'object') {
     return {};
   }
   
-  const sanitized: any = {};
+  const sanitized: Record<string, unknown> = {};
   
   for (const [key, value] of Object.entries(where)) {
     const validKey = validateFieldName(key);
@@ -114,8 +114,8 @@ export function sanitizeWhereClause(where: any): any {
  * @param prisma - The Prisma client instance
  * @returns A function to safely access Prisma models
  */
-export function createSafeModelAccessor(prisma: any) {
-  return function getModel(modelName: string) {
+export function createSafeModelAccessor(prisma: PrismaClient): (modelName: string) => unknown {
+  return function getModel(modelName: string): unknown {
     const validModel = validatePrismaModel(modelName);
     if (!validModel) {
       throw new Error(`Invalid or unauthorized model name: ${modelName}`);

@@ -37,7 +37,7 @@ export const initializeDatabase = async (): Promise<PrismaClient> => {
     databaseMetrics.start();
     
     // Test the connection through the pool
-    const result = await prismaPool.executeQuery(async () => {
+    const _result = await prismaPool.executeQuery(async () => {
       return await prismaPool.getPrismaClient().$connect();
     }, { operationType: 'query', operationName: 'connection-test' });
     
@@ -109,7 +109,7 @@ export const checkDatabaseHealth = async (): Promise<{healthy: boolean; message:
       healthy: poolHealth.healthy,
       message: poolHealth.healthy ? 'Database connection pool is healthy' : 'Database connection pool issues detected'
     };
-  } catch (error) {
+  } catch {
     // Fallback to basic health check
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -165,7 +165,7 @@ export const executeMutation = async <T>(
 };
 
 export const executeTransaction = async <T>(
-  operation: (prisma: any) => Promise<T>,
+  operation: (prisma: PrismaClient) => Promise<T>,
   operationName?: string
 ): Promise<T> => {
   return prismaPool.executeTransaction(operation, operationName);

@@ -13,7 +13,7 @@ import {
   RequestIdGenerator,
   TraceCorrelatedLogger 
 } from '../utils/traceCorrelation';
-import { addSpanAttributes, addSpanEvent, markSpanError, injectTraceHeaders } from '../middleware/tracing';
+import { addSpanAttributes as _addSpanAttributes, addSpanEvent, markSpanError, injectTraceHeaders } from '../middleware/tracing';
 
 export interface SegmentationPoint {
   x: number;
@@ -293,9 +293,9 @@ export class SegmentationService {
         });
 
         // Create service call span within try/finally scope
-        let mlCallSpan: any;
+        let mlCallSpan: unknown;
         const mlCallStartTime = Date.now();
-        let response: any;
+        let response: unknown;
         
         try {
           mlCallSpan = CrossServiceTraceLinker.createServiceCallSpan({
@@ -519,9 +519,9 @@ export class SegmentationService {
         });
         
         if (axiosError.response?.status === 400) {
-          throw new Error(`Invalid image or segmentation parameters: ${(axiosError.response?.data as any)?.detail || 'Unknown error'}`);
+          throw new Error(`Invalid image or segmentation parameters: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Unknown error'}`)
         } else if (axiosError.response?.status === 500) {
-          throw new Error(`Segmentation service error: ${(axiosError.response?.data as any)?.detail || 'Internal ML service error'}`);
+          throw new Error(`Segmentation service error: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Internal ML service error'}`);
         } else if (axiosError.code === 'ECONNREFUSED') {
           throw new Error('ML služba není dostupná - připojení odmítnuto');
         } else if (axiosError.code === 'ETIMEDOUT') {
@@ -1194,7 +1194,7 @@ export class SegmentationService {
       }
     }, 0);
 
-    const averagePolygonsPerImage = totalSegmented > 0 ? totalPolygons / totalSegmented : 0;
+    const _averagePolygonsPerImage = totalSegmented > 0 ? totalPolygons / totalSegmented : 0;
     
     const averageConfidence = segmentationData.length > 0
       ? segmentationData.reduce((sum, data) => sum + (data.confidence || 0), 0) / segmentationData.length

@@ -60,7 +60,7 @@ export const testScenarios = {
       for (let i = 0; i < failureThreshold + 1; i++) {
         try {
           await breaker.call(() => mockOp.execute());
-        } catch (error) {
+        } catch {
           // Expected failures
         }
       }
@@ -133,7 +133,7 @@ export const testScenarios = {
   },
 
   // Scenario 4: Circuit handles mixed success/failure patterns
-  async testMixedPattern(breaker: CircuitBreaker): Promise<{ stats: any; finalState: CircuitState }> {
+  async testMixedPattern(breaker: CircuitBreaker): Promise<{ stats: unknown; finalState: CircuitState }> {
     const pattern = [true, true, false, true, false, false, true]; // Mixed pattern
     const mockOp = new MockOperation(pattern);
     
@@ -157,7 +157,7 @@ export const testScenarios = {
 
 // Chaos testing utilities for resilience testing
 export class ChaosTestRunner {
-  private operations: Array<() => Promise<any>> = [];
+  private operations: Array<() => Promise<unknown>> = [];
   private chaosScenarios: Array<{
     name: string;
     execute: () => Promise<void>;
@@ -165,7 +165,7 @@ export class ChaosTestRunner {
   }> = [];
 
   // Add operation to test
-  addOperation(name: string, operation: () => Promise<any>): void {
+  addOperation(name: string, operation: () => Promise<unknown>): void {
     this.operations.push(operation);
   }
 
@@ -173,7 +173,7 @@ export class ChaosTestRunner {
   addChaosScenario(
     name: string,
     scenario: () => Promise<void>,
-    probability: number = 0.1
+    probability = 0.1
   ): void {
     this.chaosScenarios.push({ name, execute: scenario, probability });
   }
@@ -181,7 +181,7 @@ export class ChaosTestRunner {
   // Run chaos test
   async runChaosTest(
     durationMs: number,
-    concurrentOperations: number = 10
+    concurrentOperations = 10
   ): Promise<ChaosTestResults> {
     const startTime = Date.now();
     const results: ChaosTestResults = {
@@ -199,7 +199,7 @@ export class ChaosTestRunner {
     logger.info(`Starting chaos test for ${durationMs}ms with ${concurrentOperations} concurrent operations`);
 
     while (Date.now() - startTime < durationMs) {
-      const promises: Promise<any>[] = [];
+      const promises: Promise<unknown>[] = [];
 
       // Execute concurrent operations
       for (let i = 0; i < concurrentOperations && this.operations.length > 0; i++) {
@@ -229,7 +229,7 @@ export class ChaosTestRunner {
   }
 
   private async executeOperationWithTracking(
-    operation: () => Promise<any>,
+    operation: () => Promise<unknown>,
     results: ChaosTestResults,
     responseTimes: number[]
   ): Promise<void> {
@@ -285,7 +285,7 @@ export interface ChaosTestResults {
 // Pre-built chaos scenarios
 export const chaosScenarios = {
   // Network delays
-  networkDelay: (minMs: number = 1000, maxMs: number = 5000) => async () => {
+  networkDelay: (minMs = 1000, maxMs = 5000) => async () => {
     const delay = Math.random() * (maxMs - minMs) + minMs;
     await new Promise(resolve => setTimeout(resolve, delay));
   },
@@ -297,14 +297,14 @@ export const chaosScenarios = {
   },
 
   // Memory pressure simulation
-  memoryPressure: (sizeMB: number = 100) => async () => {
-    const bigArray = new Array(sizeMB * 1024 * 1024).fill('x');
+  memoryPressure: (sizeMB = 100) => async () => {
+    const _bigArray = new Array(sizeMB * 1024 * 1024).fill('x');
     await new Promise(resolve => setTimeout(resolve, 1000));
     // Array will be garbage collected
   },
 
   // CPU spike simulation
-  cpuSpike: (durationMs: number = 1000) => async () => {
+  cpuSpike: (durationMs = 1000) => async () => {
     const endTime = Date.now() + durationMs;
     while (Date.now() < endTime) {
       void (Math.random() * Math.random()); // Busy work - void operator suppresses unused expression warning
@@ -334,7 +334,7 @@ export class CircuitBreakerTestSuite {
     this.testResults = [];
 
     // Test 1: Circuit opens on failures
-    const openingTest = await this.runTest(
+    const _openingTest = await this.runTest(
       'Circuit Opening',
       () => testScenarios.testCircuitOpening(this.breaker, 5)
     );
@@ -343,7 +343,7 @@ export class CircuitBreakerTestSuite {
     this.breaker.reset();
 
     // Test 2: Circuit recovers
-    const recoveryTest = await this.runTest(
+    const _recoveryTest = await this.runTest(
       'Circuit Recovery',
       () => testScenarios.testCircuitRecovery(this.breaker, 3, 1000)
     );
@@ -352,7 +352,7 @@ export class CircuitBreakerTestSuite {
     this.breaker.reset();
 
     // Test 3: Timeout handling
-    const timeoutTest = await this.runTest(
+    const _timeoutTest = await this.runTest(
       'Timeout Handling',
       () => testScenarios.testTimeoutHandling(this.breaker, 1000)
     );
@@ -361,7 +361,7 @@ export class CircuitBreakerTestSuite {
     this.breaker.reset();
 
     // Test 4: Mixed pattern handling
-    const mixedPatternTest = await this.runTest(
+    const _mixedPatternTest = await this.runTest(
       'Mixed Pattern',
       async () => {
         const result = await testScenarios.testMixedPattern(this.breaker);

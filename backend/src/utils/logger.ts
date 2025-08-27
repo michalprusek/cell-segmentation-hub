@@ -60,19 +60,23 @@ class Logger {
     // Console output is the core functionality of a logger
     switch (entry.level) {
       case LogLevel.ERROR:
-        // Error logging to console
+        // Core logger functionality - console output is required
+         
         console.error(message);
         break;
       case LogLevel.WARN:
-        // Warning logging to console
+        // Core logger functionality - console output is required
+         
         console.warn(message);
         break;
       case LogLevel.INFO:
-        // Info logging to console
+        // Core logger functionality - console output is required
+         
         console.info(message);
         break;
       case LogLevel.DEBUG:
-        // Debug logging to console
+        // Core logger functionality - console output is required
+         
         console.debug(message);
         break;
     }

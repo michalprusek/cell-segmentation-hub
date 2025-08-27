@@ -1,7 +1,7 @@
-import nodemailer, { Transporter, SendMailOptions } from 'nodemailer';
+import nodemailer, { Transporter, SendMailOptions as _SendMailOptions } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from '../utils/logger';
-import { getNumericEnvVar, getBooleanEnvVar } from '../utils/envValidator';
+import { getNumericEnvVar as _getNumericEnvVar, getBooleanEnvVar } from '../utils/envValidator';
 import { sendEmailWithRetry, parseEmailTimeout, updateEmailMetrics } from './emailRetryService';
 import { generatePasswordResetEmailHTML, generatePasswordResetEmailText, PasswordResetEmailData } from '../templates/passwordResetEmail';
 import { generateVerificationEmailHTML } from '../templates/verificationEmail';
@@ -160,7 +160,7 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
       }
       
       // Use retry logic for email sending
-      const result = await sendEmailWithRetry(_transporter, _config, options);
+      const _result = await sendEmailWithRetry(_transporter, _config, options);
       
       // Update metrics for successful send
       updateEmailMetrics(true, retryCount);
@@ -310,8 +310,8 @@ export async function sendProjectShareEmail(
       
       // Validate the project URL first
       try {
-        new URL(projectUrl);
-      } catch (error) {
+        new globalThis.URL(projectUrl);
+      } catch {
         throw new Error('Invalid project URL provided');
       }
       

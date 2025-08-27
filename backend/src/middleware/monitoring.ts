@@ -5,7 +5,7 @@ import {
   businessMetricsRegistry, 
   trackApiError, 
   trackFeatureUsage, 
-  trackImageProcessing,
+  trackImageProcessing as _trackImageProcessing,
   initializeBusinessMetricsCollection 
 } from '../monitoring/businessMetrics';
 
@@ -100,13 +100,13 @@ export function createMonitoringMiddleware(): (req: Request, res: Response, next
 
       // Track business metrics for errors
       if (res.statusCode >= 400) {
-        const userType = (req as any).user ? 'authenticated' : 'anonymous';
+        const userType = (req as Record<string, unknown>).user ? 'authenticated' : 'anonymous';
         const errorType = res.statusCode >= 500 ? 'server_error' : 'client_error';
         trackApiError(route, errorType, status, userType);
       }
 
       // Track feature usage for authenticated users
-      if ((req as any).user && res.statusCode < 400) {
+      if ((req as Record<string, unknown>).user && res.statusCode < 400) {
         const featureName = getFeatureNameFromRoute(route, method);
         if (featureName) {
           trackFeatureUsage(featureName, 'authenticated');

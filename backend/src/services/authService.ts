@@ -1,10 +1,10 @@
 import { prisma } from '../db';
 import { hashPassword, verifyPassword, generateSecureToken } from '../auth/password';
-import { generateTokenPair, JwtPayload, verifyRefreshToken } from '../auth/jwt';
+import { generateTokenPair, JwtPayload, verifyRefreshToken as _verifyRefreshToken } from '../auth/jwt';
 import { logger } from '../utils/logger';
 import { ApiError } from '../middleware/error';
 import * as EmailService from './emailService';
-import { generateFriendlyPassword } from '../utils/passwordGenerator';
+import { generateFriendlyPassword as _generateFriendlyPassword } from '../utils/passwordGenerator';
 import { getStorageProvider } from '../storage/index';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
@@ -210,7 +210,7 @@ export async function login(data: LoginData & { rememberMe?: boolean }): Promise
       const { accessToken, refreshToken } = generateTokenPair(tokenPayload, rememberMe);
 
       // Create session in Redis
-      const sessionId = await sessionService.createSession(
+      const _sessionId = await sessionService.createSession(
         refreshToken, 
         tokenPayload, 
         {

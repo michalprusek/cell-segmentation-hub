@@ -23,7 +23,8 @@ export function sanitizeUrl(url: string): string {
   if (!url) {return '';}
   
   try {
-    const parsed = new URL(url);
+    // Use global URL constructor available in Node.js
+    const parsed = new globalThis.URL(url);
     // Only allow http and https protocols
     if (!['http:', 'https:'].includes(parsed.protocol)) {
       return '';

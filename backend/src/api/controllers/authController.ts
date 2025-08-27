@@ -736,7 +736,7 @@ export const uploadAvatar = asyncHandler(async (req: Request, res: Response) => 
       } else {
         return ResponseHelper.validationError(res, 'Invalid cropData: expected object with x,y,width,height');
       }
-    } catch (parseError) {
+    } catch {
       return ResponseHelper.validationError(res, 'Invalid cropData JSON');
     }
   }

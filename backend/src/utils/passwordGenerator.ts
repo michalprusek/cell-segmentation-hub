@@ -119,8 +119,9 @@ function shuffleString(str: string): string {
   const array = str.split('');
   for (let i = array.length - 1; i > 0; i--) {
     const j = crypto.randomInt(0, i + 1);
-    const temp = array[i]!;
-    array[i] = array[j]!;
+    // Safe array access - indices are controlled by loop bounds
+    const temp = array[i] as string;
+    array[i] = array[j] as string;
     array[j] = temp;
   }
   return array.join('');

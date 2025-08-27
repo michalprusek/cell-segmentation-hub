@@ -3,7 +3,7 @@ import * as authController from '../controllers/authController';
 import { authenticate } from '../../middleware/auth';
 import { validateBody, validateParams } from '../../middleware/validation';
 import { uploadSingleImage, handleUploadError } from '../../middleware/upload';
-import { authLimiter, passwordResetLimiter, apiLimiter } from '../../middleware/rateLimiter';
+import { authLimiter, passwordResetLimiter } from '../../middleware/rateLimiter';
 import {
   loginSchema,
   registerSchema,
@@ -12,7 +12,7 @@ import {
   changePasswordSchema,
   refreshTokenSchema,
   resendVerificationSchema,
-  updateProfileSchema
+  updateProfileSchema as _updateProfileSchema
 } from '../../auth/validation';
 import { z } from 'zod';
 

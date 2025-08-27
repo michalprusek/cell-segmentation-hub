@@ -507,7 +507,7 @@ export const CachePatterns = {
   /**
    * Database query caching pattern
    */
-  dbQuery: <T>(queryKey: string, queryFn: () => Promise<T>) => 
+  dbQuery: <T>(queryKey: string, queryFn: () => Promise<T>): Promise<T> => 
     cacheService.getOrSet(queryKey, queryFn, { 
       ttl: CacheService.TTL_PRESETS.DATABASE_QUERY,
       namespace: 'db'
@@ -516,7 +516,7 @@ export const CachePatterns = {
   /**
    * API response caching pattern
    */
-  apiResponse: <T>(endpoint: string, params: Record<string, unknown>, responseFn: () => Promise<T>) => {
+  apiResponse: <T>(endpoint: string, params: Record<string, unknown>, responseFn: () => Promise<T>): Promise<T> => {
     const key = `${endpoint}:${JSON.stringify(params)}`;
     return cacheService.getOrSet(key, responseFn, { 
       ttl: CacheService.TTL_PRESETS.API_RESPONSE,
@@ -527,7 +527,7 @@ export const CachePatterns = {
   /**
    * User data caching pattern
    */
-  userData: <T>(userId: string, dataType: string, dataFn: () => Promise<T>) =>
+  userData: <T>(userId: string, dataType: string, dataFn: () => Promise<T>): Promise<T> =>
     cacheService.getOrSet(`${userId}:${dataType}`, dataFn, {
       ttl: CacheService.TTL_PRESETS.MEDIUM,
       namespace: 'user'
@@ -536,7 +536,7 @@ export const CachePatterns = {
   /**
    * File metadata caching pattern
    */
-  fileMetadata: <T>(fileId: string, metadataFn: () => Promise<T>) =>
+  fileMetadata: <T>(fileId: string, metadataFn: () => Promise<T>): Promise<T> =>
     cacheService.getOrSet(fileId, metadataFn, {
       ttl: CacheService.TTL_PRESETS.FILE_METADATA,
       namespace: 'file'
@@ -545,7 +545,7 @@ export const CachePatterns = {
   /**
    * Statistics caching pattern
    */
-  statistics: <T>(statType: string, statFn: () => Promise<T>) =>
+  statistics: <T>(statType: string, statFn: () => Promise<T>): Promise<T> =>
     cacheService.getOrSet(statType, statFn, {
       ttl: CacheService.TTL_PRESETS.STATISTICS,
       namespace: 'stats'

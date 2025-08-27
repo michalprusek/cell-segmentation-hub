@@ -567,7 +567,7 @@ export class ImageController {
       // Transform data for frontend with proper URLs
       const transformedImages = await Promise.all(images.map(async (image) => {
         let thumbnailData: {
-          polygons: any[];
+          polygons: unknown[];
           imageWidth: number | null;
           imageHeight: number | null;
           levelOfDetail: string;

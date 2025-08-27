@@ -6,11 +6,11 @@
 import { SendMailOptions } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from '../utils/logger';
-import { getNumericEnvVar, getBooleanEnvVar } from '../utils/envValidator';
+import { getNumericEnvVar, getBooleanEnvVar as _getBooleanEnvVar } from '../utils/envValidator';
 import { EmailServiceOptions } from './emailService';
 
 // Helper function to parse email timeout values
-export function parseEmailTimeout(envVar: string, defaultValue: number = 60000): number {
+export function parseEmailTimeout(envVar: string, defaultValue = 60000): number {
   return getNumericEnvVar(envVar, defaultValue);
 }
 
@@ -78,7 +78,7 @@ export function isRetriableError(error: Error): boolean {
  * Send email with timeout wrapper
  */
 export async function sendMailWithTimeout(
-  transporter: any,
+  transporter: Record<string, unknown>,
   mailOptions: SendMailOptions
 ): Promise<SMTPTransport.SentMessageInfo> {
   const EMAIL_TIMEOUT = parseEmailTimeout('EMAIL_TIMEOUT', 60000);
@@ -104,8 +104,8 @@ export async function sendMailWithTimeout(
  * Send email with retry logic using exponential backoff
  */
 export async function sendEmailWithRetry(
-  transporter: any,
-  config: any,
+  transporter: Record<string, unknown>,
+  config: Record<string, unknown>,
   options: EmailServiceOptions,
   retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG
 ): Promise<SMTPTransport.SentMessageInfo> {
@@ -201,7 +201,7 @@ const emailMetrics: EmailMetrics = {
 /**
  * Update email metrics after send attempt
  */
-export function updateEmailMetrics(success: boolean, retries: number = 0, error?: Error): void {
+export function updateEmailMetrics(success: boolean, retries = 0, error?: Error): void {
   if (success) {
     emailMetrics.sent++;
     emailMetrics.lastSuccess = new Date();

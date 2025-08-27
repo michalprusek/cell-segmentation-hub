@@ -58,7 +58,7 @@ export function getScaleValidationMessage(scale: number): string {
  */
 export function getScaleWarningMessage(scale: number): string {
   if (scale > SCALE_CONFIG.HIGH_SCALE_WARNING) {
-    const closestObjective = findClosestTypicalScale(scale);
+    const _closestObjective = findClosestTypicalScale(scale);
     return `High scale value detected: ${scale} µm/pixel. This is higher than typical microscopy scales. ` +
            `Common scales range from ${SCALE_CONFIG.TYPICAL_SCALES['100x_objective']} (100x objective) to ` +
            `${SCALE_CONFIG.TYPICAL_SCALES['4x_objective']} (4x objective) µm/pixel. ` +

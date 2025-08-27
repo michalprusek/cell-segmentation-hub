@@ -77,12 +77,12 @@ export async function withTransaction<T>(
           logger.debug(`Starting transaction (attempt ${attempt}/${retries})`, 'Database');
           return await operation(tx as PrismaTransactionClient);
         },
-        defaultOptions as any
+        defaultOptions as Record<string, unknown>
       );
       
       logger.debug('Transaction completed successfully', 'Database');
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error(`Transaction failed (attempt ${attempt}/${retries})`, error, 'Database');
       
       // Check if it's a deadlock or timeout error that we should retry

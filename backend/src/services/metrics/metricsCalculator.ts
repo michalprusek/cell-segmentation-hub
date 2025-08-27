@@ -6,7 +6,7 @@ import path from 'path';
 import { URL } from 'url';
 import { logger } from '../../utils/logger';
 import { config } from '../../utils/config';
-import { SCALE_CONFIG, validateScale, getScaleValidationMessage, getScaleWarningMessage } from './scaleConfig';
+import { SCALE_CONFIG as _SCALE_CONFIG, validateScale, getScaleValidationMessage as _getScaleValidationMessage, getScaleWarningMessage as _getScaleWarningMessage } from './scaleConfig';
 
 export interface PolygonMetrics {
   imageId: string;

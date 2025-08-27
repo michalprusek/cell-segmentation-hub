@@ -165,7 +165,7 @@ export function validateEnvironment(): ValidationResult {
     }
     
     // Use default value if not set
-    const actualValue = value || envVar.defaultValue!;
+    const actualValue = value || (envVar.defaultValue ?? '');
     
     // Validate the value if validator is provided
     if (envVar.validator && actualValue) {
@@ -230,24 +230,23 @@ export function requireValidEnvironment(): void {
   const result = validateEnvironment();
   
   if (!result.valid) {
-    console.error('\n🚨 ENVIRONMENT VALIDATION FAILED 🚨\n');
-    console.error('The following errors must be resolved:\n');
+    logger.error('🚨 ENVIRONMENT VALIDATION FAILED 🚨', undefined, 'EnvValidator');
+    logger.error('The following errors must be resolved:', undefined, 'EnvValidator');
     result.errors.forEach((error, index) => {
-      console.error(`  ${index + 1}. ${error}`);
+      logger.error(`  ${index + 1}. ${error}`, undefined, 'EnvValidator');
     });
-    console.error('\nPlease check your .env file or Docker environment configuration.');
-    console.error('Refer to .env.example for required variables.\n');
+    logger.error('Please check your .env file or Docker environment configuration.', undefined, 'EnvValidator');
+    logger.error('Refer to .env.example for required variables.', undefined, 'EnvValidator');
     
     // Exit with error code
     process.exit(1);
   }
   
   if (result.warnings.length > 0) {
-    console.warn('\n⚠️ Environment Warnings:\n');
+    logger.warn('⚠️ Environment Warnings:', 'EnvValidator');
     result.warnings.forEach((warning, index) => {
-      console.warn(`  ${index + 1}. ${warning}`);
+      logger.warn(`  ${index + 1}. ${warning}`, 'EnvValidator');
     });
-    console.warn('');
   }
 }
 
@@ -267,7 +266,7 @@ export function getEnvVar(name: string, defaultValue?: string): string {
  */
 export function getNumericEnvVar(name: string, defaultValue: number): number {
   const value = process.env[name];
-  if (!value) return defaultValue;
+  if (!value) {return defaultValue;}
   
   const parsed = parseInt(value, 10);
   if (isNaN(parsed)) {
@@ -283,7 +282,7 @@ export function getNumericEnvVar(name: string, defaultValue: number): number {
  */
 export function getBooleanEnvVar(name: string, defaultValue: boolean): boolean {
   const value = process.env[name];
-  if (!value) return defaultValue;
+  if (!value) {return defaultValue;}
   
   return value.toLowerCase() === 'true' || value === '1';
 }

@@ -6,6 +6,8 @@ if (process.env.NODE_ENV !== 'test') {
   try {
     initializeTracing();
   } catch (error) {
+    // Critical system error - console output is necessary for startup issues
+     
     console.error('Failed to initialize OpenTelemetry tracing:', error);
   }
 }
@@ -28,7 +30,7 @@ import { WebSocketService } from './services/websocketService';
 import { prisma } from './db';
 import { initializeStorageDirectories } from './utils/initializeStorage';
 import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
-import { sessionService } from './services/sessionService';
+import { sessionService as _sessionService } from './services/sessionService';
 import { initializeRateLimitingSystem, cleanupRateLimitingSystem } from './monitoring/rateLimitingInitialization';
 import { 
   createTracingMiddleware, 

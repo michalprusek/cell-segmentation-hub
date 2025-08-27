@@ -10,16 +10,16 @@ import { SegmentationPolygon } from './segmentationService';
 import {
   WebSocketEvent,
   SegmentationUpdateData,
-  SegmentationCompletedData,
-  SegmentationFailedData,
-  SegmentationProgressData,
+  SegmentationCompletedData as _SegmentationCompletedData,
+  SegmentationFailedData as _SegmentationFailedData,
+  SegmentationProgressData as _SegmentationProgressData,
   QueueStatsData,
-  QueuePositionData,
-  ConnectionStatusData,
-  AuthenticationErrorData,
+  QueuePositionData as _QueuePositionData,
+  ConnectionStatusData as _ConnectionStatusData,
+  AuthenticationErrorData as _AuthenticationErrorData,
   getUserRoom,
   getProjectRoom,
-  getBatchRoom
+  getBatchRoom as _getBatchRoom
 } from '../types/websocket';
 
 interface AuthenticatedSocket extends Socket {
