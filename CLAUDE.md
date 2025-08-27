@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## ⚠️ PRODUCTION SAFETY WARNING ⚠️
+
+**VERY IMPORTANT: NEVER modify, deploy to, or interfere with the GREEN (production) environment unless explicitly instructed by the user!**
+
+- **Green Environment (Ports 5000-5008)**: This is PRODUCTION - DO NOT TOUCH without explicit permission
+- **Blue Environment (Ports 4000-4008)**: This is staging - safe for testing
+- **Local Development (Ports 3000-3001)**: Use this for development work
+
+**If the user asks to "run the app" or "test changes", ALWAYS use the local development environment (make up), NOT the green production environment!**
+
 ## Development Commands
 
 **CRITICAL: This project runs entirely in Docker containers - DO NOT use npm commands directly!**
