@@ -1100,21 +1100,21 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet (Malý)',
-          inferenceTime: 'Doba inference: ~3,1 sekundy',
+          inferenceTime: 'Doba inference: ~0,18 sekundy (GPU akcelerace)',
           bestFor: 'Nejlepší pro: Zpracování v reálném čase a rychlé výsledky',
           description:
             'Rychlý a efektivní model ideální pro rychlou segmentaci, když je rychlost upřednostňována před maximální přesností.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Střední)',
-          inferenceTime: 'Doba inference: ~6,9 sekundy',
+          inferenceTime: 'Doba inference: ~0,20 sekundy (GPU akcelerace)',
           bestFor: 'Nejlepší pro: Vyvážená rychlost a přesnost',
           description:
             'Optimální rovnováha mezi rychlostí zpracování a kvalitou segmentace pro většinu případů použití.',
         },
         ma: {
           name: 'MA-ResUNet (Velký)',
-          inferenceTime: 'Doba inference: ~18,1 sekundy',
+          inferenceTime: 'Doba inference: ~1,2 sekundy (GPU akcelerace)',
           bestFor: 'Nejlepší pro: Maximální přesnost',
           description:
             'Nejpřesnější model s mechanismy pozornosti pro nejpřesnější detekci hranic sféroidů.',

@@ -1,0 +1,36 @@
+[Unit]
+Description=Automatic Disk Cleanup Service
+Documentation=https://github.com/your-org/cell-segmentation-hub
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=cvat
+Group=cvat
+ExecStart=/home/cvat/cell-segmentation-hub/scripts/auto-cleanup-disk.sh
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=disk-cleanup
+
+# Security hardening
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/log /var/lib/docker /tmp /var/tmp /home/cvat/.cache /home/cvat/cell-segmentation-hub
+
+# Restart policy
+Restart=on-failure
+RestartSec=300
+
+# Resource limits
+CPUQuota=50%
+MemoryMax=2G
+IOWeight=10
+
+# Timeout - cleanup should finish within 30 minutes
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target
