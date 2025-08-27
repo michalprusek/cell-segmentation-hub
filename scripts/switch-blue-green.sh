@@ -46,6 +46,13 @@ EOF
 
 # Funkce pro zjištění aktuálního prostředí
 get_current_env() {
+    # Check if nginx config exists first
+    if [ ! -f "$NGINX_CONF" ] || [ ! -r "$NGINX_CONF" ]; then
+        echo "unknown"
+        echo "Error: Nginx config file not found or not readable: $NGINX_CONF" >&2
+        return 0  # Return 0 to prevent script exit under set -e
+    fi
+    
     if grep -q "server blue-backend:3001" "$NGINX_CONF" 2>/dev/null; then
         echo "blue"
     elif grep -q "server green-backend:3001" "$NGINX_CONF" 2>/dev/null; then
@@ -146,7 +153,8 @@ switch_environment() {
     fi
     
     # Záloha konfigurace
-    cp "$NGINX_CONF" "${NGINX_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    BACKUP_FILE="${NGINX_CONF}.backup.$(date +%Y%m%d_%H%M%S)"
+    cp "$NGINX_CONF" "$BACKUP_FILE"
     echo -e "${GREEN}[✓]${NC} Záloha nginx konfigurace vytvořena"
     
     # Přepnutí nginx upstream serverů
@@ -170,7 +178,7 @@ switch_environment() {
     else
         echo -e "${RED}[CHYBA]${NC} Nginx konfigurace je neplatná!"
         echo -e "${YELLOW}[INFO]${NC} Vracím původní konfiguraci..."
-        cp "${NGINX_CONF}.backup.$(date +%Y%m%d_%H%M%S)" "$NGINX_CONF"
+        cp "$BACKUP_FILE" "$NGINX_CONF"
         exit 1
     fi
     

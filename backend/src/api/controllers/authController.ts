@@ -26,7 +26,7 @@ import type {
  *     tags:
  *       - Authentication
  *     summary: Registrace nového uživatele
- *     description: Vytvoří nový uživatelský účet
+ *     description: Vytvoří nový uživatelský účet a odešle ověřovací email
  *     requestBody:
  *       required: true
  *       content:
@@ -164,6 +164,25 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
  *         description: Nevalidní vstupní data
  *       401:
  *         description: Neplatné přihlašovací údaje
+ *       403:
+ *         description: Email není ověřen (pokud je REQUIRE_EMAIL_VERIFICATION=true)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                       example: "FORBIDDEN"
+ *                     message:
+ *                       type: string
+ *                       example: "Email musí být ověřen před přihlášením. Zkontrolujte svou emailovou schránku nebo požádejte o nový ověřovací email."
  */
 export const login = asyncHandler(async (req: Request, res: Response) => {
   // Validate email and password using Zod schema
@@ -378,7 +397,63 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
 });
 
 /**
- * Verify email
+ * @swagger
+ * /auth/verify-email/{token}:
+ *   get:
+ *     tags:
+ *       - Authentication
+ *     summary: Ověření emailové adresy pomocí tokenu
+ *     description: Ověří emailovou adresu uživatele pomocí tokenu odeslaného emailem při registraci
+ *     parameters:
+ *       - name: token
+ *         in: path
+ *         required: true
+ *         description: Ověřovací token obdržený v registračním emailu
+ *         schema:
+ *           type: string
+ *           minLength: 1
+ *           example: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0"
+ *     responses:
+ *       200:
+ *         description: Email byl úspěšně ověřen
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Email byl úspěšně ověřen."
+ *                 message:
+ *                   type: string
+ *                   example: "Email byl úspěšně ověřen."
+ *       400:
+ *         description: Neplatný nebo expirovaný ověřovací token
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                       example: "BAD_REQUEST"
+ *                     message:
+ *                       type: string
+ *                       example: "Neplatný ověřovací token"
+ *       404:
+ *         description: Token nebyl nalezen
  */
 export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
   const { token } = req.params;
@@ -393,7 +468,70 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
- * Resend verification email
+ * @swagger
+ * /auth/resend-verification:
+ *   post:
+ *     tags:
+ *       - Authentication
+ *     summary: Opětovné odeslání ověřovacího emailu
+ *     description: Odešle nový ověřovací email uživateli, pokud ještě není ověřen
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Emailová adresa uživatele
+ *                 example: "jan.novak@example.com"
+ *     responses:
+ *       200:
+ *         description: Ověřovací email byl odeslán (pokud účet existuje a není ověřen)
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     message:
+ *                       type: string
+ *                       example: "Pokud email existuje a není ověřen, byl odeslán ověřovací email."
+ *                     verificationToken:
+ *                       type: string
+ *                       description: "Pouze v development prostředí pro testování"
+ *                       example: "a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6"
+ *                 message:
+ *                   type: string
+ *                   example: "Pokud email existuje a není ověřen, byl odeslán ověřovací email."
+ *       400:
+ *         description: Neplatná emailová adresa
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: false
+ *                 error:
+ *                   type: object
+ *                   properties:
+ *                     code:
+ *                       type: string
+ *                       example: "VALIDATION_ERROR"
+ *                     message:
+ *                       type: string
+ *                       example: "Validation failed"
  */
 export const resendVerificationEmail = asyncHandler(async (req: Request, res: Response) => {
   const { email } = req.body;
@@ -560,7 +698,7 @@ export const uploadAvatar = asyncHandler(async (req: Request, res: Response) => 
         await fs.unlink(imageFile.path);
       } catch (err) {
         // Log but don't fail the request
-        console.debug('Failed to cleanup temporary file:', err);
+        logger.debug('Failed to cleanup temporary file', err, { context: 'authController' });
       }
     }
     const maxSizeMB = Math.round(MAX_AVATAR_SIZE_BYTES / (1024 * 1024));

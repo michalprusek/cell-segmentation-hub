@@ -92,6 +92,15 @@ services:
       - FROM_EMAIL=${FROM_EMAIL}
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
+      # OpenTelemetry configuration
+      - OTEL_SERVICE_NAME=spheroseg-backend
+      - OTEL_SERVICE_VERSION=1.0.0
+      - OTEL_SERVICE_NAMESPACE=spheroseg
+      - JAEGER_ENDPOINT=http://jaeger:14268/api/traces
+      - OTEL_ENABLED_EXPORTERS=jaeger,console
+      - OTEL_SAMPLING_RATE=${OTEL_SAMPLING_RATE:-0.1}
+      - OTEL_ENABLE_CONSOLE=true
+      - OTEL_PROMETHEUS_PORT=9464
     ports:
       - "3001:3001"
     volumes:
@@ -105,6 +114,8 @@ services:
       redis:
         condition: service_healthy
       ml-service:
+        condition: service_started
+      jaeger:
         condition: service_started
     networks:
       - spheroseg-network
@@ -182,6 +193,24 @@ services:
     ports:
       - "1025:1025"  # SMTP server
       - "8025:8025"  # Web UI
+    networks:
+      - spheroseg-network
+    restart: unless-stopped
+
+  # Jaeger distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: spheroseg-jaeger
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+    ports:
+      - "16686:16686"  # Jaeger UI
+      - "14268:14268"  # Jaeger collector HTTP
+      - "14250:14250"  # Jaeger collector gRPC
+      - "9411:9411"    # Zipkin collector
+      - "4317:4317"    # OTLP gRPC
+      - "4318:4318"    # OTLP HTTP
     networks:
       - spheroseg-network
     restart: unless-stopped

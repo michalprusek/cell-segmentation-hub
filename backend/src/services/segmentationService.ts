@@ -2,11 +2,18 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import FormData from 'form-data';
 import { v4 as uuidv4 } from 'uuid';
+import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { ImageService } from './imageService';
 import { ThumbnailService } from './thumbnailService';
 import { getStorageProvider } from '../storage/index';
+import { 
+  CrossServiceTraceLinker, 
+  RequestIdGenerator,
+  TraceCorrelatedLogger 
+} from '../utils/traceCorrelation';
+import { addSpanAttributes, addSpanEvent, markSpanError, injectTraceHeaders } from '../middleware/tracing';
 
 export interface SegmentationPoint {
   x: number;
@@ -166,148 +173,364 @@ export class SegmentationService {
    * Request segmentation for an image
    */
   async requestSegmentation(request: SegmentationRequest): Promise<SegmentationResponse> {
-    const { imageId, model = 'hrnet', threshold = 0.5, userId, detectHoles } = request;
+    const tracer = trace.getTracer('segmentation-service', '1.0.0');
+    const requestId = RequestIdGenerator.generateRequestId();
+    
+    return tracer.startActiveSpan('segmentation.request', {
+      kind: SpanKind.INTERNAL,
+      attributes: {
+        'segmentation.image_id': request.imageId,
+        'segmentation.model': request.model || 'hrnet',
+        'segmentation.threshold': request.threshold || 0.5,
+        'segmentation.detect_holes': request.detectHoles || false,
+        'segmentation.user_id': request.userId,
+        'request.id': requestId,
+        'operation.name': 'segmentation_request',
+      },
+    }, async (span) => {
+      const { imageId, model = 'hrnet', threshold = 0.5, userId, detectHoles } = request;
+      const startTime = Date.now();
 
-    logger.info('Starting segmentation request', 'SegmentationService', {
-      imageId,
-      model,
-      threshold,
-      detectHoles,
-      userId
-    });
-
-    // Get image details and verify ownership
-    const image = await this.imageService.getImageById(imageId, userId);
-    if (!image) {
-      throw new Error('Image not found or no access');
-    }
-
-    // Update image status to processing
-    await this.imageService.updateSegmentationStatus(imageId, 'processing', userId);
-
-    try {
-      // Get image buffer from storage
-      const storage = getStorageProvider();
-      const imageBuffer = await storage.getBuffer(image.originalPath);
-
-      if (!imageBuffer) {
-        throw new Error('Failed to load image from storage');
-      }
-
-      // Prepare form data for Python service
-      const formData = new FormData();
-      formData.append('file', imageBuffer, {
-        filename: image.name,
-        contentType: image.mimeType || 'image/jpeg'
-      });
-
-      logger.info('Sending segmentation request to ML service', 'SegmentationService', {
-        imageId,
-        imageName: image.name,
-        imageSize: imageBuffer.length,
-        model,
-        threshold,
-        detectHoles,
-        mlServiceUrl: this.pythonServiceUrl
-      });
-
-      // Add model, threshold and detect_holes parameters to form data
-      formData.append('model', model);
-      formData.append('threshold', threshold.toString());
-      formData.append('detect_holes', (detectHoles ?? true).toString());
-
-      // Make request to Python segmentation service
-      const response = await this.httpClient.post('/api/v1/segment', formData, {
-        headers: {
-          ...formData.getHeaders(),
-        },
-        maxBodyLength: Infinity,
-        maxContentLength: Infinity
-      });
-
-      const segmentationResult: SegmentationResponse = response.data;
-
-      // Validate segmentation results - check for empty polygon results
-      const polygonCount = segmentationResult.polygons?.length || 0;
-      if (polygonCount === 0) {
-        logger.warn('Segmentation returned 0 polygons - this may indicate an issue', 'SegmentationService', {
+      try {
+        TraceCorrelatedLogger.info('Starting segmentation request', {
           imageId,
-          model: segmentationResult.model_used,
-          threshold: segmentationResult.threshold_used,
-          imageName: image.name,
-          imageSize: segmentationResult.image_size
+          model,
+          threshold,
+          detectHoles,
+          userId,
+          requestId
+        });
+
+        addSpanEvent('segmentation.request.start', {
+          'image_id': imageId,
+          'model_name': model,
+          'user_id': userId,
+        });
+
+        // Get image details and verify ownership
+        span.addEvent('database.image.fetch.start');
+        const image = await this.imageService.getImageById(imageId, userId);
+        if (!image) {
+          const error = new Error('Image not found or no access');
+          markSpanError(error, {
+            'error.type': 'authorization_error',
+            'image_id': imageId,
+            'user_id': userId,
+          });
+          throw error;
+        }
+        
+        span.setAttributes({
+          'image.name': image.name,
+          'image.width': image.width || 0,
+          'image.height': image.height || 0,
+          'image.size_bytes': image.size || 0,
+          'image.mime_type': image.mimeType || 'unknown',
         });
         
-        // Still save the results but with a warning flag
-        segmentationResult.error = 'No polygons detected - image may not contain detectable cells or threshold may need adjustment';
-      }
+        span.addEvent('database.image.fetch.complete', {
+          'image_name': image.name,
+          'image_dimensions': `${image.width}x${image.height}`,
+        });
 
-      // Save segmentation results to database
-      await this.saveSegmentationResultsInternal(imageId, segmentationResult);
+        // Update image status to processing
+        span.addEvent('database.status.update.start');
+        await this.imageService.updateSegmentationStatus(imageId, 'processing', userId);
+        span.addEvent('database.status.update.complete');
 
-      // Update image status - use 'segmented' even with 0 polygons to allow user review
-      await this.imageService.updateSegmentationStatus(imageId, 'segmented', userId);
+        // Get image buffer from storage
+        span.addEvent('storage.image.fetch.start');
+        const storage = getStorageProvider();
+        const imageBuffer = await storage.getBuffer(image.originalPath);
+        
+        span.setAttributes({
+          'storage.buffer_size': imageBuffer.length,
+          'storage.path': image.originalPath,
+        });
+        
+        span.addEvent('storage.image.fetch.complete', {
+          'buffer_size': imageBuffer.length,
+        });
 
-      // Calculate vertices statistics for logging
-      const verticesStats = segmentationResult.polygons.map(p => p.points?.length || 0);
-      const totalVertices = verticesStats.reduce((sum, count) => sum + count, 0);
-      const avgVertices = verticesStats.length > 0 ? totalVertices / verticesStats.length : 0;
-      const maxVertices = Math.max(...verticesStats, 0);
-      const minVertices = Math.min(...verticesStats, 0);
-
-      logger.info('Segmentation completed successfully', 'SegmentationService', {
-        imageId,
-        model: segmentationResult.model_used,
-        polygonCount: segmentationResult.polygons.length,
-        processingTime: segmentationResult.processing_time,
-        verticesStats: {
-          total: totalVertices,
-          average: Math.round(avgVertices),
-          max: maxVertices,
-          min: minVertices,
-          perPolygon: verticesStats
+        if (!imageBuffer) {
+          const error = new Error('Failed to load image from storage');
+          markSpanError(error, {
+            'error.type': 'storage_error',
+            'storage.path': image.originalPath,
+          });
+          throw error;
         }
-      });
 
-      return segmentationResult;
+        // Prepare form data for Python service
+        span.addEvent('ml_service.request.prepare.start');
+        const formData = new FormData();
+        formData.append('file', imageBuffer, {
+          filename: image.name,
+          contentType: image.mimeType || 'image/jpeg'
+        });
 
-    } catch (error) {
-      // Update image status to failed
-      await this.imageService.updateSegmentationStatus(imageId, 'failed', userId);
+        // Add model, threshold and detect_holes parameters to form data
+        formData.append('model', model);
+        formData.append('threshold', threshold.toString());
+        formData.append('detect_holes', (detectHoles ?? true).toString());
 
-      logger.error('Segmentation failed', error instanceof Error ? error : undefined, 'SegmentationService', {
-        imageId,
-        userId
-      });
+        span.addEvent('ml_service.request.prepare.complete', {
+          'form_data.file_size': imageBuffer.length,
+          'form_data.model': model,
+          'form_data.threshold': threshold,
+          'form_data.detect_holes': detectHoles ?? true,
+        });
 
-      const axiosError = error as AxiosError;
-      
-      // Log detailed error information
-      logger.error('ML service communication error', error instanceof Error ? error : undefined, 'SegmentationService', {
-        imageId,
-        userId,
-        model,
-        threshold,
-        httpStatus: axiosError.response?.status,
-        httpStatusText: axiosError.response?.statusText,
-        responseData: axiosError.response?.data,
-        requestUrl: axiosError.config?.url,
-        requestMethod: axiosError.config?.method,
-        mlServiceUrl: this.pythonServiceUrl
-      });
-      
-      if (axiosError.response?.status === 400) {
-        throw new Error(`Invalid image or segmentation parameters: ${(axiosError.response?.data as any)?.detail || 'Unknown error'}`);
-      } else if (axiosError.response?.status === 500) {
-        throw new Error(`Segmentation service error: ${(axiosError.response?.data as any)?.detail || 'Internal ML service error'}`);
-      } else if (axiosError.code === 'ECONNREFUSED') {
-        throw new Error('ML služba není dostupná - připojení odmítnuto');
-      } else if (axiosError.code === 'ETIMEDOUT') {
-        throw new Error('ML služba neodpovídá - timeout');
-      } else {
-        throw new Error(`Segmentation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        TraceCorrelatedLogger.info('Sending segmentation request to ML service', {
+          imageId,
+          imageName: image.name,
+          imageSize: imageBuffer.length,
+          model,
+          threshold,
+          detectHoles,
+          mlServiceUrl: this.pythonServiceUrl,
+          requestId
+        });
+
+        // Create service call span within try/finally scope
+        let mlCallSpan: any;
+        const mlCallStartTime = Date.now();
+        let response: any;
+        
+        try {
+          mlCallSpan = CrossServiceTraceLinker.createServiceCallSpan({
+            targetService: 'ml-service',
+            operationName: 'segment',
+            method: 'POST',
+            endpoint: '/api/v1/segment',
+            requestId,
+          });
+
+          // Inject trace headers for cross-service correlation
+          const traceHeaders = injectTraceHeaders();
+          
+          // Make request to Python segmentation service
+          response = await this.httpClient.post('/api/v1/segment', formData, {
+            headers: {
+              ...formData.getHeaders(),
+              ...traceHeaders,
+              'x-request-id': requestId,
+              'x-user-id': userId,
+              'x-operation': 'segmentation_request',
+            },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity
+          });
+
+          const mlCallDuration = Date.now() - mlCallStartTime;
+          
+          if (mlCallSpan) {
+            mlCallSpan.setAttributes({
+              'http.response.status_code': response.status,
+              'ml.call.duration_ms': mlCallDuration,
+              'ml.call.success': true,
+              'response.size_bytes': JSON.stringify(response.data).length,
+            });
+            mlCallSpan.setStatus({ code: SpanStatusCode.OK });
+          }
+
+          span.addEvent('ml_service.request.complete', {
+            'response.status': response.status,
+            'response.duration_ms': mlCallDuration,
+          });
+        } catch (mlError) {
+          const mlCallDuration = Date.now() - mlCallStartTime;
+          
+          if (mlCallSpan) {
+            mlCallSpan.setAttributes({
+              'ml.call.duration_ms': mlCallDuration,
+              'ml.call.success': false,
+            });
+            
+            mlCallSpan.setStatus({ 
+              code: SpanStatusCode.ERROR, 
+              message: (mlError as Error).message 
+            });
+          }
+          
+          markSpanError(mlError as Error, {
+            'error.type': 'ml_service_error',
+            'ml.service.url': this.pythonServiceUrl,
+            'ml.call.duration_ms': mlCallDuration,
+          });
+          
+          throw mlError;
+        } finally {
+          if (mlCallSpan) {
+            mlCallSpan.end();
+          }
+        }
+
+        // Validate response data exists before assignment
+        if (!response || !response.data) {
+          const error = new Error('Invalid response from ML service: missing data');
+          logger.error('ML service response validation failed', { response, requestId });
+          throw error;
+        }
+
+        const segmentationResult: SegmentationResponse = response.data;
+
+        // Validate and trace segmentation results
+        const polygonCount = segmentationResult.polygons?.length || 0;
+        const totalDuration = Date.now() - startTime;
+        
+        span.setAttributes({
+          'segmentation.result.polygon_count': polygonCount,
+          'segmentation.result.model_used': segmentationResult.model_used,
+          'segmentation.result.threshold_used': segmentationResult.threshold_used,
+          'segmentation.result.processing_time_ms': segmentationResult.processing_time || 0,
+          'segmentation.result.confidence': segmentationResult.confidence || 0,
+          'segmentation.result.total_duration_ms': totalDuration,
+          'segmentation.result.image_width': segmentationResult.image_size?.width || 0,
+          'segmentation.result.image_height': segmentationResult.image_size?.height || 0,
+        });
+        
+        span.addEvent('segmentation.results.validation.start');
+        
+        if (polygonCount === 0) {
+          span.addEvent('segmentation.results.warning', {
+            'warning.type': 'no_polygons_detected',
+            'model_used': segmentationResult.model_used,
+            'threshold_used': segmentationResult.threshold_used,
+          });
+          
+          TraceCorrelatedLogger.warn('Segmentation returned 0 polygons - this may indicate an issue', {
+            imageId,
+            model: segmentationResult.model_used,
+            threshold: segmentationResult.threshold_used,
+            imageName: image.name,
+            imageSize: segmentationResult.image_size,
+            requestId
+          });
+          
+          // Still save the results but with a warning flag
+          segmentationResult.error = 'No polygons detected - image may not contain detectable cells or threshold may need adjustment';
+        }
+
+        // Save segmentation results to database
+        span.addEvent('database.results.save.start');
+        await this.saveSegmentationResultsInternal(imageId, segmentationResult);
+        span.addEvent('database.results.save.complete');
+
+        // Update image status - use 'segmented' even with 0 polygons to allow user review
+        span.addEvent('database.status.final_update.start');
+        await this.imageService.updateSegmentationStatus(imageId, 'segmented', userId);
+        span.addEvent('database.status.final_update.complete');
+
+        // Calculate vertices statistics for logging and tracing
+        const verticesStats = segmentationResult.polygons.map(p => p.points?.length || 0);
+        const totalVertices = verticesStats.reduce((sum, count) => sum + count, 0);
+        const avgVertices = verticesStats.length > 0 ? totalVertices / verticesStats.length : 0;
+        const maxVertices = Math.max(...verticesStats, 0);
+        const minVertices = Math.min(...verticesStats, 0);
+
+        span.setAttributes({
+          'segmentation.vertices.total': totalVertices,
+          'segmentation.vertices.average': Math.round(avgVertices),
+          'segmentation.vertices.max': maxVertices,
+          'segmentation.vertices.min': minVertices,
+        });
+
+        span.addEvent('segmentation.request.complete', {
+          'success': true,
+          'polygon_count': polygonCount,
+          'total_duration_ms': totalDuration,
+          'processing_time_ms': segmentationResult.processing_time || 0,
+        });
+
+        TraceCorrelatedLogger.info('Segmentation completed successfully', {
+          imageId,
+          model: segmentationResult.model_used,
+          polygonCount: segmentationResult.polygons.length,
+          processingTime: segmentationResult.processing_time,
+          totalDuration,
+          requestId,
+          verticesStats: {
+            total: totalVertices,
+            average: Math.round(avgVertices),
+            max: maxVertices,
+            min: minVertices,
+            perPolygon: verticesStats
+          }
+        });
+
+        span.setStatus({ code: SpanStatusCode.OK });
+        return segmentationResult;
+
+      } catch (error) {
+        const totalDuration = Date.now() - startTime;
+        const axiosError = error as AxiosError;
+        
+        // Add error attributes to span
+        span.setAttributes({
+          'segmentation.failed': true,
+          'segmentation.error.type': axiosError.response?.status ? 'http_error' : 'network_error',
+          'segmentation.error.status_code': axiosError.response?.status || 0,
+          'segmentation.error.duration_ms': totalDuration,
+        });
+        
+        span.addEvent('segmentation.request.failed', {
+          'error_type': axiosError.response?.status ? 'http_error' : 'network_error',
+          'status_code': axiosError.response?.status,
+          'duration_ms': totalDuration,
+        });
+        
+        // Mark span as error
+        markSpanError(error as Error, {
+          'segmentation.image_id': imageId,
+          'segmentation.user_id': userId,
+          'segmentation.model': model,
+          'segmentation.threshold': threshold,
+          'ml_service.url': this.pythonServiceUrl,
+          'http.status_code': axiosError.response?.status,
+          'http.status_text': axiosError.response?.statusText,
+          'error.request_url': axiosError.config?.url,
+          'error.request_method': axiosError.config?.method,
+        });
+
+        // Update image status to failed
+        try {
+          await this.imageService.updateSegmentationStatus(imageId, 'failed', userId);
+          span.addEvent('database.status.failed_update.complete');
+        } catch (statusError) {
+          span.addEvent('database.status.failed_update.error', {
+            'error': (statusError as Error).message,
+          });
+        }
+
+        TraceCorrelatedLogger.error('Segmentation failed', error as Error, {
+          imageId,
+          userId,
+          model,
+          threshold,
+          requestId,
+          totalDuration,
+          httpStatus: axiosError.response?.status,
+          httpStatusText: axiosError.response?.statusText,
+          responseData: axiosError.response?.data,
+          requestUrl: axiosError.config?.url,
+          requestMethod: axiosError.config?.method,
+          mlServiceUrl: this.pythonServiceUrl
+        });
+        
+        if (axiosError.response?.status === 400) {
+          throw new Error(`Invalid image or segmentation parameters: ${(axiosError.response?.data as any)?.detail || 'Unknown error'}`);
+        } else if (axiosError.response?.status === 500) {
+          throw new Error(`Segmentation service error: ${(axiosError.response?.data as any)?.detail || 'Internal ML service error'}`);
+        } else if (axiosError.code === 'ECONNREFUSED') {
+          throw new Error('ML služba není dostupná - připojení odmítnuto');
+        } else if (axiosError.code === 'ETIMEDOUT') {
+          throw new Error('ML služba neodpovídá - timeout');
+        } else {
+          throw new Error(`Segmentation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       }
-    }
+    });
   }
 
   /**
@@ -1060,3 +1283,5 @@ export class SegmentationService {
     };
   }
 }
+
+export const segmentationService = new SegmentationService();

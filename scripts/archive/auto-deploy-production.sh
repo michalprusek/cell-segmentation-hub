@@ -2,7 +2,12 @@
 # Auto-deploy production on merge to main branch
 # Run this script in background: ./scripts/auto-deploy-production.sh &
 
-set -e
+set -eEuo pipefail
+
+# Error trap for debugging (propagates to functions and subshells)
+trap 'echo "Error at line $LINENO: Command \"$BASH_COMMAND\" failed with exit code $?" >&2' ERR
+trap 'echo "Script interrupted by signal" >&2; exit 130' INT TERM
+trap 'echo "Script exiting" >&2' EXIT
 
 PRODUCTION_DIR="/home/cvat/cell-segmentation-hub"
 BRANCH="main"
@@ -19,14 +24,15 @@ cd "$PRODUCTION_DIR"
 LAST_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "none")
 
 while true; do
-    # Fetch latest changes
-    git fetch origin $BRANCH --quiet
-    
-    # Get latest remote commit
-    REMOTE_COMMIT=$(git rev-parse origin/$BRANCH 2>/dev/null || echo "none")
-    
-    # Check if there are new changes
-    if [ "$LAST_COMMIT" != "$REMOTE_COMMIT" ] && [ "$REMOTE_COMMIT" != "none" ]; then
+    {
+        # Fetch latest changes
+        git fetch origin $BRANCH --quiet
+        
+        # Get latest remote commit
+        REMOTE_COMMIT=$(git rev-parse origin/$BRANCH 2>/dev/null || echo "none")
+        
+        # Check if there are new changes
+        if [ "$LAST_COMMIT" != "$REMOTE_COMMIT" ] && [ "$REMOTE_COMMIT" != "none" ]; then
         echo ""
         echo "🔴 PRODUCTION DEPLOYMENT TRIGGERED!"
         echo "Current: $LAST_COMMIT"
@@ -38,10 +44,27 @@ while true; do
         BACKUP_TAG="prod-backup-$(date +%Y%m%d-%H%M%S)"
         git tag -a "$BACKUP_TAG" -m "Backup before production deployment" || true
         
-        # Pull changes
-        echo "⬇️ Pulling latest changes from main..."
-        git checkout main
-        git pull origin main
+        # Pull changes with deterministic reset
+        echo "⬇️ Pulling latest changes from $BRANCH..."
+        git fetch origin "$BRANCH"
+        git checkout --force "$BRANCH" || git checkout -B "$BRANCH" "origin/$BRANCH"
+        git reset --hard "$REMOTE_COMMIT"
+        
+        # Verify we're on the expected state
+        if [ "$(git rev-parse HEAD)" != "$REMOTE_COMMIT" ]; then
+            echo "❌ Failed to reset to expected commit $REMOTE_COMMIT" >&2
+            exit 1
+        fi
+        
+        if [ "$(git status --porcelain)" != "" ]; then
+            echo "❌ Working tree is not clean after reset" >&2
+            exit 1
+        fi
+        
+        if ! git symbolic-ref -q HEAD >/dev/null; then
+            echo "❌ In detached HEAD state, expected to be on branch $BRANCH" >&2
+            exit 1
+        fi
         
         # Stop staging services first to free resources
         echo "🛑 Stopping staging services to free resources..."
@@ -57,7 +80,10 @@ while true; do
         
         # Run database migrations
         echo "📊 Running database migrations..."
-        docker compose -f docker-compose.prod.yml run --rm backend npx prisma migrate deploy || true
+        if ! docker compose -f docker-compose.prod.yml run --rm backend npx prisma migrate deploy; then
+            echo "❌ Database migration failed!" >&2
+            exit 1
+        fi
         
         # Deploy with zero-downtime strategy
         echo "🔄 Starting PRODUCTION services..."
@@ -95,6 +121,19 @@ while true; do
         # Rollback if health check fails
         if [ "$HEALTH_OK" = false ]; then
             echo "🔥 HEALTH CHECK FAILED! Rolling back..."
+            
+            # Check if database backup exists
+            LATEST_BACKUP=$(ls -t backup-*.sql 2>/dev/null | head -1)
+            if [ -n "$LATEST_BACKUP" ]; then
+                echo "📥 Found database backup: $LATEST_BACKUP"
+                read -p "Restore database from backup? This will overwrite current data! (y/N): " -n 1 -r
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]]; then
+                    echo "🔄 Restoring database..."
+                    docker exec -i spheroseg-db psql -U postgres -d spheroseg < "$LATEST_BACKUP"
+                fi
+            fi
+            
             git checkout "$BACKUP_TAG"
             docker compose -f docker-compose.prod.yml build
             docker compose -f docker-compose.prod.yml up -d
@@ -128,4 +167,10 @@ while true; do
     
     # Wait before next check
     sleep $CHECK_INTERVAL
+    } || {
+        echo "❌ Deploy iteration failed with code: $?" >&2
+        echo "⏳ Waiting ${CHECK_INTERVAL}s before retry..." >&2
+        sleep $CHECK_INTERVAL
+        continue
+    }
 done

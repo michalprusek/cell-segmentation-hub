@@ -7,9 +7,9 @@ services:
       context: .
       dockerfile: docker/frontend.prod.Dockerfile
       args:
-        - VITE_API_BASE_URL=https://spherosegapp.utia.cas.cz/api
-        - VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/api/ml
-        - VITE_WS_URL=wss://spherosegapp.utia.cas.cz
+        - VITE_API_BASE_URL=/api
+        - VITE_ML_SERVICE_URL=/api/ml
+        - VITE_WS_URL=
     container_name: green-frontend
     ports:
       - "5000:80"
@@ -44,15 +44,15 @@ services:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - API_BASE_URL=https://spherosegapp.utia.cas.cz
-      - DATABASE_URL=postgresql://spheroseg:spheroseg@postgres-green:5432/spheroseg_green
+      - DATABASE_URL=${DATABASE_URL_GREEN:-postgresql://spheroseg:${DB_PASSWORD_GREEN}@postgres-green:5432/spheroseg_green}
       - REDIS_URL=redis://redis-green:6379
-      - JWT_ACCESS_SECRET=1c4fb341de6e2812f81b0cd5287652d38518287b64289fb21346305bba6fe87d
-      - JWT_REFRESH_SECRET=fb5a22af8446e7ac670ea277715ec4bdf9e233efd55f5ddac749edd8f2e9562b
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET_GREEN}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET_GREEN}
       - FROM_EMAIL=spheroseg@utia.cas.cz
       - SEGMENTATION_SERVICE_URL=http://green-ml:8000
-      - CORS_ORIGIN=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
-      - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,wss://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
-      - ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000
+      - CORS_ORIGIN=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000,http://127.0.0.1:5000,http://localhost:5001,http://127.0.0.1:5001,http://localhost:5080
+      - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,wss://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000,http://127.0.0.1:5000,ws://localhost:5001,ws://127.0.0.1:5001,http://localhost:5080,ws://localhost:5080
+      - ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000,http://127.0.0.1:5000,http://localhost:5080
       - FRONTEND_URL=https://spherosegapp.utia.cas.cz
       # Email configuration - UTIA SMTP
       - EMAIL_SERVICE=smtp
@@ -61,6 +61,7 @@ services:
       - SMTP_SECURE=false
       - SMTP_AUTH=false
       - SMTP_REQUIRE_TLS=true
+      - UPLOAD_DIR=/app/uploads
     volumes:
       - ./backend/uploads/green:/app/uploads
       - green-backend-logs:/app/logs
@@ -125,6 +126,27 @@ services:
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx Reverse Proxy for GREEN
+  nginx-green:
+    image: nginx:alpine
+    container_name: nginx-green
+    volumes:
+      - ./docker/nginx/nginx.green.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "5080:80"
+    depends_on:
+      - green-frontend
+      - green-backend
+      - green-ml
+    networks:
+      - green-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
       interval: 30s
       timeout: 10s
       retries: 3

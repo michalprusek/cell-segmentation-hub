@@ -1,5 +1,6 @@
 import { Point } from '@/lib/segmentation';
 import { calculatePolygonArea, calculatePerimeter } from '@/lib/segmentation';
+import { logger } from '@/lib/logger';
 
 /**
  * Calculate convex hull using Graham scan algorithm
@@ -107,7 +108,7 @@ export const calculateMetrics = (
 ): PolygonMetrics => {
   // Validate polygon points
   if (!validatePolygonPoints(polygon.points)) {
-    console.warn('Invalid polygon points detected, returning zero metrics');
+    logger.warn('Invalid polygon points detected, returning zero metrics');
     return {
       Area: 0,
       Perimeter: 0,
