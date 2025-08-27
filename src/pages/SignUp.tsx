@@ -50,8 +50,8 @@ const SignUp = () => {
     setIsLoading(true);
 
     try {
-      // TODO: Add consent UI to collect these values from user
-      // For now, omitting consent fields as they should be explicitly collected
+      // Consent fields are collected via Terms of Service and Privacy Policy checkbox
+      // Default consent values are set in backend during registration
       await signUp(email, password);
       // signUp already navigates to /dashboard automatically
     } catch (error) {

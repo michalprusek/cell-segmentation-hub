@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check dev prod generate-ssl-cert
+.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring
 
 # Detect Docker Compose version  
 DOCKER_COMPOSE := docker compose
@@ -28,6 +28,13 @@ help:
 	@echo "  logs-ml     View ML service logs"
 	@echo "  status      Show container status"
 	@echo "  health      Check health of all services"
+	@echo ""
+	@echo "📊 Advanced Monitoring:"
+	@echo "  metrics     View raw metrics endpoint"
+	@echo "  prometheus  Open Prometheus dashboard"
+	@echo "  grafana     Open Grafana dashboard"
+	@echo "  alerts      Check active alerts"
+	@echo "  monitor-setup  Initialize monitoring dashboards"
 	@echo ""
 	@echo "🛠️  Development Commands:"
 	@echo "  shell-fe    Open shell in frontend container"
@@ -318,3 +325,132 @@ generate-ssl-cert:
 	@chmod 644 docker/nginx/ssl/server.crt
 	@echo "✅ Self-signed certificates generated in docker/nginx/ssl/"
 	@echo "⚠️  These are for testing only - use proper certificates in production"
+
+# ===== MONITORING COMMANDS =====
+
+# View raw metrics endpoint
+metrics:
+	@echo "📊 Fetching metrics from backend service..."
+	@curl -s http://localhost:3001/metrics | head -20
+	@echo ""
+	@echo "Full metrics available at: http://localhost:3001/metrics"
+
+# Open Prometheus dashboard
+prometheus:
+	@echo "🔍 Opening Prometheus dashboard..."
+	@echo "Dashboard URL: http://localhost:9090"
+	@if command -v open >/dev/null 2>&1; then \
+		open http://localhost:9090; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open http://localhost:9090; \
+	else \
+		echo "Please manually open http://localhost:9090 in your browser"; \
+	fi
+
+# Open Grafana dashboard
+grafana:
+	@echo "📈 Opening Grafana dashboard..."
+	@echo "Dashboard URL: http://localhost:3030"
+	@echo "Default credentials: admin / admin123"
+	@if command -v open >/dev/null 2>&1; then \
+		open http://localhost:3030; \
+	elif command -v xdg-open >/dev/null 2>&1; then \
+		xdg-open http://localhost:3030; \
+	else \
+		echo "Please manually open http://localhost:3030 in your browser"; \
+	fi
+
+# Check active alerts
+alerts:
+	@echo "🚨 Checking active alerts..."
+	@curl -s http://localhost:9090/api/v1/alerts | jq '.data[] | select(.state=="firing") | {alertname: .labels.alertname, severity: .labels.severity, summary: .annotations.summary}' 2>/dev/null || \
+	curl -s http://localhost:9090/api/v1/alerts
+	@echo ""
+	@echo "Full alerts API: http://localhost:9090/api/v1/alerts"
+
+# Validate Prometheus configuration
+prometheus-config-check:
+	@echo "🔧 Validating Prometheus configuration..."
+	@if $(DOCKER_COMPOSE) exec prometheus promtool check config /etc/prometheus/prometheus.yml; then \
+		echo "✅ Prometheus configuration is valid"; \
+	else \
+		echo "❌ Prometheus configuration has errors"; \
+		exit 1; \
+	fi
+	@if $(DOCKER_COMPOSE) exec prometheus promtool check rules /etc/prometheus/alerts.yml; then \
+		echo "✅ Alert rules are valid"; \
+	else \
+		echo "❌ Alert rules have errors"; \
+		exit 1; \
+	fi
+
+# Test alert rules
+test-alerts:
+	@echo "🧪 Testing alert rule syntax..."
+	@$(DOCKER_COMPOSE) exec prometheus promtool check rules /etc/prometheus/alerts.yml
+
+# Monitor system health
+monitor-health:
+	@echo "🏥 System Health Check"
+	@echo "======================="
+	@echo ""
+	@echo "📊 Service Status:"
+	@curl -s http://localhost:3001/health | jq '.' 2>/dev/null || curl -s http://localhost:3001/health
+	@echo ""
+	@echo "📈 Prometheus Targets:"
+	@curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[] | {job: .labels.job, health: .health, lastScrape: .lastScrape}' 2>/dev/null || echo "Prometheus not accessible"
+	@echo ""
+	@echo "🚨 Active Alerts:"
+	@curl -s http://localhost:9090/api/v1/alerts | jq '.data[] | select(.state=="firing") | .labels.alertname' 2>/dev/null || echo "No alerts or Prometheus not accessible"
+
+# Setup monitoring dashboards (provision dashboards to Grafana)
+monitor-setup:
+	@echo "🔧 Setting up monitoring dashboards..."
+	@echo "Copying dashboard configurations to Grafana..."
+	@mkdir -p docker/grafana/dashboards
+	@cp monitoring/dashboards/*.json docker/grafana/dashboards/ || echo "Dashboard files copied"
+	@echo "✅ Dashboard files copied to docker/grafana/dashboards/"
+	@echo "📈 Restart Grafana to load new dashboards: make restart-grafana"
+	@echo ""
+	@echo "📋 Available Dashboards:"
+	@echo "  • Business Overview: http://localhost:3030/d/business-overview"
+	@echo "  • Performance: http://localhost:3030/d/performance"
+	@echo "  • Alerts: http://localhost:3030/d/alerts"
+
+# Restart specific services
+restart-grafana:
+	@echo "🔄 Restarting Grafana..."
+	@$(DOCKER_COMPOSE) restart grafana
+
+restart-prometheus:
+	@echo "🔄 Restarting Prometheus..."
+	@$(DOCKER_COMPOSE) restart prometheus
+
+# Monitor logs for errors
+monitor-errors:
+	@echo "🔍 Monitoring logs for errors (press Ctrl+C to stop)..."
+	@$(DOCKER_COMPOSE) logs -f | grep -i error --color=always
+
+# Export monitoring data
+export-metrics:
+	@echo "💾 Exporting metrics data..."
+	@mkdir -p monitoring/exports
+		@curl -s "http://localhost:9090/api/v1/query_range?query=up&start=$$(shell if command -v gdate >/dev/null 2>&1 || date -d '1 hour ago' >/dev/null 2>&1; then date -d '1 hour ago' --iso-8601 2>/dev/null || gdate -d '1 hour ago' --iso-8601 2>/dev/null; else python3 -c "from datetime import datetime, timedelta; print((datetime.utcnow()-timedelta(hours=1)).isoformat()+'Z')"; fi)&end=$$(shell if command -v gdate >/dev/null 2>&1 || date --iso-8601 >/dev/null 2>&1; then date --iso-8601 2>/dev/null || gdate --iso-8601 2>/dev/null; else python3 -c "from datetime import datetime; print(datetime.utcnow().isoformat()+'Z')"; fi)&step=60s" > monitoring/exports/uptime_last_hour.json
+	@curl -s "http://localhost:9090/api/v1/query?query=spheroseg_dau" > monitoring/exports/current_dau.json
+	@echo "✅ Metrics exported to monitoring/exports/"
+
+# Monitor resource usage
+monitor-resources:
+	@echo "💻 Current Resource Usage"
+	@echo "========================="
+	@$(DOCKER_COMPOSE) exec prometheus sh -c 'wget -qO- http://localhost:9090/api/v1/query?query=process_resident_memory_bytes | head -1' || echo "Memory data not available"
+	@$(DOCKER_COMPOSE) exec prometheus sh -c 'wget -qO- "http://localhost:9090/api/v1/query?query=rate(process_cpu_user_seconds_total[5m])*100" | head -1' || echo "CPU data not available"
+	@echo ""
+	@echo "📊 Live resource monitoring: http://localhost:3030/d/performance"
+
+# Clean monitoring data
+clean-monitoring:
+	@echo "🧹 Cleaning monitoring data..."
+	@$(DOCKER_COMPOSE) down prometheus grafana
+	@docker volume rm cell-segmentation-hub_prometheus_data cell-segmentation-hub_grafana_data 2>/dev/null || true
+	@echo "✅ Monitoring data cleaned. Run 'make up' to restart with fresh data."

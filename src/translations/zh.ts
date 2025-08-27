@@ -91,6 +91,38 @@ export default {
         '我们将尖端的AI模型与直观的界面相结合，为研究人员提供强大的显微图像分析工具，专注于以无与伦比的精度进行球状体分割。',
       contactText: '如有疑问，请联系我们',
     },
+    features: {
+      badge: '强大功能',
+      title: '生物医学研究的先进工具',
+      subtitle:
+        '我们的平台提供全面的功能套件，旨在简化您的球状体分割工作流程。',
+      cards: {
+        advancedSegmentation: {
+          title: '高级分割',
+          description: '精确的球状体检测和边界分析，实现准确的细胞测量。',
+        },
+        aiPowered: {
+          title: 'AI驱动分析',
+          description: '利用深度学习算法进行自动细胞检测和分类。',
+        },
+        effortlessUploads: {
+          title: '轻松上传',
+          description: '拖放您的显微图像，即可进行即时处理和分析。',
+        },
+        statisticalInsights: {
+          title: '统计洞察',
+          description: '全面的指标和可视化，提取有意义的数据模式。',
+        },
+        collaboration: {
+          title: '协作工具',
+          description: '与同事分享项目，实时协作研究发现。',
+        },
+        processingPipeline: {
+          title: '处理流水线',
+          description: '从预处理到最终分析的自动化工作流程，具有可自定义参数。',
+        },
+      },
+    },
     cta: {
       title: '准备好改变您的细胞分析工作流程了吗？',
       subtitle: '加入已经在使用我们平台加速发现的领先研究人员。',
@@ -348,6 +380,22 @@ export default {
       label: '允许ML模型训练',
       description: '允许使用您的数据来训练和改进我们的分割模型',
     },
+    consent: {
+      privacyNotice:
+        '您的隐私对我们很重要。这些设置控制您上传的图像和分割数据如何用于改进我们的ML模型。您可以随时更改这些偏好设置。',
+      dataUsageNote: '选择退出的用户的数据不会包含在任何训练管道中。',
+      algorithmImprovement: {
+        label: '算法改进',
+        description: '使用数据提升分割准确性和速度',
+      },
+      featureDevelopment: {
+        label: '功能开发',
+        description: '帮助开发新功能和能力',
+      },
+      lastUpdated: '最后更新',
+      savePreferences: '保存同意偏好',
+      savingPreferences: '保存中...',
+    },
     cancel: '取消',
     deleting: '删除中...',
     deleteAccount: '删除账户',
@@ -392,6 +440,7 @@ export default {
   auth: {
     signIn: '登录',
     signUp: '注册',
+    redirectingToDashboard: '正在重定向到仪表板...',
     signOut: '退出登录',
     forgotPassword: '忘记密码？',
     resetPassword: '重置密码',
@@ -577,8 +626,47 @@ export default {
     },
     shortcuts: {
       buttonText: '快捷键',
+      title: '键盘快捷键',
       dialogTitle: '键盘快捷键',
       footerNote: '这些快捷键在分割编辑器中起作用，让工作更快更便利。',
+
+      // Categories
+      categories: {
+        modes: '编辑模式',
+        actions: '操作',
+        view: '视图控制',
+        navigation: '导航',
+      },
+
+      // Mode shortcuts
+      viewMode: '查看模式',
+      editVertices: '编辑顶点模式',
+      addPoints: '添加点模式',
+      createPolygon: '创建新多边形',
+      sliceMode: '切割模式',
+      deleteMode: '删除模式',
+
+      // Action shortcuts
+      save: '保存',
+      undo: '撤销',
+      redo: '重做',
+      deleteSelected: '删除选中的多边形',
+
+      // View shortcuts
+      zoom: '放大/缩小',
+      resetView: '重置视图',
+      fitToScreen: '适配屏幕',
+
+      // Navigation shortcuts
+      cycleModes: '循环切换模式',
+      cycleModesReverse: '循环切换模式（反向）',
+      cancel: '取消当前操作',
+      showHelp: '显示此帮助',
+
+      // Conditions
+      requiresSelection: '需要选择多边形',
+
+      // Legacy keys (kept for backward compatibility)
       v: '查看模式',
       e: '编辑顶点模式',
       a: '添加点模式',
@@ -818,6 +906,7 @@ export default {
     scaleUnit: 'µm/像素',
     scaleWarning: '注意：比例值高于1 µm/像素表示非常低的放大倍率。请验证。',
     outputSettings: '输出设置',
+    exportFormatsLabel: '导出格式',
     exportFormats: {
       yolo: 'YOLO格式',
       excel: 'Excel格式',
@@ -1464,6 +1553,7 @@ export default {
     listView: '列表视图',
   },
   sharing: {
+    processingInvitation: '正在处理邀请...',
     share: '分享',
     shared: '已分享',
     shareProject: '分享项目',
@@ -1540,6 +1630,18 @@ export default {
     reloadingSegmentation: '重新加载分割...',
     segmenting: '分割中...',
     waitingInQueue: '队列中等待...',
+    error: {
+      title: '分割错误',
+      description: '加载分割数据时发生错误。这可能是由于网络问题或服务器问题。',
+      errorDetails: '错误详情',
+      tryAgain: '重试',
+      unsavedChanges: '未保存的更改',
+    },
+    export: {
+      exportAllMetrics: '导出所有指标为XLSX',
+      exportUnavailable: '导出不可用',
+      loading: '加载中...',
+    },
   },
   footer: {
     appName: 'SpheroSeg',

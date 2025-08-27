@@ -81,6 +81,8 @@ Authenticate user and receive JWT tokens.
 **Authentication**: None  
 **Rate Limit**: 5 requests per 15 minutes per IP
 
+_Note: If `REQUIRE_EMAIL_VERIFICATION=true` environment variable is set, users must verify their email before logging in._
+
 #### Request Body
 
 ```json
@@ -128,6 +130,15 @@ Authenticate user and receive JWT tokens.
 {
   "success": false,
   "error": "Invalid email or password"
+}
+
+// 403 - Email Not Verified (when REQUIRE_EMAIL_VERIFICATION=true)
+{
+  "success": false,
+  "error": {
+    "code": "FORBIDDEN",
+    "message": "Email musí být ověřen před přihlášením. Zkontrolujte svou emailovou schránku nebo požádejte o nový ověřovací email."
+  }
 }
 
 // 429 - Rate Limited
@@ -466,42 +477,68 @@ Reset password using token from email.
 
 Verify user's email address using token from email.
 
-**Endpoint**: `POST /verify-email`  
+**Endpoint**: `GET /verify-email/{token}`  
 **Authentication**: None
 
-#### Request Body
+#### Path Parameters
 
-```json
-{
-  "token": "verification_token_from_email"
-}
-```
+- `token` (string, required): Verification token received in registration email
 
 #### Success Response `200`
 
 ```json
 {
   "success": true,
-  "message": "Email verified successfully"
+  "data": {
+    "message": "Email byl úspěšně ověřen."
+  },
+  "message": "Email byl úspěšně ověřen."
+}
+```
+
+#### Error Responses
+
+```json
+// 400 - Invalid or Expired Token
+{
+  "success": false,
+  "error": {
+    "code": "BAD_REQUEST",
+    "message": "Neplatný ověřovací token"
+  }
 }
 ```
 
 ### Resend Verification Email
 
-Send verification email again.
+Send verification email again to unverified users.
 
 **Endpoint**: `POST /resend-verification`  
-**Authentication**: Required (Bearer token)  
-**Rate Limit**: 3 requests per hour per user
+**Authentication**: None (for security, doesn't reveal if email exists)  
+**Rate Limit**: 3 requests per hour per IP
+
+#### Request Body
+
+```json
+{
+  "email": "user@example.com"
+}
+```
 
 #### Success Response `200`
 
 ```json
 {
   "success": true,
-  "message": "Verification email sent successfully"
+  "data": {
+    "message": "Pokud email existuje a není ověřen, byl odeslán ověřovací email.",
+    "verificationToken": "abc123..." // Only in non-production environments
+  },
+  "message": "Pokud email existuje a není ověřen, byl odeslán ověřovací email."
 }
 ```
+
+_Note: For security reasons, this endpoint always returns success, even if the email doesn't exist or is already verified._
 
 ## JWT Token Structure
 

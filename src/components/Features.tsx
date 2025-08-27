@@ -7,6 +7,7 @@ import {
   Upload,
   Brain,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface FeatureCardProps {
   icon: React.ReactNode;
@@ -29,6 +30,7 @@ const FeatureCard = ({ icon, title, description, delay }: FeatureCardProps) => (
 );
 
 const Features = () => {
+  const { t } = useTranslation();
   const featuresRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -58,44 +60,38 @@ const Features = () => {
   const features = [
     {
       icon: <Microscope size={28} />,
-      title: 'Advanced Segmentation',
-      description:
-        'Precise spheroid detection with boundary analysis for accurate cell measurements.',
+      title: t('landing.features.cards.advancedSegmentation.title'),
+      description: t('landing.features.cards.advancedSegmentation.description'),
       delay: 100,
     },
     {
       icon: <Brain size={28} />,
-      title: 'AI-Powered Analysis',
-      description:
-        'Leverage deep learning algorithms for automated cell detection and classification.',
+      title: t('landing.features.cards.aiPowered.title'),
+      description: t('landing.features.cards.aiPowered.description'),
       delay: 200,
     },
     {
       icon: <Upload size={28} />,
-      title: 'Effortless Uploads',
-      description:
-        'Drag and drop your microscopic images for instant processing and analysis.',
+      title: t('landing.features.cards.effortlessUploads.title'),
+      description: t('landing.features.cards.effortlessUploads.description'),
       delay: 300,
     },
     {
       icon: <LineChart size={28} />,
-      title: 'Statistical Insights',
-      description:
-        'Comprehensive metrics and visualizations to extract meaningful data patterns.',
+      title: t('landing.features.cards.statisticalInsights.title'),
+      description: t('landing.features.cards.statisticalInsights.description'),
       delay: 400,
     },
     {
       icon: <Share2 size={28} />,
-      title: 'Collaboration Tools',
-      description:
-        'Share projects with colleagues and collaborate in real-time on research findings.',
+      title: t('landing.features.cards.collaboration.title'),
+      description: t('landing.features.cards.collaboration.description'),
       delay: 500,
     },
     {
       icon: <Sparkles size={28} />,
-      title: 'Processing Pipeline',
-      description:
-        'Automated workflow from preprocessing to final analysis with customizable parameters.',
+      title: t('landing.features.cards.processingPipeline.title'),
+      description: t('landing.features.cards.processingPipeline.description'),
       delay: 600,
     },
   ];
@@ -111,15 +107,14 @@ const Features = () => {
         <div className="text-center max-w-3xl mx-auto mb-16">
           <div className="inline-block bg-blue-100 px-4 py-2 rounded-full mb-4">
             <span className="text-sm font-medium text-blue-700">
-              Powerful Capabilities
+              {t('landing.features.badge')}
             </span>
           </div>
           <h2 className="text-3xl md:text-4xl font-bold mb-6">
-            Advanced Tools for Biomedical Research
+            {t('landing.features.title')}
           </h2>
           <p className="text-lg text-gray-600">
-            Our platform offers a comprehensive suite of features designed to
-            streamline your spheroid segmentation workflow.
+            {t('landing.features.subtitle')}
           </p>
         </div>
 

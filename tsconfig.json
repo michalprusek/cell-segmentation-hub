@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
@@ -6,18 +7,31 @@
     { "path": "./tsconfig.test.json" }
   ],
   "compilerOptions": {
+    // Base configuration shared across all sub-configs
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     },
-    "noImplicitAny": true, // Enable for better type safety
-    "noUnusedParameters": false, // Keep false to avoid breaking existing code
+
+    // Core Type Safety (ENABLED - Production Ready)
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": false, // TODO: Enable in phase 2 migration
+
+    // Code Quality (ENABLED)
+    "exactOptionalPropertyTypes": false, // TODO: Enable in phase 2 migration
+    "noPropertyAccessFromIndexSignature": false, // TODO: Enable in phase 2 migration
+
+    // Development Experience
     "skipLibCheck": true,
     "allowJs": true,
-    "noUnusedLocals": false, // Keep false to avoid breaking existing code
-    "strictNullChecks": true, // Enable for better null safety
-    "noFallthroughCasesInSwitch": true, // Enable to prevent switch bugs
-    "noImplicitReturns": true, // Enable to ensure all code paths return
-    "noImplicitThis": true // Enable to catch 'this' context issues
+    "forceConsistentCasingInFileNames": true,
+
+    // Legacy Support (Will be removed in future phases)
+    "noUnusedLocals": false, // TODO: Enable in phase 3
+    "noUnusedParameters": false // TODO: Enable in phase 3
   }
 }
