@@ -921,7 +921,7 @@ class ApiClient {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 60000, // 60 seconds for file uploads
+        timeout: 300000, // 5 minutes for file uploads (increased from 60s)
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(

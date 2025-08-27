@@ -1113,7 +1113,8 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet (Pequeño)',
-          inferenceTime: 'Tiempo de inferencia: ~3.1 segundos',
+          inferenceTime:
+            'Tiempo de inferencia: ~0.18 segundos (acelerado por GPU)',
           bestFor:
             'Mejor para: Procesamiento en tiempo real y resultados rápidos',
           description:
@@ -1121,14 +1122,16 @@ export default {
         },
         cbam: {
           name: 'CBAM-ResUNet (Mediano)',
-          inferenceTime: 'Tiempo de inferencia: ~6.9 segundos',
+          inferenceTime:
+            'Tiempo de inferencia: ~0.20 segundos (acelerado por GPU)',
           bestFor: 'Mejor para: Velocidad y precisión equilibradas',
           description:
             'Equilibrio óptimo entre velocidad de procesamiento y calidad de segmentación para la mayoría de casos de uso.',
         },
         ma: {
           name: 'MA-ResUNet (Grande)',
-          inferenceTime: 'Tiempo de inferencia: ~18.1 segundos',
+          inferenceTime:
+            'Tiempo de inferencia: ~1.2 segundos (acelerado por GPU)',
           bestFor: 'Mejor para: Máxima precisión',
           description:
             'Modelo de mayor precisión con mecanismos de atención para la detección más precisa de límites de esferoides.',

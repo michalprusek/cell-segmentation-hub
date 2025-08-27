@@ -1,6 +1,8 @@
 import nodemailer, { Transporter, SendMailOptions } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from '../utils/logger';
+import { getNumericEnvVar, getBooleanEnvVar } from '../utils/envValidator';
+import { sendEmailWithRetry, parseEmailTimeout, updateEmailMetrics } from './emailRetryService';
 import { generatePasswordResetEmailHTML, generatePasswordResetEmailText, PasswordResetEmailData } from '../templates/passwordResetEmail';
 import { generateVerificationEmailHTML } from '../templates/verificationEmail';
 import { escapeHtml, sanitizeUrl } from '../utils/escapeHtml';
@@ -65,11 +67,14 @@ export function init(): void {
           host: config.smtp.host,
           port: config.smtp.port,
           secure: config.smtp.secure,
-          ignoreTLS: process.env.SMTP_IGNORE_TLS === 'true', // Option to completely ignore TLS
-          requireTLS: process.env.SMTP_REQUIRE_TLS === 'true' && process.env.SMTP_IGNORE_TLS !== 'true',
-          connectionTimeout: 30000, // 30 seconds connection timeout for UTIA SMTP
-          greetingTimeout: 30000,   // 30 seconds greeting timeout
-          socketTimeout: 30000,     // 30 seconds socket timeout
+          ignoreTLS: getBooleanEnvVar('SMTP_IGNORE_TLS', false),
+          requireTLS: getBooleanEnvVar('SMTP_REQUIRE_TLS', true) && !getBooleanEnvVar('SMTP_IGNORE_TLS', false),
+          // Use improved timeout parsing with UTIA SMTP defaults
+          connectionTimeout: parseEmailTimeout('SMTP_CONNECTION_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
+          greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
+          socketTimeout: parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
+          logger: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
+          debug: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false)
         };
         
         // Configure TLS settings for UTIA SMTP (port 465 with SSL)
@@ -136,9 +141,11 @@ export function init(): void {
    * Send email
    */
 export async function sendEmail(options: EmailServiceOptions): Promise<void> {
+    const retryCount = 0;
+    
     try {
-      // TEMPORARY: Skip email sending due to SMTP timeout issues
-      if (process.env.SKIP_EMAIL_SEND === 'true') {
+      // Skip email sending in test/dev environments if configured
+      if (getBooleanEnvVar('SKIP_EMAIL_SEND', false)) {
         logger.warn('Email sending skipped (SKIP_EMAIL_SEND=true)', 'EmailService', {
           to: options.to,
           subject: options.subject
@@ -151,41 +158,17 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
       if (!_transporter || !_config) {
         throw new Error('Email service not properly initialized.');
       }
-
-      const mailOptions: SendMailOptions = {
-        from: `"${_config.from.name}" <${_config.from.email}>`,
-        to: options.to,
-        subject: options.subject,
-        html: options.html,
-        text: options.text,
-        attachments: options.attachments
-      };
-
-      // Wrap sendMail in a timeout promise
-      const sendMailWithTimeout = new Promise((resolve, reject) => {
-        const timeoutId = setTimeout(() => {
-          reject(new Error('Email send timeout after 10 seconds'));
-        }, 10000);
-        
-        _transporter!.sendMail(mailOptions)
-          .then(result => {
-            clearTimeout(timeoutId);
-            resolve(result);
-          })
-          .catch(error => {
-            clearTimeout(timeoutId);
-            reject(error);
-          });
-      });
       
-      const result = await sendMailWithTimeout as any;
+      // Use retry logic for email sending
+      const result = await sendEmailWithRetry(_transporter, _config, options);
       
-      logger.info('Email sent successfully', 'EmailService', { 
-        to: options.to,
-        subject: options.subject,
-        messageId: result.messageId
-      });
+      // Update metrics for successful send
+      updateEmailMetrics(true, retryCount);
+      
     } catch (error) {
+      // Update metrics for failed send
+      updateEmailMetrics(false, retryCount, error as Error);
+      
       logger.error('Failed to send email:', error as Error, 'EmailService', {
         to: options.to,
         subject: options.subject

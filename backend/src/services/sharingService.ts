@@ -233,19 +233,26 @@ export async function acceptShareInvitation(
       }
     }
 
-    // Update the share to accepted
+    // Update the share to accepted and fetch complete data
     const updatedShare = await prisma.projectShare.update({
       where: { id: share.id },
       data: {
         status: 'accepted',
         sharedWithId: userId
+      },
+      include: {
+        project: true,
+        sharedBy: true,
+        sharedWith: true
       }
     });
 
     logger.info(`Share invitation accepted: ${share.id}`, 'SharingService', {
       shareId: share.id,
       projectId: share.projectId,
-      userId
+      userId,
+      status: updatedShare.status,
+      sharedWithId: updatedShare.sharedWithId
     });
 
     return { share: updatedShare, needsLogin: false };
