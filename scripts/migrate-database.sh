@@ -18,9 +18,9 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Databázové parametry
-DB_USER="spheroseg"
-DB_PASSWORD="spheroseg"
-BACKUP_DIR="/home/cvat/cell-segmentation-hub/backups"
+DB_USER="${DB_USER:-spheroseg}"
+DB_PASSWORD="${DB_PASSWORD:?Error: DB_PASSWORD environment variable is required}"
+BACKUP_DIR="${BACKUP_DIR:-/home/cvat/cell-segmentation-hub/backups}"
 
 # Funkce pro zobrazení nápovědy
 show_help() {
@@ -73,12 +73,20 @@ backup_database() {
     fi
     
     # Vytvoření zálohy
-    if docker exec "$container" pg_dump -U "$DB_USER" "$db_name" > "$backup_file" 2>/dev/null; then
+    # Capture stderr for debugging
+    local stderr_file=$(mktemp)
+    if docker exec "$container" sh -c "PGPASSWORD='$DB_PASSWORD' pg_dump -U '$DB_USER' '$db_name'" > "$backup_file" 2>"$stderr_file"; then
         local size=$(du -h "$backup_file" | cut -f1)
-        echo -e "${GREEN}[✓]${NC} Záloha vytvořena: $backup_file (velikost: $size)"
-        echo "$backup_file"
+        echo -e "${GREEN}[✓]${NC} Záloha vytvořena: $backup_file (velikost: $size)" >&2
+        echo "$backup_file"  # Only output path to stdout for machine consumption
+        rm -f "$stderr_file"
     else
-        echo -e "${RED}[CHYBA]${NC} Nepodařilo se vytvořit zálohu!"
+        echo -e "${RED}[CHYBA]${NC} Nepodařilo se vytvořit zálohu!" >&2
+        if [ -s "$stderr_file" ]; then
+            echo -e "${RED}[CHYBA]${NC} Detaily chyby:" >&2
+            cat "$stderr_file" >&2
+        fi
+        rm -f "$backup_file" "$stderr_file"
         return 1
     fi
 }
@@ -113,13 +121,13 @@ restore_database() {
     fi
     
     # Drop databáze
-    docker exec "$container" psql -U "$DB_USER" -c "DROP DATABASE IF EXISTS $db_name;" postgres 2>/dev/null || true
+    docker exec "$container" sh -c "PGPASSWORD='$DB_PASSWORD' psql -U '$DB_USER' -c \"DROP DATABASE IF EXISTS $db_name;\" postgres" 2>/dev/null || true
     
     # Create databáze
-    docker exec "$container" psql -U "$DB_USER" -c "CREATE DATABASE $db_name;" postgres
+    docker exec "$container" sh -c "PGPASSWORD='$DB_PASSWORD' psql -U '$DB_USER' -c \"CREATE DATABASE $db_name;\" postgres"
     
     # Restore dat
-    if docker exec -i "$container" psql -U "$DB_USER" "$db_name" < "$backup_file"; then
+    if docker exec -i "$container" sh -c "PGPASSWORD='$DB_PASSWORD' psql -U '$DB_USER' '$db_name'" < "$backup_file"; then
         echo -e "${GREEN}[✓]${NC} Databáze úspěšně obnovena"
     else
         echo -e "${RED}[CHYBA]${NC} Nepodařilo se obnovit databázi!"
@@ -165,16 +173,16 @@ show_database_stats() {
     
     if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
         # Počet tabulek
-        tables=$(docker exec "$container" psql -U "$DB_USER" -d "$db_name" -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';" 2>/dev/null || echo "0")
+        tables=$(docker exec "$container" sh -c "PGPASSWORD='$DB_PASSWORD' psql -U '$DB_USER' -d '$db_name' -t -c \"SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public';\"" 2>/dev/null || echo "0")
         
         # Velikost databáze
-        size=$(docker exec "$container" psql -U "$DB_USER" -d "$db_name" -t -c "SELECT pg_size_pretty(pg_database_size('$db_name'));" 2>/dev/null || echo "N/A")
+        size=$(docker exec "$container" sh -c "PGPASSWORD='$DB_PASSWORD' psql -U '$DB_USER' -d '$db_name' -t -c \"SELECT pg_size_pretty(pg_database_size('$db_name'));\"" 2>/dev/null || echo "N/A")
         
         # Počet uživatelů
-        users=$(docker exec "$container" psql -U "$DB_USER" -d "$db_name" -t -c "SELECT COUNT(*) FROM \"User\";" 2>/dev/null || echo "0")
+        users=$(docker exec "$container" sh -c "PGPASSWORD='$DB_PASSWORD' psql -U '$DB_USER' -d '$db_name' -t -c \"SELECT COUNT(*) FROM \\"User\\";\"" 2>/dev/null || echo "0")
         
         # Počet projektů
-        projects=$(docker exec "$container" psql -U "$DB_USER" -d "$db_name" -t -c "SELECT COUNT(*) FROM \"Project\";" 2>/dev/null || echo "0")
+        projects=$(docker exec "$container" sh -c "PGPASSWORD='$DB_PASSWORD' psql -U '$DB_USER' -d '$db_name' -t -c \"SELECT COUNT(*) FROM \\"Project\\";\"" 2>/dev/null || echo "0")
         
         echo "  Tabulek: $tables"
         echo "  Velikost: $size"

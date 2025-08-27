@@ -46,10 +46,10 @@ export const useDashboardProjects = ({
       try {
         sharedResponse = await apiClient.getSharedProjects();
         logger.debug('Shared projects response loaded', 'Dashboard', {
-          count: sharedResponse.data.length,
+          count: sharedResponse.length,
         });
       } catch (shareError) {
-        console.error('Failed to fetch shared projects:', shareError);
+        logger.error('Failed to fetch shared projects', shareError);
         logger.warn('Failed to fetch shared projects:', shareError);
         // Continue with just owned projects
       }

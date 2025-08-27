@@ -176,14 +176,14 @@ const SegmentationEditor = () => {
                 return point;
               }
               // Skip invalid object points
-              console.warn(
-                'Skipping invalid point with non-numeric coordinates:',
+              logger.warn(
+                'Skipping invalid point with non-numeric coordinates',
                 point
               );
               return null;
             }
             // Skip other invalid formats
-            console.warn('Skipping invalid point format:', point);
+            logger.warn('Skipping invalid point format', point);
             return null;
           })
           .filter((point): point is { x: number; y: number } => point !== null);
@@ -200,10 +200,9 @@ const SegmentationEditor = () => {
           };
         }
 
-        console.warn(
-          'Dropping polygon due to insufficient valid points:',
-          segPoly.id
-        );
+        logger.warn('Dropping polygon due to insufficient valid points', {
+          polygonId: segPoly.id,
+        });
         return null;
       })
       .filter((polygon): polygon is Polygon => polygon !== null);

@@ -212,20 +212,20 @@ export async function getProjectById(projectId: string, userId: string): Promise
   }
 
   /**
-   * Update a project (with ownership check)
+   * Update a project (with ownership check - only owners can update)
    */
 export async function updateProject(projectId: string, userId: string, data: UpdateProjectData): Promise<Project | null> {
     try {
-      // First check if project exists and belongs to user
+      // First check if project exists and user owns it (NOT just shared access)
       const existingProject = await prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          userId: userId  // Only actual owner can update
         }
       });
 
       if (!existingProject) {
-        return null;
+        return null; // Project not found or user is not the owner
       }
 
       // Update the project
@@ -263,15 +263,15 @@ export async function updateProject(projectId: string, userId: string, data: Upd
   }
 
   /**
-   * Delete a project (with ownership check)
+   * Delete a project (with ownership check - only owners can delete)
    */
 export async function deleteProject(projectId: string, userId: string): Promise<(Project & { _count: { images: number } }) | null> {
     try {
-      // First check if project exists and belongs to user
+      // First check if project exists and user owns it (NOT just shared access)
       const existingProject = await prisma.project.findFirst({
         where: {
           id: projectId,
-          userId: userId
+          userId: userId  // Only actual owner can delete
         },
         include: {
           _count: {
@@ -307,7 +307,7 @@ export async function deleteProject(projectId: string, userId: string): Promise<
   }
 
   /**
-   * Get project statistics
+   * Get project statistics (allows both owners and shared users)
    */
 export async function getProjectStats(projectId: string, userId: string): Promise<{
   project: {
@@ -336,12 +336,15 @@ export async function getProjectStats(projectId: string, userId: string): Promis
   };
 } | null> {
     try {
-      // First check if project exists and belongs to user
-      const project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          userId: userId
-        }
+      // Check if user has access to this project (owner or shared)
+      const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+      if (!accessCheck.hasAccess) {
+        return null;
+      }
+
+      // Get the project
+      const project = await prisma.project.findUnique({
+        where: { id: projectId }
       });
 
       if (!project) {
@@ -449,5 +452,18 @@ export async function checkProjectOwnership(projectId: string, userId: string): 
     } catch (error) {
       logger.error('Failed to check project ownership:', error as Error, 'ProjectService', { projectId, userId });
       throw error;
+    }
+  }
+
+  /**
+   * Check if user can modify a project (only owners can modify)
+   */
+export async function canModifyProject(projectId: string, userId: string): Promise<boolean> {
+    try {
+      // Only project owners can modify projects
+      return await checkProjectOwnership(projectId, userId);
+    } catch (error) {
+      logger.error('Failed to check project modification permissions:', error as Error, 'ProjectService', { projectId, userId });
+      return false;
     }
   }

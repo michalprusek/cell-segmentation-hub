@@ -22,6 +22,7 @@ interface UseKeyboardShortcutsProps {
   // Optional callbacks
   onEscape?: () => void;
   onKeyDown?: (key: string, event: KeyboardEvent) => void;
+  onShowHelp?: () => void;
 }
 
 /**
@@ -43,6 +44,7 @@ export const useKeyboardShortcuts = ({
   handleDeletePolygon,
   onEscape,
   onKeyDown,
+  onShowHelp,
 }: UseKeyboardShortcutsProps) => {
   const isShiftPressed = useRef(false);
   const isCtrlPressed = useRef(false);
@@ -232,7 +234,11 @@ export const useKeyboardShortcuts = ({
         case '?':
           if (!isCtrlPressed.current) {
             event.preventDefault();
-            showKeyboardHelp();
+            if (onShowHelp) {
+              onShowHelp();
+            } else {
+              showKeyboardHelp();
+            }
           }
           break;
       }
@@ -252,6 +258,7 @@ export const useKeyboardShortcuts = ({
       handleDeletePolygon,
       onEscape,
       onKeyDown,
+      onShowHelp,
     ]
   );
 
@@ -324,30 +331,17 @@ function cycleEditMode(
 }
 
 /**
- * Show keyboard shortcuts help
+ * Show keyboard shortcuts help modal
+ * This function should be overridden by the consuming component
+ * to show the KeyboardShortcutsModal
  */
 function showKeyboardHelp() {
-  // TODO: This should trigger a proper UI modal/overlay component
-  // For now, only log in development
+  // Default implementation logs to console in development
+  // This should be overridden by passing onShowHelp callback
   if (process.env.NODE_ENV === 'development') {
-    logger.debug('Keyboard Shortcuts:', {
-      V: 'View mode',
-      E: 'Edit vertices (requires selection)',
-      A: 'Add points (requires selection)',
-      N: 'Create new polygon',
-      S: 'Slice mode (requires selection)',
-      D: 'Delete polygon mode',
-      'Ctrl+S': 'Save',
-      'Ctrl+Z': 'Undo',
-      'Ctrl+Y': 'Redo',
-      '+/-': 'Zoom in/out',
-      R: 'Reset view',
-      Delete: 'Delete selected polygon',
-      Escape: 'Cancel/View mode',
-      Tab: 'Cycle modes',
-      'Shift+Tab': 'Cycle modes (reverse)',
-      'H/?': 'Show this help',
-    });
+    logger.debug(
+      'Keyboard Shortcuts Help requested. Override showKeyboardHelp or provide onShowHelp callback.'
+    );
   }
 }
 

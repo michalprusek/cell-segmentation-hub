@@ -1,5 +1,6 @@
 import React, { Component, ReactNode } from 'react';
 import { useLanguage } from '@/contexts/useLanguage';
+import { logger } from '@/lib/logger';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -24,7 +25,7 @@ class ErrorBoundaryClass extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    logger.error('ErrorBoundary caught an error', { error, errorInfo });
   }
 
   render() {

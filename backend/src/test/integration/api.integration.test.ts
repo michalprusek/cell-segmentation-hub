@@ -16,7 +16,10 @@ describe('API Integration Tests', () => {
     const databaseUrl = process.env.DATABASE_URL || process.env.TEST_DATABASE_URL || 'postgresql://postgres:testpass@localhost:5432/testdb'
     
     // For CI/CD environment, ensure we have a valid PostgreSQL URL
-    if (!databaseUrl.startsWith('postgresql://') && !databaseUrl.startsWith('postgres://')) {
+    // Support all postgres URL variants including postgres+asyncpg://
+    const isValidPostgresUrl = /^postgres(?:ql)?(?:\+[a-z0-9-]+)?:\/\//i.test(databaseUrl)
+    
+    if (!isValidPostgresUrl) {
       console.warn('Invalid DATABASE_URL, using default PostgreSQL URL for tests')
       process.env.DATABASE_URL = 'postgresql://postgres:testpass@localhost:5432/testdb'
     } else {
@@ -350,7 +353,7 @@ describe('API Integration Tests', () => {
           .post('/api/projects')
           .set('Authorization', `Bearer ${authToken}`)
           .send({
-            name: null, // This should cause validation error
+            title: null, // This should cause validation error
             description: 'Test description'
           })
           .expect(400)

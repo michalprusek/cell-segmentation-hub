@@ -104,6 +104,44 @@ export default {
         'Sign up for a free account and experience the power of AI-driven spheroid segmentation.',
       createAccount: 'Create Your Account',
     },
+    features: {
+      badge: 'Powerful Capabilities',
+      title: 'Advanced Tools for Biomedical Research',
+      subtitle:
+        'Our platform offers a comprehensive suite of features designed to streamline your spheroid segmentation workflow.',
+      cards: {
+        advancedSegmentation: {
+          title: 'Advanced Segmentation',
+          description:
+            'Precise spheroid detection with boundary analysis for accurate cell measurements.',
+        },
+        aiPowered: {
+          title: 'AI-Powered Analysis',
+          description:
+            'Leverage deep learning algorithms for automated cell detection and classification.',
+        },
+        effortlessUploads: {
+          title: 'Effortless Uploads',
+          description:
+            'Drag and drop your microscopic images for instant processing and analysis.',
+        },
+        statisticalInsights: {
+          title: 'Statistical Insights',
+          description:
+            'Comprehensive metrics and visualizations to extract meaningful data patterns.',
+        },
+        collaboration: {
+          title: 'Collaboration Tools',
+          description:
+            'Share projects with colleagues and collaborate in real-time on research findings.',
+        },
+        processingPipeline: {
+          title: 'Processing Pipeline',
+          description:
+            'Automated workflow from preprocessing to final analysis with customizable parameters.',
+        },
+      },
+    },
   },
 
   dashboard: {
@@ -387,6 +425,23 @@ export default {
       description:
         'Allow your data to be used for training and improving our segmentation models',
     },
+    consent: {
+      privacyNotice:
+        'Your data privacy is important to us. These settings control how your uploaded images and segmentation data may be used to improve our ML models. You can change these preferences at any time.',
+      dataUsageNote:
+        'Data from users who opt out will not be included in any training pipelines.',
+      algorithmImprovement: {
+        label: 'Algorithm Improvement',
+        description: 'Use data to enhance segmentation accuracy and speed',
+      },
+      featureDevelopment: {
+        label: 'Feature Development',
+        description: 'Help develop new features and capabilities',
+      },
+      lastUpdated: 'Last updated',
+      savePreferences: 'Save Consent Preferences',
+      savingPreferences: 'Saving...',
+    },
     cancel: 'Cancel',
     deleting: 'Deleting...',
     deleteAccount: 'Delete Account',
@@ -439,9 +494,48 @@ export default {
     },
     shortcuts: {
       buttonText: 'Shortcuts',
+      title: 'Keyboard Shortcuts',
       dialogTitle: 'Keyboard Shortcuts',
       footerNote:
         'These shortcuts work within the segmentation editor for faster and more convenient work.',
+
+      // Categories
+      categories: {
+        modes: 'Edit Modes',
+        actions: 'Actions',
+        view: 'View Controls',
+        navigation: 'Navigation',
+      },
+
+      // Mode shortcuts
+      viewMode: 'View mode',
+      editVertices: 'Edit vertices mode',
+      addPoints: 'Add points mode',
+      createPolygon: 'Create new polygon',
+      sliceMode: 'Slice mode',
+      deleteMode: 'Delete mode',
+
+      // Action shortcuts
+      save: 'Save',
+      undo: 'Undo',
+      redo: 'Redo',
+      deleteSelected: 'Delete selected polygon',
+
+      // View shortcuts
+      zoom: 'Zoom in/out',
+      resetView: 'Reset view',
+      fitToScreen: 'Fit to screen',
+
+      // Navigation shortcuts
+      cycleModes: 'Cycle through modes',
+      cycleModesReverse: 'Cycle modes (reverse)',
+      cancel: 'Cancel current operation',
+      showHelp: 'Show this help',
+
+      // Conditions
+      requiresSelection: 'Requires polygon selection',
+
+      // Legacy keys (kept for backward compatibility)
       v: 'View mode',
       e: 'Edit vertices mode',
       a: 'Add points mode',
@@ -585,6 +679,7 @@ export default {
   auth: {
     signIn: 'Sign In',
     signUp: 'Sign Up',
+    redirectingToDashboard: 'Redirecting to dashboard...',
     signOut: 'Sign Out',
     forgotPassword: 'Forgot Password?',
     resetPassword: 'Reset Password',
@@ -1652,6 +1747,7 @@ export default {
 
   // Project sharing
   sharing: {
+    processingInvitation: 'Processing invitation...',
     share: 'Share',
     shared: 'Shared',
     shareProject: 'Share project',
@@ -1735,5 +1831,18 @@ export default {
     reloadingSegmentation: 'Reloading segmentation...',
     segmenting: 'Segmenting...',
     waitingInQueue: 'Waiting in queue...',
+    error: {
+      title: 'Segmentation Error',
+      description:
+        'An error occurred while loading segmentation data. This might be due to network issues or server problems.',
+      errorDetails: 'Error Details',
+      tryAgain: 'Try Again',
+      unsavedChanges: 'Unsaved changes',
+    },
+    export: {
+      exportAllMetrics: 'Export all metrics as XLSX',
+      exportUnavailable: 'Export Unavailable',
+      loading: 'Loading...',
+    },
   },
 };

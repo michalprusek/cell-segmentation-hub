@@ -69,7 +69,14 @@ const config: AppConfig = {
   // WebSocket URL - prefer explicit VITE_WS_URL, fallback to derived from API URL
   wsUrl: (() => {
     const wsUrl = import.meta.env.VITE_WS_URL;
-    if (wsUrl) return wsUrl;
+    if (wsUrl && wsUrl.trim() !== '') return wsUrl;
+
+    // If API base URL is relative (like /api), WebSocket will use the same origin
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+    if (apiBaseUrl && apiBaseUrl.startsWith('/')) {
+      // Return empty string for relative API URLs - WebSocket will use current location
+      return '';
+    }
 
     const apiUrl = import.meta.env.VITE_API_URL;
     if (apiUrl) {
@@ -78,9 +85,8 @@ const config: AppConfig = {
       return deriveWebSocketUrl(baseUrl);
     }
 
-    throw new Error(
-      'Cannot determine WebSocket URL - VITE_WS_URL or VITE_API_URL required'
-    );
+    // Default to empty string for relative WebSocket connections
+    return '';
   })(),
 };
 
