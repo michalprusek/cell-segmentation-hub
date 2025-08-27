@@ -23,6 +23,17 @@ export const shareProjectByEmail = asyncHandler(async (req: Request, res: Respon
   const data: ShareByEmailData = req.body;
 
   try {
+    // Check if user owns the project (only owners can share projects)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, req.user.id);
+    if (!accessCheck.hasAccess) {
+      ResponseHelper.notFound(res, 'Project not found');
+      return;
+    }
+    if (!accessCheck.isOwner) {
+      ResponseHelper.forbidden(res, 'Only project owners can share projects');
+      return;
+    }
+
     const share = await SharingService.shareProjectByEmail(projectId, req.user!.id, data);
     
     ResponseHelper.success(
@@ -73,6 +84,17 @@ export const shareProjectByLink = asyncHandler(async (req: Request, res: Respons
   const data: ShareByLinkData = req.body;
 
   try {
+    // Check if user owns the project (only owners can share projects)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, req.user.id);
+    if (!accessCheck.hasAccess) {
+      ResponseHelper.notFound(res, 'Project not found');
+      return;
+    }
+    if (!accessCheck.isOwner) {
+      ResponseHelper.forbidden(res, 'Only project owners can share projects');
+      return;
+    }
+
     const share = await SharingService.shareProjectByLink(projectId, req.user!.id, data);
     
     const shareUrl = `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`;
@@ -121,6 +143,17 @@ export const getProjectShares = asyncHandler(async (req: Request, res: Response)
   }
 
   try {
+    // Check if user owns the project (only owners can view shares)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, req.user.id);
+    if (!accessCheck.hasAccess) {
+      ResponseHelper.notFound(res, 'Project not found');
+      return;
+    }
+    if (!accessCheck.isOwner) {
+      ResponseHelper.forbidden(res, 'Only project owners can view shares');
+      return;
+    }
+
     const shares = await SharingService.getProjectShares(projectId, req.user!.id);
     
     const formattedShares = shares.map(share => ({

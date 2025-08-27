@@ -7,9 +7,9 @@ services:
       context: .
       dockerfile: docker/frontend.prod.Dockerfile
       args:
-        - VITE_API_BASE_URL=https://spherosegapp.utia.cas.cz/api
-        - VITE_ML_SERVICE_URL=https://spherosegapp.utia.cas.cz/api/ml
-        - VITE_WS_URL=wss://spherosegapp.utia.cas.cz
+        - VITE_API_BASE_URL=/api
+        - VITE_ML_SERVICE_URL=/api/ml
+        - VITE_WS_URL=
     container_name: blue-frontend
     ports:
       - "4000:80"
@@ -64,9 +64,10 @@ services:
       - SMTP_REQUIRE_TLS=false
       - SMTP_IGNORE_TLS=true
       - SKIP_EMAIL_SEND=true  # TEMPORARY: Skip email sending due to SMTP timeout
+      - UPLOAD_DIR=/app/uploads
     volumes:
-      - ./backend/uploads/blue:/app/backend/uploads
-      - ./backend/data/blue:/app/backend/data
+      - ./backend/uploads/blue:/app/uploads
+      - ./backend/data/blue:/app/data
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]

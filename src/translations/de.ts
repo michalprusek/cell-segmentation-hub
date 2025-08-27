@@ -100,6 +100,44 @@ export default {
         'Melden Sie sich für ein kostenloses Konto an und erleben Sie die Kraft der KI-gesteuerten Sphäroid-Segmentierung.',
       createAccount: 'Konto erstellen',
     },
+    features: {
+      badge: 'Leistungsstarke Funktionen',
+      title: 'Fortgeschrittene Tools für die biomedizinische Forschung',
+      subtitle:
+        'Unsere Plattform bietet eine umfassende Suite von Funktionen, die darauf ausgelegt sind, Ihren Sphäroid-Segmentierungs-Workflow zu optimieren.',
+      cards: {
+        advancedSegmentation: {
+          title: 'Erweiterte Segmentierung',
+          description:
+            'Präzise Sphäroid-Erkennung mit Grenzanalyse für genaue Zellmessungen.',
+        },
+        aiPowered: {
+          title: 'KI-gestützte Analyse',
+          description:
+            'Nutzen Sie Deep-Learning-Algorithmen für automatische Zellerkennung und -klassifizierung.',
+        },
+        effortlessUploads: {
+          title: 'Müheloses Hochladen',
+          description:
+            'Ziehen Sie Ihre mikroskopischen Bilder per Drag & Drop für sofortige Verarbeitung und Analyse.',
+        },
+        statisticalInsights: {
+          title: 'Statistische Einblicke',
+          description:
+            'Umfassende Metriken und Visualisierungen zur Extraktion bedeutsamer Datenmuster.',
+        },
+        collaboration: {
+          title: 'Kollaborationswerkzeuge',
+          description:
+            'Teilen Sie Projekte mit Kollegen und arbeiten Sie in Echtzeit an Forschungsergebnissen zusammen.',
+        },
+        processingPipeline: {
+          title: 'Verarbeitungspipeline',
+          description:
+            'Automatisierter Workflow von der Vorverarbeitung bis zur finalen Analyse mit anpassbaren Parametern.',
+        },
+      },
+    },
   },
   dashboard: {
     manageProjects: 'Verwalten Sie Ihre Forschungsprojekte und Analysen',
@@ -397,6 +435,25 @@ export default {
       description:
         'Erlauben Sie die Nutzung Ihrer Daten zum Training und zur Verbesserung unserer Segmentierungsmodelle',
     },
+    consent: {
+      privacyNotice:
+        'Ihr Datenschutz ist uns wichtig. Diese Einstellungen steuern, wie Ihre hochgeladenen Bilder und Segmentierungsdaten zur Verbesserung unserer ML-Modelle verwendet werden können. Sie können diese Präferenzen jederzeit ändern.',
+      dataUsageNote:
+        'Daten von Benutzern, die sich abgemeldet haben, werden nicht in Trainingspipelines aufgenommen.',
+      algorithmImprovement: {
+        label: 'Algorithmus-Verbesserung',
+        description:
+          'Daten zur Verbesserung der Segmentierungsgenauigkeit und -geschwindigkeit verwenden',
+      },
+      featureDevelopment: {
+        label: 'Funktionsentwicklung',
+        description:
+          'Helfen Sie bei der Entwicklung neuer Funktionen und Fähigkeiten',
+      },
+      lastUpdated: 'Zuletzt aktualisiert',
+      savePreferences: 'Einwilligungspräferenzen speichern',
+      savingPreferences: 'Speichere...',
+    },
     cancel: 'Abbrechen',
     deleting: 'Lösche...',
     deleteAccount: 'Konto Löschen',
@@ -437,6 +494,7 @@ export default {
   auth: {
     signIn: 'Anmelden',
     signUp: 'Registrieren',
+    redirectingToDashboard: 'Weiterleitung zum Dashboard...',
     signOut: 'Abmelden',
     forgotPassword: 'Passwort vergessen?',
     resetPassword: 'Passwort zurücksetzen',
@@ -630,9 +688,48 @@ export default {
     },
     shortcuts: {
       buttonText: 'Tastenkürzel',
+      title: 'Tastenkürzel',
       dialogTitle: 'Tastenkürzel',
       footerNote:
         'Diese Tastenkürzel funktionieren im Segmentierungseditor für schnelleres und bequemeres Arbeiten.',
+
+      // Categories
+      categories: {
+        modes: 'Bearbeitungsmodi',
+        actions: 'Aktionen',
+        view: 'Ansichtssteuerungen',
+        navigation: 'Navigation',
+      },
+
+      // Mode shortcuts
+      viewMode: 'Ansichtsmodus',
+      editVertices: 'Eckpunkte bearbeiten-Modus',
+      addPoints: 'Punkte hinzufügen-Modus',
+      createPolygon: 'Neues Polygon erstellen',
+      sliceMode: 'Schnitt-Modus',
+      deleteMode: 'Lösch-Modus',
+
+      // Action shortcuts
+      save: 'Speichern',
+      undo: 'Rückgängig',
+      redo: 'Wiederholen',
+      deleteSelected: 'Ausgewähltes Polygon löschen',
+
+      // View shortcuts
+      zoom: 'Vergrößern/Verkleinern',
+      resetView: 'Ansicht zurücksetzen',
+      fitToScreen: 'An Bildschirm anpassen',
+
+      // Navigation shortcuts
+      cycleModes: 'Modi durchschalten',
+      cycleModesReverse: 'Modi durchschalten (rückwärts)',
+      cancel: 'Aktuelle Operation abbrechen',
+      showHelp: 'Diese Hilfe anzeigen',
+
+      // Conditions
+      requiresSelection: 'Erfordert Polygon-Auswahl',
+
+      // Legacy keys (kept for backward compatibility)
       v: 'Ansichtsmodus',
       e: 'Eckpunkte bearbeiten-Modus',
       a: 'Punkte hinzufügen-Modus',
@@ -904,6 +1001,7 @@ export default {
     scaleWarning:
       'Hinweis: Skalierungswert über 1 µm/Pixel deutet auf sehr geringe Vergrößerung hin. Bitte überprüfen.',
     outputSettings: 'Ausgabeeinstellungen',
+    exportFormatsLabel: 'Exportformate',
     exportFormats: {
       yolo: 'YOLO-Format',
       excel: 'Excel-Format',
@@ -1561,6 +1659,7 @@ export default {
     listView: 'Listenansicht',
   },
   sharing: {
+    processingInvitation: 'Einladung wird verarbeitet...',
     share: 'Teilen',
     shared: 'Geteilt',
     shareProject: 'Projekt teilen',
@@ -1641,6 +1740,19 @@ export default {
     reloadingSegmentation: 'Segmentierung wird neu geladen...',
     segmenting: 'Segmentierung läuft...',
     waitingInQueue: 'Warten in der Warteschlange...',
+    error: {
+      title: 'Segmentierungsfehler',
+      description:
+        'Beim Laden der Segmentierungsdaten ist ein Fehler aufgetreten. Dies könnte auf Netzwerkprobleme oder Serverprobleme zurückzuführen sein.',
+      errorDetails: 'Fehlerdetails',
+      tryAgain: 'Erneut versuchen',
+      unsavedChanges: 'Ungespeicherte Änderungen',
+    },
+    export: {
+      exportAllMetrics: 'Alle Metriken als XLSX exportieren',
+      exportUnavailable: 'Export nicht verfügbar',
+      loading: 'Laden...',
+    },
   },
   footer: {
     appName: 'SpheroSeg',

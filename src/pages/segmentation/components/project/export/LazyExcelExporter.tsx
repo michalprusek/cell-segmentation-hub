@@ -2,6 +2,8 @@ import React, { Suspense, lazy, Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Loader2, AlertCircle } from 'lucide-react';
 import { SegmentationResult } from '@/lib/segmentation';
+import { logger } from '@/lib/logger';
+import { useTranslation } from 'react-i18next';
 
 // Lazy load the heavy ExcelExporter component that imports ExcelJS
 const ExcelExporter = lazy(() => import('./ExcelExporter'));
@@ -26,7 +28,7 @@ class LazyImportErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('LazyExcelExporter failed to load:', error, errorInfo);
+    logger.error('LazyExcelExporter failed to load', { error, errorInfo });
   }
 
   render() {
@@ -42,6 +44,7 @@ const LazyExcelExporter: React.FC<LazyExcelExporterProps> = ({
   segmentation,
   imageName,
 }) => {
+  const { t } = useTranslation();
   const [showExporter, setShowExporter] = React.useState(false);
 
   if (!segmentation || !segmentation.polygons) return null;
@@ -55,7 +58,7 @@ const LazyExcelExporter: React.FC<LazyExcelExporterProps> = ({
         className="text-xs"
       >
         <FileSpreadsheet className="h-4 w-4 mr-1" />
-        Exportovat všechny metriky jako XLSX
+        {t('segmentationEditor.export.exportAllMetrics')}
       </Button>
     );
   }
@@ -65,7 +68,7 @@ const LazyExcelExporter: React.FC<LazyExcelExporterProps> = ({
       fallback={
         <Button variant="default" size="sm" disabled className="text-xs">
           <AlertCircle className="h-4 w-4 mr-1" />
-          Export Unavailable
+          {t('segmentationEditor.export.exportUnavailable')}
         </Button>
       }
     >

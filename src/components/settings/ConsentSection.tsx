@@ -108,14 +108,10 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
             <Info className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="text-sm text-blue-900 dark:text-blue-200">
-                Your data privacy is important to us. These settings control how
-                your uploaded images and segmentation data may be used to
-                improve our ML models. You can change these preferences at any
-                time.
+                {t('settings.consent.privacyNotice')}
               </p>
               <p className="text-sm text-blue-800 dark:text-blue-300">
-                Data from users who opt out will not be included in any training
-                pipelines.
+                {t('settings.consent.dataUsageNote')}
               </p>
             </div>
           </div>
@@ -145,10 +141,10 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="algorithm-improvement" className="text-sm">
-                    Algorithm Improvement
+                    {t('settings.consent.algorithmImprovement.label')}
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Use data to enhance segmentation accuracy and speed
+                    {t('settings.consent.algorithmImprovement.description')}
                   </p>
                 </div>
                 <Switch
@@ -166,10 +162,10 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="feature-development" className="text-sm">
-                    Feature Development
+                    {t('settings.consent.featureDevelopment.label')}
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Help develop new features and capabilities
+                    {t('settings.consent.featureDevelopment.description')}
                   </p>
                 </div>
                 <Switch
@@ -186,7 +182,7 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
 
         {profile?.consentUpdatedAt && (
           <p className="text-xs text-muted-foreground">
-            Last updated:{' '}
+            {t('settings.consent.lastUpdated')}:{' '}
             {new Date(profile.consentUpdatedAt).toLocaleDateString()}
           </p>
         )}
@@ -197,7 +193,9 @@ const ConsentSection = ({ userId, profile }: ConsentSectionProps) => {
             disabled={loading}
             className="w-full sm:w-auto"
           >
-            {loading ? 'Saving...' : 'Save Consent Preferences'}
+            {loading
+              ? t('settings.consent.savingPreferences')
+              : t('settings.consent.savePreferences')}
           </Button>
         )}
       </CardContent>

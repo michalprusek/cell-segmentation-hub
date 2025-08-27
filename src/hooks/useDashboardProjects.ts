@@ -58,7 +58,7 @@ export const useDashboardProjects = ({
           count: Array.isArray(sharedResponse) ? sharedResponse.length : 0,
         });
       } catch (shareError) {
-        console.error('Failed to fetch shared projects:', shareError);
+        logger.error('Failed to fetch shared projects', shareError);
         logger.warn('Failed to fetch shared projects:', shareError);
         sharedResponse = [];
         // Continue with just owned projects

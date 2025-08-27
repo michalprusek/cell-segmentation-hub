@@ -429,7 +429,7 @@ export class MetricsCalculator {
     // Add data rows with validation for finite values
     metrics.forEach(m => {
       // Helper function to ensure finite values
-      const safeValue = (value: number, decimals: number = 2): number => {
+      const safeValue = (value: number, decimals = 2): number => {
         if (!isFinite(value)) {
           return 0;
         }

@@ -1,20 +1,38 @@
 {
+  "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "./tsconfig.app.json",
   "compilerOptions": {
+    // Test-specific overrides
     "jsx": "react-jsx",
     "allowImportingTsExtensions": false,
     "noEmit": true,
     "composite": true,
+
+    // Test environment types
     "types": [
       "vitest/globals",
       "@testing-library/jest-dom",
       "node",
       "vite/client"
     ],
-    "lib": ["ES2020", "DOM", "DOM.Iterable"]
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+
+    // Relaxed settings for tests (can use any/unsafe patterns)
+    "noImplicitAny": false,
+    "strict": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+
+    // Keep core safety features for tests
+    "strictNullChecks": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true
   },
   "include": [
-    "src/**/*",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx",
+    "src/**/*.spec.ts",
+    "src/**/*.spec.tsx",
     "tests/**/*",
     "vitest.setup.ts",
     "**/*.test.ts",
@@ -22,5 +40,5 @@
     "**/*.spec.ts",
     "**/*.spec.tsx"
   ],
-  "exclude": ["node_modules", "dist", "backend"]
+  "exclude": ["node_modules", "dist", "backend", "coverage"]
 }

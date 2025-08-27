@@ -54,7 +54,10 @@ if confirm "Do you want to backup the production database?"; then
     mkdir -p $BACKUP_DIR
     
     echo "Creating database backup..."
-    docker exec spheroseg-db pg_dump -U postgres spheroseg > $BACKUP_DIR/spheroseg.sql
+    # Use environment variables for credentials
+    DB_USER="${DB_USER:-postgres}"
+    DB_NAME="${DB_NAME:-spheroseg}"
+    docker exec spheroseg-db pg_dump -U "$DB_USER" "$DB_NAME" > $BACKUP_DIR/spheroseg.sql
     gzip $BACKUP_DIR/spheroseg.sql
     echo -e "${GREEN}✓ Backup created: $BACKUP_DIR/spheroseg.sql.gz${NC}"
 else
@@ -96,10 +99,14 @@ if [ -f ".env.staging" ]; then
     cp .env.production .env.production.backup.$(date +%Y%m%d-%H%M%S)
     
     # Update production env with staging values (keep production-specific vars)
-    grep -E "^(POSTGRES_PASSWORD|JWT_SECRET|ADMIN_EMAIL|SMTP_)" .env.production > /tmp/prod_secrets.tmp
+    # Create secure temp file
+    TEMP_SECRETS=$(mktemp)
+    chmod 600 "$TEMP_SECRETS"
+    trap "rm -f '$TEMP_SECRETS'" EXIT
+    
+    grep -E "^(POSTGRES_PASSWORD|JWT_SECRET|ADMIN_EMAIL|SMTP_)" .env.production > "$TEMP_SECRETS"
     cp .env.staging .env.production
-    cat /tmp/prod_secrets.tmp >> .env.production
-    rm /tmp/prod_secrets.tmp
+    cat "$TEMP_SECRETS" >> .env.production
     
     echo -e "${GREEN}✓ Configuration updated${NC}"
 fi

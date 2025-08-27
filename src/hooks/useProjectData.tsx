@@ -189,7 +189,7 @@ export const useProjectData = (
               !imagesResponse.images ||
               !Array.isArray(imagesResponse.images)
             ) {
-              console.error('Invalid images response format');
+              logger.error('Invalid images response format');
               break;
             }
 
@@ -201,11 +201,11 @@ export const useProjectData = (
 
             // Safety limit to prevent infinite loops (max 2000 images)
             if (page > 40) {
-              console.warn('Reached maximum pagination limit (2000 images)');
+              logger.warn('Reached maximum pagination limit (2000 images)');
               break;
             }
           } catch (error) {
-            console.error(`Error fetching images page ${page}:`, error);
+            logger.error(`Error fetching images page ${page}`, error);
             break;
           }
         }

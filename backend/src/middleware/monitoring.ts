@@ -1,6 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import client from 'prom-client';
 import { logger } from '../utils/logger';
+import { 
+  businessMetricsRegistry, 
+  trackApiError, 
+  trackFeatureUsage, 
+  trackImageProcessing,
+  initializeBusinessMetricsCollection 
+} from '../monitoring/businessMetrics';
 
 // Vytvoření registru pro metriky
 const register = new client.Registry();
@@ -91,6 +98,21 @@ export function createMonitoringMiddleware(): (req: Request, res: Response, next
       const isHealthy = res.statusCode < 500 ? 1 : 0;
       endpointHealth.set({ endpoint: route, method }, isHealthy);
 
+      // Track business metrics for errors
+      if (res.statusCode >= 400) {
+        const userType = (req as any).user ? 'authenticated' : 'anonymous';
+        const errorType = res.statusCode >= 500 ? 'server_error' : 'client_error';
+        trackApiError(route, errorType, status, userType);
+      }
+
+      // Track feature usage for authenticated users
+      if ((req as any).user && res.statusCode < 400) {
+        const featureName = getFeatureNameFromRoute(route, method);
+        if (featureName) {
+          trackFeatureUsage(featureName, 'authenticated');
+        }
+      }
+
       // Logování pomalých požadavků
       if (duration > 1000) {
         logger.warn(`Slow request: ${method} ${route} took ${duration}ms`);
@@ -106,8 +128,15 @@ export function getMetricsEndpoint(): (req: Request, res: Response) => Promise<v
   return async (req: Request, res: Response) => {
     try {
       res.set('Content-Type', register.contentType);
-      const metrics = await register.metrics();
-      res.end(metrics);
+      
+      // Combine both standard and business metrics
+      const standardMetrics = await register.metrics();
+      const businessMetrics = await businessMetricsRegistry.metrics();
+      
+      // Combine the metrics
+      const allMetrics = standardMetrics + businessMetrics;
+      
+      res.end(allMetrics);
     } catch (error) {
       logger.error('Error generating metrics:', error as Error);
       res.status(500).end('Error generating metrics');
@@ -153,6 +182,65 @@ export function getMonitoringHealth(): {healthy: boolean; message: string; metri
   }
 }
 
+// Helper function to map routes to feature names for business metrics
+function getFeatureNameFromRoute(route: string, method: string): string | null {
+  const routeFeatureMap: Record<string, string> = {
+    // Authentication features
+    '/api/auth/login': 'user_login',
+    '/api/auth/register': 'user_registration',
+    '/api/auth/logout': 'user_logout',
+    
+    // Project features
+    '/api/projects': method === 'POST' ? 'project_creation' : 'project_list',
+    '/api/projects/:id': method === 'GET' ? 'project_view' : method === 'PUT' ? 'project_edit' : 'project_delete',
+    
+    // Image features
+    '/api/projects/:id/images': 'image_upload',
+    '/api/projects/:projectId/images/:imageId': 'image_view',
+    
+    // Segmentation features
+    '/api/segmentation/process': 'segmentation_request',
+    '/api/segmentation/:id/results': 'segmentation_results',
+    '/api/segmentation/queue': 'queue_status',
+    
+    // Export features
+    '/api/projects/:id/export': 'data_export',
+    
+    // Profile features
+    '/api/profile': 'profile_access',
+    '/api/profile/avatar': 'avatar_upload',
+    
+    // Sharing features
+    '/api/projects/:id/share': 'project_sharing'
+  };
+
+  // Check for exact match first
+  if (routeFeatureMap[route]) {
+    return routeFeatureMap[route];
+  }
+
+  // Check for pattern matches
+  for (const [pattern, feature] of Object.entries(routeFeatureMap)) {
+    if (route.match(pattern.replace(/:\w+/g, '[^/]+'))) {
+      return feature;
+    }
+  }
+
+  return null;
+}
+
+// Initialize business metrics collection when the module loads
+let metricsCollectionInterval: NodeJS.Timeout | null = null;
+
+export function initializeMetricsCollection(): void {
+  if (metricsCollectionInterval) {
+    clearInterval(metricsCollectionInterval);
+  }
+  
+  metricsCollectionInterval = initializeBusinessMetricsCollection(5); // 5-minute intervals
+  logger.info('Business metrics collection initialized');
+}
+
 // Export všech metrik pro externí použití
 export const metrics = {
   httpRequestsTotal,
@@ -163,7 +251,8 @@ export const metrics = {
   mlModelRequests,
   databaseConnections,
   uploadedFiles,
-  register
+  register,
+  businessMetricsRegistry
 };
 
 // Export funkcí

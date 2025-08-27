@@ -3,6 +3,7 @@ import * as authController from '../controllers/authController';
 import { authenticate } from '../../middleware/auth';
 import { validateBody, validateParams } from '../../middleware/validation';
 import { uploadSingleImage, handleUploadError } from '../../middleware/upload';
+import { authLimiter, passwordResetLimiter, apiLimiter } from '../../middleware/rateLimiter';
 import {
   loginSchema,
   registerSchema,
@@ -19,11 +20,13 @@ const router = Router();
 
 // Public routes
 router.post('/register', 
+  authLimiter,  // Rate limiting for registration
   validateBody(registerSchema),
   authController.register
 );
 
 router.post('/login',
+  authLimiter,  // Rate limiting for login attempts
   validateBody(loginSchema), 
   authController.login
 );
@@ -34,15 +37,25 @@ router.post('/refresh-token',
 );
 
 router.post('/logout',
+  authenticate,  // Logout requires authentication
   authController.logout
 );
 
 router.post('/request-password-reset',
+  passwordResetLimiter,  // Strict rate limiting for password reset
+  validateBody(resetPasswordRequestSchema),
+  authController.requestPasswordReset
+);
+
+// Alias for backward compatibility
+router.post('/forgot-password',
+  passwordResetLimiter,  // Strict rate limiting for password reset
   validateBody(resetPasswordRequestSchema),
   authController.requestPasswordReset
 );
 
 router.post('/reset-password',
+  passwordResetLimiter,  // Strict rate limiting for password reset
   validateBody(resetPasswordConfirmSchema),
   authController.resetPasswordWithToken
 );
@@ -61,25 +74,8 @@ router.post('/resend-verification',
 // Protected routes (require authentication)
 router.use(authenticate);
 
-router.get('/profile',
-  authController.getProfile
-);
-
-router.put('/profile',
-  validateBody(updateProfileSchema),
-  authController.updateProfile
-);
-
-router.delete('/profile',
-  authController.deleteAccount
-);
-
 router.get('/check',
   authController.checkAuth
-);
-
-router.get('/storage-stats',
-  authController.getUserStorageStats
 );
 
 router.post('/change-password',

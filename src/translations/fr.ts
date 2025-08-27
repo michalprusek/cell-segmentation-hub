@@ -91,6 +91,44 @@ export default {
         "Nous combinons des modèles d'IA de pointe avec une interface intuitive pour fournir aux chercheurs des outils puissants pour l'analyse d'images microscopiques, en nous concentrant sur la segmentation de sphéroïdes avec une précision inégalée.",
       contactText: 'Pour toute demande, veuillez nous contacter à',
     },
+    features: {
+      badge: 'Capacités Puissantes',
+      title: 'Outils Avancés pour la Recherche Biomédicale',
+      subtitle:
+        'Notre plateforme offre une suite complète de fonctionnalités conçues pour rationaliser votre flux de travail de segmentation de sphéroïdes.',
+      cards: {
+        advancedSegmentation: {
+          title: 'Segmentation Avancée',
+          description:
+            'Détection précise de sphéroïdes avec analyse des limites pour des mesures cellulaires exactes.',
+        },
+        aiPowered: {
+          title: 'Analyse par IA',
+          description:
+            "Tirez parti des algorithmes d'apprentissage profond pour la détection et classification cellulaire automatisée.",
+        },
+        effortlessUploads: {
+          title: 'Téléchargements Sans Effort',
+          description:
+            'Glissez-déposez vos images microscopiques pour un traitement et une analyse instantanés.',
+        },
+        statisticalInsights: {
+          title: 'Perspectives Statistiques',
+          description:
+            'Métriques complètes et visualisations pour extraire des modèles de données significatifs.',
+        },
+        collaboration: {
+          title: 'Outils de Collaboration',
+          description:
+            'Partagez des projets avec des collègues et collaborez en temps réel sur les résultats de recherche.',
+        },
+        processingPipeline: {
+          title: 'Pipeline de Traitement',
+          description:
+            "Flux de travail automatisé du préprocessing à l'analyse finale avec des paramètres personnalisables.",
+        },
+      },
+    },
     cta: {
       title: "Prêt à Transformer Votre Flux de Travail d'Analyse Cellulaire ?",
       subtitle:
@@ -389,6 +427,25 @@ export default {
       description:
         "Permettre l'utilisation de vos données pour entraîner et améliorer nos modèles de segmentation",
     },
+    consent: {
+      privacyNotice:
+        'Votre confidentialité est importante pour nous. Ces paramètres contrôlent comment vos images téléchargées et données de segmentation peuvent être utilisées pour améliorer nos modèles ML. Vous pouvez modifier ces préférences à tout moment.',
+      dataUsageNote:
+        "Les données des utilisateurs qui choisissent de ne pas participer ne seront incluses dans aucun pipeline d'entraînement.",
+      algorithmImprovement: {
+        label: 'Amélioration des Algorithmes',
+        description:
+          'Utiliser les données pour améliorer la précision et la vitesse de segmentation',
+      },
+      featureDevelopment: {
+        label: 'Développement de Fonctionnalités',
+        description:
+          'Aider à développer de nouvelles fonctionnalités et capacités',
+      },
+      lastUpdated: 'Dernière mise à jour',
+      savePreferences: 'Sauvegarder les Préférences de Consentement',
+      savingPreferences: 'Sauvegarde...',
+    },
     cancel: 'Annuler',
     deleting: 'Suppression...',
     deleteAccount: 'Supprimer le Compte',
@@ -433,6 +490,7 @@ export default {
   auth: {
     signIn: 'Se connecter',
     signUp: "S'inscrire",
+    redirectingToDashboard: 'Redirection vers le tableau de bord...',
     signOut: 'Se déconnecter',
     forgotPassword: 'Mot de passe oublié ?',
     resetPassword: 'Réinitialiser le mot de passe',
@@ -624,9 +682,48 @@ export default {
     },
     shortcuts: {
       buttonText: 'Raccourcis',
-      dialogTitle: 'Raccourcis clavier',
+      title: 'Raccourcis Clavier',
+      dialogTitle: 'Raccourcis Clavier',
       footerNote:
         "Ces raccourcis fonctionnent dans l'éditeur de segmentation pour un travail plus rapide et pratique.",
+
+      // Categories
+      categories: {
+        modes: "Modes d'Édition",
+        actions: 'Actions',
+        view: 'Contrôles de Vue',
+        navigation: 'Navigation',
+      },
+
+      // Mode shortcuts
+      viewMode: 'Mode visualisation',
+      editVertices: 'Mode édition des sommets',
+      addPoints: 'Mode ajout de points',
+      createPolygon: 'Créer un nouveau polygone',
+      sliceMode: 'Mode découpe',
+      deleteMode: 'Mode suppression',
+
+      // Action shortcuts
+      save: 'Sauvegarder',
+      undo: 'Annuler',
+      redo: 'Rétablir',
+      deleteSelected: 'Supprimer le polygone sélectionné',
+
+      // View shortcuts
+      zoom: 'Zoomer/Dézoomer',
+      resetView: 'Réinitialiser la vue',
+      fitToScreen: "Ajuster à l'écran",
+
+      // Navigation shortcuts
+      cycleModes: 'Alterner entre les modes',
+      cycleModesReverse: 'Alterner les modes (inverse)',
+      cancel: "Annuler l'opération actuelle",
+      showHelp: 'Afficher cette aide',
+
+      // Conditions
+      requiresSelection: "Nécessite la sélection d'un polygone",
+
+      // Legacy keys (kept for backward compatibility)
       v: 'Mode visualisation',
       e: 'Mode édition des sommets',
       a: 'Mode ajout de points',
@@ -893,6 +990,7 @@ export default {
     scaleWarning:
       "Remarque: Valeur d'échelle supérieure à 1 µm/pixel indique un très faible grossissement. Veuillez vérifier.",
     outputSettings: 'Paramètres de Sortie',
+    exportFormatsLabel: "Formats d'exportation",
     exportFormats: {
       yolo: 'Format YOLO',
       excel: 'Format Excel',
@@ -1551,6 +1649,7 @@ export default {
     listView: 'Vue en liste',
   },
   sharing: {
+    processingInvitation: "Traitement de l'invitation...",
     share: 'Partager',
     shared: 'Partagé',
     shareProject: 'Partager le projet',
@@ -1630,6 +1729,19 @@ export default {
     reloadingSegmentation: 'Rechargement de la segmentation...',
     segmenting: 'Segmentation en cours...',
     waitingInQueue: 'En attente dans la file...',
+    error: {
+      title: 'Erreur de Segmentation',
+      description:
+        "Une erreur s'est produite lors du chargement des données de segmentation. Cela pourrait être dû à des problèmes de réseau ou de serveur.",
+      errorDetails: "Détails de l'Erreur",
+      tryAgain: 'Réessayer',
+      unsavedChanges: 'Modifications non sauvegardées',
+    },
+    export: {
+      exportAllMetrics: 'Exporter toutes les métriques en XLSX',
+      exportUnavailable: 'Exportation Non Disponible',
+      loading: 'Chargement...',
+    },
   },
   footer: {
     appName: 'SpheroSeg',
