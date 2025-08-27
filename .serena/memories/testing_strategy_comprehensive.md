@@ -108,7 +108,7 @@ afterEach(() => {
 2. **ML Model Accuracy**: Systematic model validation tests
 3. **File Processing**: Edge cases in image processing
 4. **Performance Tests**: Load testing for concurrent users
-5. **Security Tests**: Penetration testing for APIs
+5. **Security Tests**: Penetration testing of APIs
 
 ## CI/CD Integration
 

@@ -13,6 +13,7 @@ import { Slider } from '@/components/ui/slider';
 import { Label } from '@/components/ui/label';
 import { Loader2, X, Check } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
+import { logger } from '@/lib/logger';
 import { cropImageToCircle } from '@/lib/cropImage';
 import { toast } from '@/hooks/use-toast';
 
@@ -54,7 +55,7 @@ const AvatarCropDialog: React.FC<AvatarCropDialogProps> = ({
       await onCropComplete(croppedImage);
       onClose();
     } catch (error) {
-      console.error('Error cropping image:', error);
+      logger.error('Error cropping image', error);
       toast({
         title: t('common.error'),
         description: t('profile.avatar.cropError'),

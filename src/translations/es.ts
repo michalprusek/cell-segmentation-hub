@@ -91,6 +91,44 @@ export default {
         'Combinamos modelos de IA de vanguardia con una interfaz intuitiva para proporcionar a los investigadores herramientas poderosas para el análisis de imágenes microscópicas, centrándonos en la segmentación de esferoides con precisión sin igual.',
       contactText: 'Para consultas, contáctenos en',
     },
+    features: {
+      badge: 'Capacidades Poderosas',
+      title: 'Herramientas Avanzadas para la Investigación Biomédica',
+      subtitle:
+        'Nuestra plataforma ofrece un conjunto completo de características diseñadas para optimizar su flujo de trabajo de segmentación de esferoides.',
+      cards: {
+        advancedSegmentation: {
+          title: 'Segmentación Avanzada',
+          description:
+            'Detección precisa de esferoides con análisis de límites para mediciones celulares exactas.',
+        },
+        aiPowered: {
+          title: 'Análisis con IA',
+          description:
+            'Aproveche algoritmos de aprendizaje profundo para detección y clasificación celular automatizada.',
+        },
+        effortlessUploads: {
+          title: 'Cargas Sin Esfuerzo',
+          description:
+            'Arrastre y suelte sus imágenes microscópicas para procesamiento y análisis instantáneos.',
+        },
+        statisticalInsights: {
+          title: 'Perspectivas Estadísticas',
+          description:
+            'Métricas integrales y visualizaciones para extraer patrones de datos significativos.',
+        },
+        collaboration: {
+          title: 'Herramientas de Colaboración',
+          description:
+            'Comparta proyectos con colegas y colabore en tiempo real en hallazgos de investigación.',
+        },
+        processingPipeline: {
+          title: 'Pipeline de Procesamiento',
+          description:
+            'Flujo de trabajo automatizado desde preprocesamiento hasta análisis final con parámetros personalizables.',
+        },
+      },
+    },
     cta: {
       title: '¿Listo para Transformar su Flujo de Trabajo de Análisis Celular?',
       subtitle:
@@ -376,6 +414,25 @@ export default {
       description:
         'Permitir que tus datos se utilicen para entrenar y mejorar nuestros modelos de segmentación',
     },
+    consent: {
+      privacyNotice:
+        'Su privacidad es importante para nosotros. Estas configuraciones controlan cómo sus imágenes cargadas y datos de segmentación pueden usarse para mejorar nuestros modelos de ML. Puede cambiar estas preferencias en cualquier momento.',
+      dataUsageNote:
+        'Los datos de usuarios que opten por no participar no serán incluidos en ningún pipeline de entrenamiento.',
+      algorithmImprovement: {
+        label: 'Mejora de Algoritmos',
+        description:
+          'Usar datos para mejorar la precisión y velocidad de segmentación',
+      },
+      featureDevelopment: {
+        label: 'Desarrollo de Características',
+        description:
+          'Ayudar a desarrollar nuevas características y capacidades',
+      },
+      lastUpdated: 'Última actualización',
+      savePreferences: 'Guardar Preferencias de Consentimiento',
+      savingPreferences: 'Guardando...',
+    },
     cancel: 'Cancelar',
     deleting: 'Eliminando...',
     deleteAccount: 'Eliminar Cuenta',
@@ -433,6 +490,7 @@ export default {
   auth: {
     signIn: 'Iniciar sesión',
     signUp: 'Registrarse',
+    redirectingToDashboard: 'Redirigiendo al panel...',
     signOut: 'Cerrar sesión',
     forgotPassword: '¿Olvidaste tu contraseña?',
     resetPassword: 'Restablecer contraseña',
@@ -623,9 +681,48 @@ export default {
     },
     shortcuts: {
       buttonText: 'Atajos',
-      dialogTitle: 'Atajos de teclado',
+      title: 'Atajos de Teclado',
+      dialogTitle: 'Atajos de Teclado',
       footerNote:
         'Estos atajos funcionan dentro del editor de segmentación para un trabajo más rápido y conveniente.',
+
+      // Categories
+      categories: {
+        modes: 'Modos de Edición',
+        actions: 'Acciones',
+        view: 'Controles de Vista',
+        navigation: 'Navegación',
+      },
+
+      // Mode shortcuts
+      viewMode: 'Modo vista',
+      editVertices: 'Modo editar vértices',
+      addPoints: 'Modo agregar puntos',
+      createPolygon: 'Crear nuevo polígono',
+      sliceMode: 'Modo cortar',
+      deleteMode: 'Modo eliminar',
+
+      // Action shortcuts
+      save: 'Guardar',
+      undo: 'Deshacer',
+      redo: 'Rehacer',
+      deleteSelected: 'Eliminar polígono seleccionado',
+
+      // View shortcuts
+      zoom: 'Acercar/Alejar',
+      resetView: 'Restablecer vista',
+      fitToScreen: 'Ajustar a pantalla',
+
+      // Navigation shortcuts
+      cycleModes: 'Alternar entre modos',
+      cycleModesReverse: 'Alternar modos (reversa)',
+      cancel: 'Cancelar operación actual',
+      showHelp: 'Mostrar esta ayuda',
+
+      // Conditions
+      requiresSelection: 'Requiere selección de polígono',
+
+      // Legacy keys (kept for backward compatibility)
       v: 'Modo vista',
       e: 'Modo editar vértices',
       a: 'Modo agregar puntos',
@@ -887,6 +984,7 @@ export default {
     scaleWarning:
       'Nota: Valor de escala superior a 1 µm/píxel indica magnificación muy baja. Por favor verifique.',
     outputSettings: 'Configuración de Salida',
+    exportFormatsLabel: 'Formatos de exportación',
     exportFormats: {
       yolo: 'Formato YOLO',
       excel: 'Formato Excel',
@@ -1629,6 +1727,7 @@ export default {
       '© {{year}} SpheroSeg. Desarrollado en ÚTIA AV ČR (Instituto de Teoría de la Información y Automatización, Academia de Ciencias de la República Checa).',
   },
   sharing: {
+    processingInvitation: 'Procesando invitación...',
     share: 'Compartir',
     shared: 'Compartido',
     shareProject: 'Compartir proyecto',
@@ -1708,5 +1807,18 @@ export default {
     reloadingSegmentation: 'Recargando segmentación...',
     segmenting: 'Segmentando...',
     waitingInQueue: 'Esperando en cola...',
+    error: {
+      title: 'Error de Segmentación',
+      description:
+        'Ocurrió un error al cargar los datos de segmentación. Esto podría deberse a problemas de red o del servidor.',
+      errorDetails: 'Detalles del Error',
+      tryAgain: 'Intentar de Nuevo',
+      unsavedChanges: 'Cambios no guardados',
+    },
+    export: {
+      exportAllMetrics: 'Exportar todas las métricas como XLSX',
+      exportUnavailable: 'Exportación No Disponible',
+      loading: 'Cargando...',
+    },
   },
 };

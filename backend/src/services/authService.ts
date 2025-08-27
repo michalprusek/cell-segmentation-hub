@@ -1,6 +1,6 @@
 import { prisma } from '../db';
 import { hashPassword, verifyPassword, generateSecureToken } from '../auth/password';
-import { generateTokenPair, JwtPayload } from '../auth/jwt';
+import { generateTokenPair, JwtPayload, verifyRefreshToken } from '../auth/jwt';
 import { logger } from '../utils/logger';
 import { ApiError } from '../middleware/error';
 import * as EmailService from './emailService';
@@ -8,6 +8,7 @@ import { generateFriendlyPassword } from '../utils/passwordGenerator';
 import { getStorageProvider } from '../storage/index';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
+import { sessionService } from './sessionService';
 import type { 
   LoginData, 
   RegisterData, 
@@ -54,6 +55,9 @@ export interface AuthResult {
    */
 export async function register(data: RegisterData): Promise<{ message: string; user: { id: string; email: string; username?: string; emailVerified: boolean }; accessToken: string; refreshToken: string }> {
     try {
+      // Import transaction utility at the top of the function
+      const { withTransaction } = await import('../utils/database');
+      
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
         where: { email: data.email }
@@ -80,74 +84,84 @@ export async function register(data: RegisterData): Promise<{ message: string; u
       // Generate verification token
       const verificationToken = generateSecureToken();
 
-      // Create user with profile including consent fields
-      await prisma.user.create({
-        data: {
-          email: data.email,
-          password: hashedPassword,
-          verificationToken,
-          profile: {
-            create: {
-              username: data.username,
-              preferredModel: 'model1',
-              modelThreshold: 0.5,
-              preferredLang: 'cs',
-              preferredTheme: 'light',
-              emailNotifications: true,
-              consentToMLTraining: true,
-              consentToAlgorithmImprovement: true,
-              consentToFeatureDevelopment: true,
-              consentUpdatedAt: new Date()
+      // Execute registration in a transaction for data integrity
+      const result = await withTransaction(prisma, async (tx) => {
+        // Create user with profile including consent fields
+        const newUser = await tx.user.create({
+          data: {
+            email: data.email,
+            password: hashedPassword,
+            verificationToken,
+            profile: {
+              create: {
+                username: data.username,
+                preferredModel: 'model1',
+                modelThreshold: 0.5,
+                preferredLang: 'cs',
+                preferredTheme: 'light',
+                emailNotifications: true,
+                consentToMLTraining: true,
+                consentToAlgorithmImprovement: true,
+                consentToFeatureDevelopment: true,
+                consentUpdatedAt: new Date()
+              }
             }
-          }
-        }
-      });
+          },
+          include: { profile: true }
+        });
 
-      logger.info('User registered successfully', 'AuthService', { email: data.email });
-
-      // TODO: Send verification email
-      // await EmailService.sendVerificationEmail(data.email, verificationToken);
-
-      // Auto-login user after registration
-      const newUser = await prisma.user.findUnique({
-        where: { email: data.email },
-        include: { profile: true }
-      });
-
-      if (!newUser) {
-        throw ApiError.internalError('Chyba při vytváření uživatele');
-      }
-
-      // Generate tokens for immediate login (default rememberMe=true for registration)
-      const tokenPayload: JwtPayload = {
-        userId: newUser.id,
-        email: newUser.email,
-        emailVerified: newUser.emailVerified
-      };
-
-      const { accessToken, refreshToken } = generateTokenPair(tokenPayload, true);
-
-      // Create session with rememberMe=true for new registrations
-      await prisma.session.create({
-        data: {
+        // Generate tokens for immediate login (default rememberMe=true for registration)
+        const tokenPayload: JwtPayload = {
           userId: newUser.id,
-          refreshToken,
-          rememberMe: true,
-          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days for new registrations
-          isValid: true
+          email: newUser.email,
+          emailVerified: newUser.emailVerified
+        };
+
+        const { accessToken, refreshToken } = generateTokenPair(tokenPayload, true);
+
+        // Create session with rememberMe=true for new registrations
+        await tx.session.create({
+          data: {
+            userId: newUser.id,
+            refreshToken,
+            rememberMe: true,
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days for new registrations
+            isValid: true
+          }
+        });
+
+        logger.info('User registered successfully', 'AuthService', { email: data.email });
+
+        // Send verification email using user's preferred language
+        try {
+          const locale = newUser.profile?.preferredLang || 'cs';
+          await EmailService.sendVerificationEmail(data.email, verificationToken, locale);
+          logger.info('Verification email sent successfully', 'AuthService', { 
+            email: data.email, 
+            locale 
+          });
+        } catch (emailError) {
+          logger.error('Failed to send verification email:', emailError as Error, 'AuthService', { email: data.email });
+          // Continue with registration - don't fail the registration process if email fails
         }
+
+        return {
+          user: newUser,
+          accessToken,
+          refreshToken
+        };
       });
 
       return {
         message: 'Uživatel byl úspěšně zaregistrován a přihlášen.',
         user: {
-          id: newUser.id,
-          email: newUser.email,
-          username: newUser.profile?.username || undefined,
-          emailVerified: newUser.emailVerified
+          id: result.user.id,
+          email: result.user.email,
+          username: result.user.profile?.username || undefined,
+          emailVerified: result.user.emailVerified
         },
-        accessToken,
-        refreshToken
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
       };
     } catch (error) {
       if (error instanceof ApiError) {
@@ -179,6 +193,12 @@ export async function login(data: LoginData & { rememberMe?: boolean }): Promise
         throw ApiError.unauthorized('Neplatné přihlašovací údaje');
       }
 
+      // Check email verification if required by environment
+      const requireEmailVerification = process.env.REQUIRE_EMAIL_VERIFICATION === 'true';
+      if (requireEmailVerification && !user.emailVerified) {
+        throw ApiError.forbidden('Email musí být ověřen před přihlášením. Zkontrolujte svou emailovou schránku nebo požádejte o nový ověřovací email.');
+      }
+
       // Generate tokens with rememberMe option
       const tokenPayload: JwtPayload = {
         userId: user.id,
@@ -189,17 +209,16 @@ export async function login(data: LoginData & { rememberMe?: boolean }): Promise
       const rememberMe = data.rememberMe ?? false;
       const { accessToken, refreshToken } = generateTokenPair(tokenPayload, rememberMe);
 
-      // Store refresh token in database with appropriate expiry
-      const expiryDays = rememberMe ? 30 : 7; // 30 days for remember me, 7 days for normal login
-      await prisma.session.create({
-        data: {
-          userId: user.id,
-          refreshToken,
+      // Create session in Redis
+      const sessionId = await sessionService.createSession(
+        refreshToken, 
+        tokenPayload, 
+        {
           rememberMe,
-          expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000),
-          isValid: true
+          userAgent: undefined, // Will be set by middleware if available
+          ipAddress: undefined  // Will be set by middleware if available
         }
-      });
+      );
 
       logger.info('User logged in successfully', 'AuthService', { 
         email: user.email, 
@@ -230,48 +249,18 @@ export async function login(data: LoginData & { rememberMe?: boolean }): Promise
    */
 export async function refreshToken(data: RefreshTokenData): Promise<{ accessToken: string; refreshToken: string }> {
     try {
-      // Find session with refresh token
-      const session = await prisma.session.findUnique({
-        where: { refreshToken: data.refreshToken }
-      });
+      // Use session service to refresh the session
+      const result = await sessionService.refreshSession(data.refreshToken);
 
-      if (!session || !session.isValid || session.expiresAt < new Date()) {
+      if (!result) {
         throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
       }
 
-      // Get user data
-      const user = await prisma.user.findUnique({
-        where: { id: session.userId }
-      });
-
-      if (!user) {
-        throw ApiError.unauthorized('Uživatel nenalezen');
-      }
-
-      // Generate new tokens with same rememberMe setting
-      const tokenPayload: JwtPayload = {
-        userId: session.userId,
-        email: user.email,
-        emailVerified: user.emailVerified
-      };
-
-      const { accessToken, refreshToken: newRefreshToken } = generateTokenPair(tokenPayload, session.rememberMe);
-
-      // Update session with new refresh token and preserve expiry based on rememberMe
-      const expiryDays = session.rememberMe ? 30 : 7;
-      await prisma.session.update({
-        where: { id: session.id },
-        data: {
-          refreshToken: newRefreshToken,
-          expiresAt: new Date(Date.now() + expiryDays * 24 * 60 * 60 * 1000)
-        }
-      });
-
-      logger.info('Token refreshed successfully', 'AuthService', { userId: session.userId });
+      logger.info('Token refreshed successfully', 'AuthService', { sessionId: result.sessionId });
 
       return {
-        accessToken,
-        refreshToken: newRefreshToken
+        accessToken: result.accessToken,
+        refreshToken: result.refreshToken
       };
     } catch (error) {
       if (error instanceof ApiError) {
@@ -287,12 +276,13 @@ export async function refreshToken(data: RefreshTokenData): Promise<{ accessToke
    */
 export async function logout(refreshToken: string): Promise<void> {
     try {
-      await prisma.session.updateMany({
-        where: { refreshToken },
-        data: { isValid: false }
-      });
-
-      logger.info('User logged out successfully', 'AuthService');
+      const success = await sessionService.invalidateSessionByRefreshToken(refreshToken);
+      
+      if (success) {
+        logger.info('User logged out successfully', 'AuthService');
+      } else {
+        logger.warn('Session not found for logout', 'AuthService');
+      }
     } catch (error) {
       logger.error('Logout failed:', error as Error, 'AuthService');
       throw ApiError.internalError('Odhlášení se nezdařilo');
@@ -550,20 +540,78 @@ export async function updateProfile(userId: string, profileData: ProfileUpdateDa
    */
 export async function deleteAccount(userId: string): Promise<void> {
     try {
+      // Import transaction utility
+      const { withTransaction } = await import('../utils/database');
+      
       const user = await prisma.user.findUnique({
-        where: { id: userId }
+        where: { id: userId },
+        include: {
+          projects: {
+            include: {
+              images: true
+            }
+          }
+        }
       });
 
       if (!user) {
         throw ApiError.notFound('Uživatel nenalezen');
       }
 
-      // Delete user (this will cascade delete profile, projects, etc. due to Prisma relations)
-      await prisma.user.delete({
-        where: { id: userId }
+      // Delete user and all related data in a transaction
+      await withTransaction(prisma, async (tx) => {
+        // First, delete all sessions to prevent any further access
+        await tx.session.deleteMany({
+          where: { userId }
+        });
+
+        // Delete all project images and their files
+        for (const project of user.projects) {
+          for (const image of project.images) {
+            // Delete segmentation results first
+            await tx.segmentationResult.deleteMany({
+              where: { projectImageId: image.id }
+            });
+
+            // Delete queue items
+            await tx.queueItem.deleteMany({
+              where: { imageId: image.id }
+            });
+          }
+
+          // Delete all project images
+          await tx.projectImage.deleteMany({
+            where: { projectId: project.id }
+          });
+        }
+
+        // Delete all projects
+        await tx.project.deleteMany({
+          where: { userId }
+        });
+
+        // Delete profile
+        await tx.profile.deleteMany({
+          where: { userId }
+        });
+
+        // Finally, delete the user
+        await tx.user.delete({
+          where: { id: userId }
+        });
+
+        logger.info('Account and all related data deleted successfully', 'AuthService', { userId });
       });
 
-      logger.info('Account deleted successfully', 'AuthService', { userId });
+      // Clean up storage files after successful database deletion
+      try {
+        const storage = getStorageProvider();
+        await storage.deleteUserFiles(userId);
+      } catch (storageError) {
+        logger.error('Failed to delete user files from storage', storageError as Error, 'AuthService');
+        // Don't throw - database deletion was successful
+      }
+
     } catch (error) {
       if (error instanceof ApiError) {
         throw error;
@@ -612,7 +660,8 @@ export async function verifyEmail(token: string): Promise<{ message: string }> {
 export async function resendVerificationEmail(email: string): Promise<{ message: string; verificationToken?: string }> {
     try {
       const user = await prisma.user.findUnique({
-        where: { email }
+        where: { email },
+        include: { profile: true }
       });
 
       if (!user) {
@@ -634,8 +683,18 @@ export async function resendVerificationEmail(email: string): Promise<{ message:
 
       logger.info('Verification email resent', 'AuthService', { email });
 
-      // TODO: Send verification email
-      // await EmailService.sendVerificationEmail(email, verificationToken);
+      // Send verification email using user's preferred language
+      try {
+        const locale = user.profile?.preferredLang || 'cs';
+        await EmailService.sendVerificationEmail(email, verificationToken, locale);
+        logger.info('Verification email resent successfully', 'AuthService', { 
+          email, 
+          locale 
+        });
+      } catch (emailError) {
+        logger.error('Failed to resend verification email:', emailError as Error, 'AuthService', { email });
+        // Don't fail the request - user should still get success message for security
+      }
 
       const response: { message: string; verificationToken?: string } = {
         message: 'Pokud email existuje a není ověřen, byl odeslán ověřovací email.'

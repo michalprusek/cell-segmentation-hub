@@ -245,7 +245,7 @@ export class QueueError extends Error {
   constructor(
     message: string,
     public code: string,
-    public statusCode: number = 500
+    public statusCode = 500
   ) {
     super(message);
     this.name = 'QueueError';
@@ -309,13 +309,13 @@ export class MLServiceUnavailableError extends QueueError {
  * Type guard for AddImageToQueueData
  */
 export function isAddImageToQueueData(data: unknown): data is AddImageToQueueData {
-  if (typeof data !== 'object' || data === null) return false;
+  if (typeof data !== 'object' || data === null) {return false;}
   const d = data as Record<string, unknown>;
   
-  if (d.model !== undefined && !isSegmentationModel(d.model)) return false;
-  if (d.threshold !== undefined && (typeof d.threshold !== 'number' || d.threshold < 0.1 || d.threshold > 0.9)) return false;
-  if (d.priority !== undefined && !isQueuePriority(d.priority)) return false;
-  if (d.detectHoles !== undefined && typeof d.detectHoles !== 'boolean') return false;
+  if (d.model !== undefined && !isSegmentationModel(d.model)) {return false;}
+  if (d.threshold !== undefined && (typeof d.threshold !== 'number' || d.threshold < 0.1 || d.threshold > 0.9)) {return false;}
+  if (d.priority !== undefined && !isQueuePriority(d.priority)) {return false;}
+  if (d.detectHoles !== undefined && typeof d.detectHoles !== 'boolean') {return false;}
   
   return true;
 }

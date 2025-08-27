@@ -1,83 +1,223 @@
-# Prometheus alerting rules for SpheroSeg Cell Segmentation Hub
+# Comprehensive Prometheus alerting rules for SpherosegApp
+# This file replaces the basic infrastructure alerts with comprehensive business and operational monitoring
+# For detailed alert response procedures, see docs/MONITORING_GUIDE.md
+
 groups:
-  - name: spheroseg_infrastructure
+  # High-Level Service Alerts
+  - name: spheroseg.service.critical
+    interval: 30s
     rules:
-      # High CPU usage alert
+      - alert: ServiceDown
+        expr: up{job=~"spheroseg-.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "SpherosegApp service {{ $labels.job }} is down"
+          description: "Service {{ $labels.job }} has been down for more than 1 minute."
+          runbook_url: "https://docs.spherosegapp.com/alerts/service-down"
+
+      - alert: HighErrorRate
+        expr: rate(spheroseg_api_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: critical
+          service: api
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+          runbook_url: "https://docs.spherosegapp.com/alerts/high-error-rate"
+
+      - alert: CriticalSystemError
+        expr: increase(spheroseg_critical_errors_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: "{{ $labels.service }}"
+        annotations:
+          summary: "Critical system error detected in {{ $labels.service }}"
+          description: "Critical error of type {{ $labels.error_type }} occurred in {{ $labels.service }}."
+          runbook_url: "https://docs.spherosegapp.com/alerts/critical-errors"
+
+  # Performance Alerts
+  - name: spheroseg.performance.warning
+    interval: 30s
+    rules:
+      - alert: SlowApiResponse
+        expr: histogram_quantile(0.95, rate(http_request_duration_ms_bucket[5m])) > 2000
+        for: 5m
+        labels:
+          severity: warning
+          service: api
+        annotations:
+          summary: "API response time is slow"
+          description: "95th percentile response time is {{ $value }}ms, above 2000ms threshold."
+          runbook_url: "https://docs.spherosegapp.com/alerts/slow-response"
+
+      - alert: SlowMLProcessing
+        expr: histogram_quantile(0.95, rate(spheroseg_model_processing_time_seconds_bucket[5m])) > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: ml
+        annotations:
+          summary: "ML model processing is slow"
+          description: "95th percentile ML processing time is {{ $value }}s, above 300s threshold."
+          runbook_url: "https://docs.spherosegapp.com/alerts/slow-ml-processing"
+
+      - alert: HighMemoryUsage
+        expr: (process_resident_memory_bytes / 1024 / 1024 / 1024) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "High memory usage in {{ $labels.job }}"
+          description: "Memory usage is {{ $value | humanize }}GB, above 2GB threshold."
+          runbook_url: "https://docs.spherosegapp.com/alerts/high-memory"
+
+  # Infrastructure Alerts (Legacy + Enhanced)
+  - name: spheroseg.infrastructure.warning
+    interval: 60s
+    rules:
       - alert: HighCPUUsage
         expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
-        for: 2m
+        for: 10m
         labels:
           severity: warning
           service: infrastructure
         annotations:
           summary: "High CPU usage detected"
-          description: "CPU usage is above 80% for more than 2 minutes on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for more than 10 minutes on {{ $labels.instance }}"
+          runbook_url: "https://docs.spherosegapp.com/alerts/high-cpu"
 
-      # High memory usage alert
-      - alert: HighMemoryUsage
+      - alert: HighMemoryUsageInfra
         expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
-        for: 2m
+        for: 5m
         labels:
           severity: critical
           service: infrastructure
         annotations:
-          summary: "High memory usage detected"
-          description: "Memory usage is above 90% for more than 2 minutes on {{ $labels.instance }}"
+          summary: "High system memory usage detected"
+          description: "System memory usage is above 90% for more than 5 minutes on {{ $labels.instance }}"
+          runbook_url: "https://docs.spherosegapp.com/alerts/high-system-memory"
 
-      # Low disk space alert
       - alert: LowDiskSpace
         expr: ((node_filesystem_size_bytes{fstype!="tmpfs"} - node_filesystem_avail_bytes{fstype!="tmpfs"}) / node_filesystem_size_bytes{fstype!="tmpfs"}) * 100 > 90
-        for: 1m
+        for: 5m
         labels:
           severity: warning
           service: infrastructure
         annotations:
           summary: "Low disk space detected"
           description: "Disk usage is above 90% on {{ $labels.instance }} at {{ $labels.mountpoint }}"
-          
-  - name: spheroseg_application
+          runbook_url: "https://docs.spherosegapp.com/alerts/low-disk-space"
+
+  # Queue and Processing Alerts
+  - name: spheroseg.queue.warning
+    interval: 30s
     rules:
-      # High API response time alert
-      - alert: HighAPIResponseTime
-        expr: histogram_quantile(0.95, sum by (le, instance)(rate(http_request_duration_seconds_bucket{job="spheroseg-backend"}[5m]))) > 2
-        for: 1m
+      - alert: LongQueueLength
+        expr: spheroseg_queue_length > 50
+        for: 5m
         labels:
           severity: warning
-          service: backend
+          service: ml-queue
         annotations:
-          summary: "High API response time detected"
-          description: "95th percentile API response time is above 2 seconds for {{ $labels.instance }}"
+          summary: "ML processing queue is backing up"
+          description: "Queue length is {{ $value }} items, above 50 threshold."
+          runbook_url: "https://docs.spherosegapp.com/alerts/long-queue"
 
-      # High error rate alert
-      - alert: HighErrorRate
-        expr: (sum by (instance)(rate(http_requests_total{job="spheroseg-backend",status=~"5.."}[5m])) / sum by (instance)(rate(http_requests_total{job="spheroseg-backend"}[5m]))) * 100 > 5
-        for: 1m
+      - alert: QueueStalled
+        expr: changes(spheroseg_queue_length[10m]) == 0 and spheroseg_queue_length > 10
+        for: 15m
         labels:
           severity: critical
-          service: backend
+          service: ml-queue
         annotations:
-          summary: "High error rate detected"
-          description: "Error rate is above 5% for {{ $labels.instance }}"
+          summary: "ML processing queue appears stalled"
+          description: "Queue length has not changed in 15 minutes with {{ $value }} items remaining."
+          runbook_url: "https://docs.spherosegapp.com/alerts/queue-stalled"
 
-      # Service down alert
-      - alert: ServiceDown
-        expr: up{job=~"spheroseg-backend|spheroseg-ml"} == 0
-        for: 30s
+  # Business Logic Alerts
+  - name: spheroseg.business.warning
+    interval: 60s
+    rules:
+      - alert: LowDailyActiveUsers
+        expr: spheroseg_dau < 5
+        for: 1h
         labels:
-          severity: critical
-          service: application
+          severity: warning
+          service: business
         annotations:
-          summary: "Service is not responding"
-          description: "Service {{ $labels.job }} on {{ $labels.instance }} is down"
-          job: "{{ $labels.job }}"
+          summary: "Low daily active users"
+          description: "Daily active users is {{ $value }}, below expected threshold of 5."
+          runbook_url: "https://docs.spherosegapp.com/alerts/low-dau"
 
-      # Database connection failures alert
-      - alert: DatabaseConnectionFailures
-        expr: increase(database_connection_errors_total{job="spheroseg-backend"}[5m]) > 5
-        for: 1m
+      - alert: HighSegmentationFailureRate
+        expr: rate(spheroseg_segmentations_completed_total{completion_status="failed"}[1h]) / rate(spheroseg_segmentations_completed_total[1h]) > 0.1
+        for: 30m
         labels:
-          severity: critical
+          severity: warning
+          service: ml
+        annotations:
+          summary: "High segmentation failure rate"
+          description: "Segmentation failure rate is {{ $value | humanizePercentage }} over the last hour."
+          runbook_url: "https://docs.spherosegapp.com/alerts/high-failure-rate"
+
+  # Storage Alerts
+  - name: spheroseg.storage.warning
+    interval: 300s
+    rules:
+      - alert: HighStorageUsage
+        expr: sum(spheroseg_storage_used_bytes) / 1024 / 1024 / 1024 > 50
+        for: 10m
+        labels:
+          severity: warning
+          service: storage
+        annotations:
+          summary: "High storage usage detected"
+          description: "Total storage usage is {{ $value | humanize }}GB, above 50GB threshold."
+          runbook_url: "https://docs.spherosegapp.com/alerts/high-storage"
+
+  # Database Alerts
+  - name: spheroseg.database.warning
+    interval: 30s
+    rules:
+      - alert: HighDatabaseConnections
+        expr: database_connections_active > 50
+        for: 5m
+        labels:
+          severity: warning
           service: database
         annotations:
-          summary: "Database connectivity issues"
-          description: "Database connection errors detected on {{ $labels.instance }}"
+          summary: "High number of active database connections"
+          description: "Active database connections: {{ $value }}, above 50 threshold."
+          runbook_url: "https://docs.spherosegapp.com/alerts/high-db-connections"
+
+      - alert: DatabaseErrorRate
+        expr: rate(spheroseg_database_errors_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          service: database
+        annotations:
+          summary: "Database error rate is elevated"
+          description: "Database error rate: {{ $value | humanizePercentage }} for operation {{ $labels.operation_type }} on {{ $labels.table_name }}."
+          runbook_url: "https://docs.spherosegapp.com/alerts/database-errors"
+
+  # Monitoring System Health
+  - name: spheroseg.monitoring.critical
+    interval: 60s
+    rules:
+      - alert: PrometheusDown
+        expr: up{job="prometheus"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: monitoring
+        annotations:
+          summary: "Prometheus is down"
+          description: "Prometheus monitoring system has been down for more than 2 minutes."
+          runbook_url: "https://docs.spherosegapp.com/alerts/prometheus-down"

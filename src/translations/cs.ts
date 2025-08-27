@@ -101,6 +101,44 @@ export default {
         'Zaregistrujte se zdarma a zažijte sílu AI-řízené segmentace sféroidů.',
       createAccount: 'Vytvořit účet',
     },
+    features: {
+      badge: 'Výkonné možnosti',
+      title: 'Pokročilé nástroje pro biomedicínský výzkum',
+      subtitle:
+        'Naše platforma nabízí komplexní sadu funkcí navržených pro zefektivnění vašeho pracovního postupu segmentace sféroidů.',
+      cards: {
+        advancedSegmentation: {
+          title: 'Pokročilá segmentace',
+          description:
+            'Přesná detekce sféroidů s analýzou hranic pro přesné měření buněk.',
+        },
+        aiPowered: {
+          title: 'AI analýza',
+          description:
+            'Využijte algoritmy hlubokého učení pro automatickou detekci a klasifikaci buněk.',
+        },
+        effortlessUploads: {
+          title: 'Snadné nahrávání',
+          description:
+            'Přetáhněte své mikroskopické obrázky pro okamžité zpracování a analýzu.',
+        },
+        statisticalInsights: {
+          title: 'Statistické přehledy',
+          description:
+            'Komplexní metriky a vizualizace pro extrakci významných datových vzorců.',
+        },
+        collaboration: {
+          title: 'Nástroje pro spolupráci',
+          description:
+            'Sdílejte projekty s kolegy a spolupracujte v reálném čase na výzkumných nálezech.',
+        },
+        processingPipeline: {
+          title: 'Zpracovatelský proces',
+          description:
+            'Automatizovaný pracovní postup od předzpracování po finální analýzu s přizpůsobitelnými parametry.',
+        },
+      },
+    },
   },
   dashboard: {
     manageProjects: 'Spravujte své výzkumné projekty a analýzy',
@@ -378,6 +416,23 @@ export default {
       description:
         'Povolit použití vašich dat pro trénování a zlepšování našich segmentačních modelů',
     },
+    consent: {
+      privacyNotice:
+        'Vaše soukromí je pro nás důležité. Tato nastavení řídí, jak mohou být vaše nahrané obrázky a segmentační data použity ke zlepšení našich ML modelů. Tyto preference můžete kdykoli změnit.',
+      dataUsageNote:
+        'Data od uživatelů, kteří se odhlásili, nebudou zahrnuta do žádných tréninkových procesů.',
+      algorithmImprovement: {
+        label: 'Vylepšení algoritmů',
+        description: 'Použít data pro zvýšení přesnosti a rychlosti segmentace',
+      },
+      featureDevelopment: {
+        label: 'Vývoj funkcí',
+        description: 'Pomoci vyvinout nové funkce a schopnosti',
+      },
+      lastUpdated: 'Naposledy aktualizováno',
+      savePreferences: 'Uložit preference souhlasu',
+      savingPreferences: 'Ukládání...',
+    },
     cancel: 'Zrušit',
     deleting: 'Mazání...',
     deleteAccount: 'Smazat účet',
@@ -488,9 +543,48 @@ export default {
     },
     shortcuts: {
       buttonText: 'Zkratky',
+      title: 'Klávesové zkratky',
       dialogTitle: 'Klávesové zkratky',
       footerNote:
         'Tyto zkratky fungují v editoru segmentace pro rychlejší a pohodlnější práci.',
+
+      // Categories
+      categories: {
+        modes: 'Režimy úprav',
+        actions: 'Akce',
+        view: 'Ovládání pohledu',
+        navigation: 'Navigace',
+      },
+
+      // Mode shortcuts
+      viewMode: 'Režim zobrazení',
+      editVertices: 'Režim úpravy vrcholů',
+      addPoints: 'Režim přidávání bodů',
+      createPolygon: 'Vytvořit nový polygon',
+      sliceMode: 'Režim řezání',
+      deleteMode: 'Režim mazání',
+
+      // Action shortcuts
+      save: 'Uložit',
+      undo: 'Zpět',
+      redo: 'Znovu',
+      deleteSelected: 'Smazat vybraný polygon',
+
+      // View shortcuts
+      zoom: 'Přiblížit/oddálit',
+      resetView: 'Resetovat pohled',
+      fitToScreen: 'Přizpůsobit obrazovce',
+
+      // Navigation shortcuts
+      cycleModes: 'Procházet režimy',
+      cycleModesReverse: 'Procházet režimy (zpět)',
+      cancel: 'Zrušit aktuální operaci',
+      showHelp: 'Zobrazit tuto nápovědu',
+
+      // Conditions
+      requiresSelection: 'Vyžaduje výběr polygonu',
+
+      // Legacy keys (kept for backward compatibility)
       v: 'Režim zobrazení',
       e: 'Režim úpravy vrcholů',
       a: 'Režim přidávání bodů',
@@ -598,6 +692,7 @@ export default {
   auth: {
     signIn: 'Přihlásit se',
     signUp: 'Registrovat se',
+    redirectingToDashboard: 'Přesměrování na nástěnku...',
     signOut: 'Odhlásit se',
     forgotPassword: 'Zapomněli jste heslo?',
     resetPassword: 'Obnovit heslo',
@@ -900,6 +995,7 @@ export default {
       excel: 'Excel Formát',
       json: 'JSON Formát',
     },
+    exportFormatsLabel: 'Formáty exportu',
     exportToZip: 'Exportovat do ZIP archívu',
     generateExcel: 'Generovat Excel metriky',
     includeCocoFormat: 'Zahrnout anotace ve formátu COCO',
@@ -1603,6 +1699,7 @@ export default {
       '© {{year}} SpheroSeg. Vyvinuto na ÚTIA AV ČR (Ústav teorie informace a automatizace, Akademie věd České republiky).',
   },
   sharing: {
+    processingInvitation: 'Zpracování pozvánky...',
     share: 'Sdílet',
     shared: 'Sdíleno',
     shareProject: 'Sdílet projekt',
@@ -1680,5 +1777,18 @@ export default {
     reloadingSegmentation: 'Obnovování segmentace...',
     segmenting: 'Segmentování...',
     waitingInQueue: 'Čekání ve frontě...',
+    error: {
+      title: 'Chyba segmentace',
+      description:
+        'Při načítání segmentačních dat došlo k chybě. Může to být způsobeno problémy se sítí nebo serverem.',
+      errorDetails: 'Podrobnosti chyby',
+      tryAgain: 'Zkusit znovu',
+      unsavedChanges: 'Neuložené změny',
+    },
+    export: {
+      exportAllMetrics: 'Exportovat všechny metriky jako XLSX',
+      exportUnavailable: 'Export není k dispozici',
+      loading: 'Načítání...',
+    },
   },
 };

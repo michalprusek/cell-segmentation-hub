@@ -278,6 +278,16 @@ class ApiClient {
   }
 
   // Auth methods
+  /**
+   * Authenticates a user with email and password
+   * @param {string} email - User's email address
+   * @param {string} password - User's password
+   * @param {boolean} rememberMe - Whether to persist the session
+   * @returns {Promise<AuthResponse>} Authentication tokens and user information
+   * @throws {Error} If authentication fails or network error occurs
+   * @example
+   * const response = await apiClient.login('user@example.com', 'securePass123', true);
+   */
   async login(
     email: string,
     password: string,
@@ -342,6 +352,22 @@ class ApiClient {
     };
   }
 
+  /**
+   * Registers a new user account
+   * @param {RegisterRequest} request - Registration details
+   * @param {string} request.email - User's email address
+   * @param {string} request.password - User's password
+   * @param {string} [request.username] - Optional username
+   * @param {boolean} [request.consentToMLTraining] - Consent for ML training
+   * @returns {Promise<AuthResponse>} Authentication tokens and user information
+   * @throws {Error} If registration fails or email already exists
+   * @example
+   * const response = await apiClient.register({
+   *   email: 'newuser@example.com',
+   *   password: 'securePass123',
+   *   username: 'newuser'
+   * });
+   */
   async register(
     email: string,
     password: string,
@@ -537,7 +563,9 @@ class ApiClient {
       (image.originalUrl as string) || (image.image_url as string) || '';
     let thumbnailUrl =
       (image.thumbnailUrl as string) || (image.thumbnail_url as string);
-    let displayUrl = (image.displayUrl as string) || imageUrl; // Fallback to original URL
+    // Generate display URL using the image ID for browser-compatible endpoint
+    const imageId = image.id as string;
+    let displayUrl = imageId ? `/api/images/${imageId}/display` : imageUrl;
 
     // Ensure URLs are absolute for Docker environment
     const ensureAbsoluteUrl = (url: string): string => {
@@ -644,6 +672,15 @@ class ApiClient {
     };
   }
 
+  /**
+   * Creates a new project
+   * @param {string} name - Project name
+   * @param {string} [description] - Optional project description
+   * @returns {Promise<Project>} The created project object
+   * @throws {Error} If project creation fails or user is not authenticated
+   * @example
+   * const project = await apiClient.createProject('Cell Analysis', 'Research project for cell segmentation');
+   */
   async createProject(data: {
     name: string;
     description?: string;
@@ -853,6 +890,20 @@ class ApiClient {
     };
   }
 
+  /**
+   * Uploads multiple images to a project
+   * @param {string} projectId - The project ID to upload images to
+   * @param {FileList | File[]} files - Array or FileList of image files to upload
+   * @param {Function} [onProgress] - Optional callback for upload progress
+   * @returns {Promise<ProjectImage[]>} Array of uploaded image objects
+   * @throws {Error} If upload fails or files are invalid
+   * @example
+   * const images = await apiClient.uploadImages(
+   *   'project-123',
+   *   fileInput.files,
+   *   (progress) => console.log(`Upload progress: ${progress}%`)
+   * );
+   */
   async uploadImages(
     projectId: string,
     files: File[],
@@ -932,6 +983,16 @@ class ApiClient {
     return this.extractData(response);
   }
 
+  /**
+   * Retrieves segmentation results for an image
+   * @param {string} projectId - The project ID
+   * @param {string} imageId - The image ID
+   * @returns {Promise<SegmentationResult>} Segmentation polygons and metadata
+   * @throws {Error} If segmentation results not found or request fails
+   * @example
+   * const results = await apiClient.getSegmentationResults('project-123', 'image-456');
+   * console.log(`Found ${results.polygons.length} segmented cells`);
+   */
   async getSegmentationResults(
     imageId: string,
     options?: { signal?: AbortSignal }

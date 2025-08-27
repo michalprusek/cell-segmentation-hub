@@ -19,6 +19,7 @@ import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { logger } from '@/lib/logger';
+import { logger } from '@/lib/logger';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { usePagination } from '@/hooks/usePagination';
 import { motion } from 'framer-motion';
@@ -324,7 +325,7 @@ const ProjectDetail = () => {
             });
           });
         } catch (error) {
-          console.error('Failed to refresh image data:', error);
+          logger.error('Failed to refresh image data', error);
 
           // Even if refresh fails, ensure correct status based on segmentation data
           updateImagesRef.current(prevImages => {
@@ -350,7 +351,7 @@ const ProjectDetail = () => {
           });
         }
       })().catch(err => {
-        console.error('Unhandled error in segmentation refresh IIFE:', err);
+        logger.error('Unhandled error in segmentation refresh IIFE', err);
         // Ensure state is updated even on unhandled rejection
         updateImagesRef.current(prevImages =>
           prevImages.map(prevImg => {
@@ -512,8 +513,8 @@ const ProjectDetail = () => {
                   }
                 } catch (error) {
                   // Silently fail for individual images - they'll be fetched later if needed
-                  console.debug(
-                    `Could not fetch segmentation for image ${img.id}:`,
+                  logger.debug(
+                    `Could not fetch segmentation for image ${img.id}`,
                     error
                   );
                 }

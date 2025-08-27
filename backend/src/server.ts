@@ -1,3 +1,15 @@
+// Initialize OpenTelemetry BEFORE any other imports
+import { initializeTracing } from './config/tracing';
+
+// Initialize tracing first (must be before any instrumented modules)
+if (process.env.NODE_ENV !== 'test') {
+  try {
+    initializeTracing();
+  } catch (error) {
+    console.error('Failed to initialize OpenTelemetry tracing:', error);
+  }
+}
+
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -11,9 +23,24 @@ import { ResponseHelper } from './utils/response';
 import { initializeDatabase, disconnectDatabase, checkDatabaseHealth } from './db';
 import { setupSwagger } from './middleware/swagger';
 import { setupRoutes, createEndpointTracker } from './api/routes';
-import { createMonitoringMiddleware, getMetricsEndpoint, getMonitoringHealth } from './middleware/monitoring';
+import { createMonitoringMiddleware, getMetricsEndpoint, getMonitoringHealth, initializeMetricsCollection } from './middleware/monitoring';
 import { WebSocketService } from './services/websocketService';
 import { prisma } from './db';
+import { initializeStorageDirectories } from './utils/initializeStorage';
+import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
+import { sessionService } from './services/sessionService';
+import { initializeRateLimitingSystem, cleanupRateLimitingSystem } from './monitoring/rateLimitingInitialization';
+import { 
+  createTracingMiddleware, 
+  createErrorTracingMiddleware, 
+  createPerformanceTracingMiddleware,
+  createContextPropagationMiddleware 
+} from './middleware/tracing';
+import { 
+  initializeTraceCorrelation, 
+  shutdownTraceCorrelation 
+} from './utils/traceCorrelation';
+import { shutdownTracing } from './config/tracing';
 
 const app = express();
 
@@ -81,6 +108,11 @@ if (config.RATE_LIMIT_ENABLED) {
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Distributed tracing middleware (MUST be early in the middleware stack)
+app.use(createContextPropagationMiddleware());
+app.use(createTracingMiddleware());
+app.use(createPerformanceTracingMiddleware());
+
 // Request logging
 app.use(createRequestLogger('API'));
 
@@ -96,16 +128,21 @@ setupSwagger(app);
 // Health check endpoint
 app.get('/health', async (req, res) => {
   const dbHealth = await checkDatabaseHealth();
+  const redisHealth = await redisHealthCheck();
   const monitoringHealth = getMonitoringHealth();
   
+  const isHealthy = dbHealth.healthy && monitoringHealth.healthy && 
+    (redisHealth.status === 'healthy' || redisHealth.status === 'disabled');
+  
   return ResponseHelper.success(res, {
-    status: dbHealth.healthy && monitoringHealth.healthy ? 'healthy' : 'unhealthy',
+    status: isHealthy ? 'healthy' : 'unhealthy',
     timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
     environment: config.NODE_ENV,
     database: dbHealth,
+    redis: redisHealth,
     monitoring: monitoringHealth
-  }, dbHealth.healthy ? 'Server is healthy' : 'Server has issues');
+  }, isHealthy ? 'Server is healthy' : 'Server has issues');
 });
 
 // Prometheus metrics endpoint
@@ -119,6 +156,9 @@ app.use('/uploads', express.static(config.UPLOAD_DIR || './uploads'));
 
 // 404 handler
 app.use(notFoundHandler);
+
+// Tracing error handler (must be before global error handler)
+app.use(createErrorTracingMiddleware());
 
 // Global error handler
 app.use(errorHandler);
@@ -193,6 +233,46 @@ const startServer = async (): Promise<void> => {
     // Initialize database connection
     await initializeDatabase();
     
+    // Initialize Redis connection
+    try {
+      const redisConnected = await initializeRedis();
+      if (redisConnected) {
+        logger.info('🔴 Redis connected successfully');
+      } else {
+        logger.warn('⚠️  Redis connection failed - caching disabled, application continues');
+      }
+    } catch (error) {
+      logger.warn('Redis initialization failed:', error as Error);
+      logger.warn('Application continuing without Redis caching');
+    }
+    
+    // Initialize comprehensive rate limiting system
+    try {
+      await initializeRateLimitingSystem();
+      logger.info('⚡ Comprehensive rate limiting system initialized');
+    } catch (error) {
+      logger.error('Failed to initialize rate limiting system:', error as Error);
+      logger.warn('Application continuing with basic rate limiting');
+    }
+    
+    // Initialize trace correlation system
+    try {
+      initializeTraceCorrelation();
+      logger.info('🔗 Trace correlation system initialized');
+    } catch (error) {
+      logger.error('Failed to initialize trace correlation system:', error as Error);
+      logger.warn('Application continuing without trace correlation');
+    }
+    
+    // Initialize storage directories
+    try {
+      await initializeStorageDirectories();
+      logger.info('📁 Storage directories initialized successfully');
+    } catch (error) {
+      logger.error('Failed to initialize storage directories:', error as Error);
+      process.exit(1); // Exit if we can't set up storage
+    }
+    
     // Initialize email service
     try {
       const { initializeEmailService } = await import('./services/emailService');
@@ -201,6 +281,15 @@ const startServer = async (): Promise<void> => {
     } catch (error) {
       logger.error('Failed to initialize email service:', error as Error);
       // Don't exit - email service can fail gracefully
+    }
+
+    // Initialize business metrics collection
+    try {
+      initializeMetricsCollection();
+      logger.info('📊 Business metrics collection initialized');
+    } catch (error) {
+      logger.error('Failed to initialize business metrics collection:', error as Error);
+      // Don't exit - metrics collection can fail gracefully
     }
     
     // Create HTTP server
@@ -257,6 +346,38 @@ const startServer = async (): Promise<void> => {
       
       server.close(async () => {
         logger.info('HTTP server closed');
+        
+        // Cleanup rate limiting system
+        try {
+          await cleanupRateLimitingSystem();
+          logger.info('Rate limiting system cleaned up');
+        } catch (error) {
+          logger.error('Error cleaning up rate limiting system:', error as Error);
+        }
+        
+        // Close Redis connection
+        try {
+          await closeRedis();
+          logger.info('Redis connection closed');
+        } catch (error) {
+          logger.error('Error closing Redis connection:', error as Error);
+        }
+        
+        // Shutdown trace correlation system
+        try {
+          shutdownTraceCorrelation();
+          logger.info('Trace correlation system shutdown');
+        } catch (error) {
+          logger.error('Error shutting down trace correlation:', error as Error);
+        }
+        
+        // Shutdown OpenTelemetry tracing
+        try {
+          await shutdownTracing();
+          logger.info('OpenTelemetry tracing shutdown');
+        } catch (error) {
+          logger.error('Error shutting down tracing:', error as Error);
+        }
         
         // Close database connections, queues, etc.
         await disconnectDatabase();

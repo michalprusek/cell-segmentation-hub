@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
+import { logger } from './logger';
 
 // Load environment variables
 dotenv.config();
@@ -134,30 +135,30 @@ const parseConfig = (): ConfigType => {
   } catch (error) {
      
     // Console is needed here for startup configuration errors
-    console.error('❌ Invalid environment configuration:');
+    logger.error('❌ Invalid environment configuration:');
     if (error instanceof z.ZodError) {
       // Detailed validation error reporting
-      console.error('Zod validation errors:');
+      logger.error('Zod validation errors:');
       error.errors.forEach((err) => {
         // Log each validation error
-        console.error(`  ${err.path.join('.')}: ${err.message}`);
+        logger.error(`  ${err.path.join('.')}: ${err.message}`);
         // Additional error details
-        console.error(`    Code: ${err.code}`);
+        logger.error(`    Code: ${err.code}`);
       });
     } else {
       // Non-validation errors
-      console.error('Non-Zod error:', error);
+      logger.error('Non-Zod error', error);
     }
     // Debug information for troubleshooting
-    console.error('Environment variables:');
+    logger.error('Environment variables:');
     // Show current environment
-    console.error('NODE_ENV:', process.env.NODE_ENV);
+    logger.error('NODE_ENV:', process.env.NODE_ENV);
     // Email configuration check
-    console.error('FROM_EMAIL:', process.env.FROM_EMAIL);
+    logger.error('FROM_EMAIL:', process.env.FROM_EMAIL);
     
     // Only log boolean presence, never expose secret details
-    console.error('JWT_ACCESS_SECRET configured:', !!process.env.JWT_ACCESS_SECRET);
-    console.error('JWT_REFRESH_SECRET configured:', !!process.env.JWT_REFRESH_SECRET);
+    logger.error('JWT_ACCESS_SECRET configured:', !!process.env.JWT_ACCESS_SECRET);
+    logger.error('JWT_REFRESH_SECRET configured:', !!process.env.JWT_REFRESH_SECRET);
      
     process.exit(1);
   }

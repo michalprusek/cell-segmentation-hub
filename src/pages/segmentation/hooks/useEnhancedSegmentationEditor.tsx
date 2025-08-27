@@ -628,7 +628,7 @@ export const useEnhancedSegmentationEditor = ({
             }));
           }
         } catch (error) {
-          console.error('Failed to execute slice action:', error);
+          logger.error('Failed to execute slice action', error);
 
           // Clear temp points on error to prevent infinite loop
           setTempPoints([]);

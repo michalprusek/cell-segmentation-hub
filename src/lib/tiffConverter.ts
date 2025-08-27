@@ -3,6 +3,7 @@
  * using Canvas API and UTIF for browser compatibility
  */
 import UTIF from 'utif2';
+import { logger } from './logger';
 
 /**
  * Check if file is a TIFF image
@@ -92,7 +93,7 @@ export const convertImageToDataUrl = async (file: File): Promise<string> => {
       const canvas = await convertTiffToCanvas(file);
       return canvas.toDataURL('image/png');
     } catch (error) {
-      console.error('Failed to convert TIFF:', error);
+      logger.error('Failed to convert TIFF', error);
       throw error;
     }
   }
@@ -152,7 +153,7 @@ export const createImagePreviewUrl = async (file: File): Promise<string> => {
     // Try to convert to data URL (handles TIFF)
     return await convertImageToDataUrl(file);
   } catch (error) {
-    console.warn('Failed to convert image, trying FileReader fallback:', error);
+    logger.warn('Failed to convert image, trying FileReader fallback', error);
 
     // Try FileReader as a fallback for data URL
     if (typeof FileReader !== 'undefined') {
@@ -171,13 +172,13 @@ export const createImagePreviewUrl = async (file: File): Promise<string> => {
           reader.readAsDataURL(file);
         });
       } catch (fileReaderError) {
-        console.warn('FileReader fallback failed:', fileReaderError);
+        logger.warn('FileReader fallback failed', fileReaderError);
       }
     }
 
     // Final fallback - create object URL
     // WARNING: Caller must call URL.revokeObjectURL() when done to prevent memory leaks
-    console.warn(
+    logger.warn(
       'Using object URL as last resort - remember to revoke it when done'
     );
     return URL.createObjectURL(file);

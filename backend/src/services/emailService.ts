@@ -56,8 +56,8 @@ export function init(): void {
 
       if (config.service === 'smtp') {
         config.smtp = {
-          host: process.env.SMTP_HOST || 'localhost',
-          port: parseInt(process.env.SMTP_PORT || '587'),
+          host: process.env.SMTP_HOST || 'mailhog',
+          port: parseInt(process.env.SMTP_PORT || '1025'),
           secure: process.env.SMTP_SECURE === 'true',
           user: process.env.SMTP_USER || '',
           pass: process.env.SMTP_PASS || ''
@@ -69,20 +69,23 @@ export function init(): void {
           secure: config.smtp.secure,
           ignoreTLS: getBooleanEnvVar('SMTP_IGNORE_TLS', false),
           requireTLS: getBooleanEnvVar('SMTP_REQUIRE_TLS', true) && !getBooleanEnvVar('SMTP_IGNORE_TLS', false),
-          connectionTimeout: parseEmailTimeout('SMTP_CONNECTION_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 60000)),
-          greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 60000)),
-          socketTimeout: parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 60000)),
+          // Use improved timeout parsing with UTIA SMTP defaults
+          connectionTimeout: parseEmailTimeout('SMTP_CONNECTION_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
+          greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
+          socketTimeout: parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
           logger: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
           debug: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false)
         };
         
-        // Only add TLS config if not ignoring TLS
+        // Configure TLS settings for UTIA SMTP (port 465 with SSL)
         if (process.env.SMTP_IGNORE_TLS !== 'true') {
           transportConfig.tls = {
             // Certificate validation enabled by default, only disable with explicit flag
             rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true',
-            // Support STARTTLS
-            minVersion: 'TLSv1.2'
+            // Support STARTTLS and direct SSL connections
+            minVersion: 'TLSv1.2',
+            // Use secure default ciphers for modern mail servers
+            secureProtocol: 'TLS_method'
           };
         }
 
@@ -101,7 +104,8 @@ export function init(): void {
           secure: transportConfig.secure,
           requireTLS: transportConfig.requireTLS,
           hasAuth: !!transportConfig.auth,
-          authDisabled: process.env.SMTP_AUTH === 'false'
+          authDisabled: process.env.SMTP_AUTH === 'false',
+          isUTIAConfig: config.smtp.host === 'mail.utia.cas.cz'
         });
         
         _transporter = nodemailer.createTransport(transportConfig);
