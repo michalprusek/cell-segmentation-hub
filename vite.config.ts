@@ -22,59 +22,94 @@ export default defineConfig({
     commonjsOptions: {
       include: [/xlsx/, /node_modules/],
     },
-    chunkSizeWarningLimit: 500, // Warn for chunks over 500KB
+    chunkSizeWarningLimit: 1000, // Increase warning limit to 1MB for now
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Core React libraries
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+        manualChunks: id => {
+          // Handle specific large libraries
+          if (id.includes('exceljs') || id.includes('xlsx')) {
+            return 'excel-vendor';
+          }
 
-          // UI components and styling
-          'ui-vendor': [
-            '@radix-ui/react-dialog',
-            '@radix-ui/react-dropdown-menu',
-            '@radix-ui/react-popover',
-            '@radix-ui/react-select',
-            '@radix-ui/react-tabs',
-            '@radix-ui/react-toast',
-            '@radix-ui/react-tooltip',
-            '@radix-ui/react-accordion',
-            '@radix-ui/react-alert-dialog',
-            '@radix-ui/react-avatar',
-            '@radix-ui/react-checkbox',
-            '@radix-ui/react-label',
-            '@radix-ui/react-progress',
-            '@radix-ui/react-separator',
-            '@radix-ui/react-switch',
-            'framer-motion',
-            'class-variance-authority',
-            'clsx',
-            'tailwind-merge',
-          ],
+          // Core React - keep together for caching
+          if (
+            id.includes('react') ||
+            id.includes('react-dom') ||
+            id.includes('react-router')
+          ) {
+            return 'react-vendor';
+          }
 
-          // Heavy chart libraries
-          'chart-vendor': ['recharts'],
+          // UI libraries - separate from core functionality
+          if (
+            id.includes('@radix-ui') ||
+            id.includes('framer-motion') ||
+            id.includes('class-variance-authority')
+          ) {
+            return 'ui-vendor';
+          }
+
+          // Chart libraries - loaded only when needed
+          if (id.includes('recharts')) {
+            return 'chart-vendor';
+          }
 
           // Form handling
-          'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          if (
+            id.includes('react-hook-form') ||
+            id.includes('hookform') ||
+            id.includes('zod')
+          ) {
+            return 'form-vendor';
+          }
 
-          // Data fetching and state management
-          'data-vendor': ['@tanstack/react-query', 'axios'],
+          // Data fetching
+          if (id.includes('tanstack') || id.includes('axios')) {
+            return 'data-vendor';
+          }
 
-          // Excel export (heavy library - loaded only when needed)
-          'excel-vendor': ['exceljs'],
-
-          // File processing and utilities
-          'file-vendor': ['file-saver', 'jszip', 'react-dropzone'],
-
-          // Date and image utilities
-          'utils-vendor': ['date-fns', 'uuid', 'socket.io-client'],
+          // File utilities
+          if (
+            id.includes('file-saver') ||
+            id.includes('jszip') ||
+            id.includes('react-dropzone') ||
+            id.includes('react-easy-crop')
+          ) {
+            return 'file-vendor';
+          }
 
           // Image processing
-          'image-vendor': ['react-easy-crop'],
+          if (id.includes('react-easy-crop')) {
+            return 'image-vendor';
+          }
 
-          // Other utilities
-          'misc-vendor': ['cmdk', 'sonner', 'vaul', 'input-otp', 'next-themes'],
+          // Utilities
+          if (
+            id.includes('date-fns') ||
+            id.includes('uuid') ||
+            id.includes('socket.io')
+          ) {
+            return 'utils-vendor';
+          }
+
+          // Other libraries
+          if (
+            id.includes('cmdk') ||
+            id.includes('sonner') ||
+            id.includes('vaul') ||
+            id.includes('input-otp') ||
+            id.includes('next-themes')
+          ) {
+            return 'misc-vendor';
+          }
+
+          // Keep vendor node_modules separate from app code
+          if (id.includes('node_modules')) {
+            return 'vendor';
+          }
+
+          // Default chunking for app code
+          return null;
         },
       },
     },

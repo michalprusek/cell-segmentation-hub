@@ -43,6 +43,11 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc
+
       - name: Install dependencies
         run: |
           npm ci
@@ -94,19 +99,24 @@ jobs:
           echo "## 📊 Test Coverage Report" > coverage-report.md
           echo "" >> coverage-report.md
 
-          # Parse coverage percentages
+          # Initialize variables
+          frontend_coverage=0
+          backend_coverage=0
+          ml_coverage=0
+
+          # Parse coverage percentages with fallback
           if [ -f coverage/frontend-coverage.json ]; then
-            frontend_coverage=$(node -e "const cov=require('./coverage/frontend-coverage.json'); console.log(cov.total.lines.pct || 0)")
+            frontend_coverage=$(node -e "try { const cov=require('./coverage/frontend-coverage.json'); console.log(cov.total?.lines?.pct || 0); } catch(e) { console.log(0); }")
             echo "### Frontend Coverage: ${frontend_coverage}%" >> coverage-report.md
           fi
 
           if [ -f coverage/backend-coverage.json ]; then
-            backend_coverage=$(node -e "const cov=require('./coverage/backend-coverage.json'); console.log(cov.total.lines.pct || 0)")
+            backend_coverage=$(node -e "try { const cov=require('./coverage/backend-coverage.json'); console.log(cov.total?.lines?.pct || 0); } catch(e) { console.log(0); }")
             echo "### Backend Coverage: ${backend_coverage}%" >> coverage-report.md
           fi
 
           if [ -f coverage/ml-coverage.json ]; then
-            ml_coverage=$(python -c "import json; data=json.load(open('coverage/ml-coverage.json')); print(data.get('totals', {}).get('percent_covered', 0))")
+            ml_coverage=$(python -c "try: import json; data=json.load(open('coverage/ml-coverage.json')); print(data.get('totals', {}).get('percent_covered', 0)); except: print(0)")
             echo "### ML Service Coverage: ${ml_coverage}%" >> coverage-report.md
           fi
 
@@ -119,32 +129,32 @@ jobs:
           echo "### Coverage Thresholds" >> coverage-report.md
           echo "" >> coverage-report.md
 
-          # Check thresholds
+          # Check thresholds with bash arithmetic (bc alternative)
           failed=false
 
-          if (( $(echo "$frontend_coverage < $MIN_FRONTEND_COVERAGE" | bc -l) )); then
+          if [ "$(echo "$frontend_coverage < $MIN_FRONTEND_COVERAGE" | bc -l 2>/dev/null || echo "$(($frontend_coverage < $MIN_FRONTEND_COVERAGE))")" = "1" ]; then
             echo "❌ Frontend coverage below threshold: ${frontend_coverage}% < ${MIN_FRONTEND_COVERAGE}%" >> coverage-report.md
             failed=true
           else
             echo "✅ Frontend coverage meets threshold: ${frontend_coverage}% >= ${MIN_FRONTEND_COVERAGE}%" >> coverage-report.md
           fi
 
-          if (( $(echo "$backend_coverage < $MIN_BACKEND_COVERAGE" | bc -l) )); then
+          if [ "$(echo "$backend_coverage < $MIN_BACKEND_COVERAGE" | bc -l 2>/dev/null || echo "$(($backend_coverage < $MIN_BACKEND_COVERAGE))")" = "1" ]; then
             echo "❌ Backend coverage below threshold: ${backend_coverage}% < ${MIN_BACKEND_COVERAGE}%" >> coverage-report.md
             failed=true
           else
             echo "✅ Backend coverage meets threshold: ${backend_coverage}% >= ${MIN_BACKEND_COVERAGE}%" >> coverage-report.md
           fi
 
-          if (( $(echo "$ml_coverage < $MIN_ML_COVERAGE" | bc -l) )); then
+          if [ "$(echo "$ml_coverage < $MIN_ML_COVERAGE" | bc -l 2>/dev/null || echo "$(($ml_coverage < $MIN_ML_COVERAGE))")" = "1" ]; then
             echo "❌ ML Service coverage below threshold: ${ml_coverage}% < ${MIN_ML_COVERAGE}%" >> coverage-report.md
             failed=true
           else
             echo "✅ ML Service coverage meets threshold: ${ml_coverage}% >= ${MIN_ML_COVERAGE}%" >> coverage-report.md
           fi
 
-          # Generate coverage badge
-          total_coverage=$(echo "scale=2; ($frontend_coverage + $backend_coverage + $ml_coverage) / 3" | bc)
+          # Generate coverage badge using bash arithmetic
+          total_coverage=$(echo "scale=2; ($frontend_coverage + $backend_coverage + $ml_coverage) / 3" | bc 2>/dev/null || echo "$(( ($frontend_coverage + $backend_coverage + $ml_coverage) / 3 ))")
           echo "" >> coverage-report.md
           echo "**Total Coverage:** ${total_coverage}%" >> coverage-report.md
 
@@ -216,6 +226,12 @@ jobs:
           mkdir -p .coverage-history
           date=$(date +%Y-%m-%d)
 
+          # Save current coverage data (ensure variables are defined)
+          frontend_coverage=${frontend_coverage:-0}
+          backend_coverage=${backend_coverage:-0}
+          ml_coverage=${ml_coverage:-0}
+          total_coverage=${total_coverage:-0}
+
           # Save current coverage data
           echo "{
             \"date\": \"$date\",
@@ -227,7 +243,9 @@ jobs:
 
           # Generate trend report (last 30 days)
           echo "### Coverage Trend (Last 30 Days)" >> trend-report.md
-          find .coverage-history -name "*.json" -mtime -30 | sort | while read file; do
-            data=$(cat $file)
-            echo "$data" >> trend-report.md
+          find .coverage-history -name "*.json" -mtime -30 2>/dev/null | sort | while read file; do
+            if [ -f "$file" ]; then
+              data=$(cat "$file")
+              echo "$data" >> trend-report.md
+            fi
           done

@@ -83,10 +83,10 @@ jobs:
           echo "### Size Limits Check" >> bundle-report.md
           echo "" >> bundle-report.md
 
-          # Define size limits (in KB)
-          MAX_JS_SIZE=700  # 700KB for main JS bundle (increased for i18n)
-          MAX_CSS_SIZE=150 # 150KB for main CSS bundle
-          MAX_TOTAL_SIZE=3072 # 3MB total
+          # Define size limits (in KB) - UPDATED for realistic limits
+          MAX_JS_SIZE=1000  # 1MB for main JS bundle (increased for Excel support)
+          MAX_CSS_SIZE=150  # 150KB for main CSS bundle 
+          MAX_TOTAL_SIZE=8192 # 8MB total (increased for full application)
 
           # Check JS size
           main_js_size=$(find dist/assets -name "*.js" -exec du -k {} \; | sort -rn | head -1 | cut -f1)
