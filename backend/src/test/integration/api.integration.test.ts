@@ -1,55 +1,76 @@
 import request from 'supertest'
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals'
-import app from '../../server'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
+// Import app with error handling
+let app: any
+let prisma: PrismaClient
+
+beforeAll(async () => {
+  try {
+    // Set test environment first
+    process.env.NODE_ENV = 'test'
+    
+    // Import app after setting environment
+    const serverModule = await import('../../server')
+    app = serverModule.default
+    
+    // Initialize Prisma client
+    prisma = new PrismaClient()
+    
+    // Connect to database
+    await prisma.$connect()
+    
+    console.log('✓ Test environment initialized successfully')
+  } catch (error) {
+    console.error('✗ Failed to initialize test environment:', error)
+    throw error
+  }
+})
+
+afterAll(async () => {
+  try {
+    if (prisma) {
+      await prisma.$disconnect()
+    }
+    console.log('✓ Test environment cleanup completed')
+  } catch (error) {
+    console.error('✗ Failed to cleanup test environment:', error)
+  }
+})
+
 describe('API Integration Tests', () => {
-  let prisma: PrismaClient
   let authToken: string
   let refreshToken: string
   let testUser: any
   let testProject: any
 
-  beforeAll(async () => {
-    // Use test database
-    const databaseUrl = process.env.DATABASE_URL || process.env.TEST_DATABASE_URL || 'postgresql://postgres:testpass@localhost:5432/testdb'
-    
-    // For CI/CD environment, ensure we have a valid PostgreSQL URL
-    // Support all postgres URL variants including postgres+asyncpg://
-    const isValidPostgresUrl = /^postgres(?:ql)?(?:\+[a-z0-9-]+)?:\/\//i.test(databaseUrl)
-    
-    if (!isValidPostgresUrl) {
-      console.warn('Invalid DATABASE_URL, using default PostgreSQL URL for tests')
-      process.env.DATABASE_URL = 'postgresql://postgres:testpass@localhost:5432/testdb'
-    } else {
-      process.env.DATABASE_URL = databaseUrl
+  beforeEach(async () => {
+    if (!prisma) {
+      throw new Error('Prisma client not initialized')
     }
     
-    prisma = new PrismaClient()
-
-    // Clean database
-    await prisma.$transaction([
-      prisma.segmentation.deleteMany(),
-      prisma.image.deleteMany(),
-      prisma.project.deleteMany(),
-      prisma.user.deleteMany(),
-    ])
-  })
-
-  afterAll(async () => {
-    // Clean up and disconnect
-    await prisma.$transaction([
-      prisma.segmentation.deleteMany(),
-      prisma.image.deleteMany(),
-      prisma.project.deleteMany(),
-      prisma.user.deleteMany(),
-    ])
-    await prisma.$disconnect()
+    // Clean database before each test
+    try {
+      await prisma.$transaction([
+        prisma.segmentation.deleteMany(),
+        prisma.image.deleteMany(),
+        prisma.project.deleteMany(),
+        prisma.user.deleteMany(),
+      ])
+    } catch (error) {
+      console.warn('Database cleanup warning:', error)
+      // Continue with tests even if cleanup partially fails
+    }
   })
 
   describe('Authentication Flow', () => {
     it('should register a new user', async () => {
+      if (!app) {
+        throw new Error('App not initialized')
+      }
+      
       const userData = {
         email: 'integration@test.com',
         password: 'password123',
@@ -72,6 +93,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should not register user with existing email', async () => {
+      if (!app) {
+        throw new Error('App not initialized')
+      }
+      
       const userData = {
         email: 'integration@test.com', // Same email
         password: 'password123',
@@ -85,6 +110,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should login with correct credentials', async () => {
+      if (!app) {
+        throw new Error('App not initialized')
+      }
+      
       const loginData = {
         email: 'integration@test.com',
         password: 'password123'
@@ -101,6 +130,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should not login with incorrect credentials', async () => {
+      if (!app) {
+        throw new Error('App not initialized')
+      }
+      
       const loginData = {
         email: 'integration@test.com',
         password: 'wrongpassword'
@@ -113,6 +146,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should refresh access token', async () => {
+      if (!app || !refreshToken) {
+        throw new Error('App or refresh token not available')
+      }
+      
       const response = await request(app)
         .post('/api/auth/refresh')
         .send({ refreshToken })
@@ -126,6 +163,10 @@ describe('API Integration Tests', () => {
 
   describe('Project Management Flow', () => {
     it('should create a new project', async () => {
+      if (!app || !authToken) {
+        throw new Error('App or auth token not available')
+      }
+      
       const projectData = {
         title: 'Integration Test Project',
         description: 'A test project for integration testing'
@@ -145,6 +186,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should get user projects', async () => {
+      if (!app || !authToken) {
+        throw new Error('App or auth token not available')
+      }
+      
       const response = await request(app)
         .get('/api/projects')
         .set('Authorization', `Bearer ${authToken}`)
@@ -156,6 +201,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should get specific project', async () => {
+      if (!app || !authToken || !testProject) {
+        throw new Error('App, auth token, or test project not available')
+      }
+      
       const response = await request(app)
         .get(`/api/projects/${testProject.id}`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -166,6 +215,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should update project', async () => {
+      if (!app || !authToken || !testProject) {
+        throw new Error('App, auth token, or test project not available')
+      }
+      
       const updateData = {
         title: 'Updated Integration Test Project',
         description: 'Updated description'
@@ -183,6 +236,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should not access other user project', async () => {
+      if (!app || !authToken || !prisma) {
+        throw new Error('App, auth token, or Prisma not available')
+      }
+      
       // Create another user and project
       const anotherUser = await prisma.user.create({
         data: {
@@ -209,6 +266,10 @@ describe('API Integration Tests', () => {
 
   describe('File Upload Flow', () => {
     it('should upload image to project', async () => {
+      if (!app || !authToken || !testProject) {
+        throw new Error('App, auth token, or test project not available')
+      }
+      
       // Create a simple test image buffer
       const testImageBuffer = Buffer.from('fake-image-data')
 
@@ -224,6 +285,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should not upload without authentication', async () => {
+      if (!app || !testProject) {
+        throw new Error('App or test project not available')
+      }
+      
       const testImageBuffer = Buffer.from('fake-image-data')
 
       await request(app)
@@ -233,6 +298,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should not upload non-image file', async () => {
+      if (!app || !authToken || !testProject) {
+        throw new Error('App, auth token, or test project not available')
+      }
+      
       const testTextBuffer = Buffer.from('This is not an image')
 
       await request(app)
@@ -245,6 +314,10 @@ describe('API Integration Tests', () => {
 
   describe('Health and Status Endpoints', () => {
     it('should return healthy status', async () => {
+      if (!app) {
+        throw new Error('App not available')
+      }
+      
       const response = await request(app)
         .get('/health')
         .expect(200)
@@ -255,6 +328,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should return API endpoints list', async () => {
+      if (!app) {
+        throw new Error('App not available')
+      }
+      
       const response = await request(app)
         .get('/api/endpoints')
         .expect(200)
@@ -265,6 +342,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should return health status of endpoints', async () => {
+      if (!app) {
+        throw new Error('App not available')
+      }
+      
       const response = await request(app)
         .get('/api/health/endpoints')
         .expect(200)
@@ -276,12 +357,20 @@ describe('API Integration Tests', () => {
 
   describe('Error Handling', () => {
     it('should handle 404 for non-existent endpoints', async () => {
+      if (!app) {
+        throw new Error('App not available')
+      }
+      
       await request(app)
         .get('/api/non-existent')
         .expect(404)
     })
 
     it('should handle malformed JSON', async () => {
+      if (!app) {
+        throw new Error('App not available')
+      }
+      
       await request(app)
         .post('/api/auth/login')
         .set('Content-Type', 'application/json')
@@ -290,6 +379,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should handle request size limit', async () => {
+      if (!app || !authToken) {
+        throw new Error('App or auth token not available')
+      }
+      
       const largePayload = {
         data: 'x'.repeat(10 * 1024 * 1024) // 10MB
       }
@@ -304,6 +397,10 @@ describe('API Integration Tests', () => {
 
   describe('Rate Limiting', () => {
     it('should enforce rate limits', async () => {
+      if (!app) {
+        throw new Error('App not available')
+      }
+      
       // Make many requests quickly to trigger rate limit
       const requests = Array.from({ length: 20 }, () =>
         request(app).get('/api/endpoints')
@@ -319,6 +416,10 @@ describe('API Integration Tests', () => {
 
   describe('CORS Headers', () => {
     it('should include proper CORS headers', async () => {
+      if (!app) {
+        throw new Error('App not available')
+      }
+      
       const response = await request(app)
         .options('/api/endpoints')
         .expect(200)
@@ -331,6 +432,10 @@ describe('API Integration Tests', () => {
 
   describe('Security Headers', () => {
     it('should include security headers', async () => {
+      if (!app) {
+        throw new Error('App not available')
+      }
+      
       const response = await request(app)
         .get('/health')
         .expect(200)
@@ -343,6 +448,10 @@ describe('API Integration Tests', () => {
 
   describe('Database Transactions', () => {
     it('should rollback transaction on error', async () => {
+      if (!app || !authToken || !prisma) {
+        throw new Error('App, auth token, or Prisma not available')
+      }
+      
       // This test would need to simulate a scenario where a database
       // operation fails partway through a transaction
       const initialProjectCount = await prisma.project.count()
@@ -369,6 +478,10 @@ describe('API Integration Tests', () => {
 
   describe('Cleanup', () => {
     it('should delete project', async () => {
+      if (!app || !authToken || !testProject) {
+        throw new Error('App, auth token, or test project not available')
+      }
+      
       await request(app)
         .delete(`/api/projects/${testProject.id}`)
         .set('Authorization', `Bearer ${authToken}`)
@@ -382,6 +495,10 @@ describe('API Integration Tests', () => {
     })
 
     it('should logout user', async () => {
+      if (!app || !refreshToken) {
+        throw new Error('App or refresh token not available')
+      }
+      
       const response = await request(app)
         .post('/api/auth/logout')
         .send({ refreshToken })

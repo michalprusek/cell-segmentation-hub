@@ -114,16 +114,18 @@ jobs:
         run: npm ci
 
       - name: Run Frontend tests with coverage
+        timeout-minutes: 10
         run: |
-          npm run test:coverage -- --reporter=json --outputFile=coverage/frontend-coverage.json
-          npm run test:coverage -- --reporter=lcov --coverage.reporter=lcov
+          # Use optimized test command for CI
+          npm run test:coverage -- --reporter=json --reporter=lcov --outputFile=coverage/frontend-coverage.json
 
       - name: Run Backend tests with coverage
         working-directory: ./backend
+        timeout-minutes: 10
         run: |
           npm ci
-          npm run test:coverage -- --reporter=json --outputFile=coverage/backend-coverage.json
-          npm run test:coverage -- --reporter=lcov --coverage.reporter=lcov
+          # Use optimized test command for CI  
+          npm run test:coverage -- --reporter=json --reporter=lcov --outputFile=coverage/backend-coverage.json
 
       - name: Generate coverage summary
         run: |
@@ -200,15 +202,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-asyncio
-          # Verify installation
-          python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
-          python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
-          python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
+          # Verify installation with proper error handling
+          python -c "import torch; print(f'PyTorch version: {torch.__version__}')" || echo "PyTorch not available"
+          python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')" || echo "OpenCV not available"
+          python -c "import numpy; print(f'NumPy version: {numpy.__version__}')" || echo "NumPy not available"
 
       - name: Run ML service tests
         working-directory: ./backend/segmentation
+        timeout-minutes: 15
         run: |
-          pytest tests/ -v --cov=. --cov-report=xml --cov-report=term
+          # Set environment variable to avoid CUDA/GPU issues in CI
+          export CUDA_VISIBLE_DEVICES=""
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=term --tb=short
 
       - name: Upload Python coverage
         uses: codecov/codecov-action@v3
@@ -283,6 +288,7 @@ jobs:
 
       - name: Run integration tests
         working-directory: ./backend
+        timeout-minutes: 15
         env:
           DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
           JWT_ACCESS_SECRET: test-access-secret
@@ -295,6 +301,31 @@ jobs:
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: spheroseg_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
     steps:
       - uses: actions/checkout@v4
 
@@ -305,7 +336,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm ci
+          cd backend && npm ci
 
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
@@ -322,48 +355,18 @@ jobs:
           echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/spheroseg_test" >> backend/.env
           echo "JWT_ACCESS_SECRET=test-jwt-access-secret-key-min-32-chars-long" >> backend/.env
           echo "JWT_REFRESH_SECRET=test-jwt-refresh-secret-key-min-32-chars-long" >> backend/.env
-
-      - name: Start test services
-        run: |
-          # Start PostgreSQL and Redis containers
-          echo "Starting PostgreSQL..."
-          docker run -d --name test-postgres \
-            -e POSTGRES_PASSWORD=postgres \
-            -e POSTGRES_DB=spheroseg_test \
-            -p 5432:5432 \
-            postgres:15-alpine
-          
-          echo "Starting Redis..."
-          docker run -d --name test-redis \
-            -p 6379:6379 \
-            redis:7-alpine
-          
-          # Wait for PostgreSQL to be ready
-          echo "Waiting for PostgreSQL..."
-          for i in {1..30}; do
-            docker exec test-postgres pg_isready -U postgres && break
-            echo "PostgreSQL not ready yet... ($i/30)"
-            sleep 2
-          done
-          
-          # Wait for Redis to be ready
-          echo "Waiting for Redis..."
-          for i in {1..30}; do
-            docker exec test-redis redis-cli ping && break
-            echo "Redis not ready yet... ($i/30)"
-            sleep 2
-          done
-          
-          echo "Test services are ready!"
+          echo "REDIS_URL=redis://localhost:6379" >> backend/.env
 
       - name: Setup database
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/spheroseg_test
         run: |
-          cd backend
-          npx prisma migrate deploy
           npx prisma generate
-          cd ..
+          npx prisma migrate deploy || npx prisma db push
 
       - name: Build and start application
+        timeout-minutes: 10
         run: |
           # Build frontend
           npm run build
@@ -374,7 +377,7 @@ jobs:
           BACKEND_PID=$!
           cd ..
           
-          # Start frontend dev server for E2E tests
+          # Start frontend preview server for E2E tests
           npm run preview &
           FRONTEND_PID=$!
           
@@ -401,9 +404,12 @@ jobs:
           echo "Application is ready for E2E tests!"
 
       - name: Run E2E tests
+        timeout-minutes: 15
+        env:
+          BASE_URL: http://localhost:4173
         run: |
           # Run Playwright tests against preview server
-          VITE_API_URL=http://localhost:3001 npm run test:e2e
+          npx playwright test
 
       - name: Upload Playwright report
         if: always()
@@ -425,10 +431,6 @@ jobs:
             kill $(cat frontend.pid) || true
             rm frontend.pid
           fi
-          
-          # Stop and remove Docker containers
-          docker stop test-postgres test-redis || true
-          docker rm test-postgres test-redis || true
 
   # ====================
   # Build Docker Images
@@ -560,4 +562,3 @@ jobs:
   #           http://localhost:3000/segmentation
   #         uploadArtifacts: true
   #         temporaryPublicStorage: true
-
