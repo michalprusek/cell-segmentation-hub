@@ -79,7 +79,7 @@ export const testScenarios = {
       return isOpen && wasRejected;
       
     } catch (error) {
-      logger.error('Circuit opening test failed', error);
+      logger.error('Circuit opening test failed', error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   },
@@ -107,7 +107,7 @@ export const testScenarios = {
       return breaker.getState() === CircuitState.CLOSED;
       
     } catch (error) {
-      logger.error('Circuit recovery test failed', error);
+      logger.error('Circuit recovery test failed', error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   },
@@ -127,7 +127,7 @@ export const testScenarios = {
       return timedOut;
       
     } catch (error) {
-      logger.error('Timeout handling test failed', error);
+      logger.error('Timeout handling test failed', error instanceof Error ? error : new Error(String(error)));
       return false;
     }
   },
@@ -224,7 +224,7 @@ export class ChaosTestRunner {
       ? responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length 
       : 0;
 
-    logger.info(`Chaos test completed`, results);
+    logger.info('Chaos test completed', 'ChaosTestRunner', JSON.stringify(results));
     return results;
   }
 
@@ -262,7 +262,7 @@ export class ChaosTestRunner {
           
           logger.warn(`Chaos event triggered: ${scenario.name}`);
         } catch (error) {
-          logger.error(`Chaos scenario failed: ${scenario.name}`, error);
+          logger.error(`Chaos scenario failed: ${scenario.name}`, error instanceof Error ? error : new Error(String(error)));
         }
       }
     }
@@ -409,7 +409,7 @@ export class CircuitBreakerTestSuite {
       
       this.testResults.push(result);
       
-      logger.error(`Test ${name}: FAILED with error (${duration}ms)`, error);
+      logger.error(`Test ${name}: FAILED with error (${duration}ms)`, error instanceof Error ? error : new Error(String(error)));
       return result;
     }
   }

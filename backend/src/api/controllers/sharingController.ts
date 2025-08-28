@@ -156,7 +156,7 @@ export const getProjectShares = asyncHandler(async (req: Request, res: Response)
 
     const shares = await SharingService.getProjectShares(projectId, req.user.id);
     
-    const formattedShares = shares.map(share => ({
+    const formattedShares = shares.map((share: any) => ({
       id: share.id,
       email: share.email,
       sharedWith: share.sharedWith ? {
@@ -274,17 +274,17 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
           id: share.sharedBy.id,
           email: share.sharedBy.email
         },
-        image_count: (share.project as Record<string, unknown>)._count?.images || 0,
-        images: (share.project as Record<string, unknown>).images || [],
+        image_count: ((share.project as any)?._count?.images as number) || 0,
+        images: ((share.project as any)?.images as any[]) || [],
         updated_at: share.project.updatedAt
       },
       sharedBy: {
         id: share.sharedBy.id,
         email: share.sharedBy.email
       },
-      status: share.status,
-      shareId: share.id,
-      sharedAt: share.createdAt,
+      status: (share as any).status,
+      shareId: (share as any).id,
+      sharedAt: (share as any).createdAt,
       isShared: true
     }));
 
@@ -325,12 +325,12 @@ export const validateShareToken = asyncHandler(async (req: Request, res: Respons
       res,
       {
         project: {
-          id: share.project.id,
-          title: share.project.title,
-          description: share.project.description
+          id: (share as any).project.id,
+          title: (share as any).project.title,
+          description: (share as any).project.description
         },
         sharedBy: {
-          email: share.sharedBy.email
+          email: (share as any).sharedBy.email
         },
         status: share.status,
         email: share.email,
@@ -366,12 +366,12 @@ export const acceptShareInvitation = asyncHandler(async (req: Request, res: Resp
         res,
         {
           project: {
-            id: result.share.project.id,
-            title: result.share.project.title,
-            description: result.share.project.description
+            id: (result as any).share.project.id,
+            title: (result as any).share.project.title,
+            description: (result as any).share.project.description
           },
           sharedBy: {
-            email: result.share.sharedBy.email
+            email: (result as any).share.sharedBy.email
           },
           needsLogin: true
         },
@@ -384,13 +384,13 @@ export const acceptShareInvitation = asyncHandler(async (req: Request, res: Resp
       res,
       {
         project: {
-          id: result.share.project.id,
-          title: result.share.project.title,
-          description: result.share.project.description
+          id: (result as any).share.project.id,
+          title: (result as any).share.project.title,
+          description: (result as any).share.project.description
         },
-        shareId: result.share.id,
-        sharedWithId: result.share.sharedWithId,
-        status: result.share.status,
+        shareId: (result as any).share.id,
+        sharedWithId: (result as any).share.sharedWithId,
+        status: (result as any).share.status,
         accepted: true
       },
       'Share invitation accepted successfully'

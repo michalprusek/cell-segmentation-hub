@@ -161,7 +161,7 @@ const ModelSettingsSection = () => {
           </div>
           <Switch
             id="detectHoles"
-            checked={detectHoles}
+            checked={detectHoles ?? true}
             onCheckedChange={handleDetectHolesChange}
           />
         </div>

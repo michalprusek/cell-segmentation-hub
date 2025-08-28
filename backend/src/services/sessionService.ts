@@ -58,7 +58,7 @@ export const sessionService = {
 
       return sessionId;
     } catch (error) {
-      logger.error('Failed to create session', 'SessionService', error as Error);
+      logger.error('Failed to create session', error instanceof Error ? error : new Error(String(error)), 'SessionService');
       throw error;
     }
   },
@@ -111,7 +111,7 @@ export const sessionService = {
         refreshToken: newRefreshToken
       };
     } catch (error) {
-      logger.error('Failed to refresh session', 'SessionService', error as Error);
+      logger.error('Failed to refresh session', error as Error);
       return null;
     }
   },
@@ -129,7 +129,7 @@ export const sessionService = {
 
       return await this.invalidateSession(sessionId, refreshToken);
     } catch (error) {
-      logger.error('Failed to invalidate session by refresh token', 'SessionService', error as Error);
+      logger.error('Failed to invalidate session by refresh token', error as Error);
       return false;
     }
   },
@@ -163,7 +163,7 @@ export const sessionService = {
       logger.info('Session invalidated', 'SessionService', { sessionId });
       return true;
     } catch (error) {
-      logger.error('Failed to invalidate session', 'SessionService', error as Error);
+      logger.error('Failed to invalidate session', error as Error);
       return false;
     }
   },
@@ -186,7 +186,7 @@ export const sessionService = {
 
       return session;
     } catch (error) {
-      logger.error('Failed to get session', 'SessionService', error as Error);
+      logger.error('Failed to get session', error as Error);
       return null;
     }
   },
@@ -212,7 +212,7 @@ export const sessionService = {
 
       return cleanupCount;
     } catch (error) {
-      logger.error('Failed to cleanup expired sessions', 'SessionService', error as Error);
+      logger.error('Failed to cleanup expired sessions', error as Error);
       return 0;
     }
   }

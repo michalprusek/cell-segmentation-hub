@@ -468,6 +468,45 @@ node scripts/security-audit/generate-scorecard.js
 
 ## Recent Implementations & Important Notes
 
+### ALL Code Changes Require Docker Rebuild for Production
+
+**CRITICAL**: Any code changes (frontend, backend, or ML) require rebuilding Docker images for production deployment!
+
+#### Frontend Changes:
+
+```bash
+# Rebuild Docker image
+docker compose -f docker-compose.green.yml build green-frontend
+# Or for quick fixes without Docker rebuild:
+VITE_API_BASE_URL=/api VITE_ML_SERVICE_URL=/api/ml npm run build
+docker cp dist/. green-frontend:/usr/share/nginx/html/
+docker exec green-frontend nginx -s reload
+```
+
+#### Backend Changes:
+
+```bash
+# MUST rebuild Docker image - code is compiled during build
+docker compose -f docker-compose.green.yml build green-backend
+docker compose -f docker-compose.green.yml up -d green-backend
+```
+
+#### ML Service Changes:
+
+```bash
+# MUST rebuild Docker image
+docker compose -f docker-compose.green.yml build green-ml
+docker compose -f docker-compose.green.yml up -d green-ml
+```
+
+#### Full Rebuild (safest):
+
+```bash
+# Rebuild all services
+docker compose -f docker-compose.green.yml build
+docker compose -f docker-compose.green.yml up -d
+```
+
 ### Storage Space Indicator (Dashboard)
 
 - **Backend Endpoint**: `GET /api/auth/storage-stats` - Returns user's total storage usage
@@ -676,6 +715,95 @@ make restart-backend-utia  # Restart backend with UTIA config
 ```
 
 - vždy používej desktop commander k získání logs!
+
+## Production Deployment Prevention Measures (Added 2025-08-28)
+
+### Common Production Issues and Prevention
+
+#### 1. Stale JavaScript Bundles After Code Changes
+
+**Problem**: Docker build uses cached layers, serving old JavaScript files despite code changes
+
+**Prevention**:
+
+```bash
+# ALWAYS rebuild without cache for production fixes
+docker compose -f docker-compose.green.yml build --no-cache green-frontend
+
+# Verify bundle hash changed (should see different hash in output)
+# Before: dist/assets/index-Z5kdYROg.js
+# After:  dist/assets/index-CB7eH8Ti.js
+```
+
+#### 2. WebSocket Singleton Export Issues
+
+**Problem**: Exporting instance instead of class breaks `getInstance()` calls
+
+**Correct Pattern**:
+
+```typescript
+// ✅ CORRECT - Export the class
+import ImprovedWebSocketManager from './webSocketManagerImproved';
+export default ImprovedWebSocketManager;
+
+// ❌ WRONG - Don't export the instance
+export default ImprovedWebSocketManager.getInstance();
+```
+
+#### 3. Browser Cache Issues
+
+**Problem**: Browser loads cached old assets even after deployment
+
+**Prevention**:
+
+- Test in incognito mode
+- Use hard refresh: Ctrl+Shift+R (Cmd+Shift+R on Mac)
+- Check Network tab for correct bundle files
+- Add cache-busting headers in nginx if needed
+
+#### 4. Missing Database Tables/Columns
+
+**Problem**: Code expects tables/columns that don't exist in production
+
+**Prevention**:
+
+```bash
+# After adding new models/fields in schema.prisma
+docker exec green-backend npx prisma db push --accept-data-loss
+
+# Or create proper migration
+docker exec green-backend npx prisma migrate dev --name describe_change
+```
+
+#### 5. Environment Variable Issues
+
+**Problem**: Missing env vars cause container startup failures
+
+**Prevention**:
+
+```bash
+# Always export required variables before docker-compose
+export DB_PASSWORD_GREEN=<value>
+export JWT_ACCESS_SECRET_GREEN=<value>
+export JWT_REFRESH_SECRET_GREEN=<value>
+export POSTGRES_PASSWORD=<value>
+
+# Or use .env file properly
+source .env.green && docker compose -f docker-compose.green.yml up -d
+```
+
+### Production Deployment Checklist
+
+Before deploying to production:
+
+- [ ] Code changes committed to correct branch
+- [ ] Rebuild containers WITHOUT cache: `--no-cache`
+- [ ] Verify JavaScript bundle hash changed
+- [ ] Check database schema is synchronized
+- [ ] Export all required environment variables
+- [ ] Test in incognito/private browser mode
+- [ ] Monitor logs for startup errors
+- [ ] Verify health endpoints respond correctly
 
 ## Enterprise Features Summary (Added 2025-08-26)
 

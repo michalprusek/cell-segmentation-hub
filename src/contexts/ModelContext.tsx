@@ -47,8 +47,21 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
       }
     }
 
+    // Defensive handling for detectHoles - default to true if not set
     if (savedDetectHoles !== null) {
-      setDetectHolesState(savedDetectHoles === 'true');
+      try {
+        setDetectHolesState(savedDetectHoles === 'true');
+      } catch (error) {
+        console.warn(
+          'Failed to parse detectHoles from localStorage, defaulting to true',
+          error
+        );
+        setDetectHolesState(true);
+      }
+    } else {
+      // If detectHoles is not in localStorage at all, ensure it's set
+      setDetectHolesState(true);
+      localStorage.setItem('detectHoles', 'true');
     }
   }, []);
 

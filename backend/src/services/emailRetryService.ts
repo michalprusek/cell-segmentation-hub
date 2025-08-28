@@ -78,7 +78,7 @@ export function isRetriableError(error: Error): boolean {
  * Send email with timeout wrapper
  */
 export async function sendMailWithTimeout(
-  transporter: Record<string, unknown>,
+  transporter: any,
   mailOptions: SendMailOptions
 ): Promise<SMTPTransport.SentMessageInfo> {
   const EMAIL_TIMEOUT = parseEmailTimeout('EMAIL_TIMEOUT', 60000);
@@ -104,7 +104,7 @@ export async function sendMailWithTimeout(
  * Send email with retry logic using exponential backoff
  */
 export async function sendEmailWithRetry(
-  transporter: Record<string, unknown>,
+  transporter: any,
   config: Record<string, unknown>,
   options: EmailServiceOptions,
   retryConfig: RetryConfig = DEFAULT_RETRY_CONFIG
@@ -128,7 +128,7 @@ export async function sendEmailWithRetry(
       }
 
       const mailOptions: SendMailOptions = {
-        from: `"${config.from.name}" <${config.from.email}>`,
+        from: `"${(config as any).from.name}" <${(config as any).from.email}>`,
         to: options.to,
         subject: options.subject,
         html: options.html,
@@ -220,7 +220,11 @@ export function updateEmailMetrics(success: boolean, retries = 0, error?: Error)
   
   // Log metrics periodically
   if ((emailMetrics.sent + emailMetrics.failed) % 100 === 0) {
-    logger.info('Email metrics checkpoint', 'EmailRetryService', emailMetrics);
+    logger.info('Email metrics checkpoint', 'EmailRetryService', {
+      sent: emailMetrics.sent,
+      failed: emailMetrics.failed,
+      totalRetries: (emailMetrics as any).totalRetries || 0
+    });
   }
 }
 

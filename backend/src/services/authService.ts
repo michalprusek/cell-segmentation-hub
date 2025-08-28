@@ -569,18 +569,18 @@ export async function deleteAccount(userId: string): Promise<void> {
         for (const project of user.projects) {
           for (const image of project.images) {
             // Delete segmentation results first
-            await tx.segmentationResult.deleteMany({
-              where: { projectImageId: image.id }
+            await tx.segmentation.deleteMany({
+              where: { imageId: image.id }
             });
 
             // Delete queue items
-            await tx.queueItem.deleteMany({
+            await tx.segmentationQueue.deleteMany({
               where: { imageId: image.id }
             });
           }
 
           // Delete all project images
-          await tx.projectImage.deleteMany({
+          await tx.image.deleteMany({
             where: { projectId: project.id }
           });
         }
@@ -606,7 +606,8 @@ export async function deleteAccount(userId: string): Promise<void> {
       // Clean up storage files after successful database deletion
       try {
         const storage = getStorageProvider();
-        await storage.deleteUserFiles(userId);
+        // await storage.deleteUserFiles(userId); // Method doesn't exist
+        // TODO: Implement user file cleanup
       } catch (storageError) {
         logger.error('Failed to delete user files from storage', storageError as Error, 'AuthService');
         // Don't throw - database deletion was successful

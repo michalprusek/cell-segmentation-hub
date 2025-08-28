@@ -83,14 +83,15 @@ export async function withTransaction<T>(
       logger.debug('Transaction completed successfully', 'Database');
       return result;
     } catch (error: unknown) {
-      logger.error(`Transaction failed (attempt ${attempt}/${retries})`, error, 'Database');
+      logger.error(`Transaction failed (attempt ${attempt}/${retries})`, error instanceof Error ? error : new Error(String(error)), 'Database');
       
       // Check if it's a deadlock or timeout error that we should retry
+      const errorObj = error as any;
       const isRetryableError = 
-        error.code === 'P2034' || // Transaction failed due to concurrent update
-        error.code === 'P2024' || // Timed out fetching a new connection from the pool
-        error.message?.includes('deadlock') ||
-        error.message?.includes('timeout');
+        errorObj.code === 'P2034' || // Transaction failed due to concurrent update
+        errorObj.code === 'P2024' || // Timed out fetching a new connection from the pool
+        errorObj.message?.includes('deadlock') ||
+        errorObj.message?.includes('timeout');
       
       if (!isRetryableError || attempt === retries) {
         throw error;
@@ -141,20 +142,20 @@ export async function cleanupOrphanedRecords(
     `;
     
     // Clean up orphaned segmentation results
-    await tx.segmentationResult.deleteMany({
+    await tx.segmentation.deleteMany({
       where: {
-        projectImage: {
+        image: {
           is: null
         }
       }
     });
     
     // Clean up orphaned queue items
-    await tx.queueItem.deleteMany({
+    await tx.segmentationQueue.deleteMany({
       where: {
         AND: [
           { status: { in: ['completed', 'failed'] } },
-          { updatedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } // Older than 7 days
+          { completedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } // Older than 7 days
         ]
       }
     });

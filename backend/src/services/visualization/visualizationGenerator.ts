@@ -134,8 +134,8 @@ export class VisualizationGenerator {
 
       // Calculate final metrics
       metrics.renderTime = Date.now() - startTime;
-      const cacheStats = NUMBER_PATHS.getCacheStats();
-      metrics.cacheHitRate = cacheStats.hitRate;
+      const cacheStats = NUMBER_PATHS.getCacheStats() as any;
+      metrics.cacheHitRate = cacheStats?.hitRate || 0;
 
       // Check render time thresholds
       if (metrics.renderTime > this.ERROR_RENDER_TIME_MS) {
@@ -161,7 +161,7 @@ export class VisualizationGenerator {
       // Log detailed metrics for monitoring
       if (polygons.length > 100) {
         logger.debug(
-          `Performance details - Polygons: ${polygons.length}, Time: ${metrics.renderTime}ms, Cache hits: ${cacheStats.hits}, Cache misses: ${cacheStats.misses}`,
+          `Performance details - Polygons: ${polygons.length}, Time: ${metrics.renderTime}ms, Cache hits: ${(cacheStats as any)?.hits || 0}, Cache misses: ${(cacheStats as any)?.misses || 0}`,
           'VisualizationGenerator'
         );
       }

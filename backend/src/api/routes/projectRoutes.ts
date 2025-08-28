@@ -10,7 +10,7 @@ import {
 import { authenticate } from '../../middleware/auth';
 import { validateBody, validateQuery, validateParams } from '../../middleware/validation';
 import { cacheMiddleware, conditionalCache, cacheInvalidationMiddleware } from '../../middleware/cache';
-import { CacheService } from '../../services/cacheService';
+import { cacheService } from '../../services/cacheService';
 import { 
   createProjectSchema, 
   updateProjectSchema, 
@@ -42,7 +42,7 @@ router.post(
 router.get(
   '/',
   validateQuery(projectQuerySchema),
-  conditionalCache.userSpecific(CacheService.TTL_PRESETS.SHORT),
+  conditionalCache(300), // 5 minutes
   getProjects
 );
 
@@ -53,11 +53,7 @@ router.get(
 router.get(
   '/:id',
   validateParams(projectIdSchema),
-  cacheMiddleware({
-    ttl: CacheService.TTL_PRESETS.DATABASE_QUERY,
-    namespace: 'project',
-    keyGenerator: (req) => `${req.user?.id}:${req.params.id}`
-  }),
+  cacheMiddleware(600), // 10 minutes
   getProject
 );
 
@@ -69,11 +65,7 @@ router.put(
   '/:id',
   validateParams(projectIdSchema),
   validateBody(updateProjectSchema),
-  cacheInvalidationMiddleware((req) => [
-    `project:${req.params.id}:*`,
-    `projects:user:${req.user?.id}:*`,
-    `stats:user:${req.user?.id}:*`
-  ]),
+  cacheInvalidationMiddleware('project'),
   updateProject
 );
 
@@ -84,11 +76,7 @@ router.put(
 router.delete(
   '/:id',
   validateParams(projectIdSchema),
-  cacheInvalidationMiddleware((req) => [
-    `project:${req.params.id}:*`,
-    `projects:user:${req.user?.id}:*`,
-    `stats:user:${req.user?.id}:*`
-  ]),
+  cacheInvalidationMiddleware('project'),
   deleteProject
 );
 

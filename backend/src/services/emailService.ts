@@ -160,7 +160,7 @@ export async function sendEmail(options: EmailServiceOptions): Promise<void> {
       }
       
       // Use retry logic for email sending
-      const _result = await sendEmailWithRetry(_transporter, _config, options);
+      const _result = await sendEmailWithRetry(_transporter, _config as unknown as Record<string, unknown>, options);
       
       // Update metrics for successful send
       updateEmailMetrics(true, retryCount);

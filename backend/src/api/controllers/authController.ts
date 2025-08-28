@@ -751,3 +751,66 @@ export const uploadAvatar = asyncHandler(async (req: Request, res: Response) => 
     return ResponseHelper.internalError(res, error as Error);
   }
 });
+
+/**
+ * GET /api/auth/storage-stats
+ * Get user's storage statistics
+ */
+export const getStorageStats = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
+
+  try {
+    const userId = req.user.id;
+
+    // Get all projects for the user with their images
+    const projects = await prisma.project.findMany({
+      where: { userId },
+      include: {
+        images: true
+      }
+    });
+
+    // Calculate total storage used
+    let totalSizeBytes = 0;
+    let totalImages = 0;
+    
+    for (const project of projects) {
+      if (project.images && Array.isArray(project.images)) {
+        for (const image of project.images) {
+          if (image.fileSize) {
+            totalSizeBytes += image.fileSize;
+            totalImages++;
+          }
+        }
+      }
+    }
+
+    // Convert to MB and GB
+    const totalStorageMB = totalSizeBytes / (1024 * 1024);
+    const totalStorageGB = totalStorageMB / 1024;
+    const averageImageSizeMB = totalImages > 0 ? totalStorageMB / totalImages : 0;
+
+    logger.info(`Storage stats fetched for user`, 'AuthController', {
+      userId,
+      totalStorageMB: totalStorageMB.toFixed(2),
+      totalStorageGB: totalStorageGB.toFixed(2),
+      totalImages,
+      projectCount: projects.length
+    });
+
+    return ResponseHelper.success(res, {
+      totalStorageBytes: totalSizeBytes,
+      totalStorageMB: parseFloat(totalStorageMB.toFixed(2)),
+      totalStorageGB: parseFloat(totalStorageGB.toFixed(2)),
+      totalImages,
+      averageImageSizeMB: parseFloat(averageImageSizeMB.toFixed(2))
+    });
+  } catch (error) {
+    logger.error('Error fetching storage stats', error as Error, 'AuthController', {
+      userId: req.user.id
+    });
+    return ResponseHelper.internalError(res, error as Error);
+  }
+});

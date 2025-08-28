@@ -70,22 +70,22 @@ interface QueueEntryResponse {
  */
 function mapQueueEntryToResponse(entry: Record<string, unknown>): QueueEntryResponse {
   return {
-    id: entry.id,
-    imageId: entry.imageId,
-    projectId: entry.projectId,
-    userId: entry.userId,
-    model: entry.model,
-    threshold: entry.threshold,
-    detectHoles: entry.detectHoles ?? false,
+    id: entry.id as string,
+    imageId: entry.imageId as string,
+    projectId: entry.projectId as string,
+    userId: entry.userId as string,
+    model: entry.model as 'hrnet' | 'resunet_advanced' | 'resunet_small',
+    threshold: entry.threshold as number,
+    detectHoles: (entry.detectHoles as boolean) ?? false,
     priority: entry.priority as QueuePriority,
     status: entry.status as QueueStatus,
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt || entry.createdAt,
-    startedAt: entry.startedAt || undefined,
-    completedAt: entry.completedAt || undefined,
-    error: entry.error || undefined,
-    retryCount: entry.retryCount || 0,
-    batchId: entry.batchId || undefined
+    createdAt: entry.createdAt as Date,
+    updatedAt: (entry.updatedAt as Date) || (entry.createdAt as Date),
+    startedAt: (entry.startedAt as Date) || undefined,
+    completedAt: (entry.completedAt as Date) || undefined,
+    error: (entry.error as string) || undefined,
+    retryCount: (entry.retryCount as number) || 0,
+    batchId: (entry.batchId as string) || undefined
   };
 }
 

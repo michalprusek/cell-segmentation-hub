@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring
+.PHONY: help build build-no-cache build-clean up down restart logs logs-f logs-fe logs-be logs-ml clean clean-moderate clean-aggressive clean-nuclear clean-buildkit docker-usage status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring
 
 # Detect Docker Compose version  
 DOCKER_COMPOSE := docker compose
@@ -16,6 +16,8 @@ help:
 	@echo ""
 	@echo "🚀 Service Commands:"
 	@echo "  build       Build all Docker images"
+	@echo "  build-no-cache  Build without cache (fresh build)"
+	@echo "  build-clean Build with automatic cache cleanup"
 	@echo "  up          Start all services"
 	@echo "  down        Stop all services"
 	@echo "  restart     Restart all services"
@@ -41,13 +43,33 @@ help:
 	@echo "  shell-be    Open shell in backend container"
 	@echo "  shell-ml    Open shell in ML container"
 	@echo "  test        Run tests in containers"
-	@echo "  clean       Clean up Docker resources"
 	@echo "  reset       Reset everything (clean + rebuild)"
+	@echo ""
+	@echo "🧹 Cleanup Commands:"
+	@echo "  clean       Light cleanup (safe)"
+	@echo "  clean-moderate  Moderate cleanup (recommended)"
+	@echo "  clean-aggressive  Remove all unused resources"
+	@echo "  clean-buildkit   Clean only BuildKit cache"
+	@echo "  docker-usage     Show Docker disk usage"
 	@echo ""
 
 # Build all services
 build:
 	@echo "🔨 Building Docker images with $(ENV_FILE)..."
+	ENV_FILE=$(ENV_FILE) $(DOCKER_COMPOSE) build --parallel
+
+# Build without cache (forces fresh build)
+build-no-cache:
+	@echo "🔨 Building Docker images WITHOUT cache..."
+	@echo "🧹 Cleaning old build cache first..."
+	@bash scripts/docker-cleanup.sh light 2>/dev/null || docker builder prune -f
+	ENV_FILE=$(ENV_FILE) $(DOCKER_COMPOSE) build --no-cache --parallel
+
+# Build with automatic cache cleanup
+build-clean:
+	@echo "🧹 Pre-build cleanup..."
+	@bash scripts/docker-cleanup.sh light 2>/dev/null || docker builder prune -f
+	@echo "🔨 Building Docker images with cache cleanup..."
 	ENV_FILE=$(ENV_FILE) $(DOCKER_COMPOSE) build --parallel
 
 # Start all services
@@ -89,12 +111,39 @@ logs-be:
 logs-ml:
 	$(DOCKER_COMPOSE) logs -f ml-service
 
-# Clean up Docker resources
+# Clean up Docker resources (light cleanup)
 clean:
 	@echo "🧹 Cleaning Docker resources..."
 	$(DOCKER_COMPOSE) down --volumes --remove-orphans
 	docker system prune -f
 	docker volume prune -f
+
+# Moderate Docker cleanup (recommended for regular use)
+clean-moderate:
+	@echo "🧹 Performing moderate Docker cleanup..."
+	@bash scripts/docker-cleanup.sh moderate || (docker system prune -f && docker builder prune -f)
+
+# Aggressive Docker cleanup (removes all unused resources)
+clean-aggressive:
+	@echo "⚠️  Performing aggressive Docker cleanup..."
+	@bash scripts/docker-cleanup.sh aggressive || docker system prune -a --volumes -f
+
+# Nuclear cleanup (removes EVERYTHING - use with extreme caution!)
+clean-nuclear:
+	@echo "☢️  WARNING: This will remove ALL Docker resources!"
+	@bash scripts/docker-cleanup.sh nuclear
+
+# Clean only BuildKit cache
+clean-buildkit:
+	@echo "🧹 Cleaning BuildKit cache..."
+	docker builder prune -a -f
+
+# Show Docker disk usage
+docker-usage:
+	@echo "📊 Docker Disk Usage:"
+	@docker system df
+	@echo ""
+	@echo "💡 Tip: Use 'make clean-moderate' for safe cleanup"
 
 # Show container status
 status:
@@ -126,15 +175,21 @@ dev-setup: build up
 	@echo "🔧 Development environment ready!"
 	@make health-check
 
-# Reset everything
-reset: clean build up
-	@echo "🔄 Environment reset complete!"
+# Reset everything (with moderate cleanup)
+reset: clean-moderate build-clean up
+	@echo "🔄 Environment reset complete with cache cleanup!"
+	@make health-check
+
+# Reset with fresh build (no cache)
+reset-fresh: clean-aggressive build-no-cache up
+	@echo "🔄 Environment reset with completely fresh build!"
+	@make health-check
 
 # Quick start
 start: up
 	@make health-check
 
-# Full rebuild
+# Full rebuild (forces fresh build)
 rebuild: down build up
 	@echo "♻️  Full rebuild complete!"
 

@@ -145,7 +145,7 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
       }
 
       // Dynamic access to Prisma model
-      const model = (prisma as Record<string, unknown>)[resourceModel];
+      const model = (prisma as any)[resourceModel];
       
       // Check if model is valid
       if (!model) {

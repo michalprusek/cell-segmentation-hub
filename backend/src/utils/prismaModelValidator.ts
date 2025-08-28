@@ -98,7 +98,7 @@ export function sanitizeWhereClause(where: Record<string, unknown>): Record<stri
         sanitized[validKey] = value; // Trust Prisma's built-in validation for operators
       } else {
         // Recursively sanitize nested objects
-        sanitized[validKey] = sanitizeWhereClause(value);
+        sanitized[validKey] = sanitizeWhereClause(value as Record<string, unknown>);
       }
     } else {
       // Direct value assignment

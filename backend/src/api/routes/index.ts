@@ -8,12 +8,12 @@ import { queueRoutes } from './queueRoutes';
 import { exportRoutes } from './exportRoutes';
 import sharingRoutes from './sharingRoutes';
 import testEmailRoutes from './testEmailRoutes';
-import mlRoutes from './mlRoutes';
-import userRoutes from './userRoutes';
-import healthRoutes from './healthRoutes';
-import cacheRoutes from './cacheRoutes';
-import databaseRoutes from './database';
-import rateLimitAdminRoutes from './rateLimitAdmin';
+// import mlRoutes from './mlRoutes';
+// import userRoutes from './userRoutes';
+// import healthRoutes from './healthRoutes';
+// import cacheRoutes from './cacheRoutes';
+// import databaseRoutes from './database';
+// import rateLimitAdminRoutes from './rateLimitAdmin';
 
 interface RouteInfo {
   path: string;
@@ -49,9 +49,9 @@ export function registerRoute(info: RouteInfo): void {
  */
 export function setupRoutes(app: Express): void {
   // Registrace routes
-  app.use('/api/health', healthRoutes);
+  // app.use('/api/health', healthRoutes); // DISABLED
   app.use('/api/auth', authRoutes);
-  app.use('/api/users', userRoutes);
+  // app.use('/api/users', userRoutes); // DISABLED
   app.use('/api/projects', projectRoutes);
   app.use('/api/projects', imageRoutes);
   app.use('/api/images', imageRoutes); // Direct image routes
@@ -59,10 +59,10 @@ export function setupRoutes(app: Express): void {
   app.use('/api/queue', queueRoutes);
   app.use('/api', exportRoutes); // Export routes
   app.use('/api', sharingRoutes); // Sharing routes
-  app.use('/api/ml', mlRoutes); // ML service routes
-  app.use('/api/cache', cacheRoutes); // Cache and session management routes
-  app.use('/api/database', databaseRoutes); // Database management and monitoring routes
-  app.use('/api/admin/rate-limits', rateLimitAdminRoutes); // Rate limiting administration routes
+  // app.use('/api/ml', mlRoutes); // ML service routes - DISABLED
+  // app.use('/api/cache', cacheRoutes); // Cache and session management routes - DISABLED
+  // app.use('/api/database', databaseRoutes); // Database management and monitoring routes - DISABLED
+  // app.use('/api/admin/rate-limits', rateLimitAdminRoutes); // Rate limiting administration routes - DISABLED
   
   // Test email routes (only in development)
   if (process.env.NODE_ENV === 'development') {

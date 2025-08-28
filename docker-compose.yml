@@ -128,10 +128,10 @@ services:
       dockerfile: ../../docker/ml.Dockerfile
     container_name: spheroseg-ml
     # Modern GPU configuration for Docker Compose
-    device_requests:
-      - driver: nvidia
-        count: 1
-        capabilities: [gpu]
+    # device_requests:
+    #   - driver: nvidia
+    #     count: 1
+    #     capabilities: [gpu]
     env_file: ${ENV_FILE:-.env.development}
     ports:
       - "8000:8000"

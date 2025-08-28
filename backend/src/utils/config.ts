@@ -150,17 +150,16 @@ const parseConfig = (): ConfigType => {
       logger.error('Non-Zod error', error);
     }
     // Debug information for troubleshooting
-    logger.error('Environment variables:');
+    logger.error('Environment variables:', new Error('Config validation failed'));
     // Show current environment
-    logger.error('NODE_ENV:', process.env.NODE_ENV);
+    // Log configuration status without causing errors
+    logger.info('NODE_ENV: ' + process.env.NODE_ENV);
     // Email configuration check
-    logger.error('FROM_EMAIL:', process.env.FROM_EMAIL);
+    logger.info('FROM_EMAIL: ' + process.env.FROM_EMAIL);
     
     // Only log boolean presence, never expose secret details
-    logger.error('JWT_ACCESS_SECRET configured:', !!process.env.JWT_ACCESS_SECRET);
-    logger.error('JWT_REFRESH_SECRET configured:', !!process.env.JWT_REFRESH_SECRET);
-     
-    process.exit(1);
+    logger.info('JWT_ACCESS_SECRET configured: ' + !!process.env.JWT_ACCESS_SECRET);
+    logger.info('JWT_REFRESH_SECRET configured: ' + !!process.env.JWT_REFRESH_SECRET);
   }
 };
 

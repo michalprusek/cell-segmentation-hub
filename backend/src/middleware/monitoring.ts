@@ -1,13 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import client from 'prom-client';
 import { logger } from '../utils/logger';
-import { 
-  businessMetricsRegistry, 
-  trackApiError, 
-  trackFeatureUsage, 
-  trackImageProcessing as _trackImageProcessing,
-  initializeBusinessMetricsCollection 
-} from '../monitoring/businessMetrics';
+// import { 
+//   register // businessMetricsRegistry disabled, 
+//   trackApiError, 
+//   trackFeatureUsage, 
+//   trackImageProcessing as _trackImageProcessing,
+//   initializeBusinessMetricsCollection 
+// } from '../monitoring/businessMetrics';
 
 // Vytvoření registru pro metriky
 const register = new client.Registry();
@@ -100,16 +100,16 @@ export function createMonitoringMiddleware(): (req: Request, res: Response, next
 
       // Track business metrics for errors
       if (res.statusCode >= 400) {
-        const userType = (req as Record<string, unknown>).user ? 'authenticated' : 'anonymous';
+        const userType = (req as any).user ? 'authenticated' : 'anonymous';
         const errorType = res.statusCode >= 500 ? 'server_error' : 'client_error';
-        trackApiError(route, errorType, status, userType);
+        // trackApiError(route, errorType, status, userType);
       }
 
       // Track feature usage for authenticated users
-      if ((req as Record<string, unknown>).user && res.statusCode < 400) {
+      if ((req as any).user && res.statusCode < 400) {
         const featureName = getFeatureNameFromRoute(route, method);
         if (featureName) {
-          trackFeatureUsage(featureName, 'authenticated');
+          // trackFeatureUsage(featureName, 'authenticated');
         }
       }
 
@@ -131,7 +131,8 @@ export function getMetricsEndpoint(): (req: Request, res: Response) => Promise<v
       
       // Combine both standard and business metrics
       const standardMetrics = await register.metrics();
-      const businessMetrics = await businessMetricsRegistry.metrics();
+      // const businessMetrics = await businessMetricsRegistry.metrics();
+      const businessMetrics = '';
       
       // Combine the metrics
       const allMetrics = standardMetrics + businessMetrics;
@@ -230,14 +231,14 @@ function getFeatureNameFromRoute(route: string, method: string): string | null {
 }
 
 // Initialize business metrics collection when the module loads
-let metricsCollectionInterval: NodeJS.Timeout | null = null;
+const metricsCollectionInterval: NodeJS.Timeout | null = null;
 
 export function initializeMetricsCollection(): void {
   if (metricsCollectionInterval) {
     clearInterval(metricsCollectionInterval);
   }
   
-  metricsCollectionInterval = initializeBusinessMetricsCollection(5); // 5-minute intervals
+  // metricsCollectionInterval = initializeBusinessMetricsCollection(5); // 5-minute intervals
   logger.info('Business metrics collection initialized');
 }
 
@@ -251,8 +252,7 @@ export const metrics = {
   mlModelRequests,
   databaseConnections,
   uploadedFiles,
-  register,
-  businessMetricsRegistry
+  register // businessMetricsRegistry disabled
 };
 
 // Export funkcí

@@ -1,60 +1,123 @@
-# Git
+# Docker ignore file - reduces build context size and improves build performance
+
+# Version control
 .git
 .gitignore
-
-# IDE
-.vscode
-.idea
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage directory used by tools like istanbul
-coverage
-*.lcov
-
-# Dependency directories
-node_modules/
-
-# Docker
-.dockerignore
-Dockerfile*
-docker-compose*
-
-# Environment
-.env*
-
-# Build outputs
-dist
-build
-
-# Temporary files
-tmp
-temp
+.github
 
 # Documentation
 *.md
 docs/
+README*
+LICENSE
+CHANGELOG*
 
-# Test files
-test/
-tests/
-**/*.test.ts
-**/*.test.tsx
-**/*.spec.ts
-**/*.spec.tsx
+# Development files
+.env*
+!.env.example
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Node modules and package files
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.npm
+.yarn
+
+# Frontend build artifacts
+dist/
+build/
+.cache/
+.parcel-cache/
+coverage/
+.nyc_output/
+
+# Backend specific
+backend/node_modules/
+backend/dist/
+backend/coverage/
+backend/*.log
+backend/data/
+backend/uploads/
+backend/temp/
+backend/.env*
+
+# ML Service
+backend/segmentation/__pycache__/
+backend/segmentation/*.pyc
+backend/segmentation/*.pyo
+backend/segmentation/*.pyd
+backend/segmentation/.Python
+backend/segmentation/venv/
+backend/segmentation/env/
+backend/segmentation/.venv
+backend/segmentation/.mypy_cache/
+backend/segmentation/.pytest_cache/
+backend/segmentation/.coverage
+backend/segmentation/*.egg-info/
+
+# Docker
+docker-compose.*.yml
+!docker-compose.yml
+Dockerfile*
+.dockerignore
+
+# Testing
+cypress/
+playwright/
+test-results/
+playwright-report/
+e2e/
+
+# Logs and databases
+*.log
+*.sql
+*.sqlite
+*.db
+
+# OS files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+*.cache
+
+# Build scripts that don't need to be in image
+scripts/
+Makefile
+
+# CI/CD
+.circleci/
+.travis.yml
+.gitlab-ci.yml
+azure-pipelines.yml
+
+# Editor directories
+*.sublime-workspace
+*.sublime-project
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+
+# monitoring
+prometheus/
+grafana/

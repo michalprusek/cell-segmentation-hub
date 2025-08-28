@@ -155,8 +155,10 @@ services:
     container_name: nginx-green
     volumes:
       - ./docker/nginx/nginx.green.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
     ports:
-      - "5080:80"
+      - "80:80"
+      - "443:443"
     depends_on:
       - green-frontend
       - green-backend

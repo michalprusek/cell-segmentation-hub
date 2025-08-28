@@ -578,4 +578,4 @@ if (typeof window !== 'undefined') {
 
 // Use the improved version with better memory management and reliability
 import ImprovedWebSocketManager from './webSocketManagerImproved';
-export default ImprovedWebSocketManager.getInstance();
+export default ImprovedWebSocketManager;

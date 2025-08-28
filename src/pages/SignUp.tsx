@@ -160,7 +160,10 @@ const SignUp = () => {
                 placeholder={t('auth.passwordPlaceholder')}
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
-                className={`h-11 ${showPasswordMatchIndicator ? (passwordsMatch ? 'border-green-500' : 'border-red-500') : ''}`}
+                className="h-11"
+                data-match={
+                  showPasswordMatchIndicator ? passwordsMatch : undefined
+                }
                 required
               />
               {showPasswordMatchIndicator && (

@@ -978,7 +978,7 @@ class ApiClient {
       imageIds,
       model: model || 'hrnet',
       threshold: threshold || 0.5,
-      detectHoles: detectHoles,
+      detectHoles: detectHoles ?? true,
     });
     return this.extractData(response);
   }
@@ -1272,7 +1272,7 @@ class ApiClient {
       model,
       threshold,
       priority,
-      detectHoles,
+      detectHoles: detectHoles ?? true,
     });
     return this.extractData<AddToQueueResponse>(response);
   }
@@ -1293,7 +1293,7 @@ class ApiClient {
       threshold,
       priority,
       forceResegment,
-      detectHoles,
+      detectHoles: detectHoles ?? true,
     });
     return this.extractData<BatchQueueResponse>(response);
   }
