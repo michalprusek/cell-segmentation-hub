@@ -1,0 +1,233 @@
+name: Test Coverage Report
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, dev]
+
+jobs:
+  coverage:
+    name: Generate Coverage Report
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for coverage trends
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd backend && npm ci && cd ..
+          cd backend/segmentation && pip install -r requirements.txt && pip install pytest pytest-cov && cd ../..
+
+      - name: Setup test database
+        env:
+          DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
+        run: |
+          cd backend
+          npx prisma migrate deploy
+          npx prisma generate
+          cd ..
+
+      - name: Run Frontend tests with coverage
+        run: |
+          npm run test:coverage -- --reporter=json --outputFile=coverage/frontend-coverage.json
+          mv coverage/lcov.info coverage/frontend-lcov.info
+
+      - name: Run Backend tests with coverage
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
+          JWT_ACCESS_SECRET: test-secret
+          JWT_REFRESH_SECRET: test-refresh
+          NODE_ENV: test
+        run: |
+          npm run test:coverage -- --reporter=json --outputFile=coverage/backend-coverage.json
+          mv coverage/lcov.info ../coverage/backend-lcov.info
+
+      - name: Run ML Service tests with coverage
+        working-directory: ./backend/segmentation
+        run: |
+          pytest tests/ --cov=. --cov-report=lcov:../../coverage/ml-lcov.info --cov-report=json:../../coverage/ml-coverage.json
+
+      - name: Generate combined coverage report
+        run: |
+          # Install coverage tools
+          npm install -g lcov-result-merger nyc
+
+          # Merge LCOV files
+          lcov-result-merger 'coverage/*-lcov.info' coverage/combined-lcov.info
+
+          # Generate HTML report
+          npx nyc report --reporter=html --report-dir=coverage/html
+
+          # Calculate total coverage
+          echo "## 📊 Test Coverage Report" > coverage-report.md
+          echo "" >> coverage-report.md
+
+          # Parse coverage percentages
+          if [ -f coverage/frontend-coverage.json ]; then
+            frontend_coverage=$(node -e "const cov=require('./coverage/frontend-coverage.json'); console.log(cov.total.lines.pct || 0)")
+            echo "### Frontend Coverage: ${frontend_coverage}%" >> coverage-report.md
+          fi
+
+          if [ -f coverage/backend-coverage.json ]; then
+            backend_coverage=$(node -e "const cov=require('./coverage/backend-coverage.json'); console.log(cov.total.lines.pct || 0)")
+            echo "### Backend Coverage: ${backend_coverage}%" >> coverage-report.md
+          fi
+
+          if [ -f coverage/ml-coverage.json ]; then
+            ml_coverage=$(python -c "import json; data=json.load(open('coverage/ml-coverage.json')); print(data.get('totals', {}).get('percent_covered', 0))")
+            echo "### ML Service Coverage: ${ml_coverage}%" >> coverage-report.md
+          fi
+
+          # Coverage thresholds
+          MIN_FRONTEND_COVERAGE=70
+          MIN_BACKEND_COVERAGE=60
+          MIN_ML_COVERAGE=50
+
+          echo "" >> coverage-report.md
+          echo "### Coverage Thresholds" >> coverage-report.md
+          echo "" >> coverage-report.md
+
+          # Check thresholds
+          failed=false
+
+          if (( $(echo "$frontend_coverage < $MIN_FRONTEND_COVERAGE" | bc -l) )); then
+            echo "❌ Frontend coverage below threshold: ${frontend_coverage}% < ${MIN_FRONTEND_COVERAGE}%" >> coverage-report.md
+            failed=true
+          else
+            echo "✅ Frontend coverage meets threshold: ${frontend_coverage}% >= ${MIN_FRONTEND_COVERAGE}%" >> coverage-report.md
+          fi
+
+          if (( $(echo "$backend_coverage < $MIN_BACKEND_COVERAGE" | bc -l) )); then
+            echo "❌ Backend coverage below threshold: ${backend_coverage}% < ${MIN_BACKEND_COVERAGE}%" >> coverage-report.md
+            failed=true
+          else
+            echo "✅ Backend coverage meets threshold: ${backend_coverage}% >= ${MIN_BACKEND_COVERAGE}%" >> coverage-report.md
+          fi
+
+          if (( $(echo "$ml_coverage < $MIN_ML_COVERAGE" | bc -l) )); then
+            echo "❌ ML Service coverage below threshold: ${ml_coverage}% < ${MIN_ML_COVERAGE}%" >> coverage-report.md
+            failed=true
+          else
+            echo "✅ ML Service coverage meets threshold: ${ml_coverage}% >= ${MIN_ML_COVERAGE}%" >> coverage-report.md
+          fi
+
+          # Generate coverage badge
+          total_coverage=$(echo "scale=2; ($frontend_coverage + $backend_coverage + $ml_coverage) / 3" | bc)
+          echo "" >> coverage-report.md
+          echo "**Total Coverage:** ${total_coverage}%" >> coverage-report.md
+
+          if [ "$failed" = true ]; then
+            echo "::warning::Some coverage thresholds not met"
+          fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/combined-lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage/html/
+            coverage-report.md
+            coverage/combined-lcov.info
+
+      - name: Comment PR with coverage report
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('coverage-report.md', 'utf8');
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Test Coverage Report')
+            );
+
+            const commentBody = report + '\n\n[View Full Coverage Report](https://codecov.io/gh/' + 
+                               context.repo.owner + '/' + context.repo.repo + '/pull/' + 
+                               context.issue.number + ')\n\n*Generated by Test Coverage workflow*';
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody,
+              });
+            }
+
+      - name: Coverage trend analysis
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Store coverage history for trend analysis
+          mkdir -p .coverage-history
+          date=$(date +%Y-%m-%d)
+
+          # Save current coverage data
+          echo "{
+            \"date\": \"$date\",
+            \"frontend\": $frontend_coverage,
+            \"backend\": $backend_coverage,
+            \"ml\": $ml_coverage,
+            \"total\": $total_coverage
+          }" > .coverage-history/$date.json
+
+          # Generate trend report (last 30 days)
+          echo "### Coverage Trend (Last 30 Days)" >> trend-report.md
+          find .coverage-history -name "*.json" -mtime -30 | sort | while read file; do
+            data=$(cat $file)
+            echo "$data" >> trend-report.md
+          done

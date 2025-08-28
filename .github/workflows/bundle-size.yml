@@ -1,0 +1,189 @@
+name: Bundle Size Analysis
+
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'package*.json'
+      - 'vite.config.ts'
+      - 'tsconfig.json'
+  push:
+    branches: [main, dev]
+
+jobs:
+  analyze-bundle:
+    name: Analyze Bundle Size
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Need full history for comparisons
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+
+      - name: Analyze bundle size
+        run: |
+          # Install bundle analyzer
+          npm install --save-dev vite-bundle-visualizer size-limit @size-limit/preset-app
+
+          # Generate bundle stats
+          npx vite-bundle-visualizer dist/stats.html
+
+          # Calculate bundle sizes
+          echo "## 📊 Bundle Size Report" > bundle-report.md
+          echo "" >> bundle-report.md
+          echo "### Main Bundle Sizes" >> bundle-report.md
+          echo "" >> bundle-report.md
+          echo "| File | Size | Gzipped |" >> bundle-report.md
+          echo "|------|------|---------|" >> bundle-report.md
+
+          # Analyze JS bundles
+          for file in dist/assets/*.js; do
+            if [ -f "$file" ]; then
+              size=$(du -h "$file" | cut -f1)
+              gzipped=$(gzip -c "$file" | wc -c | numfmt --to=iec)
+              filename=$(basename "$file")
+              echo "| $filename | $size | $gzipped |" >> bundle-report.md
+            fi
+          done
+
+          echo "" >> bundle-report.md
+          echo "### CSS Bundle Sizes" >> bundle-report.md
+          echo "" >> bundle-report.md
+          echo "| File | Size | Gzipped |" >> bundle-report.md
+          echo "|------|------|---------|" >> bundle-report.md
+
+          # Analyze CSS bundles
+          for file in dist/assets/*.css; do
+            if [ -f "$file" ]; then
+              size=$(du -h "$file" | cut -f1)
+              gzipped=$(gzip -c "$file" | wc -c | numfmt --to=iec)
+              filename=$(basename "$file")
+              echo "| $filename | $size | $gzipped |" >> bundle-report.md
+            fi
+          done
+
+          # Calculate total size
+          total_size=$(du -sh dist | cut -f1)
+          echo "" >> bundle-report.md
+          echo "**Total Build Size:** $total_size" >> bundle-report.md
+
+          # Check against size limits
+          echo "" >> bundle-report.md
+          echo "### Size Limits Check" >> bundle-report.md
+          echo "" >> bundle-report.md
+
+          # Define size limits (in KB)
+          MAX_JS_SIZE=500  # 500KB for main JS bundle
+          MAX_CSS_SIZE=100 # 100KB for main CSS bundle
+          MAX_TOTAL_SIZE=2048 # 2MB total
+
+          # Check JS size
+          main_js_size=$(find dist/assets -name "*.js" -exec du -k {} \; | sort -rn | head -1 | cut -f1)
+          if [ "$main_js_size" -gt "$MAX_JS_SIZE" ]; then
+            echo "❌ Main JS bundle exceeds limit: ${main_js_size}KB > ${MAX_JS_SIZE}KB" >> bundle-report.md
+            echo "::warning::Main JS bundle size exceeds limit"
+          else
+            echo "✅ Main JS bundle within limit: ${main_js_size}KB < ${MAX_JS_SIZE}KB" >> bundle-report.md
+          fi
+
+          # Check CSS size
+          main_css_size=$(find dist/assets -name "*.css" -exec du -k {} \; | sort -rn | head -1 | cut -f1 || echo 0)
+          if [ "$main_css_size" -gt "$MAX_CSS_SIZE" ]; then
+            echo "❌ Main CSS bundle exceeds limit: ${main_css_size}KB > ${MAX_CSS_SIZE}KB" >> bundle-report.md
+            echo "::warning::Main CSS bundle size exceeds limit"
+          else
+            echo "✅ Main CSS bundle within limit: ${main_css_size}KB < ${MAX_CSS_SIZE}KB" >> bundle-report.md
+          fi
+
+          # Check total size
+          total_size_kb=$(du -sk dist | cut -f1)
+          if [ "$total_size_kb" -gt "$MAX_TOTAL_SIZE" ]; then
+            echo "❌ Total build exceeds limit: ${total_size_kb}KB > ${MAX_TOTAL_SIZE}KB" >> bundle-report.md
+            echo "::error::Total build size exceeds limit"
+            exit 1
+          else
+            echo "✅ Total build within limit: ${total_size_kb}KB < ${MAX_TOTAL_SIZE}KB" >> bundle-report.md
+          fi
+
+      - name: Upload bundle stats
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-stats
+          path: |
+            dist/stats.html
+            bundle-report.md
+
+      - name: Comment PR with bundle report
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('bundle-report.md', 'utf8');
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('Bundle Size Report')
+            );
+
+            const commentBody = report + '\n\n*Generated by Bundle Size Analysis workflow*';
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: commentBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: commentBody,
+              });
+            }
+
+      - name: Compare with base branch
+        if: github.event_name == 'pull_request'
+        run: |
+          # Get base branch bundle size for comparison
+          git checkout ${{ github.base_ref }}
+          npm ci
+          npm run build
+          base_size=$(du -sk dist | cut -f1)
+
+          git checkout ${{ github.head_ref }}
+          npm ci
+          npm run build
+          head_size=$(du -sk dist | cut -f1)
+
+          size_diff=$((head_size - base_size))
+          percent_change=$((size_diff * 100 / base_size))
+
+          echo "### Bundle Size Comparison" >> comparison.md
+          echo "Base branch size: ${base_size}KB" >> comparison.md
+          echo "PR branch size: ${head_size}KB" >> comparison.md
+          echo "Difference: ${size_diff}KB (${percent_change}%)" >> comparison.md
+
+          if [ "$percent_change" -gt 10 ]; then
+            echo "::warning::Bundle size increased by more than 10%"
+          fi

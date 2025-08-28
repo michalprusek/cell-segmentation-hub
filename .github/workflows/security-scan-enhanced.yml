@@ -1,0 +1,432 @@
+name: Enhanced Security Scanning
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run security scans daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  dependency-scanning:
+    name: Dependency Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: NPM Audit - Frontend
+        run: |
+          echo "## Frontend Dependency Scan" >> security-report.md
+          npm audit --json > frontend-audit.json || true
+
+          # Parse and report vulnerabilities
+          node -e "
+          const audit = require('./frontend-audit.json');
+          const vulns = audit.vulnerabilities || {};
+          let critical = 0, high = 0, moderate = 0, low = 0;
+
+          Object.values(vulns).forEach(v => {
+            switch(v.severity) {
+              case 'critical': critical++; break;
+              case 'high': high++; break;
+              case 'moderate': moderate++; break;
+              case 'low': low++; break;
+            }
+          });
+
+          console.log('Critical:', critical);
+          console.log('High:', high);
+          console.log('Moderate:', moderate);
+          console.log('Low:', low);
+
+          if (critical > 0) process.exit(1);
+          if (high > 0) process.exit(1);
+          " >> security-report.md
+
+      - name: NPM Audit - Backend
+        working-directory: ./backend
+        run: |
+          echo "## Backend Dependency Scan" >> ../security-report.md
+          npm audit --json > backend-audit.json || true
+
+          # Parse and report
+          node -e "
+          const fs = require('fs');
+          const audit = JSON.parse(fs.readFileSync('./backend-audit.json', 'utf8'));
+          const metadata = audit.metadata || {};
+
+          console.log('Total dependencies:', metadata.dependencies || 0);
+          console.log('Vulnerabilities found:', metadata.vulnerabilities || {});
+
+          if ((metadata.vulnerabilities?.critical || 0) > 0) {
+            console.error('Critical vulnerabilities found!');
+            process.exit(1);
+          }
+          if ((metadata.vulnerabilities?.high || 0) > 0) {
+            console.error('High vulnerabilities found!');
+            process.exit(1);
+          }
+          " >> ../security-report.md
+
+      - name: Python Safety Check
+        working-directory: ./backend/segmentation
+        run: |
+          pip install safety bandit
+          echo "## Python Dependency Scan" >> ../../security-report.md
+
+          # Safety check for known vulnerabilities
+          safety check --json > safety-report.json || true
+
+          # Bandit check for security issues in code
+          bandit -r . -f json -o bandit-report.json || true
+
+          python -c "
+          import json
+
+          # Parse safety report
+          with open('safety-report.json') as f:
+              safety_data = json.load(f)
+              if safety_data:
+                  print(f'Found {len(safety_data)} vulnerable packages')
+                  for vuln in safety_data[:5]:  # Show first 5
+                      print(f'  - {vuln.get(\"package\", \"unknown\")}: {vuln.get(\"vulnerability\", \"\")}')
+
+          # Parse bandit report
+          with open('bandit-report.json') as f:
+              bandit_data = json.load(f)
+              results = bandit_data.get('results', [])
+              if results:
+                  high_severity = [r for r in results if r['issue_severity'] == 'HIGH']
+                  if high_severity:
+                      print(f'Found {len(high_severity)} high-severity issues')
+                      exit(1)
+          " >> ../../security-report.md
+
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-reports
+          path: |
+            security-report.md
+            frontend-audit.json
+            backend/backend-audit.json
+            backend/segmentation/safety-report.json
+            backend/segmentation/bandit-report.json
+
+  container-scanning:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy container scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Scan Dockerfiles
+        run: |
+          # Install hadolint for Dockerfile linting
+          wget -O hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+          chmod +x hadolint
+
+          echo "## Dockerfile Security Analysis" > dockerfile-report.md
+
+          # Scan each Dockerfile
+          for dockerfile in $(find . -name "Dockerfile*"); do
+            echo "### Scanning $dockerfile" >> dockerfile-report.md
+            ./hadolint "$dockerfile" >> dockerfile-report.md 2>&1 || true
+            echo "" >> dockerfile-report.md
+          done
+
+      - name: Check for hardcoded secrets in Dockerfiles
+        run: |
+          # Check for potential secrets
+          echo "## Checking for hardcoded secrets" >> dockerfile-report.md
+
+          # Patterns to check
+          patterns=(
+            "password="
+            "secret="
+            "api_key="
+            "apikey="
+            "token="
+            "private_key="
+          )
+
+          for pattern in "${patterns[@]}"; do
+            echo "Checking for: $pattern" >> dockerfile-report.md
+            grep -r "$pattern" --include="Dockerfile*" . >> dockerfile-report.md 2>&1 || true
+          done
+
+      - name: Upload container scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: container-security-scan
+          path: |
+            trivy-results.sarif
+            dockerfile-report.md
+
+  secrets-scanning:
+    name: Secret Detection Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history for secret scanning
+
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: GitLeaks Secret Scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Custom secret patterns check
+        run: |
+          echo "## Custom Secret Pattern Check" > secrets-report.md
+
+          # Define sensitive patterns
+          patterns=(
+            "JWT_[A-Z_]*SECRET"
+            "DATABASE_URL.*postgres"
+            "SMTP_PASSWORD"
+            "API_KEY"
+            "AWS_[A-Z_]*"
+            "SENDGRID_API_KEY"
+          )
+
+          for pattern in "${patterns[@]}"; do
+            echo "### Checking for: $pattern" >> secrets-report.md
+            grep -r "$pattern" --include="*.ts" --include="*.js" --include="*.py" \
+                 --exclude-dir=node_modules --exclude-dir=.git . >> secrets-report.md 2>&1 || true
+          done
+
+      - name: Check .env files
+        run: |
+          echo "## Environment File Check" >> secrets-report.md
+
+          # List all .env files (should be in .gitignore)
+          find . -name ".env*" -not -path "./.git/*" -not -path "./node_modules/*" | while read envfile; do
+            echo "WARNING: Found $envfile - ensure it's in .gitignore" >> secrets-report.md
+            
+            # Check if it's ignored
+            git check-ignore "$envfile" || echo "  ❌ NOT IN .gitignore!" >> secrets-report.md
+          done
+
+      - name: Upload secret scan results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secrets-scan-report
+          path: secrets-report.md
+
+  sast-analysis:
+    name: Static Application Security Testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install ESLint security plugin
+        run: |
+          npm install --save-dev eslint-plugin-security eslint-plugin-security-node
+
+      - name: Run ESLint security checks
+        run: |
+          echo "## ESLint Security Analysis" > sast-report.md
+
+          # Create security-focused ESLint config
+          cat > .eslintrc.security.json << 'EOF'
+          {
+            "extends": ["./.eslintrc.json"],
+            "plugins": ["security", "security-node"],
+            "rules": {
+              "security/detect-object-injection": "error",
+              "security/detect-non-literal-regexp": "warn",
+              "security/detect-unsafe-regex": "error",
+              "security/detect-buffer-noassert": "error",
+              "security/detect-child-process": "warn",
+              "security/detect-disable-mustache-escape": "error",
+              "security/detect-eval-with-expression": "error",
+              "security/detect-no-csrf-before-method-override": "error",
+              "security/detect-non-literal-fs-filename": "warn",
+              "security/detect-non-literal-require": "warn",
+              "security/detect-possible-timing-attacks": "warn",
+              "security/detect-pseudoRandomBytes": "error",
+              "security-node/detect-absence-of-name-option-in-exrpress-session": "error",
+              "security-node/detect-buffer-unsafe-allocation": "error",
+              "security-node/detect-child-process": "warn",
+              "security-node/detect-dangerous-redirects": "error",
+              "security-node/detect-missing-helmet": "warn",
+              "security-node/detect-non-literal-require-calls": "warn",
+              "security-node/detect-security-missconfiguration-cookie": "error",
+              "security-node/detect-sql-injection": "error"
+            }
+          }
+          EOF
+
+          # Run security-focused linting
+          npx eslint . --config .eslintrc.security.json --format json > eslint-security.json || true
+
+          # Parse results
+          node -e "
+          const results = require('./eslint-security.json');
+          let errorCount = 0;
+          let warningCount = 0;
+
+          results.forEach(file => {
+            errorCount += file.errorCount || 0;
+            warningCount += file.warningCount || 0;
+            
+            if (file.messages && file.messages.length > 0) {
+              console.log('File:', file.filePath);
+              file.messages.forEach(msg => {
+                if (msg.severity === 2) {
+                  console.log('  ERROR:', msg.message);
+                } else {
+                  console.log('  WARN:', msg.message);
+                }
+              });
+            }
+          });
+
+          console.log('Total security errors:', errorCount);
+          console.log('Total security warnings:', warningCount);
+
+          if (errorCount > 0) process.exit(1);
+          " >> sast-report.md
+
+      - name: TypeScript strict security check
+        run: |
+          echo "## TypeScript Security Check" >> sast-report.md
+
+          # Create strict tsconfig for security
+          cat > tsconfig.security.json << 'EOF'
+          {
+            "extends": "./tsconfig.json",
+            "compilerOptions": {
+              "strict": true,
+              "noImplicitAny": true,
+              "strictNullChecks": true,
+              "strictFunctionTypes": true,
+              "strictBindCallApply": true,
+              "strictPropertyInitialization": true,
+              "noImplicitThis": true,
+              "alwaysStrict": true,
+              "noImplicitReturns": true,
+              "noFallthroughCasesInSwitch": true
+            }
+          }
+          EOF
+
+          # Run strict TypeScript check
+          npx tsc --project tsconfig.security.json --noEmit >> sast-report.md 2>&1 || true
+
+      - name: Upload SAST results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sast-analysis-report
+          path: |
+            sast-report.md
+            eslint-security.json
+
+  security-summary:
+    name: Security Summary Report
+    runs-on: ubuntu-latest
+    needs:
+      [dependency-scanning, container-scanning, secrets-scanning, sast-analysis]
+    if: always()
+    steps:
+      - name: Download all security reports
+        uses: actions/download-artifact@v4
+        with:
+          path: security-reports
+
+      - name: Generate summary report
+        run: |
+          echo "# 🔒 Security Scan Summary" > security-summary.md
+          echo "" >> security-summary.md
+          echo "**Date:** $(date)" >> security-summary.md
+          echo "**Branch:** ${{ github.ref }}" >> security-summary.md
+          echo "**Commit:** ${{ github.sha }}" >> security-summary.md
+          echo "" >> security-summary.md
+
+          # Check each report
+          if [ -f security-reports/security-audit-reports/security-report.md ]; then
+            echo "## Dependency Scanning Results" >> security-summary.md
+            cat security-reports/security-audit-reports/security-report.md >> security-summary.md
+            echo "" >> security-summary.md
+          fi
+
+          if [ -f security-reports/container-security-scan/dockerfile-report.md ]; then
+            echo "## Container Security Results" >> security-summary.md
+            head -20 security-reports/container-security-scan/dockerfile-report.md >> security-summary.md
+            echo "" >> security-summary.md
+          fi
+
+          if [ -f security-reports/secrets-scan-report/secrets-report.md ]; then
+            echo "## Secret Detection Results" >> security-summary.md
+            head -20 security-reports/secrets-scan-report/secrets-report.md >> security-summary.md
+            echo "" >> security-summary.md
+          fi
+
+          if [ -f security-reports/sast-analysis-report/sast-report.md ]; then
+            echo "## SAST Analysis Results" >> security-summary.md
+            head -20 security-reports/sast-analysis-report/sast-report.md >> security-summary.md
+            echo "" >> security-summary.md
+          fi
+
+          echo "---" >> security-summary.md
+          echo "*Security scan completed. Review full reports in artifacts.*" >> security-summary.md
+
+      - name: Upload summary report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-summary
+          path: security-summary.md
+
+      - name: Comment PR with security summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const summary = fs.readFileSync('security-summary.md', 'utf8');
+
+            // Truncate if too long
+            const maxLength = 65000;
+            const report = summary.length > maxLength 
+              ? summary.substring(0, maxLength) + '\n\n... (truncated, see full report in artifacts)'
+              : summary;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: report,
+            });
