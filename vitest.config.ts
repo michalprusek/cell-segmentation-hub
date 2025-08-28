@@ -11,7 +11,9 @@ export default defineConfig({
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
+      reporter: process.env.CI
+        ? ['json', 'lcov'] // Minimal reporters for CI to prevent hanging
+        : ['text', 'json', 'html', 'lcov'], // Full reporters for local development
       exclude: [
         'node_modules/',
         'src/test/',
@@ -31,12 +33,28 @@ export default defineConfig({
           statements: 80,
         },
       },
+      // CI optimizations
+      reportsDirectory: './coverage',
+      clean: true,
     },
     css: true,
     include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
     exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
-    testTimeout: 15000,
-    hookTimeout: 15000,
+    testTimeout: process.env.CI ? 10000 : 15000, // Shorter timeout in CI
+    hookTimeout: process.env.CI ? 10000 : 15000,
+    // CI-specific optimizations
+    ...(process.env.CI && {
+      pool: 'threads',
+      poolOptions: {
+        threads: {
+          minThreads: 1,
+          maxThreads: 2,
+        },
+      },
+      silent: true, // Reduce output in CI
+      logHeapUsage: false,
+      allowOnly: false,
+    }),
   },
   resolve: {
     alias: {

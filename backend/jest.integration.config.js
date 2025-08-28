@@ -1,6 +1,16 @@
 export default {
-  preset: 'ts-jest',
+  preset: 'ts-jest/presets/default-esm',
   testEnvironment: 'node',
+  extensionsToTreatAsEsm: ['.ts'],
+  transform: {
+    '^.+\\.ts$': ['ts-jest', {
+      useESM: true,
+      tsconfig: {
+        module: 'ESNext',
+        moduleResolution: 'node'
+      }
+    }],
+  },
   roots: ['<rootDir>/src'],
   testMatch: [
     '**/integration/**/*.test.ts'
@@ -27,7 +37,8 @@ export default {
   verbose: true,
   forceExit: true,
   detectOpenHandles: true,
-  moduleNameMapper: {
+  maxWorkers: 1,
+  moduleNameMapping: {
     '^@/(.*)$': '<rootDir>/src/$1'
   }
 };

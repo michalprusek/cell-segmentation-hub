@@ -114,18 +114,18 @@ jobs:
         run: npm ci
 
       - name: Run Frontend tests with coverage
-        timeout-minutes: 10
+        timeout-minutes: 8
         run: |
-          # Use optimized test command for CI
-          npm run test:coverage -- --reporter=json --reporter=verbose
+          # Use optimized test command for CI with minimal reporters
+          npm run test:coverage -- --reporter=basic --coverage.reporter=json --coverage.reporter=lcov
 
       - name: Run Backend tests with coverage
         working-directory: ./backend
-        timeout-minutes: 10
+        timeout-minutes: 8
         run: |
           npm ci
-          # Use optimized test command for CI  
-          npm run test:coverage
+          # Use Jest with optimized configuration for CI
+          npm run test:coverage -- --maxWorkers=2 --ci --watchman=false
 
       - name: Generate coverage summary
         run: |
@@ -340,12 +340,12 @@ jobs:
 
       - name: Run integration tests
         working-directory: ./backend
-        timeout-minutes: 15
+        timeout-minutes: 10
         env:
           DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
           JWT_ACCESS_SECRET: test-access-secret
           JWT_REFRESH_SECRET: test-refresh-secret
-        run: npm run test:integration
+        run: npm run test:integration -- --maxWorkers=1 --ci --forceExit
 
   # ====================
   # E2E Tests
@@ -444,14 +444,11 @@ jobs:
           done
 
       - name: Build and start application
-        timeout-minutes: 10
+        timeout-minutes: 8
         run: |
-          # Build frontend with proper error handling
+          # Build frontend with proper error handling - REMOVE build:dev fallback
           echo "Building frontend..."
-          if ! npm run build; then
-            echo "Frontend build failed, trying with legacy build"
-            npm run build:dev || exit 1
-          fi
+          npm run build
           
           # Start backend server with proper environment
           echo "Starting backend server..."
@@ -472,14 +469,14 @@ jobs:
           # Wait for backend to be ready with better error handling
           echo "Waiting for backend to be ready..."
           BACKEND_READY=false
-          for i in {1..60}; do
+          for i in {1..40}; do
             if curl -f http://localhost:3001/health >/dev/null 2>&1; then
               echo "✓ Backend is ready!"
               BACKEND_READY=true
               break
             fi
-            echo "Waiting for backend... ($i/60)"
-            sleep 2
+            echo "Waiting for backend... ($i/40)"
+            sleep 3
           done
           
           if [ "$BACKEND_READY" = false ]; then
@@ -491,14 +488,14 @@ jobs:
           # Wait for frontend to be ready
           echo "Waiting for frontend to be ready..."
           FRONTEND_READY=false
-          for i in {1..30}; do
+          for i in {1..20}; do
             if curl -f http://localhost:4173 >/dev/null 2>&1; then
               echo "✓ Frontend is ready!"
               FRONTEND_READY=true
               break
             fi
-            echo "Waiting for frontend... ($i/30)"
-            sleep 2
+            echo "Waiting for frontend... ($i/20)"
+            sleep 3
           done
           
           if [ "$FRONTEND_READY" = false ]; then
@@ -509,7 +506,7 @@ jobs:
           echo "✓ Application is ready for E2E tests!"
 
       - name: Run E2E tests
-        timeout-minutes: 15
+        timeout-minutes: 12
         env:
           BASE_URL: http://localhost:4173
         run: |
@@ -607,63 +604,3 @@ jobs:
           echo "Frontend image: cell-seg-hub/frontend:${{ github.sha }}"
           echo "Backend image: cell-seg-hub/backend:${{ github.sha }}"
           echo "ML Service image: cell-seg-hub/ml-service:${{ github.sha }}"
-
-  # ====================
-  # AWS Deployment Jobs (Commented Out)
-  # ====================
-  # NOTE: These deployment jobs are not relevant for self-hosted deployment at spherosegapp.utia.cas.cz
-  # The project uses blue-green deployment strategy with Docker on self-hosted servers
-  # Keeping these commented for reference but they should not be used
-
-  # deploy-staging:
-  #   name: Deploy to Staging
-  #   runs-on: ubuntu-latest
-  #   needs: [integration-tests, e2e-tests, build-docker]
-  #   if: github.ref == 'refs/heads/dev'
-  #   environment:
-  #     name: staging
-  #     url: https://staging.cellsegmentation.com
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: ${{ secrets.AWS_REGION }}
-  #     # ... (AWS ECS/ECR deployment steps removed)
-
-  # deploy-production:
-  #   name: Deploy to Production
-  #   runs-on: ubuntu-latest
-  #   needs: [integration-tests, e2e-tests, build-docker]
-  #   if: github.ref == 'refs/heads/main'
-  #   environment:
-  #     name: production
-  #     url: https://cellsegmentation.com
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Configure AWS credentials
-  #       uses: aws-actions/configure-aws-credentials@v4
-  #       with:
-  #         aws-access-key-id: ${{ secrets.PROD_AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.PROD_AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: ${{ secrets.PROD_AWS_REGION }}
-  #     # ... (AWS RDS/ECS deployment steps removed)
-
-  # performance-test:
-  #   name: Performance Testing
-  #   runs-on: ubuntu-latest
-  #   needs: [build-docker]
-  #   if: github.event_name == 'pull_request'
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Run Lighthouse CI
-  #       uses: treosh/lighthouse-ci-action@v10
-  #       with:
-  #         urls: |
-  #           http://localhost:3000
-  #           http://localhost:3000/projects
-  #           http://localhost:3000/segmentation
-  #         uploadArtifacts: true
-  #         temporaryPublicStorage: true
