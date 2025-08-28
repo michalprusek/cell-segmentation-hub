@@ -2,22 +2,31 @@
 Basic health tests to ensure ML service functionality
 """
 import pytest
-import json
-from fastapi.testclient import TestClient
-from unittest.mock import Mock, patch
 import sys
 import os
+from unittest.mock import Mock, patch
 
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
-# Try to import FastAPI app with proper error handling
+# Test imports with fallback for CI
+HAS_FASTAPI = False
+HAS_TORCH = False
+
 try:
+    from fastapi.testclient import TestClient
     from api.main import app
     client = TestClient(app)
     HAS_FASTAPI = True
+except (ImportError, ModuleNotFoundError, Exception) as e:
+    print(f"Info: FastAPI app not available in CI environment: {e}")
+    client = None
+
+try:
+    import torch
+    HAS_TORCH = True
 except (ImportError, ModuleNotFoundError) as e:
-    print(f"Warning: FastAPI app not available: {e}")
+    print(f"Info: PyTorch not available in CI environment: {e}")
     HAS_FASTAPI = False
     client = None
 except Exception as e:
