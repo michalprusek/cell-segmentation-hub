@@ -8,6 +8,7 @@ import type { SegmentationData } from '@/types';
 import type { ProjectImage } from '@/types';
 import { getErrorMessage } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
+import { segmentationQueue } from '@/lib/requestQueue';
 
 // Utility function to enrich images with segmentation results
 const enrichImagesWithSegmentation = async (
@@ -45,7 +46,12 @@ const enrichImagesWithSegmentation = async (
         logger.debug(
           `📥 Fetching segmentation for image ${index + 1}/${completedImages.length} (ID: ${img.id.slice(0, 8)}...)`
         );
-        const segmentationData = await apiClient.getSegmentationResults(img.id);
+        // Use the request queue to manage API calls and prevent rate limiting
+        const segmentationData = await segmentationQueue.add(
+          `segmentation-${img.id}`,
+          () => apiClient.getSegmentationResults(img.id),
+          1 // priority
+        );
 
         logger.debug(
           `✅ Successfully fetched segmentation for ${img.id.slice(0, 8)}: ${segmentationData?.polygons?.length || 0} polygons, ${segmentationData?.imageWidth || 'unknown'}x${segmentationData?.imageHeight || 'unknown'}`,
