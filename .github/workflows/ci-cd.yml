@@ -127,9 +127,17 @@ jobs:
 
       - name: Generate coverage summary
         run: |
-          # Parse coverage data
-          FRONTEND_COV=$(node -e "const cov=require('./coverage/frontend-coverage.json'); console.log(cov.total?.lines?.pct || 0)")
-          BACKEND_COV=$(node -e "const cov=require('./backend/coverage/backend-coverage.json'); console.log(cov.total?.lines?.pct || 0)")
+          # Parse coverage data with error handling
+          FRONTEND_COV=0
+          BACKEND_COV=0
+          
+          if [ -f "./coverage/frontend-coverage.json" ]; then
+            FRONTEND_COV=$(node -e "try { const cov=require('./coverage/frontend-coverage.json'); console.log(Math.floor(cov.total?.lines?.pct || 0)); } catch(e) { console.log(0); }")
+          fi
+          
+          if [ -f "./backend/coverage/backend-coverage.json" ]; then
+            BACKEND_COV=$(node -e "try { const cov=require('./backend/coverage/backend-coverage.json'); console.log(Math.floor(cov.total?.lines?.pct || 0)); } catch(e) { console.log(0); }")
+          fi
           
           echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -137,21 +145,21 @@ jobs:
           echo "|-----------|----------|--------|" >> $GITHUB_STEP_SUMMARY
           
           # Check frontend coverage
-          if (( $(echo "$FRONTEND_COV >= 70" | bc -l) )); then
+          if [ "$FRONTEND_COV" -ge 70 ]; then
             echo "| Frontend | ${FRONTEND_COV}% | ✅ |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Frontend | ${FRONTEND_COV}% | ⚠️ |" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Check backend coverage
-          if (( $(echo "$BACKEND_COV >= 60" | bc -l) )); then
+          if [ "$BACKEND_COV" -ge 60 ]; then
             echo "| Backend | ${BACKEND_COV}% | ✅ |" >> $GITHUB_STEP_SUMMARY
           else
             echo "| Backend | ${BACKEND_COV}% | ⚠️ |" >> $GITHUB_STEP_SUMMARY
           fi
           
           # Calculate total coverage
-          TOTAL_COV=$(echo "scale=2; ($FRONTEND_COV + $BACKEND_COV) / 2" | bc)
+          TOTAL_COV=$(( (FRONTEND_COV + BACKEND_COV) / 2 ))
           echo "| **Total** | **${TOTAL_COV}%** | - |" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload coverage reports
@@ -309,34 +317,37 @@ jobs:
 
           # Health check loop with timeout
           echo "Waiting for services to be healthy..."
-          TIMEOUT=120
+          TIMEOUT=180
           ELAPSED=0
-          INTERVAL=5
+          INTERVAL=10
 
           # Function to check service health
           check_service_health() {
             local service_name=$1
             local health_url=$2
             local expected_response=$3
-            local max_retries=3
+            local max_retries=5
             local retry=0
             
             while [ $retry -lt $max_retries ]; do
-              if response=$(curl -f -s --max-time 5 "$health_url" 2>/dev/null); then
+              echo "  Attempt $((retry + 1))/$max_retries for $service_name..."
+              if response=$(curl -f -s --max-time 10 "$health_url" 2>/dev/null); then
                 if [ -n "$expected_response" ]; then
                   if echo "$response" | grep -q "$expected_response"; then
                     echo "✓ $service_name health check passed"
                     return 0
                   else
-                    echo "✗ $service_name returned unexpected response"
+                    echo "✗ $service_name returned unexpected response: $response"
                   fi
                 else
                   echo "✓ $service_name health check passed (HTTP 200)"
                   return 0
                 fi
+              else
+                echo "✗ $service_name health check failed (no response or HTTP error)"
               fi
               retry=$((retry + 1))
-              [ $retry -lt $max_retries ] && sleep 2
+              [ $retry -lt $max_retries ] && sleep 5
             done
             
             echo "✗ $service_name health check failed after $max_retries attempts"
@@ -380,6 +391,7 @@ jobs:
             
             sleep $INTERVAL
             ELAPSED=$((ELAPSED + INTERVAL))
+            echo "Health check progress: ${ELAPSED}/${TIMEOUT}s elapsed..."
           done
 
           if [ $ELAPSED -ge $TIMEOUT ]; then

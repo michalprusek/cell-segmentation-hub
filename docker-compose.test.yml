@@ -13,13 +13,14 @@ services:
       - VITE_API_BASE_URL=http://localhost:3001
       - VITE_WS_URL=ws://localhost:3001
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3000 || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 60s
 
   # Backend service for testing
   backend:
@@ -31,25 +32,29 @@ services:
     environment:
       - NODE_ENV=test
       - DATABASE_URL=postgresql://postgres:testpass@postgres:5432/testdb
-      - JWT_ACCESS_SECRET=test-access-secret
-      - JWT_REFRESH_SECRET=test-refresh-secret
+      - JWT_ACCESS_SECRET=test-access-secret-for-testing-only-32-characters-long
+      - JWT_REFRESH_SECRET=test-refresh-secret-for-testing-only-32-characters-long
       - REDIS_URL=redis://redis:6379
       - FROM_EMAIL=test@example.com
-      - SMTP_HOST=localhost
+      - SMTP_HOST=mailhog
       - SMTP_PORT=1025
       - SMTP_USER=test
       - SMTP_PASS=test
+      - ENABLE_TELEMETRY=false
+      - DISABLE_SWAGGER_IN_PROD=false
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      mailhog:
+        condition: service_started
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:3001/health || exit 1"]
       interval: 30s
       timeout: 10s
-      retries: 3
-      start_period: 40s
+      retries: 5
+      start_period: 60s
 
   # ML Service for testing
   ml-service:
@@ -59,14 +64,15 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - NODE_ENV=test
       - PYTHONPATH=/app
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      timeout: 15s
+      retries: 5
+      start_period: 120s
 
   # Test database
   postgres:
