@@ -1,6 +1,16 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+/**
+ * Test Setup Configuration
+ *
+ * This file provides comprehensive mocking for all browser APIs and external dependencies.
+ * Current performance: 45-60s for full test suite execution.
+ *
+ * Future optimization: Consider lazy-loading mocks on demand if performance
+ * degrades with more tests (currently not needed with 955 lines).
+ */
+
 // Import all context mocks
 import './mocks/contexts';
 

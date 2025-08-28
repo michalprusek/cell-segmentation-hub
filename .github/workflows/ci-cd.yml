@@ -171,6 +171,39 @@ jobs:
             backend/coverage/
 
   # ====================
+  # Python ML Tests
+  # ====================
+  python-ml-tests:
+    name: Python ML Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        working-directory: ./backend/segmentation
+        run: |
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-asyncio
+
+      - name: Run ML service tests
+        working-directory: ./backend/segmentation
+        run: |
+          pytest tests/ -v --cov=. --cov-report=xml --cov-report=term
+
+      - name: Upload Python coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/segmentation/coverage.xml
+          flags: ml-tests
+          name: ml-coverage
+
+  # ====================
   # Integration Tests
   # ====================
   integration-tests:
