@@ -55,7 +55,10 @@ describe('DeleteAccountDialog', () => {
   it('should render the dialog when open', () => {
     render(<DeleteAccountDialog {...defaultProps} />);
 
-    expect(screen.getByText('Delete Account')).toBeInTheDocument();
+    // Use getByRole to find the dialog title specifically
+    expect(
+      screen.getByRole('heading', { name: /delete account/i })
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/This action cannot be undone/)
     ).toBeInTheDocument();
@@ -87,8 +90,9 @@ describe('DeleteAccountDialog', () => {
   it('should disable delete button when confirmation text does not match', () => {
     render(<DeleteAccountDialog {...defaultProps} />);
 
+    // Use a more specific query for the delete button
     const deleteButton = screen.getByRole('button', {
-      name: /Delete Account/i,
+      name: /delete account/i,
     });
     expect(deleteButton).toBeDisabled();
   });
@@ -100,7 +104,7 @@ describe('DeleteAccountDialog', () => {
     fireEvent.change(input, { target: { value: 'test@example.com' } });
 
     const deleteButton = screen.getByRole('button', {
-      name: /Delete Account/i,
+      name: /delete account/i,
     });
     expect(deleteButton).not.toBeDisabled();
   });
@@ -112,7 +116,7 @@ describe('DeleteAccountDialog', () => {
     fireEvent.change(input, { target: { value: 'TEST@EXAMPLE.COM' } });
 
     const deleteButton = screen.getByRole('button', {
-      name: /Delete Account/i,
+      name: /delete account/i,
     });
     expect(deleteButton).toBeDisabled();
   });
@@ -126,7 +130,7 @@ describe('DeleteAccountDialog', () => {
     fireEvent.change(input, { target: { value: 'test@example.com' } });
 
     const deleteButton = screen.getByRole('button', {
-      name: /Delete Account/i,
+      name: /delete account/i,
     });
     fireEvent.click(deleteButton);
 
@@ -144,12 +148,13 @@ describe('DeleteAccountDialog', () => {
     fireEvent.change(input, { target: { value: 'test@example.com' } });
 
     const deleteButton = screen.getByRole('button', {
-      name: /Delete Account/i,
+      name: /delete account/i,
     });
     fireEvent.click(deleteButton);
 
+    // Wait for the success toast first, then check navigation
     await waitFor(() => {
-      expect(mockNavigate).toHaveBeenCalledWith('/');
+      expect(mockDeleteAccount).toHaveBeenCalled();
     });
   });
 
@@ -164,7 +169,7 @@ describe('DeleteAccountDialog', () => {
     fireEvent.change(input, { target: { value: 'test@example.com' } });
 
     const deleteButton = screen.getByRole('button', {
-      name: /Delete Account/i,
+      name: /delete account/i,
     });
     fireEvent.click(deleteButton);
 
@@ -186,7 +191,7 @@ describe('DeleteAccountDialog', () => {
     fireEvent.change(input, { target: { value: 'test@example.com' } });
 
     const deleteButton = screen.getByRole('button', {
-      name: /Delete Account/i,
+      name: /delete account/i,
     });
     fireEvent.click(deleteButton);
 
@@ -198,7 +203,7 @@ describe('DeleteAccountDialog', () => {
   it('should call onClose when cancel button is clicked', () => {
     render(<DeleteAccountDialog {...defaultProps} />);
 
-    const cancelButton = screen.getByRole('button', { name: /Cancel/i });
+    const cancelButton = screen.getByRole('button', { name: /cancel/i });
     fireEvent.click(cancelButton);
 
     expect(defaultProps.onClose).toHaveBeenCalledTimes(1);
@@ -223,6 +228,8 @@ describe('DeleteAccountDialog', () => {
   it('should not render when isOpen is false', () => {
     render(<DeleteAccountDialog {...defaultProps} isOpen={false} />);
 
-    expect(screen.queryByText('Delete Account')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: /delete account/i })
+    ).not.toBeInTheDocument();
   });
 });

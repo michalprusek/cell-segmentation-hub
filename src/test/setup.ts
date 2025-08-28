@@ -1,6 +1,9 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Import all context mocks
+import './mocks/contexts';
+
 // Set required environment variables for tests
 process.env.VITE_API_URL = 'http://localhost:3001/api';
 process.env.VITE_ML_SERVICE_URL = 'http://localhost:8000';
@@ -20,22 +23,104 @@ global.ResizeObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
-// Mock WebSocket
-global.WebSocket = vi.fn().mockImplementation(() => ({
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  send: vi.fn(),
-  close: vi.fn(),
-  readyState: 1,
-}));
+// Enhanced WebSocket mock with more comprehensive functionality
+class WebSocketMock {
+  url: string;
+  readyState: number = WebSocket.CONNECTING;
+  onopen: ((event: Event) => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
+  onmessage: ((event: MessageEvent) => void) | null = null;
 
-// Enhanced Canvas API mocking with comprehensive methods
+  constructor(url: string) {
+    this.url = url;
+    setTimeout(() => {
+      this.readyState = WebSocket.OPEN;
+      if (this.onopen) this.onopen(new Event('open'));
+    }, 0);
+  }
+
+  send(data: string | ArrayBuffer | Blob) {
+    // Mock send
+  }
+
+  close() {
+    this.readyState = WebSocket.CLOSED;
+    if (this.onclose) this.onclose(new CloseEvent('close'));
+  }
+
+  addEventListener(type: string, listener: EventListener) {
+    if (type === 'open' && this.readyState === WebSocket.OPEN) {
+      setTimeout(() => listener(new Event('open')), 0);
+    }
+  }
+
+  removeEventListener() {}
+}
+
+// Add WebSocket constants
+WebSocketMock.CONNECTING = 0;
+WebSocketMock.OPEN = 1;
+WebSocketMock.CLOSING = 2;
+WebSocketMock.CLOSED = 3;
+
+global.WebSocket = WebSocketMock as any;
+
+// Enhanced Canvas API mocking with comprehensive methods including WebGL
 import { createMockCanvasContext } from '@/test-utils/canvasTestUtils';
 
-// Mock Canvas API with our comprehensive mock
+// WebGL context mock
+const createMockWebGLContext = () => ({
+  canvas: { width: 800, height: 600 },
+  drawingBufferWidth: 800,
+  drawingBufferHeight: 600,
+  getExtension: vi.fn(),
+  getParameter: vi.fn(),
+  createBuffer: vi.fn(),
+  createShader: vi.fn(),
+  createProgram: vi.fn(),
+  createTexture: vi.fn(),
+  bindBuffer: vi.fn(),
+  bindTexture: vi.fn(),
+  bufferData: vi.fn(),
+  texImage2D: vi.fn(),
+  texParameteri: vi.fn(),
+  enableVertexAttribArray: vi.fn(),
+  vertexAttribPointer: vi.fn(),
+  useProgram: vi.fn(),
+  uniformMatrix4fv: vi.fn(),
+  uniform1i: vi.fn(),
+  uniform1f: vi.fn(),
+  uniform2f: vi.fn(),
+  uniform3f: vi.fn(),
+  uniform4f: vi.fn(),
+  drawArrays: vi.fn(),
+  drawElements: vi.fn(),
+  viewport: vi.fn(),
+  clear: vi.fn(),
+  clearColor: vi.fn(),
+  enable: vi.fn(),
+  disable: vi.fn(),
+  blendFunc: vi.fn(),
+  depthFunc: vi.fn(),
+  cullFace: vi.fn(),
+  frontFace: vi.fn(),
+  getUniformLocation: vi.fn(),
+  getAttribLocation: vi.fn(),
+  compileShader: vi.fn(),
+  shaderSource: vi.fn(),
+  linkProgram: vi.fn(),
+  getProgramParameter: vi.fn(() => true),
+  getShaderParameter: vi.fn(() => true),
+});
+
+// Mock Canvas API with comprehensive contexts
 HTMLCanvasElement.prototype.getContext = vi.fn((contextType: string) => {
   if (contextType === '2d') {
     return createMockCanvasContext();
+  }
+  if (contextType === 'webgl' || contextType === 'webgl2') {
+    return createMockWebGLContext();
   }
   return null;
 });
@@ -75,38 +160,154 @@ Object.defineProperty(global.performance, 'now', {
   value: vi.fn(() => Date.now()),
 });
 
-// Mock Image constructor for testing image loading
-global.Image = vi.fn().mockImplementation(() => ({
-  addEventListener: vi.fn(),
-  removeEventListener: vi.fn(),
-  naturalWidth: 1000,
-  naturalHeight: 800,
-  width: 1000,
-  height: 800,
-  complete: true,
-  src: '',
-  onload: null,
-  onerror: null,
-})) as any;
+// Enhanced Image constructor for testing image loading
+class ImageMock {
+  onload: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  src = '';
+  width = 100;
+  height = 100;
+  naturalWidth = 100;
+  naturalHeight = 100;
+  complete = false;
 
-// Mock File and FileReader for file upload testing
-global.File = vi.fn().mockImplementation((chunks, name, options) => ({
-  name,
-  size: chunks.reduce((size: number, chunk: any) => size + chunk.length, 0),
-  type: options?.type || '',
-  lastModified: Date.now(),
-  arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(0)),
-  text: vi.fn().mockResolvedValue(''),
-})) as any;
+  constructor() {
+    setTimeout(() => {
+      this.complete = true;
+      if (this.onload) this.onload();
+    }, 0);
+  }
 
-global.FileReader = vi.fn().mockImplementation(() => ({
-  readAsDataURL: vi.fn(),
-  readAsText: vi.fn(),
-  readAsArrayBuffer: vi.fn(),
-  onload: null,
-  onerror: null,
-  result: null,
-})) as any;
+  addEventListener(type: string, listener: EventListener) {
+    if (type === 'load' && this.complete) {
+      setTimeout(() => listener(new Event('load')), 0);
+    }
+  }
+
+  removeEventListener() {}
+}
+
+global.Image = ImageMock as any;
+
+// Enhanced File, FileReader, and DataTransfer mocks for file upload testing
+class FileMock {
+  name: string;
+  size: number;
+  type: string;
+  lastModified: number;
+
+  constructor(chunks: any[], name: string, options?: { type?: string }) {
+    this.name = name;
+    this.size = chunks.reduce(
+      (size: number, chunk: any) => size + chunk.length,
+      0
+    );
+    this.type = options?.type || '';
+    this.lastModified = Date.now();
+  }
+
+  arrayBuffer() {
+    return Promise.resolve(new ArrayBuffer(0));
+  }
+  text() {
+    return Promise.resolve('');
+  }
+  stream() {
+    return new ReadableStream();
+  }
+  slice() {
+    return new FileMock([], 'slice', { type: this.type });
+  }
+}
+
+global.File = FileMock as any;
+
+class FileReaderMock {
+  result: string | ArrayBuffer | null = null;
+  onload: ((event: ProgressEvent<FileReader>) => void) | null = null;
+  onerror: ((event: ProgressEvent<FileReader>) => void) | null = null;
+  onabort: ((event: ProgressEvent<FileReader>) => void) | null = null;
+  onloadstart: ((event: ProgressEvent<FileReader>) => void) | null = null;
+  onprogress: ((event: ProgressEvent<FileReader>) => void) | null = null;
+  onloadend: ((event: ProgressEvent<FileReader>) => void) | null = null;
+  readyState: number = 0;
+
+  readAsDataURL(file: Blob) {
+    setTimeout(() => {
+      this.result = 'data:image/png;base64,mock-data';
+      this.readyState = 2;
+      if (this.onload)
+        this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+    }, 0);
+  }
+
+  readAsText(file: Blob) {
+    setTimeout(() => {
+      this.result = 'mock text content';
+      this.readyState = 2;
+      if (this.onload)
+        this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+    }, 0);
+  }
+
+  readAsArrayBuffer(file: Blob) {
+    setTimeout(() => {
+      this.result = new ArrayBuffer(8);
+      this.readyState = 2;
+      if (this.onload)
+        this.onload(new ProgressEvent('load') as ProgressEvent<FileReader>);
+    }, 0);
+  }
+
+  abort() {
+    this.readyState = 2;
+    if (this.onabort)
+      this.onabort(new ProgressEvent('abort') as ProgressEvent<FileReader>);
+  }
+}
+
+global.FileReader = FileReaderMock as any;
+
+// DataTransfer and DragEvent mocks
+class DataTransferMock {
+  items: DataTransferItem[] = [];
+  files: FileList = [] as any;
+  types: string[] = [];
+  effectAllowed: string = 'none';
+  dropEffect: string = 'none';
+
+  setData(format: string, data: string) {
+    this.types.push(format);
+  }
+
+  getData(format: string): string {
+    return '';
+  }
+
+  clearData(format?: string) {
+    if (format) {
+      this.types = this.types.filter(t => t !== format);
+    } else {
+      this.types = [];
+    }
+  }
+}
+
+global.DataTransfer = DataTransferMock as any;
+
+class DragEventMock extends Event {
+  dataTransfer = new DataTransferMock();
+
+  constructor(type: string, init?: DragEventInit) {
+    super(type, init);
+  }
+}
+
+global.DragEvent = DragEventMock as any;
+
+// Mock URL methods
+global.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+global.URL.revokeObjectURL = vi.fn();
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
@@ -128,6 +329,8 @@ const localStorageMock = {
   getItem: vi.fn((key: string) => {
     if (key === 'theme') return 'system';
     if (key === 'language') return 'en';
+    if (key === 'access_token') return null;
+    if (key === 'refresh_token') return null;
     return null;
   }),
   setItem: vi.fn(),
@@ -152,6 +355,10 @@ Object.defineProperty(window, 'location', {
     reload: vi.fn(),
     assign: vi.fn(),
     replace: vi.fn(),
+    href: 'http://localhost:3000/',
+    pathname: '/',
+    search: '',
+    hash: '',
   },
   writable: true,
 });
@@ -216,133 +423,533 @@ global.DOMMatrix = vi
     return matrix;
   }) as any;
 
+// Enhanced react-i18next mock with comprehensive translations
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: any) => {
+      const translations: Record<string, string> = {
+        // Toast messages
+        'toast.unexpectedError': 'An unexpected error occurred',
+        'toast.somethingWentWrong': 'Something went wrong',
+        'toast.returnToHome': 'Return to Home',
+
+        // Dashboard
+        'dashboard.projects': 'Projects',
+        'dashboard.totalImages': 'Total Images',
+        'dashboard.storageUsed': 'Storage Used',
+
+        // Settings
+        'settings.account': 'Account',
+        'settings.deleteAccount': 'Delete Account',
+        'settings.profile': 'Profile',
+        'settings.cancel': 'Cancel',
+        'settings.deleting': 'Deleting...',
+        'settings.accountDeleted': 'Account successfully deleted',
+        'settings.deleteAccountError':
+          'Failed to delete account. Please try again.',
+        'settings.confirmDelete':
+          'Confirmation text is required and must match your email address.',
+        'settings.enterEmail': 'Enter your email to confirm',
+
+        // Delete Account Dialog
+        'settings.deleteAccountDialog.title': 'Delete Account',
+        'settings.deleteAccountDialog.description':
+          'This action cannot be undone. This will permanently delete your account and remove all of your data from our servers.',
+        'settings.deleteAccountDialog.whatWillBeDeleted':
+          'What will be deleted:',
+        'settings.deleteAccountDialog.deleteItems.account':
+          'Your user account and profile',
+        'settings.deleteAccountDialog.deleteItems.projects':
+          'All your projects and images',
+        'settings.deleteAccountDialog.deleteItems.segmentation':
+          'All segmentation data and results',
+        'settings.deleteAccountDialog.deleteItems.settings':
+          'Account settings and preferences',
+        'settings.deleteAccountDialog.confirmationLabel':
+          'Please type {0} to confirm:',
+        'settings.deleteAccountDialog.confirmationPlaceholder':
+          'Enter email to confirm',
+
+        // Common
+        'common.delete': 'Delete',
+        'common.cancel': 'Cancel',
+        'common.confirm': 'Confirm',
+        'common.save': 'Save',
+        'common.edit': 'Edit',
+        'common.loading': 'Loading...',
+        'common.close': 'Close',
+        'common.ok': 'OK',
+        'common.yes': 'Yes',
+        'common.no': 'No',
+
+        // Auth
+        'auth.login': 'Login',
+        'auth.logout': 'Logout',
+        'auth.register': 'Register',
+        'auth.email': 'Email',
+        'auth.password': 'Password',
+        'auth.username': 'Username',
+        'auth.confirmPassword': 'Confirm Password',
+
+        // Projects
+        'projects.create': 'Create Project',
+        'projects.name': 'Project Name',
+        'projects.description': 'Description',
+        'projects.noProjects': 'No projects found',
+        'projects.createFirst': 'Create your first project',
+
+        // Images
+        'images.upload': 'Upload Images',
+        'images.processing': 'Processing...',
+        'images.noImages': 'No images found',
+        'images.uploadFirst': 'Upload your first images',
+
+        // Segmentation
+        'segmentation.editor': 'Segmentation Editor',
+        'segmentation.polygons': 'Polygons',
+        'segmentation.noPolygons': 'No polygons found',
+        'segmentation.startSegmentation': 'Start Segmentation',
+
+        // Queue
+        'queue.processing': 'Processing',
+        'queue.queued': 'Queued',
+        'queue.completed': 'Completed',
+        'queue.failed': 'Failed',
+        'queue.empty': 'Queue is empty',
+
+        // Theme
+        'theme.light': 'Light',
+        'theme.dark': 'Dark',
+        'theme.system': 'System',
+
+        // Navigation
+        'nav.dashboard': 'Dashboard',
+        'nav.projects': 'Projects',
+        'nav.settings': 'Settings',
+        'nav.home': 'Home',
+        'nav.profile': 'Profile',
+
+        // Errors
+        'error.generic': 'An error occurred',
+        'error.networkError': 'Network error',
+        'error.notFound': 'Not found',
+        'error.unauthorized': 'Unauthorized',
+        'error.forbidden': 'Forbidden',
+        'error.serverError': 'Server error',
+
+        // Validation
+        'validation.required': 'This field is required',
+        'validation.email': 'Please enter a valid email address',
+        'validation.minLength': 'Minimum length is {0} characters',
+        'validation.maxLength': 'Maximum length is {0} characters',
+
+        // Models
+        'models.hrnet': 'HRNet V2',
+        'models.resunet_small': 'ResUNet Small',
+        'models.resunet_advanced': 'ResUNet Advanced',
+      };
+
+      // Handle dynamic replacements like {0}, {email}, etc.
+      let result = translations[key] || key;
+
+      // Handle interpolation options
+      if (options) {
+        if (typeof options === 'string') {
+          result = result.replace('{0}', options);
+        } else if (typeof options === 'object') {
+          Object.keys(options).forEach(optKey => {
+            result = result.replace(`{${optKey}}`, options[optKey]);
+            result = result.replace(`{0}`, options[optKey]); // Fallback for numbered placeholders
+          });
+        }
+      }
+
+      // Handle specific key replacements
+      if (key === 'settings.deleteAccountDialog.confirmationLabel') {
+        result = result.replace('{0}', 'test@example.com');
+      }
+
+      return result;
+    },
+    i18n: {
+      changeLanguage: vi.fn(),
+      language: 'en',
+    },
+  }),
+  Trans: ({ children }: any) => children,
+  I18nextProvider: ({ children }: any) => children,
+}));
+
+// Mock socket.io-client for WebSocket functionality
+vi.mock('socket.io-client', () => ({
+  io: vi.fn(() => ({
+    connected: false,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn(),
+    removeAllListeners: vi.fn(),
+  })),
+  default: vi.fn(() => ({
+    connected: false,
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn(),
+    removeAllListeners: vi.fn(),
+  })),
+}));
+
 // Silence console errors during tests unless explicitly testing them
 const originalError = console.error;
+const originalWarn = console.warn;
+
 beforeAll(() => {
-  console.error = vi.fn();
+  console.error = vi.fn((message: any) => {
+    // Allow through specific error patterns we want to test
+    if (typeof message === 'string' && message.includes('Error Boundary')) {
+      originalError(message);
+    }
+  });
+  console.warn = vi.fn();
 });
 
 afterAll(() => {
   console.error = originalError;
+  console.warn = originalWarn;
 });
 
-// Mock apiClient globally to prevent import errors
+// Mock axios with enhanced responses and error handling
+vi.mock('axios', () => {
+  const mockAxiosInstance = {
+    get: vi.fn(() => Promise.resolve({ data: {} })),
+    post: vi.fn(() => Promise.resolve({ data: {} })),
+    put: vi.fn(() => Promise.resolve({ data: {} })),
+    delete: vi.fn(() => Promise.resolve({ data: {} })),
+    patch: vi.fn(() => Promise.resolve({ data: {} })),
+    request: vi.fn(() => Promise.resolve({ data: {} })),
+    interceptors: {
+      request: { use: vi.fn(), eject: vi.fn() },
+      response: { use: vi.fn(), eject: vi.fn() },
+    },
+    defaults: {
+      headers: {
+        common: {},
+        post: { 'Content-Type': 'application/json' },
+        get: {},
+        put: { 'Content-Type': 'application/json' },
+        patch: { 'Content-Type': 'application/json' },
+        delete: {},
+      },
+    },
+  };
+
+  return {
+    default: {
+      create: vi.fn(() => mockAxiosInstance),
+      ...mockAxiosInstance,
+    },
+    // Add named exports for error handling
+    AxiosError: class extends Error {
+      response: any;
+      constructor(
+        message: string,
+        code?: string,
+        config?: any,
+        request?: any,
+        response?: any
+      ) {
+        super(message);
+        this.response = response;
+      }
+    },
+    isAxiosError: vi.fn(() => false),
+  };
+});
+
+// Enhanced apiClient mock with more comprehensive responses
 vi.mock('@/lib/api', () => ({
   apiClient: {
     // Authentication methods
     isAuthenticated: vi.fn(() => false),
     getAccessToken: vi.fn(() => null),
-    login: vi.fn(),
-    logout: vi.fn(),
-    register: vi.fn(),
-    refreshAccessToken: vi.fn(),
+    login: vi.fn().mockResolvedValue({
+      user: {
+        id: 'user-1',
+        email: 'test@example.com',
+        username: 'testuser',
+        emailVerified: true,
+      },
+      tokens: {
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
+      },
+    }),
+    logout: vi.fn().mockResolvedValue(undefined),
+    register: vi.fn().mockResolvedValue({
+      user: {
+        id: 'user-1',
+        email: 'test@example.com',
+        username: 'testuser',
+        emailVerified: false,
+      },
+    }),
+    refreshAccessToken: vi.fn().mockResolvedValue('new-access-token'),
 
     // User profile methods
     getUserProfile: vi.fn().mockResolvedValue({
-      preferred_theme: 'system',
+      id: 'user-1',
+      email: 'test@example.com',
+      username: 'testuser',
+      preferredModel: 'hrnet_v2',
+      modelThreshold: 0.5,
       preferredLang: 'en',
+      preferredTheme: 'system',
+      emailVerified: true,
     }),
-    updateUserProfile: vi.fn(),
-    changePassword: vi.fn(),
-    getUserStorageStats: vi.fn(),
-    deleteAccount: vi.fn(),
+    updateUserProfile: vi.fn().mockResolvedValue(true),
+    changePassword: vi.fn().mockResolvedValue(true),
+    getUserStorageStats: vi.fn().mockResolvedValue({
+      totalSize: 1024000,
+      imageCount: 5,
+      projectCount: 2,
+      formattedSize: '1.0 MB',
+    }),
+    deleteAccount: vi.fn().mockResolvedValue(undefined),
 
     // Project methods
-    getProjects: vi.fn(() =>
-      Promise.resolve({ projects: [], total: 0, page: 1, totalPages: 1 })
-    ),
-    createProject: vi.fn(),
-    getProject: vi.fn(),
-    updateProject: vi.fn(),
-    deleteProject: vi.fn(),
+    getProjects: vi.fn().mockResolvedValue({
+      projects: [],
+      total: 0,
+      page: 1,
+      totalPages: 1,
+    }),
+    createProject: vi.fn().mockResolvedValue({
+      id: 'new-project-1',
+      name: 'New Project',
+      userId: 'user-1',
+      createdAt: new Date().toISOString(),
+    }),
+    getProject: vi.fn().mockResolvedValue({
+      id: 'project-1',
+      name: 'Test Project',
+      userId: 'user-1',
+      imageCount: 0,
+    }),
+    updateProject: vi.fn().mockResolvedValue(true),
+    deleteProject: vi.fn().mockResolvedValue(undefined),
 
     // Image methods
-    getProjectImages: vi.fn(() =>
-      Promise.resolve({ images: [], total: 0, page: 1, totalPages: 1 })
-    ),
-    getProjectImagesWithThumbnails: vi.fn(),
-    uploadImages: vi.fn(() => Promise.resolve([])),
-    getImage: vi.fn(),
-    deleteImage: vi.fn(),
+    getProjectImages: vi.fn().mockResolvedValue({
+      images: [],
+      total: 0,
+      page: 1,
+      totalPages: 1,
+    }),
+    getProjectImagesWithThumbnails: vi.fn().mockResolvedValue([]),
+    uploadImages: vi.fn().mockResolvedValue([]),
+    getImage: vi.fn().mockResolvedValue({
+      id: 'image-1',
+      filename: 'test-image.jpg',
+      width: 1000,
+      height: 800,
+    }),
+    deleteImage: vi.fn().mockResolvedValue(undefined),
 
     // Segmentation methods
-    requestBatchSegmentation: vi.fn(),
-    getSegmentationResults: vi.fn(() => Promise.resolve(null)),
-    updateSegmentationResults: vi.fn(() => Promise.resolve({ polygons: [] })),
-    deleteSegmentationResults: vi.fn(),
-    getImageWithSegmentation: vi.fn(),
+    requestBatchSegmentation: vi.fn().mockResolvedValue({ jobId: 'job-1' }),
+    getSegmentationResults: vi.fn().mockResolvedValue({
+      polygons: [],
+      status: 'completed',
+      modelUsed: 'hrnet_v2',
+    }),
+    updateSegmentationResults: vi.fn().mockResolvedValue({ polygons: [] }),
+    deleteSegmentationResults: vi.fn().mockResolvedValue(undefined),
+    getImageWithSegmentation: vi.fn().mockResolvedValue({
+      image: { id: 'image-1', filename: 'test.jpg' },
+      segmentation: { polygons: [], status: 'completed' },
+    }),
 
     // Queue management methods
-    addImageToQueue: vi.fn(),
-    addBatchToQueue: vi.fn(),
-    getQueueStats: vi.fn(() =>
-      Promise.resolve({
-        total: 0,
-        queued: 0,
-        processing: 0,
-        completed: 0,
-        failed: 0,
-      })
-    ),
-    getQueueItems: vi.fn(() => Promise.resolve([])),
-    removeFromQueue: vi.fn(),
+    addImageToQueue: vi.fn().mockResolvedValue({ queueId: 'queue-1' }),
+    addBatchToQueue: vi.fn().mockResolvedValue({ queueIds: ['queue-1'] }),
+    getQueueStats: vi.fn().mockResolvedValue({
+      total: 0,
+      queued: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0,
+    }),
+    getQueueItems: vi.fn().mockResolvedValue([]),
+    removeFromQueue: vi.fn().mockResolvedValue(undefined),
 
     // Generic HTTP methods
-    post: vi.fn(),
-    get: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
+    post: vi.fn().mockResolvedValue({ data: {} }),
+    get: vi.fn().mockResolvedValue({ data: {} }),
+    put: vi.fn().mockResolvedValue({ data: {} }),
+    delete: vi.fn().mockResolvedValue({ data: {} }),
   },
   default: {
+    // Duplicate all methods for default export
     isAuthenticated: vi.fn(() => false),
     getAccessToken: vi.fn(() => null),
-    login: vi.fn(),
-    logout: vi.fn(),
-    register: vi.fn(),
-    refreshAccessToken: vi.fn(),
-    getUserProfile: vi.fn().mockResolvedValue({
-      preferred_theme: 'system',
-      preferredLang: 'en',
+    login: vi.fn().mockResolvedValue({
+      user: { id: 'user-1', email: 'test@example.com', username: 'testuser' },
+      tokens: {
+        accessToken: 'mock-access-token',
+        refreshToken: 'mock-refresh-token',
+      },
     }),
-    updateUserProfile: vi.fn(),
-    changePassword: vi.fn(),
-    getUserStorageStats: vi.fn(),
-    deleteAccount: vi.fn(),
-    getProjects: vi.fn(() =>
-      Promise.resolve({ projects: [], total: 0, page: 1, totalPages: 1 })
-    ),
-    createProject: vi.fn(),
-    getProject: vi.fn(),
-    updateProject: vi.fn(),
-    deleteProject: vi.fn(),
-    getProjectImages: vi.fn(() =>
-      Promise.resolve({ images: [], total: 0, page: 1, totalPages: 1 })
-    ),
-    getProjectImagesWithThumbnails: vi.fn(),
-    uploadImages: vi.fn(() => Promise.resolve([])),
-    getImage: vi.fn(),
-    deleteImage: vi.fn(),
-    requestBatchSegmentation: vi.fn(),
-    getSegmentationResults: vi.fn(() => Promise.resolve(null)),
-    updateSegmentationResults: vi.fn(() => Promise.resolve({ polygons: [] })),
-    deleteSegmentationResults: vi.fn(),
-    getImageWithSegmentation: vi.fn(),
-    addImageToQueue: vi.fn(),
-    addBatchToQueue: vi.fn(),
-    getQueueStats: vi.fn(() =>
-      Promise.resolve({
-        total: 0,
-        queued: 0,
-        processing: 0,
-        completed: 0,
-        failed: 0,
-      })
-    ),
-    getQueueItems: vi.fn(() => Promise.resolve([])),
-    removeFromQueue: vi.fn(),
-    post: vi.fn(),
-    get: vi.fn(),
-    put: vi.fn(),
-    delete: vi.fn(),
+    logout: vi.fn().mockResolvedValue(undefined),
+    register: vi.fn().mockResolvedValue({
+      user: { id: 'user-1', email: 'test@example.com', username: 'testuser' },
+    }),
+    refreshAccessToken: vi.fn().mockResolvedValue('new-access-token'),
+    getUserProfile: vi.fn().mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      username: 'testuser',
+      preferredModel: 'hrnet_v2',
+      modelThreshold: 0.5,
+      preferredLang: 'en',
+      preferredTheme: 'system',
+    }),
+    updateUserProfile: vi.fn().mockResolvedValue(true),
+    changePassword: vi.fn().mockResolvedValue(true),
+    getUserStorageStats: vi.fn().mockResolvedValue({
+      totalSize: 1024000,
+      imageCount: 5,
+      projectCount: 2,
+      formattedSize: '1.0 MB',
+    }),
+    deleteAccount: vi.fn().mockResolvedValue(undefined),
+    getProjects: vi.fn().mockResolvedValue({
+      projects: [],
+      total: 0,
+      page: 1,
+      totalPages: 1,
+    }),
+    createProject: vi.fn().mockResolvedValue({
+      id: 'new-project-1',
+      name: 'New Project',
+      userId: 'user-1',
+    }),
+    getProject: vi.fn().mockResolvedValue({
+      id: 'project-1',
+      name: 'Test Project',
+      userId: 'user-1',
+    }),
+    updateProject: vi.fn().mockResolvedValue(true),
+    deleteProject: vi.fn().mockResolvedValue(undefined),
+    getProjectImages: vi.fn().mockResolvedValue({
+      images: [],
+      total: 0,
+      page: 1,
+      totalPages: 1,
+    }),
+    getProjectImagesWithThumbnails: vi.fn().mockResolvedValue([]),
+    uploadImages: vi.fn().mockResolvedValue([]),
+    getImage: vi.fn().mockResolvedValue({
+      id: 'image-1',
+      filename: 'test-image.jpg',
+    }),
+    deleteImage: vi.fn().mockResolvedValue(undefined),
+    requestBatchSegmentation: vi.fn().mockResolvedValue({ jobId: 'job-1' }),
+    getSegmentationResults: vi.fn().mockResolvedValue({
+      polygons: [],
+      status: 'completed',
+    }),
+    updateSegmentationResults: vi.fn().mockResolvedValue({ polygons: [] }),
+    deleteSegmentationResults: vi.fn().mockResolvedValue(undefined),
+    getImageWithSegmentation: vi.fn().mockResolvedValue({
+      image: { id: 'image-1', filename: 'test.jpg' },
+      segmentation: { polygons: [], status: 'completed' },
+    }),
+    addImageToQueue: vi.fn().mockResolvedValue({ queueId: 'queue-1' }),
+    addBatchToQueue: vi.fn().mockResolvedValue({ queueIds: ['queue-1'] }),
+    getQueueStats: vi.fn().mockResolvedValue({
+      total: 0,
+      queued: 0,
+      processing: 0,
+      completed: 0,
+      failed: 0,
+    }),
+    getQueueItems: vi.fn().mockResolvedValue([]),
+    removeFromQueue: vi.fn().mockResolvedValue(undefined),
+    post: vi.fn().mockResolvedValue({ data: {} }),
+    get: vi.fn().mockResolvedValue({ data: {} }),
+    put: vi.fn().mockResolvedValue({ data: {} }),
+    delete: vi.fn().mockResolvedValue({ data: {} }),
+  },
+  // Helper to mock API errors
+  mockApiError: (status: number, message: string) => {
+    const error = new Error(message) as any;
+    error.response = {
+      status,
+      data: { message, error: true },
+      headers: {},
+    };
+    error.isAxiosError = true;
+    return Promise.reject(error);
   },
 }));
+
+// Mock toast notifications
+vi.mock('sonner', () => ({
+  toast: {
+    success: vi.fn(),
+    error: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+    promise: vi.fn(),
+    loading: vi.fn(),
+    dismiss: vi.fn(),
+    custom: vi.fn(),
+  },
+  Toaster: ({ children }: any) => children,
+}));
+
+// Mock React Router
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return {
+    ...actual,
+    useNavigate: vi.fn(() => vi.fn()),
+    useLocation: vi.fn(() => ({
+      pathname: '/',
+      search: '',
+      hash: '',
+      state: null,
+    })),
+    useParams: vi.fn(() => ({})),
+    useSearchParams: vi.fn(() => [new URLSearchParams(), vi.fn()]),
+  };
+});
+
+// Mock Lucide React icons
+vi.mock('lucide-react', () => {
+  const MockIcon = (props: any) => {
+    return React.createElement('svg', {
+      ...props,
+      'data-testid': props['data-testid'] || 'mock-icon',
+      className: props.className,
+    });
+  };
+
+  return new Proxy(
+    {},
+    {
+      get: (target, prop) => {
+        if (typeof prop === 'string') {
+          return MockIcon;
+        }
+        return target[prop];
+      },
+    }
+  );
+});
+
+// Add missing React import for icon mocking
+import * as React from 'react';

@@ -96,10 +96,10 @@ jobs:
           severity: 'HIGH,CRITICAL'
 
   # ====================
-  # Unit Tests
+  # Unit Tests with Coverage
   # ====================
   unit-tests:
-    name: Unit Tests
+    name: Unit Tests with Coverage
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -113,14 +113,46 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Frontend tests
-        run: npm run test:coverage
+      - name: Run Frontend tests with coverage
+        run: |
+          npm run test:coverage -- --reporter=json --outputFile=coverage/frontend-coverage.json
+          npm run test:coverage -- --reporter=lcov --coverage.reporter=lcov
 
-      - name: Run Backend tests
+      - name: Run Backend tests with coverage
         working-directory: ./backend
         run: |
           npm ci
-          npm run test:coverage
+          npm run test:coverage -- --reporter=json --outputFile=coverage/backend-coverage.json
+          npm run test:coverage -- --reporter=lcov --coverage.reporter=lcov
+
+      - name: Generate coverage summary
+        run: |
+          # Parse coverage data
+          FRONTEND_COV=$(node -e "const cov=require('./coverage/frontend-coverage.json'); console.log(cov.total?.lines?.pct || 0)")
+          BACKEND_COV=$(node -e "const cov=require('./backend/coverage/backend-coverage.json'); console.log(cov.total?.lines?.pct || 0)")
+          
+          echo "## Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Coverage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Check frontend coverage
+          if (( $(echo "$FRONTEND_COV >= 70" | bc -l) )); then
+            echo "| Frontend | ${FRONTEND_COV}% | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Frontend | ${FRONTEND_COV}% | ⚠️ |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check backend coverage
+          if (( $(echo "$BACKEND_COV >= 60" | bc -l) )); then
+            echo "| Backend | ${BACKEND_COV}% | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Backend | ${BACKEND_COV}% | ⚠️ |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Calculate total coverage
+          TOTAL_COV=$(echo "scale=2; ($FRONTEND_COV + $BACKEND_COV) / 2" | bc)
+          echo "| **Total** | **${TOTAL_COV}%** | - |" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload coverage reports
         uses: codecov/codecov-action@v3
@@ -128,6 +160,15 @@ jobs:
           files: ./coverage/lcov.info,./backend/coverage/lcov.info
           flags: unittests
           name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Archive coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage/
+            backend/coverage/
 
   # ====================
   # Integration Tests
