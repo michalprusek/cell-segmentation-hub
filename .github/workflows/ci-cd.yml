@@ -192,12 +192,18 @@ jobs:
         with:
           python-version: '3.11'
           cache: 'pip'
+          cache-dependency-path: 'backend/segmentation/requirements.txt'
 
       - name: Install Python dependencies
         working-directory: ./backend/segmentation
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-asyncio
+          # Verify installation
+          python -c "import torch; print(f'PyTorch version: {torch.__version__}')"
+          python -c "import cv2; print(f'OpenCV version: {cv2.__version__}')"
+          python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
 
       - name: Run ML service tests
         working-directory: ./backend/segmentation
@@ -258,15 +264,22 @@ jobs:
 
       - name: Setup test environment
         run: |
-          cp .env.example .env
-          echo "DATABASE_URL=postgresql://postgres:testpass@localhost:5432/testdb" >> .env
-          echo "REDIS_URL=redis://localhost:6379" >> .env
+          cp .env.example .env.test || echo "# Test environment" > .env.test
+          echo "DATABASE_URL=postgresql://postgres:testpass@localhost:5432/testdb" >> .env.test
+          echo "REDIS_URL=redis://localhost:6379" >> .env.test
+          echo "JWT_ACCESS_SECRET=test-jwt-access-secret-key-min-32-chars-long" >> .env.test
+          echo "JWT_REFRESH_SECRET=test-jwt-refresh-secret-key-min-32-chars-long" >> .env.test
+          cp .env.test backend/.env
+
+      - name: Generate Prisma Client
+        working-directory: ./backend
+        run: npx prisma generate
 
       - name: Run database migrations
         working-directory: ./backend
         env:
           DATABASE_URL: postgresql://postgres:testpass@localhost:5432/testdb
-        run: npx prisma migrate deploy
+        run: npx prisma migrate deploy || npx prisma db push
 
       - name: Run integration tests
         working-directory: ./backend
@@ -297,117 +310,100 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Start Docker services with health checks
+      - name: Setup test environment
         run: |
-          # Build images first with error handling
-          echo "Building Docker images..."
-          docker compose -f docker-compose.test.yml build --no-cache || {
-            echo "Failed to build Docker images"
-            docker compose -f docker-compose.test.yml logs
-            exit 1
-          }
+          # Create necessary environment files
+          cp .env.example .env || echo "# Test env" > .env
+          echo "VITE_API_URL=http://localhost:3001" >> .env
+          echo "VITE_ML_SERVICE_URL=http://localhost:8000" >> .env
+          
+          # Create backend env
+          cp .env.example backend/.env || echo "# Backend test env" > backend/.env
+          echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/spheroseg_test" >> backend/.env
+          echo "JWT_ACCESS_SECRET=test-jwt-access-secret-key-min-32-chars-long" >> backend/.env
+          echo "JWT_REFRESH_SECRET=test-jwt-refresh-secret-key-min-32-chars-long" >> backend/.env
 
-          # Start services
-          echo "Starting Docker services..."
-          docker compose -f docker-compose.test.yml up -d || {
-            echo "Failed to start Docker services"
-            docker compose -f docker-compose.test.yml logs
-            exit 1
-          }
-
-          # Health check loop with timeout
-          echo "Waiting for services to be healthy..."
-          TIMEOUT=180
-          ELAPSED=0
-          INTERVAL=10
-
-          # Function to check service health
-          check_service_health() {
-            local service_name=$1
-            local health_url=$2
-            local expected_response=$3
-            local max_retries=5
-            local retry=0
-            
-            while [ $retry -lt $max_retries ]; do
-              echo "  Attempt $((retry + 1))/$max_retries for $service_name..."
-              if response=$(curl -f -s --max-time 10 "$health_url" 2>/dev/null); then
-                if [ -n "$expected_response" ]; then
-                  if echo "$response" | grep -q "$expected_response"; then
-                    echo "✓ $service_name health check passed"
-                    return 0
-                  else
-                    echo "✗ $service_name returned unexpected response: $response"
-                  fi
-                else
-                  echo "✓ $service_name health check passed (HTTP 200)"
-                  return 0
-                fi
-              else
-                echo "✗ $service_name health check failed (no response or HTTP error)"
-              fi
-              retry=$((retry + 1))
-              [ $retry -lt $max_retries ] && sleep 5
-            done
-            
-            echo "✗ $service_name health check failed after $max_retries attempts"
-            return 1
-          }
-
-          while [ $ELAPSED -lt $TIMEOUT ]; do
-            # Check if containers are running (non-empty check)
-            RUNNING_IDS=$(docker compose -f docker-compose.test.yml ps -q 2>/dev/null | tr -d '[:space:]')
-            
-            if [ -n "$RUNNING_IDS" ]; then
-              # Count running containers properly
-              RUNNING_COUNT=$(echo "$RUNNING_IDS" | wc -l | tr -d '[:space:]')
-              echo "Found $RUNNING_COUNT running container(s)"
-              
-              # Check each service health endpoint
-              all_healthy=true
-              
-              # Backend health check
-              if ! check_service_health "Backend" "http://localhost:3001/health" "\"status\":\"healthy\""; then
-                all_healthy=false
-              fi
-              
-              # Frontend health check (basic HTTP check)
-              if ! check_service_health "Frontend" "http://localhost:3000" ""; then
-                all_healthy=false
-              fi
-              
-              # ML Service health check
-              if ! check_service_health "ML Service" "http://localhost:8000/health" "\"status\":\"healthy\""; then
-                all_healthy=false
-              fi
-              
-              if [ "$all_healthy" = true ]; then
-                echo "All services are healthy!"
-                break
-              fi
-            else
-              echo "No containers running yet..."
-            fi
-            
-            sleep $INTERVAL
-            ELAPSED=$((ELAPSED + INTERVAL))
-            echo "Health check progress: ${ELAPSED}/${TIMEOUT}s elapsed..."
+      - name: Start test services
+        run: |
+          # Start PostgreSQL and Redis containers
+          echo "Starting PostgreSQL..."
+          docker run -d --name test-postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=spheroseg_test \
+            -p 5432:5432 \
+            postgres:15-alpine
+          
+          echo "Starting Redis..."
+          docker run -d --name test-redis \
+            -p 6379:6379 \
+            redis:7-alpine
+          
+          # Wait for PostgreSQL to be ready
+          echo "Waiting for PostgreSQL..."
+          for i in {1..30}; do
+            docker exec test-postgres pg_isready -U postgres && break
+            echo "PostgreSQL not ready yet... ($i/30)"
+            sleep 2
           done
+          
+          # Wait for Redis to be ready
+          echo "Waiting for Redis..."
+          for i in {1..30}; do
+            docker exec test-redis redis-cli ping && break
+            echo "Redis not ready yet... ($i/30)"
+            sleep 2
+          done
+          
+          echo "Test services are ready!"
 
-          if [ $ELAPSED -ge $TIMEOUT ]; then
-            echo "ERROR: Services failed to start within ${TIMEOUT} seconds"
-            echo "=== Docker Compose Logs ==="
-            docker compose -f docker-compose.test.yml logs --tail=50
-            echo "=== Docker Compose Status ==="
-            docker compose -f docker-compose.test.yml ps
-            exit 1
-          fi
+      - name: Setup database
+        run: |
+          cd backend
+          npx prisma migrate deploy
+          npx prisma generate
+          cd ..
 
-          echo "All services are healthy!"
-          docker compose -f docker-compose.test.yml ps || true
+      - name: Build and start application
+        run: |
+          # Build frontend
+          npm run build
+          
+          # Start backend server
+          cd backend
+          npm run dev &
+          BACKEND_PID=$!
+          cd ..
+          
+          # Start frontend dev server for E2E tests
+          npm run preview &
+          FRONTEND_PID=$!
+          
+          # Store PIDs for cleanup
+          echo $BACKEND_PID > backend.pid
+          echo $FRONTEND_PID > frontend.pid
+          
+          # Wait for backend to be ready
+          echo "Waiting for backend..."
+          for i in {1..30}; do
+            curl -f http://localhost:3001/health && break
+            echo "Backend not ready yet... ($i/30)"
+            sleep 2
+          done
+          
+          # Wait for frontend to be ready
+          echo "Waiting for frontend..."
+          for i in {1..30}; do
+            curl -f http://localhost:4173 && break
+            echo "Frontend not ready yet... ($i/30)"
+            sleep 2
+          done
+          
+          echo "Application is ready for E2E tests!"
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: |
+          # Run Playwright tests against preview server
+          VITE_API_URL=http://localhost:3001 npm run test:e2e
 
       - name: Upload Playwright report
         if: always()
@@ -417,9 +413,22 @@ jobs:
           path: playwright-report/
           retention-days: 30
 
-      - name: Stop Docker services
+      - name: Cleanup
         if: always()
-        run: docker compose -f docker-compose.test.yml down
+        run: |
+          # Stop application servers
+          if [ -f backend.pid ]; then
+            kill $(cat backend.pid) || true
+            rm backend.pid
+          fi
+          if [ -f frontend.pid ]; then
+            kill $(cat frontend.pid) || true
+            rm frontend.pid
+          fi
+          
+          # Stop and remove Docker containers
+          docker stop test-postgres test-redis || true
+          docker rm test-postgres test-redis || true
 
   # ====================
   # Build Docker Images
