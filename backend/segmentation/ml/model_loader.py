@@ -27,8 +27,7 @@ except ImportError:
 
 # Import model architectures using relative imports
 from models.hrnet import HRNetV2
-from models.resunet_advanced import AdvancedResUNet
-from models.resunet_small import ResUNetSmall
+from models.cbam_resunet import ResUNetCBAM
 
 # Import the new inference executor
 from .inference_executor import (
@@ -60,17 +59,11 @@ class BatchConfig:
                         "expected_throughput": 2.5,
                         "memory_limit_mb": 8000
                     },
-                    "resunet_small": {
-                        "optimal_batch_size": 2,
-                        "max_safe_batch_size": 4,
-                        "expected_throughput": 1.8,
+                    "cbam_resunet": {
+                        "optimal_batch_size": 4,
+                        "max_safe_batch_size": 8,
+                        "expected_throughput": 2.0,
                         "memory_limit_mb": 10000
-                    },
-                    "resunet_advanced": {
-                        "optimal_batch_size": 1,
-                        "max_safe_batch_size": 2,
-                        "expected_throughput": 1.0,
-                        "memory_limit_mb": 15000
                     }
                 }
             }
@@ -111,16 +104,10 @@ class ModelLoader:
             'finetuned_path': 'weights/hrnet_best_model.pth',
             'config_path': None
         },
-        'resunet_advanced': {
-            'class': AdvancedResUNet,
-            'pretrained_path': 'weights/resunet_advanced_best_model.pth',
-            'finetuned_path': 'weights/resunet_advanced_best_model.pth',
-            'config_path': None
-        },
-        'resunet_small': {
-            'class': ResUNetSmall,
-            'pretrained_path': 'weights/resunet_small_best_model.pth',
-            'finetuned_path': 'weights/resunet_small_best_model.pth',
+        'cbam_resunet': {
+            'class': ResUNetCBAM,
+            'pretrained_path': 'weights/cbam_resunet_new.pth',
+            'finetuned_path': 'weights/cbam_resunet_new.pth',
             'config_path': None
         }
     }
@@ -192,12 +179,9 @@ class ModelLoader:
         try:
             if model_name == 'hrnet':
                 model = HRNetV2(n_class=1, use_instance_norm=True)
-            elif model_name == 'resunet_advanced':
-                # Use correct feature dimensions matching trained weights: [64, 128, 256, 512]
-                model = AdvancedResUNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512], use_instance_norm=True, dropout_rate=0.2)
-            elif model_name == 'resunet_small':
-                # Use correct feature dimensions matching trained weights: [48, 96, 192, 384, 512]  
-                model = ResUNetSmall(in_channels=3, out_channels=1, features=[48, 96, 192, 384, 512])
+            elif model_name == 'cbam_resunet':
+                # Use correct feature dimensions matching trained weights: [48, 96, 192, 384, 512]
+                model = ResUNetCBAM(in_channels=3, out_channels=1, features=[48, 96, 192, 384, 512], use_instance_norm=True, dropout_rate=0.0)  # No dropout for inference!
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
             
@@ -225,15 +209,12 @@ class ModelLoader:
                 state_dict = checkpoint
             
             # For ResUNet models, try to auto-detect features from weights
-            if model_name in ['resunet_advanced', 'resunet_small']:
+            if model_name == 'cbam_resunet':
                 detected_features = self._detect_features_from_weights(state_dict, model_name)
                 if detected_features:
                     logger.info(f"Auto-detected features for {model_name}: {detected_features}")
-                    # Recreate model with detected features
-                    if model_name == 'resunet_advanced':
-                        model = AdvancedResUNet(in_channels=3, out_channels=1, features=detected_features, use_instance_norm=True, dropout_rate=0.2)
-                    elif model_name == 'resunet_small':
-                        model = ResUNetSmall(in_channels=3, out_channels=1, features=detected_features)
+                    # Recreate model with detected features - DROPOUT SET TO 0 FOR INFERENCE!
+                    model = ResUNetCBAM(in_channels=3, out_channels=1, features=detected_features, use_instance_norm=True, dropout_rate=0.0)
             
             # Load state dict
             model.load_state_dict(state_dict, strict=False)
@@ -270,11 +251,16 @@ class ModelLoader:
         # Resize image
         image = image.resize(target_size, Image.Resampling.LANCZOS)
         
-        # Convert to numpy array and normalize
+        # Convert to numpy array and normalize to [0, 1]
         image_np = np.array(image).astype(np.float32) / 255.0
         
         # Convert to tensor and add batch dimension
         image_tensor = torch.from_numpy(image_np.transpose(2, 0, 1)).unsqueeze(0)
+        
+        # Apply ImageNet normalization (CRITICAL for model performance!)
+        mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
+        image_tensor = (image_tensor - mean) / std
         
         return image_tensor.to(self.device)
     
@@ -291,11 +277,18 @@ class ModelLoader:
             # Resize image
             image = image.resize(target_size, Image.Resampling.LANCZOS)
             
-            # Convert to numpy array and normalize
+            # Convert to numpy array and normalize to [0, 1]
             image_np = np.array(image).astype(np.float32) / 255.0
             
             # Convert to tensor (no batch dimension yet)
             image_tensor = torch.from_numpy(image_np.transpose(2, 0, 1))
+            
+            # Apply ImageNet normalization (CRITICAL for model performance!)
+            # Same as used during training
+            mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+            std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+            image_tensor = (image_tensor - mean) / std
+            
             batch_tensors.append(image_tensor)
         
         # Stack into batch tensor
@@ -862,18 +855,7 @@ class ModelLoader:
             features = []
             
             # Look for encoder blocks patterns
-            if model_name == 'resunet_advanced':
-                # Pattern: encoder1.0.conv1.weight, encoder2.0.conv1.weight, etc.
-                for i in range(1, 6):  # Check up to 5 encoder levels
-                    key = f"encoder{i}.0.conv1.weight"
-                    if key in state_dict:
-                        out_channels = state_dict[key].shape[0]
-                        features.append(out_channels)
-                        logger.info(f"Detected encoder{i} features: {out_channels}")
-                    else:
-                        break
-                        
-            elif model_name == 'resunet_small':
+            if model_name == 'cbam_resunet':
                 # Pattern: downs.0.conv1.weight, downs.1.conv1.weight, etc.
                 for i in range(6):  # Check up to 6 encoder levels
                     key = f"downs.{i}.conv1.weight"

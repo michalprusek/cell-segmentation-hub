@@ -45,6 +45,12 @@ export const useProjectImageActions = ({
       const updatedImages = imagesRef.current.filter(img => img.id !== imageId);
       onImagesChange(updatedImages);
 
+      // Emit event to notify Dashboard about image deletion
+      const event = new CustomEvent('project-image-deleted', {
+        detail: { projectId, imageId },
+      });
+      window.dispatchEvent(event);
+
       toast.success(t('imageDeleted'));
     } catch (error: unknown) {
       logger.error('Error deleting image:', error);

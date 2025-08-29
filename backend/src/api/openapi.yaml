@@ -352,7 +352,7 @@ paths:
                 modelName:
                   type: string
                   description: Název ML modelu pro segmentaci
-                  enum: [hrnet, resunet_small, resunet_advanced]
+                  enum: [hrnet, cbam_resunet]
                   default: hrnet
               required:
                 - image

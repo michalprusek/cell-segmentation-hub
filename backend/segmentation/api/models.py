@@ -6,8 +6,7 @@ from enum import Enum
 
 class ModelType(str, Enum):
     HRNET = "hrnet"
-    RESUNET_ADVANCED = "resunet_advanced" 
-    RESUNET_SMALL = "resunet_small"
+    CBAM_RESUNET = "cbam_resunet"
 
 class SegmentationRequest(BaseModel):
     model: ModelType = Field(default=ModelType.HRNET, description="Model to use for segmentation")

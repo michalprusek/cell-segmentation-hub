@@ -8,8 +8,7 @@ from typing import Dict, Optional, Any
 from contextlib import contextmanager
 
 from ..models.hrnet import HRNetV2
-from ..models.resunet_advanced import AdvancedResUNet
-from ..models.resunet_small import ResUNetSmall
+from ..models.cbam_resunet import ResUNetCBAM
 
 logger = logging.getLogger(__name__)
 
@@ -57,31 +56,18 @@ class ModelManager:
                 "description": "High-Resolution Network for semantic segmentation",
                 "parameters": 66_000_000
             },
-            "resunet_advanced": {
-                "class": AdvancedResUNet,
-                "weights_path": weights_dir / "resunet_advanced_best_model.pth",
+            "cbam_resunet": {
+                "class": ResUNetCBAM,
+                "weights_path": weights_dir / "cbam_resunet_new.pth",
                 "params": {
                     "in_channels": 3,
                     "out_channels": 1,
-                    "features": [64, 128, 256, 512],  # Match trained model architecture
-                    "use_instance_norm": True,
-                    "dropout_rate": 0.2
-                },
-                "description": "Advanced ResUNet with attention mechanisms",
-                "parameters": 66_000_000
-            },
-            "resunet_small": {
-                "class": ResUNetSmall,
-                "weights_path": weights_dir / "resunet_small_best_model.pth",
-                "params": {
-                    "in_channels": 3,
-                    "out_channels": 1,
-                    "features": [48, 96, 192, 384, 512],  # Based on the architecture analysis
+                    "features": [64, 128, 256, 512],
                     "use_instance_norm": True,
                     "dropout_rate": 0.15
                 },
-                "description": "Lightweight ResUNet optimized for efficiency", 
-                "parameters": 60_000_000
+                "description": "ResUNet with CBAM attention for precise segmentation",
+                "parameters": 45_000_000
             }
         }
     

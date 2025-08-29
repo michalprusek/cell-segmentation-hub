@@ -15,7 +15,7 @@ import { z } from 'zod';
 /**
  * Available segmentation models
  */
-export type SegmentationModel = 'hrnet' | 'resunet_advanced' | 'resunet_small';
+export type SegmentationModel = 'hrnet' | 'cbam_resunet';
 
 /**
  * Queue item status
@@ -324,7 +324,7 @@ export function isAddImageToQueueData(data: unknown): data is AddImageToQueueDat
  * Type guard for SegmentationModel
  */
 export function isSegmentationModel(value: unknown): value is SegmentationModel {
-  return value === 'hrnet' || value === 'resunet_advanced' || value === 'resunet_small';
+  return value === 'hrnet' || value === 'cbam_resunet';
 }
 
 /**

@@ -524,6 +524,12 @@ const ProjectDetail = () => {
 
           return mergedImages;
         });
+
+        // Emit event to notify Dashboard about image count change
+        const event = new CustomEvent('project-images-updated', {
+          detail: { projectId: id, newImageCount: formattedImages.length },
+        });
+        window.dispatchEvent(event);
       } catch (error) {
         toast.error(t('toast.upload.failed'));
       }

@@ -378,11 +378,7 @@ export default {
         cbam: {
           name: 'CBAM-ResUNet',
           description:
-            'Velocidad y precisión equilibradas para la mayoría de casos de uso',
-        },
-        ma: {
-          name: 'MA-ResUNet',
-          description: 'Mayor precisión con mecanismos de atención',
+            'Modelo de segmentación preciso con mecanismos de atención',
         },
       },
     },
@@ -1124,17 +1120,10 @@ export default {
           name: 'CBAM-ResUNet (Mediano)',
           inferenceTime:
             'Tiempo de inferencia: ~0.20 segundos (acelerado por GPU)',
-          bestFor: 'Mejor para: Velocidad y precisión equilibradas',
+          bestFor:
+            'Mejor para: Segmentación precisa con mecanismos de atención',
           description:
-            'Equilibrio óptimo entre velocidad de procesamiento y calidad de segmentación para la mayoría de casos de uso.',
-        },
-        ma: {
-          name: 'MA-ResUNet (Grande)',
-          inferenceTime:
-            'Tiempo de inferencia: ~1.2 segundos (acelerado por GPU)',
-          bestFor: 'Mejor para: Máxima precisión',
-          description:
-            'Modelo de mayor precisión con mecanismos de atención para la detección más precisa de límites de esferoides.',
+            'Modelo de segmentación preciso con mecanismos de atención para la detección precisa de límites de esferoides.',
         },
       },
       howToSelect: 'Cómo Seleccionar un Modelo',
@@ -1142,7 +1131,7 @@ export default {
         step1: 'Abre tu proyecto y navega a cualquier imagen',
         step2:
           'En la barra de herramientas del proyecto, encuentra el menú desplegable de selección de modelo',
-        step3: 'Elige entre HRNet, CBAM-ResUNet o MA-ResUNet',
+        step3: 'Elige entre HRNet o CBAM-ResUNet',
         step4:
           'Ajusta el umbral de confianza (0.0-1.0) para afinar la sensibilidad de detección',
         step5:
@@ -1150,7 +1139,7 @@ export default {
       },
       tip: 'Consejo:',
       tipText:
-        'Comienza con CBAM-ResUNet para la mayoría de casos. Usa HRNet para prototipado rápido y MA-ResUNet cuando necesites la mayor precisión posible para investigación o publicación.',
+        'Comienza con CBAM-ResUNet para la mayoría de casos. Usa HRNet para prototipado rápido y CBAM-ResUNet cuando necesites segmentación precisa con mecanismos de atención para investigación o publicación.',
     },
     segmentationProcess: {
       title: 'Proceso de Segmentación',
@@ -1172,8 +1161,7 @@ export default {
       workflow: 'Flujo de Trabajo de Segmentación Automática',
       workflowSteps: {
         step1: 'Sube tus imágenes microscópicas a un proyecto',
-        step2:
-          'Selecciona tu modelo de IA preferido (HRNet, CBAM-ResUNet o MA-ResUNet)',
+        step2: 'Selecciona tu modelo de IA preferido (HRNet o CBAM-ResUNet)',
         step3:
           'Ajusta el umbral de confianza si es necesario (predeterminado: 0.5)',
         step4:
@@ -1193,7 +1181,7 @@ export default {
       },
       processingNote: 'Los tiempos de procesamiento varían según el modelo:',
       processingTimes:
-        'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Elige según tus requisitos de precisión y restricciones de tiempo.',
+        'HRNet (~3s), CBAM-ResUNet (~7s). Elige según tus requisitos de precisión y restricciones de tiempo.',
     },
     segmentationEditor: {
       title: 'Editor de Segmentación',

@@ -451,7 +451,8 @@ export class SegmentationService {
     processingTime: number | null = null,
     imageWidth: number | null = null,
     imageHeight: number | null = null,
-    _userId: string
+    _userId: string,
+    awaitThumbnails: boolean = false
   ): Promise<void> {
     // Create compatible segmentation result object
     const segmentationResult: SegmentationResponse = {
@@ -616,14 +617,32 @@ export class SegmentationService {
       // Save to database - create or update segmentation data
       const result = await this.prisma.segmentation.upsert(upsertData);
 
-      // Generate thumbnails asynchronously after segmentation save
-      this.thumbnailService.generateThumbnails(result.id).catch(error => {
-        logger.error(
-          `Failed to generate thumbnails after ML segmentation for ${imageId}`,
-          error instanceof Error ? error : new Error(String(error)),
-          'SegmentationService'
-        );
-      });
+      // Generate thumbnails - await if this is the last batch to ensure thumbnails are ready
+      if (awaitThumbnails) {
+        try {
+          await this.thumbnailService.generateThumbnails(result.id);
+          logger.info('Thumbnails generated synchronously for last batch item', 'SegmentationService', {
+            imageId,
+            segmentationId: result.id
+          });
+        } catch (error) {
+          logger.error(
+            `Failed to generate thumbnails after ML segmentation for ${imageId} (last batch)`,
+            error instanceof Error ? error : new Error(String(error)),
+            'SegmentationService'
+          );
+          // Don't throw - just log the error to prevent blocking the queue
+        }
+      } else {
+        // Generate thumbnails asynchronously for regular batches to maintain performance
+        this.thumbnailService.generateThumbnails(result.id).catch(error => {
+          logger.error(
+            `Failed to generate thumbnails after ML segmentation for ${imageId}`,
+            error instanceof Error ? error : new Error(String(error)),
+            'SegmentationService'
+          );
+        });
+      }
 
       logger.info('Segmentation results saved to database', 'SegmentationService', {
         imageId,

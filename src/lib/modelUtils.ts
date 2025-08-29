@@ -16,22 +16,16 @@ export function getLocalizedModelInfo(
       size: 'small',
       defaultThreshold: 0.5,
     },
-    resunet_small: {
-      id: 'resunet_small',
+    cbam_resunet: {
+      id: 'cbam_resunet',
       size: 'medium',
-      defaultThreshold: 0.5,
-    },
-    resunet_advanced: {
-      id: 'resunet_advanced',
-      size: 'large',
       defaultThreshold: 0.5,
     },
   };
 
   const keyMap: Record<ModelType, string> = {
     hrnet: 'hrnet',
-    resunet_small: 'cbam',
-    resunet_advanced: 'ma',
+    cbam_resunet: 'cbam',
   };
 
   const baseModel = baseModels[modelId];
@@ -49,7 +43,7 @@ export function getLocalizedModelInfo(
  * Get all localized models
  */
 export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
-  const modelIds: ModelType[] = ['hrnet', 'resunet_small', 'resunet_advanced'];
+  const modelIds: ModelType[] = ['hrnet', 'cbam_resunet'];
   return modelIds.map(id => getLocalizedModelInfo(id, t));
 }
 
@@ -67,25 +61,17 @@ export const BASIC_MODEL_INFO: Record<
   hrnet: {
     id: 'hrnet',
     name: 'HRNet',
-    displayName: 'HRNet (Small)',
+    displayName: 'HRNet (Fast)',
     description: 'Fast and efficient model for real-time segmentation',
     size: 'small',
     defaultThreshold: 0.5,
   },
-  resunet_small: {
-    id: 'resunet_small',
+  cbam_resunet: {
+    id: 'cbam_resunet',
     name: 'CBAM-ResUNet',
-    displayName: 'CBAM-ResUNet (Medium)',
-    description: 'Balanced speed and accuracy',
+    displayName: 'CBAM-ResUNet (Precise)',
+    description: 'Precise segmentation with attention mechanisms',
     size: 'medium',
-    defaultThreshold: 0.5,
-  },
-  resunet_advanced: {
-    id: 'resunet_advanced',
-    name: 'MA-ResUNet',
-    displayName: 'MA-ResUNet (Large)',
-    description: 'Highest accuracy with attention mechanisms',
-    size: 'large',
     defaultThreshold: 0.5,
   },
 };

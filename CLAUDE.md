@@ -139,7 +139,7 @@ This is a React-based cell segmentation application with a full-stack microservi
 
 - `/backend/segmentation/api/` - FastAPI routes and models
 - `/backend/segmentation/services/` - ML inference and postprocessing
-- `/backend/segmentation/models/` - PyTorch model definitions (HRNet, ResUNet variants)
+- `/backend/segmentation/models/` - PyTorch model definitions (HRNet, CBAM-ResUNet)
 - `/backend/segmentation/weights/` - Pre-trained model weights
 
 ### Segmentation Editor Architecture
@@ -185,9 +185,8 @@ Uses JWT-based authentication with access/refresh tokens. The `AuthContext` mana
 
 ### ML Models in Production
 
-- **HRNetV2** - Best accuracy, ~3.1s inference time
-- **CBAM-ResUNet** - Fastest inference, ~6.9s inference time
-- **MA-ResUNet** - Most precise, ~18.1s inference time with attention mechanisms
+- **HRNetV2** - Fast and efficient, ~3.1s inference time
+- **CBAM-ResUNet** - Precise segmentation with attention mechanisms, optimized inference time
 
 ### API Documentation
 

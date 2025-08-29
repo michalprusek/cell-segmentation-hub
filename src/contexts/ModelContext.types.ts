@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import { BASIC_MODEL_INFO } from '@/lib/modelUtils';
 
-export type ModelType = 'hrnet' | 'resunet_small' | 'resunet_advanced';
+export type ModelType = 'hrnet' | 'cbam_resunet';
 
 export interface ModelInfo {
   id: ModelType;

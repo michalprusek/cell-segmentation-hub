@@ -390,11 +390,7 @@ export default {
         },
         cbam: {
           name: 'CBAM-ResUNet',
-          description: 'Balanced speed and accuracy for most use cases',
-        },
-        ma: {
-          name: 'MA-ResUNet',
-          description: 'Highest accuracy with attention mechanisms',
+          description: 'Precise segmentation model with attention mechanisms',
         },
       },
     },
@@ -1132,30 +1128,23 @@ export default {
         cbam: {
           name: 'CBAM-ResUNet (Medium)',
           inferenceTime: 'Inference time: ~0.20 seconds (GPU accelerated)',
-          bestFor: 'Best for: Balanced speed and accuracy',
+          bestFor: 'Best for: Precise segmentation with attention mechanisms',
           description:
-            'Optimal balance between processing speed and segmentation quality for most use cases.',
-        },
-        ma: {
-          name: 'MA-ResUNet (Large)',
-          inferenceTime: 'Inference time: ~1.2 seconds (GPU accelerated)',
-          bestFor: 'Best for: Maximum precision',
-          description:
-            'Highest accuracy model with attention mechanisms for the most precise spheroid boundary detection.',
+            'Precise segmentation model with attention mechanisms for accurate spheroid boundary detection.',
         },
       },
       howToSelect: 'How to Select a Model',
       selectionSteps: {
         step1: 'Open your project and navigate to any image',
         step2: 'In the project toolbar, find the model selection dropdown',
-        step3: 'Choose from HRNet, CBAM-ResUNet, or MA-ResUNet',
+        step3: 'Choose from HRNet or CBAM-ResUNet',
         step4:
           'Adjust the confidence threshold (0.0-1.0) to fine-tune detection sensitivity',
         step5: 'Your selection is automatically saved for future processing',
       },
       tip: 'Tip:',
       tipText:
-        'Start with CBAM-ResUNet for most cases. Use HRNet for rapid prototyping and MA-ResUNet when you need the highest possible accuracy for research or publication.',
+        'Start with CBAM-ResUNet for most cases. Use HRNet for rapid prototyping and CBAM-ResUNet when you need precise segmentation with attention mechanisms for research or publication.',
     },
 
     // Segmentation Process section
@@ -1177,8 +1166,7 @@ export default {
       workflow: 'Automatic Segmentation Workflow',
       workflowSteps: {
         step1: 'Upload your microscopic images to a project',
-        step2:
-          'Select your preferred AI model (HRNet, CBAM-ResUNet, or MA-ResUNet)',
+        step2: 'Select your preferred AI model (HRNet or CBAM-ResUNet)',
         step3: 'Adjust the confidence threshold if needed (default: 0.5)',
         step4:
           'Click "Auto-Segment" or use batch processing for multiple images',
@@ -1196,7 +1184,7 @@ export default {
       },
       processingNote: 'Processing times vary by model:',
       processingTimes:
-        'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Choose based on your accuracy requirements and time constraints.',
+        'HRNet (~3s), CBAM-ResUNet (~7s). Choose based on your accuracy requirements and time constraints.',
     },
 
     // Segmentation Editor section

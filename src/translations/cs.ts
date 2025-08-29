@@ -380,12 +380,7 @@ export default {
         },
         cbam: {
           name: 'CBAM-ResUNet',
-          description:
-            'Vyvážená rychlost a přesnost pro většinu případů použití',
-        },
-        ma: {
-          name: 'MA-ResUNet',
-          description: 'Nejvyšší přesnost s mechanismy pozornosti',
+          description: 'Přesný segmentační model s mechanismy pozornosti',
         },
       },
     },
@@ -1108,16 +1103,9 @@ export default {
         cbam: {
           name: 'CBAM-ResUNet (Střední)',
           inferenceTime: 'Doba inference: ~0,20 sekundy (GPU akcelerace)',
-          bestFor: 'Nejlepší pro: Vyvážená rychlost a přesnost',
+          bestFor: 'Nejlepší pro: Přesná segmentace s mechanismy pozornosti',
           description:
-            'Optimální rovnováha mezi rychlostí zpracování a kvalitou segmentace pro většinu případů použití.',
-        },
-        ma: {
-          name: 'MA-ResUNet (Velký)',
-          inferenceTime: 'Doba inference: ~1,2 sekundy (GPU akcelerace)',
-          bestFor: 'Nejlepší pro: Maximální přesnost',
-          description:
-            'Nejpřesnější model s mechanismy pozornosti pro nejpřesnější detekci hranic sféroidů.',
+            'Přesný segmentační model s mechanismy pozornosti pro přesnou detekci hranic sféroidů.',
         },
       },
       howToSelect: 'Jak vybrat model',
@@ -1125,14 +1113,14 @@ export default {
         step1: 'Otevřete svůj projekt a přejděte na jakýkoli obrázek',
         step2:
           'V nástrojové liště projektu najděte rozbalovací nabídku výběru modelu',
-        step3: 'Vyberte z HRNet, CBAM-ResUNet nebo MA-ResUNet',
+        step3: 'Vyberte z HRNet nebo CBAM-ResUNet',
         step4:
           'Upravte práh spolehlivosti (0,0-1,0) pro jemné doladění citlivosti detekce',
         step5: 'Váš výběr se automaticky uloží pro budoucí zpracování',
       },
       tip: 'Tip:',
       tipText:
-        'Začněte s CBAM-ResUNet pro většinu případů. Použijte HRNet pro rychlé prototypování a MA-ResUNet, když potřebujete nejvyšší možnou přesnost pro výzkum nebo publikaci.',
+        'Začněte s CBAM-ResUNet pro většinu případů. Použijte HRNet pro rychlé prototypování a CBAM-ResUNet, když potřebujete přesnou segmentaci s mechanismy pozornosti pro výzkum nebo publikaci.',
     },
     segmentationProcess: {
       title: 'Proces segmentace',
@@ -1153,8 +1141,7 @@ export default {
       workflow: 'Pracovní postup automatické segmentace',
       workflowSteps: {
         step1: 'Nahrajte své mikroskopické snímky do projektu',
-        step2:
-          'Vyberte svůj preferovaný AI model (HRNet, CBAM-ResUNet nebo MA-ResUNet)',
+        step2: 'Vyberte svůj preferovaný AI model (HRNet nebo CBAM-ResUNet)',
         step3: 'V případě potřeby upravte práh spolehlivosti (výchozí: 0,5)',
         step4:
           'Klikněte na "Auto-segmentace" nebo použijte hromadné zpracování pro více obrázků',
@@ -1173,7 +1160,7 @@ export default {
       },
       processingNote: 'Doby zpracování se liší podle modelu:',
       processingTimes:
-        'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s). Vyberte podle vašich požadavků na přesnost a časová omezení.',
+        'HRNet (~3s), CBAM-ResUNet (~7s). Vyberte podle vašich požadavků na přesnost a časová omezení.',
     },
     segmentationEditor: {
       title: 'Editor segmentace',
