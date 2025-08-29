@@ -3,24 +3,7 @@ import { AlertCircle, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { logger } from '@/lib/logger';
-
-interface Props {
-  children: ReactNode;
-  fallback?: ReactNode;
-}
-
-interface State {
-  hasError: boolean;
-  error?: Error;
-  errorInfo?: string;
-}
-
-import React, { Component, ReactNode } from 'react';
-import { AlertCircle, RefreshCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { logger } from '@/lib/logger';
-import { useTranslation } from 'react-i18next';
+import { useLanguage } from '@/contexts/exports';
 
 interface Props {
   children: ReactNode;
@@ -115,7 +98,7 @@ class SegmentationErrorBoundaryClass extends Component<Props, State> {
 export const SegmentationErrorBoundary = (
   props: Omit<Props, 'translations'>
 ) => {
-  const { t } = useTranslation();
+  const { t } = useLanguage();
 
   const translations = {
     title: t('segmentationEditor.error.title'),

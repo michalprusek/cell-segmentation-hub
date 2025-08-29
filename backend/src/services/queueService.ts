@@ -560,7 +560,7 @@ export class QueueService {
             this.websocketService.emitSegmentationUpdate(item.userId, {
               imageId: item.imageId,
               projectId: item.projectId,
-              status: 'completed',
+              status: 'segmented',  // Changed from 'completed' to match database status
               queueId: item.id
             });
             
@@ -616,7 +616,7 @@ export class QueueService {
             this.websocketService.emitSegmentationUpdate(item.userId, {
               imageId: item.imageId,
               projectId: item.projectId,
-              status: 'no_segmentation', // Changed from 'segmented' to 'no_segmentation'
+              status: 'no_segmentation',
               queueId: item.id
             });
 
