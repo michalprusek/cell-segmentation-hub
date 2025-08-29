@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Loader2, AlertCircle } from 'lucide-react';
 import { SegmentationResult } from '@/lib/segmentation';
 import { logger } from '@/lib/logger';
-import { useTranslation } from 'react-i18next';
+import { useLanguage } from '@/contexts/exports';
 
 // Lazy load the heavy ExcelExporter component that imports ExcelJS
 const ExcelExporter = lazy(() => import('./ExcelExporter'));
@@ -44,7 +44,7 @@ const LazyExcelExporter: React.FC<LazyExcelExporterProps> = ({
   segmentation,
   imageName,
 }) => {
-  const { t } = useTranslation();
+  const { t } = useLanguage();
   const [showExporter, setShowExporter] = React.useState(false);
 
   if (!segmentation || !segmentation.polygons) return null;

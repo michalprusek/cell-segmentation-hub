@@ -7,7 +7,7 @@ import {
   Upload,
   Brain,
 } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { useLanguage } from '@/contexts/exports';
 
 interface FeatureCardProps {
   icon: React.ReactNode;
@@ -30,7 +30,7 @@ const FeatureCard = ({ icon, title, description, delay }: FeatureCardProps) => (
 );
 
 const Features = () => {
-  const { t } = useTranslation();
+  const { t } = useLanguage();
   const featuresRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

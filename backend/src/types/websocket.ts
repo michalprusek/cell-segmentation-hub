@@ -104,7 +104,7 @@ export interface SegmentationStatusData {
 export interface SegmentationUpdateData {
   imageId: string;
   projectId: string;
-  status: QueueStatus | 'no_segmentation';
+  status: QueueStatus | 'no_segmentation' | 'segmented';
   queueId?: string;
   error?: string;
   progress?: number;

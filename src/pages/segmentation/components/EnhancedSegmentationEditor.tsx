@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useRef, useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useLanguage } from '@/contexts/exports';
 import { useEnhancedSegmentationEditor } from '../hooks/useEnhancedSegmentationEditor';
 import { Polygon } from '@/lib/segmentation';
 import EnhancedEditorToolbar from './EnhancedEditorToolbar';
@@ -35,7 +34,7 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
   onPolygonsChange,
   className = '',
 }) => {
-  const { t } = useTranslation();
+  const { t } = useLanguage();
   const containerRef = useRef<HTMLDivElement>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
