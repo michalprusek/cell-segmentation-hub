@@ -10,6 +10,7 @@ import ProjectsTab from '@/components/dashboard/ProjectsTab';
 import { useDashboardProjects } from '@/hooks/useDashboardProjects';
 import { apiClient } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -27,6 +28,9 @@ const Dashboard = () => {
       userEmail: user?.email,
     }
   );
+
+  // Listen for WebSocket segmentation updates to refresh project cards
+  const { lastUpdate } = useSegmentationQueue('DISABLE_GLOBAL');
 
   // Process pending share invitation after login or registration
   const processPendingShareInvitation = useCallback(async () => {
@@ -93,17 +97,38 @@ const Dashboard = () => {
     const handleProjectCreated = () => fetchProjects();
     const handleProjectDeleted = () => fetchProjects();
     const handleProjectUnshared = () => fetchProjects();
+    const handleImageUpdated = () => fetchProjects();
+    const handleImageDeleted = () => fetchProjects();
 
     window.addEventListener('project-created', handleProjectCreated);
     window.addEventListener('project-deleted', handleProjectDeleted);
     window.addEventListener('project-unshared', handleProjectUnshared);
+    window.addEventListener('project-images-updated', handleImageUpdated);
+    window.addEventListener('project-image-deleted', handleImageDeleted);
 
     return () => {
       window.removeEventListener('project-created', handleProjectCreated);
       window.removeEventListener('project-deleted', handleProjectDeleted);
       window.removeEventListener('project-unshared', handleProjectUnshared);
+      window.removeEventListener('project-images-updated', handleImageUpdated);
+      window.removeEventListener('project-image-deleted', handleImageDeleted);
     };
   }, [fetchProjects]);
+
+  // Refresh projects when WebSocket reports segmentation completion
+  useEffect(() => {
+    if (
+      lastUpdate &&
+      (lastUpdate.status === 'segmented' ||
+        lastUpdate.status === 'no_segmentation')
+    ) {
+      // Delay slightly to ensure backend has updated the image count
+      const timer = setTimeout(() => {
+        fetchProjects();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [lastUpdate, fetchProjects]);
 
   const handleOpenProject = (id: string) => {
     navigate(`/project/${id}`);

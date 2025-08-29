@@ -349,11 +349,7 @@ export default {
         },
         cbam: {
           name: 'CBAM-ResUNet',
-          description: '大多数用例的平衡速度和准确性',
-        },
-        ma: {
-          name: 'MA-ResUNet',
-          description: '具有注意力机制的最高准确性',
+          description: '具有注意力机制的精确分割模型',
         },
       },
     },
@@ -1031,14 +1027,8 @@ export default {
         cbam: {
           name: 'CBAM-ResUNet（中型）',
           inferenceTime: '推理时间：约0.20秒 (GPU加速)',
-          bestFor: '最适合：平衡速度和精度',
-          description: '速度和质量的最佳平衡。',
-        },
-        ma: {
-          name: 'MA-ResUNet（大型）',
-          inferenceTime: '推理时间：约1.2秒 (GPU加速)',
-          bestFor: '最适合：最高精度',
-          description: '具有注意力机制的最精确模型。',
+          bestFor: '最适合：具有注意力机制的精确分割',
+          description: '具有注意力机制的精确分割模型，用于精确的球体边界检测。',
         },
       },
       howToSelect: '如何选择模型',
@@ -1079,8 +1069,7 @@ export default {
         internal: '内部多边形（蓝色）',
       },
       processingNote: '处理时间因模型而异：',
-      processingTimes:
-        'HRNet（约3秒），CBAM-ResUNet（约7秒），MA-ResUNet（约18秒）。',
+      processingTimes: 'HRNet（约3秒），CBAM-ResUNet（约7秒）。',
     },
     segmentationEditor: {
       title: '分割编辑器',

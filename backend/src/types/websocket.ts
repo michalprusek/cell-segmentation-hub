@@ -410,7 +410,7 @@ export function isSegmentationCompletedData(data: unknown): data is Segmentation
     typeof d.polygonCount === 'number' &&
     typeof d.processingTime === 'number' &&
     typeof d.model === 'string' &&
-    ['hrnet', 'resunet_advanced', 'resunet_small'].includes(d.model as string)
+    ['hrnet', 'cbam_resunet'].includes(d.model as string)
   );
 }
 

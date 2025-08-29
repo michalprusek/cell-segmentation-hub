@@ -28,15 +28,8 @@ router.get('/models',
         {
           id: 'cbam-resunet',
           name: 'CBAM-ResUNet',
-          description: 'Fastest inference, ~6.9s inference time',
-          version: '1.0.0',
-          status: 'active'
-        },
-        {
-          id: 'ma-resunet',
-          name: 'MA-ResUNet',
-          description: 'Most precise, ~18.1s inference time with attention mechanisms',
-          version: '1.0.0',
+          description: 'Precise segmentation with attention mechanisms, optimized inference time',
+          version: '2.0.0',
           status: 'active'
         }
       ];

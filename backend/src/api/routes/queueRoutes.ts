@@ -40,8 +40,8 @@ router.post(
     param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID'),
     body('model')
       .optional()
-      .isIn(['hrnet', 'resunet_advanced', 'resunet_small'])
-      .withMessage('Model musí být hrnet, resunet_advanced nebo resunet_small'),
+      .isIn(['hrnet', 'cbam_resunet'])
+      .withMessage('Model musí být hrnet nebo cbam_resunet'),
     body('threshold')
       .optional()
       .isFloat({ min: 0.1, max: 0.9 })
@@ -79,8 +79,8 @@ router.post(
       .withMessage('ID projektu musí být platné UUID'),
     body('model')
       .optional()
-      .isIn(['hrnet', 'resunet_advanced', 'resunet_small'])
-      .withMessage('Model musí být hrnet, resunet_advanced nebo resunet_small'),
+      .isIn(['hrnet', 'cbam_resunet'])
+      .withMessage('Model musí být hrnet nebo cbam_resunet'),
     body('threshold')
       .optional()
       .isFloat({ min: 0.1, max: 0.9 })

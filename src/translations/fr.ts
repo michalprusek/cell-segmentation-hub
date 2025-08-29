@@ -391,11 +391,7 @@ export default {
         cbam: {
           name: 'CBAM-ResUNet',
           description:
-            "Vitesse et précision équilibrées pour la plupart des cas d'usage",
-        },
-        ma: {
-          name: 'MA-ResUNet',
-          description: "Précision maximale avec mécanismes d'attention",
+            "Modèle de segmentation précis avec mécanismes d'attention",
         },
       },
     },
@@ -1119,14 +1115,10 @@ export default {
           name: 'CBAM-ResUNet (Moyen)',
           inferenceTime:
             "Temps d'inférence : ~0,20 secondes (accéléré par GPU)",
-          bestFor: 'Optimal pour : Équilibre vitesse/précision',
-          description: 'Équilibre optimal entre vitesse et qualité.',
-        },
-        ma: {
-          name: 'MA-ResUNet (Grand)',
-          inferenceTime: "Temps d'inférence : ~1,2 secondes (accéléré par GPU)",
-          bestFor: 'Optimal pour : Précision maximale',
-          description: "Modèle le plus précis avec mécanismes d'attention.",
+          bestFor:
+            "Optimal pour : Segmentation précise avec mécanismes d'attention",
+          description:
+            "Modèle de segmentation précis avec mécanismes d'attention pour la détection précise des limites de sphéroïdes.",
         },
       },
       howToSelect: 'Comment Sélectionner un Modèle',
@@ -1167,7 +1159,7 @@ export default {
         internal: 'Polygones internes (rouge)',
       },
       processingNote: 'Les temps varient selon le modèle :',
-      processingTimes: 'HRNet (~3s), CBAM-ResUNet (~7s), MA-ResUNet (~18s).',
+      processingTimes: 'HRNet (~3s), CBAM-ResUNet (~7s).',
     },
     segmentationEditor: {
       title: 'Éditeur de Segmentation',

@@ -454,3 +454,30 @@ clean-monitoring:
 	@$(DOCKER_COMPOSE) down prometheus grafana
 	@docker volume rm cell-segmentation-hub_prometheus_data cell-segmentation-hub_grafana_data 2>/dev/null || true
 	@echo "✅ Monitoring data cleaned. Run 'make up' to restart with fresh data."
+
+# ============================================================================
+# ML Model Optimization
+# ============================================================================
+
+# Optimize batch sizes for production inference
+optimize-batch:
+	@echo "🚀 Optimizing batch sizes for production inference..."
+	@echo "⚠️  This will take several minutes and requires GPU access"
+	@$(DOCKER_COMPOSE) exec -T ml-service python /app/scripts/optimize_production_batch.py
+	@echo "✅ Batch optimization complete! Configuration saved to backend/segmentation/config/production_batch_config.json"
+
+# Test production configuration
+test-production:
+	@echo "🧪 Testing production configuration..."
+	@$(DOCKER_COMPOSE) exec -T ml-service python /app/scripts/test_production_config.py
+	@echo "✅ Production testing complete! Results saved to backend/segmentation/results/"
+
+# View current batch configuration
+show-batch-config:
+	@echo "📊 Current Production Batch Configuration:"
+	@echo "=========================================="
+	@cat backend/segmentation/config/production_batch_config.json 2>/dev/null || echo "No configuration found. Run 'make optimize-batch' first."
+
+# Run batch optimization and testing
+optimize-all: optimize-batch test-production
+	@echo "✅ Full optimization and testing complete!"

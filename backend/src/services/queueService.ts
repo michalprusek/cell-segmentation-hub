@@ -12,8 +12,7 @@ export interface QueueStats {
 
 export interface BatchConfig {
   hrnet: number;
-  resunet_small: number;
-  resunet_advanced: number;
+  cbam_resunet: number;
 }
 
 export interface QueueItem {
@@ -32,8 +31,7 @@ export class QueueService {
   private static instance: QueueService;
   private batchSizes: BatchConfig = {
     hrnet: 8,
-    resunet_small: 4,
-    resunet_advanced: 2
+    cbam_resunet: 4
   };
   private websocketService: WebSocketService | null = null;
 
@@ -365,8 +363,7 @@ export class QueueService {
     // Model batch size limits (from ML service)
     const BATCH_LIMITS = {
       'hrnet': 8,
-      'resunet_small': 2,  // Batch size of 2 for CBAM-ResUNet
-      'resunet_advanced': 1  // Keep at 1 for MA-ResUNet due to high memory usage
+      'cbam_resunet': 4  // Batch size of 4 for CBAM-ResUNet
     };
 
     // Get the highest priority item first
@@ -487,6 +484,28 @@ export class QueueService {
     }
 
     try {
+      // Check if this batch will empty the queue (making it the last batch)
+      const remainingQueuedCount = await this.prisma.segmentationQueue.count({
+        where: { status: 'queued' }
+      });
+      const isLastBatch = remainingQueuedCount === batch.length;
+      
+      if (isLastBatch) {
+        logger.info('🏁 Processing LAST BATCH - will coordinate thumbnail generation', 'QueueService', {
+          batchSize: batch.length,
+          remainingQueuedCount,
+          model,
+          message: 'Thumbnails will be generated synchronously to prevent race condition'
+        });
+      } else {
+        logger.info('Batch processing details', 'QueueService', {
+          batchSize: batch.length,
+          remainingQueuedCount,
+          isLastBatch,
+          model
+        });
+      }
+
       // Prepare images for batch processing
       const imageData = [];
       for (const item of batch) {
@@ -544,7 +563,8 @@ export class QueueService {
             result.processing_time || null,
             imageWidth,
             imageHeight,
-            item.userId
+            item.userId,
+            isLastBatch
           );
 
           // Update image status to segmented
@@ -601,7 +621,8 @@ export class QueueService {
             result?.processing_time || null,
             imageWidth,
             imageHeight,
-            item.userId
+            item.userId,
+            isLastBatch
           );
 
           // Update image status to no_segmentation (not segmented) since no polygons were detected

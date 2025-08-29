@@ -296,7 +296,7 @@ const Documentation = () => {
 
                   <p className="mb-4">{t('docs.modelSelection.description')}</p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                       <div className="flex items-center mb-2">
                         <Cpu className="w-5 h-5 text-green-600 mr-2" />
@@ -338,28 +338,6 @@ const Documentation = () => {
                       </p>
                       <p className="text-sm text-blue-700">
                         {t('docs.modelSelection.models.cbam.description')}
-                      </p>
-                    </div>
-
-                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                      <div className="flex items-center mb-2">
-                        <Settings className="w-5 h-5 text-purple-600 mr-2" />
-                        <h3 className="font-semibold text-purple-800">
-                          {t('docs.modelSelection.models.ma.name')}
-                        </h3>
-                      </div>
-                      <p className="text-sm text-purple-700 mb-2">
-                        <strong>
-                          {t('docs.modelSelection.models.ma.inferenceTime')}
-                        </strong>
-                      </p>
-                      <p className="text-sm text-purple-700 mb-2">
-                        <strong>
-                          {t('docs.modelSelection.models.ma.bestFor')}
-                        </strong>
-                      </p>
-                      <p className="text-sm text-purple-700">
-                        {t('docs.modelSelection.models.ma.description')}
                       </p>
                     </div>
                   </div>
