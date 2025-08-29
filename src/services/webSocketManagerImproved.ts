@@ -573,5 +573,9 @@ if (typeof window !== 'undefined') {
   )._beforeUnloadHandler = handleBeforeUnload;
 }
 
-// Export the manager
-export default WebSocketManager;
+// Export the original manager (now deprecated - use webSocketManagerImproved instead)
+// export default WebSocketManager;
+
+// Use the improved version with better memory management and reliability
+import ImprovedWebSocketManager from './webSocketManagerImproved';
+export default ImprovedWebSocketManager.getInstance();

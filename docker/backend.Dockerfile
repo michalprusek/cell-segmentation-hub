@@ -31,8 +31,8 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 COPY tsconfig.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (using npm install because package-lock.json is missing)
+RUN npm install
 
 # Copy Prisma schema
 COPY prisma ./prisma
@@ -59,4 +59,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
 
 # Start script with proper signal handling
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["sh", "-c", "npx prisma db push --skip-generate && npm run dev"]
+CMD ["npm", "run", "dev"]

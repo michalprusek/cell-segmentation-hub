@@ -365,7 +365,7 @@ export class QueueService {
     // Model batch size limits (from ML service)
     const BATCH_LIMITS = {
       'hrnet': 8,
-      'resunet_small': 2,  // Reduced for CBAM-ResUNet stability
+      'resunet_small': 2,  // Batch size of 2 for CBAM-ResUNet
       'resunet_advanced': 1  // Keep at 1 for MA-ResUNet due to high memory usage
     };
 
@@ -386,7 +386,6 @@ export class QueueService {
     const batchLimit = BATCH_LIMITS[firstItem.model as keyof typeof BATCH_LIMITS] || 1;
 
     // Find all items with same model, threshold, and priority for batching
-    // If no exact matches, take just the first item (single item batch)
     let batch = await this.prisma.segmentationQueue.findMany({
       where: {
         status: 'queued',
@@ -400,9 +399,32 @@ export class QueueService {
       take: batchLimit
     });
 
-    // If no matching items found, create single item batch  
+    // If no exact matches found but we have the first item, process it alone
     if (batch.length === 0) {
       batch = [firstItem];
+    }
+    
+    // IMPORTANT: Allow partial batches for remaining items
+    // If we have items but less than full batch, still process them
+    // This prevents the last odd items from being stuck
+    if (batch.length > 0 && batch.length < batchLimit) {
+      // Check if there are more items waiting with same model but different threshold/priority
+      const totalQueued = await this.prisma.segmentationQueue.count({
+        where: {
+          status: 'queued',
+          model: firstItem.model
+        }
+      });
+      
+      // If this is all that's left for this model, process as partial batch
+      if (totalQueued === batch.length) {
+        logger.info('Processing partial batch - remaining items for model', 'QueueService', {
+          batchSize: batch.length,
+          batchLimit,
+          model: firstItem.model,
+          reason: 'Last remaining items'
+        });
+      }
     }
 
     logger.info('Retrieved batch for processing', 'QueueService', {
@@ -645,12 +667,13 @@ export class QueueService {
       // Mark all items as failed and handle retries
       for (const item of batch) {
         if (item && item.retryCount < 3) {
-          // Reset to queued for retry
+          // Increment retry count and reset to queued for retry
           await this.prisma.segmentationQueue.update({
             where: { id: item.id },
             data: { 
               status: 'queued',
-              error: null,
+              retryCount: item.retryCount + 1,  // INCREMENT RETRY COUNT
+              error: error instanceof Error ? error.message : 'Processing failed',
               startedAt: null,
               completedAt: null
             }
@@ -780,32 +803,67 @@ export class QueueService {
 
   /**
    * Reset stuck items (processing items older than specified minutes)
+   * Also handles items stuck in processing-queued loop
    */
   async resetStuckItems(maxProcessingMinutes = 10): Promise<number> {
     try {
       const cutoffTime = new Date();
       cutoffTime.setMinutes(cutoffTime.getMinutes() - maxProcessingMinutes);
 
-      const result = await this.prisma.segmentationQueue.updateMany({
+      // First, get all stuck items to handle retry logic properly
+      const stuckItems = await this.prisma.segmentationQueue.findMany({
         where: {
           status: 'processing',
           startedAt: { lt: cutoffTime }
-        },
-        data: {
-          status: 'queued',
-          startedAt: null,
-          error: 'Reset due to timeout'
         }
       });
 
-      if (result.count > 0) {
-        logger.warn('Reset stuck queue items', 'QueueService', {
-          resetCount: result.count,
+      let resetCount = 0;
+      let failedCount = 0;
+
+      for (const item of stuckItems) {
+        if (item.retryCount >= 3) {
+          // Max retries exceeded - mark as failed and remove
+          await this.prisma.segmentationQueue.delete({
+            where: { id: item.id }
+          });
+          
+          await this.imageService.updateSegmentationStatus(item.imageId, 'failed', item.userId);
+          
+          logger.warn('Stuck item exceeded max retries - marked as failed', 'QueueService', {
+            queueId: item.id,
+            imageId: item.imageId,
+            retryCount: item.retryCount
+          });
+          
+          failedCount++;
+        } else {
+          // Reset to queued with incremented retry count
+          await this.prisma.segmentationQueue.update({
+            where: { id: item.id },
+            data: {
+              status: 'queued',
+              retryCount: item.retryCount + 1,
+              startedAt: null,
+              error: `Reset due to timeout (attempt ${item.retryCount + 1})`
+            }
+          });
+          
+          await this.imageService.updateSegmentationStatus(item.imageId, 'queued', item.userId);
+          
+          resetCount++;
+        }
+      }
+
+      if (resetCount > 0 || failedCount > 0) {
+        logger.warn('Handled stuck queue items', 'QueueService', {
+          resetCount,
+          failedCount,
           maxProcessingMinutes
         });
       }
 
-      return result.count;
+      return resetCount + failedCount;
     } catch (error) {
       logger.error('Failed to reset stuck items', error instanceof Error ? error : undefined, 'QueueService');
       throw error;

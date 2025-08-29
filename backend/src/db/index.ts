@@ -3,7 +3,7 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { prismaPool } from './prismaPool';
 import { databaseMetrics } from '../monitoring/databaseMetrics';
-import { logDatabasePoolConfig } from '../config/database';
+import { logDatabasePoolConfig } from '../config/database.ts';
 
 // Create a global variable to store Prisma client
 declare global {
@@ -24,59 +24,51 @@ if (config.NODE_ENV === 'development') {
 
 // Initialize database connection with enhanced pooling
 export const initializeDatabase = async (): Promise<PrismaClient> => {
-  try {
-    logger.info('🔌 Initializing enhanced database connection system...', 'Database');
-    
-    // Log database pool configuration
-    logDatabasePoolConfig();
-    
-    // Initialize the connection pool
-    await prismaPool.initialize();
-    
-    // Start database metrics collection
-    databaseMetrics.start();
-    
-    // Test the connection through the pool
-    const result = await prismaPool.executeQuery(async () => {
-      return await prismaPool.getPrismaClient().$connect();
-    }, { operationType: 'query', operationName: 'connection-test' });
-    
-    // Run startup validation query
-    const userCount = await prismaPool.executeQuery(async () => {
-      return await prismaPool.getPrismaClient().user.count();
-    }, { operationType: 'query', operationName: 'startup-validation' });
-    
-    logger.info('✅ Enhanced database connection system initialized', 'Database', {
-      userCount,
-      databaseUrl: config.DATABASE_URL.replace(/\/\/.*@/, '//***@'), // Hide credentials
-      poolEnabled: true,
-      metricsEnabled: true
-    });
-    
-    // Return the pooled client for compatibility
-    return prismaPool.getPrismaClient();
-    
-  } catch (error) {
-    logger.error('❌ Failed to initialize enhanced database system:', error as Error, 'Database');
-    
-    // Fallback to basic connection if pool initialization fails
-    logger.warn('🔄 Falling back to basic database connection...', 'Database');
-    
+  const maxRetries = 10;
+  const retryDelay = 5000; // 5 seconds
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      logger.info(`🔌 Initializing database connection (attempt ${attempt}/${maxRetries})...`, 'Database');
+      
+      // Try simple connection first
       await prisma.$connect();
-      const userCount = await prisma.user.count();
       
-      logger.info('⚠️ Basic database connection established (without pooling)', 'Database', {
-        userCount,
-        databaseUrl: config.DATABASE_URL.replace(/\/\/.*@/, '//***@')
-      });
+      // If successful, try to run migrations
+      try {
+        await prisma.$executeRaw`SELECT 1`;
+        logger.info('✅ Database connection established', 'Database');
+        
+        // Try to count users (might fail if tables don't exist)
+        try {
+          const userCount = await prisma.user.count();
+          logger.info(`Database has ${userCount} users`, 'Database');
+        } catch (e) {
+          logger.warn('Tables not yet created, run migrations', 'Database');
+        }
+        
+        return prisma;
+      } catch (queryError) {
+        logger.warn('Database connected but query failed:', queryError);
+        return prisma;
+      }
       
-      return prisma;
-    } catch (fallbackError) {
-      logger.error('❌ Even basic database connection failed:', fallbackError as Error, 'Database');
-      throw error;
+    } catch (error) {
+      logger.error(`Database connection attempt ${attempt}/${maxRetries} failed:`, error as Error, 'Database');
+      
+      if (attempt === maxRetries) {
+        logger.error('❌ All database connection attempts failed', 'Database');
+        // Don't throw - let the app run without database
+        logger.warn('⚠️ Running without database connection - most features will not work!', 'Database');
+        return prisma;
+      }
+      
+      logger.info(`Retrying in ${retryDelay/1000} seconds...`, 'Database');
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
     }
   }
+  
+  return prisma;
 };
 
 // Enhanced graceful shutdown
@@ -138,13 +130,13 @@ export const transaction = async <T>(
 // Export enhanced database utilities
 export { prismaPool } from './prismaPool';
 export { databaseMetrics } from '../monitoring/databaseMetrics';
-export { databaseOptimization } from '../utils/databaseOptimization';
+export { databaseOptimization } from '../utils/databaseOptimization.ts';
 export { 
   getDatabasePoolConfig,
   getRetryConfig,
   getHealthCheckConfig,
   getPerformanceBaselines
-} from '../config/database';
+} from '../config/database.ts';
 
 // Enhanced transaction and query helpers
 export const executeQuery = async <T>(

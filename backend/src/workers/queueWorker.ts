@@ -167,8 +167,8 @@ export class QueueWorker {
    */
   private async performHealthCheck(): Promise<void> {
     try {
-      // Reset stuck items (items processing for more than 10 minutes)
-      const resetCount = await this.queueService.resetStuckItems(10);
+      // Reset stuck items (items processing for more than 5 minutes)
+      const resetCount = await this.queueService.resetStuckItems(5);
       if (resetCount > 0) {
         logger.warn('Reset stuck items during health check', 'QueueWorker', {
           resetCount
