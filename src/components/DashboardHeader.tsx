@@ -55,9 +55,14 @@ const DashboardHeader = () => {
   useEffect(() => {
     const checkMlServiceStatus = async () => {
       try {
+        // Use backend proxy endpoint instead of direct ML service call
         const response = await fetchWithRetry(
-          `${mlServiceUrl}/api/v1/status`,
-          {},
+          '/api/ml/status',
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          },
           {
             retries: 2,
             delay: 500,
@@ -67,8 +72,16 @@ const DashboardHeader = () => {
 
         if (response.ok) {
           const data = await response.json();
-          if (data.status === 'processing') {
-            setMlServiceStatus('processing');
+          // Check if we got a successful response from the backend
+          if (data.success && data.data) {
+            const status = data.data.service;
+            if (status === 'processing') {
+              setMlServiceStatus('processing');
+            } else if (status === 'online') {
+              setMlServiceStatus('idle');
+            } else {
+              setMlServiceStatus('error');
+            }
           } else {
             setMlServiceStatus('idle');
           }
@@ -81,9 +94,9 @@ const DashboardHeader = () => {
       }
     };
 
-    // Check immediately and then every 5 seconds
+    // Check immediately and then every 30 seconds (reduced frequency)
     checkMlServiceStatus();
-    const interval = setInterval(checkMlServiceStatus, 5000);
+    const interval = setInterval(checkMlServiceStatus, 30000);
 
     return () => clearInterval(interval);
   }, []);

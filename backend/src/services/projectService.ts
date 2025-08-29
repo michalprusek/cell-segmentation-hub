@@ -51,7 +51,7 @@ export async function createProject(userId: string, data: CreateProjectData): Pr
   }
 
   /**
-   * Get projects for a user with pagination and search (only owned projects)
+   * Get projects for a user with pagination and search (owned AND shared projects)
    */
 export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: ProjectWithMeta[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     try {
@@ -63,9 +63,19 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
         throw new Error('User not found');
       }
 
-      // Build where clause for owned projects only
+      // Build where clause for owned projects AND shared projects
       const where: Prisma.ProjectWhereInput = {
-        userId: userId
+        OR: [
+          { userId: userId }, // Owned projects
+          { 
+            shares: { // Shared projects
+              some: {
+                sharedWithId: userId,
+                status: 'accepted'
+              }
+            }
+          }
+        ]
       };
 
       if (search) {
@@ -122,6 +132,16 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
               id: true,
               email: true
             }
+          },
+          shares: {
+            where: {
+              sharedWithId: userId,
+              status: 'accepted'
+            },
+            select: {
+              id: true,
+              status: true
+            }
           }
         }
       });
@@ -129,8 +149,8 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       // Add metadata to each project
       const projectsWithMeta = projects.map(project => ({
         ...project,
-        isOwned: true,  // These are only owned projects now
-        isShared: false,
+        isOwned: project.userId === userId,
+        isShared: project.userId !== userId && project.shares.length > 0,
         owner: project.user
       }));
 

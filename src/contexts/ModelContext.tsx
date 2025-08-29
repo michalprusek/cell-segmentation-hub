@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode, useContext } from 'react';
 import { BASIC_MODEL_INFO } from '@/lib/modelUtils';
 import {
   ModelContext,
@@ -6,6 +6,7 @@ import {
   type ModelInfo,
   type ModelContextType,
 } from './ModelContext.types';
+import { AuthContext } from './AuthContext.types';
 
 // ModelType and ModelInfo are exported from './exports' to avoid Fast Refresh warnings
 
@@ -15,17 +16,30 @@ interface ModelProviderProps {
   children: ReactNode;
 }
 
+// Helper function to get user-specific storage key
+const getUserStorageKey = (userId: string | undefined, key: string): string => {
+  return userId ? `user_${userId}_${key}` : `guest_${key}`;
+};
+
 export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
+  const { user } = useContext(AuthContext);
   const [selectedModel, setSelectedModelState] = useState<ModelType>('hrnet');
   const [confidenceThreshold, setConfidenceThresholdState] =
     useState<number>(0.5);
   const [detectHoles, setDetectHolesState] = useState<boolean>(true);
 
-  // Load settings from localStorage on mount
+  // Load settings from localStorage on mount and when user changes
   useEffect(() => {
-    const savedModel = localStorage.getItem('selectedModel') as ModelType;
-    const savedThreshold = localStorage.getItem('confidenceThreshold');
-    const savedDetectHoles = localStorage.getItem('detectHoles');
+    const userId = user?.id;
+    const savedModel = localStorage.getItem(
+      getUserStorageKey(userId, 'selectedModel')
+    ) as ModelType;
+    const savedThreshold = localStorage.getItem(
+      getUserStorageKey(userId, 'confidenceThreshold')
+    );
+    const savedDetectHoles = localStorage.getItem(
+      getUserStorageKey(userId, 'detectHoles')
+    );
 
     if (savedModel && AVAILABLE_MODELS.some(m => m.id === savedModel)) {
       setSelectedModelState(savedModel);
@@ -39,34 +53,49 @@ export const ModelProvider: React.FC<ModelProviderProps> = ({ children }) => {
       } else if (threshold > 0 && threshold < 0.1) {
         // If old value is below minimum, set to minimum
         setConfidenceThresholdState(0.1);
-        localStorage.setItem('confidenceThreshold', '0.1');
+        localStorage.setItem(
+          getUserStorageKey(userId, 'confidenceThreshold'),
+          '0.1'
+        );
       } else if (threshold > 0.9 && threshold <= 1) {
         // If old value is above maximum, set to maximum
         setConfidenceThresholdState(0.9);
-        localStorage.setItem('confidenceThreshold', '0.9');
+        localStorage.setItem(
+          getUserStorageKey(userId, 'confidenceThreshold'),
+          '0.9'
+        );
       }
     }
 
     if (savedDetectHoles !== null) {
       setDetectHolesState(savedDetectHoles === 'true');
     }
-  }, []);
+  }, [user?.id]); // Re-load when user changes
 
   const setSelectedModel = (model: ModelType) => {
+    const userId = user?.id;
     setSelectedModelState(model);
-    localStorage.setItem('selectedModel', model);
+    localStorage.setItem(getUserStorageKey(userId, 'selectedModel'), model);
   };
 
   const setConfidenceThreshold = (threshold: number) => {
+    const userId = user?.id;
     // Ensure threshold is between 0.1 and 0.9 (10% to 90%)
     const normalizedThreshold = Math.max(0.1, Math.min(0.9, threshold));
     setConfidenceThresholdState(normalizedThreshold);
-    localStorage.setItem('confidenceThreshold', normalizedThreshold.toString());
+    localStorage.setItem(
+      getUserStorageKey(userId, 'confidenceThreshold'),
+      normalizedThreshold.toString()
+    );
   };
 
   const setDetectHoles = (detectHoles: boolean) => {
+    const userId = user?.id;
     setDetectHolesState(detectHoles);
-    localStorage.setItem('detectHoles', detectHoles.toString());
+    localStorage.setItem(
+      getUserStorageKey(userId, 'detectHoles'),
+      detectHoles.toString()
+    );
   };
 
   const getModelInfo = (modelId: ModelType): ModelInfo => {

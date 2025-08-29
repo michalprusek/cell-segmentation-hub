@@ -630,6 +630,50 @@ export const checkAuth = asyncHandler(async (req: Request, res: Response) => {
 /**
  * Get user storage statistics
  */
+export const getStorageStats = asyncHandler(async (req: Request, res: Response) => {
+  if (!req.user) {
+    return ResponseHelper.unauthorized(res, 'User not authenticated');
+  }
+  
+  const user = req.user;
+  
+  // Calculate total storage used by user's images
+  const images = await prisma.image.findMany({
+    where: {
+      project: {
+        userId: user.id
+      }
+    },
+    select: {
+      fileSize: true
+    }
+  });
+  
+  const totalBytes = images.reduce((sum, img) => sum + (img.fileSize || 0), 0);
+  const totalMB = Math.round(totalBytes / (1024 * 1024) * 100) / 100;
+  const totalGB = Math.round(totalMB / 1024 * 100) / 100;
+  
+  // Calculate average image size
+  const averageImageSizeMB = images.length > 0 
+    ? Math.round(totalMB / images.length * 100) / 100 
+    : 0;
+  
+  return ResponseHelper.success(res, {
+    totalStorageMB: totalMB,
+    totalStorageGB: totalGB,
+    totalImages: images.length,
+    averageImageSizeMB: averageImageSizeMB,
+    // Keep backward compatibility
+    totalBytes,
+    totalMB,
+    totalGB,
+    imageCount: images.length
+  });
+});
+
+/**
+ * Get user storage statistics
+ */
 export const getUserStorageStats = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) {
     return ResponseHelper.unauthorized(res, 'User not authenticated');

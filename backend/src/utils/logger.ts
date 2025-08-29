@@ -1,5 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { isDevelopment } from './config';
+
+// Check environment directly to avoid circular dependency
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 export enum LogLevel {
   ERROR = 0,

@@ -39,34 +39,35 @@ services:
         condition: service_healthy
       redis-green:
         condition: service_healthy
-    env_file: .env.green
+    env_file: .env.green.prod
     environment:
       - NODE_ENV=production
       - HOST=0.0.0.0
       - API_BASE_URL=https://spherosegapp.utia.cas.cz
-      - DATABASE_URL=${DATABASE_URL_GREEN:-postgresql://spheroseg:${DB_PASSWORD_GREEN}@postgres-green:5432/spheroseg_green}
+      - DATABASE_URL=postgresql://spheroseg:spheroseg_green_2024@postgres-green:5432/spheroseg_green
       - REDIS_URL=redis://redis-green:6379
-      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET_GREEN}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET_GREEN}
-      - FROM_EMAIL=${FROM_EMAIL:-spheroseg@utia.cas.cz}
+      - JWT_ACCESS_SECRET=a3f8b9c2d4e6f1a5b7c9d2e4f6a8b1c3d5e7f9a2b4c6d8e1f3a5b7c9d1e3f5a7
+      - JWT_REFRESH_SECRET=b4f9c1d3e5f7a2b6c8d1e3f5a7b9c2d4e6f8a1b3c5d7e9f2a4b6c8d1e3f5a7b9
+      - FROM_EMAIL=spheroseg@utia.cas.cz
       - SEGMENTATION_SERVICE_URL=http://green-ml:8000
       - CORS_ORIGIN=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000,http://127.0.0.1:5000,http://localhost:5001,http://127.0.0.1:5001,http://localhost:5080
       - WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,wss://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000,http://127.0.0.1:5000,ws://localhost:5001,ws://127.0.0.1:5001,http://localhost:5080,ws://localhost:5080
       - ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz,http://147.231.160.153:5000,http://localhost:5000,http://127.0.0.1:5000,http://localhost:5080
       - FRONTEND_URL=https://spherosegapp.utia.cas.cz
       - UPLOAD_DIR=/app/uploads
-      # Email configuration - flexible with UTIA SMTP defaults
-      - EMAIL_SERVICE=${EMAIL_SERVICE:-smtp}
-      - SMTP_HOST=${SMTP_HOST:-mail.utia.cas.cz}
-      - SMTP_PORT=${SMTP_PORT:-25}
-      - SMTP_SECURE=${SMTP_SECURE:-false}
-      - SMTP_AUTH=${SMTP_AUTH:-false}
-      - SMTP_REQUIRE_TLS=${SMTP_REQUIRE_TLS:-true}
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASS=${SMTP_PASS}
-      - SKIP_EMAIL_SEND=${SKIP_EMAIL_SEND:-false}
-      - EMAIL_ALLOW_INSECURE=${EMAIL_ALLOW_INSECURE:-false}
-      - EMAIL_TIMEOUT=${EMAIL_TIMEOUT:-30000}
+      # Email configuration - DISABLED for production
+      - EMAIL_SERVICE=smtp
+      - SMTP_HOST=localhost
+      - SMTP_PORT=25
+      - SMTP_SECURE=false
+      - SMTP_AUTH=false
+      - SMTP_REQUIRE_TLS=false
+      - SMTP_USER=
+      - SMTP_PASS=
+      - SKIP_EMAIL_SEND=true
+      - REQUIRE_EMAIL_VERIFICATION=false
+      - EMAIL_ALLOW_INSECURE=true
+      - EMAIL_TIMEOUT=5000
     volumes:
       - ./backend/uploads/green:/app/uploads
       - green-backend-logs:/app/logs
@@ -85,7 +86,7 @@ services:
       - green-network
     environment:
       - POSTGRES_USER=spheroseg
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PASSWORD=spheroseg_green_2024
       - POSTGRES_DB=spheroseg_green
     volumes:
       - green-postgres-data:/var/lib/postgresql/data

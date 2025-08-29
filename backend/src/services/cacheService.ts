@@ -502,6 +502,9 @@ class CacheService {
 // Export singleton instance
 export const cacheService = new CacheService();
 
+// Export the class for use in other modules
+export { CacheService };
+
 // Utility functions for common cache patterns
 export const CachePatterns = {
   /**

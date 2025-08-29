@@ -16,7 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    network_mode: host
+    networks:
+      - spheroseg-network
     restart: unless-stopped
 
   # Redis cache service
@@ -27,6 +28,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: spheroseg-redis
+    networks:
+      - spheroseg-network
     ports:
       - "6379:6379"
     volumes:
@@ -49,7 +52,7 @@ services:
       - VITE_API_BASE_URL=http://localhost:3001/api
       - VITE_ML_SERVICE_URL=http://localhost:8000
       - VITE_WS_URL=ws://localhost:3001
-      - NODE_ENV=production
+      - NODE_ENV=development
     ports:
       - "3000:5173"
     volumes:
@@ -63,7 +66,8 @@ services:
       - ./tsconfig.app.json:/app/tsconfig.app.json
     depends_on:
       - backend
-    network_mode: host
+    networks:
+      - spheroseg-network
     restart: unless-stopped
 
   # Backend service
@@ -74,21 +78,16 @@ services:
     container_name: spheroseg-backend
     env_file: ${ENV_FILE:-.env.development}
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - HOST=0.0.0.0
       - PORT=3001
-      - DATABASE_URL=postgresql://spheroseg:spheroseg_dev@localhost:5432/spheroseg
-      - REDIS_URL=redis://localhost:6379
+      - DATABASE_URL=postgresql://spheroseg:spheroseg_dev@postgres:5432/spheroseg
+      - REDIS_URL=redis://redis:6379
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
-      - SEGMENTATION_SERVICE_URL=http://localhost:8000
-      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173
-      - WS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173
-      - CORS_ORIGIN=http://localhost:3000,http://localhost:4173,http://localhost:5173
-      - FRONTEND_URL=http://localhost:3000
-      - API_BASE_URL=http://localhost:3001
-      - BACKEND_URL=http://localhost:3001
-      - PUBLIC_URL=http://localhost:3001
+      - SEGMENTATION_SERVICE_URL=http://ml-service:8000
+      - ALLOWED_ORIGINS=http://localhost:3000
+      - WS_ALLOWED_ORIGINS=http://localhost:3000
       - EMAIL_SERVICE=smtp
       - FROM_EMAIL=${FROM_EMAIL}
       - SMTP_HOST=mailhog
@@ -118,7 +117,8 @@ services:
         condition: service_started
       jaeger:
         condition: service_started
-    network_mode: host
+    networks:
+      - spheroseg-network
     restart: unless-stopped
 
   # ML Service
@@ -146,6 +146,8 @@ services:
       # GPU environment variables (disabled for CPU-only systems)
       # - NVIDIA_VISIBLE_DEVICES=all
       # - CUDA_VISIBLE_DEVICES=0
+    networks:
+      - spheroseg-network
     # Resource limits for memory
     deploy:
       resources:
@@ -172,7 +174,8 @@ services:
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
       - '--web.enable-admin-api'
-    network_mode: host
+    networks:
+      - spheroseg-network
     restart: unless-stopped
 
   # Grafana visualization
@@ -186,6 +189,8 @@ services:
       - grafana-data:/var/lib/grafana
       - ./docker/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml
       - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+    networks:
+      - spheroseg-network
     depends_on:
       - prometheus
     restart: unless-stopped
@@ -197,7 +202,8 @@ services:
     ports:
       - "1025:1025"  # SMTP server
       - "8025:8025"  # Web UI
-    network_mode: host
+    networks:
+      - spheroseg-network
     restart: unless-stopped
 
   # Jaeger distributed tracing
@@ -214,8 +220,16 @@ services:
       - "9411:9411"    # Zipkin collector
       - "4317:4317"    # OTLP gRPC
       - "4318:4318"    # OTLP HTTP
-    network_mode: host
+    networks:
+      - spheroseg-network
     restart: unless-stopped
+
+networks:
+  spheroseg-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
 
 volumes:
   postgres-data:

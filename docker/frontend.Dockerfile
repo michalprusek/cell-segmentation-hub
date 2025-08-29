@@ -8,8 +8,8 @@ RUN apk add --no-cache dumb-init curl python3 make g++ cairo-dev pango-dev jpeg-
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies (clean install to ensure all deps are included)
+RUN npm ci || npm install
 
 # Copy application files
 COPY . .

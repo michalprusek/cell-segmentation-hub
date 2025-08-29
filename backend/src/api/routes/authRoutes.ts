@@ -78,6 +78,19 @@ router.get('/check',
   authController.checkAuth
 );
 
+router.get('/profile',
+  authController.getProfile
+);
+
+router.put('/profile',
+  validateBody(updateProfileSchema),
+  authController.updateProfile
+);
+
+router.get('/storage-stats',
+  authController.getStorageStats
+);
+
 router.post('/change-password',
   validateBody(changePasswordSchema),
   authController.changePassword

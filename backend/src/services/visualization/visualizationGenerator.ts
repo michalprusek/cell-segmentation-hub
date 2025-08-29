@@ -3,7 +3,6 @@ import { writeFile, readFile } from 'fs/promises';
 import sharp from 'sharp';
 import path from 'path';
 import { logger } from '../../utils/logger';
-import { NUMBER_PATHS } from './numberPaths';
 
 
 export interface VisualizationOptions {
@@ -55,8 +54,8 @@ export class VisualizationGenerator {
   private readonly ERROR_RENDER_TIME_MS = 30000;
 
   constructor() {
-    // No complex font registration needed - use universal approach
-    logger.info('VisualizationGenerator initialized with universal number rendering and performance monitoring', 'VisualizationGenerator');
+    // Using standard font rendering for better clarity and consistency
+    logger.info('VisualizationGenerator initialized with font-based number rendering and performance monitoring', 'VisualizationGenerator');
   }
 
   async generateVisualization(
@@ -117,7 +116,10 @@ export class VisualizationGenerator {
       // Draw the original image
       ctx.drawImage(image, 0, 0);
 
-      // Draw polygons
+      // Reset any transformations before drawing polygons
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+
+      // Draw polygons - reset polygon numbering for each image
       let polygonNumber = 1;
       for (const polygon of polygons) {
         if (polygon.type === 'external') {
@@ -134,8 +136,7 @@ export class VisualizationGenerator {
 
       // Calculate final metrics
       metrics.renderTime = Date.now() - startTime;
-      const cacheStats = NUMBER_PATHS.getCacheStats();
-      metrics.cacheHitRate = cacheStats.hitRate;
+      metrics.cacheHitRate = 0; // No longer using cache since we're using native font rendering
 
       // Check render time thresholds
       if (metrics.renderTime > this.ERROR_RENDER_TIME_MS) {
@@ -154,14 +155,14 @@ export class VisualizationGenerator {
 
       // Log performance metrics
       logger.info(
-        `Visualization generated: ${outputPath} | Metrics: ${polygons.length} polygons in ${metrics.renderTime}ms (cache hit rate: ${(metrics.cacheHitRate * 100).toFixed(1)}%)`,
+        `Visualization generated: ${outputPath} | Metrics: ${polygons.length} polygons in ${metrics.renderTime}ms`,
         'VisualizationGenerator'
       );
 
       // Log detailed metrics for monitoring
       if (polygons.length > 100) {
         logger.debug(
-          `Performance details - Polygons: ${polygons.length}, Time: ${metrics.renderTime}ms, Cache hits: ${cacheStats.hits}, Cache misses: ${cacheStats.misses}`,
+          `Performance details - Polygons: ${polygons.length}, Time: ${metrics.renderTime}ms`,
           'VisualizationGenerator'
         );
       }
@@ -237,12 +238,14 @@ export class VisualizationGenerator {
     // Calculate centroid
     const centroid = this.calculateCentroid(polygon.points);
 
-    // Use geometric approach - draw numbers as simple shapes
     const baseSize = Math.max(options.fontSize ?? 32, 24);
     const radius = baseSize * 0.8; // Circle radius
     
-    // Save context state
+    // Save context state - CRITICAL for preventing state persistence
     ctx.save();
+    
+    // Reset transformation matrix to ensure clean positioning
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     
     // Draw white background circle with strong border
     ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';
@@ -254,19 +257,163 @@ export class VisualizationGenerator {
     ctx.fill();
     ctx.stroke();
     
-    // Draw number using geometric shapes instead of text
-    ctx.fillStyle = 'rgba(0, 0, 0, 1.0)';
-    ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
-    ctx.lineWidth = Math.max(3, baseSize * 0.08);
+    // Try multiple font options for better compatibility
+    const fontFamilies = [
+      'DejaVu Sans',        // Primary choice - installed via ttf-dejavu
+      'Liberation Sans',    // Secondary - installed via ttf-liberation
+      'Noto Sans',         // Tertiary - installed via font-noto
+      'FreeSans',          // Fallback - installed via ttf-freefont
+      'Arial',             // Common fallback
+      'Helvetica',         // macOS fallback
+      'sans-serif'         // Generic fallback
+    ];
     
-    // Use extracted number path definitions
-    NUMBER_PATHS.drawLargeNumber(ctx, number, centroid.x, centroid.y, baseSize * 0.5);
+    // Build font string with fallbacks
+    const fontString = `bold ${baseSize}px ${fontFamilies.join(', ')}`;
     
-    // Restore context state
+    try {
+      // Set font with fallback chain
+      ctx.font = fontString;
+      ctx.fillStyle = 'rgba(0, 0, 0, 1.0)';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      // Test if font rendering works by measuring text
+      const numberStr = String(number);
+      const metrics = ctx.measureText(numberStr);
+      
+      // If measurement returns valid width, fonts are working
+      if (metrics && metrics.width > 0) {
+        ctx.fillText(numberStr, centroid.x, centroid.y);
+        logger.debug(`Rendered number ${number} using font rendering`, 'VisualizationGenerator');
+      } else {
+        // Fallback to simple geometric rendering if fonts fail
+        this.drawNumberFallback(ctx, number, centroid.x, centroid.y, baseSize);
+        logger.warn(`Font rendering failed for number ${number}, using fallback`, 'VisualizationGenerator');
+      }
+    } catch (error) {
+      // If font operations fail, use geometric fallback
+      this.drawNumberFallback(ctx, number, centroid.x, centroid.y, baseSize);
+      logger.warn(`Font error for number ${number}: ${error}, using fallback`, 'VisualizationGenerator');
+    }
+    
+    // Restore context state - ensures no state leaks to next image
     ctx.restore();
+  }
+
+  /**
+   * Fallback method to draw numbers using simple strokes when fonts aren't available
+   */
+  private drawNumberFallback(
+    ctx: CanvasRenderingContext2D,
+    number: number,
+    x: number,
+    y: number,
+    size: number
+  ): void {
+    // Use stroke-based rendering as fallback
+    ctx.strokeStyle = 'rgba(0, 0, 0, 1.0)';
+    ctx.lineWidth = Math.max(2, size * 0.1);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
     
-    // Log successful rendering for debugging
-    logger.debug(`Rendered polygon number ${number} at (${centroid.x.toFixed(1)}, ${centroid.y.toFixed(1)}) using geometric shapes`, 'VisualizationGenerator');
+    const numberStr = String(number);
+    const digitWidth = size * 0.3;
+    const startX = x - (numberStr.length * digitWidth) / 2;
+    
+    // Draw each digit using simple strokes
+    for (let i = 0; i < numberStr.length; i++) {
+      const digit = parseInt(numberStr[i], 10);
+      const digitX = startX + i * digitWidth + digitWidth / 2;
+      this.strokeDigit(ctx, digit, digitX, y, size * 0.6);
+    }
+  }
+
+  /**
+   * Draw a single digit using strokes (simplified for readability)
+   */
+  private strokeDigit(
+    ctx: CanvasRenderingContext2D,
+    digit: number,
+    x: number,
+    y: number,
+    size: number
+  ): void {
+    const halfSize = size / 2;
+    const quarterSize = size / 4;
+    
+    ctx.beginPath();
+    
+    switch(digit) {
+      case 0:
+        ctx.arc(x, y, quarterSize, 0, Math.PI * 2);
+        break;
+      case 1:
+        ctx.moveTo(x, y - halfSize);
+        ctx.lineTo(x, y + halfSize);
+        break;
+      case 2:
+        ctx.moveTo(x - quarterSize, y - halfSize);
+        ctx.lineTo(x + quarterSize, y - halfSize);
+        ctx.lineTo(x + quarterSize, y);
+        ctx.lineTo(x - quarterSize, y);
+        ctx.lineTo(x - quarterSize, y + halfSize);
+        ctx.lineTo(x + quarterSize, y + halfSize);
+        break;
+      case 3:
+        ctx.moveTo(x - quarterSize, y - halfSize);
+        ctx.lineTo(x + quarterSize, y - halfSize);
+        ctx.lineTo(x + quarterSize, y + halfSize);
+        ctx.lineTo(x - quarterSize, y + halfSize);
+        ctx.moveTo(x - quarterSize, y);
+        ctx.lineTo(x + quarterSize, y);
+        break;
+      case 4:
+        ctx.moveTo(x - quarterSize, y - halfSize);
+        ctx.lineTo(x - quarterSize, y);
+        ctx.lineTo(x + quarterSize, y);
+        ctx.moveTo(x + quarterSize, y - halfSize);
+        ctx.lineTo(x + quarterSize, y + halfSize);
+        break;
+      case 5:
+        ctx.moveTo(x + quarterSize, y - halfSize);
+        ctx.lineTo(x - quarterSize, y - halfSize);
+        ctx.lineTo(x - quarterSize, y);
+        ctx.lineTo(x + quarterSize, y);
+        ctx.lineTo(x + quarterSize, y + halfSize);
+        ctx.lineTo(x - quarterSize, y + halfSize);
+        break;
+      case 6:
+        ctx.moveTo(x + quarterSize, y - halfSize);
+        ctx.lineTo(x - quarterSize, y - halfSize);
+        ctx.lineTo(x - quarterSize, y + halfSize);
+        ctx.lineTo(x + quarterSize, y + halfSize);
+        ctx.lineTo(x + quarterSize, y);
+        ctx.lineTo(x - quarterSize, y);
+        break;
+      case 7:
+        ctx.moveTo(x - quarterSize, y - halfSize);
+        ctx.lineTo(x + quarterSize, y - halfSize);
+        ctx.lineTo(x, y + halfSize);
+        break;
+      case 8:
+        ctx.arc(x, y - quarterSize, quarterSize, 0, Math.PI * 2);
+        ctx.moveTo(x + quarterSize, y + quarterSize);
+        ctx.arc(x, y + quarterSize, quarterSize, 0, Math.PI * 2);
+        break;
+      case 9:
+        ctx.moveTo(x + quarterSize, y + halfSize);
+        ctx.lineTo(x + quarterSize, y - halfSize);
+        ctx.lineTo(x - quarterSize, y - halfSize);
+        ctx.lineTo(x - quarterSize, y);
+        ctx.lineTo(x + quarterSize, y);
+        break;
+      default:
+        // Draw a dot for unknown
+        ctx.arc(x, y, size * 0.1, 0, Math.PI * 2);
+    }
+    
+    ctx.stroke();
   }
 
 
