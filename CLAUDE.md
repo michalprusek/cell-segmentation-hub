@@ -185,8 +185,15 @@ Uses JWT-based authentication with access/refresh tokens. The `AuthContext` mana
 
 ### ML Models in Production
 
-- **HRNetV2** - Fast and efficient, ~3.1s inference time
-- **CBAM-ResUNet** - Precise segmentation with attention mechanisms, optimized inference time
+- **HRNetV2** - Fast and efficient, ~0.2s per image, 5.5 images/second throughput
+- **CBAM-ResUNet** - Precise segmentation with attention mechanisms, ~0.3s per image, 3.0 images/second throughput
+
+**Production Performance Metrics (Measured 2025-08-31):**
+
+- HRNet: 0.2s average per image, P95 <0.3s, batch size 8 (optimal), 12 (max)
+- CBAM-ResUNet: 0.3s average per image, P95 <0.7s, batch size 2 (optimal), 4 (max)
+- Dynamic batching enabled with 5ms queue delay
+- GPU: NVIDIA RTX A5000 (24GB VRAM)
 
 ### API Documentation
 

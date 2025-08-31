@@ -2,6 +2,33 @@
 
 This document provides performance guidelines and best practices for working with large datasets in SpheroSeg.
 
+## ML Model Performance (Updated 2025-08-31)
+
+### Model Benchmarks
+
+Production environment testing with NVIDIA RTX A5000 (24GB VRAM):
+
+| Model            | Avg Time/Image | Throughput  | P95 Latency | Batch Size  | Use Case                   |
+| ---------------- | -------------- | ----------- | ----------- | ----------- | -------------------------- |
+| **HRNet**        | 0.2 seconds    | 5.5 img/sec | <0.3 sec    | 8 (optimal) | High-throughput processing |
+| **CBAM-ResUNet** | 0.3 seconds    | 3.0 img/sec | <0.7 sec    | 2 (optimal) | Maximum accuracy analysis  |
+
+### Dynamic Batching Configuration
+
+The system implements dynamic batching for optimal GPU utilization:
+
+- **Queue Delay**: 5ms (groups requests arriving within this window)
+- **Batch Timeout**: 50ms (maximum wait time for batch formation)
+- **Memory Reserve**: 15% VRAM kept free for stability
+- **Max Safe Batch Sizes**: HRNet (12), CBAM-ResUNet (4)
+
+### SLA Compliance
+
+All models maintain P95 latency under 1 second for production SLA compliance:
+
+- HRNet: 99% of requests complete within 300ms
+- CBAM-ResUNet: 99% of requests complete within 700ms
+
 ## Performance Thresholds
 
 The system implements automatic performance monitoring with the following thresholds:

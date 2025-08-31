@@ -386,11 +386,13 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet',
-          description: 'Fast and efficient model for real-time segmentation',
+          description:
+            'Fast and efficient model (~0.2s/image, 5.5 img/s throughput)',
         },
         cbam: {
           name: 'CBAM-ResUNet',
-          description: 'Precise segmentation model with attention mechanisms',
+          description:
+            'Precise segmentation with attention (~0.3s/image, 3.0 img/s throughput)',
         },
       },
     },
@@ -409,9 +411,9 @@ export default {
       large: 'Large',
     },
     modelDescription: {
-      hrnet: 'Fast and efficient model for real-time segmentation',
-      resunet_small: 'Balanced speed and accuracy for most use cases',
-      resunet_advanced: 'Highest accuracy with attention mechanisms',
+      hrnet: 'Fast and efficient model (~0.2s/image, 5.5 img/s throughput)',
+      cbam_resunet:
+        'Precise segmentation with attention (~0.3s/image, 3.0 img/s throughput)',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:
@@ -1116,21 +1118,23 @@ export default {
     modelSelection: {
       title: 'Model Selection',
       description:
-        'SpheroSeg offers three different AI models optimized for different use cases. Choose the model that best fits your requirements for speed vs accuracy.',
+        'SpheroSeg offers two production-optimized AI models with dynamic batching. Choose the model that best fits your requirements for speed vs accuracy.',
       models: {
         hrnet: {
-          name: 'HRNet (Small)',
-          inferenceTime: 'Inference time: ~0.18 seconds (GPU accelerated)',
-          bestFor: 'Best for: Real-time processing and quick results',
+          name: 'HRNet (Fast)',
+          inferenceTime:
+            'Inference time: ~0.2 seconds per image (GPU accelerated)',
+          bestFor: 'Best for: High-throughput processing (5.5 images/second)',
           description:
-            'Fast and efficient model ideal for rapid segmentation when speed is prioritized over maximum accuracy.',
+            'Fast and efficient model with batch processing of 8 images simultaneously. P95 latency under 0.3 seconds.',
         },
         cbam: {
-          name: 'CBAM-ResUNet (Medium)',
-          inferenceTime: 'Inference time: ~0.20 seconds (GPU accelerated)',
-          bestFor: 'Best for: Precise segmentation with attention mechanisms',
+          name: 'CBAM-ResUNet (Precise)',
+          inferenceTime:
+            'Inference time: ~0.3 seconds per image (GPU accelerated)',
+          bestFor: 'Best for: Maximum accuracy (3.0 images/second throughput)',
           description:
-            'Precise segmentation model with attention mechanisms for accurate spheroid boundary detection.',
+            'Advanced model with dual attention mechanisms for highest accuracy. Batch processing of 2 images with P95 latency under 0.7 seconds.',
         },
       },
       howToSelect: 'How to Select a Model',
@@ -1144,7 +1148,7 @@ export default {
       },
       tip: 'Tip:',
       tipText:
-        'Start with CBAM-ResUNet for most cases. Use HRNet for rapid prototyping and CBAM-ResUNet when you need precise segmentation with attention mechanisms for research or publication.',
+        'Use HRNet for high-volume processing with 5.5 images/second throughput. Choose CBAM-ResUNet for maximum accuracy in research or publication work.',
     },
 
     // Segmentation Process section

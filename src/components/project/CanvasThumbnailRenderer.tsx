@@ -363,7 +363,7 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
     height,
   ]);
 
-  // Effect to handle rendering with RAF
+  // Effect to handle rendering with RAF and retry logic
   useEffect(() => {
     // Cancel any pending animation frame
     if (animationFrameRef.current) {
@@ -373,7 +373,17 @@ const CanvasThumbnailRenderer: React.FC<CanvasThumbnailRendererProps> = ({
     // Schedule rendering on next frame
     animationFrameRef.current = requestAnimationFrame(render);
 
+    // Retry rendering after a delay to ensure canvas is ready
+    // This is crucial for the last batch where timing is critical
+    const retryTimeout = setTimeout(() => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      animationFrameRef.current = requestAnimationFrame(render);
+    }, 200);
+
     return () => {
+      clearTimeout(retryTimeout);
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }

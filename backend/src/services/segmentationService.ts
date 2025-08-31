@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { ImageService } from './imageService';
 import { ThumbnailService } from './thumbnailService';
+import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { getStorageProvider } from '../storage/index';
 import { 
   CrossServiceTraceLinker, 
@@ -88,12 +89,14 @@ export class SegmentationService {
   private httpClient: AxiosInstance;
   private pythonServiceUrl: string;
   private thumbnailService: ThumbnailService;
+  private segmentationThumbnailService: SegmentationThumbnailService;
   
   constructor(
     private prisma: PrismaClient,
     private imageService: ImageService
   ) {
     this.thumbnailService = new ThumbnailService(prisma);
+    this.segmentationThumbnailService = new SegmentationThumbnailService(prisma);
     // Python microservice URL - can be configured via environment
     this.pythonServiceUrl = config.SEGMENTATION_SERVICE_URL;
     
@@ -467,7 +470,7 @@ export class SegmentationService {
       }
     };
 
-    return this.saveSegmentationResultsInternal(imageId, segmentationResult);
+    return this.saveSegmentationResultsInternal(imageId, segmentationResult, awaitThumbnails);
   }
 
   /**
@@ -475,7 +478,8 @@ export class SegmentationService {
    */
   private async saveSegmentationResultsInternal(
     imageId: string,
-    segmentationResult: SegmentationResponse
+    segmentationResult: SegmentationResponse,
+    awaitThumbnails: boolean = false
   ): Promise<void> {
     try {
       // Log the full segmentation result for debugging
@@ -620,10 +624,16 @@ export class SegmentationService {
       // Generate thumbnails - await if this is the last batch to ensure thumbnails are ready
       if (awaitThumbnails) {
         try {
+          // Generate polygon data thumbnails
           await this.thumbnailService.generateThumbnails(result.id);
+          
+          // Generate actual thumbnail image with segmentation overlay
+          const segmentationThumbnailUrl = await this.segmentationThumbnailService.generateSegmentationThumbnail(result.id);
+          
           logger.info('Thumbnails generated synchronously for last batch item', 'SegmentationService', {
             imageId,
-            segmentationId: result.id
+            segmentationId: result.id,
+            segmentationThumbnailUrl
           });
         } catch (error) {
           logger.error(
@@ -637,7 +647,16 @@ export class SegmentationService {
         // Generate thumbnails asynchronously for regular batches to maintain performance
         this.thumbnailService.generateThumbnails(result.id).catch(error => {
           logger.error(
-            `Failed to generate thumbnails after ML segmentation for ${imageId}`,
+            `Failed to generate polygon thumbnails after ML segmentation for ${imageId}`,
+            error instanceof Error ? error : new Error(String(error)),
+            'SegmentationService'
+          );
+        });
+        
+        // Also generate actual thumbnail image asynchronously
+        this.segmentationThumbnailService.generateSegmentationThumbnail(result.id).catch(error => {
+          logger.error(
+            `Failed to generate segmentation thumbnail image for ${imageId}`,
             error instanceof Error ? error : new Error(String(error)),
             'SegmentationService'
           );

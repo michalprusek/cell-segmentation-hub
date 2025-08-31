@@ -180,8 +180,8 @@ class ModelLoader:
             if model_name == 'hrnet':
                 model = HRNetV2(n_class=1, use_instance_norm=True)
             elif model_name == 'cbam_resunet':
-                # Use correct feature dimensions matching trained weights: [48, 96, 192, 384, 512]
-                model = ResUNetCBAM(in_channels=3, out_channels=1, features=[48, 96, 192, 384, 512], use_instance_norm=True, dropout_rate=0.0)  # No dropout for inference!
+                # Use correct feature dimensions matching trained weights: [64, 128, 256, 512]
+                model = ResUNetCBAM(in_channels=3, out_channels=1, features=[64, 128, 256, 512], use_instance_norm=True, dropout_rate=0.0)  # No dropout for inference!
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
             

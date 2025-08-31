@@ -108,15 +108,32 @@ export const ImageCard = ({
   React.useEffect(() => {
     setFallbackIndex(0);
     setImageError(false);
-  }, [image.id, image.thumbnail_url, image.url, image.image_url]);
+  }, [
+    image.id,
+    image.segmentationThumbnailPath,
+    image.thumbnail_url,
+    image.url,
+    image.image_url,
+  ]);
 
   // Create ordered list of candidate URLs, deduplicating falsy/identical entries
   const candidateUrls = React.useMemo(() => {
-    const urls = [image.thumbnail_url, image.url, image.image_url]
+    // If we have a segmentation thumbnail, use it as the primary source
+    const urls = [
+      image.segmentationThumbnailPath, // Prefer segmentation thumbnail if available
+      image.thumbnail_url,
+      image.url,
+      image.image_url,
+    ]
       .filter(Boolean) // Remove falsy values
       .filter((url, index, array) => array.indexOf(url) === index); // Deduplicate identical entries
     return urls;
-  }, [image.thumbnail_url, image.url, image.image_url]);
+  }, [
+    image.segmentationThumbnailPath,
+    image.thumbnail_url,
+    image.url,
+    image.image_url,
+  ]);
   const statusInfo = getStatusInfo(
     image.segmentationStatus || 'no_segmentation',
     t
@@ -190,9 +207,10 @@ export const ImageCard = ({
           )}
         </div>
 
-        {/* Segmentation overlay */}
+        {/* Segmentation overlay - only render if we don't have a segmentation thumbnail */}
         {(() => {
           const shouldShowSegmentation =
+            !image.segmentationThumbnailPath && // Only show canvas if no segmentation thumbnail
             (image.segmentationStatus === 'completed' ||
               image.segmentationStatus === 'segmented') &&
             image.segmentationResult?.polygons &&

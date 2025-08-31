@@ -453,6 +453,7 @@ export interface ProjectImage {
   segmentationResult?: SegmentationData;
   project_id?: string;
   thumbnail_url?: string;
+  segmentationThumbnailPath?: string; // New field for segmentation thumbnail
   image_url?: string; // Alternative field for backward compatibility
   status?: string;
   created_at?: string; // Alternative date format
