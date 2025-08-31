@@ -1,7 +1,7 @@
 import { getRedisClient } from '../config/redis';
 import { logger } from '../utils/logger';
 import rateLimit, { RateLimitRequestHandler, Options } from 'express-rate-limit';
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 
 interface RateLimitTier {
   name: string;
@@ -94,7 +94,7 @@ class RateLimitingSystem {
   /**
    * Create a rate limiter for a specific tier
    */
-  createLimiter(tierName: string): RateLimitRequestHandler | null {
+  async createLimiter(tierName: string): Promise<RateLimitRequestHandler | null> {
     const tier = this.tiers.get(tierName);
     if (!tier) {
       logger.warn(`Rate limit tier '${tierName}' not found`);
@@ -144,14 +144,15 @@ class RateLimitingSystem {
     // If Redis is available, use it for distributed rate limiting
     if (client) {
       try {
-        const RedisStore = require('rate-limit-redis').default;
+        // Dynamic import for optional dependency
+        const { default: RedisStore } = await import('rate-limit-redis');
         options.store = new RedisStore({
           client: client,
           prefix: `rate_limit:${tierName}:`,
         });
         logger.info(`Rate limiter '${tierName}' using Redis store`);
       } catch (error) {
-        logger.warn(`Failed to create Redis store for rate limiter '${tierName}', using memory store`);
+        logger.warn(`Failed to create Redis store for rate limiter '${tierName}', using memory store`, error);
       }
     } else {
       logger.warn(`Rate limiter '${tierName}' using memory store (Redis not available)`);
@@ -176,8 +177,12 @@ class RateLimitingSystem {
   /**
    * Get rate limiter by tier name
    */
-  getLimiter(tierName: string): RateLimitRequestHandler | null {
-    return this.limiters.get(tierName) || this.createLimiter(tierName);
+  async getLimiter(tierName: string): Promise<RateLimitRequestHandler | null> {
+    const existing = this.limiters.get(tierName);
+    if (existing) {
+      return existing;
+    }
+    return this.createLimiter(tierName);
   }
   
   /**
@@ -205,13 +210,13 @@ class RateLimitingSystem {
    * Create dynamic rate limiter based on user tier
    */
   createDynamicLimiter(): RateLimitRequestHandler {
-    return (req: Request, res: Response, next: Function) => {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       const tier = this.getUserTier(req);
-      const limiter = this.getLimiter(tier);
+      const limiter = await this.getLimiter(tier);
       
       if (!limiter) {
         // Fallback to anonymous if tier not found
-        const fallbackLimiter = this.getLimiter('anonymous');
+        const fallbackLimiter = await this.getLimiter('anonymous');
         if (fallbackLimiter) {
           return fallbackLimiter(req, res, next);
         }
@@ -310,10 +315,10 @@ export async function initializeRateLimitingSystem(): Promise<void> {
     logger.info('Initializing rate limiting system...');
     
     // Create default limiters
-    rateLimitingSystem.createLimiter('anonymous');
-    rateLimitingSystem.createLimiter('authenticated');
-    rateLimitingSystem.createLimiter('api');
-    rateLimitingSystem.createLimiter('auth');
+    await rateLimitingSystem.createLimiter('anonymous');
+    await rateLimitingSystem.createLimiter('authenticated');
+    await rateLimitingSystem.createLimiter('api');
+    await rateLimitingSystem.createLimiter('auth');
     
     logger.info('✅ Rate limiting system initialized successfully');
   } catch (error) {
@@ -334,18 +339,18 @@ export async function cleanupRateLimitingSystem(): Promise<void> {
  */
 export const rateLimiters = {
   // Get specific tier limiter
-  getTierLimiter: (tier: string) => rateLimitingSystem.getLimiter(tier),
+  getTierLimiter: (tier: string): Promise<RateLimitRequestHandler | null> => rateLimitingSystem.getLimiter(tier),
   
   // Dynamic limiter based on user authentication
   dynamic: rateLimitingSystem.createDynamicLimiter(),
   
   // Predefined limiters for common use cases
-  anonymous: () => rateLimitingSystem.getLimiter('anonymous'),
-  authenticated: () => rateLimitingSystem.getLimiter('authenticated'),
-  api: () => rateLimitingSystem.getLimiter('api'),
-  auth: () => rateLimitingSystem.getLimiter('auth'),
-  upload: () => rateLimitingSystem.getLimiter('upload'),
-  admin: () => rateLimitingSystem.getLimiter('admin'),
+  anonymous: (): Promise<RateLimitRequestHandler | null> => rateLimitingSystem.getLimiter('anonymous'),
+  authenticated: (): Promise<RateLimitRequestHandler | null> => rateLimitingSystem.getLimiter('authenticated'),
+  api: (): Promise<RateLimitRequestHandler | null> => rateLimitingSystem.getLimiter('api'),
+  auth: (): Promise<RateLimitRequestHandler | null> => rateLimitingSystem.getLimiter('auth'),
+  upload: (): Promise<RateLimitRequestHandler | null> => rateLimitingSystem.getLimiter('upload'),
+  admin: (): Promise<RateLimitRequestHandler | null> => rateLimitingSystem.getLimiter('admin'),
 };
 
 /**

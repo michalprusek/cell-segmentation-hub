@@ -103,7 +103,7 @@ const ProjectDetail = () => {
     useSegmentationQueue(id);
 
   // Handle thumbnail updates via WebSocket
-  const {} = useThumbnailUpdates({
+  useThumbnailUpdates({
     projectId: id,
     enabled: true,
     onThumbnailUpdate: useCallback(
