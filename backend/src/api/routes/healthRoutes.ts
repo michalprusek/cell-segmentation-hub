@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import { loadavg } from 'os';
 import { logger } from '../../utils/logger';
 import { apiLimiter } from '../../middleware/rateLimiter';
 
@@ -247,7 +248,7 @@ router.get('/metrics',
           uptime: process.uptime(),
           memoryUsage: process.memoryUsage(),
           cpuUsage: process.cpuUsage(),
-          loadAverage: require('os').loadavg()
+          loadAverage: loadavg()
         },
         application: {
           activeConnections: 15, // Placeholder
