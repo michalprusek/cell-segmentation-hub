@@ -75,21 +75,22 @@ model Project {
 }
 
 model Image {
-  id                 String              @id @default(uuid())
-  name               String
-  originalPath       String
-  thumbnailPath      String?
-  projectId          String
-  segmentationStatus String              @default("no_segmentation")
-  fileSize           Int?
-  width              Int?
-  height             Int?
-  mimeType           String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  project            Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  queueEntries       SegmentationQueue[]
-  segmentation       Segmentation?
+  id                     String              @id @default(uuid())
+  name                   String
+  originalPath           String
+  thumbnailPath          String?
+  segmentationThumbnailPath String?          // New field for segmentation thumbnail
+  projectId              String
+  segmentationStatus     String              @default("no_segmentation")
+  fileSize               Int?
+  width                  Int?
+  height                 Int?
+  mimeType               String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+  project                Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  queueEntries           SegmentationQueue[]
+  segmentation           Segmentation?
 
   @@index([projectId, segmentationStatus], map: "idx_image_project_status")
   @@map("images")

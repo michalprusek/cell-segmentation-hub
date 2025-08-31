@@ -18,6 +18,7 @@ import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
+import { useThumbnailUpdates } from '@/hooks/useThumbnailUpdates';
 import { logger } from '@/lib/logger';
 import { logger } from '@/lib/logger';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
@@ -100,6 +101,47 @@ const ProjectDetail = () => {
   // Queue management - must be declared before using queueStats
   const { isConnected, queueStats, lastUpdate, requestQueueStats } =
     useSegmentationQueue(id);
+
+  // Handle thumbnail updates via WebSocket
+  const {} = useThumbnailUpdates({
+    projectId: id,
+    enabled: true,
+    onThumbnailUpdate: useCallback(
+      update => {
+        logger.debug('Thumbnail update received', 'ProjectDetail', {
+          imageId: update.imageId,
+          levelOfDetail: update.thumbnailData.levelOfDetail,
+        });
+
+        // Fetch updated image with new thumbnail URL
+        (async () => {
+          try {
+            const img = await apiClient.getImage(id, update.imageId);
+            if (img?.thumbnail_url) {
+              updateImagesRef.current(prevImages =>
+                prevImages.map(prevImg => {
+                  if (prevImg.id === update.imageId) {
+                    return {
+                      ...prevImg,
+                      thumbnail_url: `${img.thumbnail_url}?t=${Date.now()}`,
+                    };
+                  }
+                  return prevImg;
+                })
+              );
+            }
+          } catch (error) {
+            logger.error(
+              'Failed to fetch updated image after thumbnail update',
+              error,
+              'ProjectDetail'
+            );
+          }
+        })();
+      },
+      [id]
+    ),
+  });
 
   // Filtering and sorting with memoization
   const {
@@ -276,8 +318,9 @@ const ProjectDetail = () => {
           // refreshImageSegmentation already updates the state with segmentation data
           await refreshImageSegmentationRef.current(lastUpdate.imageId);
 
-          // Wait a bit for the state to be updated
-          await new Promise(resolve => setTimeout(resolve, 100));
+          // Wait longer for the state to be updated and Canvas to render
+          // This is crucial for the last batch where timing is critical
+          await new Promise(resolve => setTimeout(resolve, 500));
 
           // Now also fetch the updated image for thumbnail URL
           const img = await apiClient.getImage(id, lastUpdate.imageId);
@@ -314,6 +357,8 @@ const ProjectDetail = () => {
                   ...prevImg,
                   segmentationStatus: finalStatus,
                   // Keep the segmentation data that was already updated by refreshImageSegmentation
+                  // Force re-render by updating a timestamp
+                  lastSegmentationUpdate: Date.now(),
                   // Update thumbnail URL with cache-busting timestamp
                   thumbnail_url: img?.thumbnail_url
                     ? `${img.thumbnail_url}?t=${Date.now()}`

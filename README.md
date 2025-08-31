@@ -137,17 +137,22 @@ Technical reference materials
 
 ### Available Models
 
-- **HRNetV2**: High-Resolution Network (~3.1s, highest accuracy)
-- **ResUNet Advanced**: Advanced with attention mechanisms (~18.1s, balanced)
-- **ResUNet Small**: Lightweight version (~6.9s, fastest)
+- **HRNetV2**: High-Resolution Network (0.2s per image, highest throughput)
+- **CBAM-ResUNet**: Advanced with attention mechanisms (0.3s per image, best accuracy)
 
 ### Performance Benchmarks
 
-| Model            | Parameters | Inference Time | Best Use Case             |
-| ---------------- | ---------- | -------------- | ------------------------- |
-| HRNet            | 66M        | ~3.1s          | Research-quality analysis |
-| ResUNet Advanced | 45M        | ~18.1s         | Balanced accuracy/speed   |
-| ResUNet Small    | 15M        | ~6.9s          | Fast batch processing     |
+| Model        | Inference Time | Throughput  | Batch Size  | P95 Latency | Best Use Case              |
+| ------------ | -------------- | ----------- | ----------- | ----------- | -------------------------- |
+| HRNet        | ~0.2s/image    | 5.5 img/sec | 8 (optimal) | <0.3s       | High-throughput processing |
+| CBAM-ResUNet | ~0.3s/image    | 3.0 img/sec | 2 (optimal) | <0.7s       | Maximum accuracy analysis  |
+
+### Production Configuration
+
+- **Dynamic Batching**: Enabled with 5ms queue delay for optimal GPU utilization
+- **GPU**: NVIDIA RTX A5000 (24GB VRAM)
+- **Max Batch Sizes**: HRNet (12), CBAM-ResUNet (4) for offline processing
+- **SLA Compliance**: All models maintain P95 latency under 1 second
 
 ## 🏢 About
 

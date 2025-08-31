@@ -1,0 +1,132 @@
+{
+  "production_batch_sizes": {
+    "hrnet": {
+      "optimal": 8,
+      "max_safe": 12,
+      "p95_latency_ms": 464.3,
+      "throughput_img_s": 17.3
+    },
+    "cbam_resunet": {
+      "optimal": 2,
+      "max_safe": 4,
+      "p95_latency_ms": 396.9,
+      "throughput_img_s": 5.1
+    }
+  },
+  "dynamic_batching": {
+    "enabled": true,
+    "max_queue_delay_ms": 5,
+    "timeout_ms": 50
+  },
+  "memory_reserve_percent": 15,
+  "detailed_benchmarks": {
+    "hrnet": {
+      "model": "hrnet",
+      "optimal_batch_size": 8,
+      "max_safe_batch_size": 12,
+      "p95_latency_ms": 464.33793557807803,
+      "throughput_img_per_sec": 17.280590062598215,
+      "memory_gb": 1.170790195465088,
+      "benchmarks": [
+        {
+          "batch_size": 1,
+          "p50_ms": 63.3,
+          "p95_ms": 63.6,
+          "throughput": 15.8,
+          "memory_gb": 1.01,
+          "stable": true
+        },
+        {
+          "batch_size": 2,
+          "p50_ms": 125.7,
+          "p95_ms": 126.0,
+          "throughput": 15.9,
+          "memory_gb": 1.03,
+          "stable": true
+        },
+        {
+          "batch_size": 4,
+          "p50_ms": 232.6,
+          "p95_ms": 233.6,
+          "throughput": 17.2,
+          "memory_gb": 1.08,
+          "stable": true
+        },
+        {
+          "batch_size": 8,
+          "p50_ms": 462.8,
+          "p95_ms": 464.3,
+          "throughput": 17.3,
+          "memory_gb": 1.17,
+          "stable": true
+        },
+        {
+          "batch_size": 12,
+          "p50_ms": 684.3,
+          "p95_ms": 685.7,
+          "throughput": 17.5,
+          "memory_gb": 1.26,
+          "stable": true
+        },
+        {
+          "batch_size": 16,
+          "p50_ms": 1271.0,
+          "p95_ms": 1321.3,
+          "throughput": 12.5,
+          "memory_gb": 1.36,
+          "stable": false
+        },
+        {
+          "batch_size": 24,
+          "p50_ms": Infinity,
+          "p95_ms": Infinity,
+          "throughput": 0,
+          "memory_gb": 0,
+          "stable": false
+        }
+      ]
+    },
+    "cbam_resunet": {
+      "model": "cbam_resunet",
+      "optimal_batch_size": 2,
+      "max_safe_batch_size": 4,
+      "p95_latency_ms": 396.93178460001945,
+      "throughput_img_per_sec": 5.058607937040052,
+      "memory_gb": 0.8356313705444336,
+      "benchmarks": [
+        {
+          "batch_size": 1,
+          "p50_ms": 270.4,
+          "p95_ms": 271.6,
+          "throughput": 3.7,
+          "memory_gb": 0.81,
+          "stable": true
+        },
+        {
+          "batch_size": 2,
+          "p50_ms": 395.2,
+          "p95_ms": 396.9,
+          "throughput": 5.1,
+          "memory_gb": 0.84,
+          "stable": true
+        },
+        {
+          "batch_size": 4,
+          "p50_ms": 937.7,
+          "p95_ms": 940.1,
+          "throughput": 4.3,
+          "memory_gb": 0.88,
+          "stable": true
+        },
+        {
+          "batch_size": 8,
+          "p50_ms": Infinity,
+          "p95_ms": Infinity,
+          "throughput": 0,
+          "memory_gb": 0,
+          "stable": false
+        }
+      ]
+    }
+  }
+}

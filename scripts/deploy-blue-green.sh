@@ -37,7 +37,12 @@ print_error() {
 
 # Function to check current active environment
 get_active_env() {
-    if docker ps | grep -q "production-backend"; then
+    # Check nginx config to determine active environment
+    if grep -q "server green-backend:3001" "$NGINX_CONFIG"; then
+        echo "green"
+    elif grep -q "server blue-backend:3001" "$NGINX_CONFIG"; then
+        echo "blue"
+    elif docker ps | grep -q "production-backend"; then
         echo "production"
     elif docker ps | grep -q "staging-backend"; then
         echo "staging"
@@ -97,7 +102,21 @@ switch_nginx() {
     cp "$NGINX_CONFIG" "$BACKUP_DIR/nginx.prod.conf.backup"
     
     # Update nginx config to point to new environment
-    if [ "$to_env" == "production" ]; then
+    if [ "$to_env" == "green" ]; then
+        # Switch to green
+        sed -i 's/blue-backend/green-backend/g' "$NGINX_CONFIG"
+        sed -i 's/blue-frontend/green-frontend/g' "$NGINX_CONFIG"
+        sed -i 's/blue-ml/green-ml/g' "$NGINX_CONFIG"
+        sed -i 's/blue-grafana/green-grafana/g' "$NGINX_CONFIG"
+        sed -i 's/"blue"/"green"/g' "$NGINX_CONFIG"
+    elif [ "$to_env" == "blue" ]; then
+        # Switch to blue
+        sed -i 's/green-backend/blue-backend/g' "$NGINX_CONFIG"
+        sed -i 's/green-frontend/blue-frontend/g' "$NGINX_CONFIG"
+        sed -i 's/green-ml/blue-ml/g' "$NGINX_CONFIG"
+        sed -i 's/green-grafana/blue-grafana/g' "$NGINX_CONFIG"
+        sed -i 's/"green"/"blue"/g' "$NGINX_CONFIG"
+    elif [ "$to_env" == "production" ]; then
         # Switch to production
         sed -i 's/staging-backend/production-backend/g' "$NGINX_CONFIG"
         sed -i 's/staging-frontend/production-frontend/g' "$NGINX_CONFIG"
@@ -113,8 +132,16 @@ switch_nginx() {
         sed -i 's/"production"/"staging"/g' "$NGINX_CONFIG"
     fi
     
-    # Reload nginx
-    docker exec spheroseg-nginx nginx -s reload
+    # Reload nginx (try multiple container names)
+    if docker ps | grep -q "nginx-main"; then
+        docker exec nginx-main nginx -s reload
+    elif docker ps | grep -q "nginx-green"; then
+        docker exec nginx-green nginx -s reload
+    elif docker ps | grep -q "nginx-blue"; then
+        docker exec nginx-blue nginx -s reload
+    else
+        docker exec spheroseg-nginx nginx -s reload
+    fi
     
     if [ $? -eq 0 ]; then
         print_success "Nginx switched to $to_env"
@@ -155,7 +182,11 @@ cleanup_old_env() {
     
     cd "$PROJECT_ROOT"
     
-    if [ "$env" == "staging" ]; then
+    if [ "$env" == "blue" ]; then
+        docker compose -f docker-compose.blue.yml down
+    elif [ "$env" == "green" ]; then
+        docker compose -f docker-compose.green.yml down
+    elif [ "$env" == "staging" ]; then
         docker compose -f docker-compose.staging.yml down
     else
         docker compose -f docker-compose.production.yml down
@@ -179,7 +210,13 @@ main() {
     fi
     
     # Determine target environment
-    if [ "$ACTIVE_ENV" == "staging" ]; then
+    if [ "$ACTIVE_ENV" == "green" ]; then
+        TARGET_ENV="blue"
+        TARGET_COMPOSE="docker-compose.blue.yml"
+    elif [ "$ACTIVE_ENV" == "blue" ]; then
+        TARGET_ENV="green"
+        TARGET_COMPOSE="docker-compose.green.yml"
+    elif [ "$ACTIVE_ENV" == "staging" ]; then
         TARGET_ENV="production"
         TARGET_COMPOSE="docker-compose.production.yml"
     else

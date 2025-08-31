@@ -3,6 +3,13 @@ import { BASIC_MODEL_INFO } from '@/lib/modelUtils';
 
 export type ModelType = 'hrnet' | 'cbam_resunet';
 
+export interface ModelPerformance {
+  avgTimePerImage: number; // seconds
+  throughput: number; // images per second
+  p95Latency: number; // seconds
+  batchSize: number; // optimal batch size
+}
+
 export interface ModelInfo {
   id: ModelType;
   name: string;
@@ -10,6 +17,7 @@ export interface ModelInfo {
   description: string;
   size: 'small' | 'medium' | 'large';
   defaultThreshold: number;
+  performance?: ModelPerformance;
 }
 
 export interface ModelContextType {

@@ -2,17 +2,16 @@
 
 ## Přehled ML infrastruktury
 
-Cell Segmentation Hub využívá 3 pokročilé deep learning modely pro sémantickou segmentaci buněčných struktur, všechny implementované v PyTorch a optimalizované pro spheroid detekci na rozlišení 1024×1024.
+Cell Segmentation Hub využívá 2 pokročilé deep learning modely pro sémantickou segmentaci buněčných struktur, oba implementované v PyTorch a optimalizované pro spheroid detekci na rozlišení 1024×1024.
 
-## 📊 Přehled výkonu modelů
+## 📊 Přehled výkonu modelů (Aktualizováno 2025-08-31)
 
-| Model                | Parametry | Rozlišení | Inference čas | Architektura                          | Doporučené použití |
-| -------------------- | --------- | --------- | ------------- | ------------------------------------- | ------------------ |
-| **HRNet**            | ~66M      | 1024×1024 | **~3.1s**     | Multi-scale parallel                  | Rychlá inference   |
-| **ResUNet Small**    | ~60M      | 1024×1024 | **~6.9s**     | features=[48,96,192,384,512]          | Vyvážený výkon     |
-| **Advanced ResUNet** | ~66M      | 1024×1024 | **~18.1s**    | features=[64,128,256,512] + attention | Nejvyšší přesnost  |
+| Model            | Parametry | Rozlišení | Inference čas | Throughput | P95 Latence | Batch Size | Doporučené použití |
+| ---------------- | --------- | --------- | ------------- | ---------- | ----------- | ---------- | ------------------ |
+| **HRNet**        | ~66M      | 1024×1024 | **~0.2s**     | 5.5 img/s  | <0.3s       | 8 (opt)    | Vysoká propustnost |
+| **CBAM-ResUNet** | ~64M      | 1024×1024 | **~0.3s**     | 3.0 img/s  | <0.7s       | 2 (opt)    | Maximální přesnost |
 
-**Testováno na**: CPU, BxPC-3 buněčné linie, den1_A1.bmp
+**Testováno na**: NVIDIA RTX A5000 (24GB VRAM), produkční prostředí s dynamic batching
 
 ## 🧠 Implementované modely
 
@@ -39,79 +38,49 @@ model = HRNetV2(n_class=1, use_instance_norm=True)
 - Final: Fusion + Classification head
 ```
 
-#### Výkonnost:
+#### Výkonnost (Produkce 2025-08-31):
 
-- **Inference čas**: ~3.1s (CPU, 1024x1024)
-- **Přesnost**: Nejlepší pro detailní struktury
-- **Paměť**: ~1.2GB RAM
+- **Inference čas**: ~0.2s (GPU, 1024x1024)
+- **Throughput**: 5.5 images/second
+- **P95 Latence**: <0.3s
+- **Batch Size**: 8 (optimální), 12 (maximální)
+- **Paměť**: ~1.2GB VRAM při batch size 8
 - **Doporučený threshold**: 0.4-0.6
+- **Dynamic Batching**: Ano, 5ms queue delay
 
 ---
 
-### 2. ResUNet Small (Optimized ResUNet)
+### 2. CBAM-ResUNet (Channel & Spatial Attention ResUNet)
 
-- **Soubor**: `models/resunet_small.py`
-- **Třída**: `ResUNetSmall`
-- **Parametry**: ~60M
-- **Architektura**: U-Net + ResNet blocks + SE + Spatial Attention
-- **Specialita**: Optimalizovaný pro rychlost s dobrým výkonem
+- **Soubor**: `models/cbam_resunet.py`
+- **Třída**: `ResUNetCBAM`
+- **Parametry**: ~64M
+- **Architektura**: U-Net + ResNet blocks + CBAM (Channel & Spatial Attention)
+- **Specialita**: Nejvyšší přesnost díky dual attention mechanismu
 
 #### Klíčové vlastnosti:
 
 ```python
 # Inicializace
-model = ResUNetSmall(in_channels=3, out_channels=1, features=[48, 96, 192, 384, 512])
+model = ResUNetCBAM(in_channels=3, out_channels=1, features=[64, 128, 256, 512])
 
 # Architektura
-- Encoder: EnhancedResidualBlock s SE + SpatialAttention
-- Bottleneck: Multi-block s enhanced regularization
-- Decoder: Enhanced attention gates + skip connections
-- Features: [48, 96, 192, 384, 512] channels
-
+- Encoder: ResidualBlock s CBAM attention
+- Bottleneck: Double residual blocks
+- Decoder: Transposed convolutions + skip connections
+- Features: [64, 128, 256, 512] channels
+- CBAM: Channel attention → Spatial attention
 ```
 
-#### Výkonnost:
+#### Výkonnost (Produkce 2025-08-31):
 
-- **Inference čas**: ~6.9s (CPU, 1024x1024)
-- **Přesnost**: Vyvážený poměr rychlost/přesnost
-- **Paměť**: ~1.8GB RAM
+- **Inference čas**: ~0.3s (GPU, 1024x1024)
+- **Throughput**: 3.0 images/second
+- **P95 Latence**: <0.7s
+- **Batch Size**: 2 (optimální), 4 (maximální)
+- **Paměť**: ~900MB VRAM při batch size 2
 - **Doporučený threshold**: 0.4-0.6
-
----
-
-### 3. Advanced ResUNet (State-of-the-art ResUNet)
-
-- **Soubor**: `models/resunet_advanced.py`
-- **Třída**: `AdvancedResUNet`
-- **Parametry**: ~66M
-- **Architektura**: U-Net + Multi-Stage Attention + Self-Attention
-- **Specialita**: Nejpřesnější model s pokročilými attention mechanismy
-
-#### Klíčové vlastnosti:
-
-```python
-# Inicializace
-model = AdvancedResUNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512])
-
-# Pokročilé komponenty:
-- SimAM/NAM: Parameter-free attention
-- TripletAttention: Cross-dimension C-H-W interaction
-- LightweightSelfAttention: Efficient bottleneck attention
-- AdvancedAttentionGate: Multi-scale decoder attention
-
-# Encoder-Decoder struktura
-- Encoder: 4 ResNet blocks s downsampling
-- Decoder: 4 deconvolutional blocks s upsampling
-- Skip connections mezi encoder-decoder
-- BatchNorm + ReLU aktivace
-```
-
-#### Výkonnost:
-
-- **Inference čas**: ~18.1s (CPU, 1024x1024)
-- **Přesnost**: Nejvyšší ze všech modelů
-- **Paměť**: ~2.2GB RAM
-- **Doporučený threshold**: 0.4-0.6
+- **Dynamic Batching**: Ano, 5ms queue delay
 
 ---
 

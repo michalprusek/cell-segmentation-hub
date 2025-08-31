@@ -15,11 +15,23 @@ export function getLocalizedModelInfo(
       id: 'hrnet',
       size: 'small',
       defaultThreshold: 0.5,
+      performance: {
+        avgTimePerImage: 0.2,
+        throughput: 5.5,
+        p95Latency: 0.3,
+        batchSize: 8,
+      },
     },
     cbam_resunet: {
       id: 'cbam_resunet',
       size: 'medium',
       defaultThreshold: 0.5,
+      performance: {
+        avgTimePerImage: 0.3,
+        throughput: 3.0,
+        p95Latency: 0.7,
+        batchSize: 2,
+      },
     },
   };
 
@@ -62,16 +74,30 @@ export const BASIC_MODEL_INFO: Record<
     id: 'hrnet',
     name: 'HRNet',
     displayName: 'HRNet (Fast)',
-    description: 'Fast and efficient model for real-time segmentation',
+    description:
+      'Fast and efficient model for real-time segmentation (~0.2s per image)',
     size: 'small',
     defaultThreshold: 0.5,
+    performance: {
+      avgTimePerImage: 0.2,
+      throughput: 5.5,
+      p95Latency: 0.3,
+      batchSize: 8,
+    },
   },
   cbam_resunet: {
     id: 'cbam_resunet',
     name: 'CBAM-ResUNet',
     displayName: 'CBAM-ResUNet (Precise)',
-    description: 'Precise segmentation with attention mechanisms',
+    description:
+      'Precise segmentation with attention mechanisms (~0.3s per image)',
     size: 'medium',
     defaultThreshold: 0.5,
+    performance: {
+      avgTimePerImage: 0.3,
+      throughput: 3.0,
+      p95Latency: 0.7,
+      batchSize: 2,
+    },
   },
 };
