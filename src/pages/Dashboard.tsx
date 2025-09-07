@@ -205,25 +205,6 @@ const Dashboard = () => {
     [removeProjectOptimistically]
   );
 
-  if (fetchError) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <DashboardHeader />
-        <div className="container mx-auto px-4 py-8">
-          <div className="bg-white p-6 rounded-lg border border-red-200 text-center">
-            <p className="text-red-500 mb-4">{fetchError}</p>
-            <button
-              onClick={fetchProjects}
-              className="bg-blue-500 text-white px-4 py-2 rounded"
-            >
-              {t('common.tryAgain')}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // Memoize the StatsOverview component to prevent unnecessary re-renders
   const statsOverview = useMemo(() => <StatsOverview />, []);
 
@@ -243,6 +224,25 @@ const Dashboard = () => {
     ),
     [sortField, sortDirection, handleSort, viewMode]
   );
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <DashboardHeader />
+        <div className="container mx-auto px-4 py-8">
+          <div className="bg-white p-6 rounded-lg border border-red-200 text-center">
+            <p className="text-red-500 mb-4">{fetchError}</p>
+            <button
+              onClick={fetchProjects}
+              className="bg-blue-500 text-white px-4 py-2 rounded"
+            >
+              {t('common.tryAgain')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <PageTransition mode="fade">
