@@ -82,7 +82,7 @@ const ProjectThumbnail = ({
     };
 
     fetchFirstImage();
-  }, [projectId, imageCount]);
+  }, [projectId, imageCount, onAccessError]);
 
   return (
     <img
