@@ -9,6 +9,7 @@ import { VisualizationGenerator } from './visualization/visualizationGenerator';
 import { MetricsCalculator } from './metrics/metricsCalculator';
 import { FormatConverter } from './export/formatConverter';
 import { WebSocketService } from './websocketService';
+import * as SharingService from './sharingService';
 // import { Queue } from 'bull';
 // import { RedisClient } from '../redis/client';
 
@@ -173,6 +174,12 @@ export class ExportService {
     userId: string,
     options: ExportOptions
   ): Promise<string> {
+    // Check if user has access to this project (owner or shared)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    if (!accessCheck.hasAccess) {
+      throw new Error('Access denied: You do not have permission to export this project');
+    }
+
     const jobId = uuidv4();
 
     // Create job record
@@ -239,9 +246,15 @@ export class ExportService {
       job.status = 'processing';
       this.updateJobProgress(jobId, 0);
 
+      // Check if user has access to this project (owner or shared)
+      const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+      if (!accessCheck.hasAccess) {
+        throw new Error('Access denied: You do not have permission to export this project');
+      }
+
       // Get project data
       const project = await prisma.project.findUnique({
-        where: { id: projectId, userId },
+        where: { id: projectId },
         select: {
           id: true,
           title: true,
@@ -1110,24 +1123,42 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
   }
 
   async getJobStatus(jobId: string, projectId: string, userId: string): Promise<ExportJob | null> {
+    // Check if user has access to this project (owner or shared)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    if (!accessCheck.hasAccess) {
+      return null;
+    }
+
     const job = this.exportJobs.get(jobId);
-    if (job && job.projectId === projectId && job.userId === userId) {
+    if (job && job.projectId === projectId) {
       return job;
     }
     return null;
   }
 
   async getExportFilePath(jobId: string, projectId: string, userId: string): Promise<string | null> {
+    // Check if user has access to this project (owner or shared)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    if (!accessCheck.hasAccess) {
+      return null;
+    }
+
     const job = this.exportJobs.get(jobId);
-    if (job && job.projectId === projectId && job.userId === userId && job.filePath) {
+    if (job && job.projectId === projectId && job.filePath) {
       return job.filePath;
     }
     return null;
   }
 
   async cancelJob(jobId: string, projectId: string, userId: string): Promise<void> {
+    // Check if user has access to this project (owner or shared)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    if (!accessCheck.hasAccess) {
+      return; // Silently return if no access
+    }
+
     const job = this.exportJobs.get(jobId);
-    if (job && job.projectId === projectId && job.userId === userId) {
+    if (job && job.projectId === projectId) {
       job.status = 'cancelled';
       // Cancel the Bull queue job if bullJobId exists and queue is available
       if (job.bullJobId && this.exportQueue && typeof (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob === 'function') {
@@ -1140,8 +1171,14 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
   }
 
   async getExportHistory(projectId: string, userId: string): Promise<ExportJob[]> {
+    // Check if user has access to this project (owner or shared)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    if (!accessCheck.hasAccess) {
+      return [];
+    }
+
     const jobs = Array.from(this.exportJobs.values())
-      .filter(job => job.projectId === projectId && job.userId === userId)
+      .filter(job => job.projectId === projectId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 10); // Return last 10 exports
     

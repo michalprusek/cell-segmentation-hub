@@ -6,6 +6,7 @@ interface ProjectsTabProps {
   viewMode: 'grid' | 'list';
   loading: boolean;
   onOpenProject: (id: string) => void;
+  onProjectUpdate?: (projectId: string, action: string) => void;
 }
 
 const ProjectsTab = ({
@@ -13,6 +14,7 @@ const ProjectsTab = ({
   viewMode,
   loading,
   onOpenProject,
+  onProjectUpdate,
 }: ProjectsTabProps) => {
   return (
     <ProjectsList
@@ -21,6 +23,7 @@ const ProjectsTab = ({
       onOpenProject={onOpenProject}
       loading={loading}
       showCreateCard={true}
+      onProjectUpdate={onProjectUpdate}
     />
   );
 };

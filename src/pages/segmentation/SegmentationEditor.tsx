@@ -53,6 +53,10 @@ const SegmentationEditor = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
 
+  // Track if this is the initial load (coming from Project Detail) vs internal navigation
+  const isInitialLoadRef = useRef(true);
+  const previousImageIdRef = useRef<string | undefined>(undefined);
+
   // Project data - fetch all images for segmentation editor
   const {
     projectTitle,
@@ -233,6 +237,23 @@ const SegmentationEditor = () => {
     return polygons;
   }, [segmentationPolygons, imageDimensions]);
 
+  // Determine if we should trigger auto-center (only on initial load from Project Detail)
+  const shouldAutoCenter = useRef(false);
+  useEffect(() => {
+    if (imageId !== previousImageIdRef.current) {
+      // Image has changed
+      if (isInitialLoadRef.current) {
+        // This is the initial load - trigger auto-center
+        shouldAutoCenter.current = true;
+        isInitialLoadRef.current = false;
+      } else {
+        // This is navigation within the editor - don't auto-center
+        shouldAutoCenter.current = false;
+      }
+      previousImageIdRef.current = imageId;
+    }
+  }, [imageId]);
+
   // Initialize enhanced editor
   const editor = useEnhancedSegmentationEditor({
     initialPolygons,
@@ -241,9 +262,64 @@ const SegmentationEditor = () => {
     canvasWidth,
     canvasHeight,
     imageId, // Pass imageId to track image changes
-    onSave: async (polygons, targetImageId) => {
+    isFromGallery: shouldAutoCenter.current, // Use our auto-center flag
+    onSave: async (polygons, targetImageId, targetDimensions) => {
       const saveToImageId = targetImageId || imageId;
       if (!projectId || !saveToImageId) return;
+
+      // Determine the correct dimensions to use
+      let saveWidth: number | undefined;
+      let saveHeight: number | undefined;
+
+      if (targetDimensions) {
+        // Use explicitly provided dimensions (for auto-save)
+        saveWidth = targetDimensions.width;
+        saveHeight = targetDimensions.height;
+        logger.debug(
+          '📐 Using provided dimensions for save:',
+          targetDimensions,
+          'for image:',
+          saveToImageId
+        );
+      } else if (targetImageId && targetImageId !== imageId) {
+        // Look up dimensions from projectImages if saving to a different image
+        const targetImage = projectImages.find(img => img.id === targetImageId);
+        saveWidth = targetImage?.width;
+        saveHeight = targetImage?.height;
+        logger.debug(
+          '📐 Looked up dimensions from projectImages:',
+          { width: saveWidth, height: saveHeight },
+          'for image:',
+          saveToImageId
+        );
+      } else {
+        // Use current image dimensions for manual save
+        saveWidth = imageDimensions?.width;
+        saveHeight = imageDimensions?.height;
+        logger.debug(
+          '📐 Using current dimensions for manual save:',
+          imageDimensions,
+          'for image:',
+          saveToImageId
+        );
+      }
+
+      // Fallback: if we still don't have dimensions, try to get them from projectImages
+      if (!saveWidth || !saveHeight) {
+        const fallbackImage = projectImages.find(
+          img => img.id === saveToImageId
+        );
+        if (fallbackImage?.width && fallbackImage?.height) {
+          saveWidth = fallbackImage.width;
+          saveHeight = fallbackImage.height;
+          logger.warn(
+            '⚠️ Using fallback dimensions from projectImages:',
+            { width: saveWidth, height: saveHeight },
+            'for image:',
+            saveToImageId
+          );
+        }
+      }
 
       try {
         // Transform Polygon[] to SegmentationPolygon[] for API
@@ -260,8 +336,8 @@ const SegmentationEditor = () => {
         const updatedResult = await apiClient.updateSegmentationResults(
           saveToImageId,
           polygonData,
-          imageDimensions?.width,
-          imageDimensions?.height
+          saveWidth,
+          saveHeight
         );
         // Only update UI state if we're saving the current image (not autosave for different image)
         if (saveToImageId === imageId) {

@@ -173,24 +173,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Don't fail the sign in if profile loading fails
       }
 
-      // Process pending share invitation if exists
-      const pendingToken = localStorage.getItem('pendingShareToken');
-      if (pendingToken) {
-        try {
-          logger.debug('Processing pending share invitation after sign in');
-          const result = await apiClient.acceptShareInvitation(pendingToken);
-          if (!result.needsLogin) {
-            logger.info('Share invitation accepted after sign in');
-            localStorage.removeItem('pendingShareToken');
-          }
-        } catch (error) {
-          logger.error(
-            'Failed to process share invitation after sign in:',
-            error
-          );
-          // Don't fail navigation, let Dashboard handle it
-        }
-      }
+      // NOTE: Share invitation processing moved to Dashboard component
+      // to avoid race conditions and ensure proper data refresh.
+      // Dashboard will handle the pending share token after navigation.
 
       navigate('/dashboard');
     } catch (error: unknown) {
@@ -255,24 +240,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Don't fail the sign up if profile loading fails
       }
 
-      // Process pending share invitation if exists
-      const pendingToken = localStorage.getItem('pendingShareToken');
-      if (pendingToken) {
-        try {
-          logger.debug('Processing pending share invitation after sign up');
-          const result = await apiClient.acceptShareInvitation(pendingToken);
-          if (!result.needsLogin) {
-            logger.info('Share invitation accepted after sign up');
-            localStorage.removeItem('pendingShareToken');
-          }
-        } catch (error) {
-          logger.error(
-            'Failed to process share invitation after sign up:',
-            error
-          );
-          // Don't fail navigation, let Dashboard handle it
-        }
-      }
+      // NOTE: Share invitation processing moved to Dashboard component
+      // to avoid race conditions and ensure proper data refresh.
+      // Dashboard will handle the pending share token after navigation.
 
       navigate('/dashboard');
     } catch (error: unknown) {

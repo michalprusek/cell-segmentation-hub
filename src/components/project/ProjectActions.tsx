@@ -21,6 +21,7 @@ interface ProjectActionsProps {
   onDialogStateChange?: (isOpen: boolean) => void;
   isShared?: boolean;
   shareId?: string;
+  onProjectUpdate?: (projectId: string, action: 'delete' | 'unshare') => void;
 }
 
 const ProjectActions = ({
@@ -29,6 +30,7 @@ const ProjectActions = ({
   onDialogStateChange,
   isShared = false,
   shareId,
+  onProjectUpdate,
 }: ProjectActionsProps) => {
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
@@ -46,13 +48,16 @@ const ProjectActions = ({
 
     setLoading(true);
 
+    // Optimistically remove the project from UI immediately
+    onProjectUpdate?.(projectId, 'delete');
+
     try {
       // Delete project using API
       await apiClient.deleteProject(projectId);
 
       toast.success(t('toast.project.deleted'));
 
-      // Refresh projects list instead of page reload
+      // Still emit the event for other components that might need it
       const event = new CustomEvent('project-deleted', {
         detail: { projectId },
       });
@@ -62,6 +67,12 @@ const ProjectActions = ({
       const errorMessage =
         getErrorMessage(error, t) || t('errors.operations.deleteProject');
       toast.error(errorMessage);
+
+      // On error, trigger a full refetch to restore correct state
+      const refetchEvent = new CustomEvent('project-refetch-needed', {
+        detail: { reason: 'delete-failed', projectId },
+      });
+      window.dispatchEvent(refetchEvent);
     } finally {
       setLoading(false);
     }
@@ -83,6 +94,9 @@ const ProjectActions = ({
 
     setLoading(true);
 
+    // Optimistically remove the project from UI immediately
+    onProjectUpdate?.(projectId, 'unshare');
+
     try {
       // Remove shared project from user's list
       // This doesn't delete the project, just removes the share
@@ -92,7 +106,7 @@ const ProjectActions = ({
 
       toast.success(t('toast.project.unshared'));
 
-      // Refresh projects list
+      // Still emit the event for other components that might need it
       const event = new CustomEvent('project-unshared', {
         detail: { projectId, shareId },
       });
@@ -102,6 +116,12 @@ const ProjectActions = ({
       const errorMessage =
         getErrorMessage(error, t) || t('errors.operations.unshareProject');
       toast.error(errorMessage);
+
+      // On error, trigger a full refetch to restore correct state
+      const refetchEvent = new CustomEvent('project-refetch-needed', {
+        detail: { reason: 'unshare-failed', projectId },
+      });
+      window.dispatchEvent(refetchEvent);
     } finally {
       setLoading(false);
     }

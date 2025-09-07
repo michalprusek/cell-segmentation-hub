@@ -5,6 +5,7 @@ import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/index';
 import { getStorageProvider } from '../../storage/index';
+import { ApiError } from '../../middleware/error';
 
 export class ImageController {
   private imageService: ImageService;
@@ -100,12 +101,14 @@ export class ImageController {
         projectId: req.params.id
       });
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
-        ResponseHelper.notFound(res, errorMessage);
-      } else {
-        ResponseHelper.internalError(res, error as Error);
+      // Handle ApiError instances directly
+      if (error instanceof ApiError) {
+        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        return;
       }
+
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -185,12 +188,14 @@ export class ImageController {
         projectId: req.params.id
       });
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
-        ResponseHelper.notFound(res, errorMessage);
-      } else {
-        ResponseHelper.internalError(res, error as Error);
+      // Handle ApiError instances directly - this is the primary fix
+      if (error instanceof ApiError) {
+        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        return;
       }
+
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -269,12 +274,14 @@ export class ImageController {
         imageId: req.params.imageId
       });
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
-        ResponseHelper.notFound(res, errorMessage);
-      } else {
-        ResponseHelper.internalError(res, error as Error);
+      // Handle ApiError instances directly
+      if (error instanceof ApiError) {
+        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        return;
       }
+
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -333,12 +340,14 @@ export class ImageController {
         imageIds: req.body?.imageIds
       });
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
-        ResponseHelper.notFound(res, errorMessage);
-      } else {
-        ResponseHelper.internalError(res, error as Error);
+      // Handle ApiError instances directly
+      if (error instanceof ApiError) {
+        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        return;
       }
+
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -457,12 +466,14 @@ export class ImageController {
         projectId: req.params.id
       });
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
-        ResponseHelper.notFound(res, errorMessage);
-      } else {
-        ResponseHelper.internalError(res, error as Error);
+      // Handle ApiError instances directly
+      if (error instanceof ApiError) {
+        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        return;
       }
+
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -688,12 +699,14 @@ export class ImageController {
         }
       );
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
-        ResponseHelper.notFound(res, errorMessage);
-      } else {
-        ResponseHelper.internalError(res, error as Error);
+      // Handle ApiError instances directly
+      if (error instanceof ApiError) {
+        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        return;
       }
+
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 

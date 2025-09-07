@@ -184,7 +184,16 @@ export async function acceptShareInvitation(
         status: 'pending'
       },
       include: {
-        project: true,
+        project: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true
+              }
+            }
+          }
+        },
         sharedBy: true
       }
     });
@@ -213,11 +222,25 @@ export async function acceptShareInvitation(
         projectId: share.projectId,
         sharedWithId: userId,
         status: 'accepted'
+      },
+      include: {
+        project: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true
+              }
+            }
+          }
+        },
+        sharedBy: true,
+        sharedWith: true
       }
     });
 
     if (existingAcceptedShare) {
-      // User already has access, return the existing share
+      // User already has access, return the existing share with full data
       return { share: existingAcceptedShare, needsLogin: false };
     }
 
@@ -241,7 +264,16 @@ export async function acceptShareInvitation(
         sharedWithId: userId
       },
       include: {
-        project: true,
+        project: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true
+              }
+            }
+          }
+        },
         sharedBy: true,
         sharedWith: true
       }
@@ -272,27 +304,21 @@ export async function getSharedProjects(userId: string): Promise<ShareWithDetail
     // Fetch user email once
     const user = await prisma.user.findUnique({ where: { id: userId } });
     
-    const whereConditions: any[] = [
-      { sharedWithId: userId, status: 'accepted' }
-    ];
-    
-    // Only add email condition if user and email exist
-    if (user?.email) {
-      whereConditions.push({
-        email: user.email,
-        status: { in: ['pending', 'accepted'] }
-      });
-    }
+    // Only fetch ACCEPTED shares where the user is the recipient
+    // Removed the email condition as it was causing confusion
+    const whereConditions = {
+      sharedWithId: userId,
+      status: 'accepted'
+    };
     
     logger.debug(`Fetching shared projects for user ${userId}`, 'SharingService', {
       userId,
+      userEmail: user?.email,
       conditions: whereConditions
     });
     
     const shares = await prisma.projectShare.findMany({
-      where: {
-        OR: whereConditions
-      },
+      where: whereConditions,
       include: {
         project: {
           include: {
@@ -474,6 +500,11 @@ export async function hasProjectAccess(
   userId: string
 ): Promise<{ hasAccess: boolean; isOwner: boolean; shareId?: string }> {
   try {
+    logger.debug('hasProjectAccess called', 'SharingService', {
+      projectId,
+      userId
+    });
+
     // Check if user is the owner
     const project = await prisma.project.findFirst({
       where: {
@@ -482,17 +513,43 @@ export async function hasProjectAccess(
       }
     });
 
+    logger.debug('Owner check result', 'SharingService', {
+      projectId,
+      userId,
+      isOwner: !!project
+    });
+
     if (project) {
+      logger.debug('User is project owner - granting access', 'SharingService', {
+        projectId,
+        userId
+      });
       return { hasAccess: true, isOwner: true };
     }
 
     // Check if project is shared with user
     const user = await prisma.user.findUnique({ where: { id: userId } });
+    logger.debug('User lookup result', 'SharingService', {
+      projectId,
+      userId,
+      foundUser: !!user
+    });
+
     if (!user) {
+      logger.debug('User not found in database', 'SharingService', {
+        projectId,
+        userId
+      });
       return { hasAccess: false, isOwner: false };
     }
 
     // Check direct shares first
+    logger.debug('Checking for project shares', 'SharingService', {
+      projectId,
+      userId,
+      userEmail: user.email
+    });
+
     const share = await prisma.projectShare.findFirst({
       where: {
         projectId,
@@ -504,15 +561,43 @@ export async function hasProjectAccess(
       }
     });
 
+    logger.debug('Share lookup result', 'SharingService', {
+      projectId,
+      userId,
+      foundShare: !!share,
+      shareId: share?.id
+    });
+
     if (share) {
+      logger.debug('Found accepted share - granting access', 'SharingService', {
+        projectId,
+        userId,
+        shareId: share.id
+      });
       return { hasAccess: true, isOwner: false, shareId: share.id };
     }
 
+    // Let's also check all shares for this project to see what exists
+    const allShares = await prisma.projectShare.findMany({
+      where: {
+        projectId
+      }
+    });
+
+    logger.debug('All shares for this project', 'SharingService', {
+      projectId,
+      totalShares: allShares.length
+    });
+
     // No need for separate ShareLink check - all accepted shares are already checked above
+    logger.debug('No access granted - no ownership or accepted shares found', 'SharingService', {
+      projectId,
+      userId
+    });
 
     return { hasAccess: false, isOwner: false };
   } catch (error) {
-    logger.error('Failed to check project access:', error as Error, 'SharingService', {
+    logger.error('Exception in hasProjectAccess:', error as Error, 'SharingService', {
       projectId,
       userId
     });
@@ -531,7 +616,16 @@ export async function validateShareToken(token: string): Promise<any | null> {
         status: { in: ['pending', 'accepted'] }
       },
       include: {
-        project: true,
+        project: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true
+              }
+            }
+          }
+        },
         sharedBy: true
       }
     });

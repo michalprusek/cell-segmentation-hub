@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SlidersHorizontal, Package, Trash2 } from 'lucide-react';
+import { SlidersHorizontal, Package, Trash2, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -63,6 +63,7 @@ const ProjectToolbar = ({
   const navigate = useNavigate();
   const { id: projectId } = useParams<{ id: string }>();
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = () => {
     setShowExportDialog(true);
@@ -169,9 +170,19 @@ const ProjectToolbar = ({
             size="sm"
             className="flex items-center h-9"
             onClick={handleExport}
+            disabled={isExporting}
           >
-            <Package className="mr-1 h-4 w-4" />
-            {t('export.advancedExport')}
+            {isExporting ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                {t('export.downloading')}
+              </>
+            ) : (
+              <>
+                <Package className="mr-1 h-4 w-4" />
+                {t('export.advancedExport')}
+              </>
+            )}
           </Button>
         )}
 
@@ -286,6 +297,7 @@ const ProjectToolbar = ({
           projectName={projectName}
           images={images}
           selectedImageIds={selectedImageIds}
+          onExportingChange={setIsExporting}
         />
       )}
     </div>
