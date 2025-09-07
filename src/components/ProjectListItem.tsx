@@ -20,6 +20,7 @@ interface ProjectListItemProps {
   sharedBy?: { email: string };
   owner?: { email: string; name?: string };
   shareId?: string;
+  onProjectUpdate?: (projectId: string, action: string) => void;
 }
 
 const ProjectListItem = React.memo(
@@ -35,6 +36,7 @@ const ProjectListItem = React.memo(
     sharedBy,
     owner,
     shareId,
+    onProjectUpdate,
   }: ProjectListItemProps) => {
     const { t } = useLanguage();
     const { user } = useAuth();
@@ -42,6 +44,10 @@ const ProjectListItem = React.memo(
       if (onClick) {
         onClick();
       }
+    };
+
+    const handleAccessError = (projectId: string, error: unknown) => {
+      onProjectUpdate?.(projectId, 'access-denied');
     };
 
     return (
@@ -55,6 +61,7 @@ const ProjectListItem = React.memo(
               projectId={id}
               fallbackSrc={thumbnail}
               imageCount={imageCount}
+              onAccessError={handleAccessError}
             />
           </div>
 
@@ -86,6 +93,7 @@ const ProjectListItem = React.memo(
               projectId={id}
               isShared={isShared}
               shareId={shareId}
+              onProjectUpdate={onProjectUpdate}
             />
             <Button variant="ghost" size="icon" className="h-8 w-8">
               <ArrowRight className="h-4 w-4" />

@@ -56,11 +56,20 @@ interface AdvancedExportDialogProps {
   projectName: string;
   images: ProjectImage[];
   selectedImageIds?: string[];
+  onExportingChange?: (isExporting: boolean) => void;
 }
 
 export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
   React.memo(
-    ({ open, onClose, projectId, projectName, images, selectedImageIds }) => {
+    ({
+      open,
+      onClose,
+      projectId,
+      projectName,
+      images,
+      selectedImageIds,
+      onExportingChange,
+    }) => {
       const { t } = useLanguage();
       const {
         exportOptions,
@@ -77,6 +86,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       } = useAdvancedExport(projectId);
 
       const [activeTab, setActiveTab] = useState('general');
+
+      // Notify parent component when export state changes
+      useEffect(() => {
+        onExportingChange?.(isExporting);
+      }, [isExporting, onExportingChange]);
 
       // Set default selected images
       useEffect(() => {
