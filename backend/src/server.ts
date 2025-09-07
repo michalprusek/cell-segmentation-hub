@@ -292,6 +292,16 @@ const startServer = async (): Promise<void> => {
       // Don't exit - metrics collection can fail gracefully
     }
     
+    // Initialize health check service
+    try {
+      const { healthCheckService } = await import('./services/healthCheckService');
+      healthCheckService.startPeriodicChecks(30000); // Check every 30 seconds
+      logger.info('🏥 Health check service initialized with 30s interval');
+    } catch (error) {
+      logger.error('Failed to initialize health check service:', error as Error);
+      // Don't exit - health checks can fail gracefully
+    }
+    
     // Create HTTP server
     const server = createServer(app);
     
@@ -343,6 +353,15 @@ const startServer = async (): Promise<void> => {
       
       // Shutdown WebSocket service first
       await websocketService.shutdown();
+      
+      // Stop health check service
+      try {
+        const { healthCheckService } = await import('./services/healthCheckService');
+        await healthCheckService.cleanup();
+        logger.info('Health check service stopped');
+      } catch (error) {
+        logger.error('Error stopping health check service:', error as Error);
+      }
       
       server.close(async () => {
         logger.info('HTTP server closed');

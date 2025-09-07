@@ -66,11 +66,8 @@ services:
       - SMTP_IGNORE_TLS=true
       - SKIP_EMAIL_SEND=true  # TEMPORARY: Skip email sending due to SMTP timeout
       - UPLOAD_DIR=/app/uploads
-      - ALLOWED_ORIGINS=http://localhost:4000,http://localhost:4080,https://spherosegapp.utia.cas.cz
-      - CORS_ORIGIN=http://localhost:4000,http://localhost:4080,https://spherosegapp.utia.cas.cz
-      - WS_ALLOWED_ORIGINS=http://localhost:4000,http://localhost:4080,https://spherosegapp.utia.cas.cz
     volumes:
-      - ./backend/uploads/blue/blue:/app/uploads
+      - ./backend/uploads/blue:/app/uploads
       - ./backend/data/blue:/app/data
     restart: always
     healthcheck:
@@ -135,18 +132,14 @@ services:
       - REDIS_URL=redis://redis-blue:6379
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
-      - ./backend/uploads/blue/blue:/app/uploads
+      - ./backend/uploads/blue:/app/uploads
     restart: always
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 4G
         reservations:
           memory: 2G
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
