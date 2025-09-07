@@ -21,6 +21,7 @@ interface ProjectCardProps {
   sharedBy?: { email: string };
   owner?: { email: string; name?: string };
   shareId?: string;
+  onProjectUpdate?: (projectId: string, action: string) => void;
 }
 
 const ProjectCard = React.memo(
@@ -36,6 +37,7 @@ const ProjectCard = React.memo(
     sharedBy,
     owner,
     shareId,
+    onProjectUpdate,
   }: ProjectCardProps) => {
     const { t } = useLanguage();
     const { user } = useAuth();
@@ -56,6 +58,10 @@ const ProjectCard = React.memo(
       if (!isInteractive && onClick) {
         onClick();
       }
+    };
+
+    const handleAccessError = (projectId: string, error: unknown) => {
+      onProjectUpdate?.(projectId, 'access-denied');
     };
 
     return (
@@ -80,6 +86,7 @@ const ProjectCard = React.memo(
               projectId={id}
               fallbackSrc={thumbnail}
               imageCount={imageCount}
+              onAccessError={handleAccessError}
             />
             <div className="absolute top-4 right-4 z-10">
               <ProjectActions
@@ -88,6 +95,7 @@ const ProjectCard = React.memo(
                 onDialogStateChange={setIsDialogOpen}
                 isShared={isShared}
                 shareId={shareId}
+                onProjectUpdate={onProjectUpdate}
               />
             </div>
           </div>

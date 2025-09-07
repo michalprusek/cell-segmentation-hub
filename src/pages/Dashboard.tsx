@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -11,6 +11,7 @@ import { useDashboardProjects } from '@/hooks/useDashboardProjects';
 import { apiClient } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
+import { PageTransition } from '@/components/PageTransition';
 
 // Configuration for share propagation delay (in milliseconds)
 // This delay ensures database and cache have time to update after share acceptance
@@ -26,14 +27,18 @@ const Dashboard = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
 
-  const { projects, loading, fetchError, fetchProjects } = useDashboardProjects(
-    {
-      sortField,
-      sortDirection,
-      userId: user?.id,
-      userEmail: user?.email,
-    }
-  );
+  const {
+    projects,
+    loading,
+    fetchError,
+    fetchProjects,
+    removeProjectOptimistically,
+  } = useDashboardProjects({
+    sortField,
+    sortDirection,
+    userId: user?.id,
+    userEmail: user?.email,
+  });
 
   // Listen for WebSocket segmentation updates to refresh project cards
   const { lastUpdate } = useSegmentationQueue('DISABLE_GLOBAL');
@@ -161,29 +166,44 @@ const Dashboard = () => {
     }
   }, [lastUpdate, fetchProjects]);
 
-  const handleOpenProject = (id: string) => {
-    navigate(`/project/${id}`);
-  };
+  const handleOpenProject = useCallback(
+    (id: string) => {
+      navigate(`/project/${id}`);
+    },
+    [navigate]
+  );
 
-  const handleSort = (field: 'name' | 'updatedAt' | 'segmentationStatus') => {
-    let frontendField = field;
+  const handleSort = useCallback(
+    (field: 'name' | 'updatedAt' | 'segmentationStatus') => {
+      let frontendField = field;
 
-    // Map field names to frontend fields (API client already handles backend mapping)
-    if (field === 'name')
-      frontendField = 'name'; // Now sort by 'name' directly
-    else if (field === 'updatedAt') frontendField = 'updated_at';
+      // Map field names to frontend fields (API client already handles backend mapping)
+      if (field === 'name')
+        frontendField = 'name'; // Now sort by 'name' directly
+      else if (field === 'updatedAt') frontendField = 'updated_at';
 
-    // Toggle direction if same field
-    const newDirection =
-      frontendField === sortField
-        ? sortDirection === 'asc'
-          ? 'desc'
-          : 'asc'
-        : 'desc';
+      // Toggle direction if same field
+      const newDirection =
+        frontendField === sortField
+          ? sortDirection === 'asc'
+            ? 'desc'
+            : 'asc'
+          : 'desc';
 
-    setSortField(frontendField);
-    setSortDirection(newDirection);
-  };
+      setSortField(frontendField);
+      setSortDirection(newDirection);
+    },
+    [sortField, sortDirection]
+  );
+
+  const handleProjectUpdate = useCallback(
+    (projectId: string, action: string) => {
+      if (action === 'access-denied') {
+        removeProjectOptimistically(projectId);
+      }
+    },
+    [removeProjectOptimistically]
+  );
 
   if (fetchError) {
     return (
@@ -204,58 +224,70 @@ const Dashboard = () => {
     );
   }
 
+  // Memoize the StatsOverview component to prevent unnecessary re-renders
+  const statsOverview = useMemo(() => <StatsOverview />, []);
+
+  // Memoize the toolbar component
+  const projectToolbar = useMemo(
+    () => (
+      <ProjectToolbar
+        sortField={sortField as 'name' | 'updatedAt' | 'segmentationStatus'}
+        sortDirection={sortDirection}
+        onSort={handleSort}
+        viewMode={viewMode}
+        setViewMode={setViewMode}
+        showSearchBar={false}
+        showUploadButton={false}
+        showExportButton={false}
+      />
+    ),
+    [sortField, sortDirection, handleSort, viewMode]
+  );
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <DashboardHeader />
+    <PageTransition mode="fade">
+      <div className="min-h-screen bg-gray-50">
+        <DashboardHeader />
 
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
-          <div>
-            <h1 className="text-2xl font-bold mb-1">{t('common.dashboard')}</h1>
-            <p className="text-gray-500">{t('dashboard.manageProjects')}</p>
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
+            <div>
+              <h1 className="text-2xl font-bold mb-1">
+                {t('common.dashboard')}
+              </h1>
+              <p className="text-gray-500">{t('dashboard.manageProjects')}</p>
+            </div>
           </div>
-        </div>
 
-        <div className="mb-8 animate-fade-in">
-          <StatsOverview />
-        </div>
+          <div className="mb-8 animate-fade-in">{statsOverview}</div>
 
-        <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-            <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
-                  {t('dashboard.projectGallery')}
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {t('dashboard.projectGalleryDescription')}
-                </p>
+          <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
+                    {t('dashboard.projectGallery')}
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t('dashboard.projectGalleryDescription')}
+                  </p>
+                </div>
+
+                {projectToolbar}
               </div>
 
-              <ProjectToolbar
-                sortField={
-                  sortField as 'name' | 'updatedAt' | 'segmentationStatus'
-                }
-                sortDirection={sortDirection}
-                onSort={handleSort}
+              <ProjectsTab
+                projects={projects}
                 viewMode={viewMode}
-                setViewMode={setViewMode}
-                showSearchBar={false}
-                showUploadButton={false}
-                showExportButton={false}
+                loading={loading}
+                onOpenProject={handleOpenProject}
+                onProjectUpdate={handleProjectUpdate}
               />
             </div>
-
-            <ProjectsTab
-              projects={projects}
-              viewMode={viewMode}
-              loading={loading}
-              onOpenProject={handleOpenProject}
-            />
           </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   );
 };
 
