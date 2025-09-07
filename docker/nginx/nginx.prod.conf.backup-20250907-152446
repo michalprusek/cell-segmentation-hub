@@ -66,15 +66,15 @@ http {
     # UNIFIED UPSTREAM DEFINITIONS
     # These will be dynamically updated by deployment scripts
     upstream backend {
-        server blue-backend:3001;
+        server green-backend:3001;
     }
 
     upstream ml_service {
-        server blue-ml:8000;
+        server green-ml:8000;
     }
 
     upstream frontend {
-        server blue-frontend:80;
+        server green-frontend:80;
     }
 
 
