@@ -8,7 +8,7 @@ import {
   getSharedProjects,
   validateShareToken
 } from '../controllers/sharingController';
-import { authenticate } from '../../middleware/auth';
+import { authenticate, optionalAuthenticate } from '../../middleware/auth';
 import { validateBody, validateParams } from '../../middleware/validation';
 import {
   shareByEmailSchema,
@@ -82,6 +82,7 @@ router.get(
  */
 router.get(
   '/share/validate/:token',
+  optionalAuthenticate,
   validateParams(shareTokenSchema),
   validateShareToken
 );
@@ -92,6 +93,7 @@ router.get(
  */
 router.post(
   '/share/accept/:token',
+  optionalAuthenticate,
   validateParams(shareTokenSchema),
   acceptShareInvitation
 );

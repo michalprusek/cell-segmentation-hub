@@ -276,12 +276,12 @@ export async function refreshToken(data: RefreshTokenData): Promise<{ accessToke
    */
 export async function logout(refreshToken: string): Promise<void> {
     try {
-      const success = await sessionService.invalidateSessionByRefreshToken(refreshToken);
+      const success = await sessionService.deleteRefreshToken(refreshToken);
       
       if (success) {
         logger.info('User logged out successfully', 'AuthService');
       } else {
-        logger.warn('Session not found for logout', 'AuthService');
+        logger.warn('Refresh token not found for logout', 'AuthService');
       }
     } catch (error) {
       logger.error('Logout failed:', error as Error, 'AuthService');

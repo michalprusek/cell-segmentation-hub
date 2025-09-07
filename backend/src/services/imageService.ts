@@ -9,6 +9,7 @@ import sharp from 'sharp';
 import path from 'path';
 import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
+import { ApiError } from '../middleware/error';
 
 export interface UploadImageData {
   originalname: string;
@@ -86,7 +87,7 @@ export class ImageService {
     });
 
     if (!project) {
-      throw new Error('Project not found or no access');
+      throw ApiError.forbidden('Access denied to this project');
     }
 
     logger.info('Starting image upload', 'ImageService', {
@@ -190,7 +191,7 @@ export class ImageService {
     });
 
     if (!user) {
-      throw new Error('User not found');
+      throw ApiError.notFound('User not found');
     }
 
     // Verify project ownership or share access
@@ -215,7 +216,7 @@ export class ImageService {
     });
     
     if (!project) {
-      throw new Error('Project not found or no access');
+      throw ApiError.forbidden('Access denied to this project');
     }
 
     const { page, limit, status, sortBy, sortOrder } = options;
@@ -301,10 +302,9 @@ export class ImageService {
             {
               shares: {
                 some: {
-                  status: 'accepted',
                   OR: [
-                    { sharedWithId: userId },
-                    { email: user.email }
+                    { sharedWithId: userId, status: 'accepted' },
+                    { email: user.email, status: { in: ['pending', 'accepted'] } }
                   ]
                 }
               }
@@ -366,7 +366,7 @@ export class ImageService {
     });
 
     if (!image) {
-      throw new Error('Image not found or no access');
+      throw ApiError.forbidden('Access denied to this image');
     }
 
     const storage = getStorageProvider();
@@ -443,7 +443,7 @@ export class ImageService {
     });
 
     if (!project) {
-      throw new Error('Project not found or no access');
+      throw ApiError.forbidden('Access denied to this project');
     }
 
     // Get all images that exist and belong to the project (owner or shared)
@@ -566,7 +566,7 @@ export class ImageService {
     });
 
     if (!project) {
-      throw new Error('Project not found or no access');
+      throw ApiError.forbidden('Access denied to this project');
     }
 
     // Get all images in the project
@@ -622,17 +622,46 @@ export class ImageService {
     status: 'no_segmentation' | 'queued' | 'processing' | 'segmented' | 'failed',
     userId?: string
   ): Promise<void> {
-    const where: Prisma.ImageWhereInput = { id: imageId };
+    let where: Prisma.ImageWhereInput = { id: imageId };
     
     // Add user permission check if userId is provided
     if (userId) {
-      where.project = { userId };
+      // Get user email for share checking
+      const user = await this.prisma.user.findUnique({
+        where: { id: userId },
+        select: { email: true }
+      });
+
+      if (!user) {
+        throw ApiError.notFound('User not found');
+      }
+
+      // Use same permission check as getImageById method - check both ownership AND shared access
+      where = {
+        id: imageId,
+        project: {
+          OR: [
+            { userId }, // User owns the project
+            {
+              shares: {
+                some: {
+                  status: 'accepted',
+                  OR: [
+                    { sharedWithId: userId },
+                    { email: user.email }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      };
     }
 
     const image = await this.prisma.image.findFirst({ where });
 
     if (!image) {
-      throw new Error('Image not found or no access');
+      throw ApiError.forbidden('Access denied to this project');
     }
 
     await this.prisma.image.update({
@@ -663,7 +692,7 @@ export class ImageService {
 
     const image = await this.prisma.image.findFirst({ where });
     if (!image) {
-      throw new Error('Image not found or no access');
+      throw ApiError.forbidden('Access denied to this project');
     }
     
     // Check if conversion is needed

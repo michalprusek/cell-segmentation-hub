@@ -70,9 +70,7 @@ const ProjectListItem = React.memo(
             <div className="flex items-center gap-1 mt-1">
               <User className="h-3 w-3 text-gray-400" />
               <span className="text-xs text-gray-600 dark:text-gray-400">
-                {isShared && sharedBy
-                  ? sharedBy.email
-                  : owner?.email || user?.email || 'Unknown'}
+                {owner?.email || 'Unknown'}
               </span>
             </div>
             <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-1 mt-1">

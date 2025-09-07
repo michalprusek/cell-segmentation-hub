@@ -106,9 +106,7 @@ const ProjectCard = React.memo(
           <div className="flex items-center gap-1 mb-2">
             <User className="h-3 w-3 text-gray-400" />
             <p className="text-xs text-gray-600 dark:text-gray-400">
-              {isShared && sharedBy
-                ? sharedBy.email
-                : owner?.email || user?.email || 'Unknown'}
+              {owner?.email || 'Unknown'}
             </p>
           </div>
 

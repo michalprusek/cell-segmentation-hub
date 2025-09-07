@@ -47,9 +47,9 @@ services:
     environment:
       - VITE_API_URL=http://localhost:3001
       - VITE_API_BASE_URL=http://localhost:3001/api
-      - VITE_ML_SERVICE_URL=http://localhost:8000
+      - VITE_ML_SERVICE_URL=http://localhost:3001/api/ml
       - VITE_WS_URL=ws://localhost:3001
-      - NODE_ENV=production
+      - NODE_ENV=development
     ports:
       - "3000:5173"
     volumes:
@@ -74,25 +74,29 @@ services:
     container_name: spheroseg-backend
     env_file: ${ENV_FILE:-.env.development}
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=development
       - HOST=0.0.0.0
       - PORT=3001
       - DATABASE_URL=postgresql://spheroseg:spheroseg_dev@localhost:5432/spheroseg
       - REDIS_URL=redis://localhost:6379
-      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
-      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_ACCESS_SECRET=97f06b3bf3d7389514f44fc5153b1e6a08f105758322f532261c84b24854fa3f
+      - JWT_REFRESH_SECRET=a65c84f6b3adff25916ba06afb696fa7748d057b51d6f5ab55fd07c4da08bfcb
       - SEGMENTATION_SERVICE_URL=http://localhost:8000
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173
       - WS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173
       - CORS_ORIGIN=http://localhost:3000,http://localhost:4173,http://localhost:5173
-      - FRONTEND_URL=http://localhost:3000
+      - FRONTEND_URL=http://localhost:5173
       - API_BASE_URL=http://localhost:3001
       - BACKEND_URL=http://localhost:3001
       - PUBLIC_URL=http://localhost:3001
       - EMAIL_SERVICE=smtp
       - FROM_EMAIL=${FROM_EMAIL}
-      - SMTP_HOST=mailhog
+      - SMTP_HOST=localhost
       - SMTP_PORT=1025
+      - SMTP_SECURE=false
+      - SMTP_AUTH=false
+      - SMTP_REQUIRE_TLS=false
+      - EMAIL_TIMEOUT=30000
       # OpenTelemetry configuration
       - OTEL_SERVICE_NAME=spheroseg-backend
       - OTEL_SERVICE_VERSION=1.0.0
