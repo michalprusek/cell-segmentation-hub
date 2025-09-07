@@ -144,29 +144,25 @@ export const getProjectShares = asyncHandler(async (req: Request, res: Response)
 
   try {
     // Debug logging for the access check
-    logger.info('DEBUG: Starting getProjectShares access check', 'SharingController', {
+    logger.debug('Starting getProjectShares access check', 'SharingController', {
       userId: req.user.id,
-      projectId,
-      userEmail: req.user.email,
-      requestedEndpoint: 'GET /api/projects/:id/shares'
+      projectId
     });
 
     // Check if user has access to the project (owners and users with shared access can view shares)
     const accessCheck = await SharingService.hasProjectAccess(projectId, req.user.id);
     
-    logger.info('DEBUG: hasProjectAccess result', 'SharingController', {
+    logger.debug('hasProjectAccess result', 'SharingController', {
       userId: req.user.id,
       projectId,
       hasAccess: accessCheck.hasAccess,
-      isOwner: accessCheck.isOwner,
-      shareId: accessCheck.shareId
+      isOwner: accessCheck.isOwner
     });
 
     if (!accessCheck.hasAccess) {
-      logger.warn('DEBUG: Access denied - returning 404', 'SharingController', {
+      logger.debug('Access denied - returning 404', 'SharingController', {
         userId: req.user.id,
-        projectId,
-        reason: 'hasProjectAccess returned false'
+        projectId
       });
       ResponseHelper.notFound(res, 'Project not found');
       return;

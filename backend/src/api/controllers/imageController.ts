@@ -101,12 +101,14 @@ export class ImageController {
         projectId: req.params.id
       });
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
-        ResponseHelper.notFound(res, errorMessage);
-      } else {
-        ResponseHelper.internalError(res, error as Error);
+      // Handle ApiError instances directly
+      if (error instanceof ApiError) {
+        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        return;
       }
+
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -192,15 +194,8 @@ export class ImageController {
         return;
       }
 
-      // Fallback for legacy error messages (Czech and English patterns)
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění') || 
-          errorMessage.includes('not found') || errorMessage.includes('access') ||
-          errorMessage.includes('Access denied')) {
-        ResponseHelper.forbidden(res, 'Access denied to this project');
-      } else {
-        ResponseHelper.internalError(res, error as Error);
-      }
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -285,14 +280,8 @@ export class ImageController {
         return;
       }
 
-      // Fallback for legacy error messages
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění') ||
-          errorMessage.includes('Access denied')) {
-        ResponseHelper.forbidden(res, 'Access denied to this image');
-      } else {
-        ResponseHelper.internalError(res, error as Error);
-      }
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -357,14 +346,8 @@ export class ImageController {
         return;
       }
 
-      // Fallback for legacy error messages
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění') ||
-          errorMessage.includes('Access denied')) {
-        ResponseHelper.forbidden(res, 'Access denied to this project');
-      } else {
-        ResponseHelper.internalError(res, error as Error);
-      }
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -489,14 +472,8 @@ export class ImageController {
         return;
       }
 
-      // Fallback for legacy error messages
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění') ||
-          errorMessage.includes('Access denied')) {
-        ResponseHelper.forbidden(res, 'Access denied to this project');
-      } else {
-        ResponseHelper.internalError(res, error as Error);
-      }
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
@@ -722,12 +699,14 @@ export class ImageController {
         }
       );
 
-      const errorMessage = error instanceof Error ? error.message : 'Neznámá chyba';
-      if (errorMessage.includes('nenalezen') || errorMessage.includes('oprávnění')) {
-        ResponseHelper.notFound(res, errorMessage);
-      } else {
-        ResponseHelper.internalError(res, error as Error);
+      // Handle ApiError instances directly
+      if (error instanceof ApiError) {
+        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        return;
       }
+
+      // Fallback for non-ApiError errors
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
     }
   };
 
