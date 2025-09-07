@@ -37,6 +37,11 @@ const Dashboard = () => {
     const pendingToken = localStorage.getItem('pendingShareToken');
     if (!pendingToken || !user) return;
 
+    // Prevent duplicate processing by immediately removing the token
+    localStorage.removeItem('pendingShareToken');
+
+    let loadingToastId: string | number | undefined;
+
     try {
       logger.debug(
         'Processing pending share invitation with token:',
@@ -44,12 +49,12 @@ const Dashboard = () => {
       );
 
       // Show loading toast
-      const loadingToastId = toast.loading(t('sharing.processingInvitation'));
+      loadingToastId = toast.loading(t('sharing.processingInvitation'));
 
       const result = await apiClient.acceptShareInvitation(pendingToken);
 
-      // Dismiss loading toast
-      toast.dismiss(loadingToastId);
+      // Dismiss loading toast on success
+      if (loadingToastId) toast.dismiss(loadingToastId);
 
       if (!result.needsLogin) {
         toast.success(t('sharing.invitationAccepted'), {
@@ -58,13 +63,18 @@ const Dashboard = () => {
             : undefined,
         });
 
-        // Small delay to ensure database propagation
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Increased delay to ensure database propagation and API cache refresh
+        // This prevents race conditions where shared projects are fetched before
+        // the database has fully propagated the new share relationship
+        await new Promise(resolve => setTimeout(resolve, 1500));
 
         // Refresh projects list to show the newly shared project
         await fetchProjects();
       }
     } catch (error: any) {
+      // Always dismiss loading toast on error
+      if (loadingToastId) toast.dismiss(loadingToastId);
+
       logger.error('Failed to process pending share invitation:', error);
 
       // Check if the error is because invitation was already accepted
@@ -72,16 +82,27 @@ const Dashboard = () => {
         error?.response?.status === 409 ||
         error?.response?.data?.message?.includes('already')
       ) {
-        // Invitation was already accepted, just refresh the projects
+        // Invitation was already accepted, wait for propagation and refresh
+        logger.debug(
+          'Share invitation was already accepted, refreshing projects'
+        );
+        toast.info(
+          t(
+            'sharing.invitationAlreadyAccepted',
+            'Share invitation was already accepted'
+          )
+        );
+        await new Promise(resolve => setTimeout(resolve, 1500));
         await fetchProjects();
       } else if (error?.response?.status === 404) {
         // Invalid or expired invitation
         toast.error(t('sharing.invitationInvalid'));
+      } else {
+        // Show generic error for other cases
+        toast.error(
+          t('sharing.invitationError', 'Failed to process share invitation')
+        );
       }
-      // For other errors, don't show toast as it might confuse the user
-    } finally {
-      // Always remove the pending token after processing
-      localStorage.removeItem('pendingShareToken');
     }
   }, [user, t, fetchProjects]);
 

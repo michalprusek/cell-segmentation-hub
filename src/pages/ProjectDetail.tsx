@@ -20,7 +20,6 @@ import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { useThumbnailUpdates } from '@/hooks/useThumbnailUpdates';
 import { logger } from '@/lib/logger';
-import { logger } from '@/lib/logger';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { usePagination } from '@/hooks/usePagination';
 import { motion } from 'framer-motion';

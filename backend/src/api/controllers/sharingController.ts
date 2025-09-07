@@ -143,16 +143,35 @@ export const getProjectShares = asyncHandler(async (req: Request, res: Response)
   }
 
   try {
-    // Check if user owns the project (only owners can view shares)
+    // Debug logging for the access check
+    logger.info('DEBUG: Starting getProjectShares access check', 'SharingController', {
+      userId: req.user.id,
+      projectId,
+      userEmail: req.user.email,
+      requestedEndpoint: 'GET /api/projects/:id/shares'
+    });
+
+    // Check if user has access to the project (owners and users with shared access can view shares)
     const accessCheck = await SharingService.hasProjectAccess(projectId, req.user.id);
+    
+    logger.info('DEBUG: hasProjectAccess result', 'SharingController', {
+      userId: req.user.id,
+      projectId,
+      hasAccess: accessCheck.hasAccess,
+      isOwner: accessCheck.isOwner,
+      shareId: accessCheck.shareId
+    });
+
     if (!accessCheck.hasAccess) {
+      logger.warn('DEBUG: Access denied - returning 404', 'SharingController', {
+        userId: req.user.id,
+        projectId,
+        reason: 'hasProjectAccess returned false'
+      });
       ResponseHelper.notFound(res, 'Project not found');
       return;
     }
-    if (!accessCheck.isOwner) {
-      ResponseHelper.forbidden(res, 'Only project owners can view shares');
-      return;
-    }
+    // Both owners and users with shared access can view shares - no additional check needed
 
     const shares = await SharingService.getProjectShares(projectId, req.user!.id);
     
@@ -253,14 +272,29 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
       return;
     }
     
+    // Debug log to check data structure
+    if (shares.length > 0) {
+      logger.info('First share data structure:', {
+        hasProject: !!shares[0].project,
+        hasUser: !!shares[0].project?.user,
+        projectUserId: shares[0].project?.user?.id,
+        projectUserEmail: shares[0].project?.user?.email,
+        sharedById: shares[0].sharedBy?.id,
+        sharedByEmail: shares[0].sharedBy?.email
+      });
+    }
+
     const formattedProjects = shares
       .filter(share => 
         share.project && 
         share.sharedBy &&
+        share.project.user &&
         share.project.id &&
         share.project.title &&
         share.sharedBy.id &&
-        share.sharedBy.email
+        share.sharedBy.email &&
+        share.project.user.id &&
+        share.project.user.email
       ) // Filter out shares with missing data or incomplete nested properties
       .map(share => ({
       project: {
@@ -271,8 +305,8 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
         createdAt: share.project.createdAt,
         updatedAt: share.project.updatedAt,
         owner: {
-          id: share.sharedBy.id,
-          email: share.sharedBy.email
+          id: share.project.user.id,
+          email: share.project.user.email
         },
         image_count: (share.project as any)._count?.images || 0,
         images: (share.project as any).images || [],
@@ -327,7 +361,8 @@ export const validateShareToken = asyncHandler(async (req: Request, res: Respons
         project: {
           id: share.project.id,
           title: share.project.title,
-          description: share.project.description
+          description: share.project.description,
+          owner: share.project.user  // Include the project owner
         },
         sharedBy: {
           email: share.sharedBy.email
@@ -368,7 +403,8 @@ export const acceptShareInvitation = asyncHandler(async (req: Request, res: Resp
           project: {
             id: result.share.project.id,
             title: result.share.project.title,
-            description: result.share.project.description
+            description: result.share.project.description,
+            owner: result.share.project.user  // Include the project owner
           },
           sharedBy: {
             email: result.share.sharedBy.email
@@ -386,7 +422,8 @@ export const acceptShareInvitation = asyncHandler(async (req: Request, res: Resp
         project: {
           id: result.share.project.id,
           title: result.share.project.title,
-          description: result.share.project.description
+          description: result.share.project.description,
+          owner: result.share.project.user  // Include the project owner
         },
         shareId: result.share.id,
         sharedWithId: result.share.sharedWithId,
