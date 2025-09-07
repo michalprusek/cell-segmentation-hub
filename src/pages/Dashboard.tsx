@@ -12,6 +12,12 @@ import { apiClient } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 
+// Configuration for share propagation delay (in milliseconds)
+// This delay ensures database and cache have time to update after share acceptance
+const SHARE_PROPAGATION_DELAY = import.meta.env.VITE_SHARE_PROPAGATION_DELAY
+  ? parseInt(import.meta.env.VITE_SHARE_PROPAGATION_DELAY, 10)
+  : 1500;
+
 const Dashboard = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortField, setSortField] = useState<string>('updated_at');
@@ -63,10 +69,12 @@ const Dashboard = () => {
             : undefined,
         });
 
-        // Increased delay to ensure database propagation and API cache refresh
+        // Delay to ensure database propagation and API cache refresh
         // This prevents race conditions where shared projects are fetched before
         // the database has fully propagated the new share relationship
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve =>
+          setTimeout(resolve, SHARE_PROPAGATION_DELAY)
+        );
 
         // Refresh projects list to show the newly shared project
         await fetchProjects();
@@ -92,7 +100,9 @@ const Dashboard = () => {
             'Share invitation was already accepted'
           )
         );
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        await new Promise(resolve =>
+          setTimeout(resolve, SHARE_PROPAGATION_DELAY)
+        );
         await fetchProjects();
       } else if (error?.response?.status === 404) {
         // Invalid or expired invitation

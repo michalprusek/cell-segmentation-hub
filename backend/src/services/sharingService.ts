@@ -500,10 +500,9 @@ export async function hasProjectAccess(
   userId: string
 ): Promise<{ hasAccess: boolean; isOwner: boolean; shareId?: string }> {
   try {
-    logger.info('DEBUG: hasProjectAccess called', 'SharingService', {
+    logger.debug('hasProjectAccess called', 'SharingService', {
       projectId,
-      userId,
-      timestamp: new Date().toISOString()
+      userId
     });
 
     // Check if user is the owner
@@ -514,16 +513,14 @@ export async function hasProjectAccess(
       }
     });
 
-    logger.info('DEBUG: Owner check result', 'SharingService', {
+    logger.debug('Owner check result', 'SharingService', {
       projectId,
       userId,
-      foundProject: !!project,
-      projectUserId: project?.userId,
       isOwner: !!project
     });
 
     if (project) {
-      logger.info('DEBUG: User is project owner - granting access', 'SharingService', {
+      logger.debug('User is project owner - granting access', 'SharingService', {
         projectId,
         userId
       });
@@ -532,15 +529,14 @@ export async function hasProjectAccess(
 
     // Check if project is shared with user
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    logger.info('DEBUG: User lookup result', 'SharingService', {
+    logger.debug('User lookup result', 'SharingService', {
       projectId,
       userId,
-      foundUser: !!user,
-      userEmail: user?.email
+      foundUser: !!user
     });
 
     if (!user) {
-      logger.warn('DEBUG: User not found in database', 'SharingService', {
+      logger.debug('User not found in database', 'SharingService', {
         projectId,
         userId
       });
@@ -548,18 +544,10 @@ export async function hasProjectAccess(
     }
 
     // Check direct shares first
-    logger.info('DEBUG: Checking for project shares', 'SharingService', {
+    logger.debug('Checking for project shares', 'SharingService', {
       projectId,
       userId,
-      userEmail: user.email,
-      searchCriteria: {
-        projectId,
-        status: 'accepted',
-        OR: [
-          { sharedWithId: userId },
-          { email: user.email }
-        ]
-      }
+      userEmail: user.email
     });
 
     const share = await prisma.projectShare.findFirst({
@@ -573,19 +561,15 @@ export async function hasProjectAccess(
       }
     });
 
-    logger.info('DEBUG: Share lookup result', 'SharingService', {
+    logger.debug('Share lookup result', 'SharingService', {
       projectId,
       userId,
-      userEmail: user.email,
       foundShare: !!share,
-      shareId: share?.id,
-      shareStatus: share?.status,
-      shareEmail: share?.email,
-      sharedWithId: share?.sharedWithId
+      shareId: share?.id
     });
 
     if (share) {
-      logger.info('DEBUG: Found accepted share - granting access', 'SharingService', {
+      logger.debug('Found accepted share - granting access', 'SharingService', {
         projectId,
         userId,
         shareId: share.id
@@ -600,34 +584,22 @@ export async function hasProjectAccess(
       }
     });
 
-    logger.info('DEBUG: All shares for this project', 'SharingService', {
+    logger.debug('All shares for this project', 'SharingService', {
       projectId,
-      userId,
-      totalShares: allShares.length,
-      shares: allShares.map(s => ({
-        id: s.id,
-        email: s.email,
-        status: s.status,
-        sharedWithId: s.sharedWithId,
-        matchesUserId: s.sharedWithId === userId,
-        matchesUserEmail: s.email === user.email
-      }))
+      totalShares: allShares.length
     });
 
     // No need for separate ShareLink check - all accepted shares are already checked above
-    logger.warn('DEBUG: No access granted - no ownership or accepted shares found', 'SharingService', {
+    logger.debug('No access granted - no ownership or accepted shares found', 'SharingService', {
       projectId,
-      userId,
-      userEmail: user.email
+      userId
     });
 
     return { hasAccess: false, isOwner: false };
   } catch (error) {
-    logger.error('DEBUG: Exception in hasProjectAccess:', error as Error, 'SharingService', {
+    logger.error('Exception in hasProjectAccess:', error as Error, 'SharingService', {
       projectId,
-      userId,
-      errorMessage: (error as Error).message,
-      errorStack: (error as Error).stack
+      userId
     });
     return { hasAccess: false, isOwner: false };
   }
