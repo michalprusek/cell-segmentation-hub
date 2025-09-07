@@ -10,15 +10,15 @@ http {
     default_type application/octet-stream;
 
     upstream backend {
-        server blue-backend:3001;
+        server green-backend:3001;
     }
 
     upstream frontend {
-        server blue-frontend:80;
+        server green-frontend:80;
     }
 
     upstream ml {
-        server blue-ml:8000;
+        server green-ml:8000;
     }
 
     # Redirect HTTP to HTTPS
@@ -56,26 +56,6 @@ http {
             proxy_set_header X-Forwarded-Proto https;
         }
 
-        # WebSocket - MUST BE BEFORE CATCH-ALL
-        location /socket.io/ {
-            proxy_pass http://backend/socket.io/;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
-            proxy_set_header Host $host;
-            proxy_set_header X-Real-IP $remote_addr;
-            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto https;
-            
-            # CORS headers for WebSocket
-            add_header Access-Control-Allow-Origin "https://spherosegapp.utia.cas.cz" always;
-            add_header Access-Control-Allow-Credentials "true" always;
-            
-            proxy_connect_timeout 7d;
-            proxy_send_timeout 7d;
-            proxy_read_timeout 7d;
-        }
-
         # Uploads directory (images, thumbnails, avatars) - MUST BE BEFORE CATCH-ALL
         location /uploads/ {
             proxy_pass http://backend/uploads/;
@@ -97,6 +77,21 @@ http {
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto https;
+        }
+
+        # WebSocket
+        location /socket.io/ {
+            proxy_pass http://backend/socket.io/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_connect_timeout 7d;
+            proxy_send_timeout 7d;
+            proxy_read_timeout 7d;
         }
 
         # ML Service
