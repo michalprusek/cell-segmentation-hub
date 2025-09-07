@@ -56,11 +56,14 @@ const DashboardHeader = () => {
     const checkMlServiceStatus = async () => {
       try {
         // Use backend proxy endpoint instead of direct ML service call
+        const mlServiceUrl =
+          import.meta.env.VITE_ML_SERVICE_URL || 'http://localhost:3001/api/ml';
         const response = await fetchWithRetry(
-          '/api/ml/status',
+          `${mlServiceUrl}/status`,
           {
+            method: 'GET',
             headers: {
-              'Content-Type': 'application/json',
+              Accept: 'application/json',
             },
           },
           {
@@ -71,19 +74,28 @@ const DashboardHeader = () => {
         );
 
         if (response.ok) {
-          const data = await response.json();
-          // Check if we got a successful response from the backend
-          if (data.success && data.data) {
-            const status = data.data.service;
-            if (status === 'processing') {
-              setMlServiceStatus('processing');
-            } else if (status === 'online') {
-              setMlServiceStatus('idle');
+          const contentType = response.headers.get('content-type');
+          if (contentType && contentType.includes('application/json')) {
+            const data = await response.json();
+            // Check if we got a successful response from the backend
+            if (data.success && data.data) {
+              const status = data.data.service;
+              if (status === 'processing') {
+                setMlServiceStatus('processing');
+              } else if (status === 'online') {
+                setMlServiceStatus('idle');
+              } else {
+                setMlServiceStatus('error');
+              }
             } else {
-              setMlServiceStatus('error');
+              setMlServiceStatus('idle');
             }
           } else {
-            setMlServiceStatus('idle');
+            // Received HTML or other non-JSON content
+            logger.warn(
+              'ML service status endpoint returned non-JSON response'
+            );
+            setMlServiceStatus('error');
           }
         } else {
           setMlServiceStatus('error');

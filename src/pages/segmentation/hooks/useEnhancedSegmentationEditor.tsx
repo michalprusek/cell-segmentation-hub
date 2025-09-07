@@ -25,7 +25,11 @@ interface UseEnhancedSegmentationEditorProps {
   imageHeight: number;
   canvasWidth: number;
   canvasHeight: number;
-  onSave?: (polygons: Polygon[], imageId?: string) => Promise<void>;
+  onSave?: (
+    polygons: Polygon[],
+    imageId?: string,
+    dimensions?: { width: number; height: number }
+  ) => Promise<void>;
   onPolygonsChange?: (polygons: Polygon[]) => void;
   imageId?: string; // Add imageId to detect image changes
   isFromGallery?: boolean; // Add flag to trigger auto-reset
@@ -124,6 +128,29 @@ export const useEnhancedSegmentationEditor = ({
   const currentImageIdRef = useRef<string | undefined>(undefined);
   const hasInitialized = useRef(false);
   const previousImageIdRef = useRef<string | undefined>(imageId);
+  const previousImageDimensionsRef = useRef<
+    { width: number; height: number } | undefined
+  >(
+    imageWidth && imageHeight
+      ? { width: imageWidth, height: imageHeight }
+      : undefined
+  );
+
+  // Update dimensions ref whenever dimensions change (BEFORE image switch)
+  useEffect(() => {
+    if (imageWidth && imageHeight && imageId === previousImageIdRef.current) {
+      // Only update if we're still on the same image
+      previousImageDimensionsRef.current = {
+        width: imageWidth,
+        height: imageHeight,
+      };
+      logger.debug('📐 Updated dimension tracking:', {
+        width: imageWidth,
+        height: imageHeight,
+        imageId,
+      });
+    }
+  }, [imageWidth, imageHeight, imageId]);
 
   // Autosave function - defined early to be used in useEffect
   const autosaveBeforeReset = useCallback(async () => {
@@ -146,15 +173,27 @@ export const useEnhancedSegmentationEditor = ({
         '🔄 Autosaving before switching from image:',
         previousImageId,
         'to:',
-        currentImageId
+        currentImageId,
+        'with dimensions:',
+        previousImageDimensionsRef.current
       );
 
       // Save the polygons from the previous image
       const polygonsToSave = history[historyIndex] || [];
 
       try {
-        await onSave(polygonsToSave, previousImageId);
-        logger.debug('✅ Autosave completed for image:', previousImageId);
+        // Pass the previous image dimensions to ensure correct coordinate context
+        await onSave(
+          polygonsToSave,
+          previousImageId,
+          previousImageDimensionsRef.current
+        );
+        logger.debug(
+          '✅ Autosave completed for image:',
+          previousImageId,
+          'with dimensions:',
+          previousImageDimensionsRef.current
+        );
       } catch (error) {
         logger.error('Autosave failed when switching images:', error);
         toast.error(t('toast.autosaveFailed'));
@@ -163,6 +202,7 @@ export const useEnhancedSegmentationEditor = ({
 
     // Update the ref for next comparison
     previousImageIdRef.current = currentImageId;
+    // Note: dimensions are now tracked separately in a useEffect to ensure they're captured BEFORE image changes
   }, [imageId, hasUnsavedChanges, onSave, history, historyIndex, t]);
 
   useEffect(() => {

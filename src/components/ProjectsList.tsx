@@ -4,6 +4,8 @@ import ProjectListItem from '@/components/ProjectListItem';
 import NewProjectCard from '@/components/NewProjectCard';
 import NewProjectListItem from '@/components/NewProjectListItem';
 import { useLanguage } from '@/contexts/useLanguage';
+import { SkeletonProjectCard } from '@/components/ui/skeleton-variants';
+import { cn } from '@/lib/utils';
 
 export interface Project {
   id: string;
@@ -25,6 +27,7 @@ export interface ProjectsListProps {
   onOpenProject: (id: string) => void;
   loading: boolean;
   showCreateCard?: boolean;
+  onProjectUpdate?: (projectId: string, action: string) => void;
 }
 
 const ProjectsList = ({
@@ -33,18 +36,28 @@ const ProjectsList = ({
   onOpenProject,
   loading,
   showCreateCard = false,
+  onProjectUpdate,
 }: ProjectsListProps) => {
   const { t } = useLanguage();
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div
+        className={cn(
+          viewMode === 'grid'
+            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
+            : 'flex flex-col space-y-3 w-full'
+        )}
+      >
         {Array.from({ length: 6 }).map((_, index) => (
           <div
             key={index}
-            className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm h-64 animate-pulse"
-          />
+            className="animate-in fade-in duration-500"
+            style={{ animationDelay: `${index * 75}ms` }}
+          >
+            <SkeletonProjectCard />
+          </div>
         ))}
       </div>
     );
@@ -61,21 +74,27 @@ const ProjectsList = ({
   }
 
   if (viewMode === 'list') {
-    const projectItems = projects.map(project => (
-      <ProjectListItem
+    const projectItems = projects.map((project, index) => (
+      <div
         key={project.id}
-        id={project.id}
-        title={project.title}
-        description={project.description}
-        thumbnail={project.thumbnail}
-        date={project.date}
-        imageCount={project.imageCount}
-        onClick={() => onOpenProject(project.id)}
-        isShared={project.isShared}
-        sharedBy={project.sharedBy}
-        owner={project.owner}
-        shareId={project.shareId}
-      />
+        className="animate-in fade-in slide-in-from-bottom-2 duration-500"
+        style={{ animationDelay: `${index * 50}ms` }}
+      >
+        <ProjectListItem
+          id={project.id}
+          title={project.title}
+          description={project.description}
+          thumbnail={project.thumbnail}
+          date={project.date}
+          imageCount={project.imageCount}
+          onClick={() => onOpenProject(project.id)}
+          isShared={project.isShared}
+          sharedBy={project.sharedBy}
+          owner={project.owner}
+          shareId={project.shareId}
+          onProjectUpdate={onProjectUpdate}
+        />
+      </div>
     ));
 
     const allItems = showCreateCard
@@ -102,21 +121,27 @@ const ProjectsList = ({
   }
 
   // Grid mode
-  const projectItems = projects.map(project => (
-    <ProjectCard
+  const projectItems = projects.map((project, index) => (
+    <div
       key={project.id}
-      id={project.id}
-      title={project.title}
-      description={project.description}
-      thumbnail={project.thumbnail}
-      date={project.date}
-      imageCount={project.imageCount}
-      onClick={() => onOpenProject(project.id)}
-      isShared={project.isShared}
-      sharedBy={project.sharedBy}
-      owner={project.owner}
-      shareId={project.shareId}
-    />
+      className="animate-in fade-in zoom-in-95 duration-500"
+      style={{ animationDelay: `${index * 75}ms` }}
+    >
+      <ProjectCard
+        id={project.id}
+        title={project.title}
+        description={project.description}
+        thumbnail={project.thumbnail}
+        date={project.date}
+        imageCount={project.imageCount}
+        onClick={() => onOpenProject(project.id)}
+        isShared={project.isShared}
+        sharedBy={project.sharedBy}
+        owner={project.owner}
+        shareId={project.shareId}
+        onProjectUpdate={onProjectUpdate}
+      />
+    </div>
   ));
 
   const allItems = showCreateCard

@@ -53,7 +53,7 @@ export function parseDatabaseUrl(url: string): {
   database: string;
 } | null {
   try {
-    const urlPattern = /^(postgresql|postgres):\/\/([^:]+):([^@]+)@([^:\/]+):(\d+)\/(.+)$/;
+    const urlPattern = /^(postgresql|postgres):\/\/([^:]+):([^@]+)@([^:/]+):(\d+)\/(.+)$/;
     const match = url.match(urlPattern);
     
     if (!match) {

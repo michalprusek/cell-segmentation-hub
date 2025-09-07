@@ -225,7 +225,7 @@ function registerKnownRoutes(): void {
   });
 
   registerRoute({
-    path: '/api/projects/shared',
+    path: '/api/shared/projects',
     method: 'GET',
     description: 'Projekty sdílené se mnou',
     authenticated: true
@@ -286,7 +286,7 @@ function registerKnownRoutes(): void {
     path: '/api/ml/status',
     method: 'GET',
     description: 'Stav ML služby',
-    authenticated: true
+    authenticated: false
   });
 
   registerRoute({
