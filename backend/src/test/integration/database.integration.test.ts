@@ -48,13 +48,48 @@ describe('Database Integration Tests', () => {
   afterAll(async () => {
     try {
       // Clean up without transaction
-      await prisma.segmentationQueue.deleteMany({}).catch(() => {});
-      await prisma.segmentation.deleteMany({}).catch(() => {});
-      await prisma.image.deleteMany({}).catch(() => {});
-      await prisma.project.deleteMany({}).catch(() => {});
-      await prisma.session.deleteMany({}).catch(() => {});
-      await prisma.profile.deleteMany({}).catch(() => {});
-      await prisma.user.deleteMany({}).catch(() => {});
+      await prisma.segmentationQueue.deleteMany({}).catch((error) => {
+        console.warn('SegmentationQueue cleanup failed:', error.message);
+        if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
+          throw error;
+        }
+      });
+      await prisma.segmentation.deleteMany({}).catch((error) => {
+        console.warn('Segmentation cleanup failed:', error.message);
+        if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
+          throw error;
+        }
+      });
+      await prisma.image.deleteMany({}).catch((error) => {
+        console.warn('Image cleanup failed:', error.message);
+        if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
+          throw error;
+        }
+      });
+      await prisma.project.deleteMany({}).catch((error) => {
+        console.warn('Project cleanup failed:', error.message);
+        if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
+          throw error;
+        }
+      });
+      await prisma.session.deleteMany({}).catch((error) => {
+        console.warn('Session cleanup failed:', error.message);
+        if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
+          throw error;
+        }
+      });
+      await prisma.profile.deleteMany({}).catch((error) => {
+        console.warn('Profile cleanup failed:', error.message);
+        if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
+          throw error;
+        }
+      });
+      await prisma.user.deleteMany({}).catch((error) => {
+        console.warn('User cleanup failed:', error.message);
+        if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
+          throw error;
+        }
+      });
     } catch (error) {
       console.warn('Database cleanup failed in afterAll:', error)
     }

@@ -113,6 +113,13 @@ bun.lockb
 # Generated documentation
 docs/api/generated/
 
+# Test results
+backend/e2e-results.json
+backend/frontend-test-results.json
+real-*-measurements-*.json
+**/test-results/
+**/coverage/
+
 # Development tools
 .vscode/settings.json
 
