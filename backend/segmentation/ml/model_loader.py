@@ -256,6 +256,11 @@ class ModelLoader:
     def preprocess_image(self, image: Image.Image, target_size: Tuple[int, int] = (1024, 1024)) -> torch.Tensor:
         """Preprocess single image for model inference - OPTIMIZED VERSION"""
         
+        # Ensure image is in RGB format (convert grayscale to RGB if needed)
+        if image.mode != 'RGB':
+            logger.info(f"Converting image from {image.mode} to RGB")
+            image = image.convert('RGB')
+        
         # Initialize transform pipeline if not already done
         if not hasattr(self, '_transform'):
             self._transform = transforms.Compose([
@@ -275,6 +280,15 @@ class ModelLoader:
     def preprocess_image_batch(self, images: List[Image.Image], target_size: Tuple[int, int] = (1024, 1024)) -> torch.Tensor:
         """Preprocess batch of images for model inference - OPTIMIZED VERSION"""
         
+        # Ensure all images are in RGB format
+        rgb_images = []
+        for img in images:
+            if img.mode != 'RGB':
+                logger.info(f"Converting batch image from {img.mode} to RGB")
+                rgb_images.append(img.convert('RGB'))
+            else:
+                rgb_images.append(img)
+        
         # Initialize transform pipeline if not already done
         if not hasattr(self, '_transform'):
             self._transform = transforms.Compose([
@@ -288,7 +302,7 @@ class ModelLoader:
         
         # Process all images with optimized pipeline
         batch_tensors = []
-        for image in images:
+        for image in rgb_images:  # Use the RGB-converted images
             tensor = self._transform(image)
             batch_tensors.append(tensor)
         

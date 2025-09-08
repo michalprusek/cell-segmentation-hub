@@ -12,8 +12,8 @@ export const uuidSchema = z.string().uuid('Musí být platné UUID');
 /**
  * Segmentation model validation
  */
-export const segmentationModelSchema = z.enum(['hrnet', 'cbam_resunet', 'unet_spherohq', 'resunet_advanced', 'resunet_small'], {
-  errorMap: () => ({ message: 'Model musí být hrnet, cbam_resunet, unet_spherohq, resunet_advanced nebo resunet_small' })
+export const segmentationModelSchema = z.enum(['hrnet', 'cbam_resunet', 'unet_spherohq'], {
+  errorMap: () => ({ message: 'Model musí být hrnet, cbam_resunet nebo unet_spherohq' })
 });
 
 /**
