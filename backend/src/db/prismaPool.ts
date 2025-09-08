@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { logger } from '../utils/logger';
+import { getPrismaConfig } from './prismaConfig';
 
 /**
  * Connection pool configuration for Prisma
@@ -100,16 +101,12 @@ class PrismaPool {
       throw new Error('Connection limit reached');
     }
 
-    const client = new PrismaClient({
-      log: this.config.enablePoolLogging 
-        ? ['query', 'info', 'warn', 'error']
-        : ['error'],
-      datasources: {
-        db: {
-          url: process.env.DATABASE_URL,
-        },
-      },
-    });
+    const clientConfig = getPrismaConfig();
+    // Override log level based on pool config
+    if (this.config.enablePoolLogging) {
+      clientConfig.log = ['query', 'info', 'warn', 'error'];
+    }
+    const client = new PrismaClient(clientConfig);
 
     try {
       // Test the connection

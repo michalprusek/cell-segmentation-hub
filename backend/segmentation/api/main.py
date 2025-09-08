@@ -42,12 +42,19 @@ async def lifespan(app: FastAPI):
         app.state.model_loader = model_loader_instance
         logger.info("Model loader initialized")
         
-        # Pre-load HRNet model for faster first response
-        try:
-            model_loader_instance.load_model("hrnet")
-            logger.info("HRNet model pre-loaded successfully")
-        except Exception as e:
-            logger.warning(f"Could not pre-load HRNet model: {e}")
+        # Pre-load all models for faster first response
+        models_to_load = ["hrnet", "cbam_resunet", "unet_spherohq"]
+        loaded_count = 0
+        
+        for model_name in models_to_load:
+            try:
+                model_loader_instance.load_model(model_name)
+                logger.info(f"{model_name.upper()} model pre-loaded successfully")
+                loaded_count += 1
+            except Exception as e:
+                logger.warning(f"Could not pre-load {model_name} model: {e}")
+        
+        logger.info(f"Pre-loaded {loaded_count}/{len(models_to_load)} models")
         
         logger.info("Segmentation microservice started successfully")
     except Exception as e:

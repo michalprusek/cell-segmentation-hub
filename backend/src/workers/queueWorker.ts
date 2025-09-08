@@ -10,18 +10,23 @@ export class QueueWorker {
   private healthCheckIntervalId: NodeJS.Timeout | null = null;
   private cleanupIntervalId: NodeJS.Timeout | null = null;
   private isRunning = false;
+  private isProcessing = false;
+  private immediateProcessTimer: NodeJS.Immediate | null = null;
   private queueService: QueueService;
   private imageService: ImageService;
   private segmentationService: SegmentationService;
   
   constructor(
     private prisma: PrismaClient,
-    private intervalMs = 5000 // Check every 5 seconds
+    private intervalMs = 100 // Check every 100ms for near-instant processing
   ) {
     // Initialize services
     this.imageService = new ImageService(prisma);
     this.segmentationService = new SegmentationService(prisma, this.imageService);
     this.queueService = QueueService.getInstance(prisma, this.segmentationService, this.imageService);
+    
+    // Register this worker with QueueService for immediate processing triggers
+    this.queueService.setQueueWorker(this);
   }
   
   public static getInstance(prisma: PrismaClient): QueueWorker {
@@ -96,9 +101,31 @@ export class QueueWorker {
   }
   
   /**
+   * Trigger immediate queue processing when new items are added
+   */
+  public triggerImmediateProcessing(): void {
+    if (!this.isRunning) return;
+    
+    // If not currently processing and no immediate timer set, process immediately
+    if (!this.isProcessing && !this.immediateProcessTimer) {
+      this.immediateProcessTimer = setImmediate(() => {
+        this.immediateProcessTimer = null;
+        this.processQueue();
+      });
+    }
+  }
+
+  /**
    * Process the queue using batch processing for better performance
    */
   private async processQueue(): Promise<void> {
+    // Prevent overlapping executions
+    if (this.isProcessing) {
+      return;
+    }
+    
+    this.isProcessing = true;
+    
     try {
       // Try to get a batch of items for processing
       const batch = await this.queueService.getNextBatch();
@@ -143,6 +170,8 @@ export class QueueWorker {
       
     } catch (error) {
       logger.error('Failed to process queue', error instanceof Error ? error : undefined, 'QueueWorker');
+    } finally {
+      this.isProcessing = false;
     }
   }
 

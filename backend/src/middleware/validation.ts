@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import type { Express } from 'express-serve-static-core';
 import { ZodSchema, ZodError } from 'zod';
 import { ResponseHelper } from '../utils/response';
+import { logger } from '../utils/logger';
 
 export type ValidationTarget = 'body' | 'query' | 'params';
 
@@ -13,8 +14,8 @@ export const validate = <T>(
   target: ValidationTarget = 'body'
 ): (req: Request, res: Response, next: NextFunction) => void => {
   return (req: Request, res: Response, next: NextFunction) => {
+    const data = req[target];
     try {
-      const data = req[target];
       const validatedData = schema.parse(data);
       
       // Replace the original data with validated data
@@ -31,6 +32,17 @@ export const validate = <T>(
             errors[path] = [];
           }
           errors[path].push(err.message);
+        });
+
+        // Enhanced logging for validation errors with request details
+        logger.warn('Validation failed', undefined, 'ValidationMiddleware', {
+          target: target,
+          url: req.url,
+          method: req.method,
+          userId: (req as any).user?.id,
+          validationErrors: errors,
+          receivedData: data,
+          errorCount: error.errors.length
         });
 
         return ResponseHelper.validationError(res, errors, 'Validation');

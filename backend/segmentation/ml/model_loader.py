@@ -6,6 +6,7 @@ import os
 import json
 import torch
 import torch.nn.functional as F
+import torchvision.transforms as transforms
 from PIL import Image
 import numpy as np
 import cv2
@@ -28,6 +29,7 @@ except ImportError:
 # Import model architectures using relative imports
 from models.hrnet import HRNetV2
 from models.cbam_resunet import ResUNetCBAM
+from models.unet import UNet
 
 # Import the new inference executor
 from .inference_executor import (
@@ -109,6 +111,12 @@ class ModelLoader:
             'pretrained_path': 'weights/cbam_resunet_new.pth',
             'finetuned_path': 'weights/cbam_resunet_new.pth',
             'config_path': None
+        },
+        'unet_spherohq': {
+            'class': UNet,
+            'pretrained_path': 'weights/unet_spherohq_best.pth',
+            'finetuned_path': 'weights/unet_spherohq_best.pth',
+            'config_path': None
         }
     }
     
@@ -182,6 +190,10 @@ class ModelLoader:
             elif model_name == 'cbam_resunet':
                 # Use correct feature dimensions matching trained weights: [64, 128, 256, 512]
                 model = ResUNetCBAM(in_channels=3, out_channels=1, features=[64, 128, 256, 512], use_instance_norm=True, dropout_rate=0.0)  # No dropout for inference!
+            elif model_name == 'unet_spherohq':
+                # UNet optimized for SpheroHQ dataset
+                model = UNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512, 1024], 
+                           use_instance_norm=True, dropout_rate=0.0, use_deep_supervision=False)
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
             
@@ -242,54 +254,43 @@ class ModelLoader:
         return self.loaded_models[model_name]
     
     def preprocess_image(self, image: Image.Image, target_size: Tuple[int, int] = (1024, 1024)) -> torch.Tensor:
-        """Preprocess single image for model inference"""
+        """Preprocess single image for model inference - OPTIMIZED VERSION"""
         
-        # Convert to RGB if needed
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
+        # Initialize transform pipeline if not already done
+        if not hasattr(self, '_transform'):
+            self._transform = transforms.Compose([
+                transforms.Resize(target_size),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]
+                )
+            ])
         
-        # Resize image
-        image = image.resize(target_size, Image.Resampling.LANCZOS)
+        # Apply unified preprocessing pipeline
+        tensor = self._transform(image).unsqueeze(0)
         
-        # Convert to numpy array and normalize to [0, 1]
-        image_np = np.array(image).astype(np.float32) / 255.0
-        
-        # Convert to tensor and add batch dimension
-        image_tensor = torch.from_numpy(image_np.transpose(2, 0, 1)).unsqueeze(0)
-        
-        # Apply ImageNet normalization (CRITICAL for model performance!)
-        mean = torch.tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1)
-        std = torch.tensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1)
-        image_tensor = (image_tensor - mean) / std
-        
-        return image_tensor.to(self.device)
+        return tensor.to(self.device)
     
     def preprocess_image_batch(self, images: List[Image.Image], target_size: Tuple[int, int] = (1024, 1024)) -> torch.Tensor:
-        """Preprocess batch of images for model inference"""
+        """Preprocess batch of images for model inference - OPTIMIZED VERSION"""
         
+        # Initialize transform pipeline if not already done
+        if not hasattr(self, '_transform'):
+            self._transform = transforms.Compose([
+                transforms.Resize(target_size),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406],
+                    std=[0.229, 0.224, 0.225]
+                )
+            ])
+        
+        # Process all images with optimized pipeline
         batch_tensors = []
-        
         for image in images:
-            # Convert to RGB if needed
-            if image.mode != 'RGB':
-                image = image.convert('RGB')
-            
-            # Resize image
-            image = image.resize(target_size, Image.Resampling.LANCZOS)
-            
-            # Convert to numpy array and normalize to [0, 1]
-            image_np = np.array(image).astype(np.float32) / 255.0
-            
-            # Convert to tensor (no batch dimension yet)
-            image_tensor = torch.from_numpy(image_np.transpose(2, 0, 1))
-            
-            # Apply ImageNet normalization (CRITICAL for model performance!)
-            # Same as used during training
-            mean = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-            std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
-            image_tensor = (image_tensor - mean) / std
-            
-            batch_tensors.append(image_tensor)
+            tensor = self._transform(image)
+            batch_tensors.append(tensor)
         
         # Stack into batch tensor
         batch_tensor = torch.stack(batch_tensors, dim=0)

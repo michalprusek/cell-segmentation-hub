@@ -4,6 +4,17 @@ import { fetchWithRetry } from '../httpUtils';
 // Mock fetch globally
 global.fetch = vi.fn();
 
+// Helper function to create Response with proper ok property
+function createResponse(body: any, init?: ResponseInit): Response {
+  const response = new Response(body, init);
+  const status = init?.status || 200;
+  Object.defineProperty(response, 'ok', {
+    value: status >= 200 && status < 300,
+    writable: false,
+  });
+  return response;
+}
+
 describe('HTTP Utils', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -15,7 +26,7 @@ describe('HTTP Utils', () => {
 
   describe('fetchWithRetry', () => {
     test('should return response on successful request', async () => {
-      const mockResponse = new Response('success', {
+      const mockResponse = createResponse('success', {
         status: 200,
         statusText: 'OK',
       });
@@ -32,7 +43,7 @@ describe('HTTP Utils', () => {
     });
 
     test('should pass through request options', async () => {
-      const mockResponse = new Response('success', { status: 200 });
+      const mockResponse = createResponse('success', { status: 200 });
       (global.fetch as any).mockResolvedValue(mockResponse);
 
       const options = {
@@ -54,7 +65,7 @@ describe('HTTP Utils', () => {
       (global.fetch as any)
         .mockRejectedValueOnce(networkError)
         .mockRejectedValueOnce(networkError)
-        .mockResolvedValue(new Response('success', { status: 200 }));
+        .mockResolvedValue(createResponse('success', { status: 200 }));
 
       const result = await fetchWithRetry('https://api.example.com/test');
 
@@ -65,19 +76,19 @@ describe('HTTP Utils', () => {
     test('should retry on HTTP error status', async () => {
       (global.fetch as any)
         .mockResolvedValueOnce(
-          new Response('Server Error', {
+          createResponse('Server Error', {
             status: 500,
             statusText: 'Internal Server Error',
           })
         )
         .mockResolvedValueOnce(
-          new Response('Bad Gateway', {
+          createResponse('Bad Gateway', {
             status: 502,
             statusText: 'Bad Gateway',
           })
         )
         .mockResolvedValue(
-          new Response('success', { status: 200, statusText: 'OK' })
+          createResponse('success', { status: 200, statusText: 'OK' })
         );
 
       const result = await fetchWithRetry('https://api.example.com/test');
@@ -213,7 +224,7 @@ describe('HTTP Utils', () => {
 
     test('should create proper HTTP error messages', async () => {
       (global.fetch as any).mockResolvedValue(
-        new Response('Not Found', { status: 404, statusText: 'Not Found' })
+        createResponse('Not Found', { status: 404, statusText: 'Not Found' })
       );
 
       await expect(
@@ -223,7 +234,7 @@ describe('HTTP Utils', () => {
 
     test('should handle response with no statusText', async () => {
       (global.fetch as any).mockResolvedValue(
-        new Response('Error', { status: 500, statusText: '' })
+        createResponse('Error', { status: 500, statusText: '' })
       );
 
       await expect(
@@ -231,25 +242,49 @@ describe('HTTP Utils', () => {
       ).rejects.toThrow('HTTP 500: ');
     });
 
-    test('should return immediately on successful response status codes', async () => {
-      const successCodes = [200, 201, 202, 204, 206, 301, 302, 304];
-
-      for (const code of successCodes) {
-        const mockResponse = new Response('success', { status: code });
-        (global.fetch as any).mockResolvedValueOnce(mockResponse);
+    test.each([200, 201, 202, 204, 206])(
+      'should return immediately on successful response status code %i',
+      async code => {
+        // Response with 204 cannot have a body
+        const body = code === 204 ? null : 'success';
+        const mockResponse = createResponse(body, { status: code });
+        (global.fetch as any).mockResolvedValue(mockResponse);
 
         const result = await fetchWithRetry('https://api.example.com/test');
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(result.status).toBe(code);
       }
-    });
+    );
+
+    test.each([301, 302, 304])(
+      'should retry on redirect/not-modified status code %i and eventually succeed',
+      async code => {
+        // These status codes are not considered "ok" (200-299), so they should trigger retry
+        const body = code === 304 ? null : 'redirect';
+        const errorResponse = createResponse(body, { status: code });
+        const successResponse = createResponse('success', { status: 200 });
+
+        // First call returns redirect/not-modified, second returns success
+        (global.fetch as any)
+          .mockResolvedValueOnce(errorResponse)
+          .mockResolvedValue(successResponse);
+
+        const result = await fetchWithRetry('https://api.example.com/test');
+
+        // Should have retried once after getting non-ok status
+        expect(global.fetch).toHaveBeenCalledTimes(2);
+        expect(result.status).toBe(200);
+      }
+    );
 
     test('should retry on client and server error status codes', async () => {
       const errorCodes = [400, 401, 403, 404, 500, 502, 503, 504];
 
       for (const code of errorCodes) {
         (global.fetch as any)
-          .mockResolvedValueOnce(new Response('Error', { status: code }))
-          .mockResolvedValue(new Response('Success', { status: 200 }));
+          .mockResolvedValueOnce(createResponse('Error', { status: code }))
+          .mockResolvedValue(createResponse('Success', { status: 200 }));
 
         const result = await fetchWithRetry('https://api.example.com/test');
         expect(result.status).toBe(200);
@@ -271,7 +306,7 @@ describe('HTTP Utils', () => {
     });
 
     test('should work with default options', async () => {
-      const mockResponse = new Response('success', { status: 200 });
+      const mockResponse = createResponse('success', { status: 200 });
       (global.fetch as any).mockResolvedValue(mockResponse);
 
       const result = await fetchWithRetry('https://api.example.com/test');
@@ -289,8 +324,8 @@ describe('HTTP Utils', () => {
       // Third request succeeds
       (global.fetch as any)
         .mockRejectedValueOnce(new Error('Network timeout'))
-        .mockResolvedValueOnce(new Response('Server Error', { status: 500 }))
-        .mockResolvedValue(new Response('Success', { status: 200 }));
+        .mockResolvedValueOnce(createResponse('Server Error', { status: 500 }))
+        .mockResolvedValue(createResponse('Success', { status: 200 }));
 
       const result = await fetchWithRetry('https://api.example.com/test');
 

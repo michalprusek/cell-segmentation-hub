@@ -207,7 +207,7 @@ export function validateEnvironment(): ValidationResult {
   if (result.valid) {
     logger.info('✅ Environment validation passed', 'EnvValidator', result.summary);
   } else {
-    logger.error('❌ Environment validation failed', 'EnvValidator', {
+    logger.error('❌ Environment validation failed', undefined, 'EnvValidator', {
       ...result.summary,
       errors: result.errors.slice(0, 5), // Log first 5 errors
     });

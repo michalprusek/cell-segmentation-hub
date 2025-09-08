@@ -272,6 +272,18 @@ Multi-language support via `LanguageContext` with translations in `/src/translat
 - **Health checks**: Use `make health` to verify all services are running
 - **Service logs**: Use `make logs-f` to monitor all services in real-time
 
+### Performance Testing
+
+- **Script**: `python3 measure-all-models.py` - Comprehensive performance measurement
+- **Features**:
+  - 100 samples per model for statistical significance
+  - 5-iteration warmup phase
+  - 95% confidence intervals using t-distribution
+  - Measures: inference, preprocessing, postprocessing times
+  - Outputs LaTeX-ready tables
+- **ML Service Endpoint**: `POST http://localhost:8000/api/v1/segment`
+- **Test Images**: Located in `test-images/` directory
+
 ### Internationalization (i18n)
 
 - **Translation validation**: Run `npm run i18n:validate` to check translation completeness and consistency
@@ -473,6 +485,33 @@ node scripts/security-audit/generate-scorecard.js
 ```
 
 ## Recent Implementations & Important Notes
+
+### Polygon Metrics with Scientific Standards (2025-09-07)
+
+- **Rotating Calipers Algorithm**: Implemented for accurate Feret diameter calculations
+- **Metrics Updated**:
+  - ✅ **Sphericity removed** - 3D metric not applicable to 2D analysis
+  - ✅ **Compactness → Extent** - Renamed to match scientific terminology (area/bbox_area)
+  - ✅ **Feret diameters** - Now use proper rotating calipers on convex hull
+  - ✅ **Perimeter calculation** - Includes holes (outer + Σ inner) following ImageJ convention
+- **Location**: `/src/pages/segmentation/utils/metricCalculations.ts`
+- **Excel Export**: Updated headers with units (px, px²)
+
+### Model Performance Benchmarks (2025-09-07)
+
+Based on 100 real measurements per model on NVIDIA A5000:
+
+| Model        | Inference (ms) | 95% CI     | Total E2E (ms) |
+| ------------ | -------------- | ---------- | -------------- |
+| HRNet        | 196.0          | [195, 197] | 301            |
+| CBAM-ResUNet | 396.1          | [395, 397] | 501            |
+| U-Net        | 196.9          | [196, 198] | 302            |
+
+- **Performance Test Script**: `measure-all-models.py` - Tests with 100 samples, warmup, statistical analysis
+- **Key findings**:
+  - Preprocessing/postprocessing < 0.1ms (negligible)
+  - Very stable performance (CV < 3%)
+  - All models suitable for real-time processing
 
 ### Storage Space Indicator (Dashboard)
 

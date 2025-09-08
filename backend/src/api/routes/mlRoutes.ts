@@ -31,6 +31,13 @@ router.get('/models',
           description: 'Precise segmentation with attention mechanisms, optimized inference time',
           version: '2.0.0',
           status: 'active'
+        },
+        {
+          id: 'unet_spherohq',
+          name: 'UNet (SpheroHQ)',
+          description: 'Best performance on SpheroHQ dataset, balanced speed and accuracy',
+          version: '1.0.0',
+          status: 'active'
         }
       ];
 

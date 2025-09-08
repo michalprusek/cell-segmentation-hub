@@ -21,6 +21,15 @@
       "memory_limit_mb": 900,
       "p95_latency_ms": 396.9,
       "production_optimized": true
+    },
+    "unet_spherohq": {
+      "optimal_batch_size": 4,
+      "max_safe_batch_size": 8,
+      "expected_throughput": 1.02,
+      "memory_limit_mb": 3100,
+      "p95_latency_ms": 1250.0,
+      "production_optimized": true,
+      "note": "Optimized batch size 4 for RTX A5000 - 3.4x speedup"
     }
   },
   "dynamic_batching": {

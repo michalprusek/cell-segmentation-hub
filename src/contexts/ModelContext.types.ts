@@ -1,7 +1,7 @@
 import { createContext } from 'react';
 import { BASIC_MODEL_INFO } from '@/lib/modelUtils';
 
-export type ModelType = 'hrnet' | 'cbam_resunet';
+export type ModelType = 'hrnet' | 'cbam_resunet' | 'unet_spherohq';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds

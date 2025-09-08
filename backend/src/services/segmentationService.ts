@@ -32,7 +32,7 @@ export interface SegmentationPolygon {
 
 export interface SegmentationRequest {
   imageId: string;
-  model?: 'hrnet' | 'resunet_advanced' | 'resunet_small';
+  model?: 'hrnet' | 'cbam_resunet' | 'unet_spherohq' | 'resunet_advanced' | 'resunet_small';
   threshold?: number;
   userId: string;
   detectHoles?: boolean;
