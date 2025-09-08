@@ -1,0 +1,23 @@
+Error: Cannot find module './tests/global.setup.ts'
+Require stack:
+- /app/node_modules/playwright/lib/common/config.js
+- /app/node_modules/playwright/lib/program.js
+- /app/node_modules/@playwright/test/cli.js
+    at Function.Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    at Function.resolveFilename [as _resolveFilename] (/app/node_modules/playwright/lib/transform/transform.js:240:36)
+    at Function.resolve (node:internal/modules/helpers:193:19)
+    at resolveScript (/app/node_modules/playwright/lib/common/config.js:253:18)
+    at /app/node_modules/playwright/lib/common/config.js:67:128
+    at Array.map (<anonymous>)
+    at new FullConfigInternal (/app/node_modules/playwright/lib/common/config.js:67:117)
+    at loadConfig (/app/node_modules/playwright/lib/common/configLoader.js:120:22)
+    at loadConfigFromFile (/app/node_modules/playwright/lib/common/configLoader.js:330:10)
+    at runTests (/app/node_modules/playwright/lib/program.js:166:18)
+    at i.<anonymous> (/app/node_modules/playwright/lib/program.js:65:7) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '/app/node_modules/playwright/lib/common/config.js',
+    '/app/node_modules/playwright/lib/program.js',
+    '/app/node_modules/@playwright/test/cli.js'
+  ]
+}

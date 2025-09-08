@@ -394,6 +394,11 @@ export default {
           description:
             'Precise segmentation with attention (~0.3s/image, 3.0 img/s throughput)',
         },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          description:
+            'Best performance on SpheroHQ dataset - optimized for spheroid segmentation with balanced speed and accuracy (~0.25s/image, 10 img/s)',
+        },
       },
     },
     confidenceThreshold: 'Confidence Threshold',
@@ -411,9 +416,12 @@ export default {
       large: 'Large',
     },
     modelDescription: {
-      hrnet: 'Fast and efficient model (~0.2s/image, 5.5 img/s throughput)',
+      hrnet:
+        'Balanced model with good speed and quality (E2E ~309ms, 4.9 img/s)',
       cbam_resunet:
-        'Precise segmentation with attention (~0.3s/image, 3.0 img/s throughput)',
+        'Most precise segmentation with attention mechanisms (E2E ~482ms, 2.7 img/s)',
+      unet_spherohq:
+        'Fastest model after optimizations! Excellent for real-time processing (E2E ~286ms, 5.5 img/s)',
     },
     dataUsageTitle: 'Data Usage & Privacy',
     dataUsageDescription:
@@ -1059,6 +1067,7 @@ export default {
       segmentationProcess: 'Segmentation Process',
       segmentationEditor: 'Segmentation Editor',
       exportFeatures: 'Export Features',
+      sharedProjects: 'Shared Projects',
     },
 
     // Introduction section
@@ -1121,34 +1130,40 @@ export default {
         'SpheroSeg offers two production-optimized AI models with dynamic batching. Choose the model that best fits your requirements for speed vs accuracy.',
       models: {
         hrnet: {
-          name: 'HRNet (Fast)',
-          inferenceTime:
-            'Inference time: ~0.2 seconds per image (GPU accelerated)',
-          bestFor: 'Best for: High-throughput processing (5.5 images/second)',
+          name: 'HRNet (Balanced)',
+          inferenceTime: 'E2E time: ~309ms per image (ML inference: 204ms)',
+          bestFor: 'Best for: Balanced speed and quality (4.9 images/second)',
           description:
-            'Fast and efficient model with batch processing of 8 images simultaneously. P95 latency under 0.3 seconds.',
+            'Well-balanced model with batch processing of 8 images simultaneously. Good for high-volume processing with reliable quality.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Precise)',
-          inferenceTime:
-            'Inference time: ~0.3 seconds per image (GPU accelerated)',
-          bestFor: 'Best for: Maximum accuracy (3.0 images/second throughput)',
+          inferenceTime: 'E2E time: ~482ms per image (ML inference: 377ms)',
+          bestFor: 'Best for: Maximum accuracy (2.7 images/second throughput)',
           description:
-            'Advanced model with dual attention mechanisms for highest accuracy. Batch processing of 2 images with P95 latency under 0.7 seconds.',
+            'Most precise model with attention mechanisms for highest accuracy. Batch processing of 2 images. Best for research requiring maximum precision.',
+        },
+        unet: {
+          name: 'UNet (Fastest)',
+          inferenceTime: 'E2E time: ~286ms per image (ML inference: 181ms)',
+          bestFor:
+            'Best for: Real-time processing (5.5 images/second throughput)',
+          description:
+            'Fastest model after optimizations! Excellent for real-time processing with batch size of 4. Now 36x faster than original implementation.',
         },
       },
       howToSelect: 'How to Select a Model',
       selectionSteps: {
         step1: 'Open your project and navigate to any image',
         step2: 'In the project toolbar, find the model selection dropdown',
-        step3: 'Choose from HRNet or CBAM-ResUNet',
+        step3: 'Choose from HRNet, CBAM-ResUNet, or UNet (SpheroHQ)',
         step4:
           'Adjust the confidence threshold (0.0-1.0) to fine-tune detection sensitivity',
         step5: 'Your selection is automatically saved for future processing',
       },
       tip: 'Tip:',
       tipText:
-        'Use HRNet for high-volume processing with 5.5 images/second throughput. Choose CBAM-ResUNet for maximum accuracy in research or publication work.',
+        'Use UNet for fastest processing (286ms E2E). Choose HRNet for balanced speed/quality (309ms). Select CBAM-ResUNet for maximum accuracy (482ms).',
     },
 
     // Segmentation Process section
@@ -1188,7 +1203,7 @@ export default {
       },
       processingNote: 'Processing times vary by model:',
       processingTimes:
-        'HRNet (~3s), CBAM-ResUNet (~7s). Choose based on your accuracy requirements and time constraints.',
+        'UNet (~286ms), HRNet (~309ms), CBAM-ResUNet (~482ms). All models now optimized for sub-second processing!',
     },
 
     // Segmentation Editor section
@@ -1349,6 +1364,35 @@ export default {
       exportNote: 'Export packages are comprehensive:',
       exportNoteText:
         'Each export includes documentation, metadata, and all selected content types organized in a clear folder structure for easy use.',
+    },
+
+    // Shared Projects section
+    sharedProjects: {
+      title: 'Shared Projects',
+      description:
+        'SpheroSeg allows you to collaborate with colleagues by sharing projects. Share your segmentation results and annotations with other researchers for review and collaboration.',
+      sharingFeatures: 'Sharing Features',
+      features: {
+        readOnly:
+          'Read-only access: Recipients can view but not modify your data',
+        emailInvite:
+          'Email invitations: Share via email with automatic notifications',
+        revokeAccess:
+          'Revocable access: Remove sharing permissions at any time',
+        multipleCollaborators:
+          'Multiple collaborators: Share with entire research teams',
+      },
+      howToShare: 'How to Share a Project',
+      shareSteps: {
+        step1: 'Open the project you want to share',
+        step2: 'Click the "Share" button in the project toolbar',
+        step3: 'Enter the email addresses of your collaborators',
+        step4: 'Add an optional message explaining the shared content',
+        step5: 'Click "Send Invitations" to share the project',
+      },
+      permissionsNote: 'Important:',
+      permissionsNoteText:
+        'Shared projects are read-only for recipients. They can view segmentations, export data, but cannot modify the original annotations. This ensures data integrity while enabling collaboration.',
     },
 
     // Footer navigation

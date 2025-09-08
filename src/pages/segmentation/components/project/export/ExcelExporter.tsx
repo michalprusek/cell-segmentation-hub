@@ -67,18 +67,17 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({
             area: metrics.Area,
             perimeter: metrics.Perimeter,
             circularity: metrics.Circularity,
-            compactness: metrics.Compactness,
+            extent: metrics.Extent, // Renamed from compactness
             convexity: metrics.Convexity,
             equivalentDiameter: metrics.EquivalentDiameter,
             aspectRatio: metrics.FeretAspectRatio,
             feretDiameterMax: metrics.FeretDiameterMax,
-            feretDiameterMaxOrthogonal:
-              metrics.FeretDiameterMaxOrthogonalDistance,
+            feretDiameterOrthogonal: metrics.FeretDiameterOrthogonal, // Renamed
             feretDiameterMin: metrics.FeretDiameterMin,
-            lengthMajorDiameter: metrics.LengthMajorDiameterThroughCentroid,
-            lengthMinorDiameter: metrics.LengthMinorDiameterThroughCentroid,
+            boundingBoxWidth: metrics.BoundingBoxWidth, // Renamed from lengthMajorDiameter
+            boundingBoxHeight: metrics.BoundingBoxHeight, // Renamed from lengthMinorDiameter
             solidity: metrics.Solidity,
-            sphericity: metrics.Sphericity,
+            // sphericity removed - 3D metric not applicable to 2D
           };
         }
       );
@@ -92,32 +91,27 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({
       worksheet.columns = [
         { header: 'Image Name', key: 'imageName', width: 20 },
         { header: 'Contour', key: 'contourNumber', width: 10 },
-        { header: 'Area', key: 'area', width: 15 },
+        { header: 'Area (px²)', key: 'area', width: 15 },
+        { header: 'Perimeter (px)', key: 'perimeter', width: 15 },
         { header: 'Circularity', key: 'circularity', width: 15 },
-        { header: 'Compactness', key: 'compactness', width: 15 },
+        { header: 'Extent', key: 'extent', width: 15 }, // Renamed from Compactness
         { header: 'Convexity', key: 'convexity', width: 15 },
-        { header: 'Equivalent Diameter', key: 'equivalentDiameter', width: 20 },
-        { header: 'Aspect Ratio', key: 'aspectRatio', width: 15 },
-        { header: 'Feret Diameter Max', key: 'feretDiameterMax', width: 20 },
+        { header: 'Solidity', key: 'solidity', width: 15 },
         {
-          header: 'Feret Diameter Max Orthogonal',
-          key: 'feretDiameterMaxOrthogonal',
+          header: 'Equivalent Diameter (px)',
+          key: 'equivalentDiameter',
+          width: 20,
+        },
+        { header: 'Aspect Ratio', key: 'aspectRatio', width: 15 },
+        { header: 'Feret Max (px)', key: 'feretDiameterMax', width: 20 },
+        {
+          header: 'Feret Orthogonal (px)',
+          key: 'feretDiameterOrthogonal',
           width: 25,
         },
-        { header: 'Feret Diameter Min', key: 'feretDiameterMin', width: 20 },
-        {
-          header: 'Length Major Diameter',
-          key: 'lengthMajorDiameter',
-          width: 20,
-        },
-        {
-          header: 'Length Minor Diameter',
-          key: 'lengthMinorDiameter',
-          width: 20,
-        },
-        { header: 'Perimeter', key: 'perimeter', width: 15 },
-        { header: 'Solidity', key: 'solidity', width: 15 },
-        { header: 'Sphericity', key: 'sphericity', width: 15 },
+        { header: 'Feret Min (px)', key: 'feretDiameterMin', width: 20 },
+        { header: 'BBox Width (px)', key: 'boundingBoxWidth', width: 20 },
+        { header: 'BBox Height (px)', key: 'boundingBoxHeight', width: 20 },
       ];
 
       // Add data rows
@@ -126,19 +120,18 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({
           imageName: metric.imageName,
           contourNumber: metric.contourNumber,
           area: metric.area,
+          perimeter: metric.perimeter,
           circularity: metric.circularity,
-          compactness: metric.compactness,
+          extent: metric.extent,
           convexity: metric.convexity,
+          solidity: metric.solidity,
           equivalentDiameter: metric.equivalentDiameter,
           aspectRatio: metric.aspectRatio,
           feretDiameterMax: metric.feretDiameterMax,
-          feretDiameterMaxOrthogonal: metric.feretDiameterMaxOrthogonal,
+          feretDiameterOrthogonal: metric.feretDiameterOrthogonal,
           feretDiameterMin: metric.feretDiameterMin,
-          lengthMajorDiameter: metric.lengthMajorDiameter,
-          lengthMinorDiameter: metric.lengthMinorDiameter,
-          perimeter: metric.perimeter,
-          solidity: metric.solidity,
-          sphericity: metric.sphericity,
+          boundingBoxWidth: metric.boundingBoxWidth,
+          boundingBoxHeight: metric.boundingBoxHeight,
         });
       });
 

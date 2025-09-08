@@ -20,15 +20,15 @@ const SERVICES = [
 async function verifyServiceHealth(
   service: (typeof SERVICES)[0]
 ): Promise<void> {
-  const maxRetries = 10;
-  const retryDelay = 2000; // 2 seconds
+  const maxRetries = 20; // Increased from 10
+  const retryDelay = 3000; // Increased to 3 seconds
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       console.log(`[${attempt}/${maxRetries}] Checking ${service.name}...`);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const response = await fetch(service.url, {
         signal: controller.signal,

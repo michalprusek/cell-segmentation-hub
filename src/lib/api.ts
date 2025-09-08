@@ -573,6 +573,10 @@ class ApiClient {
       if (url.startsWith('http://') || url.startsWith('https://')) {
         return url;
       }
+      // Ensure the URL starts with /uploads/ prefix for image URLs
+      if (!url.startsWith('/uploads/') && !url.startsWith('/api/')) {
+        url = `/uploads/${url}`;
+      }
       // If it's a relative URL, prepend the base URL
       const baseUrl = this.baseURL.replace('/api', '');
       return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;

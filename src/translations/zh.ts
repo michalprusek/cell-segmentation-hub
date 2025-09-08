@@ -351,6 +351,11 @@ export default {
           name: 'CBAM-ResUNet',
           description: '具有注意力机制的精确分割模型',
         },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          description:
+            '在SpheroHQ数据集上表现最佳 - 专为球体分割优化，速度和精度平衡 (~0.25秒/图像, 10图像/秒)',
+        },
       },
     },
     confidenceThreshold: '置信度阈值',
@@ -366,9 +371,10 @@ export default {
       large: '大',
     },
     modelDescription: {
-      hrnet: '快速高效的实时分割模型',
-      resunet_small: '大多数用例的平衡速度和准确性',
-      resunet_advanced: '具有注意力机制的最高准确性',
+      hrnet: '速度与质量均衡的模型 (E2E ~309ms, 4.9 图像/秒)',
+      cbam_resunet: '具有注意力机制的最精确分割 (E2E ~482ms, 2.7 图像/秒)',
+      unet_spherohq:
+        '优化后最快的模型！非常适合实时处理 (E2E ~286ms, 5.5 图像/秒)',
     },
     dataUsageTitle: '数据使用和隐私',
     dataUsageDescription: '控制您的数据如何用于机器学习和研究',
@@ -971,6 +977,7 @@ export default {
       segmentationProcess: '分割过程',
       segmentationEditor: '分割编辑器',
       exportFeatures: '导出功能',
+      sharedProjects: '共享项目',
     },
     introduction: {
       title: '介绍',
@@ -1020,27 +1027,35 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet（小型）',
-          inferenceTime: '推理时间：约0.18秒 (GPU加速)',
-          bestFor: '最适合：实时处理',
+          inferenceTime: 'E2E时间：~309ms每张图像（ML推理：204ms）',
+          bestFor: '最适合：速度与质量之间的平衡性能',
           description: '快速高效的模型。',
         },
         cbam: {
           name: 'CBAM-ResUNet（中型）',
-          inferenceTime: '推理时间：约0.20秒 (GPU加速)',
-          bestFor: '最适合：具有注意力机制的精确分割',
+          inferenceTime: 'E2E时间：~482ms每张图像（ML推理：377ms）',
+          bestFor: '最适合：最大分割精度',
           description: '具有注意力机制的精确分割模型，用于精确的球体边界检测。',
+        },
+        unet: {
+          name: 'UNet (SpheroHQ)',
+          inferenceTime: 'E2E时间：~286ms每张图像（ML推理：181ms）',
+          bestFor: '最适合：最快处理速度，非常适合实时应用',
+          description:
+            '专门为SpheroHQ数据集的球体分割训练的专业模型。提供平衡的速度和精度。',
         },
       },
       howToSelect: '如何选择模型',
       selectionSteps: {
         step1: '打开您的项目',
         step2: '找到模型选择菜单',
-        step3: '选择您的模型',
+        step3: '从 HRNet、CBAM-ResUNet 或 UNet (SpheroHQ) 中选择',
         step4: '调整置信度阈值',
         step5: '您的选择将被保存',
       },
       tip: '提示：',
-      tipText: '大多数情况下从 CBAM-ResUNet 开始。',
+      tipText:
+        '使用UNet获得最快的处理速度，吞吐量为5.5张图像/秒。选择CBAM-ResUNet以获得研究工作中的最大精度。选择HRNet以获得速度和质量之间的平衡性能。',
     },
     segmentationProcess: {
       title: '分割过程',
@@ -1204,6 +1219,29 @@ export default {
       },
       exportNote: '导出包是全面的：',
       exportNoteText: '每个导出都包含文档和元数据。',
+    },
+    sharedProjects: {
+      title: '共享项目',
+      description:
+        'SpheroSeg允许您通过共享项目与同事合作。与其他研究人员共享您的分割结果和注释，以便审查和合作。',
+      sharingFeatures: '共享功能',
+      features: {
+        readOnly: '只读访问：接收者可以查看但不能修改您的数据',
+        emailInvite: '电子邮件邀请：通过电子邮件共享，自动发送通知',
+        revokeAccess: '可撤销访问：随时移除共享权限',
+        multipleCollaborators: '多个协作者：与整个研究团队共享',
+      },
+      howToShare: '如何共享项目',
+      shareSteps: {
+        step1: '打开您要共享的项目',
+        step2: '在项目工具栏中点击"共享"按钮',
+        step3: '输入协作者的电子邮件地址',
+        step4: '添加解释共享内容的可选消息',
+        step5: '点击"发送邀请"以共享项目',
+      },
+      permissionsNote: '重要提示：',
+      permissionsNoteText:
+        '共享项目对接收者是只读的。他们可以查看分割结果、导出数据，但不能修改原始注释。这确保了数据完整性，同时实现了协作。',
     },
     footer: {
       backToHome: '返回首页',

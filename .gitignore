@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+test-images/
 node_modules
 dist
 dist-ssr
@@ -104,6 +104,7 @@ bun.lockb
 
 # Model weights and large files
 *.pth
+*.pth.backup
 *.onnx
 *.h5
 *.pkl
@@ -111,6 +112,13 @@ bun.lockb
 
 # Generated documentation
 docs/api/generated/
+
+# Test results
+backend/e2e-results.json
+backend/frontend-test-results.json
+real-*-measurements-*.json
+**/test-results/
+**/coverage/
 
 # Development tools
 .vscode/settings.json

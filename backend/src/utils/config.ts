@@ -21,9 +21,25 @@ const configSchema = z.object({
     return 'file:./data/dev.db';
   }),
   
-  // JWT
-  JWT_ACCESS_SECRET: z.string().min(32, 'JWT Access Secret must be at least 32 characters'),
-  JWT_REFRESH_SECRET: z.string().min(32, 'JWT Refresh Secret must be at least 32 characters'),
+  // JWT - Must be 64-character hexadecimal strings in production, more lenient in development
+  JWT_ACCESS_SECRET: z.string().refine((val) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const pattern = isProduction ? /^[0-9a-fA-F]{64}$/ : /.{32,}/;
+    return pattern.test(val);
+  }, {
+    message: process.env.NODE_ENV === 'production' 
+      ? 'JWT Access Secret must be a 64-character hexadecimal string (32 bytes) in production. Generate with: openssl rand -hex 32'
+      : 'JWT Access Secret must be at least 32 characters in development'
+  }),
+  JWT_REFRESH_SECRET: z.string().refine((val) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const pattern = isProduction ? /^[0-9a-fA-F]{64}$/ : /.{32,}/;
+    return pattern.test(val);
+  }, {
+    message: process.env.NODE_ENV === 'production'
+      ? 'JWT Refresh Secret must be a 64-character hexadecimal string (32 bytes) in production. Generate with: openssl rand -hex 32'
+      : 'JWT Refresh Secret must be at least 32 characters in development'
+  }),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
   JWT_REFRESH_EXPIRY_REMEMBER: z.string().default('30d'),

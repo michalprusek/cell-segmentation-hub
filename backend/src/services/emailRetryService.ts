@@ -179,7 +179,7 @@ export async function sendEmailWithRetry(
 /**
  * Email metrics for monitoring
  */
-export interface EmailMetrics {
+export interface EmailMetrics extends Record<string, unknown> {
   sent: number;
   failed: number;
   retried: number;

@@ -382,6 +382,11 @@ export default {
           name: 'CBAM-ResUNet',
           description: 'Přesný segmentační model s mechanismy pozornosti',
         },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          description:
+            'Nejlepší výkon na datové sadě SpheroHQ - optimalizováno pro segmentaci sféroidů s vyváženou rychlostí a přesností (~0.25s/obr., 10 obr./s)',
+        },
       },
     },
     confidenceThreshold: 'Práh Spolehlivosti',
@@ -399,9 +404,12 @@ export default {
       large: 'Velký',
     },
     modelDescription: {
-      hrnet: 'Rychlý a efektivní model pro segmentaci v reálném čase',
-      resunet_small: 'Vyvážená rychlost a přesnost pro většinu případů použití',
-      resunet_advanced: 'Nejvyšší přesnost s mechanismy pozornosti',
+      hrnet:
+        'Vyvážený model s dobrou rychlostí a kvalitou (E2E ~309ms, 4.9 obr/s)',
+      cbam_resunet:
+        'Nejpřesnější segmentace s mechanismy pozornosti (E2E ~482ms, 2.7 obr/s)',
+      unet_spherohq:
+        'Nejrychlejší model po optimalizacích! Výborný pro zpracování v reálném čase (E2E ~286ms, 5.5 obr/s)',
     },
     dataUsageTitle: 'Použití dat a soukromí',
     dataUsageDescription:
@@ -1107,20 +1115,28 @@ export default {
           description:
             'Přesný segmentační model s mechanismy pozornosti pro přesnou detekci hranic sféroidů.',
         },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          inferenceTime: 'E2E čas: ~286ms na obrázek (ML inference: 181ms)',
+          bestFor:
+            'Nejlepší pro: Nejrychlejší zpracování, výborný pro real-time aplikace',
+          description:
+            'Nejrychlejší model po optimalizacích! Ideální pro zpracování velkého objemu dat v reálném čase.',
+        },
       },
       howToSelect: 'Jak vybrat model',
       selectionSteps: {
         step1: 'Otevřete svůj projekt a přejděte na jakýkoli obrázek',
         step2:
           'V nástrojové liště projektu najděte rozbalovací nabídku výběru modelu',
-        step3: 'Vyberte z HRNet nebo CBAM-ResUNet',
+        step3: 'Vyberte z HRNet, CBAM-ResUNet nebo UNet (SpheroHQ)',
         step4:
           'Upravte práh spolehlivosti (0,0-1,0) pro jemné doladění citlivosti detekce',
         step5: 'Váš výběr se automaticky uloží pro budoucí zpracování',
       },
       tip: 'Tip:',
       tipText:
-        'Začněte s CBAM-ResUNet pro většinu případů. Použijte HRNet pro rychlé prototypování a CBAM-ResUNet, když potřebujete přesnou segmentaci s mechanismy pozornosti pro výzkum nebo publikaci.',
+        'Použijte UNet pro nejrychlejší zpracování s propustností 5,5 obrázků/sekundu. Vyberte CBAM-ResUNet pro maximální přesnost při výzkumné práci. Zvolte HRNet pro vyvážený výkon mezi rychlostí a kvalitou.',
     },
     segmentationProcess: {
       title: 'Proces segmentace',
@@ -1321,6 +1337,49 @@ export default {
       exportNote: 'Exportní balíčky jsou komplexní:',
       exportNoteText:
         'Každý export obsahuje dokumentaci, metadata a všechny vybrané typy obsahu organizované v přehledné struktuře složek pro snadné použití.',
+    },
+    sharedProjectsSection: {
+      title: 'Sdílené projekty',
+      description:
+        'SpheroSeg umožňuje spolupráci na projektech prostřednictvím výkonných funkcí sdílení. Sdílejte své projekty s kolegy, spolupracujte na anotacích a společně analyzujte výsledky.',
+      keyFeatures: 'Klíčové funkce',
+      features: {
+        projectSharing: {
+          title: 'Sdílení projektů',
+          description:
+            'Sdílejte projekty s konkrétními uživateli prostřednictvím e-mailových pozvánek nebo generováním odkazů pro sdílení.',
+        },
+        permissions: {
+          title: 'Správa oprávnění',
+          description:
+            'Nastavte oprávnění pouze pro čtení nebo úplný přístup pro sdílené uživatele.',
+        },
+        realTimeSync: {
+          title: 'Synchronizace v reálném čase',
+          description:
+            'Změny provedené sdílenými uživateli jsou okamžitě viditelné pro všechny spolupracovníky.',
+        },
+        activityTracking: {
+          title: 'Sledování aktivity',
+          description:
+            'Sledujte, kdo provedl jaké změny s podrobnými protokoly aktivit.',
+        },
+      },
+      howToShare: 'Jak sdílet projekt',
+      shareSteps: {
+        step1: 'Otevřete projekt, který chcete sdílet',
+        step2: 'Klikněte na tlačítko "Sdílet" v nástrojové liště projektu',
+        step3: 'Zvolte mezi e-mailovou pozvánkou nebo odkazem pro sdílení',
+        step4: 'Nastavte úroveň oprávnění (čtení nebo úplný přístup)',
+        step5: 'Odešlete pozvánku nebo zkopírujte odkaz pro sdílení',
+        step6: 'Spolupracovníci mohou přistupovat k projektu po přijetí',
+      },
+      accessingShared: 'Přístup ke sdíleným projektům',
+      accessDescription:
+        'Projekty sdílené s vámi se objeví v sekci "Sdílené projekty" na vašem řídicím panelu. Můžete je zobrazit, upravovat (pokud máte oprávnění) a analyzovat stejně jako své vlastní projekty.',
+      collaborationTip: 'Tip pro spolupráci:',
+      collaborationTipText:
+        'Používejte funkci komentářů k zanechávání poznámek na konkrétních obrázcích nebo segmentacích pro efektivní komunikaci s vašim týmem.',
     },
     footer: {
       backToHome: 'Zpět domů',
