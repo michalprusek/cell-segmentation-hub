@@ -3,46 +3,6 @@ import axios from 'axios';
 import MockAdapter from 'axios-mock-adapter';
 import apiClient from '../api';
 
-// Mock the API module to expose internal methods for testing
-vi.mock('../api', async () => {
-  const actual = await vi.importActual('../api');
-  const ApiClient = (actual as any).default.constructor;
-
-  // Create a test-friendly version that exposes needed methods
-  class TestableApiClient extends ApiClient {
-    clearAuthToken() {
-      this.accessToken = null;
-      this.refreshToken = null;
-      localStorage.removeItem('accessToken');
-      localStorage.removeItem('refreshToken');
-    }
-
-    setAuthToken(accessToken: string, refreshToken: string) {
-      this.accessToken = accessToken;
-      this.refreshToken = refreshToken;
-      localStorage.setItem('accessToken', accessToken);
-      localStorage.setItem('refreshToken', refreshToken);
-    }
-
-    async refreshAccessToken() {
-      // Mock implementation for testing
-      return Promise.resolve();
-    }
-  }
-
-  const testableClient = new TestableApiClient();
-
-  return {
-    ...actual,
-    default: testableClient,
-    apiClient: testableClient,
-    clearAuthToken: () => testableClient.clearAuthToken(),
-    setAuthToken: (access: string, refresh: string) =>
-      testableClient.setAuthToken(access, refresh),
-    refreshAccessToken: () => testableClient.refreshAccessToken(),
-  };
-});
-
 // Create axios mock adapter
 const mock = new MockAdapter(axios);
 
@@ -81,10 +41,7 @@ describe('API Integration Tests', () => {
 
       mock.onPost('/api/auth/login').reply(200, response);
 
-      const result = await apiClient.auth.login(
-        loginData.email,
-        loginData.password
-      );
+      const result = await apiClient.login(loginData.email, loginData.password);
 
       expect(result).toEqual(response);
       expect(mock.history.post[0].data).toBe(JSON.stringify(loginData));
@@ -109,7 +66,7 @@ describe('API Integration Tests', () => {
 
       mock.onPost('/api/auth/register').reply(201, response);
 
-      const result = await apiClient.auth.register(
+      const result = await apiClient.register(
         registerData.name,
         registerData.email,
         registerData.password
@@ -124,7 +81,7 @@ describe('API Integration Tests', () => {
       });
 
       await expect(
-        apiClient.auth.login('wrong@example.com', 'wrongpass')
+        apiClient.login('wrong@example.com', 'wrongpass')
       ).rejects.toThrow();
     });
 
@@ -132,7 +89,7 @@ describe('API Integration Tests', () => {
       mock.onPost('/api/auth/login').networkError();
 
       await expect(
-        apiClient.auth.login('test@example.com', 'password')
+        apiClient.login('test@example.com', 'password')
       ).rejects.toThrow();
     });
 
@@ -140,7 +97,7 @@ describe('API Integration Tests', () => {
       mock.onPost('/api/auth/login').timeout();
 
       await expect(
-        apiClient.auth.login('test@example.com', 'password')
+        apiClient.login('test@example.com', 'password')
       ).rejects.toThrow();
     });
   });
@@ -164,7 +121,7 @@ describe('API Integration Tests', () => {
 
       mock.onGet('/api/projects').reply(200, projects);
 
-      const result = await apiClient.projects.getAll();
+      const result = await apiClient.getProjects();
 
       expect(result).toEqual(projects);
     });
@@ -183,7 +140,7 @@ describe('API Integration Tests', () => {
 
       mock.onPost('/api/projects').reply(201, response);
 
-      const result = await apiClient.projects.create(newProject);
+      const result = await apiClient.createProject(newProject);
 
       expect(result).toEqual(response);
     });
@@ -202,7 +159,7 @@ describe('API Integration Tests', () => {
 
       mock.onPut(`/api/projects/${projectId}`).reply(200, response);
 
-      const result = await apiClient.projects.update(projectId, updates);
+      const result = await apiClient.updateProject(projectId, updates);
 
       expect(result).toEqual(response);
     });
@@ -212,9 +169,7 @@ describe('API Integration Tests', () => {
 
       mock.onDelete(`/api/projects/${projectId}`).reply(204);
 
-      await expect(
-        apiClient.projects.delete(projectId)
-      ).resolves.toBeUndefined();
+      await expect(apiClient.deleteProject(projectId)).resolves.toBeUndefined();
     });
 
     it('should handle unauthorized access', async () => {
@@ -227,7 +182,7 @@ describe('API Integration Tests', () => {
         error: 'Unauthorized',
       });
 
-      await expect(apiClient.projects.getAll()).rejects.toThrow();
+      await expect(apiClient.getProjects()).rejects.toThrow();
     });
   });
 
@@ -258,7 +213,7 @@ describe('API Integration Tests', () => {
       const formData = new FormData();
       formData.append('file', file);
 
-      const result = await apiClient.images.upload(projectId, file);
+      const result = await apiClient.uploadImage(projectId, file);
 
       expect(result).toEqual(response);
     });
@@ -275,7 +230,7 @@ describe('API Integration Tests', () => {
         fileName: 'test.jpg',
       });
 
-      await apiClient.images.upload(projectId, file, progressCallback);
+      await apiClient.uploadImage(projectId, file, progressCallback);
 
       // Progress callback should have been called
       expect(progressCallback).toHaveBeenCalled();
@@ -292,7 +247,7 @@ describe('API Integration Tests', () => {
       });
 
       await expect(
-        apiClient.images.upload(projectId, largeFile)
+        apiClient.uploadImage(projectId, largeFile)
       ).rejects.toThrow();
     });
   });
@@ -322,7 +277,7 @@ describe('API Integration Tests', () => {
 
       mock.onPost('/api/segmentation/process').reply(202, response);
 
-      const result = await apiClient.segmentation.process(request);
+      const result = await apiClient.requestSegmentation(request);
 
       expect(result).toEqual(response);
     });
@@ -347,7 +302,7 @@ describe('API Integration Tests', () => {
 
       mock.onGet(`/api/segmentation/results/${resultId}`).reply(200, results);
 
-      const result = await apiClient.segmentation.getResults(resultId);
+      const result = await apiClient.getSegmentationResult(resultId);
 
       expect(result).toEqual(results);
     });
@@ -362,7 +317,7 @@ describe('API Integration Tests', () => {
 
       mock.onGet(`/api/segmentation/queue/${queueId}`).reply(200, status);
 
-      const result = await apiClient.segmentation.getQueueStatus(queueId);
+      const result = await apiClient.getQueueStats(queueId);
 
       expect(result).toEqual(status);
     });
@@ -372,9 +327,7 @@ describe('API Integration Tests', () => {
 
       mock.onDelete(`/api/segmentation/queue/${queueId}`).reply(204);
 
-      await expect(
-        apiClient.segmentation.cancelRequest(queueId)
-      ).resolves.toBeUndefined();
+      await expect(apiClient.removeFromQueue(queueId)).resolves.toBeUndefined();
     });
   });
 
@@ -390,7 +343,7 @@ describe('API Integration Tests', () => {
         return [200, []];
       });
 
-      const result = await apiClient.projects.getAll();
+      const result = await apiClient.getProjects();
 
       expect(attempts).toBe(3);
       expect(result).toEqual([]);
@@ -410,7 +363,7 @@ describe('API Integration Tests', () => {
 
       mock.onPost('/api/auth/refresh').reply(200, refreshResponse);
 
-      const result = await apiClient.projects.getAll();
+      const result = await apiClient.getProjects();
 
       expect(result).toEqual([]);
     });
@@ -431,7 +384,7 @@ describe('API Integration Tests', () => {
 
       // Make concurrent requests
       const promises = [
-        apiClient.projects.getAll(),
+        apiClient.getProjects(),
         apiClient.projects.getById('1'),
         apiClient.projects.getById('2'),
       ];

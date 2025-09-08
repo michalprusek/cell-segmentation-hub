@@ -393,6 +393,11 @@ export default {
           description:
             "Modèle de segmentation précis avec mécanismes d'attention",
         },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          description:
+            "Meilleures performances sur l'ensemble de données SpheroHQ - optimisé pour la segmentation de sphéroïdes avec vitesse et précision équilibrées (~0.25s/image, 10 img/s)",
+        },
       },
     },
     confidenceThreshold: 'Seuil de confiance',
@@ -410,10 +415,12 @@ export default {
       large: 'Grand',
     },
     modelDescription: {
-      hrnet: 'Modèle rapide et efficace pour la segmentation en temps réel',
-      resunet_small:
-        "Vitesse et précision équilibrées pour la plupart des cas d'usage",
-      resunet_advanced: "Précision maximale avec mécanismes d'attention",
+      hrnet:
+        'Modèle équilibré avec bonne vitesse et qualité (E2E ~309ms, 4.9 img/s)',
+      cbam_resunet:
+        "Segmentation la plus précise avec mécanismes d'attention (E2E ~482ms, 2.7 img/s)",
+      unet_spherohq:
+        'Le modèle le plus rapide après optimisations! Excellent pour le traitement en temps réel (E2E ~286ms, 5.5 img/s)',
     },
     dataUsageTitle: 'Utilisation des données et confidentialité',
     dataUsageDescription:
@@ -1056,6 +1063,7 @@ export default {
       segmentationProcess: 'Processus Segmentation',
       segmentationEditor: 'Éditeur Segmentation',
       exportFeatures: 'Fonctions Export',
+      sharedProjects: 'Projets Partagés',
     },
     introduction: {
       title: 'Introduction',
@@ -1106,31 +1114,38 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet (Petit)',
-          inferenceTime:
-            "Temps d'inférence : ~0,18 secondes (accéléré par GPU)",
-          bestFor: 'Optimal pour : Traitement en temps réel',
+          inferenceTime: 'Temps E2E: ~309ms par image (inférence ML: 204ms)',
+          bestFor:
+            'Idéal pour: Performance équilibrée entre vitesse et qualité',
           description: 'Modèle rapide et efficace.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Moyen)',
-          inferenceTime:
-            "Temps d'inférence : ~0,20 secondes (accéléré par GPU)",
-          bestFor:
-            "Optimal pour : Segmentation précise avec mécanismes d'attention",
+          inferenceTime: 'Temps E2E: ~482ms par image (inférence ML: 377ms)',
+          bestFor: 'Idéal pour: Précision maximale de segmentation',
           description:
             "Modèle de segmentation précis avec mécanismes d'attention pour la détection précise des limites de sphéroïdes.",
+        },
+        unet: {
+          name: 'UNet (SpheroHQ)',
+          inferenceTime: 'Temps E2E: ~286ms par image (inférence ML: 181ms)',
+          bestFor:
+            'Idéal pour: Traitement le plus rapide, excellent pour les applications temps réel',
+          description:
+            "Modèle spécialisé entraîné spécifiquement pour la segmentation de sphéroïdes avec l'ensemble de données SpheroHQ. Fournit une vitesse et une précision équilibrées.",
         },
       },
       howToSelect: 'Comment Sélectionner un Modèle',
       selectionSteps: {
         step1: 'Ouvrez votre projet',
         step2: 'Trouvez le menu de sélection de modèle',
-        step3: 'Choisissez votre modèle',
+        step3: 'Choisissez parmi HRNet, CBAM-ResUNet ou UNet (SpheroHQ)',
         step4: 'Ajustez le seuil de confiance',
         step5: 'Votre sélection est sauvegardée',
       },
       tip: 'Conseil :',
-      tipText: 'Commencez avec CBAM-ResUNet pour la plupart des cas.',
+      tipText:
+        'Utilisez UNet pour le traitement le plus rapide avec un débit de 5,5 images/seconde. Choisissez CBAM-ResUNet pour une précision maximale dans les travaux de recherche. Sélectionnez HRNet pour une performance équilibrée entre vitesse et qualité.',
     },
     segmentationProcess: {
       title: 'Processus de Segmentation',
@@ -1294,6 +1309,34 @@ export default {
       },
       exportNote: 'Les packages sont complets :',
       exportNoteText: 'Chaque export inclut documentation et métadonnées.',
+    },
+    sharedProjects: {
+      title: 'Projets Partagés',
+      description:
+        "SpheroSeg vous permet de collaborer avec des collègues en partageant des projets. Partagez vos résultats de segmentation et annotations avec d'autres chercheurs pour révision et collaboration.",
+      sharingFeatures: 'Fonctionnalités de Partage',
+      features: {
+        readOnly:
+          'Accès en lecture seule: Les destinataires peuvent voir mais pas modifier vos données',
+        emailInvite:
+          'Invitations par email: Partagez via email avec notifications automatiques',
+        revokeAccess:
+          'Accès révocable: Retirez les permissions de partage à tout moment',
+        multipleCollaborators:
+          'Collaborateurs multiples: Partagez avec des équipes de recherche entières',
+      },
+      howToShare: 'Comment Partager un Projet',
+      shareSteps: {
+        step1: 'Ouvrez le projet que vous voulez partager',
+        step2:
+          'Cliquez sur le bouton "Partager" dans la barre d\'outils du projet',
+        step3: 'Entrez les adresses email de vos collaborateurs',
+        step4: 'Ajoutez un message optionnel expliquant le contenu partagé',
+        step5: 'Cliquez sur "Envoyer Invitations" pour partager le projet',
+      },
+      permissionsNote: 'Important:',
+      permissionsNoteText:
+        "Les projets partagés sont en lecture seule pour les destinataires. Ils peuvent voir les segmentations, exporter des données, mais ne peuvent pas modifier les annotations originales. Cela garantit l'intégrité des données tout en permettant la collaboration.",
     },
     footer: {
       backToHome: 'Retour Accueil',

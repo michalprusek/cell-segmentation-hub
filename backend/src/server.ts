@@ -132,7 +132,7 @@ app.get('/health', async (req, res) => {
   const monitoringHealth = getMonitoringHealth();
   
   const isHealthy = dbHealth.healthy && monitoringHealth.healthy && 
-    (redisHealth.status === 'healthy' || redisHealth.status === 'disabled');
+    redisHealth.status === 'healthy';
   
   return ResponseHelper.success(res, {
     status: isHealthy ? 'healthy' : 'unhealthy',
@@ -235,14 +235,10 @@ const startServer = async (): Promise<void> => {
     
     // Initialize Redis connection
     try {
-      const redisConnected = await initializeRedis();
-      if (redisConnected) {
-        logger.info('🔴 Redis connected successfully');
-      } else {
-        logger.warn('⚠️  Redis connection failed - caching disabled, application continues');
-      }
+      await initializeRedis();
+      logger.info('🔴 Redis connected successfully');
     } catch (error) {
-      logger.warn('Redis initialization failed:', error as Error);
+      logger.warn('Redis initialization failed:', (error as Error).message);
       logger.warn('Application continuing without Redis caching');
     }
     

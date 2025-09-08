@@ -284,4 +284,7 @@ const PrivacyPolicy = () => {
   );
 };
 
+// Set displayName for React DevTools
+PrivacyPolicy.displayName = 'PrivacyPolicy';
+
 export default PrivacyPolicy;

@@ -141,16 +141,16 @@ export async function cleanupOrphanedRecords(
     `;
     
     // Clean up orphaned segmentation results
-    await tx.segmentationResult.deleteMany({
+    await tx.segmentation.deleteMany({
       where: {
-        projectImage: {
+        image: {
           is: null
         }
       }
     });
     
     // Clean up orphaned queue items
-    await tx.queueItem.deleteMany({
+    await tx.segmentationQueue.deleteMany({
       where: {
         AND: [
           { status: { in: ['completed', 'failed'] } },

@@ -1,9 +1,38 @@
 import { jest } from '@jest/globals'
-// import { mockDeep, mockReset, DeepMockProxy } from 'jest-mock-extended'
+import { PrismaClient } from '@prisma/client'
 
-// Mock Prisma client  
-// export const prismaMock = mockDeep<PrismaClient>() as unknown as DeepMockProxy<PrismaClient>
-export const prismaMock = {} as Record<string, jest.Mock>
+// Create a comprehensive Prisma mock
+const createPrismaMock = () => {
+  const models = ['user', 'project', 'projectImage', 'segmentationResult', 'queueItem', 'share', 'passwordResetToken'];
+  const mock: any = {
+    $connect: jest.fn(() => Promise.resolve()),
+    $disconnect: jest.fn(() => Promise.resolve()),
+    $executeRaw: jest.fn(),
+    $queryRaw: jest.fn(),
+    $transaction: jest.fn((cb: any) => cb(mock)),
+  };
+  
+  models.forEach(model => {
+    mock[model] = {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+      updateMany: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
+      count: jest.fn(),
+      aggregate: jest.fn(),
+      groupBy: jest.fn(),
+      upsert: jest.fn(),
+    };
+  });
+  
+  return mock;
+};
+
+export const prismaMock = createPrismaMock()
 
 // Mock Redis client
 export const redisMock = {
@@ -38,7 +67,8 @@ jest.mock('bcryptjs')
 // Mock Prisma client
 jest.mock('../db', () => ({
   __esModule: true,
-  prisma: prismaMock,
+  prisma: createPrismaMock(),
+  default: createPrismaMock(),
 }))
 
 // Mock Redis client
@@ -87,16 +117,23 @@ process.env.PORT = '3001'
 process.env.HOST = 'localhost'
 process.env.JWT_ACCESS_SECRET = 'test-jwt-access-secret-that-is-at-least-32-characters-long'
 process.env.JWT_REFRESH_SECRET = 'test-jwt-refresh-secret-that-is-at-least-32-characters-long'
+process.env.JWT_REFRESH_EXPIRY_REMEMBER = '30d'
 process.env.DATABASE_URL = 'file:./test.db'
 process.env.REDIS_URL = 'redis://localhost:6379'
 process.env.ML_SERVICE_URL = 'http://localhost:8000'
+process.env.SEGMENTATION_SERVICE_URL = 'http://localhost:8000'
 process.env.FROM_EMAIL = 'test@example.com'
+process.env.FROM_NAME = 'Test Platform'
 process.env.UPLOAD_DIR = './uploads'
-process.env.EMAIL_SERVICE = 'smtp'
+process.env.EMAIL_SERVICE = 'none'
 process.env.SMTP_HOST = 'localhost'
 process.env.SMTP_PORT = '587'
 process.env.SMTP_USER = 'test'
 process.env.SMTP_PASS = 'test'
+process.env.SESSION_SECRET = 'test-session-secret-for-testing'
+process.env.REQUIRE_EMAIL_VERIFICATION = 'false'
+process.env.ALLOWED_ORIGINS = 'http://localhost:3000'
+process.env.WS_ALLOWED_ORIGINS = 'http://localhost:3000'
 
 // Suppress console logs during tests
 global.console = {

@@ -1,8 +1,29 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
-import { ProjectCard } from '../ProjectCard';
-import { ProjectsList } from '../ProjectsList';
-import { ProjectThumbnail } from '../project/ProjectThumbnail';
+import ProjectCard from '../ProjectCard';
+import ProjectsList from '../ProjectsList';
+import ProjectThumbnail from '../project/ProjectThumbnail';
+
+// Mock React Router
+vi.mock('react-router-dom', () => ({
+  useNavigate: vi.fn(() => vi.fn()),
+  Link: ({ children, to }: any) => <a href={to}>{children}</a>,
+}));
+
+// Mock contexts
+vi.mock('@/contexts/useLanguage', () => ({
+  useLanguage: () => ({
+    t: (key: string) => key,
+    language: 'en',
+  }),
+}));
+
+vi.mock('@/contexts/useAuth', () => ({
+  useAuth: () => ({
+    user: { id: '1', email: 'test@example.com' },
+    isAuthenticated: true,
+  }),
+}));
 
 // Mock the API client
 vi.mock('@/lib/api', () => ({

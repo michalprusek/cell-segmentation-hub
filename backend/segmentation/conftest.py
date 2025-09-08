@@ -179,9 +179,11 @@ def mock_model_inference(monkeypatch):
     
     # Use context manager for proper monkeypatch cleanup
     with monkeypatch.context() as m:
-        m.setattr('services.inference.predict_with_model', mock_predict, raising=False)
-        m.setattr('services.hrnet_inference.predict', lambda x: mock_predict(x, 'hrnet'), raising=False)
-        m.setattr('services.resunet_inference.predict', lambda x: mock_predict(x, 'resunet'), raising=False)
+        # Only mock existing modules
+        try:
+            m.setattr('services.inference.predict_with_model', mock_predict, raising=False)
+        except:
+            pass
         yield mock_predict
 
 

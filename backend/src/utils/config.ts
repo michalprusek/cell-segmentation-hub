@@ -21,9 +21,9 @@ const configSchema = z.object({
     return 'file:./data/dev.db';
   }),
   
-  // JWT
-  JWT_ACCESS_SECRET: z.string().min(32, 'JWT Access Secret must be at least 32 characters'),
-  JWT_REFRESH_SECRET: z.string().min(32, 'JWT Refresh Secret must be at least 32 characters'),
+  // JWT - Must be 64-character hexadecimal strings (32 bytes)
+  JWT_ACCESS_SECRET: z.string().regex(/^[0-9a-fA-F]{64}$/, 'JWT Access Secret must be a 64-character hexadecimal string (32 bytes). Generate with: openssl rand -hex 32'),
+  JWT_REFRESH_SECRET: z.string().regex(/^[0-9a-fA-F]{64}$/, 'JWT Refresh Secret must be a 64-character hexadecimal string (32 bytes). Generate with: openssl rand -hex 32'),
   JWT_ACCESS_EXPIRY: z.string().default('15m'),
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
   JWT_REFRESH_EXPIRY_REMEMBER: z.string().default('30d'),

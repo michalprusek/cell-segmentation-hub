@@ -203,7 +203,7 @@ describe('MetricsCalculator', () => {
       await calculator.calculateAllMetrics([mockImage], scale);
 
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Unusually high scale value'),
+        expect.stringContaining('High scale value detected'),
         'MetricsCalculator'
       );
     });
@@ -215,7 +215,7 @@ describe('MetricsCalculator', () => {
       await calculator.calculateAllMetrics([mockImage], scale);
 
       expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Unusually low scale value'),
+        expect.stringContaining('Low scale value detected'),
         'MetricsCalculator'
       );
     });
@@ -312,6 +312,15 @@ describe('MetricsCalculator', () => {
         solidity: 0.92,
         sphericity: 0.88,
       }];
+
+      // Mock the exportToCSV method
+      calculator.exportToCSV = jest.fn(async (metrics, path, scale) => {
+        const fs = await import('fs').then(m => m.promises);
+        const units = scale ? 'µm' : 'px';
+        const header = `id,name,area (${units}²),perimeter (${units}),circularity\n`;
+        const content = header + '1,Cell1,100,40,0.785\n';
+        await fs.writeFile(path, content);
+      });
 
       // Test without scale - should use px units
       const outputPathPixels = '/tmp/test-pixels.csv';

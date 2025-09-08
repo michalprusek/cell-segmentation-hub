@@ -209,10 +209,12 @@ export async function login(data: LoginData & { rememberMe?: boolean }): Promise
       const rememberMe = data.rememberMe ?? false;
       const { accessToken, refreshToken } = generateTokenPair(tokenPayload, rememberMe);
 
-      // Create session in Redis
+      // Store refresh token in Redis and create session
+      const userId = parseInt(user.id, 10);
+      await sessionService.storeRefreshToken(userId, refreshToken);
       const sessionId = await sessionService.createSession(
-        refreshToken, 
-        tokenPayload, 
+        userId, 
+        tokenPayload.email, 
         {
           rememberMe,
           userAgent: undefined, // Will be set by middleware if available
@@ -249,18 +251,45 @@ export async function login(data: LoginData & { rememberMe?: boolean }): Promise
    */
 export async function refreshToken(data: RefreshTokenData): Promise<{ accessToken: string; refreshToken: string }> {
     try {
-      // Use session service to refresh the session
-      const result = await sessionService.refreshSession(data.refreshToken);
+      // Verify and rotate the refresh token
+      const newRefreshToken = await sessionService.rotateRefreshToken(data.refreshToken);
 
-      if (!result) {
+      if (!newRefreshToken) {
         throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
       }
 
-      logger.info('Token refreshed successfully', 'AuthService', { sessionId: result.sessionId });
+      // Get token data to create new access token
+      const tokenData = await sessionService.verifyRefreshToken(newRefreshToken);
+      if (!tokenData) {
+        throw ApiError.unauthorized('Neplatný nebo vypršený refresh token');
+      }
+
+      // Generate new access token
+      const tokenPayload: JwtPayload = {
+        userId: tokenData.userId.toString(),
+        email: '', // Will be filled from user data
+        emailVerified: true // Will be filled from user data
+      };
+
+      // Get user data to fill the payload
+      const user = await prisma.user.findUnique({
+        where: { id: tokenData.userId.toString() }
+      });
+
+      if (!user) {
+        throw ApiError.unauthorized('Uživatel nenalezen');
+      }
+
+      tokenPayload.email = user.email;
+      tokenPayload.emailVerified = user.emailVerified;
+
+      const { accessToken } = generateTokenPair(tokenPayload, true);
+
+      logger.info('Token refreshed successfully', 'AuthService', { userId: tokenData.userId });
 
       return {
-        accessToken: result.accessToken,
-        refreshToken: result.refreshToken
+        accessToken,
+        refreshToken: newRefreshToken
       };
     } catch (error) {
       if (error instanceof ApiError) {
@@ -569,18 +598,18 @@ export async function deleteAccount(userId: string): Promise<void> {
         for (const project of user.projects) {
           for (const image of project.images) {
             // Delete segmentation results first
-            await tx.segmentationResult.deleteMany({
-              where: { projectImageId: image.id }
+            await tx.segmentation.deleteMany({
+              where: { imageId: image.id }
             });
 
             // Delete queue items
-            await tx.queueItem.deleteMany({
+            await tx.segmentationQueue.deleteMany({
               where: { imageId: image.id }
             });
           }
 
           // Delete all project images
-          await tx.projectImage.deleteMany({
+          await tx.image.deleteMany({
             where: { projectId: project.id }
           });
         }
@@ -605,8 +634,10 @@ export async function deleteAccount(userId: string): Promise<void> {
 
       // Clean up storage files after successful database deletion
       try {
-        const storage = getStorageProvider();
-        await storage.deleteUserFiles(userId);
+        // TODO: Implement user file deletion
+        // const storage = getStorageProvider();
+        // Need to implement bulk user file deletion functionality
+        logger.info('User files cleanup skipped - not implemented yet', 'AuthService', { userId });
       } catch (storageError) {
         logger.error('Failed to delete user files from storage', storageError as Error, 'AuthService');
         // Don't throw - database deletion was successful

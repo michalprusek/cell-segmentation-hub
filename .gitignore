@@ -6,7 +6,7 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-
+test-images/
 node_modules
 dist
 dist-ssr
@@ -104,6 +104,7 @@ bun.lockb
 
 # Model weights and large files
 *.pth
+*.pth.backup
 *.onnx
 *.h5
 *.pkl

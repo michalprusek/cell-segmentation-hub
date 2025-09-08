@@ -1,6 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { queueController } from '../controllers/queueController';
 import { authenticate } from '../../middleware/auth';
+import { validateBody, validateParams } from '../../middleware/validation';
+import { addImageToQueueSchema, batchQueueSchema, resetStuckItemsSchema, cleanupQueueSchema } from '../../types/validation';
 import { body, param } from 'express-validator';
 import { validationResult, ValidationError } from 'express-validator';
 import { ResponseHelper } from '../../utils/response';
@@ -37,26 +39,10 @@ router.use(authenticate);
 router.post(
   '/images/:imageId',
   [
-    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID'),
-    body('model')
-      .optional()
-      .isIn(['hrnet', 'cbam_resunet'])
-      .withMessage('Model musí být hrnet nebo cbam_resunet'),
-    body('threshold')
-      .optional()
-      .isFloat({ min: 0.1, max: 0.9 })
-      .withMessage('Threshold musí být mezi 0.1 a 0.9'),
-    body('priority')
-      .optional()
-      .isInt({ min: 0, max: 10 })
-      .withMessage('Priorita musí být mezi 0 a 10'),
-    body('detectHoles')
-      .optional()
-      .isBoolean()
-      .withMessage('detectHoles musí být boolean')
-      .toBoolean()
+    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID')
   ],
   handleValidation,
+  validateBody(addImageToQueueSchema),
   queueController.addImageToQueue
 );
 
@@ -67,40 +53,7 @@ router.post(
  */
 router.post(
   '/batch',
-  [
-    body('imageIds')
-      .isArray({ min: 1, max: 100 })
-      .withMessage('Musíte zadat 1-100 obrázků'),
-    body('imageIds.*')
-      .isUUID()
-      .withMessage('Všechna ID obrázků musí být platná UUID'),
-    body('projectId')
-      .isUUID()
-      .withMessage('ID projektu musí být platné UUID'),
-    body('model')
-      .optional()
-      .isIn(['hrnet', 'cbam_resunet'])
-      .withMessage('Model musí být hrnet nebo cbam_resunet'),
-    body('threshold')
-      .optional()
-      .isFloat({ min: 0.1, max: 0.9 })
-      .withMessage('Threshold musí být mezi 0.1 a 0.9'),
-    body('priority')
-      .optional()
-      .isInt({ min: 0, max: 10 })
-      .withMessage('Priorita musí být mezi 0 a 10'),
-    body('forceResegment')
-      .optional()
-      .isBoolean()
-      .withMessage('forceResegment musí být boolean')
-      .toBoolean(),
-    body('detectHoles')
-      .optional()
-      .isBoolean()
-      .withMessage('detectHoles musí být boolean')
-      .toBoolean()
-  ],
-  handleValidation,
+  validateBody(batchQueueSchema),
   queueController.addBatchToQueue
 );
 
