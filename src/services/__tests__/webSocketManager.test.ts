@@ -40,13 +40,22 @@ describe('WebSocketManager', () => {
   let wsManager: WebSocketManager;
 
   beforeEach(() => {
-    // Create comprehensive mock socket
+    // Create comprehensive mock socket with event handlers
+    const eventHandlers: { [key: string]: ((...args: unknown[]) => void)[] } =
+      {};
+
     mockSocket = {
       connected: false,
       id: 'socket-123',
       connect: vi.fn(),
       disconnect: vi.fn(),
-      on: vi.fn(),
+      on: vi.fn((event, handler) => {
+        if (!eventHandlers[event]) {
+          eventHandlers[event] = [];
+        }
+        eventHandlers[event].push(handler);
+        return mockSocket; // for chaining
+      }),
       off: vi.fn(),
       emit: vi.fn(),
       removeAllListeners: vi.fn(),
@@ -55,6 +64,11 @@ describe('WebSocketManager', () => {
         off: vi.fn(),
         reconnectionAttempts: vi.fn().mockReturnValue(5),
         reconnectionDelay: vi.fn().mockReturnValue(1000),
+      },
+      // Helper to trigger events in tests
+      _trigger: (event: string, ...args: any[]) => {
+        const handlers = eventHandlers[event] || [];
+        handlers.forEach(handler => handler(...args));
       },
     };
 
@@ -105,10 +119,7 @@ describe('WebSocketManager', () => {
 
       // Simulate successful connection
       mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket._trigger('connect');
 
       await connectPromise;
 

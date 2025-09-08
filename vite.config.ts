@@ -8,6 +8,18 @@ export default defineConfig({
     host: '::',
     port: 5173,
     allowedHosts: ['localhost', '127.0.0.1', 'spherosegapp.utia.cas.cz'],
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+      '/socket.io': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        ws: true,
+      },
+    },
   },
   plugins: [react()],
   resolve: {
@@ -25,6 +37,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 500, // Warn for chunks over 500KB
     rollupOptions: {
       output: {
+        // Fix for dynamic imports in production - use consistent naming
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: {
           // Core React libraries
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],

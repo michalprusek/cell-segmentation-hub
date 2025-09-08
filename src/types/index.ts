@@ -482,17 +482,17 @@ export interface SpheroidMetric {
   area: number;
   perimeter: number;
   circularity: number;
-  compactness: number;
+  extent: number; // Renamed from compactness - ratio of area to bounding box area
   convexity: number;
   equivalentDiameter: number;
   aspectRatio: number;
   feretDiameterMax: number;
-  feretDiameterMaxOrthogonal: number;
+  feretDiameterOrthogonal: number; // Renamed - perpendicular to max Feret
   feretDiameterMin: number;
-  lengthMajorDiameter: number;
-  lengthMinorDiameter: number;
+  boundingBoxWidth: number; // Renamed from lengthMajorDiameter for clarity
+  boundingBoxHeight: number; // Renamed from lengthMinorDiameter for clarity
   solidity: number;
-  sphericity: number;
+  // sphericity removed - it's a 3D metric, not applicable to 2D
 }
 
 // Type guard for ApiError

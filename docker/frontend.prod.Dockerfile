@@ -50,13 +50,24 @@ RUN echo 'server { \
     server_name _; \
     root /usr/share/nginx/html; \
     index index.html; \
-    location / { \
-        try_files $uri $uri/ /index.html; \
+    \
+    # Static assets - serve directly or return 404 \
+    location ~* \.(js|css|map|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ { \
+        try_files $uri =404; \
+        expires 1y; \
+        add_header Cache-Control "public, immutable"; \
     } \
+    \
+    # Health check endpoint \
     location /health { \
         access_log off; \
         return 200 "healthy\n"; \
         add_header Content-Type text/plain; \
+    } \
+    \
+    # SPA fallback for all other routes \
+    location / { \
+        try_files $uri $uri/ /index.html; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 

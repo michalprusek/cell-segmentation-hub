@@ -380,6 +380,11 @@ export default {
           description:
             'Modelo de segmentación preciso con mecanismos de atención',
         },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          description:
+            'Mejor rendimiento en el conjunto de datos SpheroHQ - optimizado para segmentación de esferoides con velocidad y precisión equilibradas (~0.25s/imagen, 10 img/s)',
+        },
       },
     },
     confidenceThreshold: 'Umbral de Confianza',
@@ -397,10 +402,12 @@ export default {
       large: 'Grande',
     },
     modelDescription: {
-      hrnet: 'Modelo rápido y eficiente para segmentación en tiempo real',
-      resunet_small:
-        'Velocidad y precisión equilibradas para la mayoría de casos de uso',
-      resunet_advanced: 'Mayor precisión con mecanismos de atención',
+      hrnet:
+        'Modelo equilibrado con buena velocidad y calidad (E2E ~309ms, 4.9 img/s)',
+      cbam_resunet:
+        'Segmentación más precisa con mecanismos de atención (E2E ~482ms, 2.7 img/s)',
+      unet_spherohq:
+        '¡El modelo más rápido después de las optimizaciones! Excelente para procesamiento en tiempo real (E2E ~286ms, 5.5 img/s)',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
     dataUsageDescription:
@@ -1109,21 +1116,26 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet (Pequeño)',
-          inferenceTime:
-            'Tiempo de inferencia: ~0.18 segundos (acelerado por GPU)',
+          inferenceTime: 'Tiempo E2E: ~309ms por imagen (inferencia ML: 204ms)',
           bestFor:
-            'Mejor para: Procesamiento en tiempo real y resultados rápidos',
+            'Mejor para: Rendimiento equilibrado entre velocidad y calidad',
           description:
             'Modelo rápido y eficiente ideal para segmentación rápida cuando la velocidad se prioriza sobre la máxima precisión.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Mediano)',
-          inferenceTime:
-            'Tiempo de inferencia: ~0.20 segundos (acelerado por GPU)',
-          bestFor:
-            'Mejor para: Segmentación precisa con mecanismos de atención',
+          inferenceTime: 'Tiempo E2E: ~482ms por imagen (inferencia ML: 377ms)',
+          bestFor: 'Mejor para: Máxima precisión en segmentación',
           description:
             'Modelo de segmentación preciso con mecanismos de atención para la detección precisa de límites de esferoides.',
+        },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          inferenceTime: 'Tiempo E2E: ~286ms por imagen (inferencia ML: 181ms)',
+          bestFor:
+            'Mejor para: Procesamiento más rápido, excelente para aplicaciones en tiempo real',
+          description:
+            'Modelo especializado entrenado específicamente para segmentación de esferoides con el conjunto de datos SpheroHQ. Proporciona velocidad y precisión equilibradas.',
         },
       },
       howToSelect: 'Cómo Seleccionar un Modelo',
@@ -1131,7 +1143,7 @@ export default {
         step1: 'Abre tu proyecto y navega a cualquier imagen',
         step2:
           'En la barra de herramientas del proyecto, encuentra el menú desplegable de selección de modelo',
-        step3: 'Elige entre HRNet o CBAM-ResUNet',
+        step3: 'Elige entre HRNet, CBAM-ResUNet o UNet (SpheroHQ)',
         step4:
           'Ajusta el umbral de confianza (0.0-1.0) para afinar la sensibilidad de detección',
         step5:
@@ -1139,7 +1151,7 @@ export default {
       },
       tip: 'Consejo:',
       tipText:
-        'Comienza con CBAM-ResUNet para la mayoría de casos. Usa HRNet para prototipado rápido y CBAM-ResUNet cuando necesites segmentación precisa con mecanismos de atención para investigación o publicación.',
+        'Usa UNet para el procesamiento más rápido con rendimiento de 5,5 imágenes/segundo. Elige CBAM-ResUNet para máxima precisión en trabajo de investigación. Selecciona HRNet para rendimiento equilibrado entre velocidad y calidad.',
     },
     segmentationProcess: {
       title: 'Proceso de Segmentación',
@@ -1347,6 +1359,52 @@ export default {
       exportNote: 'Los paquetes de exportación son completos:',
       exportNoteText:
         'Cada exportación incluye documentación, metadatos y todos los tipos de contenido seleccionados organizados en una estructura de carpetas clara para uso fácil.',
+    },
+    sharedProjectsSection: {
+      title: 'Proyectos Compartidos',
+      description:
+        'SpheroSeg permite la colaboración en proyectos a través de potentes funciones de compartición. Comparte tus proyectos con colegas, colabora en anotaciones y analiza resultados juntos.',
+      keyFeatures: 'Características Principales',
+      features: {
+        projectSharing: {
+          title: 'Compartir Proyectos',
+          description:
+            'Comparte proyectos con usuarios específicos a través de invitaciones por correo electrónico o generando enlaces para compartir.',
+        },
+        permissions: {
+          title: 'Gestión de Permisos',
+          description:
+            'Establece permisos de solo lectura o acceso completo para usuarios compartidos.',
+        },
+        realTimeSync: {
+          title: 'Sincronización en Tiempo Real',
+          description:
+            'Los cambios realizados por usuarios compartidos son inmediatamente visibles para todos los colaboradores.',
+        },
+        activityTracking: {
+          title: 'Seguimiento de Actividad',
+          description:
+            'Rastrea quién hizo qué cambios con registros de actividad detallados.',
+        },
+      },
+      howToShare: 'Cómo Compartir un Proyecto',
+      shareSteps: {
+        step1: 'Abre el proyecto que deseas compartir',
+        step2:
+          'Haz clic en el botón "Compartir" en la barra de herramientas del proyecto',
+        step3:
+          'Elige entre invitación por correo electrónico o enlace para compartir',
+        step4: 'Establece el nivel de permisos (lectura o acceso completo)',
+        step5: 'Envía la invitación o copia el enlace para compartir',
+        step6:
+          'Los colaboradores pueden acceder al proyecto después de aceptar',
+      },
+      accessingShared: 'Acceder a Proyectos Compartidos',
+      accessDescription:
+        'Los proyectos compartidos contigo aparecerán en la sección "Proyectos Compartidos" de tu panel de control. Puedes verlos, editarlos (si tienes permisos) y analizarlos igual que tus propios proyectos.',
+      collaborationTip: 'Consejo de Colaboración:',
+      collaborationTipText:
+        'Usa la función de comentarios para dejar notas en imágenes o segmentaciones específicas para una comunicación efectiva con tu equipo.',
     },
     footer: {
       backToHome: 'Volver al Inicio',

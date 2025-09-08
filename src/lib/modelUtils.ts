@@ -16,9 +16,9 @@ export function getLocalizedModelInfo(
       size: 'small',
       defaultThreshold: 0.5,
       performance: {
-        avgTimePerImage: 0.2,
-        throughput: 5.5,
-        p95Latency: 0.3,
+        avgTimePerImage: 0.204,
+        throughput: 4.9,
+        p95Latency: 0.309,
         batchSize: 8,
       },
     },
@@ -27,10 +27,21 @@ export function getLocalizedModelInfo(
       size: 'medium',
       defaultThreshold: 0.5,
       performance: {
-        avgTimePerImage: 0.3,
-        throughput: 3.0,
-        p95Latency: 0.7,
+        avgTimePerImage: 0.377,
+        throughput: 2.7,
+        p95Latency: 0.482,
         batchSize: 2,
+      },
+    },
+    unet_spherohq: {
+      id: 'unet_spherohq',
+      size: 'small',
+      defaultThreshold: 0.5,
+      performance: {
+        avgTimePerImage: 0.181,
+        throughput: 5.5,
+        p95Latency: 0.286,
+        batchSize: 4,
       },
     },
   };
@@ -38,6 +49,7 @@ export function getLocalizedModelInfo(
   const keyMap: Record<ModelType, string> = {
     hrnet: 'hrnet',
     cbam_resunet: 'cbam',
+    unet_spherohq: 'unet_spherohq',
   };
 
   const baseModel = baseModels[modelId];
@@ -55,7 +67,7 @@ export function getLocalizedModelInfo(
  * Get all localized models
  */
 export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
-  const modelIds: ModelType[] = ['hrnet', 'cbam_resunet'];
+  const modelIds: ModelType[] = ['hrnet', 'cbam_resunet', 'unet_spherohq'];
   return modelIds.map(id => getLocalizedModelInfo(id, t));
 }
 
@@ -73,15 +85,14 @@ export const BASIC_MODEL_INFO: Record<
   hrnet: {
     id: 'hrnet',
     name: 'HRNet',
-    displayName: 'HRNet (Fast)',
-    description:
-      'Fast and efficient model for real-time segmentation (~0.2s per image)',
+    displayName: 'HRNet (Balanced)',
+    description: 'Balanced model with good speed and quality, E2E ~309ms',
     size: 'small',
     defaultThreshold: 0.5,
     performance: {
-      avgTimePerImage: 0.2,
-      throughput: 5.5,
-      p95Latency: 0.3,
+      avgTimePerImage: 0.204,
+      throughput: 4.9,
+      p95Latency: 0.309,
       batchSize: 8,
     },
   },
@@ -90,14 +101,29 @@ export const BASIC_MODEL_INFO: Record<
     name: 'CBAM-ResUNet',
     displayName: 'CBAM-ResUNet (Precise)',
     description:
-      'Precise segmentation with attention mechanisms (~0.3s per image)',
+      'Most precise segmentation with attention mechanisms, E2E ~482ms',
     size: 'medium',
     defaultThreshold: 0.5,
     performance: {
-      avgTimePerImage: 0.3,
-      throughput: 3.0,
-      p95Latency: 0.7,
+      avgTimePerImage: 0.377,
+      throughput: 2.7,
+      p95Latency: 0.482,
       batchSize: 2,
+    },
+  },
+  unet_spherohq: {
+    id: 'unet_spherohq',
+    name: 'UNet (SpheroHQ)',
+    displayName: 'UNet (Fastest)',
+    description:
+      'Fastest model after optimizations, excellent for real-time processing, E2E ~286ms',
+    size: 'small',
+    defaultThreshold: 0.5,
+    performance: {
+      avgTimePerImage: 0.181,
+      throughput: 5.5,
+      p95Latency: 0.286,
+      batchSize: 4,
     },
   },
 };

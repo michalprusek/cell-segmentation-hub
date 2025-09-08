@@ -3,6 +3,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Suspense, lazy } from 'react';
+import {
+  createLazyComponent,
+  LazyWrapper,
+} from '@/components/LazyComponentWrapper';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -15,24 +19,55 @@ import { ToastEventProvider } from '@/components/AuthToastProvider';
 import { toast } from 'sonner';
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 
-// Lazy load all page components for code splitting
-const Index = lazy(() => import('./pages/Index'));
-const SignIn = lazy(() => import('./pages/SignIn'));
-const SignUp = lazy(() => import('./pages/SignUp'));
-const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const ProjectDetail = lazy(() => import('./pages/ProjectDetail'));
-const SegmentationEditor = lazy(
-  () => import('./pages/segmentation/SegmentationEditor')
+// Enhanced lazy load with better error handling and displayName support
+const Index = createLazyComponent(() => import('./pages/Index'), 'Index');
+const SignIn = createLazyComponent(() => import('./pages/SignIn'), 'SignIn');
+const SignUp = createLazyComponent(() => import('./pages/SignUp'), 'SignUp');
+const ForgotPassword = createLazyComponent(
+  () => import('./pages/ForgotPassword'),
+  'ForgotPassword'
 );
-const NotFound = lazy(() => import('./pages/NotFound'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Profile = lazy(() => import('./pages/Profile'));
-const TermsOfService = lazy(() => import('./pages/TermsOfService'));
-const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
-const Documentation = lazy(() => import('./pages/Documentation'));
-const ProjectExport = lazy(() => import('./pages/export/ProjectExport'));
-const ShareAccept = lazy(() => import('./pages/ShareAccept'));
+const Dashboard = createLazyComponent(
+  () => import('./pages/Dashboard'),
+  'Dashboard'
+);
+const ProjectDetail = createLazyComponent(
+  () => import('./pages/ProjectDetail'),
+  'ProjectDetail'
+);
+const SegmentationEditor = createLazyComponent(
+  () => import('./pages/segmentation/SegmentationEditor'),
+  'SegmentationEditor'
+);
+const NotFound = createLazyComponent(
+  () => import('./pages/NotFound'),
+  'NotFound'
+);
+const Settings = createLazyComponent(
+  () => import('./pages/Settings'),
+  'Settings'
+);
+const Profile = createLazyComponent(() => import('./pages/Profile'), 'Profile');
+const TermsOfService = createLazyComponent(
+  () => import('./pages/TermsOfService'),
+  'TermsOfService'
+);
+const PrivacyPolicy = createLazyComponent(
+  () => import('./pages/PrivacyPolicy'),
+  'PrivacyPolicy'
+);
+const Documentation = createLazyComponent(
+  () => import('./pages/Documentation'),
+  'Documentation'
+);
+const ProjectExport = createLazyComponent(
+  () => import('./pages/export/ProjectExport'),
+  'ProjectExport'
+);
+const ShareAccept = createLazyComponent(
+  () => import('./pages/ShareAccept'),
+  'ShareAccept'
+);
 
 // Create a client for React Query
 const queryClient = new QueryClient({

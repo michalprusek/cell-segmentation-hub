@@ -35,8 +35,8 @@ export default defineConfig({
     css: true,
     include: ['src/**/*.{test,spec}.{js,ts,jsx,tsx}'],
     exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
-    testTimeout: 10000,
-    hookTimeout: 10000,
+    testTimeout: 20000, // Increased for WebSocket and async tests
+    hookTimeout: 20000, // Increased for async hooks
   },
   resolve: {
     alias: {

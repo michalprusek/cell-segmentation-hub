@@ -34,6 +34,7 @@ export class QueueService {
     cbam_resunet: 4
   };
   private websocketService: WebSocketService | null = null;
+  private queueWorkerInstance: any = null; // Reference to QueueWorker for triggering
 
   constructor(
     private prisma: PrismaClient,
@@ -47,6 +48,17 @@ export class QueueService {
   public setWebSocketService(wsService: WebSocketService): void {
     this.websocketService = wsService;
     logger.info('WebSocket service connected to QueueService', 'QueueService');
+  }
+
+  public setQueueWorker(queueWorker: any): void {
+    this.queueWorkerInstance = queueWorker;
+    logger.info('QueueWorker connected to QueueService for immediate processing', 'QueueService');
+  }
+
+  private triggerQueueProcessing(): void {
+    if (this.queueWorkerInstance && typeof this.queueWorkerInstance.triggerImmediateProcessing === 'function') {
+      this.queueWorkerInstance.triggerImmediateProcessing();
+    }
   }
 
   public static getInstance(
@@ -117,7 +129,8 @@ export class QueueService {
         queueId: queueEntry.id
       });
 
-      // Processing will be handled by QueueWorker
+      // Trigger immediate processing for low latency
+      this.triggerQueueProcessing();
 
       return queueEntry;
     } catch (error) {
@@ -217,7 +230,10 @@ export class QueueService {
         model
       });
 
-      // Processing will be handled by QueueWorker
+      // Trigger immediate processing for low latency
+      if (queueEntries.length > 0) {
+        this.triggerQueueProcessing();
+      }
 
       return queueEntries;
     } catch (error) {
@@ -459,26 +475,49 @@ export class QueueService {
       itemIds: batch.map(item => item.id)
     });
 
-    // Mark all items as processing
-    for (const item of batch) {
-      await this.prisma.segmentationQueue.update({
-        where: { id: item.id },
-        data: { 
-          status: 'processing',
-          startedAt: new Date()
-        }
-      });
+    // Batch update all items to processing status
+    const batchIds = batch.map(item => item.id);
+    const imageIds = batch.map(item => item.imageId);
+    const startedAt = new Date();
+    
+    // Use batch update for better performance
+    await this.prisma.segmentationQueue.updateMany({
+      where: { id: { in: batchIds } },
+      data: { 
+        status: 'processing',
+        startedAt: startedAt
+      }
+    });
 
-      // Update image status
-      await this.imageService.updateSegmentationStatus(item.imageId, 'processing', item.userId);
+    // Batch update image statuses
+    await this.prisma.image.updateMany({
+      where: { id: { in: imageIds } },
+      data: { segmentationStatus: 'processing' }
+    });
 
-      // Emit processing status
-      if (this.websocketService) {
-        this.websocketService.emitSegmentationUpdate(item.userId, {
+    // Batch emit WebSocket notifications
+    if (this.websocketService) {
+      const notifications = batch.map(item => ({
+        userId: item.userId,
+        data: {
           imageId: item.imageId,
           projectId: item.projectId,
           status: 'processing',
           queueId: item.id
+        }
+      }));
+      
+      // Group notifications by userId for efficient emission
+      const groupedNotifications = notifications.reduce((acc, notif) => {
+        if (!acc[notif.userId]) acc[notif.userId] = [];
+        acc[notif.userId].push(notif.data);
+        return acc;
+      }, {} as Record<string, any[]>);
+      
+      for (const [userId, updates] of Object.entries(groupedNotifications)) {
+        // Emit all updates for this user at once
+        updates.forEach(update => {
+          this.websocketService!.emitSegmentationUpdate(userId, update);
         });
       }
     }

@@ -7,8 +7,8 @@ from pathlib import Path
 from typing import Dict, Optional, Any
 from contextlib import contextmanager
 
-from ..models.hrnet import HRNetV2
-from ..models.cbam_resunet import ResUNetCBAM
+from models.hrnet import HRNetV2
+from models.cbam_resunet import ResUNetCBAM
 
 logger = logging.getLogger(__name__)
 

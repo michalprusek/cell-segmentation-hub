@@ -30,34 +30,8 @@ Object.defineProperty(window, 'matchMedia', {
   })),
 });
 
-// Mock document
-Object.defineProperty(window, 'document', {
-  value: {
-    documentElement: {
-      classList: {
-        add: vi.fn(),
-        remove: vi.fn(),
-        contains: vi.fn(() => false),
-      },
-      setAttribute: vi.fn(),
-      style: {},
-    },
-    body: {
-      classList: {
-        add: vi.fn(),
-        remove: vi.fn(),
-      },
-      style: {},
-    },
-    createElement: vi.fn(() => ({
-      classList: {
-        add: vi.fn(),
-        remove: vi.fn(),
-      },
-    })),
-  },
-  writable: true,
-});
+// Remove document mock - let jsdom handle it
+// The test environment already provides a proper document object
 
 // Mock apiClient
 vi.mock('@/lib/api', () => ({

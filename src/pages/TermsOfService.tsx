@@ -164,4 +164,7 @@ const TermsOfService = () => {
   );
 };
 
+// Set displayName for React DevTools
+TermsOfService.displayName = 'TermsOfService';
+
 export default TermsOfService;

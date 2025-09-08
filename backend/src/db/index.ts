@@ -4,6 +4,7 @@ import { config } from '../utils/config';
 import { prismaPool } from './prismaPool';
 import { databaseMetrics } from '../monitoring/databaseMetrics';
 import { logDatabasePoolConfig } from '../config/database.ts';
+import { getPrismaConfig } from './prismaConfig';
 
 // Create a global variable to store Prisma client
 declare global {
@@ -12,7 +13,7 @@ declare global {
 
 // Initialize Prisma client (legacy compatibility)
 const createPrismaClient = (): PrismaClient => {
-  return new PrismaClient();
+  return new PrismaClient(getPrismaConfig());
 };
 
 // Use global variable in development to prevent multiple instances (legacy compatibility)

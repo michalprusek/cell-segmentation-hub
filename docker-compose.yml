@@ -79,8 +79,8 @@ services:
       - PORT=3001
       - DATABASE_URL=postgresql://spheroseg:spheroseg_dev@localhost:5432/spheroseg
       - REDIS_URL=redis://localhost:6379
-      - JWT_ACCESS_SECRET=97f06b3bf3d7389514f44fc5153b1e6a08f105758322f532261c84b24854fa3f
-      - JWT_REFRESH_SECRET=a65c84f6b3adff25916ba06afb696fa7748d057b51d6f5ab55fd07c4da08bfcb
+      - JWT_ACCESS_SECRET=b75d09c9e67acfe64cf2ff2ebe704648b2b6deba44b1eea6bed51a66b325fd41
+      - JWT_REFRESH_SECRET=b1e6ae77c4da116fe524c057879c0779a7fe5f3cc26a59bbc1ab3ef482bc0a3d
       - SEGMENTATION_SERVICE_URL=http://localhost:8000
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173
       - WS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173
@@ -131,11 +131,8 @@ services:
       context: ./backend/segmentation
       dockerfile: ../../docker/ml.Dockerfile
     container_name: spheroseg-ml
-    # Modern GPU configuration for Docker Compose (disabled for CPU-only systems)
-    # device_requests:
-    #   - driver: nvidia
-    #     count: 1
-    #     capabilities: [gpu]
+    # GPU configuration for Docker Compose v2
+    runtime: nvidia
     env_file: ${ENV_FILE:-.env.development}
     ports:
       - "8000:8000"
@@ -147,9 +144,9 @@ services:
       - PYTHONDONTWRITEBYTECODE=1
       - DISPLAY=:99
       - QT_QPA_PLATFORM=offscreen
-      # GPU environment variables (disabled for CPU-only systems)
-      # - NVIDIA_VISIBLE_DEVICES=all
-      # - CUDA_VISIBLE_DEVICES=0
+      # GPU environment variables
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CUDA_VISIBLE_DEVICES=0
     # Resource limits for memory
     deploy:
       resources:

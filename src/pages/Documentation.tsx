@@ -19,6 +19,7 @@ import {
   Edit3,
   Cpu,
   Layers,
+  Users,
 } from 'lucide-react';
 import { useActiveSection } from '@/hooks/useActiveSection';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -39,6 +40,7 @@ const Documentation = () => {
     'segmentation',
     'segmentation-editor',
     'export-features',
+    'shared-projects',
   ];
 
   const { activeSection, scrollToSection } = useActiveSection(sectionIds);
@@ -169,6 +171,17 @@ const Documentation = () => {
                     <Download className="w-4 h-4 mr-2" />
                     {t('docs.nav.exportFeatures')}
                   </button>
+                  <button
+                    onClick={() => scrollToSection('shared-projects')}
+                    className={`flex items-center w-full text-left p-2 rounded-md transition-colors ${
+                      activeSection === 'shared-projects'
+                        ? 'text-blue-600 bg-blue-50'
+                        : 'text-gray-700 hover:text-blue-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Users className="w-4 h-4 mr-2" />
+                    {t('docs.nav.sharedProjects')}
+                  </button>
                 </nav>
               </div>
             </aside>
@@ -296,25 +309,47 @@ const Documentation = () => {
 
                   <p className="mb-4">{t('docs.modelSelection.description')}</p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                       <div className="flex items-center mb-2">
                         <Cpu className="w-5 h-5 text-green-600 mr-2" />
                         <h3 className="font-semibold text-green-800">
-                          {t('docs.modelSelection.models.hrnet.name')}
+                          {t('docs.modelSelection.models.unet.name')}
                         </h3>
                       </div>
                       <p className="text-sm text-green-700 mb-2">
                         <strong>
-                          {t('docs.modelSelection.models.hrnet.inferenceTime')}
+                          {t('docs.modelSelection.models.unet.inferenceTime')}
                         </strong>
                       </p>
                       <p className="text-sm text-green-700 mb-2">
                         <strong>
-                          {t('docs.modelSelection.models.hrnet.bestFor')}
+                          {t('docs.modelSelection.models.unet.bestFor')}
                         </strong>
                       </p>
                       <p className="text-sm text-green-700">
+                        {t('docs.modelSelection.models.unet.description')}
+                      </p>
+                    </div>
+
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-center mb-2">
+                        <Cpu className="w-5 h-5 text-yellow-600 mr-2" />
+                        <h3 className="font-semibold text-yellow-800">
+                          {t('docs.modelSelection.models.hrnet.name')}
+                        </h3>
+                      </div>
+                      <p className="text-sm text-yellow-700 mb-2">
+                        <strong>
+                          {t('docs.modelSelection.models.hrnet.inferenceTime')}
+                        </strong>
+                      </p>
+                      <p className="text-sm text-yellow-700 mb-2">
+                        <strong>
+                          {t('docs.modelSelection.models.hrnet.bestFor')}
+                        </strong>
+                      </p>
+                      <p className="text-sm text-yellow-700">
                         {t('docs.modelSelection.models.hrnet.description')}
                       </p>
                     </div>
@@ -790,6 +825,53 @@ const Documentation = () => {
                   </div>
                 </section>
 
+                <section id="shared-projects" className="mb-12">
+                  <h2 className="text-2xl font-bold mb-4 pb-2 border-b border-gray-200">
+                    {t('docs.sharedProjects.title')}
+                  </h2>
+
+                  <p className="mb-4">{t('docs.sharedProjects.description')}</p>
+
+                  <h3 className="text-xl font-semibold mb-3">
+                    {t('docs.sharedProjects.sharingFeatures')}
+                  </h3>
+                  <ul className="list-disc pl-6 mb-6 space-y-2">
+                    <li>{t('docs.sharedProjects.features.readOnly')}</li>
+                    <li>{t('docs.sharedProjects.features.emailInvite')}</li>
+                    <li>{t('docs.sharedProjects.features.revokeAccess')}</li>
+                    <li>
+                      {t('docs.sharedProjects.features.multipleCollaborators')}
+                    </li>
+                  </ul>
+
+                  <h3 className="text-xl font-semibold mb-3">
+                    {t('docs.sharedProjects.howToShare')}
+                  </h3>
+                  <ol className="list-decimal pl-6 mb-6 space-y-2">
+                    <li>{t('docs.sharedProjects.shareSteps.step1')}</li>
+                    <li>{t('docs.sharedProjects.shareSteps.step2')}</li>
+                    <li>{t('docs.sharedProjects.shareSteps.step3')}</li>
+                    <li>{t('docs.sharedProjects.shareSteps.step4')}</li>
+                    <li>{t('docs.sharedProjects.shareSteps.step5')}</li>
+                  </ol>
+
+                  <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <Info className="h-5 w-5 text-blue-400" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm text-blue-700">
+                          <strong>
+                            {t('docs.sharedProjects.permissionsNote')}
+                          </strong>{' '}
+                          {t('docs.sharedProjects.permissionsNoteText')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
                 <div className="flex justify-between items-center mt-8 pt-4 border-t border-gray-200">
                   <Link
                     to="/"
@@ -815,5 +897,8 @@ const Documentation = () => {
     </div>
   );
 };
+
+// Set displayName for React DevTools
+Documentation.displayName = 'Documentation';
 
 export default Documentation;

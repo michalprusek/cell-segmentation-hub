@@ -401,6 +401,11 @@ export default {
           description:
             'Präzises Segmentierungsmodell mit Aufmerksamkeitsmechanismen',
         },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          description:
+            'Beste Leistung auf SpheroHQ-Datensatz - optimiert für Sphäroid-Segmentierung mit ausgewogener Geschwindigkeit und Genauigkeit (~0.25s/Bild, 10 Bilder/s)',
+        },
       },
     },
     confidenceThreshold: 'Vertrauensschwelle',
@@ -418,10 +423,12 @@ export default {
       large: 'Groß',
     },
     modelDescription: {
-      hrnet: 'Schnelles und effizientes Modell für Echzeit-Segmentierung',
-      resunet_small:
-        'Ausgewogene Geschwindigkeit und Genauigkeit für die meisten Anwendungsfälle',
-      resunet_advanced: 'Höchste Genauigkeit mit Aufmerksamkeitsmechanismen',
+      hrnet:
+        'Ausgewogenes Modell mit guter Geschwindigkeit und Qualität (E2E ~309ms, 4.9 Bilder/s)',
+      cbam_resunet:
+        'Präziseste Segmentierung mit Aufmerksamkeitsmechanismen (E2E ~482ms, 2.7 Bilder/s)',
+      unet_spherohq:
+        'Schnellstes Modell nach Optimierungen! Hervorragend für Echtzeitverarbeitung (E2E ~286ms, 5.5 Bilder/s)',
     },
     dataUsageTitle: 'Datennutzung und Datenschutz',
     dataUsageDescription:
@@ -1116,29 +1123,38 @@ export default {
       models: {
         hrnet: {
           name: 'HRNet (Klein)',
-          inferenceTime: 'Inferenzzeit: ~0,18 Sekunden (GPU-beschleunigt)',
-          bestFor: 'Optimal für: Echtzeit-Verarbeitung',
+          inferenceTime: 'E2E-Zeit: ~309ms pro Bild (ML-Inferenz: 204ms)',
+          bestFor:
+            'Am besten für: Ausgewogene Leistung zwischen Geschwindigkeit und Qualität',
           description: 'Schnelles und effizientes Modell.',
         },
         cbam: {
           name: 'CBAM-ResUNet (Mittel)',
-          inferenceTime: 'Inferenzzeit: ~0,20 Sekunden (GPU-beschleunigt)',
-          bestFor:
-            'Optimal für: Präzise Segmentierung mit Aufmerksamkeitsmechanismen',
+          inferenceTime: 'E2E-Zeit: ~482ms pro Bild (ML-Inferenz: 377ms)',
+          bestFor: 'Am besten für: Maximale Präzision bei der Segmentierung',
           description:
             'Präzises Segmentierungsmodell mit Aufmerksamkeitsmechanismen für genaue Sphäroid-Grenzerkennung.',
+        },
+        unet_spherohq: {
+          name: 'UNet (SpheroHQ)',
+          inferenceTime: 'E2E-Zeit: ~286ms pro Bild (ML-Inferenz: 181ms)',
+          bestFor:
+            'Am besten für: Schnellste Verarbeitung, hervorragend für Echtzeitanwendungen',
+          description:
+            'Spezialisiertes Modell, das spezifisch für Sphäroid-Segmentierung mit dem SpheroHQ-Datensatz trainiert wurde. Bietet ausgewogene Geschwindigkeit und Genauigkeit.',
         },
       },
       howToSelect: 'Modell Auswählen',
       selectionSteps: {
         step1: 'Projekt öffnen',
         step2: 'Modellauswahl-Menü finden',
-        step3: 'Modell auswählen',
+        step3: 'Wählen Sie aus HRNet, CBAM-ResUNet oder UNet (SpheroHQ)',
         step4: 'Konfidenzschwellwert anpassen',
         step5: 'Auswahl wird gespeichert',
       },
       tip: 'Tipp:',
-      tipText: 'Beginnen Sie mit CBAM-ResUNet für die meisten Fälle.',
+      tipText:
+        'Verwenden Sie UNet für die schnellste Verarbeitung mit 5,5 Bildern/Sekunde Durchsatz. Wählen Sie CBAM-ResUNet für maximale Präzision bei Forschungsarbeiten. Wählen Sie HRNet für ausgewogene Leistung zwischen Geschwindigkeit und Qualität.',
     },
     segmentationProcess: {
       title: 'Segmentierungsprozess',
@@ -1302,6 +1318,35 @@ export default {
       },
       exportNote: 'Pakete sind umfassend:',
       exportNoteText: 'Jeder Export enthält Dokumentation und Metadaten.',
+    },
+    sharedProjectsSection: {
+      title: 'Geteilte Projekte',
+      description:
+        'SpheroSeg ermöglicht Ihnen die Zusammenarbeit mit Kollegen durch das Teilen von Projekten. Teilen Sie Ihre Segmentierungsergebnisse und Annotationen mit anderen Forschern zur Überprüfung und Zusammenarbeit.',
+      sharingFeatures: 'Sharing-Funktionen',
+      features: {
+        readOnly:
+          'Schreibgeschützter Zugriff: Empfänger können anzeigen, aber nicht ändern',
+        emailInvite:
+          'E-Mail-Einladungen: Teilen per E-Mail mit automatischen Benachrichtigungen',
+        revokeAccess:
+          'Widerrufbarer Zugriff: Sharing-Berechtigungen jederzeit entfernen',
+        multipleCollaborators:
+          'Mehrere Mitarbeiter: Mit ganzen Forschungsteams teilen',
+      },
+      howToShare: 'Wie man ein Projekt teilt',
+      shareSteps: {
+        step1: 'Öffnen Sie das Projekt, das Sie teilen möchten',
+        step2:
+          'Klicken Sie auf den "Teilen"-Button in der Projekt-Symbolleiste',
+        step3: 'Geben Sie die E-Mail-Adressen Ihrer Mitarbeiter ein',
+        step4:
+          'Fügen Sie eine optionale Nachricht zur Erklärung des geteilten Inhalts hinzu',
+        step5: 'Klicken Sie auf "Einladungen senden", um das Projekt zu teilen',
+      },
+      permissionsNote: 'Wichtig:',
+      permissionsNoteText:
+        'Geteilte Projekte sind für Empfänger schreibgeschützt. Sie können Segmentierungen anzeigen und Daten exportieren, aber die ursprünglichen Annotationen nicht ändern. Dies gewährleistet Datenintegrität bei gleichzeitiger Zusammenarbeit.',
     },
     footer: {
       backToHome: 'Zurück zur Startseite',
