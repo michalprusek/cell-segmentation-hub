@@ -1,0 +1,13 @@
+# Auto-generated Docker Compose configuration
+# Active environment: blue
+# Generated: Wed Sep 10 07:16:00 PM UTC 2025
+
+version: '3.8'
+
+# This file sets the active environment variables
+# Use with: docker compose -f docker-compose.blue.yml -f docker-compose.active.yml up
+
+x-active-environment: &active-env
+  DEPLOYMENT_COLOR: blue
+  ENVIRONMENT_NAME: production-blue
+  SERVICE_PREFIX: blue

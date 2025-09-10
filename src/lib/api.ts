@@ -218,6 +218,44 @@ class ApiClient {
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/refresh');
 
+        // Check if error is due to missing authentication token
+        if (
+          error.response?.status === 401 &&
+          error.response?.data?.message === 'Chybí autentizační token'
+        ) {
+          // Token is missing - immediately logout the user
+          logger.debug('🔒 Missing authentication token - logging out user');
+          this.clearTokensFromStorage();
+
+          // Emit event to notify the app about missing token
+          if (typeof window !== 'undefined') {
+            // Import dynamically to avoid circular dependencies
+            import('./authEvents').then(({ authEventEmitter }) => {
+              authEventEmitter.emit({
+                type: 'token_missing',
+                data: {
+                  message: 'Authentication required',
+                  description:
+                    'Your session has expired. Please sign in again.',
+                },
+              });
+            });
+
+            // Only redirect if not already on sign-in page
+            if (
+              window.location.pathname !== '/sign-in' &&
+              window.location.pathname !== '/sign-up' &&
+              !window.location.pathname.startsWith('/public')
+            ) {
+              setTimeout(() => {
+                window.location.href = '/sign-in';
+              }, 100); // Small delay to allow event to be processed
+            }
+          }
+
+          return Promise.reject(error);
+        }
+
         if (
           error.response?.status === 401 &&
           !originalRequest._retry &&
@@ -1078,22 +1116,25 @@ class ApiClient {
                   (progressEvent.loaded * 100) / progressEvent.total
                 );
 
-                // Update chunk progress
-                if (onChunkProgress) {
-                  onChunkProgress({
-                    chunkIndex,
-                    totalChunks: chunks.length,
-                    filesInChunk: chunk.length,
-                    totalFiles: validFiles.length,
-                    chunkProgress: chunkProgressPercent,
-                    overallProgress: Math.round(
-                      ((chunkIndex + chunkProgressPercent / 100) /
-                        chunks.length) *
-                        100
-                    ),
-                    currentOperation: `Uploading chunk ${chunkIndex + 1} of ${chunks.length}`,
-                  });
-                }
+                // Calculate overall progress including current chunk progress
+                const overallProgressValue = Math.round(
+                  ((chunkIndex + chunkProgressPercent / 100) / chunks.length) *
+                    100
+                );
+
+                // Create chunk progress data
+                const chunkProgressData: ChunkProgress = {
+                  chunkIndex,
+                  totalChunks: chunks.length,
+                  filesInChunk: chunk.length,
+                  totalFiles: validFiles.length,
+                  chunkProgress: chunkProgressPercent,
+                  overallProgress: overallProgressValue,
+                  currentOperation: `Uploading chunk ${chunkIndex + 1} of ${chunks.length}`,
+                };
+
+                // Update both overall and chunk progress
+                updateOverallProgress(chunkProgressData);
               }
             },
           }
@@ -1245,6 +1286,14 @@ class ApiClient {
     imageIds: string[]
   ): Promise<Record<string, SegmentationResultData | null>> {
     try {
+      // Validate input
+      if (!Array.isArray(imageIds) || imageIds.length === 0) {
+        logger.warn(
+          'getBatchSegmentationResults called with invalid imageIds:',
+          imageIds
+        );
+        return {};
+      }
       // Batch requests in chunks of 500 to avoid overwhelming the server
       const BATCH_SIZE = 500;
       const results: Record<string, SegmentationResultData | null> = {};

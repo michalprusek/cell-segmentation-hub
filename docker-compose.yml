@@ -42,7 +42,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: docker/frontend.Dockerfile
+      dockerfile: docker/frontend.optimized.Dockerfile
     container_name: spheroseg-frontend
     environment:
       - VITE_API_URL=http://localhost:3001
@@ -70,7 +70,7 @@ services:
   backend:
     build:
       context: ./backend
-      dockerfile: ../docker/backend.Dockerfile
+      dockerfile: ../docker/backend.optimized.Dockerfile
     container_name: spheroseg-backend
     env_file: ${ENV_FILE:-.env.development}
     environment:

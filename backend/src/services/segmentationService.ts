@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 // import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
+import { PolygonValidator } from '../utils/polygonValidation';
 import { ImageService } from './imageService';
 import { ThumbnailService } from './thumbnailService';
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
@@ -875,17 +876,14 @@ export class SegmentationService {
       return null;
     }
 
-    // Always use full polygons - no simplification
-    let polygons = [];
-    try {
-      polygons = JSON.parse(segmentationData.polygons);
-    } catch (error) {
-      logger.error('Failed to parse polygons JSON', error instanceof Error ? error : undefined, 'SegmentationService', { 
-        imageId, 
-        polygonsRaw: segmentationData.polygons 
-      });
-      polygons = [];
-    }
+    // Use centralized polygon validator for consistent parsing
+    const polygonResult = PolygonValidator.parsePolygonData(
+      segmentationData.polygons, 
+      'single-fetch', 
+      imageId
+    );
+    
+    const polygons = polygonResult.isValid ? polygonResult.polygons : [];
 
     const result: SegmentationResponse = {
       success: true,
@@ -1128,14 +1126,10 @@ export class SegmentationService {
     // Calculate statistics
     const totalSegmented = segmentationData.length;
     
-    // Calculate total polygons by parsing JSON data
+    // Calculate total polygons using centralized validator
     const totalPolygons = segmentationData.reduce((sum, data) => {
-      try {
-        const polygons = JSON.parse(data.polygons);
-        return sum + (Array.isArray(polygons) ? polygons.length : 0);
-      } catch {
-        return sum;
-      }
+      const polygonCount = PolygonValidator.getPolygonCount(data.polygons);
+      return sum + polygonCount;
     }, 0);
 
     const averagePolygonsPerImage = totalSegmented > 0 ? totalPolygons / totalSegmented : 0;
@@ -1248,49 +1242,42 @@ export class SegmentationService {
 
       const accessibleImageIds = new Set(accessibleImages.map(img => img.id));
       
-      // Fetch all segmentation results in a single query
+      // Fetch all segmentation results in a single query - NO INCLUDES, use JSON parsing
       const segmentations = await this.prisma.segmentation.findMany({
         where: {
           imageId: { in: Array.from(accessibleImageIds) }
-        },
-        include: {
-          segmentationPolygons: {
-            include: {
-              points: {
-                orderBy: { order: 'asc' }
-              }
-            }
-          }
         }
+        // Removed the problematic segmentationPolygons include
       });
 
       // Transform results into a map for easy lookup
       const results: Record<string, any> = {};
       
       for (const segmentation of segmentations) {
-        const polygons = segmentation.segmentationPolygons.map(polygon => ({
-          id: polygon.id,
-          points: polygon.points.map(point => ({
-            x: point.x,
-            y: point.y
-          })),
-          type: polygon.type as 'external' | 'internal',
-          class: polygon.class || 'spheroid',
-          parentIds: polygon.parentIds || [],
-          confidence: polygon.confidence || null,
-          area: polygon.area || null
-        }));
+        // Use centralized polygon validator for consistent parsing
+        const polygonResult = PolygonValidator.parsePolygonData(
+          segmentation.polygons, 
+          'batch-fetch', 
+          segmentation.imageId
+        );
+        
+        const polygons = polygonResult.isValid ? polygonResult.polygons : [];
 
+        // Use same response format as single getSegmentationResults method
         results[segmentation.imageId] = {
-          id: segmentation.id,
-          polygons,
-          imageWidth: segmentation.imageWidth,
-          imageHeight: segmentation.imageHeight,
-          modelUsed: segmentation.modelUsed,
+          success: true,
+          polygons: polygons,
+          model_used: segmentation.model,
+          threshold_used: segmentation.threshold,
           confidence: segmentation.confidence,
-          processingTime: segmentation.processingTime,
-          createdAt: segmentation.createdAt,
-          updatedAt: segmentation.updatedAt
+          processing_time: segmentation.processingTime ? segmentation.processingTime / 1000 : null,
+          image_size: { 
+            width: segmentation.imageWidth || 0, 
+            height: segmentation.imageHeight || 0 
+          },
+          // Add image dimensions for frontend rendering
+          imageWidth: segmentation.imageWidth || 0,
+          imageHeight: segmentation.imageHeight || 0
         };
       }
 
@@ -1301,9 +1288,18 @@ export class SegmentationService {
         }
       }
 
+      logger.debug('Batch segmentation results fetched successfully', 'SegmentationService', {
+        requestedImages: imageIds.length,
+        accessibleImages: accessibleImageIds.size,
+        resultsFound: Object.keys(results).filter(id => results[id] !== null).length
+      });
+
       return results;
     } catch (error) {
-      logger.error('Failed to batch fetch segmentation results', error as Error);
+      logger.error('Failed to batch fetch segmentation results', error as Error, 'SegmentationService', {
+        imageCount: imageIds.length,
+        userId
+      });
       throw error;
     }
   }

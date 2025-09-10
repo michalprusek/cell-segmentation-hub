@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/useLanguage';
+import { useAuth } from '@/contexts/useAuth';
 import apiClient, { SegmentationResultData } from '@/lib/api';
 import type { SegmentationData } from '@/types';
 import type { ProjectImage } from '@/types';
@@ -160,6 +161,7 @@ export const useProjectData = (
   }
 ) => {
   const { t } = useLanguage();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
   const [projectTitle, setProjectTitle] = useState<string>('');
   const [images, setImages] = useState<ProjectImage[]>([]);
@@ -277,6 +279,20 @@ export const useProjectData = (
         setImages(enrichedImages);
       } catch (error: unknown) {
         logger.error('Error fetching project:', error);
+
+        // Check for missing token error
+        if (
+          error &&
+          typeof error === 'object' &&
+          'response' in error &&
+          'data' in (error as any).response &&
+          (error as any).response?.data?.message === 'Chybí autentizační token'
+        ) {
+          // Missing authentication token - sign out and redirect
+          await signOut();
+          navigateRef.current('/sign-in');
+          return;
+        }
 
         if (
           error &&

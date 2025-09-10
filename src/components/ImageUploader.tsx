@@ -76,8 +76,8 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         })
       );
 
-      // Update overall progress
-      setUploadProgress(data.percentComplete);
+      // Update overall progress - only if it's higher to prevent jumps
+      setUploadProgress(prev => Math.max(prev, data.percentComplete));
 
       // Update operation message
       if (data.currentFileStatus === 'uploading') {
@@ -155,11 +155,17 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
             selectedProjectId,
             filesToUpload,
             progressPercent => {
-              setUploadProgress(progressPercent);
+              // For smooth updates, only update if the new progress is higher
+              setUploadProgress(prev => Math.max(prev, progressPercent));
             },
             chunkProgressData => {
               setChunkProgress(chunkProgressData);
               setCurrentOperation(chunkProgressData.currentOperation);
+
+              // Also update the overall progress from chunk data for smoother updates
+              setUploadProgress(prev =>
+                Math.max(prev, chunkProgressData.overallProgress)
+              );
 
               // Update individual file progress based on chunk progress
               // Calculate which files are in the current chunk
@@ -392,6 +398,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
       <FileList
         files={files}
         uploadProgress={uploadProgress}
+        isUploading={isUploading}
         onRemoveFile={removeFile}
       />
     </div>

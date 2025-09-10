@@ -91,6 +91,9 @@ export class ImageController {
       // Get WebSocket service instance
       const wsService = WebSocketService.getInstance();
 
+      // Track files uploaded (not just completed) for more responsive progress
+      let filesUploaded = 0;
+      
       // Upload images with progress tracking
       const uploadedImages = await this.imageService.uploadImagesWithProgress(
         projectId,
@@ -99,6 +102,20 @@ export class ImageController {
         batchId,
         // Progress callback for each file
         (filename: string, fileSize: number, progress: number, status: string, filesCompleted: number) => {
+          // Track uploaded files separately for more responsive progress bar
+          if (status === 'uploading' && progress >= 50) {
+            // File has been uploaded to storage (50% progress)
+            filesUploaded = Math.max(filesUploaded, filesCompleted + 1);
+          } else if (status === 'completed') {
+            // File is fully processed
+            filesUploaded = Math.max(filesUploaded, filesCompleted);
+          }
+          
+          // Calculate overall progress based on files uploaded, not just completed
+          const overallProgress = files.length > 0 
+            ? Math.round((filesUploaded / files.length) * 100)
+            : 0;
+          
           const progressData: UploadProgressData = {
             projectId,
             batchId,
@@ -108,7 +125,7 @@ export class ImageController {
             currentFileStatus: status as 'uploading' | 'processing' | 'completed' | 'failed',
             filesCompleted,
             filesTotal: files.length,
-            percentComplete: Math.round((filesCompleted / files.length) * 100),
+            percentComplete: overallProgress,
             timestamp: new Date()
           };
           

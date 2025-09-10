@@ -724,6 +724,9 @@ export default {
     registrationFailed: 'Registration failed',
     logoutFailed: 'Logout failed',
     profileUpdateFailed: 'Profile update failed',
+    tokenMissing: 'Authentication token missing',
+    tokenExpired: 'Authentication token expired',
+    pleaseSignInAgain: 'Please sign in again',
     welcomeMessage: 'Welcome to the Spheroid Segmentation Platform',
     confirmationRequired:
       'Confirmation text is required and must match your email address',

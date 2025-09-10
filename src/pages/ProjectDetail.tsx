@@ -326,6 +326,10 @@ const ProjectDetail = () => {
   const pendingUpdatesRef = useRef<Map<string, any>>(new Map());
   const batchUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Batch refresh operations to prevent API flooding during bulk operations
+  const pendingRefreshRef = useRef<Set<string> | null>(null);
+  const refreshBatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const processBatchUpdates = useCallback(() => {
     const pendingUpdates = pendingUpdatesRef.current;
     if (pendingUpdates.size === 0) return;
@@ -465,109 +469,139 @@ const ProjectDetail = () => {
         lastUpdate.status === 'completed') &&
       lastUpdate.status !== 'no_segmentation'
     ) {
-      // Immediate refresh for completed status - this will also validate if polygons exist
-      (async () => {
-        logger.debug('Refreshing segmentation data', 'ProjectDetail', {
-          imageId: lastUpdate.imageId,
-        });
-
-        try {
-          // refreshImageSegmentation already updates the state with segmentation data
-          await refreshImageSegmentationRef.current(lastUpdate.imageId);
-
-          // Wait longer for the state to be updated and Canvas to render
-          // This is crucial for the last batch where timing is critical
-          await new Promise(resolve => setTimeout(resolve, 500));
-
-          // Now also fetch the updated image for thumbnail URL
-          const img = await apiClient.getImage(id, lastUpdate.imageId);
-          logger.debug('Updated image data', 'ProjectDetail', {
-            id: img.id,
-            hasThumbnail: !!img.thumbnail_url,
-            thumbnailUrl: img.thumbnail_url,
-            segmentationStatus: img.segmentationStatus,
-          });
-
-          // Get the current segmentation data from state after refresh
-          updateImagesRef.current(prevImages => {
-            const currentImg = prevImages.find(
-              i => i.id === lastUpdate.imageId
-            );
-            const hasPolygons =
-              currentImg?.segmentationResult?.polygons &&
-              currentImg.segmentationResult.polygons.length > 0;
-
-            logger.debug('Image polygon count', 'ProjectDetail', {
-              imageId: lastUpdate.imageId,
-              polygonCount: hasPolygons
-                ? currentImg.segmentationResult.polygons.length
-                : 0,
-            });
-
-            return prevImages.map(prevImg => {
-              if (prevImg.id === lastUpdate.imageId) {
-                const finalStatus = hasPolygons
-                  ? 'completed'
-                  : 'no_segmentation';
-
-                return {
-                  ...prevImg,
-                  segmentationStatus: finalStatus,
-                  // Keep the segmentation data that was already updated by refreshImageSegmentation
-                  // Force re-render by updating a timestamp
-                  lastSegmentationUpdate: Date.now(),
-                  // Update thumbnail URL with cache-busting timestamp
-                  thumbnail_url: img?.thumbnail_url
-                    ? `${img.thumbnail_url}?t=${Date.now()}`
-                    : prevImg.thumbnail_url,
-                  updatedAt: new Date(),
-                };
-              }
-              return prevImg;
-            });
-          });
-        } catch (error) {
-          logger.error('Failed to refresh image data', error);
-
-          // Even if refresh fails, ensure correct status based on segmentation data
-          updateImagesRef.current(prevImages => {
-            const currentImg = prevImages.find(
-              i => i.id === lastUpdate.imageId
-            );
-            const hasPolygons =
-              currentImg?.segmentationResult?.polygons &&
-              currentImg.segmentationResult.polygons.length > 0;
-
-            return prevImages.map(prevImg => {
-              if (prevImg.id === lastUpdate.imageId) {
-                return {
-                  ...prevImg,
-                  segmentationStatus: hasPolygons
-                    ? 'completed'
-                    : 'no_segmentation',
-                  updatedAt: new Date(),
-                };
-              }
-              return prevImg;
-            });
-          });
+      // Batch refresh requests to avoid API flooding
+      if (isBulkOperation) {
+        // In bulk mode, batch the refresh requests
+        if (!pendingRefreshRef.current) {
+          pendingRefreshRef.current = new Set();
         }
-      })().catch(err => {
-        logger.error('Unhandled error in segmentation refresh IIFE', err);
-        // Ensure state is updated even on unhandled rejection
-        updateImagesRef.current(prevImages =>
-          prevImages.map(prevImg => {
-            if (prevImg.id === lastUpdate.imageId) {
-              return {
-                ...prevImg,
-                segmentationStatus: 'error',
-                updatedAt: new Date(),
-              };
+        pendingRefreshRef.current.add(lastUpdate.imageId);
+
+        // Clear existing timeout and set new one
+        if (refreshBatchTimeoutRef.current) {
+          clearTimeout(refreshBatchTimeoutRef.current);
+        }
+
+        // Batch refresh after a delay
+        refreshBatchTimeoutRef.current = setTimeout(async () => {
+          const imageIdsToRefresh = Array.from(pendingRefreshRef.current || []);
+          pendingRefreshRef.current = null;
+
+          logger.debug('Batch refreshing segmentation data', 'ProjectDetail', {
+            count: imageIdsToRefresh.length,
+          });
+
+          // Process in smaller chunks to avoid overwhelming the API
+          const chunkSize = 10;
+          for (let i = 0; i < imageIdsToRefresh.length; i += chunkSize) {
+            const chunk = imageIdsToRefresh.slice(i, i + chunkSize);
+            await Promise.all(
+              chunk.map(imageId =>
+                refreshImageSegmentationRef.current(imageId).catch(error => {
+                  logger.error('Failed to refresh segmentation data', error);
+                })
+              )
+            );
+            // Small delay between chunks
+            if (i + chunkSize < imageIdsToRefresh.length) {
+              await new Promise(resolve => setTimeout(resolve, 100));
             }
-            return prevImg;
-          })
-        );
-      });
+          }
+        }, 2000); // 2 second delay for batching
+      } else {
+        // Single operation - refresh immediately but only one call
+        (async () => {
+          logger.debug('Refreshing segmentation data', 'ProjectDetail', {
+            imageId: lastUpdate.imageId,
+          });
+
+          try {
+            // Only call refreshImageSegmentation which should fetch everything needed
+            // DO NOT make duplicate apiClient.getImage call
+            await refreshImageSegmentationRef.current(lastUpdate.imageId);
+
+            // Wait for state update
+            await new Promise(resolve => setTimeout(resolve, 200));
+
+            // Get the current segmentation data from state after refresh
+            updateImagesRef.current(prevImages => {
+              const currentImg = prevImages.find(
+                i => i.id === lastUpdate.imageId
+              );
+              const hasPolygons =
+                currentImg?.segmentationResult?.polygons &&
+                currentImg.segmentationResult.polygons.length > 0;
+
+              logger.debug('Image polygon count', 'ProjectDetail', {
+                imageId: lastUpdate.imageId,
+                polygonCount: hasPolygons
+                  ? currentImg.segmentationResult.polygons.length
+                  : 0,
+              });
+
+              return prevImages.map(prevImg => {
+                if (prevImg.id === lastUpdate.imageId) {
+                  const finalStatus = hasPolygons
+                    ? 'completed'
+                    : 'no_segmentation';
+
+                  return {
+                    ...prevImg,
+                    segmentationStatus: finalStatus,
+                    // Keep the segmentation data that was already updated by refreshImageSegmentation
+                    // Force re-render by updating a timestamp
+                    lastSegmentationUpdate: Date.now(),
+                    // Keep existing thumbnail URL - it should be updated via WebSocket
+                    thumbnail_url: prevImg.thumbnail_url,
+                    updatedAt: new Date(),
+                  };
+                }
+                return prevImg;
+              });
+            });
+          } catch (error) {
+            logger.error('Failed to refresh image data', error);
+
+            // Even if refresh fails, ensure correct status based on segmentation data
+            updateImagesRef.current(prevImages => {
+              const currentImg = prevImages.find(
+                i => i.id === lastUpdate.imageId
+              );
+              const hasPolygons =
+                currentImg?.segmentationResult?.polygons &&
+                currentImg.segmentationResult.polygons.length > 0;
+
+              return prevImages.map(prevImg => {
+                if (prevImg.id === lastUpdate.imageId) {
+                  return {
+                    ...prevImg,
+                    segmentationStatus: hasPolygons
+                      ? 'completed'
+                      : 'no_segmentation',
+                    updatedAt: new Date(),
+                  };
+                }
+                return prevImg;
+              });
+            });
+          }
+        })().catch(err => {
+          logger.error('Unhandled error in segmentation refresh IIFE', err);
+          // Ensure state is updated even on unhandled rejection
+          updateImagesRef.current(prevImages =>
+            prevImages.map(prevImg => {
+              if (prevImg.id === lastUpdate.imageId) {
+                return {
+                  ...prevImg,
+                  segmentationStatus: 'error',
+                  updatedAt: new Date(),
+                };
+              }
+              return prevImg;
+            })
+          );
+        });
+      }
     }
 
     // Reset batch submitted state when queue becomes empty

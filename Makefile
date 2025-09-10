@@ -96,6 +96,39 @@ clean:
 	docker system prune -f
 	docker volume prune -f
 
+# Deep clean - aggressive Docker cleanup
+deep-clean:
+	@echo "🧹💪 Deep cleaning Docker resources..."
+	@scripts/docker-build-optimizer.sh --aggressive
+
+# Optimized build with automatic cleanup
+build-optimized:
+	@echo "🚀 Starting optimized build with cleanup..."
+	@scripts/smart-docker-build.sh --env $(ENV_FILE)
+
+# Build without cache (clean build)
+build-clean:
+	@echo "🔨 Clean build (no cache)..."
+	@scripts/smart-docker-build.sh --no-cache --env $(ENV_FILE)
+
+# Build specific service with optimization
+build-service:
+	@echo "🔨 Building service: $(SERVICE)..."
+	@scripts/smart-docker-build.sh --service $(SERVICE) --env $(ENV_FILE)
+
+# Show Docker disk usage
+docker-usage:
+	@echo "📊 Docker Disk Usage:"
+	@docker system df
+	@echo ""
+	@echo "📦 Image Sizes:"
+	@docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | head -20
+
+# Optimize Docker storage
+optimize-storage:
+	@echo "⚡ Optimizing Docker storage..."
+	@scripts/docker-build-optimizer.sh --max-cache 5 --keep-images 2
+
 # Show container status
 status:
 	@echo "📊 Container Status:"

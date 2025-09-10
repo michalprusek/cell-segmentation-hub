@@ -732,6 +732,9 @@ export default {
     registrationFailed: 'Registrace selhala',
     logoutFailed: 'Odhlášení selhalo',
     profileUpdateFailed: 'Aktualizace profilu selhala',
+    tokenMissing: 'Chybí autentizační token',
+    tokenExpired: 'Platnost tokenu vypršela',
+    pleaseSignInAgain: 'Prosím přihlaste se znovu',
     welcomeMessage: 'Vítejte na platformě pro segmentaci sféroidů',
     confirmationRequired:
       'Potvrzovací text je povinný a musí se shodovat s vaší e-mailovou adresou',
