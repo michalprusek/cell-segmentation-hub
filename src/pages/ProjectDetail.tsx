@@ -56,14 +56,16 @@ const ProjectDetail = () => {
   const debounceTimeoutRef = useRef<{ [imageId: string]: NodeJS.Timeout }>({});
   const lastStatusRef = useRef<{ [imageId: string]: string }>({});
 
-  // Fetch project data
+  // Fetch project data - simplified without visible range for now
   const {
     projectTitle,
     images,
     loading,
     updateImages,
     refreshImageSegmentation,
-  } = useProjectData(id, user?.id);
+  } = useProjectData(id, user?.id, {
+    fetchAll: false,
+  });
 
   // Optimized refresh function for real-time updates
   const debouncedRefreshSegmentation = useCallback(
@@ -178,6 +180,95 @@ const ProjectDetail = () => {
     [filteredImages, paginatedIndices]
   );
 
+  // Lazy-load segmentation data for visible images only
+  useEffect(() => {
+    const loadVisibleSegmentationData = async () => {
+      if (!paginatedImages.length) return;
+
+      const imagesToEnrich = paginatedImages.filter(img => {
+        const status = img.segmentationStatus;
+        return (
+          (status === 'completed' || status === 'segmented') &&
+          !img.segmentationResult // Only fetch if not already loaded
+        );
+      });
+
+      if (imagesToEnrich.length === 0) return;
+
+      try {
+        // Fetch segmentation data for visible images only
+        const segmentationPromises = imagesToEnrich.map(async img => {
+          try {
+            const segmentationData = await apiClient.getSegmentationResults(
+              img.id
+            );
+            return {
+              imageId: img.id,
+              segmentationData: segmentationData
+                ? {
+                    polygons: segmentationData.polygons || [],
+                    imageWidth:
+                      segmentationData.imageWidth || img.width || null,
+                    imageHeight:
+                      segmentationData.imageHeight || img.height || null,
+                    modelUsed: segmentationData.modelUsed,
+                    confidence: segmentationData.confidence,
+                    processingTime: segmentationData.processingTime,
+                    levelOfDetail: 'medium',
+                    polygonCount: segmentationData.polygons?.length || 0,
+                    pointCount:
+                      segmentationData.polygons?.reduce(
+                        (sum, p) => sum + p.points.length,
+                        0
+                      ) || 0,
+                    compressionRatio: 1.0,
+                  }
+                : null,
+            };
+          } catch (error) {
+            if (
+              error &&
+              typeof error === 'object' &&
+              'response' in error &&
+              (error as { response?: { status?: number } }).response?.status ===
+                404
+            ) {
+              // 404 is normal for images without segmentation
+              return null;
+            }
+            logger.error(
+              `Failed to fetch segmentation for image ${img.id}:`,
+              error
+            );
+            return null;
+          }
+        });
+
+        const results = await Promise.all(segmentationPromises);
+
+        // Update only the images that have new segmentation data
+        updateImages(prevImages =>
+          prevImages.map(img => {
+            const result = results.find(r => r?.imageId === img.id);
+            if (result?.segmentationData) {
+              return {
+                ...img,
+                segmentationResult: result.segmentationData,
+              };
+            }
+            return img;
+          })
+        );
+      } catch (error) {
+        logger.error('Error loading visible segmentation data:', error);
+      }
+    };
+
+    // Debounce the loading to avoid excessive API calls during rapid pagination
+    const timeoutId = setTimeout(loadVisibleSegmentationData, 300);
+    return () => clearTimeout(timeoutId);
+  }, [paginatedImages, updateImages]);
+
   // Memoized calculations for heavy operations
   const imagesToSegmentCount = useMemo(
     () =>
@@ -231,7 +322,51 @@ const ProjectDetail = () => {
   const refreshImageSegmentationRef = useRef(refreshImageSegmentation);
   refreshImageSegmentationRef.current = refreshImageSegmentation;
 
-  // Real-time image status updates with optimized dependencies
+  // Batch WebSocket updates to prevent excessive re-renders during bulk operations
+  const pendingUpdatesRef = useRef<Map<string, any>>(new Map());
+  const batchUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const processBatchUpdates = useCallback(() => {
+    const pendingUpdates = pendingUpdatesRef.current;
+    if (pendingUpdates.size === 0) return;
+
+    logger.debug(`Processing ${pendingUpdates.size} batched image updates`);
+
+    // Apply all pending updates at once
+    updateImagesRef.current(prevImages =>
+      prevImages.map(img => {
+        const update = pendingUpdates.get(img.id);
+        if (update) {
+          logger.debug('Applying batched update:', {
+            imageId: img.id,
+            fromStatus: img.segmentationStatus,
+            toStatus: update.normalizedStatus,
+          });
+
+          return {
+            ...img,
+            segmentationStatus: update.normalizedStatus,
+            updatedAt: new Date(),
+            segmentationResult: update.clearSegmentationData
+              ? undefined
+              : img.segmentationResult,
+            segmentationData: update.clearSegmentationData
+              ? undefined
+              : img.segmentationData,
+            thumbnail_url: update.clearSegmentationData
+              ? img.url
+              : img.thumbnail_url,
+          };
+        }
+        return img;
+      })
+    );
+
+    // Clear pending updates
+    pendingUpdates.clear();
+  }, []);
+
+  // Real-time image status updates with batching for bulk operations
   useEffect(() => {
     if (!lastUpdate || lastUpdate.projectId !== id) {
       return;
@@ -244,16 +379,14 @@ const ProjectDetail = () => {
       projectId: lastUpdate.projectId,
     });
 
-    // Normalize status to match frontend expectations, but validate segmented status
+    // Normalize status to match frontend expectations
     let normalizedStatus = lastUpdate.status;
     if (
       lastUpdate.status === 'segmented' ||
       lastUpdate.status === 'completed'
     ) {
-      // Set to completed, we'll refresh the segmentation data to verify
       normalizedStatus = 'completed';
     } else if (lastUpdate.status === 'no_segmentation') {
-      // Backend explicitly says no segmentation found
       normalizedStatus = 'no_segmentation';
     } else if (lastUpdate.status === 'failed') {
       normalizedStatus = 'failed';
@@ -263,42 +396,67 @@ const ProjectDetail = () => {
       normalizedStatus = 'processing';
     }
 
-    // Update the specific image status in the images array immediately
-    updateImagesRef.current(prevImages =>
-      prevImages.map(img => {
-        if (img.id === lastUpdate.imageId) {
-          // Clear segmentation data if this is a re-segmentation being queued
-          const clearSegmentationData =
-            lastUpdate.status === 'queued' &&
-            (img.segmentationStatus === 'completed' ||
-              img.segmentationStatus === 'segmented');
+    // Determine if segmentation data should be cleared
+    const currentImage = images.find(img => img.id === lastUpdate.imageId);
+    const clearSegmentationData =
+      lastUpdate.status === 'queued' &&
+      currentImage &&
+      (currentImage.segmentationStatus === 'completed' ||
+        currentImage.segmentationStatus === 'segmented');
 
-          logger.debug('Updating image status', 'ProjectDetail', {
-            imageId: img.id,
-            fromStatus: img.segmentationStatus,
-            toStatus: normalizedStatus,
-          });
+    // Check if we're in bulk operation mode (more than 10 items in queue)
+    // Increased threshold to better detect bulk operations
+    const isBulkOperation =
+      queueStats && (queueStats.queued > 10 || queueStats.processing > 5);
 
-          return {
-            ...img,
-            segmentationStatus: normalizedStatus,
-            updatedAt: new Date(), // Update timestamp for tracking and reconciliation
-            // Clear existing segmentation result if re-segmenting
-            segmentationResult: clearSegmentationData
-              ? undefined
-              : img.segmentationResult,
-            segmentationData: clearSegmentationData
-              ? undefined
-              : img.segmentationData,
-            // Clear thumbnail when starting new segmentation
-            thumbnail_url: clearSegmentationData
-              ? img.url // Reset to original image URL
-              : img.thumbnail_url,
-          };
-        }
-        return img;
-      })
-    );
+    if (isBulkOperation) {
+      // Batch the update
+      pendingUpdatesRef.current.set(lastUpdate.imageId, {
+        normalizedStatus,
+        clearSegmentationData,
+      });
+
+      // Clear existing timeout and set new one
+      if (batchUpdateTimeoutRef.current) {
+        clearTimeout(batchUpdateTimeoutRef.current);
+      }
+
+      // Longer batch timeout for bulk operations to reduce UI updates
+      const batchTimeout = queueStats.queued > 100 ? 1000 : 500;
+      batchUpdateTimeoutRef.current = setTimeout(
+        processBatchUpdates,
+        batchTimeout
+      );
+    } else {
+      // Apply update immediately for single operations
+      updateImagesRef.current(prevImages =>
+        prevImages.map(img => {
+          if (img.id === lastUpdate.imageId) {
+            logger.debug('Updating image status immediately', 'ProjectDetail', {
+              imageId: img.id,
+              fromStatus: img.segmentationStatus,
+              toStatus: normalizedStatus,
+            });
+
+            return {
+              ...img,
+              segmentationStatus: normalizedStatus,
+              updatedAt: new Date(),
+              segmentationResult: clearSegmentationData
+                ? undefined
+                : img.segmentationResult,
+              segmentationData: clearSegmentationData
+                ? undefined
+                : img.segmentationData,
+              thumbnail_url: clearSegmentationData
+                ? img.url
+                : img.thumbnail_url,
+            };
+          }
+          return img;
+        })
+      );
+    }
 
     // For completed segmentation, refresh immediately to get polygon data and validate
     // Skip refresh if backend already says no_segmentation
@@ -431,16 +589,29 @@ const ProjectDetail = () => {
       // Cleanup timeout if component unmounts
       return () => clearTimeout(timeoutId);
     }
-  }, [lastUpdate, id, queueStats, setBatchSubmitted]);
+  }, [
+    lastUpdate,
+    id,
+    queueStats,
+    setBatchSubmitted,
+    images,
+    processBatchUpdates,
+  ]);
 
   // Cleanup debounce timeouts on unmount
   useEffect(() => {
-    const timeouts = debounceTimeoutRef.current;
     return () => {
+      // Clear debounce timeouts
+      const timeouts = debounceTimeoutRef.current;
       if (timeouts) {
         for (const timeout of Object.values(timeouts)) {
           clearTimeout(timeout);
         }
+      }
+
+      // Clear batch update timeout
+      if (batchUpdateTimeoutRef.current) {
+        clearTimeout(batchUpdateTimeoutRef.current);
       }
     };
   }, []);
@@ -456,8 +627,33 @@ const ProjectDetail = () => {
     // Refresh the images data
     if (id && user?.id) {
       try {
-        const imagesResponse = await apiClient.getProjectImages(id);
-        const imagesData = imagesResponse.images;
+        // Fetch all images with pagination (same logic as useProjectData)
+        let allImages: any[] = [];
+        let page = 1;
+        let hasMore = true;
+        const limit = 50; // Same as useProjectData
+
+        while (hasMore) {
+          const imagesResponse = await apiClient.getProjectImages(id, {
+            limit,
+            page,
+          });
+
+          if (!imagesResponse.images || !Array.isArray(imagesResponse.images)) {
+            break;
+          }
+
+          allImages = [...allImages, ...imagesResponse.images];
+          hasMore = page * limit < imagesResponse.total;
+          page++;
+
+          // Safety limit (same as useProjectData)
+          if (page > 40) {
+            break;
+          }
+        }
+
+        const imagesData = allImages;
 
         const formattedImages = (imagesData || []).map(img => {
           // Normalize segmentation status from different backend field names
@@ -758,39 +954,68 @@ const ProjectDetail = () => {
 
       let totalQueued = 0;
 
+      // Helper function to process image chunks
+      const processImageChunks = async (
+        imageIds: string[],
+        forceResegment: boolean
+      ) => {
+        const CHUNK_SIZE = 500; // Process 500 images at a time
+        let processedCount = 0;
+
+        for (let i = 0; i < imageIds.length; i += CHUNK_SIZE) {
+          const chunk = imageIds.slice(i, i + CHUNK_SIZE);
+
+          // Show progress for large batches - only update every 20%
+          if (imageIds.length > CHUNK_SIZE) {
+            const progress = Math.round((i / imageIds.length) * 100);
+            // Only show toast at 20%, 40%, 60%, 80% to reduce spam
+            if (progress % 20 === 0 && progress > 0 && progress < 100) {
+              toast.info(
+                t('projects.processingBatch', {
+                  processed: i,
+                  total: imageIds.length,
+                  percent: progress,
+                }) || `Processing: ${i}/${imageIds.length} (${progress}%)`,
+                { id: 'batch-progress', duration: 2000 }
+              );
+            }
+          }
+
+          const response = await apiClient.addBatchToQueue(
+            chunk,
+            id,
+            selectedModel,
+            confidenceThreshold,
+            0, // priority
+            forceResegment,
+            detectHoles
+          );
+          processedCount += response.queuedCount;
+        }
+
+        return processedCount;
+      };
+
       // Process images without segmentation (normal segmentation)
       if (imageIdsWithoutSegmentation.length > 0) {
-        const response = await apiClient.addBatchToQueue(
+        const queuedCount = await processImageChunks(
           imageIdsWithoutSegmentation,
-          id,
-          selectedModel,
-          confidenceThreshold,
-          0, // priority
-          false, // not force re-segment
-          detectHoles
+          false
         );
-        totalQueued += response.queuedCount;
+        totalQueued += queuedCount;
       }
 
       // Process selected images with segmentation (force re-segment)
       if (imageIdsToResegment.length > 0) {
-        const response = await apiClient.addBatchToQueue(
-          imageIdsToResegment,
-          id,
-          selectedModel,
-          confidenceThreshold,
-          0, // priority
-          true, // force re-segment
-          detectHoles
-        );
-        totalQueued += response.queuedCount;
+        const queuedCount = await processImageChunks(imageIdsToResegment, true);
+        totalQueued += queuedCount;
       }
 
-      toast.success(
-        t('projects.imagesQueuedForSegmentation', {
-          count: totalQueued,
-        })
-      );
+      // Dismiss progress toast if it exists
+      toast.dismiss('batch-progress');
+
+      // Don't show another toast here - the batch processing hook will show start/end toasts
+      // This prevents toast spam
 
       // Clear selection after successful batch operation
       setSelectedImageIds(new Set());
@@ -801,6 +1026,9 @@ const ProjectDetail = () => {
       toast.error(t('projects.errorAddingToQueue'));
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);
+
+      // Dismiss progress toast if it exists
+      toast.dismiss('batch-progress');
 
       // Revert UI changes on error
       updateImages(prevImages =>

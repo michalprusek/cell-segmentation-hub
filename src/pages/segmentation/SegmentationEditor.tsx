@@ -57,12 +57,18 @@ const SegmentationEditor = () => {
   const isInitialLoadRef = useRef(true);
   const previousImageIdRef = useRef<string | undefined>(undefined);
 
-  // Project data - fetch all images for segmentation editor
+  // Project data - optimize by NOT fetching all images upfront
+  // This significantly improves performance with large projects (e.g., 640 images)
+  // Instead, we fetch only metadata and load segmentation data on-demand
   const {
     projectTitle,
     images,
     loading: projectLoading,
-  } = useProjectData(projectId, user?.id, { fetchAll: true });
+    refreshImageSegmentation,
+  } = useProjectData(projectId, user?.id, {
+    fetchAll: false, // CRITICAL: Don't fetch all segmentation data upfront
+    // We'll handle prefetching adjacent images separately
+  });
 
   // WebSocket connection for segmentation status updates
   const {
@@ -72,7 +78,13 @@ const SegmentationEditor = () => {
   } = useSegmentationQueue(projectId);
 
   // Debounce WebSocket updates to prevent rapid state changes
-  const debouncedLastUpdate = useDebounce(lastUpdate, 300);
+  // Use longer debounce during bulk operations to reduce re-renders
+  const debouncedLastUpdate = useDebounce(
+    lastUpdate,
+    queueStats && (queueStats.queued > 10 || queueStats.processing > 5)
+      ? 1000
+      : 300
+  );
 
   // Create compatibility objects for existing code
   // Apply the same sorting as in ProjectDetail page
@@ -81,9 +93,15 @@ const SegmentationEditor = () => {
     return sortImagesBySettings(images);
   }, [images]);
 
-  const selectedImage = projectImages.find(img => img.id === imageId);
+  const selectedImage = useMemo(
+    () => projectImages.find(img => img.id === imageId),
+    [projectImages, imageId]
+  );
 
-  const project = { name: projectTitle || 'Unknown Project' };
+  const project = useMemo(
+    () => ({ name: projectTitle || 'Unknown Project' }),
+    [projectTitle]
+  );
 
   // State for segmentation polygons from API
   const [segmentationPolygons, setSegmentationPolygons] = useState<
@@ -110,6 +128,53 @@ const SegmentationEditor = () => {
       onDimensionsUpdated: setImageDimensions,
       maxRetries: 2,
     });
+
+  // Smart prefetching for adjacent images
+  // This ensures smooth navigation without loading all 640 images upfront
+  useEffect(() => {
+    if (!projectImages.length || !imageId || !refreshImageSegmentation) return;
+
+    const currentIndex = projectImages.findIndex(img => img.id === imageId);
+    if (currentIndex === -1) return;
+
+    // Define prefetch window (current + adjacent images)
+    const prefetchIndices = [
+      currentIndex - 1, // Previous image
+      currentIndex, // Current image (priority)
+      currentIndex + 1, // Next image
+    ].filter(idx => idx >= 0 && idx < projectImages.length);
+
+    // Prefetch with priority: current first, then adjacent
+    const prefetchWithPriority = async () => {
+      // First ensure current image is loaded
+      const currentImage = projectImages[currentIndex];
+      if (currentImage && !currentImage.segmentationResult) {
+        await refreshImageSegmentation(currentImage.id);
+      }
+
+      // Then prefetch adjacent images in background
+      setTimeout(() => {
+        prefetchIndices.forEach(idx => {
+          if (idx !== currentIndex) {
+            const img = projectImages[idx];
+            if (
+              img &&
+              !img.segmentationResult &&
+              (img.segmentationStatus === 'completed' ||
+                img.segmentationStatus === 'segmented')
+            ) {
+              // Prefetch in background without blocking
+              refreshImageSegmentation(img.id).catch(() => {
+                // Silent fail for prefetch - not critical
+              });
+            }
+          }
+        });
+      }, 500); // Small delay to prioritize current image
+    };
+
+    prefetchWithPriority();
+  }, [imageId, projectImages, refreshImageSegmentation]);
 
   // Calculate canvas dimensions dynamically based on container and image
   const updateCanvasDimensions = useCallback(
@@ -619,11 +684,34 @@ const SegmentationEditor = () => {
         }
       );
 
-      // Add a small delay to ensure the API is ready
-      setTimeout(() => {
-        if (!isReloading) {
-          reloadSegmentation();
+      // Add retry mechanism to handle race condition between WebSocket status and API availability
+      const tryReloadWithRetry = async (attempt = 1, maxAttempts = 3) => {
+        if (isReloading) return;
+
+        try {
+          await reloadSegmentation();
+        } catch (error) {
+          logger.warn(
+            `Segmentation reload attempt ${attempt} failed, will retry in ${attempt * 1000}ms`,
+            { imageId: debouncedLastUpdate.imageId, error }
+          );
+
+          if (attempt < maxAttempts) {
+            setTimeout(() => {
+              tryReloadWithRetry(attempt + 1, maxAttempts);
+            }, attempt * 1000); // Exponential backoff: 1s, 2s, 3s
+          } else {
+            logger.error(
+              `Failed to reload segmentation after ${maxAttempts} attempts`,
+              { imageId: debouncedLastUpdate.imageId }
+            );
+          }
         }
+      };
+
+      // Start with initial delay to ensure API is ready
+      setTimeout(() => {
+        tryReloadWithRetry();
       }, 500);
 
       return;
@@ -807,7 +895,9 @@ const SegmentationEditor = () => {
     projectImages?.findIndex(img => img.id === imageId) ?? -1;
   const isAnyEditModeActive = editor.editMode !== EditMode.View;
 
-  if (projectLoading) {
+  // Show loading state only during initial load
+  // Once we have basic image metadata, show the UI even if segmentation is still loading
+  if (projectLoading && !projectImages.length) {
     return (
       <div className="flex items-center justify-center h-screen">
         {t('common.loading')}

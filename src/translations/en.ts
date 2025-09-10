@@ -903,6 +903,11 @@ export default {
       started: 'Segmentation has started',
       completed: 'Segmentation completed successfully',
       completedWithCount: 'Segmentation complete! Found {{count}} objects',
+      batchStarted: 'Segmentation started for {{count}} images',
+      batchCompleted:
+        '✅ {{count}} images segmented successfully ({{duration}}s)',
+      batchCompletedWithErrors:
+        '⚠️ Batch completed: {{successful}} successful, {{failed}} failed ({{duration}}s)',
       noPolygons: 'No segmentation polygons detected',
       reloadFailed:
         'Failed to load segmentation results. Please refresh the page.',

@@ -915,6 +915,11 @@ export default {
       started: 'Segmentace byla zahájena',
       completed: 'Segmentace byla úspěšně dokončena',
       completedWithCount: 'Segmentace dokončena! Nalezeno {{count}} objektů',
+      batchStarted: 'Segmentace zahájena pro {{count}} obrázků',
+      batchCompleted:
+        '✅ {{count}} obrázků úspěšně segmentováno ({{duration}}s)',
+      batchCompletedWithErrors:
+        '⚠️ Dávka dokončena: {{successful}} úspěšných, {{failed}} neúspěšných ({{duration}}s)',
       noPolygons: 'Nebyly nalezeny žádné polygony segmentace',
       reloadFailed:
         'Nepodařilo se načíst výsledky segmentace. Obnovte prosím stránku.',

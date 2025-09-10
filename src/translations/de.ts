@@ -942,6 +942,11 @@ export default {
       completed: 'Segmentierung erfolgreich abgeschlossen',
       completedWithCount:
         'Segmentierung abgeschlossen! {{count}} Objekte gefunden',
+      batchStarted: 'Segmentierung gestartet für {{count}} Bilder',
+      batchCompleted:
+        '✅ {{count}} Bilder erfolgreich segmentiert ({{duration}}s)',
+      batchCompletedWithErrors:
+        '⚠️ Batch abgeschlossen: {{successful}} erfolgreich, {{failed}} fehlgeschlagen ({{duration}}s)',
       noPolygons: 'Keine Segmentierungspolygone erkannt',
       reloadFailed:
         'Laden der Segmentierungsergebnisse fehlgeschlagen. Bitte Seite aktualisieren.',

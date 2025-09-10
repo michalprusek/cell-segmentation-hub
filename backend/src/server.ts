@@ -16,6 +16,10 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config, getOrigins } from './utils/config';
+import { getUploadLimitsForEnvironment } from './config/uploadLimits';
+
+// Get environment-specific upload limits
+const uploadLimits = getUploadLimitsForEnvironment();
 import { logger, createRequestLogger } from './utils/logger';
 import { requireValidEnvironment } from './utils/envValidator';
 import { errorHandler, notFoundHandler } from './middleware/error';
@@ -104,9 +108,9 @@ if (config.RATE_LIMIT_ENABLED) {
   logger.warn('⚠️  Rate limiting is disabled');
 }
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing middleware - increased limits for large uploads
+app.use(express.json({ limit: uploadLimits.EXPRESS_JSON_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: uploadLimits.EXPRESS_URL_ENCODED_LIMIT }));
 
 // Distributed tracing middleware (MUST be early in the middleware stack)
 // app.use(createContextPropagationMiddleware()); // Temporarily disabled

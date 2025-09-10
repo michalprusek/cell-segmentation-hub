@@ -51,7 +51,7 @@ export const addImageToQueueSchema = z.object({
 export const batchQueueSchema = z.object({
   imageIds: z.array(uuidSchema)
     .min(1, 'Musíte zadat alespoň jeden obrázek')
-    .max(100, 'Můžete zpracovat maximálně 100 obrázků najednou'),
+    .max(10000, 'Můžete zpracovat maximálně 10000 obrázků najednou'),
   projectId: uuidSchema,
   model: segmentationModelSchema.optional().default('hrnet'),
   threshold: thresholdSchema.optional().default(0.5),
@@ -173,7 +173,7 @@ export const imageUploadSchema = z.object({
  */
 export const imageQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional().default(1),
-  limit: z.coerce.number().int().min(1).max(50).optional().default(30),
+  limit: z.coerce.number().int().min(1).max(100).optional().default(50),
   status: z.enum(['pending', 'processing', 'completed', 'failed'], {
     errorMap: () => ({ message: 'Neplatný status. Možné hodnoty: pending, processing, completed, failed' })
   }).optional(),

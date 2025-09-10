@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { ImageService } from '../../services/imageService';
 import { ThumbnailService } from '../../services/thumbnailService';
+import { WebSocketService } from '../../services/websocketService';
+import { WebSocketEvent, UploadProgressData, UploadCompletedData } from '../../types/websocket';
 import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/index';
@@ -83,12 +85,59 @@ export class ImageController {
         fileCount: files.length
       });
 
-      // Upload images
-      const uploadedImages = await this.imageService.uploadImages(
+      // Generate unique batch ID for this upload session
+      const batchId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Get WebSocket service instance
+      const wsService = WebSocketService.getInstance();
+
+      // Upload images with progress tracking
+      const uploadedImages = await this.imageService.uploadImagesWithProgress(
         projectId,
         userId,
-        uploadFiles
+        uploadFiles,
+        batchId,
+        // Progress callback for each file
+        (filename: string, fileSize: number, progress: number, status: string, filesCompleted: number) => {
+          const progressData: UploadProgressData = {
+            projectId,
+            batchId,
+            filename,
+            fileSize,
+            progress,
+            currentFileStatus: status as 'uploading' | 'processing' | 'completed' | 'failed',
+            filesCompleted,
+            filesTotal: files.length,
+            percentComplete: Math.round((filesCompleted / files.length) * 100),
+            timestamp: new Date()
+          };
+          
+          wsService.emitToUser(userId, WebSocketEvent.UPLOAD_PROGRESS, progressData);
+        }
       );
+      
+      // Emit completion event
+      const completedData: UploadCompletedData = {
+        projectId,
+        batchId,
+        summary: {
+          totalFiles: files.length,
+          successCount: uploadedImages.length,
+          failedCount: files.length - uploadedImages.length,
+          failedFiles: files.length > uploadedImages.length ? 
+            files.filter(f => !uploadedImages.find(img => img.name === f.originalname))
+                 .map(f => f.originalname) : undefined
+        },
+        uploadedImages: uploadedImages.map(img => ({
+          id: img.id,
+          name: img.name,
+          originalUrl: img.originalUrl,
+          thumbnailUrl: img.thumbnailUrl
+        })),
+        timestamp: new Date()
+      };
+      
+      wsService.emitToUser(userId, WebSocketEvent.UPLOAD_COMPLETED, completedData);
 
       ResponseHelper.success(res, {
         images: uploadedImages,

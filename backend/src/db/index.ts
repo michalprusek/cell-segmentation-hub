@@ -4,7 +4,7 @@ import { config } from '../utils/config';
 import { prismaPool } from './prismaPool';
 import { databaseMetrics } from '../monitoring/databaseMetrics';
 import { logDatabasePoolConfig } from '../config/database.ts';
-import { getPrismaConfig } from './prismaConfig';
+import { getPrismaConfig } from './prismaConfig.js';
 
 // Create a global variable to store Prisma client
 declare global {

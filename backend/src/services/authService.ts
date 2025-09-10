@@ -132,18 +132,25 @@ export async function register(data: RegisterData): Promise<{ message: string; u
 
         logger.info('User registered successfully', 'AuthService', { email: data.email });
 
-        // Send verification email using user's preferred language
-        try {
-          const locale = newUser.profile?.preferredLang || 'cs';
-          await EmailService.sendVerificationEmail(data.email, verificationToken, locale);
-          logger.info('Verification email sent successfully', 'AuthService', { 
-            email: data.email, 
-            locale 
+        // Send verification email using user's preferred language (fire-and-forget)
+        // Fire and forget - don't await the email sending to prevent timeout issues
+        const locale = newUser.profile?.preferredLang || 'cs';
+        EmailService.sendVerificationEmail(data.email, verificationToken, locale)
+          .then(() => {
+            logger.info('Verification email sent successfully', 'AuthService', { 
+              email: data.email, 
+              locale 
+            });
+          })
+          .catch((emailError) => {
+            logger.error('Failed to send verification email:', emailError as Error, 'AuthService', { 
+              email: data.email 
+            });
+            // Email failed but user already registered - they can request resend
           });
-        } catch (emailError) {
-          logger.error('Failed to send verification email:', emailError as Error, 'AuthService', { email: data.email });
-          // Continue with registration - don't fail the registration process if email fails
-        }
+
+        // Log that email was queued
+        logger.info('Verification email queued for sending', 'AuthService', { email: data.email });
 
         return {
           user: newUser,
@@ -350,21 +357,27 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
 
       logger.info('Password reset token generated', 'AuthService', { email: data.email });
 
-      // Send email with reset link
-      // TEMPORARY: Skip email sending due to SMTP timeout issues
+      // Send email with reset link asynchronously (fire-and-forget)
+      // Don't await the email sending to prevent timeout issues
       if (process.env.SKIP_EMAIL_SEND === 'true') {
         logger.warn('Password reset email skipped (SKIP_EMAIL_SEND=true)', 'AuthService', { 
           email: data.email,
           tokenExpiry: resetTokenExpiry 
         });
       } else {
-        try {
-          await EmailService.sendPasswordResetEmail(data.email, resetToken, resetTokenExpiry);
-          logger.info('Password reset email sent successfully', 'AuthService', { email: data.email });
-        } catch (emailError) {
-          logger.error('Failed to send password reset email:', emailError as Error, 'AuthService', { email: data.email });
-          // Continue without throwing error - token has already been generated
-        }
+        // Fire and forget - don't await the email sending
+        // This prevents the request from timing out due to slow SMTP server
+        EmailService.sendPasswordResetEmail(data.email, resetToken, resetTokenExpiry)
+          .then(() => {
+            logger.info('Password reset email sent successfully', 'AuthService', { email: data.email });
+          })
+          .catch((emailError) => {
+            logger.error('Failed to send password reset email:', emailError as Error, 'AuthService', { email: data.email });
+            // Email failed but user already got response - token is still valid
+          });
+        
+        // Log that email was queued
+        logger.info('Password reset email queued for sending', 'AuthService', { email: data.email });
       }
 
       const response: { message: string; resetToken?: string } = {

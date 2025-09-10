@@ -229,6 +229,51 @@ class SegmentationController {
     }
   };
 
+  /**
+   * Batch fetch segmentation results for multiple images
+   * This is a critical performance optimization for large projects
+   */
+  batchGetSegmentationResults = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { imageIds } = req.body;
+      
+      // Validate user authentication
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+
+      // Validate parameters
+      if (!Array.isArray(imageIds) || imageIds.length === 0) {
+        ResponseHelper.validationError(res, 'Image IDs must be provided as an array');
+        return;
+      }
+
+      // Limit batch size to prevent memory issues
+      if (imageIds.length > 1000) {
+        ResponseHelper.validationError(res, 'Maximum 1000 images per batch request');
+        return;
+      }
+
+      // Fetch all segmentation results in a single efficient query
+      const results = await this.segmentationService.getBatchSegmentationResults(
+        imageIds,
+        userId
+      );
+
+      ResponseHelper.success(res, results, 'Batch segmentation results fetched');
+
+    } catch (error) {
+      logger.error('Failed to batch fetch segmentation results', error instanceof Error ? error : undefined, 'SegmentationController', {
+        imageCount: req.body.imageIds?.length,
+        userId: req.user?.id
+      });
+      
+      const errorMessage = error instanceof Error ? error.message : 'Error fetching batch results';
+      ResponseHelper.internalError(res, error as Error, errorMessage);
+    }
+  };
+
 }
 
 export const segmentationController = new SegmentationController();

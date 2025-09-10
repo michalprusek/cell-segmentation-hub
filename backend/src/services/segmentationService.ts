@@ -1226,6 +1226,87 @@ export class SegmentationService {
       results
     };
   }
+
+  /**
+   * Batch fetch segmentation results for multiple images
+   * Performance optimization: Fetches all results in a single database query
+   * instead of N individual queries
+   */
+  async getBatchSegmentationResults(
+    imageIds: string[],
+    userId: string
+  ): Promise<Record<string, any>> {
+    try {
+      // First, verify user has access to all requested images
+      const accessibleImages = await this.prisma.image.findMany({
+        where: {
+          id: { in: imageIds },
+          project: { userId }
+        },
+        select: { id: true }
+      });
+
+      const accessibleImageIds = new Set(accessibleImages.map(img => img.id));
+      
+      // Fetch all segmentation results in a single query
+      const segmentations = await this.prisma.segmentation.findMany({
+        where: {
+          imageId: { in: Array.from(accessibleImageIds) }
+        },
+        include: {
+          segmentationPolygons: {
+            include: {
+              points: {
+                orderBy: { order: 'asc' }
+              }
+            }
+          }
+        }
+      });
+
+      // Transform results into a map for easy lookup
+      const results: Record<string, any> = {};
+      
+      for (const segmentation of segmentations) {
+        const polygons = segmentation.segmentationPolygons.map(polygon => ({
+          id: polygon.id,
+          points: polygon.points.map(point => ({
+            x: point.x,
+            y: point.y
+          })),
+          type: polygon.type as 'external' | 'internal',
+          class: polygon.class || 'spheroid',
+          parentIds: polygon.parentIds || [],
+          confidence: polygon.confidence || null,
+          area: polygon.area || null
+        }));
+
+        results[segmentation.imageId] = {
+          id: segmentation.id,
+          polygons,
+          imageWidth: segmentation.imageWidth,
+          imageHeight: segmentation.imageHeight,
+          modelUsed: segmentation.modelUsed,
+          confidence: segmentation.confidence,
+          processingTime: segmentation.processingTime,
+          createdAt: segmentation.createdAt,
+          updatedAt: segmentation.updatedAt
+        };
+      }
+
+      // Add null entries for images without segmentation
+      for (const imageId of imageIds) {
+        if (accessibleImageIds.has(imageId) && !results[imageId]) {
+          results[imageId] = null;
+        }
+      }
+
+      return results;
+    } catch (error) {
+      logger.error('Failed to batch fetch segmentation results', error as Error);
+      throw error;
+    }
+  }
 }
 
 export const segmentationService = new SegmentationService();

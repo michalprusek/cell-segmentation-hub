@@ -2,6 +2,10 @@ import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
 import { Request, Response } from 'express';
 import { logger } from '../utils/logger';
 import { ResponseHelper } from '../utils/response';
+import { getRateLimitsForEnvironment } from '../config/uploadLimits';
+
+// Get environment-specific rate limits
+const rateLimits = getRateLimitsForEnvironment();
 
 /**
  * Rate limiting middleware configurations
@@ -56,11 +60,11 @@ function createRateLimiter(config: RateLimitConfig): RateLimitRequestHandler {
     keyGenerator: config.keyGenerator || generateRateLimitKey,
     handler: rateLimitHandler,
     skip: (req: Request) => {
-      // Skip rate limiting for health checks in development
-      if (process.env.NODE_ENV === 'development') {
-        return req.path === '/health' || req.path === '/metrics';
-      }
-      return false;
+      // Skip rate limiting for health checks and metrics
+      return req.path === '/health' || 
+             req.path === '/api/health' || 
+             req.path === '/metrics' ||
+             req.path === '/api/ml/health';
     }
   });
 }
@@ -69,8 +73,8 @@ function createRateLimiter(config: RateLimitConfig): RateLimitRequestHandler {
  * Strict rate limiter for authentication endpoints
  */
 export const authRateLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP/user to 5 requests per windowMs
+  windowMs: rateLimits.AUTH_WINDOW_MS, // 15 minutes from config
+  max: rateLimits.AUTH_MAX_REQUESTS, // 20 requests per 15 minutes from config (increased from 5)
   message: 'Too many authentication attempts, please try again later',
   skipSuccessfulRequests: true
 });
@@ -103,8 +107,8 @@ export const registrationRateLimiter = createRateLimiter({
  * General API rate limiter
  */
 export const apiRateLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP/user to 100 requests per windowMs
+  windowMs: rateLimits.API_WINDOW_MS, // 5 minutes from config
+  max: rateLimits.API_MAX_REQUESTS, // 1000 requests per 5 minutes from config
   message: 'Too many API requests, please try again later',
   skipSuccessfulRequests: false
 });
@@ -125,9 +129,18 @@ export const sensitiveOperationRateLimiter = createRateLimiter({
  * File upload rate limiter
  */
 export const uploadRateLimiter = createRateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10, // Limit each IP/user to 10 uploads per minute
+  windowMs: rateLimits.UPLOAD_WINDOW_MS, // 1 minute
+  max: rateLimits.UPLOAD_MAX_REQUESTS, // Increased from 10 to 100 per minute
   message: 'Too many file upload requests, please try again later'
+});
+
+/**
+ * Bulk upload rate limiter for large batch operations
+ */
+export const bulkUploadRateLimiter = createRateLimiter({
+  windowMs: rateLimits.BULK_UPLOAD_WINDOW_MS, // 5 minutes
+  max: rateLimits.BULK_UPLOAD_MAX_REQUESTS, // 1000 requests per 5 minutes
+  message: 'Too many bulk upload requests, please try again later'
 });
 
 /**

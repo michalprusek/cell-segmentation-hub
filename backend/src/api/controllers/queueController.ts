@@ -205,8 +205,8 @@ class QueueController {
         return;
       }
 
-      if (imageIds.length > 100) {
-        ResponseHelper.validationError(res, 'Můžete zpracovat maximálně 100 obrázků najednou');
+      if (imageIds.length > 10000) {
+        ResponseHelper.validationError(res, 'Můžete zpracovat maximálně 10000 obrázků najednou');
         return;
       }
 

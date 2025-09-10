@@ -35,6 +35,11 @@ export enum WebSocketEvent {
   QUEUE_POSITION = 'queuePosition',
   QUEUE_UPDATE = 'queueUpdate',
   
+  // Upload events
+  UPLOAD_PROGRESS = 'uploadProgress',
+  UPLOAD_COMPLETED = 'uploadCompleted',
+  UPLOAD_FAILED = 'uploadFailed',
+  
   // Project events
   PROJECT_UPDATE = 'projectUpdate',
   PROJECT_DELETED = 'projectDeleted',
@@ -200,6 +205,61 @@ export interface QueueUpdateData {
   affectedCount: number;
   queueIds?: string[];
   newStats: QueueStatsData;
+}
+
+// ============================================================================
+// Upload Events
+// ============================================================================
+
+/**
+ * Upload progress event data
+ */
+export interface UploadProgressData {
+  projectId: string;
+  batchId: string;
+  filename: string;
+  fileSize: number;
+  progress: number; // 0-100 for individual file
+  currentFileStatus: 'uploading' | 'processing' | 'completed' | 'failed';
+  filesCompleted: number;
+  filesTotal: number;
+  percentComplete: number; // 0-100 for overall batch
+  timestamp: Date;
+}
+
+/**
+ * Upload completed event data
+ */
+export interface UploadCompletedData {
+  projectId: string;
+  batchId: string;
+  summary: {
+    totalFiles: number;
+    successCount: number;
+    failedCount: number;
+    failedFiles?: string[];
+  };
+  uploadedImages: Array<{
+    id: string;
+    name: string;
+    originalUrl: string;
+    thumbnailUrl?: string;
+  }>;
+  timestamp: Date;
+}
+
+/**
+ * Upload failed event data
+ */
+export interface UploadFailedData {
+  projectId: string;
+  batchId: string;
+  filename: string;
+  error: string;
+  fileIndex: number;
+  filesTotal: number;
+  canContinue: boolean;
+  timestamp: Date;
 }
 
 // ============================================================================

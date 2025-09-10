@@ -53,7 +53,156 @@ export class ImageService {
   constructor(private prisma: PrismaClient) {}
 
   /**
-   * Upload multiple images to a project
+   * Upload multiple images to a project with progress tracking
+   */
+  async uploadImagesWithProgress(
+    projectId: string,
+    userId: string,
+    files: UploadImageData[],
+    batchId: string,
+    onProgress: (filename: string, fileSize: number, progress: number, status: string, filesCompleted: number) => void
+  ): Promise<ImageWithUrls[]> {
+    const storage = getStorageProvider();
+    const uploadedImages: ImageWithUrls[] = [];
+    let filesCompleted = 0;
+
+    // Verify project ownership or share access
+    const project = await this.prisma.project.findFirst({
+      where: {
+        id: projectId,
+        OR: [
+          { userId }, // User owns the project
+          {
+            shares: {
+              some: {
+                OR: [
+                  { sharedWithId: userId, status: 'accepted' },
+                  {
+                    sharedWith: { id: userId },
+                    status: 'accepted'
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    });
+
+    if (!project) {
+      throw ApiError.forbidden('Access denied to this project');
+    }
+
+    logger.info('Starting image upload with progress tracking', 'ImageService', {
+      projectId,
+      userId,
+      batchId,
+      fileCount: files.length,
+      totalSize: files.reduce((sum, file) => sum + file.size, 0)
+    });
+
+    // Process each file with progress updates
+    for (let index = 0; index < files.length; index++) {
+      const file = files[index];
+      
+      try {
+        // Emit progress - starting file upload
+        onProgress(file.originalname, file.size, 0, 'uploading', filesCompleted);
+
+        // Generate unique storage key
+        const storageKey = LocalStorageProvider.generateKey(
+          userId,
+          projectId,
+          file.originalname,
+          true
+        );
+
+        // Emit progress - uploading file (50% progress)
+        onProgress(file.originalname, file.size, 50, 'uploading', filesCompleted);
+
+        // Upload to storage with thumbnail generation
+        const uploadResult = await storage.upload(file.buffer, storageKey, {
+          mimeType: file.mimetype,
+          originalName: file.originalname,
+          generateThumbnail: true
+        });
+
+        // Emit progress - processing file (75% progress)
+        onProgress(file.originalname, file.size, 75, 'processing', filesCompleted);
+
+        // Create database record
+        const image = await this.prisma.image.create({
+          data: {
+            name: file.originalname,
+            originalPath: uploadResult.originalPath,
+            thumbnailPath: uploadResult.thumbnailPath,
+            projectId,
+            fileSize: uploadResult.fileSize,
+            width: uploadResult.width,
+            height: uploadResult.height,
+            mimeType: uploadResult.mimeType,
+            segmentationStatus: 'no_segmentation'
+          }
+        });
+
+        // Get URLs for response
+        const originalUrl = await storage.getUrl(uploadResult.originalPath);
+        const thumbnailUrl = uploadResult.thumbnailPath 
+          ? await storage.getUrl(uploadResult.thumbnailPath)
+          : undefined;
+
+        uploadedImages.push({
+          ...image,
+          originalUrl,
+          thumbnailUrl,
+          displayUrl: this.getDisplayUrl(image.id)
+        });
+
+        filesCompleted++;
+        
+        // Emit progress - file completed (100% progress)
+        onProgress(file.originalname, file.size, 100, 'completed', filesCompleted);
+
+        logger.info('Image uploaded successfully with progress', 'ImageService', {
+          imageId: image.id,
+          filename: file.originalname,
+          size: uploadResult.fileSize,
+          progress: `${filesCompleted}/${files.length}`
+        });
+
+      } catch (error) {
+        // Emit progress - file failed
+        onProgress(file.originalname, file.size, 0, 'failed', filesCompleted);
+        
+        logger.error('Failed to upload image', error instanceof Error ? error : undefined, 'ImageService', {
+          filename: file.originalname,
+          projectId,
+          userId,
+          batchId
+        });
+        
+        // Continue with other files, don't throw error
+      }
+    }
+
+    // Validate at least one image was uploaded
+    if (uploadedImages.length === 0) {
+      throw ApiError.badRequest('Failed to upload any images');
+    }
+
+    logger.info('Batch upload completed with progress tracking', 'ImageService', {
+      projectId,
+      userId,
+      batchId,
+      successCount: uploadedImages.length,
+      failedCount: files.length - uploadedImages.length
+    });
+
+    return uploadedImages;
+  }
+
+  /**
+   * Upload multiple images to a project (legacy method without progress)
    */
   async uploadImages(
     projectId: string,

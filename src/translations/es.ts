@@ -927,6 +927,11 @@ export default {
       completed: 'Segmentación completada exitosamente',
       completedWithCount:
         '¡Segmentación completa! Se encontraron {{count}} objetos',
+      batchStarted: 'Segmentación iniciada para {{count}} imágenes',
+      batchCompleted:
+        '✅ {{count}} imágenes segmentadas exitosamente ({{duration}}s)',
+      batchCompletedWithErrors:
+        '⚠️ Lote completado: {{successful}} exitosas, {{failed}} fallidas ({{duration}}s)',
       noPolygons: 'No se detectaron polígonos de segmentación',
       reloadFailed:
         'Error al cargar los resultados de segmentación. Por favor, actualiza la página.',

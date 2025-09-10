@@ -66,6 +66,12 @@ class BatchConfig:
                         "max_safe_batch_size": 8,
                         "expected_throughput": 2.0,
                         "memory_limit_mb": 10000
+                    },
+                    "unet_spherohq": {
+                        "optimal_batch_size": 4,
+                        "max_safe_batch_size": 6,
+                        "expected_throughput": 2.2,
+                        "memory_limit_mb": 6000
                     }
                 }
             }
