@@ -187,7 +187,7 @@ export const conditionalCache = Object.assign(
      * User-specific cache middleware
      */
     userSpecific: (ttl: number) => {
-      return (req: Request, res: Response, next: NextFunction) => {
+      return (req: Request, res: Response, next: NextFunction): void => {
         // Add cache headers for user-specific content
         const userId = (req as Request & { user?: { id?: string } }).user?.id;
         if (userId) {

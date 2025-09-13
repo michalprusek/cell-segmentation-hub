@@ -11,6 +11,19 @@ export interface UploadLimitsConfig {
   MAX_FIELD_SIZE_KB: number;
   CHUNK_SIZE: number;
   NGINX_BODY_LIMIT: string;
+  EXPRESS_JSON_LIMIT: string;
+  EXPRESS_URL_ENCODED_LIMIT: string;
+  // Rate limiting properties
+  UPLOAD_WINDOW_MS: number;
+  UPLOAD_MAX_REQUESTS: number;
+  BULK_UPLOAD_WINDOW_MS: number;
+  BULK_UPLOAD_MAX_REQUESTS: number;
+  PROCESSING_WINDOW_MS: number;
+  PROCESSING_MAX_REQUESTS: number;
+  API_WINDOW_MS: number;
+  API_MAX_REQUESTS: number;
+  AUTH_WINDOW_MS: number;
+  AUTH_MAX_REQUESTS: number;
 }
 
 // Production-optimized configuration for 10,000 files
@@ -21,7 +34,20 @@ const PRODUCTION_LIMITS: UploadLimitsConfig = {
   MAX_FIELDS: 20,                    // Additional form fields
   MAX_FIELD_SIZE_KB: 100,            // Field size limit
   CHUNK_SIZE: 100,                   // Files per chunk for frontend
-  NGINX_BODY_LIMIT: '500M'           // 100 files * 1.5MB * safety factor
+  NGINX_BODY_LIMIT: '500M',           // 100 files * 1.5MB * safety factor
+  EXPRESS_JSON_LIMIT: '50mb',         // JSON payload limit
+  EXPRESS_URL_ENCODED_LIMIT: '50mb',   // URL-encoded payload limit
+  // Rate limiting properties
+  UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  UPLOAD_MAX_REQUESTS: 200, // 200 chunks per 5 minutes
+  BULK_UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  BULK_UPLOAD_MAX_REQUESTS: 10000, // 10,000 requests per 5 minutes
+  PROCESSING_WINDOW_MS: 10 * 60 * 1000, // 10 minutes
+  PROCESSING_MAX_REQUESTS: 20, // 20 processing requests per 10 minutes
+  API_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  API_MAX_REQUESTS: 1000, // 1000 requests per 5 minutes
+  AUTH_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
+  AUTH_MAX_REQUESTS: 20, // 20 auth attempts per 15 minutes
 };
 
 const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
@@ -31,7 +57,20 @@ const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
   MAX_FIELDS: 10,
   MAX_FIELD_SIZE_KB: 50,
   CHUNK_SIZE: 50,
-  NGINX_BODY_LIMIT: '200M'
+  NGINX_BODY_LIMIT: '200M',
+  EXPRESS_JSON_LIMIT: '20mb',
+  EXPRESS_URL_ENCODED_LIMIT: '20mb',
+  // Rate limiting properties
+  UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  UPLOAD_MAX_REQUESTS: 1000, // More permissive for development
+  BULK_UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  BULK_UPLOAD_MAX_REQUESTS: 10000, // 10,000 requests per 5 minutes
+  PROCESSING_WINDOW_MS: 10 * 60 * 1000, // 10 minutes
+  PROCESSING_MAX_REQUESTS: 100, // More permissive for development
+  API_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  API_MAX_REQUESTS: 5000, // More permissive for development
+  AUTH_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
+  AUTH_MAX_REQUESTS: 20, // Keep strict for security
 };
 
 const TEST_LIMITS: UploadLimitsConfig = {
@@ -41,7 +80,20 @@ const TEST_LIMITS: UploadLimitsConfig = {
   MAX_FIELDS: 5,
   MAX_FIELD_SIZE_KB: 10,
   CHUNK_SIZE: 20,
-  NGINX_BODY_LIMIT: '50M'
+  NGINX_BODY_LIMIT: '50M',
+  EXPRESS_JSON_LIMIT: '10mb',
+  EXPRESS_URL_ENCODED_LIMIT: '10mb',
+  // Rate limiting properties
+  UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  UPLOAD_MAX_REQUESTS: 10000, // Very permissive for testing
+  BULK_UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  BULK_UPLOAD_MAX_REQUESTS: 10000, // 10,000 requests per 5 minutes
+  PROCESSING_WINDOW_MS: 10 * 60 * 1000, // 10 minutes
+  PROCESSING_MAX_REQUESTS: 1000, // Very permissive for testing
+  API_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
+  API_MAX_REQUESTS: 10000, // Very permissive for testing
+  AUTH_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
+  AUTH_MAX_REQUESTS: 1000, // Very permissive for testing
 };
 
 /**
@@ -104,60 +156,8 @@ export interface RateLimitConfig {
   max: number;
 }
 
-// Base configuration for all environments
-const baseConfig = {
-  // Upload rate limits - very permissive for 10,000 files
-  UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  UPLOAD_MAX_REQUESTS: 200, // 200 chunks per 5 minutes (supports 20,000 files)
-  
-  // Bulk upload rate limits
-  BULK_UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  BULK_UPLOAD_MAX_REQUESTS: 10000, // 10,000 requests per 5 minutes
-  
-  // Processing rate limits
-  PROCESSING_WINDOW_MS: 10 * 60 * 1000, // 10 minutes
-  PROCESSING_MAX_REQUESTS: 20, // 20 processing requests per 10 minutes
-  
-  // API rate limits
-  API_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
-  API_MAX_REQUESTS: 1000, // 1000 requests per 5 minutes
-  
-  // Auth rate limits (keep strict for security)
-  AUTH_WINDOW_MS: 15 * 60 * 1000, // 15 minutes
-  AUTH_MAX_REQUESTS: 20, // 20 auth attempts per 15 minutes
-};
-
-// Environment-specific overrides
-export function getRateLimitsForEnvironment(env: string = process.env.NODE_ENV || 'development') {
-  switch (env) {
-    case 'development':
-      return {
-        ...baseConfig,
-        UPLOAD_MAX_REQUESTS: 1000,
-        API_MAX_REQUESTS: 5000,
-        PROCESSING_MAX_REQUESTS: 100,
-      };
-    case 'production':
-      return {
-        ...baseConfig,
-        UPLOAD_MAX_REQUESTS: 200,  // Allow 200 chunks per 5 min for 10,000 files
-        BULK_UPLOAD_MAX_REQUESTS: 10000,  // Very permissive for bulk operations
-      };
-    case 'test':
-      return {
-        ...baseConfig,
-        UPLOAD_MAX_REQUESTS: 10000,
-        API_MAX_REQUESTS: 10000,
-        PROCESSING_MAX_REQUESTS: 1000,
-        AUTH_MAX_REQUESTS: 1000,
-      };
-    default:
-      return baseConfig;
-  }
-}
-
-// Export configured limits
-export const RATE_LIMITS = getRateLimitsForEnvironment();
+// Export configured limits (now uses the unified UploadLimitsConfig)
+export const RATE_LIMITS = getUploadLimitsForEnvironment();
 
 // Helper function to create rate limit config
 export function createRateLimitConfig(

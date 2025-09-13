@@ -4,6 +4,8 @@ import { SegmentationService, SegmentationResponse } from './segmentationService
 import { ImageService } from './imageService';
 import { WebSocketService } from './websocketService';
 import { batchProcessor } from '../utils/batchProcessor';
+import { SegmentationUpdateData } from '../types/websocket';
+import { QueueStatus } from '../types/queue';
 
 export interface QueueStats {
   queued: number;
@@ -65,7 +67,7 @@ export class QueueService {
           logger.debug(`${operationName} batch ${index + 1} completed, ${results.length} successful`);
         },
         onItemError: (item, error) => {
-          logger.error(`${operationName} failed for item`, error);
+          logger.error(`${operationName} failed for item`, error instanceof Error ? error : new Error(String(error)));
         }
       }
     );
@@ -82,8 +84,8 @@ export class QueueService {
   }
 
   private triggerQueueProcessing(): void {
-    if (this.queueWorkerInstance && typeof this.queueWorkerInstance.triggerImmediateProcessing === 'function') {
-      this.queueWorkerInstance.triggerImmediateProcessing();
+    if (this.queueWorkerInstance && typeof (this.queueWorkerInstance as Record<string, unknown>).triggerImmediateProcessing === 'function') {
+      (this.queueWorkerInstance as Record<string, () => void>).triggerImmediateProcessing();
     }
   }
 
@@ -528,7 +530,7 @@ export class QueueService {
         data: {
           imageId: item.imageId,
           projectId: item.projectId,
-          status: 'processing',
+          status: 'processing' as QueueStatus,
           queueId: item.id
         }
       }));
@@ -538,12 +540,12 @@ export class QueueService {
         if (!acc[notif.userId]) {acc[notif.userId] = [];}
         acc[notif.userId].push(notif.data);
         return acc;
-      }, {} as Record<string, any[]>);
+      }, {} as Record<string, SegmentationUpdateData[]>);
       
       for (const [userId, updates] of Object.entries(groupedNotifications)) {
         // Emit all updates for this user at once
         updates.forEach(update => {
-          this.websocketService!.emitSegmentationUpdate(userId, update);
+          this.websocketService?.emitSegmentationUpdate(userId, update);
         });
       }
     }

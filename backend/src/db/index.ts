@@ -3,7 +3,7 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { prismaPool } from './prismaPool';
 import { databaseMetrics } from '../monitoring/databaseMetrics';
-import { getPrismaConfig } from './prismaConfig.js';
+import { getPrismaConfig } from './prismaConfig';
 
 // Create a global variable to store Prisma client
 declare global {
@@ -12,7 +12,8 @@ declare global {
 
 // Initialize Prisma client (legacy compatibility)
 const createPrismaClient = (): PrismaClient => {
-  return new PrismaClient(getPrismaConfig());
+  const config = getPrismaConfig();
+  return config ? new PrismaClient(config as any) : new PrismaClient();
 };
 
 // Use global variable in development to prevent multiple instances (legacy compatibility)
@@ -43,7 +44,7 @@ export const initializeDatabase = async (): Promise<PrismaClient> => {
         try {
           const userCount = await prisma.user.count();
           logger.info(`Database has ${userCount} users`, 'Database');
-        } catch (_e) {
+        } catch {
           logger.warn('Tables not yet created, run migrations', 'Database');
         }
         
@@ -57,7 +58,7 @@ export const initializeDatabase = async (): Promise<PrismaClient> => {
       logger.error(`Database connection attempt ${attempt}/${maxRetries} failed:`, error as Error, 'Database');
       
       if (attempt === maxRetries) {
-        logger.error('❌ All database connection attempts failed', 'Database');
+        logger.error('❌ All database connection attempts failed', undefined, 'Database');
         // Don't throw - let the app run without database
         logger.warn('⚠️ Running without database connection - most features will not work!', 'Database');
         return prisma;
@@ -101,7 +102,7 @@ export const checkDatabaseHealth = async (): Promise<{healthy: boolean; message:
       healthy: poolHealth.healthy,
       message: poolHealth.healthy ? 'Database connection pool is healthy' : 'Database connection pool issues detected'
     };
-  } catch (_error) {
+  } catch {
     // Fallback to basic health check
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -130,13 +131,13 @@ export const transaction = async <T>(
 // Export enhanced database utilities
 export { prismaPool } from './prismaPool';
 export { databaseMetrics } from '../monitoring/databaseMetrics';
-export { databaseOptimization } from '../utils/databaseOptimization.ts';
+export { databaseOptimization } from '../utils/databaseOptimization';
 export { 
   getDatabasePoolConfig,
   getRetryConfig,
   getHealthCheckConfig,
   getPerformanceBaselines
-} from '../config/database.ts';
+} from '../config/database';
 
 // Enhanced transaction and query helpers
 export const executeQuery = async <T>(

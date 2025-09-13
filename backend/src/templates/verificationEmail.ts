@@ -19,7 +19,7 @@ function escapeHtml(text: string): string {
 
 const translations = {
   en: {
-    subject: 'Verify Your Email - Cell Segmentation Platform',
+    subject: 'Verify Your Email - SpheroSeg',
     title: 'Email Verification',
     greeting: 'Hello,',
     body: 'Please click the button below to verify your email address and activate your account.',
@@ -27,10 +27,10 @@ const translations = {
     altText: 'Or copy and paste this link into your browser:',
     footer: 'If you did not create an account, you can safely ignore this email.',
     regards: 'Best regards,',
-    team: 'Cell Segmentation Platform Team'
+    team: 'SpheroSeg Team'
   },
   cs: {
-    subject: 'Ověřte svůj e-mail - Cell Segmentation Platform',
+    subject: 'Ověřte svůj e-mail - SpheroSeg',
     title: 'Ověření e-mailu',
     greeting: 'Dobrý den,',
     body: 'Kliknutím na tlačítko níže ověřte svou e-mailovou adresu a aktivujte svůj účet.',
@@ -38,10 +38,10 @@ const translations = {
     altText: 'Nebo zkopírujte a vložte tento odkaz do svého prohlížeče:',
     footer: 'Pokud jste si nevytvořili účet, můžete tento e-mail bezpečně ignorovat.',
     regards: 'S pozdravem,',
-    team: 'Tým Cell Segmentation Platform'
+    team: 'Tým SpheroSeg'
   },
   es: {
-    subject: 'Verifica tu correo - Cell Segmentation Platform',
+    subject: 'Verifica tu correo - SpheroSeg',
     title: 'Verificación de correo',
     greeting: 'Hola,',
     body: 'Haz clic en el botón de abajo para verificar tu dirección de correo y activar tu cuenta.',
@@ -49,10 +49,10 @@ const translations = {
     altText: 'O copia y pega este enlace en tu navegador:',
     footer: 'Si no creaste una cuenta, puedes ignorar este correo de forma segura.',
     regards: 'Saludos,',
-    team: 'Equipo de Cell Segmentation Platform'
+    team: 'Equipo de SpheroSeg'
   },
   de: {
-    subject: 'E-Mail bestätigen - Cell Segmentation Platform',
+    subject: 'E-Mail bestätigen - SpheroSeg',
     title: 'E-Mail-Bestätigung',
     greeting: 'Hallo,',
     body: 'Klicken Sie auf die Schaltfläche unten, um Ihre E-Mail-Adresse zu bestätigen und Ihr Konto zu aktivieren.',
@@ -60,10 +60,10 @@ const translations = {
     altText: 'Oder kopieren Sie diesen Link und fügen Sie ihn in Ihren Browser ein:',
     footer: 'Wenn Sie kein Konto erstellt haben, können Sie diese E-Mail sicher ignorieren.',
     regards: 'Mit freundlichen Grüßen,',
-    team: 'Cell Segmentation Platform Team'
+    team: 'SpheroSeg Team'
   },
   fr: {
-    subject: 'Vérifiez votre email - Cell Segmentation Platform',
+    subject: 'Vérifiez votre email - SpheroSeg',
     title: 'Vérification d\'email',
     greeting: 'Bonjour,',
     body: 'Cliquez sur le bouton ci-dessous pour vérifier votre adresse email et activer votre compte.',
@@ -71,7 +71,7 @@ const translations = {
     altText: 'Ou copiez et collez ce lien dans votre navigateur :',
     footer: 'Si vous n\'avez pas créé de compte, vous pouvez ignorer cet email en toute sécurité.',
     regards: 'Cordialement,',
-    team: 'Équipe Cell Segmentation Platform'
+    team: 'Équipe SpheroSeg'
   },
   zh: {
     subject: '验证您的电子邮件 - 细胞分割平台',
@@ -101,7 +101,7 @@ export function generateVerificationEmailHTML(data: VerificationEmailData): {
       throw new Error('Invalid protocol');
     }
     safeUrl = escapeHtml(data.verificationUrl);
-  } catch (_error) {
+  } catch {
     // Fall back to safe default if URL is invalid
     safeUrl = escapeHtml('#');
   }

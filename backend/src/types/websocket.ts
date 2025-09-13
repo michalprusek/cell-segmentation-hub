@@ -356,7 +356,7 @@ export interface SharePermissions {
 export interface ErrorData {
   code: string;
   message: string;
-  details?: any;
+  details?: unknown;
   timestamp: Date;
   recoverable: boolean;
   action?: string;
@@ -367,9 +367,9 @@ export interface ErrorData {
  */
 export interface ValidationErrorData {
   field: string;
-  value: any;
+  value: unknown;
   error: string;
-  constraints?: Record<string, any>;
+  constraints?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -379,7 +379,7 @@ export interface ValidationErrorData {
 /**
  * WebSocket message envelope for typed events
  */
-export interface WebSocketMessage<T = any> {
+export interface WebSocketMessage<T = unknown> {
   event: WebSocketEvent | string;
   data: T;
   timestamp: Date;

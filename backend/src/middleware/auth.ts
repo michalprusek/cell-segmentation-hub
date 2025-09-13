@@ -144,15 +144,15 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
         throw new Error(`Invalid resource model: ${resourceModel}`);
       }
 
-      // Dynamic access to Prisma model
-      const model = (prisma as Record<string, unknown>)[resourceModel];
-      
+      // Dynamic access to Prisma model with proper typing
+      const model = (prisma as any)[resourceModel];
+
       // Check if model is valid
-      if (!model) {
+      if (!model || typeof model.findUnique !== 'function') {
         ResponseHelper.badRequest(res, 'Invalid resource model', 'Auth');
         return;
       }
-      
+
       const resource = await model.findUnique({
         where: { id: resourceId },
         select: { [resourceUserIdField]: true }

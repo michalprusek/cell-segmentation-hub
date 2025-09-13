@@ -1,4 +1,4 @@
-import { redisClient } from '../config/redis';
+import { executeRedisCommand, redisClient } from '../config/redis';
 import { logger } from '../utils/logger';
 
 // Augment Express Request interface
@@ -67,7 +67,7 @@ class CacheService {
     try {
       const fullKey = this.buildKey(key, options.namespace);
       
-      const cached = await redisClient.execute(async (client) => {
+      const cached = await executeRedisCommand(async (client) => {
         return client.get(fullKey);
       });
 
@@ -118,7 +118,7 @@ class CacheService {
         compressed: options.compress || false
       };
 
-      const result = await redisClient.execute(async (client) => {
+      const result = await executeRedisCommand(async (client) => {
         return client.setEx(fullKey, ttl, JSON.stringify(entry));
       });
 
@@ -141,7 +141,7 @@ class CacheService {
     try {
       const fullKey = this.buildKey(key, options.namespace);
       
-      const result = await redisClient.execute(async (client) => {
+      const result = await executeRedisCommand(async (client) => {
         return client.del(fullKey);
       });
 
@@ -164,7 +164,7 @@ class CacheService {
     try {
       const fullKey = this.buildKey(key, options.namespace);
       
-      const result = await redisClient.execute(async (client) => {
+      const result = await executeRedisCommand(async (client) => {
         return client.exists(fullKey);
       });
 
@@ -211,7 +211,7 @@ class CacheService {
     try {
       const fullKey = this.buildKey(key, options.namespace);
       
-      const result = await redisClient.execute(async (client) => {
+      const result = await executeRedisCommand(async (client) => {
         const value = await client.incrBy(fullKey, amount);
         
         // Set TTL if this is the first increment
@@ -235,11 +235,11 @@ class CacheService {
     try {
       const fullKey = this.buildKey(key, options.namespace);
       
-      const result = await redisClient.execute(async (client) => {
+      const result = await executeRedisCommand(async (client) => {
         return client.expire(fullKey, ttl);
       });
 
-      return (result || 0) === 1;
+      return !!result;
     } catch (error) {
       logger.error('Cache expire failed:', error as Error, 'Cache');
       return false;
@@ -253,7 +253,7 @@ class CacheService {
     try {
       const fullKey = this.buildKey(key, options.namespace);
       
-      const result = await redisClient.execute(async (client) => {
+      const result = await executeRedisCommand(async (client) => {
         return client.ttl(fullKey);
       });
 
@@ -271,16 +271,16 @@ class CacheService {
     try {
       const fullPattern = this.buildKey(pattern, options.namespace);
       
-      const result = await redisClient.execute(async (client) => {
+      const result = await executeRedisCommand(async (client) => {
         const keys: string[] = [];
-        let cursor = '0';
-        
+        let cursor = 0;
+
         // Use SCAN instead of KEYS for better performance
         do {
           const scanResult = await client.scan(cursor, { MATCH: fullPattern, COUNT: 100 });
           cursor = scanResult.cursor;
           keys.push(...scanResult.keys);
-        } while (cursor !== '0');
+        } while (cursor !== 0);
         
         if (keys.length === 0) {
           return 0;
@@ -292,7 +292,7 @@ class CacheService {
         
         for (let i = 0; i < keys.length; i += batchSize) {
           const batch = keys.slice(i, i + batchSize);
-          const deleted = await client.unlink(...batch);
+          const deleted = await client.unlink(batch);
           deletedCount += deleted || 0;
         }
         
@@ -452,29 +452,30 @@ class CacheService {
     latency?: number;
   }> {
     try {
-      const redisHealth = await redisClient.healthCheck();
-      
-      if (redisHealth.status === 'disabled') {
+      if (!redisClient) {
         return { status: 'disabled', stats: this.stats };
       }
 
-      if (redisHealth.status === 'unhealthy') {
+      // Check if Redis is connected
+      try {
+        await redisClient.ping();
+      } catch {
         return { status: 'unhealthy', stats: this.stats };
       }
 
       // Get additional Redis info
-      const info = await redisClient.getInfo();
+      const info = await redisClient.info();
       
-      const keyCount = await redisClient.execute(async (client) => {
+      const keyCount = await executeRedisCommand(async (client) => {
         return client.dbSize();
       });
 
       return {
         status: 'healthy',
         stats: this.stats,
-        memoryUsage: info.memory,
+        memoryUsage: info ? info.slice(0, 100) : 'unknown', // Show first 100 chars of info
         keyCount: keyCount || 0,
-        latency: redisHealth.latency
+        latency: 0 // We don't measure latency in this implementation
       };
     } catch (error) {
       logger.error('Cache health check failed:', error as Error, 'Cache');
@@ -510,8 +511,8 @@ export const CachePatterns = {
   /**
    * Database query caching pattern
    */
-  dbQuery: <T>(queryKey: string, queryFn: () => Promise<T>) => 
-    cacheService.getOrSet(queryKey, queryFn, { 
+  dbQuery: <T>(queryKey: string, queryFn: () => Promise<T>): Promise<T> =>
+    cacheService.getOrSet(queryKey, queryFn, {
       ttl: CacheService.TTL_PRESETS.DATABASE_QUERY,
       namespace: 'db'
     }),
@@ -519,7 +520,7 @@ export const CachePatterns = {
   /**
    * API response caching pattern
    */
-  apiResponse: <T>(endpoint: string, params: Record<string, unknown>, responseFn: () => Promise<T>) => {
+  apiResponse: <T>(endpoint: string, params: Record<string, unknown>, responseFn: () => Promise<T>): Promise<T> => {
     const key = `${endpoint}:${JSON.stringify(params)}`;
     return cacheService.getOrSet(key, responseFn, { 
       ttl: CacheService.TTL_PRESETS.API_RESPONSE,
@@ -530,7 +531,7 @@ export const CachePatterns = {
   /**
    * User data caching pattern
    */
-  userData: <T>(userId: string, dataType: string, dataFn: () => Promise<T>) =>
+  userData: <T>(userId: string, dataType: string, dataFn: () => Promise<T>): Promise<T> =>
     cacheService.getOrSet(`${userId}:${dataType}`, dataFn, {
       ttl: CacheService.TTL_PRESETS.MEDIUM,
       namespace: 'user'
@@ -539,7 +540,7 @@ export const CachePatterns = {
   /**
    * File metadata caching pattern
    */
-  fileMetadata: <T>(fileId: string, metadataFn: () => Promise<T>) =>
+  fileMetadata: <T>(fileId: string, metadataFn: () => Promise<T>): Promise<T> =>
     cacheService.getOrSet(fileId, metadataFn, {
       ttl: CacheService.TTL_PRESETS.FILE_METADATA,
       namespace: 'file'
@@ -548,7 +549,7 @@ export const CachePatterns = {
   /**
    * Statistics caching pattern
    */
-  statistics: <T>(statType: string, statFn: () => Promise<T>) =>
+  statistics: <T>(statType: string, statFn: () => Promise<T>): Promise<T> =>
     cacheService.getOrSet(statType, statFn, {
       ttl: CacheService.TTL_PRESETS.STATISTICS,
       namespace: 'stats'

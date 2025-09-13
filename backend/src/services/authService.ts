@@ -332,7 +332,10 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
     
     try {
       const user = await prisma.user.findUnique({
-        where: { email: data.email }
+        where: { email: data.email },
+        include: {
+          profile: true
+        }
       });
 
       logger.info('User lookup result', 'AuthService', { 
@@ -371,19 +374,20 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
 
       logger.info('Password reset token generated and stored', 'AuthService', { email: data.email });
 
-      // Send email with reset link asynchronously (fire-and-forget)
-      // Don't await the email sending to prevent timeout issues
+      // Send email with reset link (fire-and-forget for UTIA)
       if (process.env.SKIP_EMAIL_SEND === 'true') {
-        logger.warn('Password reset email skipped (SKIP_EMAIL_SEND=true)', 'AuthService', { 
+        logger.warn('Password reset email skipped (SKIP_EMAIL_SEND=true)', 'AuthService', {
           email: data.email,
-          tokenExpiry: resetTokenExpiry 
+          tokenExpiry: resetTokenExpiry
         });
       } else {
         logger.info('Preparing to send password reset email', 'AuthService', { email: data.email });
-        
+
         // Fire and forget - don't await the email sending
         // This prevents the request from timing out due to slow SMTP server
-        EmailService.sendPasswordResetEmail(data.email, resetToken, resetTokenExpiry)
+        // Get user's preferred language or default to 'en'
+        const userLocale = user.profile?.preferredLang || 'en';
+        EmailService.sendPasswordResetEmail(data.email, resetToken, resetTokenExpiry, userLocale)
           .then(() => {
             logger.info('Password reset email sent successfully', 'AuthService', { email: data.email });
           })
@@ -391,7 +395,7 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
             logger.error('Failed to send password reset email:', emailError as Error, 'AuthService', { email: data.email });
             // Email failed but user already got response - token is still valid
           });
-        
+
         // Log that email was queued
         logger.info('Password reset email queued for sending', 'AuthService', { email: data.email });
       }
@@ -423,8 +427,9 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
    */
 export async function resetPasswordWithToken(data: ResetPasswordConfirmData): Promise<{ message: string }> {
     try {
-      // Find user with non-expired reset token
-      const user = await prisma.user.findFirst({
+      // Find ALL users with non-expired reset tokens
+      // We need to iterate because tokens are hashed and we can't query directly
+      const usersWithTokens = await prisma.user.findMany({
         where: {
           resetTokenExpiry: {
             gte: new Date() // Token must not be expired
@@ -435,13 +440,20 @@ export async function resetPasswordWithToken(data: ResetPasswordConfirmData): Pr
         }
       });
 
-      if (!user || !user.resetToken) {
-        throw ApiError.badRequest('Neplatný nebo vypršený reset token');
+      // Find the user whose hashed token matches the provided token
+      let matchedUser = null;
+      for (const user of usersWithTokens) {
+        if (user.resetToken) {
+          // Verify the token matches (compare against hashed version)
+          const isTokenValid = await verifyPassword(data.token, user.resetToken);
+          if (isTokenValid) {
+            matchedUser = user;
+            break;
+          }
+        }
       }
 
-      // Verify the token matches (compare against hashed version)
-      const isTokenValid = await verifyPassword(data.token, user.resetToken);
-      if (!isTokenValid) {
+      if (!matchedUser) {
         throw ApiError.badRequest('Neplatný nebo vypršený reset token');
       }
 
@@ -450,7 +462,7 @@ export async function resetPasswordWithToken(data: ResetPasswordConfirmData): Pr
 
       // Update password and clear reset token
       await prisma.user.update({
-        where: { id: user.id },
+        where: { id: matchedUser.id },
         data: {
           password: hashedPassword,
           resetToken: null,
@@ -460,11 +472,11 @@ export async function resetPasswordWithToken(data: ResetPasswordConfirmData): Pr
 
       // Invalidate all existing sessions to force re-login
       await prisma.session.updateMany({
-        where: { userId: user.id },
+        where: { userId: matchedUser.id },
         data: { isValid: false }
       });
 
-      logger.info('Password reset completed successfully', 'AuthService', { userId: user.id });
+      logger.info('Password reset completed successfully', 'AuthService', { userId: matchedUser.id });
 
       return { message: 'Heslo bylo úspěšně změněno. Nyní se můžete přihlásit s novým heslem.' };
     } catch (error) {

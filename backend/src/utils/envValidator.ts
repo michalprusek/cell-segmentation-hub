@@ -165,7 +165,7 @@ export function validateEnvironment(): ValidationResult {
     }
     
     // Use default value if not set
-    const actualValue = value || envVar.defaultValue!;
+    const actualValue = value || envVar.defaultValue || '';
     
     // Validate the value if validator is provided
     if (envVar.validator && actualValue) {
@@ -230,12 +230,17 @@ export function requireValidEnvironment(): void {
   const result = validateEnvironment();
   
   if (!result.valid) {
+     
     console.error('\n🚨 ENVIRONMENT VALIDATION FAILED 🚨\n');
+     
     console.error('The following errors must be resolved:\n');
     result.errors.forEach((error, index) => {
+       
       console.error(`  ${index + 1}. ${error}`);
     });
+     
     console.error('\nPlease check your .env file or Docker environment configuration.');
+     
     console.error('Refer to .env.example for required variables.\n');
     
     // Exit with error code
@@ -243,10 +248,13 @@ export function requireValidEnvironment(): void {
   }
   
   if (result.warnings.length > 0) {
+     
     console.warn('\n⚠️ Environment Warnings:\n');
     result.warnings.forEach((warning, index) => {
+       
       console.warn(`  ${index + 1}. ${warning}`);
     });
+     
     console.warn('');
   }
 }

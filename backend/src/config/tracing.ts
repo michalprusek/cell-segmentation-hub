@@ -37,10 +37,10 @@ export function getActiveSpan(): unknown {
  */
 export function createSpan(_name: string, _options?: Record<string, unknown>): Record<string, () => void> {
   return {
-    setAttribute: () => {},
-    setStatus: () => {},
-    addEvent: () => {},
-    end: () => {},
+    setAttribute: (): void => {},
+    setStatus: (): void => {},
+    addEvent: (): void => {},
+    end: (): void => {},
   };
 }
 
