@@ -25,14 +25,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY backend/segmentation/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY . .
+COPY backend/segmentation/ .
 
 # Create weights directory
 RUN mkdir -p weights

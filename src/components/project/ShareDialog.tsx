@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+// import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Select,
@@ -30,15 +30,15 @@ import {
   Link,
   Copy,
   Trash2,
-  ExternalLink,
-  Clock,
-  Users,
+  // ExternalLink,
+  // Clock,
+  // Users,
   CheckCircle,
   XCircle,
   AlertCircle,
-  Send,
+  // Send,
   UserCheck,
-  UserPlus,
+  // UserPlus,
   RefreshCw,
 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -259,7 +259,7 @@ export function ShareDialog({
     }
   };
 
-  const getStatusIcon = (status: string) => {
+  const _getStatusIcon = (status: string) => {
     switch (status) {
       case 'accepted':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
@@ -272,7 +272,7 @@ export function ShareDialog({
     }
   };
 
-  const formatExpiry = (expiry: string | null) => {
+  const _formatExpiry = (expiry: string | null) => {
     if (!expiry) return t('sharing.neverExpires');
     const date = new Date(expiry);
     return date.toLocaleString();
@@ -289,7 +289,7 @@ export function ShareDialog({
   const acceptedLinkShares = linkShares.filter(
     share => share.status === 'accepted' && share.sharedWith
   );
-  const activeLinkShares = linkShares.filter(
+  const _activeLinkShares = linkShares.filter(
     share => share.status === 'accepted' && !share.sharedWith
   );
 

@@ -496,10 +496,10 @@ test.describe('Polygon Editing E2E Tests', () => {
             // Wait for the download and verify filename
             const download = await downloadPromise;
             expect(download.suggestedFilename()).toMatch(format.extension);
-          } catch (error) {
-            console.log(
-              `Download test for ${format.name} failed or timed out: ${error}`
-            );
+          } catch (_error) {
+            // console.log(
+            //   `Download test for ${format.name} failed or timed out: ${_error}`
+            // );
           }
 
           // Close export dialog if it's still open
@@ -569,10 +569,10 @@ test.describe('Polygon Editing E2E Tests', () => {
           '.polygon-highlight',
         ];
 
-        let selectionVisible = false;
+        let _selectionVisible = false;
         for (const selector of selectedIndicators) {
           if (await page.locator(selector).isVisible()) {
-            selectionVisible = true;
+            _selectionVisible = true;
             break;
           }
         }

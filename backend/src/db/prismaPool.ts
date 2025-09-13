@@ -140,11 +140,13 @@ class PrismaPool {
 
     // Try to get an idle connection
     if (this.idleClients.length > 0) {
-      const client = this.idleClients.pop()!;
-      this.activeClients.add(client);
-      this.stats.idleConnections--;
-      this.stats.activeConnections++;
-      return client;
+      const client = this.idleClients.pop();
+      if (client) {
+        this.activeClients.add(client);
+        this.stats.idleConnections--;
+        this.stats.activeConnections++;
+        return client;
+      }
     }
 
     // Create a new connection if under limit
@@ -211,10 +213,12 @@ class PrismaPool {
 
     // Give the connection to a waiting request or return to idle pool
     if (this.waitQueue.length > 0) {
-      const resolve = this.waitQueue.shift()!;
-      this.activeClients.add(client);
-      this.stats.activeConnections++;
-      resolve(client);
+      const resolve = this.waitQueue.shift();
+      if (resolve) {
+        this.activeClients.add(client);
+        this.stats.activeConnections++;
+        resolve(client);
+      }
     } else {
       this.idleClients.push(client);
       this.stats.idleConnections++;
@@ -238,7 +242,7 @@ class PrismaPool {
    */
   async executeQuery<T>(
     operation: () => Promise<T>, 
-    options?: { operationType?: string; operationName?: string }
+    _options?: { operationType?: string; operationName?: string }
   ): Promise<T> {
     const client = await this.acquire();
     try {
@@ -253,7 +257,7 @@ class PrismaPool {
    */
   async executeMutation<T>(
     operation: () => Promise<T>,
-    operationName?: string
+    _operationName?: string
   ): Promise<T> {
     const client = await this.acquire();
     try {
@@ -267,8 +271,8 @@ class PrismaPool {
    * Execute a transaction with a pooled connection
    */
   async executeTransaction<T>(
-    operation: (prisma: any) => Promise<T>,
-    operationName?: string
+    operation: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
+    _operationName?: string
   ): Promise<T> {
     const client = await this.acquire();
     try {
@@ -402,7 +406,7 @@ class PrismaPool {
 
     // Reject all waiting requests
     for (const resolve of this.waitQueue) {
-      resolve(null as any); // Will be caught by error handling
+      resolve(null as unknown as PrismaClient); // Will be caught by error handling
     }
     this.waitQueue = [];
 

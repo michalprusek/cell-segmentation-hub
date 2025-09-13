@@ -12,7 +12,7 @@ test.describe('Enhanced Performance Tests', () => {
     password: 'testpassword123',
   };
 
-  const testProject = {
+  const _testProject = {
     name: 'Performance Test Project',
     description: 'Comprehensive performance testing',
   };
@@ -27,7 +27,7 @@ test.describe('Enhanced Performance Tests', () => {
   ].filter(imagePath => {
     const exists = fs.existsSync(imagePath);
     if (!exists) {
-      console.warn(`Test image not found: ${imagePath}`);
+      //       console.warn(`Test image not found: ${imagePath}`);
     }
     return exists;
   });
@@ -103,7 +103,7 @@ test.describe('Enhanced Performance Tests', () => {
         }
         return 0;
       });
-      const isChrome = browserName === 'chromium';
+      const _isChrome = browserName === 'chromium';
 
       const startTime = Date.now();
 
@@ -127,9 +127,7 @@ test.describe('Enhanced Performance Tests', () => {
 
         if (currentMemory > 0 && initialMemory > 0) {
           const memoryIncrease = currentMemory - initialMemory;
-          console.log(
-            `Memory increase after batch ${batch + 1}: ${Math.round(memoryIncrease / 1024 / 1024)}MB`
-          );
+          // console.log(`Memory increase after batch ${batch + 1}: ${Math.round(memoryIncrease / 1024 / 1024)}MB`);
 
           // Memory shouldn't increase by more than threshold per batch
           expect(memoryIncrease).toBeLessThan(
@@ -142,9 +140,7 @@ test.describe('Enhanced Performance Tests', () => {
       const expectedMaxTime =
         PERFORMANCE_THRESHOLDS.imageUpload * testImagePaths.length * 5;
 
-      console.log(
-        `Total bulk upload time: ${totalTime}ms (max expected: ${expectedMaxTime}ms)`
-      );
+      // console.log(`Total bulk upload time: ${totalTime}ms (max expected: ${expectedMaxTime}ms)`);
       expect(totalTime).toBeLessThan(expectedMaxTime);
 
       // Should show correct image count
@@ -198,9 +194,7 @@ test.describe('Enhanced Performance Tests', () => {
         });
 
         const processingTime = Date.now() - startTime;
-        console.log(
-          `Batch processing time: ${processingTime}ms for ${testImagePaths.length} images`
-        );
+        // console.log(`Batch processing time: ${processingTime}ms for ${testImagePaths.length} images`);
 
         // Batch processing should be more efficient than individual processing
         const maxExpectedTime =
@@ -269,7 +263,7 @@ test.describe('Enhanced Performance Tests', () => {
         await page.waitForTimeout(1000);
         const renderTime = Date.now() - startRenderTime;
 
-        console.log(`Canvas and polygon render time: ${renderTime}ms`);
+        //         console.log(`Canvas and polygon render time: ${renderTime}ms`);
         expect(renderTime).toBeLessThan(
           PERFORMANCE_THRESHOLDS.canvasRender * 2
         );
@@ -367,9 +361,7 @@ test.describe('Enhanced Performance Tests', () => {
 
           if (currentMemory > 0 && initialMemory > 0) {
             const memoryIncrease = currentMemory - initialMemory;
-            console.log(
-              `Memory increase after ${i + 1} operations: ${Math.round(memoryIncrease / 1024 / 1024)}MB`
-            );
+            // console.log(`Memory increase after ${i + 1} operations: ${Math.round(memoryIncrease / 1024 / 1024)}MB`);
 
             // Memory shouldn't grow excessively
             expect(memoryIncrease).toBeLessThan(
@@ -395,9 +387,7 @@ test.describe('Enhanced Performance Tests', () => {
 
       if (finalMemory > 0 && initialMemory > 0) {
         const totalMemoryIncrease = finalMemory - initialMemory;
-        console.log(
-          `Total memory increase: ${Math.round(totalMemoryIncrease / 1024 / 1024)}MB`
-        );
+        // console.log(`Total memory increase: ${Math.round(totalMemoryIncrease / 1024 / 1024)}MB`);
         expect(totalMemoryIncrease).toBeLessThan(PERFORMANCE_THRESHOLDS.memory);
       }
     });
@@ -435,7 +425,7 @@ test.describe('Enhanced Performance Tests', () => {
         timeout: 30000,
       });
 
-      const afterUploadMemory = await page.evaluate(() => {
+      const _afterUploadMemory = await page.evaluate(() => {
         if ('memory' in performance) {
           return (performance as any).memory.usedJSHeapSize;
         }
@@ -461,9 +451,7 @@ test.describe('Enhanced Performance Tests', () => {
 
         if (afterEditorMemory > 0 && beforeMemory > 0) {
           const memoryIncrease = afterEditorMemory - beforeMemory;
-          console.log(
-            `Memory increase with large images: ${Math.round(memoryIncrease / 1024 / 1024)}MB`
-          );
+          // console.log(`Memory increase with large images: ${Math.round(memoryIncrease / 1024 / 1024)}MB`);
 
           // Should not use excessive memory
           expect(memoryIncrease).toBeLessThan(
@@ -536,8 +524,8 @@ test.describe('Enhanced Performance Tests', () => {
         const canvas = page.locator('canvas, .canvas-container').first();
 
         // Test continuous dragging performance
-        const dragStartTime = Date.now();
-        const frameCount = 0;
+        const _dragStartTime = Date.now();
+        const _frameCount = 0;
 
         // Start performance monitoring
         await page.evaluate(() => {
@@ -570,7 +558,7 @@ test.describe('Enhanced Performance Tests', () => {
         if (performanceData.frameCount > 0 && performanceData.duration > 0) {
           const fps =
             (performanceData.frameCount / performanceData.duration) * 1000;
-          console.log(`Canvas FPS during operations: ${Math.round(fps)}`);
+          //           console.log(`Canvas FPS during operations: ${Math.round(fps)}`);
 
           // Should maintain reasonable frame rate (at least 30 FPS)
           expect(fps).toBeGreaterThan(30);
@@ -660,7 +648,7 @@ test.describe('Enhanced Performance Tests', () => {
           });
 
           const creationTime = Date.now() - startTime;
-          console.log(`Complex polygon creation time: ${creationTime}ms`);
+          //           console.log(`Complex polygon creation time: ${creationTime}ms`);
 
           // Should handle complex geometry creation in reasonable time
           expect(creationTime).toBeLessThan(
@@ -699,7 +687,7 @@ test.describe('Enhanced Performance Tests', () => {
         try {
           const response = await route.fetch();
           const responseTime = Date.now() - startTime;
-          const endpoint = `${method} ${url.split('/api/')[1]?.split('?')[0] || 'unknown'}`;
+          const _endpoint = `${method} ${url.split('/api/')[1]?.split('?')[0] || 'unknown'}`;
 
           if (!apiMetrics[endpoint]) {
             apiMetrics[endpoint] = [];
@@ -707,8 +695,8 @@ test.describe('Enhanced Performance Tests', () => {
           apiMetrics[endpoint].push(responseTime);
 
           await route.fulfill({ response });
-        } catch (error) {
-          console.warn('Route handling error:', error);
+        } catch (_error) {
+          //           console.warn('Route handling error:', _error);
           await route.continue();
         }
       };
@@ -757,14 +745,12 @@ test.describe('Enhanced Performance Tests', () => {
         await page.getByText('API Performance Test').click();
 
         // Analyze API metrics
-        for (const [endpoint, times] of Object.entries(apiMetrics)) {
+        for (const [_endpoint, times] of Object.entries(apiMetrics)) {
           if (times.length > 0) {
             const avgTime = times.reduce((a, b) => a + b, 0) / times.length;
             const maxTime = Math.max(...times);
 
-            console.log(
-              `${endpoint}: avg ${Math.round(avgTime)}ms, max ${Math.round(maxTime)}ms (${times.length} calls)`
-            );
+            // console.log(`${endpoint}: avg ${Math.round(avgTime)}ms, max ${Math.round(maxTime)}ms (${times.length} calls)`);
 
             // Most API calls should be under threshold
             expect(avgTime).toBeLessThan(PERFORMANCE_THRESHOLDS.apiResponse);
@@ -821,7 +807,7 @@ test.describe('Enhanced Performance Tests', () => {
       await Promise.all(concurrentRequests);
       const totalTime = Date.now() - startTime;
 
-      console.log(`Concurrent project creation took ${totalTime}ms`);
+      //       console.log(`Concurrent project creation took ${totalTime}ms`);
 
       // Should handle concurrent requests efficiently
       expect(totalTime).toBeLessThan(PERFORMANCE_THRESHOLDS.apiResponse * 10); // Allow for some queuing
@@ -862,7 +848,7 @@ test.describe('Enhanced Performance Tests', () => {
       });
 
       // Monitor WebSocket messages
-      const wsMessages: Array<{ timestamp: number; type: string }> = [];
+      const _wsMessages: Array<{ timestamp: number; type: string }> = [];
 
       await page.evaluate(() => {
         const originalWebSocket = window.WebSocket;
@@ -877,7 +863,7 @@ test.describe('Enhanced Performance Tests', () => {
             return originalSend.call(this, data);
           };
 
-          ws.addEventListener('message', event => {
+          ws.addEventListener('message', _event => {
             const now = Date.now();
             const sendTime = (window as any).lastWsSendTime;
             if (sendTime) {
@@ -921,9 +907,7 @@ test.describe('Enhanced Performance Tests', () => {
             latencies.length;
           const maxLatency = Math.max(...latencies);
 
-          console.log(
-            `WebSocket latency: avg ${Math.round(avgLatency)}ms, max ${Math.round(maxLatency)}ms`
-          );
+          // console.log(`WebSocket latency: avg ${Math.round(avgLatency)}ms, max ${Math.round(maxLatency)}ms`);
 
           // WebSocket latency should be low for real-time feel
           expect(avgLatency).toBeLessThan(500); // 500ms average
@@ -955,7 +939,7 @@ test.describe('Enhanced Performance Tests', () => {
       await page.getByText('WS Reconnection Test').click();
 
       // Set up WebSocket monitoring
-      const reconnectionTime = 0;
+      const _reconnectionTime = 0;
 
       await page.evaluate(() => {
         (window as any).wsReconnectionStart = 0;
@@ -1008,9 +992,7 @@ test.describe('Enhanced Performance Tests', () => {
       });
 
       if (reconnectionMetrics.duration > 0) {
-        console.log(
-          `WebSocket reconnection took ${reconnectionMetrics.duration}ms`
-        );
+        // console.log(`WebSocket reconnection took ${reconnectionMetrics.duration}ms`);
         expect(reconnectionMetrics.duration).toBeLessThan(5000); // Should reconnect within 5 seconds
       }
 

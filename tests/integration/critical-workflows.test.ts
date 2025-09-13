@@ -4,8 +4,8 @@ import {
   expect,
   beforeAll,
   afterAll,
-  beforeEach,
-  afterEach,
+  beforeEach as _beforeEach,
+  afterEach as _afterEach,
 } from 'vitest';
 import axios, { AxiosInstance } from 'axios';
 import { PrismaClient } from '@prisma/client';
@@ -107,7 +107,7 @@ describe('Critical User Workflows', () => {
           const minimalJpeg =
             '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAP/bAEMAAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAf/AABEIAAEAAQMBEgACEQEDEQH/xABVAAEAAAAAAAAAAAAAAAAAAAAKEAEBAQAAAAAAAAAAAAAAAAAAAQEBAQAAAAAAAAAAAAAAAAAAAAERAAEAAAAAAAAAAAAAAAAAAAAQEQEAAAAAAAAAAAAAAAAAAAAQ/9oADAMBAAIRAxEAPwA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhADEAAAAU8P/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEQA/AAAA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/EABQRAQAAAAAAAAAAAAAAAAAAAAD/2gAMAwEAAhEDEAAA8A//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAEFAn//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/AX//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/AX//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAY/An//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/IX//2gAMAwEAAgADAAAAEAB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPxB//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPxB//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxB//9k=';
           imageBuffer = Buffer.from(minimalJpeg, 'base64');
-          console.warn('Test fixture not found, using minimal test image');
+          //           console.warn('Test fixture not found, using minimal test image');
         }
 
         const formData = new FormData();
@@ -227,7 +227,7 @@ describe('Critical User Workflows', () => {
         }, 30000);
 
         socket.on('connect', () => {
-          console.log('WebSocket connected');
+          //           console.log('WebSocket connected');
           socket.emit('join-project', testProject.id);
         });
 

@@ -3,7 +3,7 @@
  * Provides common setup, teardown, and utility functions
  */
 
-import { Page, Browser, BrowserContext } from '@playwright/test';
+import { Page, Browser as _Browser, BrowserContext } from '@playwright/test';
 import { TestDataManager, TestUser, TestProject } from './test-data-manager';
 import path from 'path';
 import fs from 'fs';
@@ -191,8 +191,8 @@ export class TestSetupUtils {
           const buffer = canvas.toBuffer('image/jpeg', { quality: 0.8 });
           fs.writeFileSync(path.join(testImagesDir, imageName), buffer);
         }
-      } catch (error) {
-        console.warn('Canvas not available, creating placeholder images');
+      } catch (_error) {
+        // console.warn('Canvas not available, creating placeholder images');
 
         // Create minimal placeholder files
         for (const imageName of missingImages) {
@@ -254,11 +254,11 @@ export class TestSetupUtils {
    * Wait for all network requests to complete
    */
   static async waitForNetworkIdle(page: Page, timeout = 10000): Promise<void> {
-    let requestCount = 0;
-    let responseCount = 0;
+    let _requestCount = 0;
+    let _responseCount = 0;
 
     const requestHandler = () => {
-      requestCount++;
+      _requestCount++;
       // Update window counter
       page
         .evaluate(() => {
@@ -270,7 +270,7 @@ export class TestSetupUtils {
         });
     };
     const responseHandler = () => {
-      responseCount++;
+      _responseCount++;
       // Update window counter
       page
         .evaluate(() => {
@@ -302,7 +302,7 @@ export class TestSetupUtils {
         },
         { timeout }
       );
-    } catch (error) {
+    } catch (_error) {
       // Fallback: just wait a bit
       await page.waitForTimeout(2000);
     } finally {
@@ -348,8 +348,8 @@ export class TestSetupUtils {
       await page.addScriptTag({
         url: 'https://unpkg.com/axe-core@4.7.0/axe.min.js',
       });
-    } catch (error) {
-      console.warn('Failed to load axe-core, accessibility tests may not work');
+    } catch (_error) {
+      // console.warn('Failed to load axe-core, accessibility tests may not work');
     }
   }
 
@@ -403,9 +403,9 @@ export class TestSetupUtils {
         if (!response.ok) {
           throw new Error(`${service.name} returned ${response.status}`);
         }
-      } catch (error) {
+      } catch (_error) {
         throw new Error(
-          `${service.name} health check failed: ${error.message}`
+          `${service.name} health check failed: ${_error.message}`
         );
       }
     }
@@ -414,7 +414,7 @@ export class TestSetupUtils {
   /**
    * Setup database state for testing
    */
-  static async setupDatabaseState(scenario: string): Promise<void> {
+  static async setupDatabaseState(_scenario: string): Promise<void> {
     // In a real implementation, this would set up database state
     // For now, we'll just log the scenario
     // Setting up database state for scenario
@@ -517,9 +517,9 @@ export class TestSetupUtils {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         return await operation();
-      } catch (error) {
+      } catch (_error) {
         if (attempt === maxRetries) {
-          throw error;
+          throw _error;
         }
 
         const delay = baseDelay * Math.pow(2, attempt - 1);

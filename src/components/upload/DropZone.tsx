@@ -1,7 +1,8 @@
 import React from 'react';
-import { DropzoneOptions, useDropzone } from 'react-dropzone';
+import { useDropzone } from 'react-dropzone';
 import { Upload } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
+import { toast } from 'sonner';
 
 interface DropZoneProps {
   disabled: boolean;
@@ -16,15 +17,41 @@ const DropZone: React.FC<DropZoneProps> = ({
 }) => {
   const { t } = useLanguage();
 
+  // Handle drop with 10,000 file limit check
+  const handleDrop = (acceptedFiles: File[]) => {
+    if (acceptedFiles.length > 10000) {
+      // Show toast notification for file limit exceeded
+      const messages = {
+        cs: 'Překročen maximální počet souborů. Limit je 10 000 souborů najednou.',
+        en: 'Maximum file limit exceeded. The limit is 10,000 files at once.',
+        es: 'Se excedió el límite máximo de archivos. El límite es de 10,000 archivos a la vez.',
+        de: 'Maximale Dateianzahl überschritten. Das Limit beträgt 10.000 Dateien auf einmal.',
+        fr: 'Limite maximale de fichiers dépassée. La limite est de 10 000 fichiers à la fois.',
+        zh: '超出最大文件限制。限制为一次10,000个文件。',
+      };
+
+      // Get current language from localStorage or default to 'en'
+      const currentLang = (localStorage.getItem('language') ||
+        'en') as keyof typeof messages;
+      toast.error(messages[currentLang] || messages.en);
+
+      // Only pass the first 10,000 files
+      onDrop(acceptedFiles.slice(0, 10000));
+      return;
+    }
+
+    onDrop(acceptedFiles);
+  };
+
   const { getRootProps, getInputProps } = useDropzone({
-    onDrop,
+    onDrop: handleDrop,
     accept: {
       'image/jpeg': [],
       'image/png': [],
       'image/tiff': [],
       'image/bmp': [],
     },
-    maxSize: 10485760,
+    maxSize: 100 * 1024 * 1024, // 100MB per file (increased from 10MB)
     disabled,
   });
 

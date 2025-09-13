@@ -1,24 +1,13 @@
 import { createContext } from 'react';
-import { BASIC_MODEL_INFO } from '@/lib/modelUtils';
+import {
+  BASIC_MODEL_INFO,
+  ModelType,
+  ModelInfo,
+  ModelPerformance,
+} from '@/lib/modelUtils';
 
-export type ModelType = 'hrnet' | 'cbam_resunet' | 'unet_spherohq';
-
-export interface ModelPerformance {
-  avgTimePerImage: number; // seconds
-  throughput: number; // images per second
-  p95Latency: number; // seconds
-  batchSize: number; // optimal batch size
-}
-
-export interface ModelInfo {
-  id: ModelType;
-  name: string;
-  displayName: string;
-  description: string;
-  size: 'small' | 'medium' | 'large';
-  defaultThreshold: number;
-  performance?: ModelPerformance;
-}
+// Re-export types for convenience
+export type { ModelType, ModelInfo, ModelPerformance };
 
 export interface ModelContextType {
   selectedModel: ModelType;

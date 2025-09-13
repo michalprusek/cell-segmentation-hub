@@ -11,7 +11,7 @@ const NotificationsDropdown = ({
   hasNotifications,
 }: NotificationsDropdownProps) => {
   const navigate = useNavigate();
-  const location = useLocation();
+  const _location = useLocation();
 
   return (
     <Button

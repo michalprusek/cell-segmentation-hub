@@ -4,6 +4,7 @@ import { CheckCircle, Clipboard, DownloadCloud } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { convertToCOCO } from '../../../utils/cocoConverter';
 import { useLanguage } from '@/contexts/useLanguage';
+import { downloadJSON } from '@/lib/downloadUtils';
 
 interface CocoTabProps {
   segmentation: SegmentationResult;
@@ -24,15 +25,9 @@ const CocoTab: React.FC<CocoTabProps> = ({ segmentation }) => {
   };
 
   const handleDownload = () => {
-    const blob = new Blob([cocoData], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'segmentation-coco.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Use centralized download utility for consistency
+    const data = JSON.parse(cocoData);
+    downloadJSON(data, 'segmentation-coco');
   };
 
   return (

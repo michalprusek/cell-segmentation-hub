@@ -1,9 +1,9 @@
 import { chromium } from '@playwright/test';
 
 async function globalSetup() {
-  console.log(
-    '🚀 Starting global setup for E2E tests in Docker environment...'
-  );
+  // console.log(
+  //   '🚀 Starting global setup for E2E tests in Docker environment...'
+  // );
 
   // Services to check - using Docker container ports
   const services = [
@@ -41,7 +41,7 @@ async function globalSetup() {
   page.setDefaultNavigationTimeout(15000);
 
   for (const service of services) {
-    console.log(`Checking ${service.name}...`);
+    // console.log(`Checking ${service.name}...`);
 
     let isHealthy = false;
     let attempts = 0;
@@ -54,18 +54,18 @@ async function globalSetup() {
         isHealthy = await service.healthCheck(page);
 
         if (isHealthy) {
-          console.log(
-            `✅ ${service.name} is healthy (attempt ${attempts}/${maxAttempts})`
-          );
+          // console.log(
+          //   `✅ ${service.name} is healthy (attempt ${attempts}/${maxAttempts})`
+          // );
         } else {
-          console.log(
-            `⚠️ ${service.name} returned non-200 status (attempt ${attempts}/${maxAttempts})`
-          );
+          // console.log(
+          //   `⚠️ ${service.name} returned non-200 status (attempt ${attempts}/${maxAttempts})`
+          // );
         }
-      } catch (error: any) {
-        console.log(
-          `⚠️ ${service.name} is not ready (attempt ${attempts}/${maxAttempts}): ${error.message}`
-        );
+      } catch (_error: any) {
+        // console.log(
+        //   `⚠️ ${service.name} is not ready (attempt ${attempts}/${maxAttempts}): ${_error.message}`
+        // );
       }
 
       if (!isHealthy && attempts < maxAttempts) {
@@ -83,11 +83,11 @@ async function globalSetup() {
 
   await browser.close();
 
-  console.log('✅ All services are healthy and ready for E2E tests!');
-  console.log('📍 Using Blue environment on ports 4000-4008');
+  // console.log('✅ All services are healthy and ready for E2E tests!');
+  // console.log('📍 Using Blue environment on ports 4000-4008');
 
   return async () => {
-    console.log('🧹 Global teardown completed');
+    // console.log('🧹 Global teardown completed');
   };
 }
 

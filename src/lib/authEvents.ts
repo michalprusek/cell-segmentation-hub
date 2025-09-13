@@ -9,7 +9,9 @@ export interface AuthEvent {
     | 'signin_error'
     | 'signup_error'
     | 'logout_error'
-    | 'profile_error';
+    | 'profile_error'
+    | 'token_missing'
+    | 'token_expired';
   data?: {
     message?: string;
     description?: string;

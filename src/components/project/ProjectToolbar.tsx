@@ -60,10 +60,11 @@ const ProjectToolbar = ({
   showSelectAll = false,
 }: ProjectToolbarProps) => {
   const { t } = useLanguage();
-  const navigate = useNavigate();
+  const _navigate = useNavigate();
   const { id: projectId } = useParams<{ id: string }>();
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const handleExport = () => {
     setShowExportDialog(true);
@@ -170,9 +171,14 @@ const ProjectToolbar = ({
             size="sm"
             className="flex items-center h-9"
             onClick={handleExport}
-            disabled={isExporting}
+            disabled={isExporting || isDownloading}
           >
             {isExporting ? (
+              <>
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                {t('export.processingExport')}
+              </>
+            ) : isDownloading ? (
               <>
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" />
                 {t('export.downloading')}
@@ -298,6 +304,7 @@ const ProjectToolbar = ({
           images={images}
           selectedImageIds={selectedImageIds}
           onExportingChange={setIsExporting}
+          onDownloadingChange={setIsDownloading}
         />
       )}
     </div>

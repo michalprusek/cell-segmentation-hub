@@ -231,8 +231,8 @@ export class ProjectPage extends BasePage {
     try {
       await this.clickWithWait(downloadButton);
       return await downloadPromise;
-    } catch (error) {
-      console.warn('Download failed:', error);
+    } catch (_error) {
+      // console.warn('Download failed:', _error);
       throw new Error(`Export download failed: ${error.message}`);
     }
   }

@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { updateImageProcessingStatus } from '../imageProcessingService';
-import type { SegmentationData } from '@/types';
+import { getErrorMessage, type SegmentationData } from '@/types';
 
 // Mock dependencies
 vi.mock('@/lib/api', () => ({
@@ -30,7 +30,6 @@ vi.mock('@/lib/logger', () => ({
 // Import mocked dependencies
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
-import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 
 describe('ImageProcessingService', () => {

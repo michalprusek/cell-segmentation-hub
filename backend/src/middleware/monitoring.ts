@@ -1,12 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import client from 'prom-client';
 import { logger } from '../utils/logger';
-import { 
-  businessMetricsRegistry, 
-  trackApiError, 
-  trackFeatureUsage, 
-  trackImageProcessing,
-  initializeBusinessMetricsCollection 
+import {
+  businessMetricsRegistry,
+  trackApiError,
+  trackFeatureUsage,
+  initializeBusinessMetricsCollection
 } from '../monitoring/businessMetrics';
 
 // Vytvoření registru pro metriky
@@ -100,13 +99,13 @@ export function createMonitoringMiddleware(): (req: Request, res: Response, next
 
       // Track business metrics for errors
       if (res.statusCode >= 400) {
-        const userType = (req as any).user ? 'authenticated' : 'anonymous';
+        const userType = (req as Request & { user?: unknown }).user ? 'authenticated' : 'anonymous';
         const errorType = res.statusCode >= 500 ? 'server_error' : 'client_error';
         trackApiError(route, errorType, status, userType);
       }
 
       // Track feature usage for authenticated users
-      if ((req as any).user && res.statusCode < 400) {
+      if ((req as Request & { user?: unknown }).user && res.statusCode < 400) {
         const featureName = getFeatureNameFromRoute(route, method);
         if (featureName) {
           trackFeatureUsage(featureName, 'authenticated');

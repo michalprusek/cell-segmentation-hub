@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useLanguage } from '@/contexts/exports';
-import apiClient from '@/lib/api';
+// import apiClient from '@/lib/api';
 import { Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {

@@ -7,7 +7,7 @@ interface SessionData {
   email: string;
   createdAt: Date;
   expiresAt: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 interface RefreshToken {
@@ -27,7 +27,7 @@ class SessionService {
   /**
    * Create a new session
    */
-  async createSession(userId: number, email: string, metadata?: Record<string, any>): Promise<string | null> {
+  async createSession(userId: number, email: string, metadata?: Record<string, unknown>): Promise<string | null> {
     try {
       const sessionId = this.generateSessionId();
       const now = new Date();
@@ -328,7 +328,7 @@ class SessionService {
               await client.del(key);
               cleanedSessions++;
             }
-          } catch (e) {
+          } catch (_e) {
             // Invalid data, delete it
             await client.del(key);
             cleanedSessions++;
@@ -346,7 +346,7 @@ class SessionService {
               await client.del(key);
               cleanedTokens++;
             }
-          } catch (e) {
+          } catch (_e) {
             // Invalid data, delete it
             await client.del(key);
             cleanedTokens++;

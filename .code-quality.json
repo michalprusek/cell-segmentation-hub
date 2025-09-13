@@ -1,0 +1,95 @@
+{
+  "rules": {
+    "complexity": {
+      "maxCyclomaticComplexity": 10,
+      "maxCognitiveComplexity": 15,
+      "maxLinesPerFunction": 50,
+      "maxLinesPerFile": 300,
+      "maxParametersPerFunction": 4,
+      "maxNestingDepth": 4
+    },
+    "performance": {
+      "avoidNestedLoops": true,
+      "preferMapOverForEach": true,
+      "avoidSynchronousFileOperations": true,
+      "memoizeExpensiveOperations": true,
+      "maxArrayLength": 10000,
+      "warnOnLargeStateObjects": true
+    },
+    "security": {
+      "noEval": true,
+      "noDangerouslySetInnerHTML": true,
+      "noHardcodedCredentials": true,
+      "enforceHTTPS": true,
+      "validateUserInput": true,
+      "usePreparedStatements": true,
+      "enforceCSP": true,
+      "preventXSS": true,
+      "preventSQLInjection": true
+    },
+    "react": {
+      "enforceHooksRules": true,
+      "noDirectStateManipulation": true,
+      "preferFunctionalComponents": true,
+      "enforceKeyProp": true,
+      "avoidIndexAsKey": true,
+      "memoizeExpensiveComponents": true,
+      "maxPropsPerComponent": 7,
+      "enforcePropsValidation": true
+    },
+    "typescript": {
+      "noImplicitAny": true,
+      "strictNullChecks": true,
+      "noUnusedParameters": true,
+      "noUnusedLocals": true,
+      "noImplicitReturns": true,
+      "noFallthroughCasesInSwitch": true,
+      "exactOptionalPropertyTypes": true,
+      "noUncheckedIndexedAccess": true
+    },
+    "testing": {
+      "minCoverage": {
+        "statements": 80,
+        "branches": 75,
+        "functions": 80,
+        "lines": 80
+      },
+      "requireTestsForNewFiles": true,
+      "enforceTestNamingConvention": true,
+      "maxTestFileSize": 500,
+      "preferIntegrationTests": false
+    },
+    "accessibility": {
+      "enforceAltText": true,
+      "enforceAriaLabels": true,
+      "enforceSemanticHTML": true,
+      "enforceKeyboardNavigation": true,
+      "enforceColorContrast": true,
+      "maxTabIndex": 0
+    },
+    "database": {
+      "enforceIndexes": true,
+      "avoidSelectStar": true,
+      "useTransactions": true,
+      "limitQueryComplexity": true,
+      "enforceConnectionPooling": true,
+      "maxQueryTime": 5000
+    },
+    "dependencies": {
+      "checkForOutdated": true,
+      "checkForVulnerabilities": true,
+      "preferPeerDependencies": true,
+      "noDuplicateDependencies": true,
+      "checkLicenseCompatibility": true,
+      "maxBundleSize": 5000000
+    }
+  },
+  "thresholds": {
+    "duplicateCode": 3,
+    "codeSmells": 0,
+    "bugs": 0,
+    "vulnerabilities": 0,
+    "technicalDebt": "1h",
+    "maintainabilityRating": "A"
+  }
+}

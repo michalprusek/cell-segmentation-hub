@@ -28,7 +28,7 @@ function deriveWebSocketUrl(httpUrl: string): string {
     const url = new URL(httpUrl);
     url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
     return url.toString();
-  } catch (error) {
+  } catch (_error) {
     // Fallback for invalid URLs - simple string replacement
     return httpUrl.replace(/^https?:/, match =>
       match === 'https:' ? 'wss:' : 'ws:'

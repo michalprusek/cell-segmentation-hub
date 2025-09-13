@@ -619,7 +619,7 @@ test.describe('Critical User Flows - Comprehensive', () => {
         await page.waitForTimeout(100);
 
         // Simulate pinch zoom with proper touch events
-        await page.evaluate(boxCoords => {
+        await page.evaluate(_boxCoords => {
           const canvas = document.querySelector('canvas');
           if (!canvas) return;
 

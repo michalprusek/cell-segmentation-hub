@@ -2,7 +2,7 @@ import React from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { ImagePlus, FileX, CheckCircle, X } from 'lucide-react';
+import { ImagePlus, FileX, CheckCircle, X, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 
 export interface FileWithPreview extends File {
@@ -15,19 +15,34 @@ export interface FileWithPreview extends File {
 interface FileListProps {
   files: FileWithPreview[];
   uploadProgress: number;
+  isUploading?: boolean;
   onRemoveFile: (file: FileWithPreview) => void;
 }
 
-const FileList = ({ files, uploadProgress, onRemoveFile }: FileListProps) => {
+const FileList = ({
+  files,
+  uploadProgress,
+  isUploading = false,
+  onRemoveFile,
+}: FileListProps) => {
   const { t } = useLanguage();
 
   if (files.length === 0) return null;
 
   // Helper function to format file size
-  const formatFileSize = (sizeInBytes: number): string => {
-    if (sizeInBytes === 0) return '0 KB';
+  const formatFileSize = (file: FileWithPreview): string => {
+    // Try multiple sources for file size
+    let sizeInBytes: number;
 
-    if (isNaN(sizeInBytes)) return 'Unknown size';
+    if (typeof file.size === 'number' && !isNaN(file.size)) {
+      sizeInBytes = file.size;
+    } else if (file instanceof File && typeof file.size === 'number') {
+      sizeInBytes = file.size;
+    } else {
+      return 'Unknown size';
+    }
+
+    if (sizeInBytes === 0) return '0 KB';
 
     if (sizeInBytes < 1024) {
       return `${sizeInBytes} B`;
@@ -41,9 +56,14 @@ const FileList = ({ files, uploadProgress, onRemoveFile }: FileListProps) => {
   return (
     <div className="space-y-4 bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium dark:text-white">
-          {t('images.uploadProgress')}
-        </h3>
+        <div className="flex items-center gap-2">
+          {isUploading && (
+            <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+          )}
+          <h3 className="text-sm font-medium dark:text-white">
+            {t('images.uploadProgress')}
+          </h3>
+        </div>
         <span className="text-sm text-gray-500 dark:text-gray-400">
           {uploadProgress}%
         </span>
@@ -81,7 +101,7 @@ const FileList = ({ files, uploadProgress, onRemoveFile }: FileListProps) => {
                   </p>
                   <div className="flex items-center gap-2">
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatFileSize(file.size)}
+                      {formatFileSize(file)}
                     </p>
                     {file.status === 'uploading' &&
                       file.uploadProgress !== undefined && (

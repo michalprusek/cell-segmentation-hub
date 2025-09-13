@@ -8,15 +8,13 @@ import {
   loginSchema,
   registerSchema,
   resetPasswordRequestSchema,
-  resetPasswordConfirmSchema
-} from '../../auth/validation';
-import type {
-  LoginData,
-  RegisterData,
-  ResetPasswordRequestData,
-  ResetPasswordConfirmData,
-  ChangePasswordData,
-  RefreshTokenData
+  resetPasswordConfirmSchema,
+  type LoginData,
+  type RegisterData,
+  type ResetPasswordRequestData,
+  type ResetPasswordConfirmData,
+  type ChangePasswordData,
+  type RefreshTokenData
 } from '../../auth/validation';
 
 /**
@@ -780,7 +778,7 @@ export const uploadAvatar = asyncHandler(async (req: Request, res: Response) => 
       } else {
         return ResponseHelper.validationError(res, 'Invalid cropData: expected object with x,y,width,height');
       }
-    } catch (parseError) {
+    } catch (_parseError) {
       return ResponseHelper.validationError(res, 'Invalid cropData JSON');
     }
   }

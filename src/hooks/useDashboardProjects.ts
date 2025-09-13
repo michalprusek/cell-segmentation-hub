@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 import { useLanguage } from '@/contexts/useLanguage';
+import { useAuth } from '@/contexts/useAuth';
+import { useNavigate } from 'react-router-dom';
 import { useDebounce } from '@/hooks/useDebounce';
 import config from '@/lib/config';
 
@@ -28,6 +30,8 @@ export const useDashboardProjects = ({
   userEmail,
 }: DashboardProjectsOptions) => {
   const { t } = useLanguage();
+  const { signOut } = useAuth();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
@@ -318,6 +322,21 @@ export const useDashboardProjects = ({
         if (controller.signal.aborted) return;
 
         logger.error('Error fetching projects:', error);
+
+        // Check for missing token error
+        if (
+          error &&
+          typeof error === 'object' &&
+          'response' in error &&
+          'data' in (error as any).response &&
+          (error as any).response?.data?.message === 'Chybí autentizační token'
+        ) {
+          // Missing authentication token - sign out and redirect
+          await signOut();
+          navigate('/sign-in');
+          return;
+        }
+
         const errorMessage = getLocalizedErrorMessage(
           error,
           t,

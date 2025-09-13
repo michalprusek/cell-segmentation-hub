@@ -27,7 +27,7 @@ export async function shutdownTracing(): Promise<void> {
  * Get active span
  * Placeholder implementation
  */
-export function getActiveSpan(): any {
+export function getActiveSpan(): unknown {
   return null;
 }
 
@@ -35,7 +35,7 @@ export function getActiveSpan(): any {
  * Create a new span
  * Placeholder implementation
  */
-export function createSpan(name: string, options?: any): any {
+export function createSpan(_name: string, _options?: Record<string, unknown>): Record<string, () => void> {
   return {
     setAttribute: () => {},
     setStatus: () => {},
@@ -48,7 +48,7 @@ export function createSpan(name: string, options?: any): any {
  * Set span attributes
  * Placeholder implementation
  */
-export function setSpanAttributes(attributes: Record<string, any>): void {
+export function setSpanAttributes(_attributes: Record<string, unknown>): void {
   // No-op in placeholder
 }
 

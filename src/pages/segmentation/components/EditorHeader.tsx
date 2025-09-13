@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/useLanguage';
 import { motion } from 'framer-motion';
@@ -53,30 +53,63 @@ const EditorHeader = ({
   const navigate = useNavigate();
   const { t } = useLanguage();
 
-  const handleBackClick = async () => {
-    // Autosave before leaving the editor
+  const handleBackClick = () => {
+    // Use startTransition to ensure navigation works with React 18 concurrent features
+    // This fixes navigation freezing issues after segmentation
+    startTransition(() => {
+      // Navigate immediately - don't block UI
+      navigate(`/project/${projectId}`);
+    });
+
+    // Fire background save if needed
     if (hasUnsavedChanges && onSave) {
-      try {
-        await onSave();
-      } catch (error) {
-        logger.error('Failed to autosave before navigation', error);
-        // Continue navigation even if save fails
-      }
+      // Create timeout promise (3 seconds)
+      const timeoutPromise = new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error('Save timeout')), 3000)
+      );
+
+      // Race between save and timeout
+      Promise.race([onSave(), timeoutPromise]).catch(error => {
+        // Log error but don't block navigation
+        logger.warn(
+          'Background autosave failed or timed out during navigation',
+          {
+            error: error.message,
+            destination: 'project',
+            projectId,
+          }
+        );
+      });
     }
-    navigate(`/project/${projectId}`);
   };
 
-  const handleHomeClick = async () => {
-    // Autosave before leaving the editor
+  const handleHomeClick = () => {
+    // Use startTransition to ensure navigation works with React 18 concurrent features
+    // This fixes navigation freezing issues after segmentation
+    startTransition(() => {
+      // Navigate immediately - don't block UI
+      navigate('/dashboard');
+    });
+
+    // Fire background save if needed
     if (hasUnsavedChanges && onSave) {
-      try {
-        await onSave();
-      } catch (error) {
-        logger.error('Failed to autosave before navigation', error);
-        // Continue navigation even if save fails
-      }
+      // Create timeout promise (3 seconds)
+      const timeoutPromise = new Promise<void>((_, reject) =>
+        setTimeout(() => reject(new Error('Save timeout')), 3000)
+      );
+
+      // Race between save and timeout
+      Promise.race([onSave(), timeoutPromise]).catch(error => {
+        // Log error but don't block navigation
+        logger.warn(
+          'Background autosave failed or timed out during navigation',
+          {
+            error: error.message,
+            destination: 'dashboard',
+          }
+        );
+      });
     }
-    navigate('/dashboard');
   };
 
   return (

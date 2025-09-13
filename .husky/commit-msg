@@ -1,1 +1,81 @@
+#!/bin/sh
+
+# Commit message format validation for SpheroSeg project
+# Enforces conventional commit format
+
+# Colors for output
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m' # No Color
+
+# Get the commit message
+COMMIT_MSG_FILE=$1
+COMMIT_MSG=$(cat "$COMMIT_MSG_FILE")
+
+# Skip merge commits
+if echo "$COMMIT_MSG" | grep -q "^Merge"; then
+    exit 0
+fi
+
+# Define valid commit types
+VALID_TYPES="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
+
+# Check commit message format
+# Format: type(scope): description
+# or: type: description
+PATTERN="^($VALID_TYPES)(\([a-z0-9-]+\))?: .{1,100}$"
+
+if ! echo "$COMMIT_MSG" | grep -qE "$PATTERN"; then
+    echo -e "${RED}❌ Invalid commit message format!${NC}"
+    echo ""
+    echo "Commit message: '$COMMIT_MSG'"
+    echo ""
+    echo -e "${YELLOW}Expected format:${NC}"
+    echo "  type(scope): description"
+    echo "  OR"
+    echo "  type: description"
+    echo ""
+    echo -e "${YELLOW}Valid types:${NC}"
+    echo "  feat:     New feature"
+    echo "  fix:      Bug fix"
+    echo "  docs:     Documentation changes"
+    echo "  style:    Code style changes (formatting, semicolons, etc)"
+    echo "  refactor: Code refactoring"
+    echo "  perf:     Performance improvements"
+    echo "  test:     Adding or updating tests"
+    echo "  build:    Build system or dependencies"
+    echo "  ci:       CI/CD configuration"
+    echo "  chore:    Other changes (maintenance, etc)"
+    echo "  revert:   Revert a previous commit"
+    echo ""
+    echo -e "${YELLOW}Examples:${NC}"
+    echo "  feat: add user authentication"
+    echo "  fix(api): resolve database connection timeout"
+    echo "  docs: update README with installation instructions"
+    echo "  refactor(frontend): simplify state management"
+    echo ""
+    echo -e "${YELLOW}Rules:${NC}"
+    echo "  - Use present tense ('add' not 'added')"
+    echo "  - Use lowercase"
+    echo "  - No period at the end"
+    echo "  - Keep under 100 characters"
+    echo ""
+    exit 1
+fi
+
+# Check commit message length
+FIRST_LINE=$(echo "$COMMIT_MSG" | head -n1)
+if [ ${#FIRST_LINE} -gt 100 ]; then
+    echo -e "${YELLOW}⚠️  Warning: Commit message is too long (${#FIRST_LINE} chars, max 100)${NC}"
+    echo "Consider making it more concise"
+fi
+
+# Check for imperative mood (simple heuristic)
+DESCRIPTION=$(echo "$FIRST_LINE" | sed -E "s/^($VALID_TYPES)(\([a-z0-9-]+\))?: //")
+if echo "$DESCRIPTION" | grep -qE "^(added|fixed|updated|removed|changed)"; then
+    echo -e "${YELLOW}⚠️  Hint: Use imperative mood ('add' instead of 'added')${NC}"
+fi
+
+echo -e "${GREEN}✅ Commit message format is valid${NC}"
 exit 0

@@ -3,100 +3,120 @@ import { useState, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/useLanguage';
+import { useAuth } from '@/contexts/useAuth';
 import apiClient, { SegmentationResultData } from '@/lib/api';
-import type { SegmentationData } from '@/types';
-import type { ProjectImage } from '@/types';
-import { getErrorMessage } from '@/types';
+import {
+  getErrorMessage,
+  type SegmentationData,
+  type ProjectImage,
+} from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 
 // Utility function to enrich images with segmentation results
+// Now supports pagination to only fetch data for visible images
 const enrichImagesWithSegmentation = async (
-  images: ProjectImage[]
+  images: ProjectImage[],
+  options?: {
+    startIndex?: number;
+    endIndex?: number;
+    fetchAll?: boolean;
+  }
 ): Promise<ProjectImage[]> => {
-  // Filter images that have completed segmentation
-  const completedImages = images.filter(img => {
-    const status = img.segmentationStatus;
-    return status === 'completed' || status === 'segmented';
-  });
+  const {
+    startIndex = 0,
+    endIndex = images.length,
+    fetchAll = false,
+  } = options || {};
+
+  // Filter images that need segmentation data
+  const imagesToEnrich = fetchAll
+    ? images.filter(img => {
+        const status = img.segmentationStatus;
+        return status === 'completed' || status === 'segmented';
+      })
+    : images
+        .slice(startIndex, endIndex) // Only visible images
+        .filter(img => {
+          const status = img.segmentationStatus;
+          return status === 'completed' || status === 'segmented';
+        });
 
   logger.debug(
-    `📊 Enriching images with segmentation data: ${images.length} total images, ${completedImages.length} completed`
-  );
-  logger.debug(
-    'Image statuses:',
-    images.map(img => ({
-      id: img.id.slice(0, 8),
-      status: img.segmentationStatus,
-    }))
+    `📊 Enriching images with segmentation data: ${images.length} total images, ${imagesToEnrich.length} to enrich (${fetchAll ? 'all' : `visible ${startIndex}-${endIndex}`})`
   );
 
-  if (completedImages.length === 0) {
+  if (imagesToEnrich.length === 0) {
     logger.debug('ℹ️ No completed images found for segmentation enrichment');
     return images;
   }
 
   try {
-    // Fetch segmentation results for completed images in parallel
     logger.debug(
-      `🔄 Fetching segmentation data for ${completedImages.length} images...`
+      `🔄 Fetching segmentation data for ${imagesToEnrich.length} images using batch API...`
     );
-    const segmentationPromises = completedImages.map(async (img, index) => {
-      try {
-        logger.debug(
-          `📥 Fetching segmentation for image ${index + 1}/${completedImages.length} (ID: ${img.id.slice(0, 8)}...)`
-        );
-        const segmentationData = await apiClient.getSegmentationResults(img.id);
 
+    // Use the new batch API endpoint for massive performance improvement
+    // This reduces 640 individual API calls to just 1-2 batch calls
+    const imageIds = imagesToEnrich.map(img => img.id);
+    const batchResults = await apiClient.getBatchSegmentationResults(imageIds);
+
+    // Defensive check for batch results
+    if (!batchResults || typeof batchResults !== 'object') {
+      logger.error('Invalid batch results received from API:', batchResults);
+      throw new Error(
+        'Failed to batch fetch segmentation results: Invalid response format'
+      );
+    }
+
+    logger.debug(
+      `✅ Batch fetch complete: received ${Object.keys(batchResults).length} results`
+    );
+
+    // Transform batch results into the expected format
+    const segmentationResults = [];
+
+    for (const img of imagesToEnrich) {
+      const segmentationData = batchResults[img.id];
+
+      // Check if segmentation data exists and is valid
+      if (
+        segmentationData &&
+        typeof segmentationData === 'object' &&
+        segmentationData.polygons
+      ) {
         logger.debug(
-          `✅ Successfully fetched segmentation for ${img.id.slice(0, 8)}: ${segmentationData?.polygons?.length || 0} polygons, ${segmentationData?.imageWidth || 'unknown'}x${segmentationData?.imageHeight || 'unknown'}`,
-          {
-            segmentationData,
-          }
+          `✅ Segmentation data for ${img.id.slice(0, 8)}: ${segmentationData.polygons?.length || 0} polygons`
         );
 
-        return {
+        segmentationResults.push({
           imageId: img.id,
-          result: segmentationData
-            ? {
-                polygons: segmentationData.polygons || [],
-                imageWidth: segmentationData.imageWidth || img.width || null,
-                imageHeight: segmentationData.imageHeight || img.height || null,
-                modelUsed: segmentationData.modelUsed,
-                confidence: segmentationData.confidence,
-                processingTime: segmentationData.processingTime,
-                levelOfDetail: 'medium', // Default level of detail for thumbnails
-                polygonCount: segmentationData.polygons?.length || 0,
-                pointCount:
-                  segmentationData.polygons?.reduce(
-                    (sum, p) => sum + p.points.length,
-                    0
-                  ) || 0,
-                compressionRatio: 1.0, // Default compression ratio
-              }
-            : null,
-        };
-      } catch (error) {
-        // Check if it's a 404 error (no segmentation found)
-        if (
-          error &&
-          typeof error === 'object' &&
-          'response' in error &&
-          (error as { response?: { status?: number } }).response?.status === 404
-        ) {
-          logger.debug(
-            `ℹ️ No segmentation found for image ${img.id.slice(0, 8)} (404) - this is normal for images pending segmentation`
-          );
-        } else {
-          logger.error(
-            `❌ Failed to fetch segmentation results for image ${img.id.slice(0, 8)}:`,
-            error
-          );
-        }
-        return null;
+          result: {
+            polygons: segmentationData.polygons || [],
+            imageWidth: segmentationData.imageWidth || img.width || null,
+            imageHeight: segmentationData.imageHeight || img.height || null,
+            modelUsed: segmentationData.modelUsed,
+            confidence: segmentationData.confidence,
+            processingTime: segmentationData.processingTime,
+            levelOfDetail: 'medium',
+            polygonCount: segmentationData.polygons?.length || 0,
+            pointCount:
+              segmentationData.polygons?.reduce(
+                (sum, p) => sum + p.points.length,
+                0
+              ) || 0,
+            compressionRatio: 1.0,
+          },
+        });
+      } else {
+        logger.debug(
+          `ℹ️ No segmentation found for image ${img.id.slice(0, 8)}`
+        );
+        segmentationResults.push({
+          imageId: img.id,
+          result: null,
+        });
       }
-    });
-
-    const segmentationResults = await Promise.all(segmentationPromises);
+    }
 
     // Create a map of imageId to segmentation results
     const segmentationMap = new Map();
@@ -109,7 +129,7 @@ const enrichImagesWithSegmentation = async (
     });
 
     logger.debug(
-      `📈 Successfully enriched ${successfulEnrichments} out of ${completedImages.length} images with segmentation data`
+      `📈 Successfully enriched ${successfulEnrichments} out of ${imagesToEnrich.length} images with segmentation data`
     );
 
     // Enrich images with segmentation results
@@ -136,9 +156,14 @@ const enrichImagesWithSegmentation = async (
 
 export const useProjectData = (
   projectId: string | undefined,
-  userId: string | undefined
+  userId: string | undefined,
+  options?: {
+    fetchAll?: boolean;
+    visibleRange?: { start: number; end: number };
+  }
 ) => {
   const { t } = useLanguage();
+  const { signOut } = useAuth();
   const navigate = useNavigate();
   const [projectTitle, setProjectTitle] = useState<string>('');
   const [images, setImages] = useState<ProjectImage[]>([]);
@@ -150,6 +175,9 @@ export const useProjectData = (
   // Store navigate function in ref to avoid dependency issues
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
+
+  // Store images without segmentation data
+  const [imagesBase, setImagesBase] = useState<ProjectImage[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -180,10 +208,12 @@ export const useProjectData = (
         // Always fetch all images to ensure proper pagination on frontend
         while (hasMore) {
           try {
-            const imagesResponse = await apiClient.getProjectImages(projectId, {
-              limit,
-              page,
-            });
+            const imagesResponse =
+              await apiClient.getProjectImagesWithThumbnails(projectId, {
+                limit,
+                page,
+                lod: 'low',
+              });
 
             if (
               !imagesResponse.images ||
@@ -196,7 +226,10 @@ export const useProjectData = (
             allImages = [...allImages, ...imagesResponse.images];
 
             // Check if we've fetched all images
-            hasMore = page * limit < imagesResponse.total;
+            // The new endpoint returns pagination.total
+            const totalImages =
+              imagesResponse.pagination?.total || imagesResponse.total || 0;
+            hasMore = page * limit < totalImages;
             page++;
 
             // Safety limit to prevent infinite loops (max 2000 images)
@@ -229,21 +262,46 @@ export const useProjectData = (
             width: img.width,
             height: img.height,
             thumbnail_url: img.thumbnail_url,
+            segmentationThumbnailUrl: img.segmentationThumbnailUrl,
+            segmentationThumbnailPath: img.segmentationThumbnailPath,
             createdAt: new Date(img.created_at || img.createdAt),
             updatedAt: new Date(img.updated_at || img.updatedAt),
             segmentationStatus: segmentationStatus,
             // Will be populated by enriching with segmentation results
-            segmentationResult: undefined,
+            segmentationResult: img.segmentationResult || undefined,
           };
         });
 
-        // Enrich images with segmentation results for completed images
-        const enrichedImages =
-          await enrichImagesWithSegmentation(formattedImages);
+        // Store base images
+        setImagesBase(formattedImages);
+
+        // Initial enrichment for visible range only
+        const enrichedImages = await enrichImagesWithSegmentation(
+          formattedImages,
+          {
+            fetchAll: options?.fetchAll || false,
+            startIndex: options?.visibleRange?.start,
+            endIndex: options?.visibleRange?.end,
+          }
+        );
 
         setImages(enrichedImages);
       } catch (error: unknown) {
         logger.error('Error fetching project:', error);
+
+        // Check for missing token error
+        if (
+          error &&
+          typeof error === 'object' &&
+          'response' in error &&
+          'data' in (error as any).response &&
+          (error as any).response?.data?.message === 'Chybí autentizační token'
+        ) {
+          // Missing authentication token - sign out and redirect
+          await signOut();
+          navigateRef.current('/sign-in');
+          return;
+        }
 
         if (
           error &&
@@ -269,10 +327,44 @@ export const useProjectData = (
     fetchData();
   }, [projectId, userId, t]);
 
+  // Update segmentation data when visible range changes
+  useEffect(() => {
+    if (!imagesBase.length || loading) return;
+    if (!options?.visibleRange) return;
+
+    const enrichVisibleImages = async () => {
+      logger.debug('Enriching visible images', {
+        start: options.visibleRange?.start,
+        end: options.visibleRange?.end,
+      });
+
+      const enrichedImages = await enrichImagesWithSegmentation(imagesBase, {
+        fetchAll: false,
+        startIndex: options.visibleRange.start,
+        endIndex: options.visibleRange.end,
+      });
+
+      setImages(enrichedImages);
+    };
+
+    enrichVisibleImages();
+  }, [
+    options?.visibleRange?.start,
+    options?.visibleRange?.end,
+    imagesBase,
+    loading,
+  ]);
+
   const updateImages = (
     newImages: ProjectImage[] | ((prev: ProjectImage[]) => ProjectImage[])
   ): void => {
     setImages(newImages);
+    // Also update base images to maintain consistency
+    setImagesBase(prevBase => {
+      const updatedImages =
+        typeof newImages === 'function' ? newImages(prevBase) : newImages;
+      return updatedImages;
+    });
   };
 
   // Function to refresh segmentation data for a specific image with deduplication
@@ -293,6 +385,14 @@ export const useProjectData = (
       );
 
       const segmentationData = await apiClient.getSegmentationResults(imageId);
+
+      // Check if segmentation data exists before accessing properties
+      if (!segmentationData) {
+        logger.debug(
+          `ℹ️ No segmentation data available for image ${imageId.slice(0, 8)} - API returned null`
+        );
+        return; // Exit early if no data
+      }
 
       logger.debug(
         `✅ Successfully refreshed segmentation for ${imageId.slice(0, 8)}: ${segmentationData.polygons?.length || 0} polygons, ${segmentationData.imageWidth}x${segmentationData.imageHeight}`

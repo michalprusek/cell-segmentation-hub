@@ -1,4 +1,4 @@
-import type { Polygon } from '@/lib/segmentation';
+import type { Polygon as _Polygon } from '@/lib/segmentation';
 
 // Auth types
 export interface User {
@@ -58,7 +58,7 @@ export interface PolygonMetrics {
 export function getErrorMessage(
   error: unknown,
   t?: (key: string) => string,
-  context?: string
+  _context?: string
 ): string {
   // Extract status code if available
   let statusCode: number | undefined;
@@ -453,7 +453,8 @@ export interface ProjectImage {
   segmentationResult?: SegmentationData;
   project_id?: string;
   thumbnail_url?: string;
-  segmentationThumbnailPath?: string; // New field for segmentation thumbnail
+  segmentationThumbnailPath?: string; // New field for segmentation thumbnail (deprecated)
+  segmentationThumbnailUrl?: string; // New field for segmentation thumbnail URL
   image_url?: string; // Alternative field for backward compatibility
   status?: string;
   created_at?: string; // Alternative date format

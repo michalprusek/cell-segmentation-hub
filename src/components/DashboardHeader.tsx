@@ -9,8 +9,8 @@ import Logo from '@/components/header/Logo';
 import UserProfileDropdown from '@/components/header/UserProfileDropdown';
 import MobileMenu from '@/components/header/MobileMenu';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
-import api from '@/lib/api';
-import { mlServiceUrl } from '@/lib/config';
+// api unused - available for future use
+// mlServiceUrl unused - available for future use
 import { logger } from '@/lib/logger';
 import { fetchWithRetry } from '@/lib/httpUtils';
 
@@ -20,7 +20,8 @@ const DashboardHeader = () => {
     'idle' | 'processing' | 'error'
   >('idle');
   const { user } = useAuth();
-  const { selectedModel, getSelectedModelInfo } = useLocalizedModels();
+  const { selectedModel: _selectedModel, getSelectedModelInfo } =
+    useLocalizedModels();
   const { t } = useLanguage();
   const location = useLocation();
   const navigate = useNavigate();
@@ -59,7 +60,7 @@ const DashboardHeader = () => {
         const mlServiceUrl =
           import.meta.env.VITE_ML_SERVICE_URL || 'http://localhost:3001/api/ml';
         const response = await fetchWithRetry(
-          `${mlServiceUrl}/status`,
+          `${mlServiceUrl}/health`,
           {
             method: 'GET',
             headers: {
@@ -77,23 +78,16 @@ const DashboardHeader = () => {
           const contentType = response.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
             const data = await response.json();
-            // Check if we got a successful response from the backend
-            if (data.success && data.data) {
-              const status = data.data.service;
-              if (status === 'processing') {
-                setMlServiceStatus('processing');
-              } else if (status === 'online') {
-                setMlServiceStatus('idle');
-              } else {
-                setMlServiceStatus('error');
-              }
-            } else {
+            // Check if we got a successful response from ML health endpoint
+            if (data.status === 'healthy') {
               setMlServiceStatus('idle');
+            } else {
+              setMlServiceStatus('error');
             }
           } else {
             // Received HTML or other non-JSON content
             logger.warn(
-              'ML service status endpoint returned non-JSON response'
+              'ML service health endpoint returned non-JSON response'
             );
             setMlServiceStatus('error');
           }

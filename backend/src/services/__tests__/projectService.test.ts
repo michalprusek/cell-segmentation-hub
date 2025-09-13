@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
-import type { PrismaClient } from '@prisma/client'
 
 // Create a comprehensive prisma mock first
 type MockPrismaClient = {
@@ -439,7 +438,7 @@ describe('ProjectService', () => {
 
       expect(result).toBeDefined()
       expect(result).not.toBeNull()
-      expect(result!.project).toEqual({
+      expect(result?.project).toEqual({
         id: projectId,
         title: 'Test Project',
         createdAt: expect.any(Date),

@@ -113,4 +113,29 @@ router.post(
   segmentationController.batchSegment
 );
 
+/**
+ * @route POST /api/segmentation/batch/results
+ * @description Batch fetch segmentation results for multiple images (Performance optimization)
+ * @access Private
+ */
+router.post(
+  '/batch/results',
+  [
+    body('imageIds')
+      .isArray({ min: 1, max: 1000 })
+      .withMessage('Must provide 1-1000 image IDs')
+      .custom((imageIds) => {
+        if (Array.isArray(imageIds) && new Set(imageIds).size !== imageIds.length) {
+          throw new Error('Duplicate image IDs are not allowed');
+        }
+        return true;
+      }),
+    body('imageIds.*')
+      .isUUID()
+      .withMessage('All image IDs must be valid UUIDs')
+  ],
+  handleValidation,
+  segmentationController.batchGetSegmentationResults
+);
+
 export { router as segmentationRoutes };

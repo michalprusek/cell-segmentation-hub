@@ -1,7 +1,24 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// Import React and configure for testing
+import _React from 'react';
+
+// Force React to use development mode features in tests
+if (typeof window !== 'undefined') {
+  // @ts-expect-error - Internal React flag
+  window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+    ...window.__REACT_DEVTOOLS_GLOBAL_HOOK__,
+    isDisabled: false,
+    supportsFiber: true,
+    inject: vi.fn(),
+    onCommitFiberRoot: vi.fn(),
+    onCommitFiberUnmount: vi.fn(),
+  };
+}
+
 // Set required environment variables for tests
+process.env.NODE_ENV = 'test';
 process.env.VITE_API_URL = 'http://localhost:3001/api';
 process.env.VITE_ML_SERVICE_URL = 'http://localhost:8000';
 process.env.VITE_WS_URL = 'ws://localhost:3001';

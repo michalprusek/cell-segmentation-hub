@@ -2,10 +2,11 @@ import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
+import { Suspense } from 'react';
+// lazy import removed - using createLazyComponent instead
 import {
   createLazyComponent,
-  LazyWrapper,
+  // LazyWrapper unused - available for future use
 } from '@/components/LazyComponentWrapper';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
@@ -26,6 +27,10 @@ const SignUp = createLazyComponent(() => import('./pages/SignUp'), 'SignUp');
 const ForgotPassword = createLazyComponent(
   () => import('./pages/ForgotPassword'),
   'ForgotPassword'
+);
+const ResetPassword = createLazyComponent(
+  () => import('./pages/ResetPassword'),
+  'ResetPassword'
 );
 const Dashboard = createLazyComponent(
   () => import('./pages/Dashboard'),
@@ -144,6 +149,16 @@ const App = () => (
                                 fallback={<PageLoadingFallback type="form" />}
                               >
                                 <ForgotPassword />
+                              </Suspense>
+                            }
+                          />
+                          <Route
+                            path="/reset-password"
+                            element={
+                              <Suspense
+                                fallback={<PageLoadingFallback type="form" />}
+                              >
+                                <ResetPassword />
                               </Suspense>
                             }
                           />

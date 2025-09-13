@@ -87,7 +87,7 @@ describe('WebSocketManager', () => {
     try {
       wsManager.disconnect();
       WebSocketManager.cleanup();
-    } catch (error) {
+    } catch (_error) {
       // Ignore cleanup errors
     }
     vi.clearAllMocks();
@@ -460,7 +460,7 @@ describe('WebSocketManager', () => {
       // Clean up connection
       try {
         wsManager.disconnect();
-      } catch (error) {
+      } catch (_error) {
         // Ignore cleanup errors
       }
     });

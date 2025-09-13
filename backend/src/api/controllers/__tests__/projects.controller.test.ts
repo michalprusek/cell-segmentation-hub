@@ -40,7 +40,7 @@ describe('ProjectController', () => {
     app.use(express.json())
     
     // Mock auth middleware to add user to request
-    mockAuthMiddleware.mockImplementation(async (req: any, res: any, next: any) => {
+    mockAuthMiddleware.mockImplementation(async (req: express.Request & {user?: Record<string, unknown>}, res: express.Response, next: express.NextFunction) => {
       req.user = mockUser
       next()
     })
@@ -361,7 +361,7 @@ MockProjectService.deleteProject.mockRejectedValueOnce(
   describe('Authorization checks', () => {
     it('should require authentication for GET /projects', async () => {
       // Mock auth middleware to return unauthorized
-      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, _next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -371,7 +371,7 @@ MockProjectService.deleteProject.mockRejectedValueOnce(
     })
 
     it('should require authentication for POST /projects', async () => {
-      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, _next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -382,7 +382,7 @@ MockProjectService.deleteProject.mockRejectedValueOnce(
     })
 
     it('should require authentication for GET /projects/:id', async () => {
-      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, _next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -392,7 +392,7 @@ MockProjectService.deleteProject.mockRejectedValueOnce(
     })
 
     it('should require authentication for PUT /projects/:id', async () => {
-      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, _next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 
@@ -403,7 +403,7 @@ MockProjectService.deleteProject.mockRejectedValueOnce(
     })
 
     it('should require authentication for DELETE /projects/:id', async () => {
-      mockAuthMiddleware.mockImplementationOnce(async (req, res, next) => {
+      mockAuthMiddleware.mockImplementationOnce(async (req, res, _next) => {
         res.status(401).json({ success: false, message: 'Unauthorized' })
       })
 

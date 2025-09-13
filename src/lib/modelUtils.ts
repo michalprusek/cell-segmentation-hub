@@ -1,4 +1,22 @@
-import { ModelType, ModelInfo } from '@/contexts/ModelContext';
+// Define types locally to avoid circular dependency
+export type ModelType = 'hrnet' | 'cbam_resunet' | 'unet_spherohq';
+
+export interface ModelPerformance {
+  avgTimePerImage: number; // seconds
+  throughput: number; // images per second
+  p95Latency: number; // seconds
+  batchSize: number; // optimal batch size
+}
+
+export interface ModelInfo {
+  id: ModelType;
+  name: string;
+  displayName: string;
+  description: string;
+  size: 'small' | 'medium' | 'large';
+  defaultThreshold: number;
+  performance?: ModelPerformance;
+}
 
 /**
  * Get localized model information using the translation function

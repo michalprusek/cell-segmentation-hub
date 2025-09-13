@@ -22,7 +22,7 @@ export class DatabaseSeeder {
   }
 
   async clearDatabase() {
-    console.log('🗑️ Clearing existing test data...');
+    // console.log('🗑️ Clearing existing test data...');
 
     // Delete in correct order to respect foreign key constraints
     await this.prisma.segmentationResult.deleteMany();
@@ -30,11 +30,11 @@ export class DatabaseSeeder {
     await this.prisma.project.deleteMany();
     await this.prisma.user.deleteMany();
 
-    console.log('✅ Database cleared');
+    // console.log('✅ Database cleared');
   }
 
   async seedUsers() {
-    console.log('👥 Seeding users...');
+    // console.log('👥 Seeding users...');
 
     const users = [];
 
@@ -59,12 +59,12 @@ export class DatabaseSeeder {
       users.push(user);
     }
 
-    console.log(`✅ Created ${users.length} users`);
+    // console.log(`✅ Created ${users.length} users`);
     return users;
   }
 
   async seedProjects() {
-    console.log('📁 Seeding projects...');
+    // console.log('📁 Seeding projects...');
 
     const projects = [];
 
@@ -84,12 +84,12 @@ export class DatabaseSeeder {
       projects.push(project);
     }
 
-    console.log(`✅ Created ${projects.length} projects`);
+    // console.log(`✅ Created ${projects.length} projects`);
     return projects;
   }
 
   async seedProjectImages() {
-    console.log('🖼️ Seeding project images...');
+    // console.log('🖼️ Seeding project images...');
 
     const images = [];
 
@@ -118,12 +118,12 @@ export class DatabaseSeeder {
       images.push(image);
     }
 
-    console.log(`✅ Created ${images.length} project images`);
+    // console.log(`✅ Created ${images.length} project images`);
     return images;
   }
 
   async seedSegmentationResults() {
-    console.log('🎯 Seeding segmentation results...');
+    // console.log('🎯 Seeding segmentation results...');
 
     const results = [];
 
@@ -151,34 +151,29 @@ export class DatabaseSeeder {
       results.push(result);
     }
 
-    console.log(`✅ Created ${results.length} segmentation results`);
+    // console.log(`✅ Created ${results.length} segmentation results`);
     return results;
   }
 
   async seedAll() {
-    console.log('🌱 Starting database seeding...');
+    // console.log('🌱 Starting database seeding...');
 
-    try {
-      await this.clearDatabase();
+    await this.clearDatabase();
 
-      await this.seedUsers();
-      await this.seedProjects();
-      await this.seedProjectImages();
-      await this.seedSegmentationResults();
+    await this.seedUsers();
+    await this.seedProjects();
+    await this.seedProjectImages();
+    await this.seedSegmentationResults();
 
-      console.log('🎉 Database seeding completed successfully!');
+    // console.log('🎉 Database seeding completed successfully!');
 
-      // Print summary
-      const counts = await this.getDatabaseCounts();
-      console.log('\n📊 Database Summary:');
-      console.log(`Users: ${counts.users}`);
-      console.log(`Projects: ${counts.projects}`);
-      console.log(`Images: ${counts.images}`);
-      console.log(`Segmentation Results: ${counts.results}`);
-    } catch (error) {
-      console.error('❌ Error during database seeding:', error);
-      throw error;
-    }
+    // Print summary
+    const _counts = await this.getDatabaseCounts();
+    // console.log('\n📊 Database Summary:');
+    // console.log(`Users: ${counts.users}`);
+    // console.log(`Projects: ${counts.projects}`);
+    // console.log(`Images: ${counts.images}`);
+    // console.log(`Segmentation Results: ${counts.results}`);
   }
 
   async getDatabaseCounts() {
@@ -250,7 +245,7 @@ export class DatabaseSeeder {
 
   async cleanup() {
     await this.clearDatabase();
-    console.log('🧹 Test data cleanup completed');
+    // console.log('🧹 Test data cleanup completed');
   }
 }
 
@@ -335,8 +330,8 @@ if (require.main === module) {
       seeder
         .seedAll()
         .then(() => process.exit(0))
-        .catch(err => {
-          console.error(err);
+        .catch(_err => {
+          //           console.error(_err);
           process.exit(1);
         });
       break;
@@ -345,11 +340,11 @@ if (require.main === module) {
       seeder
         .clearDatabase()
         .then(() => {
-          console.log('✅ Database cleared');
+          // console.log('✅ Database cleared');
           process.exit(0);
         })
-        .catch(err => {
-          console.error(err);
+        .catch(_err => {
+          //           console.error(_err);
           process.exit(1);
         });
       break;
@@ -357,25 +352,25 @@ if (require.main === module) {
     case 'status':
       seeder
         .getDatabaseCounts()
-        .then(counts => {
-          console.log('📊 Database Status:');
-          console.log(`Users: ${counts.users}`);
-          console.log(`Projects: ${counts.projects}`);
-          console.log(`Images: ${counts.images}`);
-          console.log(`Segmentation Results: ${counts.results}`);
+        .then(_counts => {
+          //           console.log('📊 Database Status:');
+          //           console.log(`Users: ${counts.users}`);
+          //           console.log(`Projects: ${counts.projects}`);
+          //           console.log(`Images: ${counts.images}`);
+          //           console.log(`Segmentation Results: ${counts.results}`);
           process.exit(0);
         })
-        .catch(err => {
-          console.error(err);
+        .catch(_err => {
+          //           console.error(_err);
           process.exit(1);
         });
       break;
 
     default:
-      console.log('Usage: tsx database-seed.ts [seed|clear|status]');
-      console.log('  seed   - Seed database with test data');
-      console.log('  clear  - Clear all test data');
-      console.log('  status - Show current database counts');
+      //       console.log('Usage: tsx database-seed.ts [seed|clear|status]');
+      //       console.log('  seed   - Seed database with test data');
+      //       console.log('  clear  - Clear all test data');
+      //       console.log('  status - Show current database counts');
       process.exit(1);
   }
 }

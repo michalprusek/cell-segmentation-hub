@@ -1,7 +1,6 @@
 import { useTheme } from 'next-themes';
-import { Toaster as Sonner } from 'sonner';
+import { Toaster as Sonner, toast } from 'sonner';
 import { X } from 'lucide-react';
-import { toast } from 'sonner';
 import { Button } from './button';
 import { useLanguage } from '@/contexts/exports';
 

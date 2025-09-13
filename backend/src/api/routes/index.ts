@@ -51,6 +51,7 @@ export function setupRoutes(app: Express): void {
   // Registrace routes
   app.use('/api/health', healthRoutes);
   app.use('/api/auth', authRoutes);
+  
   app.use('/api/users', userRoutes);
   app.use('/api/projects', projectRoutes);
   app.use('/api/projects', imageRoutes);
@@ -64,10 +65,8 @@ export function setupRoutes(app: Express): void {
   app.use('/api/database', databaseRoutes); // Database management and monitoring routes
   app.use('/api/admin/rate-limits', rateLimitAdminRoutes); // Rate limiting administration routes
   
-  // Test email routes (only in development)
-  if (process.env.NODE_ENV === 'development') {
-    app.use('/api/test-email', testEmailRoutes);
-  }
+  // Test email routes (enabled in all environments for debugging)
+  app.use('/api/test-email', testEmailRoutes);
 
   // Manuální registrace známých routes
   registerKnownRoutes();
@@ -157,6 +156,27 @@ function registerKnownRoutes(): void {
     method: 'POST',
     description: 'Odhlášení uživatele',
     authenticated: true
+  });
+
+  registerRoute({
+    path: '/api/auth/request-password-reset',
+    method: 'POST',
+    description: 'Žádost o reset hesla',
+    authenticated: false
+  });
+
+  registerRoute({
+    path: '/api/auth/forgot-password',
+    method: 'POST',
+    description: 'Žádost o reset hesla (alias)',
+    authenticated: false
+  });
+
+  registerRoute({
+    path: '/api/auth/reset-password',
+    method: 'POST',
+    description: 'Reset hesla pomocí tokenu',
+    authenticated: false
   });
 
   // Project endpoints

@@ -119,7 +119,7 @@ async def get_metrics_info():
     return {
         "metrics": {
             "Area": "Total area of the polygon in pixels² (with holes subtracted)",
-            "Perimeter": "Total length of the polygon boundary in pixels",
+            "Perimeter": "Length of the external polygon boundary in pixels (excluding holes)",
             "EquivalentDiameter": "Diameter of a circle with the same area",
             "Circularity": "Measure of how circular the shape is (0-1, where 1 is a perfect circle)",
             "FeretDiameterMax": "Maximum distance between any two points on the boundary",

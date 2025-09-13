@@ -41,6 +41,18 @@ export function useAuthToasts() {
           toast.error(event.data?.error || t('auth.profileUpdateFailed'));
           break;
 
+        case 'token_missing':
+          toast.error(event.data?.message || t('auth.tokenMissing'), {
+            description: event.data?.description || t('auth.pleaseSignInAgain'),
+          });
+          break;
+
+        case 'token_expired':
+          toast.warning(event.data?.message || t('auth.tokenExpired'), {
+            description: event.data?.description || t('auth.pleaseSignInAgain'),
+          });
+          break;
+
         default:
           break;
       }
@@ -53,6 +65,8 @@ export function useAuthToasts() {
     authEventEmitter.on('signup_error', handleAuthEvent);
     authEventEmitter.on('logout_error', handleAuthEvent);
     authEventEmitter.on('profile_error', handleAuthEvent);
+    authEventEmitter.on('token_missing', handleAuthEvent);
+    authEventEmitter.on('token_expired', handleAuthEvent);
 
     return () => {
       // Cleanup
@@ -62,6 +76,8 @@ export function useAuthToasts() {
       authEventEmitter.off('signup_error', handleAuthEvent);
       authEventEmitter.off('logout_error', handleAuthEvent);
       authEventEmitter.off('profile_error', handleAuthEvent);
+      authEventEmitter.off('token_missing', handleAuthEvent);
+      authEventEmitter.off('token_expired', handleAuthEvent);
     };
   }, [t]);
 }

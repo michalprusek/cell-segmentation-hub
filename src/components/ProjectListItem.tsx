@@ -33,20 +33,20 @@ const ProjectListItem = React.memo(
     imageCount,
     onClick,
     isShared = false,
-    sharedBy,
+    sharedBy: _sharedBy,
     owner,
     shareId,
     onProjectUpdate,
   }: ProjectListItemProps) => {
-    const { t } = useLanguage();
-    const { user } = useAuth();
+    const { t: _t } = useLanguage();
+    const { user: _user } = useAuth();
     const handleCardClick = () => {
       if (onClick) {
         onClick();
       }
     };
 
-    const handleAccessError = (projectId: string, error: unknown) => {
+    const handleAccessError = (projectId: string, _error: unknown) => {
       onProjectUpdate?.(projectId, 'access-denied');
     };
 

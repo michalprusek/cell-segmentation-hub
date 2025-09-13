@@ -9,21 +9,21 @@ RUN apk add --no-cache python3 make g++ curl dumb-init \
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
-COPY tsconfig.json ./
-COPY tsconfig.prod.json ./
+COPY backend/package*.json ./
+COPY backend/tsconfig.json ./
+COPY backend/tsconfig.prod.json ./
 
 # Install all dependencies
 RUN npm install --frozen-lockfile || npm install
 
 # Copy Prisma schema
-COPY prisma ./prisma
+COPY backend/prisma ./prisma
 
 # Generate Prisma client
 RUN npx prisma generate
 
 # Copy source code
-COPY src ./src
+COPY backend/src ./src
 
 # Skip TypeScript build - use tsx for runtime transpilation
 
@@ -45,7 +45,7 @@ RUN addgroup -g 1001 -S nodejs && \
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY backend/package*.json ./
 COPY --from=builder /app/tsconfig.json ./
 
 # Install production dependencies only

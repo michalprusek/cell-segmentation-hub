@@ -22,6 +22,7 @@ vi.mock('@/lib/api', () => ({
     getProject: vi.fn(),
     getProjectImages: vi.fn(),
     getSegmentationResults: vi.fn(),
+    getBatchSegmentationResults: vi.fn(),
   },
 }));
 
@@ -75,6 +76,7 @@ describe('useProjectData', () => {
     vi.mocked(apiClient.getProject).mockReset();
     vi.mocked(apiClient.getProjectImages).mockReset();
     vi.mocked(apiClient.getSegmentationResults).mockReset();
+    vi.mocked(apiClient.getBatchSegmentationResults).mockReset();
   });
 
   describe('successful data fetching', () => {
@@ -473,6 +475,299 @@ describe('useProjectData', () => {
       expect(result.current.loading).toBe(false);
       expect(result.current.projectTitle).toBe('');
       expect(vi.mocked(apiClient.getProject)).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('batch segmentation result fetching', () => {
+    it('should handle null response from batch API gracefully', async () => {
+      const mockProject = { id: 'project-1', name: 'Test Project' };
+      const mockImages = [
+        {
+          id: 'img-1',
+          name: 'test1.jpg',
+          url: '/uploads/test1.jpg',
+          created_at: '2023-01-01T00:00:00Z',
+          updated_at: '2023-01-01T00:00:00Z',
+          segmentationStatus: 'completed',
+        },
+        {
+          id: 'img-2',
+          name: 'test2.jpg',
+          url: '/uploads/test2.jpg',
+          created_at: '2023-01-01T00:00:00Z',
+          updated_at: '2023-01-01T00:00:00Z',
+          segmentationStatus: 'completed',
+        },
+      ];
+
+      vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
+      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+        images: mockImages,
+        total: 2,
+        page: 1,
+        totalPages: 1,
+      });
+
+      // Mock batch API returning null for some images
+      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue({
+        'img-1': {
+          polygons: [
+            {
+              id: 'poly-1',
+              points: [
+                { x: 0, y: 0 },
+                { x: 10, y: 0 },
+                { x: 10, y: 10 },
+                { x: 0, y: 10 },
+              ],
+              type: 'external',
+              confidence: 0.9,
+              area: 100,
+            },
+          ],
+          imageWidth: 800,
+          imageHeight: 600,
+          modelUsed: 'hrnet',
+          confidence: 0.9,
+        },
+        'img-2': null, // Null response for this image
+      });
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1', { fetchAll: true }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.images).toHaveLength(2);
+
+      // First image should have segmentation data
+      expect(result.current.images[0].segmentationResult).toBeDefined();
+      expect(
+        result.current.images[0].segmentationResult?.polygons
+      ).toHaveLength(1);
+
+      // Second image should handle null gracefully
+      expect(result.current.images[1].segmentationResult).toBeUndefined();
+    });
+
+    it('should handle invalid batch response format', async () => {
+      const mockProject = { id: 'project-1', name: 'Test Project' };
+      const mockImages = [
+        {
+          id: 'img-1',
+          name: 'test1.jpg',
+          url: '/uploads/test1.jpg',
+          created_at: '2023-01-01T00:00:00Z',
+          updated_at: '2023-01-01T00:00:00Z',
+          segmentationStatus: 'completed',
+        },
+      ];
+
+      vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
+      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+        images: mockImages,
+        total: 1,
+        page: 1,
+        totalPages: 1,
+      });
+
+      // Mock invalid batch response
+      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue(
+        null as any
+      );
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1', { fetchAll: true }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Should fall back to original images without enrichment
+      expect(result.current.images).toHaveLength(1);
+      expect(result.current.images[0].segmentationResult).toBeUndefined();
+    });
+
+    it('should handle batch API errors gracefully', async () => {
+      const mockProject = { id: 'project-1', name: 'Test Project' };
+      const mockImages = [
+        {
+          id: 'img-1',
+          name: 'test1.jpg',
+          url: '/uploads/test1.jpg',
+          created_at: '2023-01-01T00:00:00Z',
+          updated_at: '2023-01-01T00:00:00Z',
+          segmentationStatus: 'completed',
+        },
+      ];
+
+      vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
+      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+        images: mockImages,
+        total: 1,
+        page: 1,
+        totalPages: 1,
+      });
+
+      // Mock batch API error
+      const batchError = new Error('Batch API failed');
+      vi.mocked(apiClient.getBatchSegmentationResults).mockRejectedValue(
+        batchError
+      );
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1', { fetchAll: true }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Should return original images without enrichment
+      expect(result.current.images).toHaveLength(1);
+      expect(result.current.images[0].segmentationResult).toBeUndefined();
+    });
+
+    it('should handle missing polygons in segmentation data', async () => {
+      const mockProject = { id: 'project-1', name: 'Test Project' };
+      const mockImages = [
+        {
+          id: 'img-1',
+          name: 'test1.jpg',
+          url: '/uploads/test1.jpg',
+          created_at: '2023-01-01T00:00:00Z',
+          updated_at: '2023-01-01T00:00:00Z',
+          segmentationStatus: 'completed',
+        },
+      ];
+
+      vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
+      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+        images: mockImages,
+        total: 1,
+        page: 1,
+        totalPages: 1,
+      });
+
+      // Mock batch response with missing polygons
+      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue({
+        'img-1': {
+          // Missing polygons property
+          imageWidth: 800,
+          imageHeight: 600,
+          modelUsed: 'hrnet',
+          confidence: 0.9,
+        },
+      });
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1', { fetchAll: true }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      expect(result.current.images).toHaveLength(1);
+      // Should handle missing polygons gracefully
+      expect(result.current.images[0].segmentationResult).toBeUndefined();
+    });
+
+    it('should handle refreshImageSegmentation null response', async () => {
+      const mockProject = { id: 'project-1', name: 'Test Project' };
+      const mockImages = [
+        {
+          id: 'img-1',
+          name: 'test1.jpg',
+          url: '/uploads/test1.jpg',
+          created_at: '2023-01-01T00:00:00Z',
+          updated_at: '2023-01-01T00:00:00Z',
+          segmentationStatus: 'completed',
+        },
+      ];
+
+      vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
+      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+        images: mockImages,
+        total: 1,
+        page: 1,
+        totalPages: 1,
+      });
+      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue({});
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1'),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Mock single image API returning null
+      vi.mocked(apiClient.getSegmentationResults).mockResolvedValue(null);
+
+      // Call refreshImageSegmentation
+      await waitFor(() => {
+        result.current.refreshImageSegmentation('img-1');
+      });
+
+      // Should handle null response gracefully without throwing
+      expect(result.current.images[0].segmentationResult).toBeUndefined();
+    });
+
+    it('should handle refreshImageSegmentation API errors', async () => {
+      const mockProject = { id: 'project-1', name: 'Test Project' };
+      const mockImages = [
+        {
+          id: 'img-1',
+          name: 'test1.jpg',
+          url: '/uploads/test1.jpg',
+          created_at: '2023-01-01T00:00:00Z',
+          updated_at: '2023-01-01T00:00:00Z',
+          segmentationStatus: 'completed',
+        },
+      ];
+
+      vi.mocked(apiClient.getProject).mockResolvedValue(mockProject);
+      vi.mocked(apiClient.getProjectImages).mockResolvedValue({
+        images: mockImages,
+        total: 1,
+        page: 1,
+        totalPages: 1,
+      });
+      vi.mocked(apiClient.getBatchSegmentationResults).mockResolvedValue({});
+
+      const { result } = renderHook(
+        () => useProjectData('project-1', 'user-1'),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false);
+      });
+
+      // Mock API error
+      const refreshError = new Error('API refresh failed');
+      vi.mocked(apiClient.getSegmentationResults).mockRejectedValue(
+        refreshError
+      );
+
+      // Call refreshImageSegmentation - should not throw
+      await waitFor(() => {
+        result.current.refreshImageSegmentation('img-1');
+      });
+
+      // Should handle error gracefully
+      expect(result.current.images[0].segmentationResult).toBeUndefined();
     });
   });
 });

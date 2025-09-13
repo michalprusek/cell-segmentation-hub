@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import { render } from '@/test/utils/test-utils';
 import StatsOverview from '@/components/StatsOverview';
-import { useAuth } from '@/contexts/exports';
+import { useAuth as _useAuth } from '@/contexts/exports';
 
 // Mock the API client
 vi.mock('@/lib/api', () => ({

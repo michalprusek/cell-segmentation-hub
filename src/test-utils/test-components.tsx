@@ -7,7 +7,7 @@ import { vi } from 'vitest';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
 import { AuthContext } from '@/contexts/useAuth';
-import type { User, Profile } from '@/types';
+import type { User as _User, Profile as _Profile } from '@/types';
 
 // Mock contexts for testing
 export const MockLanguageProvider: React.FC<{ children: React.ReactNode }> = ({

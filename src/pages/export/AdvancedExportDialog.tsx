@@ -42,6 +42,7 @@ import {
   WifiOff,
   AlertCircle,
   RefreshCw,
+  X,
 } from 'lucide-react';
 import { useAdvancedExport } from './hooks/useAdvancedExport';
 import { useLanguage } from '@/contexts/useLanguage';
@@ -57,6 +58,7 @@ interface AdvancedExportDialogProps {
   images: ProjectImage[];
   selectedImageIds?: string[];
   onExportingChange?: (isExporting: boolean) => void;
+  onDownloadingChange?: (isDownloading: boolean) => void;
 }
 
 export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
@@ -69,6 +71,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       images,
       selectedImageIds,
       onExportingChange,
+      onDownloadingChange,
     }) => {
       const { t } = useLanguage();
       const {
@@ -78,8 +81,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         exportProgress,
         exportStatus,
         isExporting,
+        isDownloading,
         cancelExport,
         triggerDownload,
+        dismissExport,
         completedJobId,
         wsConnected,
         currentJob,
@@ -91,6 +96,11 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
       useEffect(() => {
         onExportingChange?.(isExporting);
       }, [isExporting, onExportingChange]);
+
+      // Notify parent component when downloading state changes
+      useEffect(() => {
+        onDownloadingChange?.(isDownloading);
+      }, [isDownloading, onDownloadingChange]);
 
       // Set default selected images
       useEffect(() => {
@@ -687,23 +697,48 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
             )}
 
             {/* Completed Export - Manual Download */}
-            {completedJobId &&
-              !isExporting &&
-              currentJob?.status === 'completed' && (
-                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                  <AlertCircle className="h-4 w-4 text-green-600" />
-                  <div className="flex-1">
-                    <span className="text-sm text-green-800">
-                      Export completed successfully! Click below to download if
-                      it didn't start automatically.
-                    </span>
-                  </div>
-                  <Button size="sm" onClick={triggerDownload} className="ml-2">
-                    <Download className="h-4 w-4 mr-1" />
-                    {t('export.download')}
-                  </Button>
+            {completedJobId && !isExporting && !isDownloading && (
+              <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg relative">
+                <AlertCircle className="h-4 w-4 text-green-600" />
+                <div className="flex-1">
+                  <span className="text-sm text-green-800">
+                    {exportStatus ||
+                      "Export completed successfully! Click below to download if it didn't start automatically."}
+                  </span>
                 </div>
-              )}
+                <Button
+                  size="sm"
+                  onClick={triggerDownload}
+                  className="ml-2"
+                  title={
+                    isDownloading
+                      ? 'Click to stop animation when download completes'
+                      : 'Download export file'
+                  }
+                >
+                  {isDownloading ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-1 animate-spin" />
+                      {t('export.downloading') || 'Downloading...'}
+                    </>
+                  ) : (
+                    <>
+                      <Download className="h-4 w-4 mr-1" />
+                      {t('export.download')}
+                    </>
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={dismissExport}
+                  className="ml-1 h-6 w-6 p-0"
+                  title="Dismiss"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
 
             {/* Failed Export */}
             {currentJob?.status === 'failed' && (

@@ -109,7 +109,7 @@ test.describe('Authentication Flow', () => {
     await expect(page.getByText(/invalid.*credentials/i)).toBeVisible();
   });
 
-  test('should logout successfully', async ({ page, context }) => {
+  test('should logout successfully', async ({ page, context: _context }) => {
     // Register and login first
     await page.getByRole('link', { name: /sign up/i }).click();
     await page.getByLabel(/email/i).fill(testUser.email);

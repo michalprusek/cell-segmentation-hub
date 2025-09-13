@@ -3,7 +3,7 @@ import express from 'express'
 import { describe, it, expect, beforeEach, jest } from '@jest/globals'
 import { register, login, refreshToken, logout } from '../authController'
 import * as AuthService from '../../../services/authService'
-import { prismaMock } from '../../../test/setup'
+import { prismaMock as _prismaMock } from '../../../test/setup'
 
 // Mock AuthService
 jest.mock('../../../services/authService')
@@ -342,7 +342,7 @@ describe('Auth Controller Functions', () => {
       // Verify that the service was called with sanitized data
       const mockCalls = (authService.register as jest.Mock).mock.calls
       expect(mockCalls.length).toBeGreaterThan(0)
-      const actualEmail = (mockCalls[0][0] as any).email
+      const actualEmail = (mockCalls[0][0] as Record<string, unknown>).email
       
       // Verify script tags and their content are removed
       expect(actualEmail).not.toContain('<')

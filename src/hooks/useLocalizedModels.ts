@@ -1,7 +1,11 @@
 import { useModel } from '@/contexts/useModel';
 import { useLanguage } from '@/contexts/useLanguage';
-import { getLocalizedModelInfo, getAllLocalizedModels } from '@/lib/modelUtils';
-import { ModelType, ModelInfo } from '@/contexts/ModelContext';
+import {
+  getLocalizedModelInfo,
+  getAllLocalizedModels,
+  ModelType,
+  ModelInfo,
+} from '@/lib/modelUtils';
 
 /**
  * Hook that provides localized model information

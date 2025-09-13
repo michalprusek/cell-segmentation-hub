@@ -2,6 +2,10 @@ import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
 import { Request, Response } from 'express';
 import { logger } from '../utils/logger';
 import { ResponseHelper } from '../utils/response';
+import { getRateLimitsForEnvironment } from '../config/uploadLimits';
+
+// Get environment-specific rate limits
+const rateLimits = getRateLimitsForEnvironment();
 
 /**
  * Rate limiting middleware configurations
@@ -21,7 +25,7 @@ export interface RateLimitConfig {
  */
 const generateRateLimitKey = (req: Request): string => {
   // Use user ID if authenticated, otherwise use IP address
-  const userId = (req as any).user?.id;
+  const userId = (req as Request & { user?: { id?: string } }).user?.id;
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
   
   return userId ? `user:${userId}` : `ip:${ip}`;
@@ -33,7 +37,7 @@ const generateRateLimitKey = (req: Request): string => {
 const rateLimitHandler = (req: Request, res: Response): void => {
   logger.warn('Rate limit exceeded', 'RateLimit', {
     ip: req.ip,
-    userId: (req as any).user?.id,
+    userId: (req as Request & { user?: { id?: string } }).user?.id,
     path: req.path,
     method: req.method
   });
@@ -56,11 +60,11 @@ function createRateLimiter(config: RateLimitConfig): RateLimitRequestHandler {
     keyGenerator: config.keyGenerator || generateRateLimitKey,
     handler: rateLimitHandler,
     skip: (req: Request) => {
-      // Skip rate limiting for health checks in development
-      if (process.env.NODE_ENV === 'development') {
-        return req.path === '/health' || req.path === '/metrics';
-      }
-      return false;
+      // Skip rate limiting for health checks and metrics
+      return req.path === '/health' || 
+             req.path === '/api/health' || 
+             req.path === '/metrics' ||
+             req.path === '/api/ml/health';
     }
   });
 }
@@ -69,8 +73,8 @@ function createRateLimiter(config: RateLimitConfig): RateLimitRequestHandler {
  * Strict rate limiter for authentication endpoints
  */
 export const authRateLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5, // Limit each IP/user to 5 requests per windowMs
+  windowMs: rateLimits.AUTH_WINDOW_MS, // 15 minutes from config
+  max: rateLimits.AUTH_MAX_REQUESTS, // 20 requests per 15 minutes from config (increased from 5)
   message: 'Too many authentication attempts, please try again later',
   skipSuccessfulRequests: true
 });
@@ -103,8 +107,8 @@ export const registrationRateLimiter = createRateLimiter({
  * General API rate limiter
  */
 export const apiRateLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP/user to 100 requests per windowMs
+  windowMs: rateLimits.API_WINDOW_MS, // 5 minutes from config
+  max: rateLimits.API_MAX_REQUESTS, // 1000 requests per 5 minutes from config
   message: 'Too many API requests, please try again later',
   skipSuccessfulRequests: false
 });
@@ -125,9 +129,18 @@ export const sensitiveOperationRateLimiter = createRateLimiter({
  * File upload rate limiter
  */
 export const uploadRateLimiter = createRateLimiter({
-  windowMs: 60 * 1000, // 1 minute
-  max: 10, // Limit each IP/user to 10 uploads per minute
+  windowMs: rateLimits.UPLOAD_WINDOW_MS, // 1 minute
+  max: rateLimits.UPLOAD_MAX_REQUESTS, // Increased from 10 to 100 per minute
   message: 'Too many file upload requests, please try again later'
+});
+
+/**
+ * Bulk upload rate limiter for large batch operations
+ */
+export const bulkUploadRateLimiter = createRateLimiter({
+  windowMs: rateLimits.BULK_UPLOAD_WINDOW_MS, // 5 minutes
+  max: rateLimits.BULK_UPLOAD_MAX_REQUESTS, // 1000 requests per 5 minutes
+  message: 'Too many bulk upload requests, please try again later'
 });
 
 /**
@@ -183,8 +196,8 @@ export const createConditionalSkipRateLimiter = (
   skipCondition: (req: Request) => boolean
 ): RateLimitRequestHandler => {
   const limiter = createRateLimiter(config);
-  
-  return (req: Request, res: Response, next) => {
+
+  return (req: Request, res: Response, next: unknown) => {
     if (skipCondition(req)) {
       return next();
     }
@@ -197,7 +210,7 @@ export const createConditionalSkipRateLimiter = (
  */
 export const createAuthSkipRateLimiter = (config: RateLimitConfig): RateLimitRequestHandler => {
   return createConditionalSkipRateLimiter(config, (req: Request) => {
-    return !!(req as any).user; // Skip if user is authenticated
+    return !!(req as Request & { user?: unknown }).user; // Skip if user is authenticated
   });
 };
 
@@ -214,7 +227,7 @@ export const burstRateLimiter = createRateLimiter({
  * Combine multiple rate limiters
  */
 export const combineRateLimiters = (...limiters: RateLimitRequestHandler[]) => {
-  return (req: Request, res: Response, next) => {
+  return (req: Request, res: Response, next: unknown) => {
     let currentIndex = 0;
     
     const runNextLimiter = () => {
@@ -223,7 +236,7 @@ export const combineRateLimiters = (...limiters: RateLimitRequestHandler[]) => {
       }
       
       const limiter = limiters[currentIndex++];
-      limiter(req, res, (err?: any) => {
+      limiter(req, res, (err?: unknown) => {
         if (err) {
           return next(err);
         }

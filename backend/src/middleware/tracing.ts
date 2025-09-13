@@ -1,19 +1,19 @@
 // Placeholder tracing middleware for development setup
 // This provides minimal implementations to prevent import errors
 
-export function addSpanAttributes(attributes: Record<string, any>): void {
+export function addSpanAttributes(_attributes: Record<string, unknown>): void {
   // Placeholder implementation - just log the attributes in development
-  console.log('Span attributes (dev mode):', attributes);
+  // console.warn('Span attributes (dev mode):', attributes);
 }
 
-export function addSpanEvent(name: string, attributes?: Record<string, any>): void {
+export function addSpanEvent(_name: string, _attributes?: Record<string, unknown>): void {
   // Placeholder implementation - just log the event in development
-  console.log('Span event (dev mode):', name, attributes);
+  // console.warn('Span event (dev mode):', name, attributes);
 }
 
 export function markSpanError(error: Error | string): void {
   // Placeholder implementation - just log the error in development
-  console.log('Span error (dev mode):', error);
+  console.error('Span error (dev mode):', error);
 }
 
 export function injectTraceHeaders(headers: Record<string, string>): Record<string, string> {
@@ -26,7 +26,7 @@ export function injectTraceHeaders(headers: Record<string, string>): Record<stri
 
 // Middleware functions expected by server.ts
 export function createContextPropagationMiddleware() {
-  return (req: any, res: any, next: any) => {
+  return (req: Record<string, unknown>, res: Record<string, unknown>, next: () => void) => {
     // Placeholder - just add trace ID to request
     req.traceId = `trace_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     next();
@@ -34,21 +34,21 @@ export function createContextPropagationMiddleware() {
 }
 
 export function createTracingMiddleware() {
-  return (req: any, res: any, next: any) => {
+  return (req: Record<string, unknown>, res: Record<string, unknown>, next: () => void) => {
     // Placeholder - no-op middleware
     next();
   };
 }
 
 export function createPerformanceTracingMiddleware() {
-  return (req: any, res: any, next: any) => {
+  return (req: Record<string, unknown>, res: Record<string, unknown>, next: () => void) => {
     // Placeholder - no-op middleware
     next();
   };
 }
 
 export function createErrorTracingMiddleware() {
-  return (err: any, req: any, res: any, next: any) => {
+  return (err: unknown, req: Record<string, unknown>, res: Record<string, unknown>, next: (error?: unknown) => void) => {
     // Placeholder - just pass error through
     next(err);
   };

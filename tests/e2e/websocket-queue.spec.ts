@@ -95,7 +95,7 @@ test.describe('WebSocket Queue Processing E2E Tests', () => {
           if (data.type === 'queue_update' || data.type === 'status_update') {
             statusUpdates.push(data.status || data.message);
           }
-        } catch (e) {
+        } catch (_e) {
           // Ignore non-JSON frames
         }
       });
@@ -117,10 +117,8 @@ test.describe('WebSocket Queue Processing E2E Tests', () => {
 
       // Verify we received status updates
       expect(statusUpdates.length).toBeGreaterThan(0);
-    } catch (error) {
-      console.log(
-        'WebSocket connection test failed or timed out - this may be expected in test environment'
-      );
+    } catch (_error) {
+      // console.log('WebSocket connection test failed or timed out - this may be expected in test environment');
 
       // Fallback: Just verify the UI shows the expected status progression
       await expect(page.getByText(/queued|waiting|processing/i)).toBeVisible({
@@ -182,10 +180,10 @@ test.describe('WebSocket Queue Processing E2E Tests', () => {
       page.getByText(/online|connected|reconnected/i),
     ];
 
-    let reconnectionHandled = false;
+    let _reconnectionHandled = false;
     for (const indicator of reconnectionIndicators) {
       if (await indicator.isVisible({ timeout: 10000 })) {
-        reconnectionHandled = true;
+        _reconnectionHandled = true;
         break;
       }
     }
@@ -536,7 +534,7 @@ test.describe('WebSocket Queue Processing E2E Tests', () => {
     });
 
     // Get current status before refresh
-    const statusBeforeRefresh = await page
+    const _statusBeforeRefresh = await page
       .getByText(/processing|analyzing|queued|complete/i)
       .first()
       .textContent();

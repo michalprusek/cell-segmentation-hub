@@ -1024,4 +1024,299 @@ describe('API Client', () => {
       }
     });
   });
+
+  describe('Batch Segmentation Results', () => {
+    beforeEach(() => {
+      (apiClient as any).accessToken = 'valid-access-token';
+    });
+
+    describe('getBatchSegmentationResults', () => {
+      test('should validate input parameters correctly', async () => {
+        // Test with empty array
+        const result = await apiClient.getBatchSegmentationResults([]);
+        expect(result).toEqual({});
+        expect(mockAxiosInstance.get).not.toHaveBeenCalled();
+      });
+
+      test('should handle invalid image IDs gracefully', async () => {
+        // Test with null/undefined values
+        const invalidIds = [null, undefined, '', '   '] as any[];
+
+        const result = await apiClient.getBatchSegmentationResults(invalidIds);
+        expect(result).toEqual({});
+        expect(mockAxiosInstance.get).not.toHaveBeenCalled();
+      });
+
+      test('should make correct API call with valid image IDs', async () => {
+        const imageIds = ['img-1', 'img-2', 'img-3'];
+        const mockResponse = {
+          data: {
+            'img-1': {
+              success: true,
+              polygons: [
+                {
+                  id: 'poly-1',
+                  points: [
+                    { x: 0, y: 0 },
+                    { x: 10, y: 0 },
+                    { x: 10, y: 10 },
+                    { x: 0, y: 10 },
+                  ],
+                  type: 'external',
+                  confidence: 0.9,
+                  area: 100,
+                },
+              ],
+              model_used: 'hrnet',
+              threshold_used: 0.5,
+              confidence: 0.9,
+              processing_time: 2.5,
+              image_size: { width: 800, height: 600 },
+              imageWidth: 800,
+              imageHeight: 600,
+            },
+            'img-2': null,
+            'img-3': {
+              success: false,
+              error: 'Processing failed',
+            },
+          },
+        };
+
+        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+
+        const result = await apiClient.getBatchSegmentationResults(imageIds);
+
+        expect(mockAxiosInstance.get).toHaveBeenCalledWith(
+          '/api/segmentation/batch-results',
+          {
+            params: { imageIds: imageIds.join(',') },
+            timeout: 30000,
+          }
+        );
+
+        expect(result).toEqual(mockResponse.data);
+      });
+
+      test('should handle API errors gracefully', async () => {
+        const imageIds = ['img-1'];
+        const apiError = new Error('Network error');
+
+        mockAxiosInstance.get.mockRejectedValue(apiError);
+
+        await expect(
+          apiClient.getBatchSegmentationResults(imageIds)
+        ).rejects.toThrow('Network error');
+      });
+
+      test('should handle timeout errors', async () => {
+        const imageIds = ['img-1'];
+        const timeoutError = {
+          code: 'ECONNABORTED',
+          message: 'timeout of 30000ms exceeded',
+        };
+
+        mockAxiosInstance.get.mockRejectedValue(timeoutError);
+
+        await expect(
+          apiClient.getBatchSegmentationResults(imageIds)
+        ).rejects.toThrow('timeout of 30000ms exceeded');
+      });
+
+      test('should handle rate limit errors with exponential backoff', async () => {
+        const imageIds = ['img-1'];
+        const rateLimitError = {
+          response: { status: 429 },
+          message: 'Too many requests',
+        };
+
+        mockAxiosInstance.get
+          .mockRejectedValueOnce(rateLimitError)
+          .mockRejectedValueOnce(rateLimitError)
+          .mockResolvedValueOnce({ data: { 'img-1': null } });
+
+        const result = await apiClient.getBatchSegmentationResults(imageIds);
+
+        // Should retry and eventually succeed
+        expect(mockAxiosInstance.get).toHaveBeenCalledTimes(3);
+        expect(result).toEqual({ 'img-1': null });
+      });
+
+      test('should handle large batches correctly', async () => {
+        // Test with 100 image IDs
+        const imageIds = Array.from({ length: 100 }, (_, i) => `img-${i}`);
+        const mockResponse = {
+          data: imageIds.reduce(
+            (acc, id) => {
+              acc[id] = null;
+              return acc;
+            },
+            {} as Record<string, any>
+          ),
+        };
+
+        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+
+        const result = await apiClient.getBatchSegmentationResults(imageIds);
+
+        expect(mockAxiosInstance.get).toHaveBeenCalledWith(
+          '/api/segmentation/batch-results',
+          {
+            params: { imageIds: imageIds.join(',') },
+            timeout: 30000,
+          }
+        );
+
+        expect(Object.keys(result)).toHaveLength(100);
+        expect(result['img-0']).toBeNull();
+        expect(result['img-99']).toBeNull();
+      });
+
+      test('should handle mixed response data types', async () => {
+        const imageIds = ['img-1', 'img-2', 'img-3', 'img-4'];
+        const mockResponse = {
+          data: {
+            'img-1': {
+              polygons: [],
+              imageWidth: 800,
+              imageHeight: 600,
+            },
+            'img-2': null,
+            'img-3': {
+              polygons: [
+                {
+                  id: 'poly-1',
+                  points: [
+                    { x: 0, y: 0 },
+                    { x: 10, y: 0 },
+                  ],
+                  type: 'external',
+                },
+              ],
+            },
+            // img-4 is missing from response
+          },
+        };
+
+        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+
+        const result = await apiClient.getBatchSegmentationResults(imageIds);
+
+        expect(result['img-1']).toEqual({
+          polygons: [],
+          imageWidth: 800,
+          imageHeight: 600,
+        });
+        expect(result['img-2']).toBeNull();
+        expect(result['img-3']).toEqual({
+          polygons: [
+            {
+              id: 'poly-1',
+              points: [
+                { x: 0, y: 0 },
+                { x: 10, y: 0 },
+              ],
+              type: 'external',
+            },
+          ],
+        });
+        expect(result['img-4']).toBeUndefined();
+      });
+
+      test('should handle malformed response data', async () => {
+        const imageIds = ['img-1'];
+        const mockResponse = {
+          data: 'invalid-json-string',
+        };
+
+        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+
+        const result = await apiClient.getBatchSegmentationResults(imageIds);
+
+        // Should return the malformed data as-is (let caller handle it)
+        expect(result).toBe('invalid-json-string');
+      });
+
+      test('should handle HTTP error status codes', async () => {
+        const imageIds = ['img-1'];
+        const httpError = {
+          response: {
+            status: 500,
+            statusText: 'Internal Server Error',
+            data: { error: 'Database error' },
+          },
+          message: 'Request failed with status code 500',
+        };
+
+        mockAxiosInstance.get.mockRejectedValue(httpError);
+
+        await expect(
+          apiClient.getBatchSegmentationResults(imageIds)
+        ).rejects.toThrow('Request failed with status code 500');
+      });
+
+      test('should handle concurrent batch requests efficiently', async () => {
+        const batchSizes = [10, 50, 100];
+        const mockResponses = batchSizes.map(size => ({
+          data: Array.from({ length: size }, (_, i) => [
+            `img-${i}`,
+            null,
+          ]).reduce(
+            (acc, [key, value]) => {
+              acc[key] = value;
+              return acc;
+            },
+            {} as Record<string, any>
+          ),
+        }));
+
+        mockAxiosInstance.get.mockImplementation((url, config) => {
+          const imageIds = config.params.imageIds.split(',');
+          const batchSize = imageIds.length;
+          const responseIndex = batchSizes.indexOf(batchSize);
+          return Promise.resolve(mockResponses[responseIndex]);
+        });
+
+        // Execute concurrent requests
+        const promises = batchSizes.map(size =>
+          apiClient.getBatchSegmentationResults(
+            Array.from({ length: size }, (_, i) => `img-${i}`)
+          )
+        );
+
+        const results = await Promise.all(promises);
+
+        expect(results).toHaveLength(3);
+        expect(Object.keys(results[0])).toHaveLength(10);
+        expect(Object.keys(results[1])).toHaveLength(50);
+        expect(Object.keys(results[2])).toHaveLength(100);
+        expect(mockAxiosInstance.get).toHaveBeenCalledTimes(3);
+      });
+    });
+
+    describe('getSegmentationResults - null handling', () => {
+      test('should handle null response gracefully', async () => {
+        mockAxiosInstance.get.mockResolvedValue({ data: null });
+
+        const result = await apiClient.getSegmentationResults('img-1');
+        expect(result).toBeNull();
+      });
+
+      test('should handle undefined response gracefully', async () => {
+        mockAxiosInstance.get.mockResolvedValue({ data: undefined });
+
+        const result = await apiClient.getSegmentationResults('img-1');
+        expect(result).toBeUndefined();
+      });
+
+      test('should handle API errors', async () => {
+        const apiError = new Error('Not found');
+        mockAxiosInstance.get.mockRejectedValue(apiError);
+
+        await expect(
+          apiClient.getSegmentationResults('invalid-id')
+        ).rejects.toThrow('Not found');
+      });
+    });
+  });
 });

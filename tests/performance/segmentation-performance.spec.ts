@@ -72,7 +72,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
     await expect(page.getByText(/project|dashboard/i)).toBeVisible();
     const dashboardTime = Date.now() - dashboardStart;
 
-    console.log(`Dashboard load time: ${dashboardTime}ms`);
+    //     console.warn(`Dashboard load time: ${dashboardTime}ms`);
     expect(dashboardTime).toBeLessThan(PERFORMANCE_THRESHOLDS.PAGE_LOAD);
 
     // Create project for further testing
@@ -98,7 +98,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
     await expect(page.getByText('Performance Test Project')).toBeVisible();
     const projectDetailTime = Date.now() - projectDetailStart;
 
-    console.log(`Project detail load time: ${projectDetailTime}ms`);
+    //     console.warn(`Project detail load time: ${projectDetailTime}ms`);
     expect(projectDetailTime).toBeLessThan(PERFORMANCE_THRESHOLDS.PAGE_LOAD);
   });
 
@@ -127,7 +127,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
       });
 
       const uploadTime = Date.now() - uploadStart;
-      console.log(`Image ${i + 1} upload time: ${uploadTime}ms`);
+      //       console.warn(`Image ${i + 1} upload time: ${uploadTime}ms`);
       expect(uploadTime).toBeLessThan(PERFORMANCE_THRESHOLDS.IMAGE_UPLOAD);
 
       // Wait a bit between uploads
@@ -195,7 +195,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
         .click();
       const startTime = Date.now() - startButtonClick;
 
-      console.log(`${model.name} segmentation start time: ${startTime}ms`);
+      //       console.warn(`${model.name} segmentation start time: ${startTime}ms`);
       expect(startTime).toBeLessThan(PERFORMANCE_THRESHOLDS.SEGMENTATION_START);
 
       // Wait for processing to complete
@@ -207,7 +207,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
       ).toBeVisible({ timeout: model.threshold });
 
       const processingTime = Date.now() - segmentationStart;
-      console.log(`${model.name} total processing time: ${processingTime}ms`);
+      //       console.warn(`${model.name} total processing time: ${processingTime}ms`);
       expect(processingTime).toBeLessThan(model.threshold);
     }
   });
@@ -259,7 +259,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
     );
 
     const editorLoadTime = Date.now() - editorLoadStart;
-    console.log(`Segmentation editor load time: ${editorLoadTime}ms`);
+    //     console.warn(`Segmentation editor load time: ${editorLoadTime}ms`);
     expect(editorLoadTime).toBeLessThan(PERFORMANCE_THRESHOLDS.EDITOR_LOAD);
 
     // Measure canvas interaction performance
@@ -288,9 +288,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
       await page.waitForTimeout(100); // Allow for UI updates
       const interactionTime = Date.now() - interactionStart;
 
-      console.log(
-        `Canvas ${interaction.name} response time: ${interactionTime}ms`
-      );
+      // console.warn(`Canvas ${interaction.name} response time: ${interactionTime}ms`);
       expect(interactionTime).toBeLessThan(
         PERFORMANCE_THRESHOLDS.CANVAS_INTERACTION
       );
@@ -370,7 +368,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
           await page.waitForTimeout(50);
           const zoomTime = Date.now() - zoomStart;
 
-          console.log(`${operation.name} time: ${zoomTime}ms`);
+          //           console.warn(`${operation.name} time: ${zoomTime}ms`);
           expect(zoomTime).toBeLessThan(
             PERFORMANCE_THRESHOLDS.CANVAS_INTERACTION
           );
@@ -381,7 +379,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
         await page.waitForTimeout(50);
         const zoomTime = Date.now() - zoomStart;
 
-        console.log(`${operation.name} time: ${zoomTime}ms`);
+        //         console.warn(`${operation.name} time: ${zoomTime}ms`);
         expect(zoomTime).toBeLessThan(
           PERFORMANCE_THRESHOLDS.CANVAS_INTERACTION
         );
@@ -402,7 +400,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
       await page.waitForTimeout(50);
       const panTime = Date.now() - panStart;
 
-      console.log(`Pan operation time: ${panTime}ms`);
+      //       console.warn(`Pan operation time: ${panTime}ms`);
       expect(panTime).toBeLessThan(
         PERFORMANCE_THRESHOLDS.CANVAS_INTERACTION * 2
       );
@@ -483,7 +481,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
       });
       const saveTime = Date.now() - saveStart;
 
-      console.log(`Save operation time: ${saveTime}ms`);
+      //       console.warn(`Save operation time: ${saveTime}ms`);
       expect(saveTime).toBeLessThan(PERFORMANCE_THRESHOLDS.SAVE_OPERATION);
     }
 
@@ -512,7 +510,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
         const download = await downloadPromise;
         const exportTime = Date.now() - exportStart;
 
-        console.log(`Export operation time: ${exportTime}ms`);
+        //         console.warn(`Export operation time: ${exportTime}ms`);
         expect(exportTime).toBeLessThan(
           PERFORMANCE_THRESHOLDS.EXPORT_OPERATION
         );
@@ -520,18 +518,14 @@ test.describe('Segmentation Performance Benchmarks', () => {
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
-        console.log(
-          `Export download test failed: ${errorMessage}. Stack: ${error instanceof Error ? error.stack : 'No stack trace'}`
-        );
+        // console.warn(`Export download test failed: ${errorMessage}. Stack: ${error instanceof Error ? error.stack : 'No stack trace'}`);
 
         // Check if this is a known test environment limitation
         if (
           errorMessage.includes('Download not supported') ||
           errorMessage.includes('Browser not available')
         ) {
-          console.log(
-            'Skipping download test due to test environment limitations'
-          );
+          // console.warn('Skipping download test due to test environment limitations');
           test.skip();
           return;
         }
@@ -635,10 +629,8 @@ test.describe('Segmentation Performance Benchmarks', () => {
         memoryMetrics.peakMemory - memoryMetrics.startMemory;
       const memoryIncreaseMB = memoryIncrease / (1024 * 1024);
 
-      console.log(
-        `Peak memory usage: ${(memoryMetrics.peakMemory / (1024 * 1024)).toFixed(2)}MB`
-      );
-      console.log(`Memory increase: ${memoryIncreaseMB.toFixed(2)}MB`);
+      // console.warn(`Peak memory usage: ${(memoryMetrics.peakMemory / (1024 * 1024)).toFixed(2)}MB`);
+      // console.warn(`Memory increase: ${memoryIncreaseMB.toFixed(2)}MB`);
 
       // Memory increase should be reasonable (less than 100MB for these operations)
       expect(memoryIncreaseMB).toBeLessThan(100);
@@ -702,7 +694,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
     };
 
     const responsivenesTime = await rapidOperations();
-    console.log(`Rapid operations completion time: ${responsivenesTime}ms`);
+    //     console.warn(`Rapid operations completion time: ${responsivenesTime}ms`);
 
     // Should handle rapid operations without significant delay
     expect(responsivenesTime).toBeLessThan(5000);
@@ -713,7 +705,7 @@ test.describe('Segmentation Performance Benchmarks', () => {
     await page.getByRole('button', { name: /edit|modify/i }).click();
     const uiResponseTime = Date.now() - uiResponseStart;
 
-    console.log(`UI mode switch time: ${uiResponseTime}ms`);
+    //     console.warn(`UI mode switch time: ${uiResponseTime}ms`);
     expect(uiResponseTime).toBeLessThan(
       PERFORMANCE_THRESHOLDS.CANVAS_INTERACTION
     );

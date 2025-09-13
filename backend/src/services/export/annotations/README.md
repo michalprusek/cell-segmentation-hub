@@ -6,6 +6,10 @@ This directory contains annotation export utilities for various computer vision 
 
 **See [FORMATS_GUIDE.md](./FORMATS_GUIDE.md) for the complete consolidated guide covering all formats.**
 
+## 📊 Export Metrics
+
+**See [METRICS_DEFINITIONS.md](./METRICS_DEFINITIONS.md) for complete definitions of all calculated metrics.**
+
 ## Available Formats
 
 | Format | Directory | Best Use Case |
@@ -18,11 +22,12 @@ This directory contains annotation export utilities for various computer vision 
 
 ```
 annotations/
-├── FORMATS_GUIDE.md  # Complete guide (START HERE)
-├── coco/            # COCO format with CVAT instructions
-├── yolo/            # YOLO format with training examples
-├── json/            # Custom JSON with conversion tools
-└── README.md        # This overview file
+├── FORMATS_GUIDE.md       # Complete guide (START HERE)
+├── METRICS_DEFINITIONS.md # Detailed metric formulas and explanations
+├── coco/                  # COCO format with CVAT instructions
+├── yolo/                  # YOLO format with training examples
+├── json/                  # Custom JSON with conversion tools
+└── README.md              # This overview file
 ```
 
 ## Scale Conversion Support

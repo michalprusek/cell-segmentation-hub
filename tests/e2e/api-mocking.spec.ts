@@ -13,11 +13,11 @@ test.describe('API Mocking Tests', () => {
   test.afterEach(async () => {
     try {
       await mockManager.stop();
-    } catch (error) {
-      console.warn('Error stopping mock manager:', error);
+    } catch (_error) {
+      // console.warn('Error stopping mock manager:', _error);
     }
-    const report = mockManager.generateReport();
-    console.log('Mock usage report:', JSON.stringify(report, null, 2));
+    const _report = mockManager.generateReport();
+    // console.log('Mock usage report:', JSON.stringify(report, null, 2));
   });
 
   test.describe('Success Scenarios', () => {
@@ -50,7 +50,7 @@ test.describe('API Mocking Tests', () => {
     test('should handle project creation with mocks', async ({ page }) => {
       mockManager.setupSuccessScenario();
 
-      const env = await setupAuthenticatedTest(page, 'mock-projects');
+      const _env = await setupAuthenticatedTest(page, 'mock-projects');
 
       // Create project - should use mock
       await page
@@ -74,7 +74,7 @@ test.describe('API Mocking Tests', () => {
     }) => {
       mockManager.setupSuccessScenario();
 
-      const env = await setupAuthenticatedTest(page, 'mock-upload');
+      const _env = await setupAuthenticatedTest(page, 'mock-upload');
 
       // Create project first
       await page
@@ -110,7 +110,7 @@ test.describe('API Mocking Tests', () => {
     test('should handle segmentation process with mocks', async ({ page }) => {
       mockManager.setupSuccessScenario();
 
-      const env = await setupAuthenticatedTest(page, 'mock-segmentation');
+      const _env = await setupAuthenticatedTest(page, 'mock-segmentation');
 
       // Assume we have a project with images (using mocked data)
       await page
@@ -150,7 +150,7 @@ test.describe('API Mocking Tests', () => {
     test('should handle export functionality with mocks', async ({ page }) => {
       mockManager.setupSuccessScenario();
 
-      const env = await setupAuthenticatedTest(page, 'mock-export');
+      const _env = await setupAuthenticatedTest(page, 'mock-export');
 
       // Create project
       await page
@@ -183,9 +183,9 @@ test.describe('API Mocking Tests', () => {
           try {
             const download = await downloadPromise;
             expect(download.suggestedFilename()).toMatch(/.*\.(zip|json)$/);
-          } catch (error) {
+          } catch (_error) {
             // Export mock should have been called even if download fails
-            console.log('Download test completed (mock scenario)');
+            // console.log('Download test completed (mock scenario)');
           }
 
           // Verify export mock was called
@@ -343,7 +343,7 @@ test.describe('API Mocking Tests', () => {
         priority: 1, // Higher priority than general project mock
       });
 
-      const env = await setupAuthenticatedTest(page, 'mock-404');
+      const _env = await setupAuthenticatedTest(page, 'mock-404');
 
       // Try to navigate to non-existent project
       await page.goto('/projects/nonexistent-project');
@@ -388,7 +388,7 @@ test.describe('API Mocking Tests', () => {
     test('should handle slow network conditions', async ({ page }) => {
       mockManager.setupSlowNetworkScenario();
 
-      const env = await setupAuthenticatedTest(page, 'slow-network');
+      const _env = await setupAuthenticatedTest(page, 'slow-network');
 
       // Measure response time
       const startTime = Date.now();
@@ -407,7 +407,7 @@ test.describe('API Mocking Tests', () => {
       const endTime = Date.now();
       const responseTime = endTime - startTime;
 
-      console.log(`Slow network response time: ${responseTime}ms`);
+      // console.log(`Slow network response time: ${responseTime}ms`);
 
       // Should be slower due to network conditions
       expect(responseTime).toBeGreaterThan(2000); // At least 2 seconds due to latency
@@ -419,7 +419,7 @@ test.describe('API Mocking Tests', () => {
         latency: 1000,
       });
 
-      const env = await setupAuthenticatedTest(page, 'packet-loss');
+      const _env = await setupAuthenticatedTest(page, 'packet-loss');
 
       // Perform multiple actions to test packet loss handling
       for (let i = 0; i < 3; i++) {
@@ -451,16 +451,12 @@ test.describe('API Mocking Tests', () => {
           expect(successVisible || errorVisible).toBe(true);
 
           if (successVisible) {
-            console.log(`Request ${i + 1} succeeded despite packet loss`);
+            // console.log(`Request ${i + 1} succeeded despite packet loss`);
           } else {
-            console.log(
-              `Request ${i + 1} failed due to packet loss - handled gracefully`
-            );
+            // console.log(`Request ${i + 1} failed due to packet loss - handled gracefully`);
           }
-        } catch (error) {
-          console.log(
-            `Request ${i + 1} timeout - expected with high packet loss`
-          );
+        } catch (_error) {
+          // console.log(`Request ${i + 1} timeout - expected with high packet loss`);
         }
 
         // Close any open dialogs
@@ -482,7 +478,7 @@ test.describe('API Mocking Tests', () => {
     test('should track API calls correctly', async ({ page }) => {
       mockManager.setupSuccessScenario();
 
-      const env = await setupAuthenticatedTest(page, 'mock-verification');
+      const _env = await setupAuthenticatedTest(page, 'mock-verification');
 
       // Perform various actions
       await page
@@ -508,13 +504,10 @@ test.describe('API Mocking Tests', () => {
       const apiCalls = requestLog.filter(req => req.url.includes('/api/'));
       expect(apiCalls.length).toBeGreaterThan(0);
 
-      console.log(
-        'API calls made:',
-        apiCalls.map(call => ({
-          method: call.method,
-          url: call.url.split('/api/')[1],
-        }))
-      );
+      // console.log('API calls made:', apiCalls.map(call => ({
+      //   method: call.method,
+      //   url: call.url.split('/api/')[1],
+      // })));
     });
 
     test('should handle mock times limits', async ({ page }) => {
@@ -529,7 +522,7 @@ test.describe('API Mocking Tests', () => {
         },
       });
 
-      const env = await setupAuthenticatedTest(page, 'times-limit');
+      const _env = await setupAuthenticatedTest(page, 'times-limit');
 
       // Make multiple requests to the same endpoint
       for (let i = 0; i < 5; i++) {
@@ -550,7 +543,7 @@ test.describe('API Mocking Tests', () => {
     test('should generate comprehensive mock report', async ({ page }) => {
       mockManager.setupSuccessScenario();
 
-      const env = await setupAuthenticatedTest(page, 'mock-report');
+      const _env = await setupAuthenticatedTest(page, 'mock-report');
 
       // Perform various actions to generate mock usage
       await page
@@ -565,7 +558,7 @@ test.describe('API Mocking Tests', () => {
       });
 
       // Generate report
-      const report = mockManager.generateReport();
+      const _report = mockManager.generateReport();
 
       // Validate report structure
       expect(report).toHaveProperty('mocksUsed');
@@ -579,8 +572,8 @@ test.describe('API Mocking Tests', () => {
       expect(report.mocksUsed.length).toBeGreaterThan(0);
       expect(report.requestLog.length).toBeGreaterThan(0);
 
-      console.log('Mock usage summary:', report.mocksUsed);
-      console.log('Total API calls:', report.requestLog.length);
+      // console.log('Mock usage summary:', report.mocksUsed);
+      // console.log('Total API calls:', report.requestLog.length);
     });
   });
 });

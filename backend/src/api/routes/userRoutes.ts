@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../utils/logger';
 import { authenticate } from '../../middleware/auth';
 import { apiLimiter, authLimiter } from '../../middleware/rateLimiter';
-import { validateBody, validateParams } from '../../middleware/validation';
+import { validateBody } from '../../middleware/validation';
 import { z } from 'zod';
 
 const router = Router();

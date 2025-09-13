@@ -1,16 +1,32 @@
 {
   "*.{ts,tsx}": [
     "eslint --fix --cache --max-warnings=0 --format=stylish --no-warn-ignored",
-    "prettier --write"
+    "prettier --write",
+    "bash -c 'node scripts/code-quality-check.js || true'"
   ],
-  "src/**/*.{ts,tsx}": ["bash -c 'npm run type-check'"],
+  "src/**/*.{ts,tsx}": [
+    "bash -c 'npm run type-check'",
+    "bash -c 'npx madge --circular src/ || true'"
+  ],
   "*.{js,jsx}": [
     "eslint --fix --cache --max-warnings=0 --format=stylish --no-warn-ignored",
     "prettier --write"
   ],
   "backend/src/**/*.{ts,tsx}": ["bash -c 'cd backend && npm run type-check'"],
-  "*.{css,scss}": ["prettier --write"],
+  "*.{css,scss}": ["prettier --write", "stylelint --fix --allow-empty-input"],
   "*.{json,md,html,yml,yaml}": ["prettier --write"],
-  "package.json": ["prettier --write"],
-  "backend/package.json": ["prettier --write"]
+  "package.json": [
+    "prettier --write",
+    "bash -c 'npm audit --production --audit-level=high || true'"
+  ],
+  "backend/package.json": [
+    "prettier --write",
+    "bash -c 'cd backend && npm audit --production --audit-level=high || true'"
+  ],
+  "*.py": [
+    "bash -c 'ruff check --fix || flake8 || true'",
+    "bash -c 'black --check || true'"
+  ],
+  "Dockerfile*": ["bash -c 'hadolint $0 || true'"],
+  "*.sql": ["bash -c 'sqlfluff lint $0 || true'"]
 }

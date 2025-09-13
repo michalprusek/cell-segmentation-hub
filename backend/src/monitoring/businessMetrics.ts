@@ -93,7 +93,7 @@ export function trackApiError(endpoint: string, errorType: string, statusCode: n
 /**
  * Track feature usage
  */
-export function trackFeatureUsage(feature: string, userType: string = 'anonymous'): void {
+export function trackFeatureUsage(feature: string, userType = 'anonymous'): void {
   try {
     featureUsageCounter.inc({
       feature,
@@ -245,7 +245,7 @@ export async function getBusinessMetricsSummary(): Promise<{
     
     const getMetricValue = (name: string): number => {
       const metric = metrics.find(m => m.name === name);
-      if (!metric || !metric.values) return 0;
+      if (!metric || !metric.values) {return 0;}
       
       return metric.values.reduce((sum, v) => sum + (v.value || 0), 0);
     };

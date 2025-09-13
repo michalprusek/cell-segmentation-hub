@@ -1,3 +1,5 @@
+import { downloadExcel } from '@/lib/downloadUtils';
+
 // Lazy-loaded service for Excel export functionality to reduce initial bundle size
 export const createExcelExport = async () => {
   // Dynamically import ExcelJS only when needed
@@ -17,12 +19,8 @@ export const createExcelExport = async () => {
     },
 
     downloadFile(blob: Blob, filename: string) {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      link.click();
-      URL.revokeObjectURL(url);
+      // Use centralized download utility for consistency and better browser support
+      downloadExcel(blob, filename);
     },
   };
 };

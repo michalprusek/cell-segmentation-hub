@@ -7,7 +7,7 @@ import { authEventEmitter } from '@/lib/authEvents';
 import { tokenRefreshManager } from '@/lib/tokenRefresh';
 import {
   AuthContext,
-  type AuthContextType,
+  // type AuthContextType,
   type ConsentOptions,
 } from './AuthContext.types';
 

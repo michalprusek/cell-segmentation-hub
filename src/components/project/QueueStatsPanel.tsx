@@ -33,7 +33,7 @@ export const QueueStatsPanel = ({
   images = [],
 }: QueueStatsPanelProps) => {
   const { t } = useLanguage();
-  const hasQueuedItems = stats && stats.queued > 0;
+  const _hasQueuedItems = stats && stats.queued > 0;
   const isProcessing = stats && stats.processing > 0;
 
   // Calculate counts for button label

@@ -267,7 +267,7 @@ export function getEnvVar(name: string, defaultValue?: string): string {
  */
 export function getNumericEnvVar(name: string, defaultValue: number): number {
   const value = process.env[name];
-  if (!value) return defaultValue;
+  if (!value) {return defaultValue;}
   
   const parsed = parseInt(value, 10);
   if (isNaN(parsed)) {
@@ -283,7 +283,7 @@ export function getNumericEnvVar(name: string, defaultValue: number): number {
  */
 export function getBooleanEnvVar(name: string, defaultValue: boolean): boolean {
   const value = process.env[name];
-  if (!value) return defaultValue;
+  if (!value) {return defaultValue;}
   
   return value.toLowerCase() === 'true' || value === '1';
 }

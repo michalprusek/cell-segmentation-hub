@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { render } from '@/test/utils/test-utils';
 import { ToastEventProvider } from '@/components/AuthToastProvider';
-import { authEventEmitter } from '@/lib/authEvents';
+// import { authEventEmitter } from '@/lib/authEvents';
 import { toast } from 'sonner';
 
 // Mock the hooks at module level

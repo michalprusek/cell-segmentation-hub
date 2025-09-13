@@ -1,4 +1,5 @@
 import { AxiosError } from 'axios';
+import { logger } from '@/lib/logger';
 
 /**
  * Interface for standardized error structure
@@ -229,4 +230,78 @@ export function getLocalizedErrorMessage(
   }
 
   return localizedMessage;
+}
+
+/**
+ * Checks if an error is a cancellation error (request was aborted)
+ * Handles both Axios CanceledError and AbortError
+ */
+export function isCancelledError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+
+  const err = error as any;
+
+  // Check for Axios CanceledError (what Axios actually throws)
+  if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+    return true;
+  }
+
+  // Check for standard AbortError (what AbortController throws)
+  if (err.name === 'AbortError') {
+    return true;
+  }
+
+  // Check for message-based cancellation
+  if (typeof err.message === 'string' && err.message === 'canceled') {
+    return true;
+  }
+
+  // Check for Axios error with specific cancellation status
+  if (err.isAxiosError && err.message && err.message.includes('canceled')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Handles cancelled errors gracefully by logging debug info and returning true if cancelled
+ * Use this in catch blocks to silently handle cancellation without showing errors to user
+ */
+export function handleCancelledError(
+  error: unknown,
+  context?: string
+): boolean {
+  if (isCancelledError(error)) {
+    logger.debug(`Request cancelled${context ? ` in ${context}` : ''}`, {
+      error: error instanceof Error ? error.name : 'unknown',
+      context,
+    });
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Safe error handler that checks for cancellation first, then handles other errors
+ * Returns true if the error was handled (cancelled or processed), false if it should bubble up
+ */
+export function handleRequestError(
+  error: unknown,
+  context: string,
+  onError?: (error: unknown) => void
+): boolean {
+  // First check if it's a cancellation - these are expected and should be silent
+  if (handleCancelledError(error, context)) {
+    return true;
+  }
+
+  // Handle other errors
+  if (onError) {
+    onError(error);
+    return true;
+  }
+
+  // Error not handled
+  return false;
 }

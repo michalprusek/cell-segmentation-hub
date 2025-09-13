@@ -39,7 +39,7 @@ export const validate = <T>(
           target: target,
           url: req.url,
           method: req.method,
-          userId: (req as any).user?.id,
+          userId: (req as Request & { user?: { id?: string } }).user?.id,
           validationErrors: errors,
           receivedData: data,
           errorCount: error.errors.length

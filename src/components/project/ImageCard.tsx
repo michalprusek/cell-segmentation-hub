@@ -110,6 +110,7 @@ export const ImageCard = ({
     setImageError(false);
   }, [
     image.id,
+    image.segmentationThumbnailUrl,
     image.segmentationThumbnailPath,
     image.thumbnail_url,
     image.url,
@@ -119,8 +120,9 @@ export const ImageCard = ({
   // Create ordered list of candidate URLs, deduplicating falsy/identical entries
   const candidateUrls = React.useMemo(() => {
     // If we have a segmentation thumbnail, use it as the primary source
+    // Support both new (segmentationThumbnailUrl) and legacy (segmentationThumbnailPath) fields
     const urls = [
-      image.segmentationThumbnailPath, // Prefer segmentation thumbnail if available
+      image.segmentationThumbnailUrl || image.segmentationThumbnailPath, // Prefer segmentation thumbnail if available
       image.thumbnail_url,
       image.url,
       image.image_url,
@@ -129,6 +131,7 @@ export const ImageCard = ({
       .filter((url, index, array) => array.indexOf(url) === index); // Deduplicate identical entries
     return urls;
   }, [
+    image.segmentationThumbnailUrl,
     image.segmentationThumbnailPath,
     image.thumbnail_url,
     image.url,
@@ -210,6 +213,7 @@ export const ImageCard = ({
         {/* Segmentation overlay - only render if we don't have a segmentation thumbnail */}
         {(() => {
           const shouldShowSegmentation =
+            !image.segmentationThumbnailUrl &&
             !image.segmentationThumbnailPath && // Only show canvas if no segmentation thumbnail
             (image.segmentationStatus === 'completed' ||
               image.segmentationStatus === 'segmented') &&

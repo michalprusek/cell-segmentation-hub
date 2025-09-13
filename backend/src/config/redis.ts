@@ -101,7 +101,7 @@ export function getRedisClient(): RedisClientType | null {
 export async function redisHealthCheck(): Promise<{
   status: 'healthy' | 'unhealthy';
   message: string;
-  details?: any;
+  details?: Record<string, unknown>;
 }> {
   try {
     if (!redisClient) {
@@ -122,7 +122,7 @@ export async function redisHealthCheck(): Promise<{
     const pingResult = await redisClient.ping();
     
     // Get some basic info
-    const info = await redisClient.info('server');
+    const _info = await redisClient.info('server');
     const memoryInfo = await redisClient.info('memory');
     
     // Parse memory usage

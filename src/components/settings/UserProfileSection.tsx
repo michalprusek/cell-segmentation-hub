@@ -78,7 +78,6 @@ const UserProfileSection = ({ userId, profile }: UserProfileSectionProps) => {
         <div className="space-y-4">
           <h3 className="text-lg font-medium">{t('settings.bio')}</h3>
           <div className="space-y-2">
-            <Label htmlFor="bio">{t('settings.bio')}</Label>
             <Input
               id="bio"
               value={formData.bio}

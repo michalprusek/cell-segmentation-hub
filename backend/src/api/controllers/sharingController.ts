@@ -34,7 +34,7 @@ export const shareProjectByEmail = asyncHandler(async (req: Request, res: Respon
       return;
     }
 
-    const share = await SharingService.shareProjectByEmail(projectId, req.user!.id, data);
+    const share = await SharingService.shareProjectByEmail(projectId, req.user.id, data);
     
     ResponseHelper.success(
       res,
@@ -49,7 +49,7 @@ export const shareProjectByEmail = asyncHandler(async (req: Request, res: Respon
     );
   } catch (error) {
     logger.error('Failed to share project by email:', error as Error, 'SharingController', {
-      userId: req.user!.id,
+      userId: req.user.id,
       projectId,
       email: data.email
     });
@@ -95,7 +95,7 @@ export const shareProjectByLink = asyncHandler(async (req: Request, res: Respons
       return;
     }
 
-    const share = await SharingService.shareProjectByLink(projectId, req.user!.id, data);
+    const share = await SharingService.shareProjectByLink(projectId, req.user.id, data);
     
     const shareUrl = `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`;
     
@@ -113,7 +113,7 @@ export const shareProjectByLink = asyncHandler(async (req: Request, res: Respons
     );
   } catch (error) {
     logger.error('Failed to generate shareable link:', error as Error, 'SharingController', {
-      userId: req.user!.id,
+      userId: req.user.id,
       projectId
     });
 
@@ -169,7 +169,7 @@ export const getProjectShares = asyncHandler(async (req: Request, res: Response)
     }
     // Both owners and users with shared access can view shares - no additional check needed
 
-    const shares = await SharingService.getProjectShares(projectId, req.user!.id);
+    const shares = await SharingService.getProjectShares(projectId, req.user.id);
     
     const formattedShares = shares.map(share => ({
       id: share.id,
@@ -192,7 +192,7 @@ export const getProjectShares = asyncHandler(async (req: Request, res: Response)
     );
   } catch (error) {
     logger.error('Failed to get project shares:', error as Error, 'SharingController', {
-      userId: req.user!.id,
+      userId: req.user.id,
       projectId
     });
 
@@ -222,7 +222,7 @@ export const revokeProjectShare = asyncHandler(async (req: Request, res: Respons
   }
 
   try {
-    await SharingService.revokeShare(shareId, req.user!.id);
+    await SharingService.revokeShare(shareId, req.user.id);
     
     ResponseHelper.success(
       res,
@@ -231,7 +231,7 @@ export const revokeProjectShare = asyncHandler(async (req: Request, res: Respons
     );
   } catch (error) {
     logger.error('Failed to revoke share:', error as Error, 'SharingController', {
-      userId: req.user!.id,
+      userId: req.user.id,
       shareId
     });
 
@@ -255,10 +255,10 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
   }
 
   try {
-    const shares = await SharingService.getSharedProjects(req.user!.id);
+    const shares = await SharingService.getSharedProjects(req.user.id);
     
     logger.info(`Found ${shares?.length || 0} shared projects for user`, 'SharingController', {
-      userId: req.user!.id,
+      userId: req.user.id,
       shareCount: shares?.length || 0
     });
     
@@ -304,8 +304,8 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
           id: share.project.user.id,
           email: share.project.user.email
         },
-        image_count: (share.project as any)._count?.images || 0,
-        images: (share.project as any).images || [],
+        image_count: (share.project as Record<string, unknown> & {_count?: {images?: number}})._count?.images || 0,
+        images: (share.project as Record<string, unknown> & {images?: unknown[]}).images || [],
         updated_at: share.project.updatedAt
       },
       sharedBy: {
@@ -325,7 +325,7 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
     );
   } catch (error) {
     logger.error('Failed to get shared projects:', error as Error, 'SharingController', {
-      userId: req.user!.id
+      userId: req.user.id
     });
 
     ResponseHelper.internalError(res, error as Error, 'Failed to get shared projects', 'SharingController');

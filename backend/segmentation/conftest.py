@@ -12,8 +12,8 @@ from PIL import Image
 from fastapi.testclient import TestClient
 from httpx import AsyncClient
 
-# Use proper imports instead of sys.path manipulation
-# sys.path.insert(0, os.path.dirname(__file__))
+# Add current directory to Python path for imports
+sys.path.insert(0, os.path.dirname(__file__))
 
 from api.main import app
 

@@ -6,6 +6,21 @@ import sharp from 'sharp';
 import { VisualizationGenerator, Polygon } from './visualization/visualizationGenerator';
 import { logger } from '../utils/logger';
 import { getStorageProvider } from '../storage';
+import { retryService, RetryService } from '../utils/retryService';
+import { ConcurrencyManager } from '../utils/concurrencyManager';
+import { batchProcessor } from '../utils/batchProcessor';
+
+// Default retry configuration optimized for thumbnail generation
+const DEFAULT_THUMBNAIL_RETRY_CONFIG = {
+  maxRetries: 3,
+  initialDelay: 1000,  // 1 second
+  maxDelay: 10000,     // 10 seconds
+  backoffFactor: 2,
+  operationName: 'Thumbnail generation'
+};
+
+// Global concurrency controller instance
+const thumbnailConcurrencyController = new ConcurrencyManager(5);
 
 interface SegmentationThumbnailOptions {
   width?: number;
@@ -138,19 +153,19 @@ export class SegmentationThumbnailService {
       // Clean up temp file
       try {
         await fs.unlink(tempVisualizationPath);
-      } catch (error) {
+      } catch (_error) {
         logger.warn('Failed to clean up temp visualization file', 'SegmentationThumbnailService', {
           tempPath: tempVisualizationPath
         });
       }
 
-      // Update image record with new segmentation thumbnail URL
-      const segmentationThumbnailUrl = `/uploads/${thumbnailRelativePath}`;
+      // Update image record with new segmentation thumbnail path (relative, without /uploads/ prefix)
+      // This makes it consistent with originalPath and thumbnailPath fields
       
       await this.prisma.image.update({
         where: { id: image.id },
         data: {
-          segmentationThumbnailPath: segmentationThumbnailUrl,
+          segmentationThumbnailPath: thumbnailRelativePath, // Store relative path without /uploads/
           updatedAt: new Date()
         }
       });
@@ -158,10 +173,10 @@ export class SegmentationThumbnailService {
       logger.info('Segmentation thumbnail generated successfully', 'SegmentationThumbnailService', {
         segmentationId,
         thumbnailPath: thumbnailFullPath,
-        thumbnailUrl: segmentationThumbnailUrl
+        thumbnailRelativePath: thumbnailRelativePath
       });
 
-      return segmentationThumbnailUrl;
+      return `/uploads/${thumbnailRelativePath}`; // Return with prefix for immediate use
 
     } catch (error) {
       logger.error(
@@ -175,7 +190,68 @@ export class SegmentationThumbnailService {
   }
 
   /**
-   * Generate thumbnails for all images in a batch
+   * Generate a segmentation thumbnail with retry logic and exponential backoff
+   * This method provides robust thumbnail generation following the emailRetryService pattern
+   */
+  async generateSegmentationThumbnailWithRetry(
+    segmentationId: string,
+    options: SegmentationThumbnailOptions = {}
+  ): Promise<string | null> {
+    // Use concurrency control and shared retry service
+    return thumbnailConcurrencyController.execute(async () => {
+      return retryService.executeWithRetry(
+        () => this.generateSegmentationThumbnail(segmentationId, options),
+        {
+          ...DEFAULT_THUMBNAIL_RETRY_CONFIG,
+          operationName: `Thumbnail generation for ${segmentationId}`
+        },
+        (error) => this.isRetriableError(error)
+      );
+    }, `Thumbnail generation for ${segmentationId}`);
+  }
+
+  /**
+   * Determine if a thumbnail generation error is retriable
+   * Uses shared logic plus thumbnail-specific rules
+   */
+  private isRetriableError(error: Error): boolean {
+    // Check common retriable errors first
+    if (RetryService.isCommonRetriableError(error)) {
+      return true;
+    }
+    
+    const message = error.message.toLowerCase();
+    
+    // Additional thumbnail-specific retriable errors
+    if (message.includes('sharp') && 
+        (message.includes('memory') ||    // Memory issues
+         message.includes('buffer') ||    // Buffer issues
+         message.includes('processing'))) { // Processing issues
+      return true;
+    }
+    
+    // Database errors that might be temporary
+    if (message.includes('prisma') &&
+        (message.includes('timeout') ||   // DB timeouts
+         message.includes('connection'))) { // Connection issues
+      return true;
+    }
+    
+    // Do not retry for permanent errors
+    if (message.includes('invalid') ||    // Invalid data
+        message.includes('corrupt') ||    // Corrupted files
+        message.includes('unsupported') || // Unsupported formats
+        message.includes('not found') && !message.includes('enoent')) { // Permanent not found
+      return false;
+    }
+    
+    // Default to retriable for unknown errors
+    return true;
+  }
+
+  /**
+   * Generate thumbnails for all images in a batch with improved concurrency control
+   * Now uses the retry wrapper for each thumbnail generation
    */
   async generateBatchThumbnails(
     segmentationIds: string[],
@@ -183,20 +259,45 @@ export class SegmentationThumbnailService {
   ): Promise<Map<string, string | null>> {
     const results = new Map<string, string | null>();
 
-    // Process thumbnails in parallel with concurrency limit
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < segmentationIds.length; i += BATCH_SIZE) {
-      const batch = segmentationIds.slice(i, i + BATCH_SIZE);
-      const batchResults = await Promise.all(
-        batch.map(id => this.generateSegmentationThumbnail(id, options))
-      );
-      
-      batch.forEach((id, index) => {
-        results.set(id, batchResults[index]);
-      });
-    }
+    // Use shared BatchProcessor
+    await batchProcessor.processBatch(
+      segmentationIds,
+      async (id) => {
+        const result = await this.generateSegmentationThumbnailWithRetry(id, options);
+        results.set(id, result);
+        return result;
+      },
+      {
+        batchSize: 5,
+        concurrency: 5,
+        onBatchComplete: (index, batchResults) => {
+          logger.info(`Thumbnail batch ${index + 1} completed, ${batchResults.length} successful`);
+        },
+        onItemError: (id, error) => {
+          logger.error(`Failed to generate thumbnail for ${id}`, error);
+          results.set(id, null);
+        }
+      }
+    );
+
+    const successCount = Array.from(results.values()).filter(r => r !== null).length;
+    const failureCount = results.size - successCount;
+
+    logger.info('Batch thumbnail generation completed', 'SegmentationThumbnailService', {
+      batchSize: segmentationIds.length,
+      successCount,
+      failureCount,
+      concurrencyStatus: thumbnailConcurrencyController.getStatus()
+    });
 
     return results;
+  }
+
+  /**
+   * Get concurrency controller status for monitoring
+   */
+  getConcurrencyStatus(): { active: number; queued: number; maxConcurrent: number } {
+    return thumbnailConcurrencyController.getStatus();
   }
 }
 

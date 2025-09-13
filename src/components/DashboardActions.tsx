@@ -1,14 +1,10 @@
 import React from 'react';
-import { Grid2X2, List as ListIcon, ArrowUpDown } from 'lucide-react';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Grid2X2, List as ListIcon } from 'lucide-react';
+// ArrowUpDown unused - available for future use
+// ToggleGroup, ToggleGroupItem unused - available for future use
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from './ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+// DropdownMenu components unused - available for future use
 
 interface DashboardActionsProps {
   viewMode: 'grid' | 'list';
@@ -20,10 +16,10 @@ interface DashboardActionsProps {
 const DashboardActions = ({
   viewMode,
   setViewMode,
-  onSort,
-  sortOptions = [],
+  onSort: _onSort,
+  sortOptions: _sortOptions = [],
 }: DashboardActionsProps) => {
-  const { t } = useLanguage();
+  const { t: _t } = useLanguage();
 
   return (
     <div className="flex items-center space-x-2">

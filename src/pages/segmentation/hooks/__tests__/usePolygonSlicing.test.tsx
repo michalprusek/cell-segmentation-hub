@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { act } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import React from 'react';
 import { usePolygonSlicing } from '../usePolygonSlicing';
 import { EditMode } from '../../types';
@@ -7,7 +7,6 @@ import {
   createMockInteractionState,
   mockBrowserAPIs,
 } from '@/test-utils/reactTestUtils';
-import { renderHook } from '@testing-library/react';
 import {
   createTestPolygons,
   createTestPolygonObjects,

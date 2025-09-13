@@ -25,7 +25,7 @@ test.describe('Enhanced Authentication Flow', () => {
     page,
   }) => {
     const landingPage = new LandingPage(page);
-    const signInPage = new SignInPage(page);
+    const _signInPage = new SignInPage(page);
     const signUpPage = new SignUpPage(page);
     const dashboardPage = new DashboardPage(page);
 
@@ -122,8 +122,8 @@ test.describe('Enhanced Authentication Flow', () => {
 
   test('should navigate between authentication pages', async ({ page }) => {
     const landingPage = new LandingPage(page);
-    const signInPage = new SignInPage(page);
-    const signUpPage = new SignUpPage(page);
+    const _signInPage = new SignInPage(page);
+    const _signUpPage = new SignUpPage(page);
 
     // Landing -> Sign In
     await landingPage.navigate();
@@ -131,7 +131,7 @@ test.describe('Enhanced Authentication Flow', () => {
     await expect(page).toHaveURL('/sign-in');
 
     // Sign In -> Sign Up
-    await signInPage.clickSignUp();
+    await _signInPage.clickSignUp();
     await expect(page).toHaveURL('/sign-up');
 
     // Sign Up -> Sign In
@@ -139,7 +139,7 @@ test.describe('Enhanced Authentication Flow', () => {
     await expect(page).toHaveURL('/sign-in');
 
     // Sign In -> Back to Landing
-    await signInPage.clickBack();
+    await _signInPage.clickBack();
     await expect(page).toHaveURL('/');
   });
 
@@ -219,7 +219,7 @@ test.describe('Enhanced Authentication Flow', () => {
     const submitPromise = signInPage.signInButton.click();
 
     // Should show loading state (might be very brief)
-    const hasLoadingSpinner = await signInPage.loadingSpinner.isVisible({
+    const _hasLoadingSpinner = await signInPage.loadingSpinner.isVisible({
       timeout: 3000,
     });
 

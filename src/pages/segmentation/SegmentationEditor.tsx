@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useCallback,
   useRef,
+  startTransition,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth, useLanguage } from '@/contexts/exports';
@@ -12,12 +13,16 @@ import { sortImagesBySettings } from '@/hooks/useImageFilter';
 import { useEnhancedSegmentationEditor } from './hooks/useEnhancedSegmentationEditor';
 import { useSegmentationReload } from './hooks/useSegmentationReload';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
+import { useCoordinatedAbortController } from '@/hooks/shared/useAbortController';
 import useDebounce from '@/hooks/useDebounce';
 import { EditMode } from './types';
 import { Polygon } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import {
+  handleCancelledError /* , isCancelledError */,
+} from '@/lib/errorUtils';
 
 // New layout components
 import VerticalToolbar from './components/VerticalToolbar';
@@ -56,13 +61,27 @@ const SegmentationEditor = () => {
   // Track if this is the initial load (coming from Project Detail) vs internal navigation
   const isInitialLoadRef = useRef(true);
   const previousImageIdRef = useRef<string | undefined>(undefined);
+  const currentImageIdRef = useRef<string | undefined>(imageId);
 
-  // Project data - fetch all images for segmentation editor
+  // Coordinated AbortController for all segmentation operations
+  const { getSignal, abortAllOperations, abortAll } =
+    useCoordinatedAbortController(
+      ['main-loading', 'prefetch', 'websocket-reload'],
+      'SegmentationEditor'
+    );
+
+  // Project data - optimize by NOT fetching all images upfront
+  // This significantly improves performance with large projects (e.g., 640 images)
+  // Instead, we fetch only metadata and load segmentation data on-demand
   const {
     projectTitle,
     images,
     loading: projectLoading,
-  } = useProjectData(projectId, user?.id, { fetchAll: true });
+    refreshImageSegmentation,
+  } = useProjectData(projectId, user?.id, {
+    fetchAll: false, // CRITICAL: Don't fetch all segmentation data upfront
+    // We'll handle prefetching adjacent images separately
+  });
 
   // WebSocket connection for segmentation status updates
   const {
@@ -72,7 +91,13 @@ const SegmentationEditor = () => {
   } = useSegmentationQueue(projectId);
 
   // Debounce WebSocket updates to prevent rapid state changes
-  const debouncedLastUpdate = useDebounce(lastUpdate, 300);
+  // Use longer debounce during bulk operations to reduce re-renders
+  const debouncedLastUpdate = useDebounce(
+    lastUpdate,
+    queueStats && (queueStats.queued > 10 || queueStats.processing > 5)
+      ? 1000
+      : 300
+  );
 
   // Create compatibility objects for existing code
   // Apply the same sorting as in ProjectDetail page
@@ -81,9 +106,15 @@ const SegmentationEditor = () => {
     return sortImagesBySettings(images);
   }, [images]);
 
-  const selectedImage = projectImages.find(img => img.id === imageId);
+  const selectedImage = useMemo(
+    () => projectImages.find(img => img.id === imageId),
+    [projectImages, imageId]
+  );
 
-  const project = { name: projectTitle || 'Unknown Project' };
+  const project = useMemo(
+    () => ({ name: projectTitle || 'Unknown Project' }),
+    [projectTitle]
+  );
 
   // State for segmentation polygons from API
   const [segmentationPolygons, setSegmentationPolygons] = useState<
@@ -110,6 +141,76 @@ const SegmentationEditor = () => {
       onDimensionsUpdated: setImageDimensions,
       maxRetries: 2,
     });
+
+  // Smart prefetching for adjacent images with cancellation support
+  // This ensures smooth navigation without loading all 640 images upfront
+  useEffect(() => {
+    if (!projectImages.length || !imageId || !refreshImageSegmentation) return;
+
+    // Cancel any existing prefetch operations when imageId changes
+    const signal = getSignal('prefetch');
+
+    const currentIndex = projectImages.findIndex(img => img.id === imageId);
+    if (currentIndex === -1) return;
+
+    // Define prefetch window (current + adjacent images)
+    const prefetchIndices = [
+      currentIndex - 1, // Previous image
+      currentIndex, // Current image (priority)
+      currentIndex + 1, // Next image
+    ].filter(idx => idx >= 0 && idx < projectImages.length);
+
+    // Prefetch with priority: current first, then adjacent
+    const prefetchWithPriority = async () => {
+      try {
+        // Check if we're still on the same image
+        if (signal.aborted || imageId !== currentImageIdRef.current) {
+          logger.debug('🛑 Prefetch cancelled - image changed');
+          return;
+        }
+
+        // First ensure current image is loaded
+        const currentImage = projectImages[currentIndex];
+        if (currentImage && !currentImage.segmentationResult) {
+          await refreshImageSegmentation(currentImage.id);
+        }
+
+        // Then prefetch adjacent images in background
+        setTimeout(() => {
+          if (signal.aborted || imageId !== currentImageIdRef.current) {
+            return; // Don't prefetch if cancelled or image changed
+          }
+
+          prefetchIndices.forEach(idx => {
+            if (idx !== currentIndex) {
+              const img = projectImages[idx];
+              if (
+                img &&
+                !img.segmentationResult &&
+                (img.segmentationStatus === 'completed' ||
+                  img.segmentationStatus === 'segmented')
+              ) {
+                // Prefetch in background without blocking
+                refreshImageSegmentation(img.id).catch(error => {
+                  // Silent fail for prefetch, but handle cancellation properly
+                  if (!handleCancelledError(error, 'prefetch')) {
+                    logger.debug('Prefetch failed (non-critical):', error);
+                  }
+                });
+              }
+            }
+          });
+        }, 500); // Small delay to prioritize current image
+      } catch (error) {
+        // Handle cancellation gracefully
+        if (!handleCancelledError(error, 'prefetch')) {
+          logger.error('Prefetch error:', error);
+        }
+      }
+    };
+
+    prefetchWithPriority();
+  }, [imageId, projectImages, refreshImageSegmentation, getSignal]);
 
   // Calculate canvas dimensions dynamically based on container and image
   const updateCanvasDimensions = useCallback(
@@ -164,6 +265,9 @@ const SegmentationEditor = () => {
       return [];
     }
 
+    // For large datasets, process in chunks to prevent blocking
+    const startTime = performance.now();
+
     // Transform SegmentationPolygon[] to Polygon[] and filter out invalid polygons
     const polygons: Polygon[] = segmentationPolygons
       .filter(segPoly => segPoly.points && segPoly.points.length >= 3)
@@ -212,9 +316,18 @@ const SegmentationEditor = () => {
       .filter((polygon): polygon is Polygon => polygon !== null);
 
     const invalidCount = segmentationPolygons.length - polygons.length;
+    const processingTime = performance.now() - startTime;
+
     if (invalidCount > 0) {
       logger.warn(
         `⚠️ Filtered out ${invalidCount} invalid polygons (missing or insufficient points)`
+      );
+    }
+
+    // Monitor processing time to detect performance issues
+    if (processingTime > 100) {
+      logger.warn(
+        `⚠️ Polygon processing took ${processingTime.toFixed(2)}ms for ${segmentationPolygons.length} polygons`
       );
     }
 
@@ -223,6 +336,7 @@ const SegmentationEditor = () => {
       inputCount: segmentationPolygons.length,
       validCount: polygons.length,
       filteredOut: invalidCount,
+      processingTime: `${processingTime.toFixed(2)}ms`,
       imageDimensions,
       firstPolygon: polygons[0]
         ? {
@@ -263,7 +377,7 @@ const SegmentationEditor = () => {
     canvasHeight,
     imageId, // Pass imageId to track image changes
     isFromGallery: shouldAutoCenter.current, // Use our auto-center flag
-    onSave: async (polygons, targetImageId, targetDimensions) => {
+    onSave: async (polygons, targetImageId, targetDimensions, signal) => {
       const saveToImageId = targetImageId || imageId;
       if (!projectId || !saveToImageId) return;
 
@@ -337,7 +451,8 @@ const SegmentationEditor = () => {
           saveToImageId,
           polygonData,
           saveWidth,
-          saveHeight
+          saveHeight,
+          signal ? { signal } : undefined
         );
         // Only update UI state if we're saving the current image (not autosave for different image)
         if (saveToImageId === imageId) {
@@ -348,6 +463,11 @@ const SegmentationEditor = () => {
           logger.debug('✅ Autosaved polygons for image:', saveToImageId);
         }
       } catch (error) {
+        // Handle cancellation gracefully
+        if (handleCancelledError(error, 'segmentation save')) {
+          return;
+        }
+
         logger.error('Failed to save segmentation:', error);
         toast.error(t('toast.operationFailed'));
       }
@@ -385,13 +505,18 @@ const SegmentationEditor = () => {
     [editor]
   );
 
-  // Load segmentation data
+  // Load segmentation data with proper cancellation handling
   useEffect(() => {
     let isMounted = true;
-    const abortController = new AbortController();
+
+    // Update current image ref immediately
+    currentImageIdRef.current = imageId;
 
     const loadSegmentation = async () => {
       if (!projectId || !imageId) return;
+
+      // Get abort signal for main loading operation
+      const signal = getSignal('main-loading');
 
       // Immediately clear polygons when switching images to prevent showing old data
       setSegmentationPolygons(null);
@@ -424,7 +549,7 @@ const SegmentationEditor = () => {
               height: selectedImage.height,
             }
           );
-          if (isMounted) {
+          if (isMounted && imageId === currentImageIdRef.current) {
             setImageDimensions({
               width: selectedImage.width,
               height: selectedImage.height,
@@ -438,16 +563,26 @@ const SegmentationEditor = () => {
         const segmentationData = await apiClient.getSegmentationResults(
           imageId,
           {
-            signal: abortController.signal,
+            signal,
           }
         );
 
-        // Check if component is still mounted
-        if (!isMounted) return;
+        // Verify we're still on the same image and component is mounted
+        if (
+          !isMounted ||
+          imageId !== currentImageIdRef.current ||
+          signal.aborted
+        ) {
+          logger.debug(
+            '🛑 Segmentation load cancelled - image changed or component unmounted'
+          );
+          return;
+        }
+
         // Handle empty or null segmentation gracefully
         if (!segmentationData || !segmentationData.polygons) {
           logger.debug('No segmentation data found for image:', imageId);
-          if (isMounted) {
+          if (isMounted && imageId === currentImageIdRef.current) {
             setSegmentationPolygons(null);
           }
 
@@ -460,10 +595,12 @@ const SegmentationEditor = () => {
                 height: selectedImage.height,
               }
             );
-            setImageDimensions({
-              width: selectedImage.width,
-              height: selectedImage.height,
-            });
+            if (isMounted && imageId === currentImageIdRef.current) {
+              setImageDimensions({
+                width: selectedImage.width,
+                height: selectedImage.height,
+              });
+            }
           }
           return;
         }
@@ -476,10 +613,12 @@ const SegmentationEditor = () => {
             width: segmentationData.imageWidth,
             height: segmentationData.imageHeight,
           });
-          setImageDimensions({
-            width: segmentationData.imageWidth,
-            height: segmentationData.imageHeight,
-          });
+          if (isMounted && imageId === currentImageIdRef.current) {
+            setImageDimensions({
+              width: segmentationData.imageWidth,
+              height: segmentationData.imageHeight,
+            });
+          }
         } else if (selectedImage?.width && selectedImage?.height) {
           // Fallback to image dimensions from project data (database)
           logger.debug(
@@ -489,7 +628,7 @@ const SegmentationEditor = () => {
               height: selectedImage.height,
             }
           );
-          if (isMounted) {
+          if (isMounted && imageId === currentImageIdRef.current) {
             setImageDimensions({
               width: selectedImage.width,
               height: selectedImage.height,
@@ -513,32 +652,33 @@ const SegmentationEditor = () => {
               }
             : null,
         });
-        if (isMounted) {
+
+        // Final check before setting state
+        if (isMounted && imageId === currentImageIdRef.current) {
           setSegmentationPolygons(polygons);
         }
       } catch (error: any) {
-        // Ignore aborted requests
-        if (error.name === 'AbortError') return;
-        logger.error('Failed to load segmentation:', error);
-        // Set to null instead of showing error for missing segmentation
-        if (
-          error &&
-          typeof error === 'object' &&
-          'response' in error &&
-          (error as { response?: { status?: number } }).response?.status === 404
-        ) {
-          logger.debug('No segmentation found for image (404):', imageId);
-          if (isMounted) {
-            if (isMounted) {
-              setSegmentationPolygons(null);
-            }
-          }
-        } else {
-          if (isMounted) {
+        // Handle cancellation gracefully - don't show errors for cancelled requests
+        if (handleCancelledError(error, 'segmentation loading')) {
+          return;
+        }
+
+        // Only handle real errors if we're still on the same image
+        if (isMounted && imageId === currentImageIdRef.current) {
+          logger.error('Failed to load segmentation:', error);
+          // Set to null instead of showing error for missing segmentation
+          if (
+            error &&
+            typeof error === 'object' &&
+            'response' in error &&
+            (error as { response?: { status?: number } }).response?.status ===
+              404
+          ) {
+            logger.debug('No segmentation found for image (404):', imageId);
+            setSegmentationPolygons(null);
+          } else {
             toast.error(t('toast.operationFailed'));
-            if (isMounted) {
-              setSegmentationPolygons(null);
-            }
+            setSegmentationPolygons(null);
           }
         }
       }
@@ -548,7 +688,7 @@ const SegmentationEditor = () => {
 
     return () => {
       isMounted = false;
-      abortController.abort();
+      // Don't abort here - let the coordinated controller handle it
     };
   }, [
     projectId,
@@ -557,6 +697,7 @@ const SegmentationEditor = () => {
     selectedImage?.width,
     selectedImage?.height,
     selectedImage?.segmentationStatus,
+    getSignal,
   ]);
 
   // Debug logging for polygon rendering (only when polygons change)
@@ -597,7 +738,7 @@ const SegmentationEditor = () => {
     editor.transform,
   ]);
 
-  // Listen for segmentation completion and auto-reload polygons (debounced)
+  // Listen for segmentation completion and auto-reload polygons (debounced) with cancellation
   const handleSegmentationStatusUpdate = useCallback(() => {
     // Only proceed if we have a WebSocket update for the current image
     if (!debouncedLastUpdate || debouncedLastUpdate.imageId !== imageId) {
@@ -619,10 +760,56 @@ const SegmentationEditor = () => {
         }
       );
 
-      // Add a small delay to ensure the API is ready
+      // Get abort signal for WebSocket reload operations
+      const signal = getSignal('websocket-reload');
+
+      // Add retry mechanism to handle race condition between WebSocket status and API availability
+      const tryReloadWithRetry = async (attempt = 1, maxAttempts = 3) => {
+        if (
+          isReloading ||
+          signal.aborted ||
+          imageId !== currentImageIdRef.current
+        ) {
+          logger.debug('🛑 WebSocket reload cancelled');
+          return;
+        }
+
+        try {
+          await reloadSegmentation();
+        } catch (error) {
+          // Handle cancellation gracefully
+          if (handleCancelledError(error, 'websocket reload')) {
+            return;
+          }
+
+          logger.warn(
+            `Segmentation reload attempt ${attempt} failed, will retry in ${attempt * 1000}ms`,
+            { imageId: debouncedLastUpdate.imageId, error }
+          );
+
+          if (
+            attempt < maxAttempts &&
+            !signal.aborted &&
+            imageId === currentImageIdRef.current
+          ) {
+            setTimeout(() => {
+              if (!signal.aborted && imageId === currentImageIdRef.current) {
+                tryReloadWithRetry(attempt + 1, maxAttempts);
+              }
+            }, attempt * 1000); // Exponential backoff: 1s, 2s, 3s
+          } else {
+            logger.error(
+              `Failed to reload segmentation after ${maxAttempts} attempts`,
+              { imageId: debouncedLastUpdate.imageId }
+            );
+          }
+        }
+      };
+
+      // Start with initial delay to ensure API is ready
       setTimeout(() => {
-        if (!isReloading) {
-          reloadSegmentation();
+        if (!signal.aborted && imageId === currentImageIdRef.current) {
+          tryReloadWithRetry();
         }
       }, 500);
 
@@ -638,7 +825,10 @@ const SegmentationEditor = () => {
         imageId: debouncedLastUpdate.imageId,
         status: debouncedLastUpdate.status,
       });
-      setSegmentationPolygons(null);
+      // Only update if we're still on the same image
+      if (imageId === currentImageIdRef.current) {
+        setSegmentationPolygons(null);
+      }
     }
   }, [
     debouncedLastUpdate,
@@ -646,18 +836,39 @@ const SegmentationEditor = () => {
     isReloading,
     reloadSegmentation,
     setSegmentationPolygons,
+    getSignal,
   ]);
 
   useEffect(() => {
     handleSegmentationStatusUpdate();
   }, [handleSegmentationStatusUpdate]);
 
-  // Cleanup timeout and abort controller when component unmounts or imageId changes
+  // Cleanup and coordinate cancellation when imageId changes
   useEffect(() => {
+    // When imageId changes, cancel all ongoing operations for the previous image
+    const previousImageId = previousImageIdRef.current;
+    if (previousImageId && previousImageId !== imageId) {
+      logger.debug(
+        `🛑 Image changed from ${previousImageId} to ${imageId} - cancelling all operations`
+      );
+      abortAllOperations();
+    }
+
+    // Update the ref
+    previousImageIdRef.current = imageId;
+    currentImageIdRef.current = imageId;
+
     return () => {
       cleanupReloadOperations();
     };
-  }, [imageId, cleanupReloadOperations]);
+  }, [imageId, cleanupReloadOperations, abortAllOperations]);
+
+  // Cleanup all operations when component unmounts
+  useEffect(() => {
+    return () => {
+      abortAll();
+    };
+  }, [abortAll]);
 
   // Handle image load to get dimensions (only if not already set from segmentation data)
   const handleImageLoad = (width: number, height: number) => {
@@ -705,7 +916,11 @@ const SegmentationEditor = () => {
 
     const nextImage = projectImages[nextIndex];
     if (nextImage) {
-      navigate(`/segmentation/${projectId}/${nextImage.id}`);
+      // Use startTransition to ensure navigation works with React 18 concurrent features
+      // This fixes navigation freezing issues after segmentation
+      startTransition(() => {
+        navigate(`/segmentation/${projectId}/${nextImage.id}`);
+      });
     }
   };
 
@@ -805,9 +1020,11 @@ const SegmentationEditor = () => {
 
   const currentImageIndex =
     projectImages?.findIndex(img => img.id === imageId) ?? -1;
-  const isAnyEditModeActive = editor.editMode !== EditMode.View;
+  const _isAnyEditModeActive = editor.editMode !== EditMode.View;
 
-  if (projectLoading) {
+  // Show loading state only during initial load
+  // Once we have basic image metadata, show the UI even if segmentation is still loading
+  if (projectLoading && !projectImages.length) {
     return (
       <div className="flex items-center justify-center h-screen">
         {t('common.loading')}

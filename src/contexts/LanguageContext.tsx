@@ -14,7 +14,7 @@ import {
   LanguageContext,
   type Language,
   type Translations,
-  type LanguageContextType,
+  // type LanguageContextType,
 } from './LanguageContext.types';
 
 // Language and Translations types are exported from './exports' to avoid Fast Refresh warnings

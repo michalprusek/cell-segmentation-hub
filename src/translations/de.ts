@@ -942,6 +942,11 @@ export default {
       completed: 'Segmentierung erfolgreich abgeschlossen',
       completedWithCount:
         'Segmentierung abgeschlossen! {{count}} Objekte gefunden',
+      batchStarted: 'Segmentierung gestartet für {{count}} Bilder',
+      batchCompleted:
+        '✅ {{count}} Bilder erfolgreich segmentiert ({{duration}}s)',
+      batchCompletedWithErrors:
+        '⚠️ Batch abgeschlossen: {{successful}} erfolgreich, {{failed}} fehlgeschlagen ({{duration}}s)',
       noPolygons: 'Keine Segmentierungspolygone erkannt',
       reloadFailed:
         'Laden der Segmentierungsergebnisse fehlgeschlagen. Bitte Seite aktualisieren.',
@@ -1016,6 +1021,7 @@ export default {
     includeJsonMetadata: 'JSON-Metadaten einschließen',
     preparing: 'Export wird vorbereitet...',
     processing: 'Verarbeitung {{current}} von {{total}}',
+    processingExport: 'Verarbeitung...',
     packaging: 'Paket wird erstellt...',
     completed: 'Export abgeschlossen',
     downloading: 'Herunterladen...',

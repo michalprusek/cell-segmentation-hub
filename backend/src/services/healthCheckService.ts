@@ -25,7 +25,7 @@ export interface ComponentHealth {
   status: 'healthy' | 'degraded' | 'unhealthy';
   message: string;
   responseTime?: number;
-  details?: any;
+  details?: Record<string, unknown>;
   lastCheck: Date;
 }
 
@@ -66,7 +66,7 @@ export class HealthCheckService {
       this.redis.on('error', (err) => {
         logger.warn('Redis health check connection error:', err);
       });
-    } catch (error) {
+    } catch (_error) {
       logger.warn('Redis initialization failed for health checks');
     }
   }
@@ -92,6 +92,9 @@ export class HealthCheckService {
 
     // Check WebSocket
     checks.webSocket = await this.checkWebSocket();
+
+    // Check email service
+    checks.emailService = await this.checkEmailService();
 
     // Check monitoring services
     checks.monitoring = await this.checkMonitoring();
@@ -123,7 +126,7 @@ export class HealthCheckService {
           60,
           JSON.stringify(healthStatus)
         );
-      } catch (error) {
+      } catch (_error) {
         logger.warn('Failed to store health status in Redis');
       }
     }
@@ -158,12 +161,12 @@ export class HealthCheckService {
         responseTime,
         details: {
           poolSize: poolMetrics?.counters?.find(
-            (c: any) => c.key === 'prisma_pool_connections_open'
+            (c: Record<string, unknown>) => c.key === 'prisma_pool_connections_open'
           )?.value,
         },
         lastCheck: new Date(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
         message: `Database error: ${error.message}`,
@@ -207,7 +210,7 @@ export class HealthCheckService {
         },
         lastCheck: new Date(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
         message: `Redis error: ${error.message}`,
@@ -240,7 +243,7 @@ export class HealthCheckService {
         },
         lastCheck: new Date(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
         message: `ML service error: ${error.message}`,
@@ -276,7 +279,7 @@ export class HealthCheckService {
       }
 
       // Get disk usage
-      const stats = await fs.stat(uploadDir);
+      const _stats = await fs.stat(uploadDir);
       const responseTime = Date.now() - startTime;
 
       return {
@@ -292,7 +295,7 @@ export class HealthCheckService {
         },
         lastCheck: new Date(),
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         status: 'unhealthy',
         message: `File system error: ${error.message}`,
@@ -328,10 +331,97 @@ export class HealthCheckService {
         },
         lastCheck: new Date(),
       };
-    } catch (error: any) {
+    } catch (_error: unknown) {
       return {
         status: 'degraded',
         message: 'WebSocket status unknown',
+        lastCheck: new Date(),
+      };
+    }
+  }
+
+  /**
+   * Check email service health
+   */
+  private async checkEmailService(): Promise<ComponentHealth> {
+    const startTime = Date.now();
+    
+    try {
+      // Import email service dynamically to avoid circular dependencies
+      const { testConnection, _config } = await import('./emailService');
+      
+      // Check if email service is configured
+      if (!process.env.SMTP_HOST && !process.env.SENDGRID_API_KEY) {
+        return {
+          status: 'degraded',
+          message: 'Email service not configured',
+          responseTime: Date.now() - startTime,
+          details: {
+            configured: false,
+            reason: 'No SMTP or SendGrid configuration found'
+          },
+          lastCheck: new Date(),
+        };
+      }
+      
+      // Skip email connectivity test in test environments
+      if (process.env.NODE_ENV === 'test' || process.env.SKIP_EMAIL_SEND === 'true') {
+        return {
+          status: 'healthy',
+          message: 'Email service configured (test mode)',
+          responseTime: Date.now() - startTime,
+          details: {
+            configured: true,
+            testMode: true,
+            smtpHost: process.env.SMTP_HOST,
+            service: process.env.EMAIL_SERVICE || 'smtp'
+          },
+          lastCheck: new Date(),
+        };
+      }
+      
+      // Test email service connection
+      const isConnected = await testConnection();
+      const responseTime = Date.now() - startTime;
+      
+      if (isConnected) {
+        return {
+          status: 'healthy',
+          message: 'Email service is operational',
+          responseTime,
+          details: {
+            configured: true,
+            connected: true,
+            smtpHost: process.env.SMTP_HOST,
+            service: process.env.EMAIL_SERVICE || 'smtp',
+            fromEmail: process.env.FROM_EMAIL,
+            authEnabled: process.env.SMTP_AUTH !== 'false'
+          },
+          lastCheck: new Date(),
+        };
+      } else {
+        return {
+          status: 'unhealthy',
+          message: 'Email service connection failed',
+          responseTime,
+          details: {
+            configured: true,
+            connected: false,
+            smtpHost: process.env.SMTP_HOST,
+            service: process.env.EMAIL_SERVICE || 'smtp'
+          },
+          lastCheck: new Date(),
+        };
+      }
+    } catch (error: unknown) {
+      return {
+        status: 'unhealthy',
+        message: `Email service error: ${error.message}`,
+        responseTime: Date.now() - startTime,
+        details: {
+          error: error.message,
+          configured: !!(process.env.SMTP_HOST || process.env.SENDGRID_API_KEY)
+        },
         lastCheck: new Date(),
       };
     }
@@ -463,7 +553,7 @@ export class HealthCheckService {
   /**
    * Start periodic health checks
    */
-  startPeriodicChecks(intervalMs: number = 30000) {
+  startPeriodicChecks(intervalMs = 30000) {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
     }

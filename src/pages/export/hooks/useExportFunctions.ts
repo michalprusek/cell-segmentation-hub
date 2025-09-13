@@ -7,6 +7,7 @@ import { logger } from '@/lib/logger';
 import { useLanguage } from '@/contexts/useLanguage';
 import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
 import { createExcelExport } from '@/services/excelExportService';
+import { downloadJSON } from '@/lib/downloadUtils';
 
 export const useExportFunctions = (
   images: ProjectImage[],
@@ -256,17 +257,9 @@ export const useExportFunctions = (
         return data;
       });
 
-      // Create a json file and trigger download
-      const dataStr = JSON.stringify(exportData, null, 2);
-      const dataBlob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(dataBlob);
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${projectTitle || 'project'}_export_${format(new Date(), 'yyyy-MM-dd')}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      // Use centralized download utility for JSON export
+      const filename = `${projectTitle || 'project'}_export_${format(new Date(), 'yyyy-MM-dd')}`;
+      downloadJSON(exportData, filename);
 
       // If object metrics option is selected, also export metrics to XLSX
       if (includeObjectMetrics) {

@@ -375,8 +375,8 @@ export class ProjectDetailPage extends BasePage {
         storageUsed: storageUsedText || '',
         lastModified: lastModifiedText || '',
       };
-    } catch (error) {
-      console.warn('Error parsing project statistics:', error);
+    } catch (_error) {
+      // console.warn('Error parsing project statistics:', _error);
       return {
         imageCount: 0,
         processedCount: 0,

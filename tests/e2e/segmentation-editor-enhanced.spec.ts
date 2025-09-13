@@ -730,7 +730,7 @@ test.describe('Enhanced Segmentation Editor Tests', () => {
     }) => {
       // This would require a second browser context to simulate another user
       const secondContext = await browser.newContext();
-      const secondPage = await secondContext.newPage();
+      const _secondPage = await secondContext.newPage();
 
       // For now, just test the UI exists for collaboration
       const collaborationIndicator = page.getByText(

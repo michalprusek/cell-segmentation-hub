@@ -7,10 +7,7 @@ import { AllProviders } from './test-providers';
 export const mockUser = {
   id: 'test-user-id',
   email: 'test@example.com',
-  firstName: 'Test',
-  lastName: 'User',
-  createdAt: new Date('2023-01-01'),
-  updatedAt: new Date('2023-01-01'),
+  username: 'testuser',
 };
 
 // Mock auth context value

@@ -118,7 +118,7 @@ describe('DashboardHeader', () => {
 
     // Mock setInterval and clearInterval
     vi.spyOn(global, 'setInterval').mockImplementation(
-      (fn: any, delay: number) => {
+      (fn: any, _delay: number) => {
         return setTimeout(fn, 0) as any; // Execute immediately for tests
       }
     );

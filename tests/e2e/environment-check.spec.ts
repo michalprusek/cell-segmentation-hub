@@ -7,10 +7,10 @@ import { test, expect } from '@playwright/test';
 test.describe('Environment Check', () => {
   test('should verify environment is properly configured', async ({ page }) => {
     // Log environment info for debugging
-    console.log('Environment Variables:');
-    console.log('NODE_ENV:', process.env.NODE_ENV);
-    console.log('CI:', process.env.CI);
-    console.log('PLAYWRIGHT_SERVICE_URL:', process.env.PLAYWRIGHT_SERVICE_URL);
+    //     console.log('Environment Variables:');
+    //     console.log('NODE_ENV:', process.env.NODE_ENV);
+    //     console.log('CI:', process.env.CI);
+    //     console.log('PLAYWRIGHT_SERVICE_URL:', process.env.PLAYWRIGHT_SERVICE_URL);
 
     // Visit the application home page
     await page.goto('/');
@@ -25,7 +25,7 @@ test.describe('Environment Check', () => {
 
     expect(hasNavigation || hasWelcome).toBeTruthy();
 
-    console.log('✓ Homepage loaded successfully');
+    //     console.log('✓ Homepage loaded successfully');
   });
 
   test('should verify API connectivity', async ({ page }) => {
@@ -36,7 +36,7 @@ test.describe('Environment Check', () => {
     const responseBody = await apiResponse.json();
     expect(responseBody).toHaveProperty('status', 'ok');
 
-    console.log('✓ API connectivity verified');
+    //     console.log('✓ API connectivity verified');
   });
 
   test('should verify services are responding', async ({ page }) => {
@@ -55,6 +55,6 @@ test.describe('Environment Check', () => {
       await expect(signInLink).toBeVisible();
     }
 
-    console.log('✓ Services are responding correctly');
+    //     console.log('✓ Services are responding correctly');
   });
 });

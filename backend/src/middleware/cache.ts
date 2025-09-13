@@ -189,7 +189,7 @@ export const conditionalCache = Object.assign(
     userSpecific: (ttl: number) => {
       return (req: Request, res: Response, next: NextFunction) => {
         // Add cache headers for user-specific content
-        const userId = (req as any).user?.id;
+        const userId = (req as Request & { user?: { id?: string } }).user?.id;
         if (userId) {
           res.setHeader('Cache-Control', `private, max-age=${ttl}`);
           res.setHeader('Vary', 'Authorization');
