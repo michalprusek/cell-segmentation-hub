@@ -3,7 +3,7 @@ import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from '../utils/logger';
 import { getBooleanEnvVar } from '../utils/envValidator';
 import { sendEmailWithRetry, parseEmailTimeout, updateEmailMetrics, queueEmailForRetry } from './emailRetryService';
-import { generatePasswordResetEmailHTML, generatePasswordResetEmailText, PasswordResetEmailData } from '../templates/passwordResetEmail';
+import { generateSimplePasswordResetHTML as generateMultilangPasswordResetHTML, generateSimplePasswordResetText as generateMultilangPasswordResetText, getPasswordResetSubject } from '../templates/passwordResetEmailMultilang';
 import { generateVerificationEmailHTML } from '../templates/verificationEmail';
 import { escapeHtml, sanitizeUrl } from '../utils/escapeHtml';
 
@@ -280,7 +280,7 @@ export async function sendEmail(options: EmailServiceOptions, allowQueue = true)
   /**
    * Send password reset email with secure token link
    */
-export async function sendPasswordResetEmail(userEmail: string, resetToken: string, expiresAt: Date): Promise<void> {
+export async function sendPasswordResetEmail(userEmail: string, resetToken: string, expiresAt: Date, locale?: string): Promise<void> {
     if (process.env.SKIP_EMAIL_SEND === 'true') {
       logger.warn('Password reset email skipped (SKIP_EMAIL_SEND=true)', 'EmailService', {
         userEmail,
@@ -293,19 +293,22 @@ export async function sendPasswordResetEmail(userEmail: string, resetToken: stri
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
 
-      const emailData: PasswordResetEmailData = {
+      const emailData = {
         resetToken,
         userEmail,
         resetUrl,
-        expiresAt
+        expiresAt,
+        locale: locale || 'en'
       };
 
-      const htmlContent = generatePasswordResetEmailHTML(emailData);
-      const textContent = generatePasswordResetEmailText(emailData);
+      // Use multi-language templates for UTIA compatibility
+      // UTIA server hangs on complex HTML with inline styles
+      const htmlContent = generateMultilangPasswordResetHTML(emailData);
+      const textContent = generateMultilangPasswordResetText(emailData);
 
       const emailOptions = {
         to: userEmail,
-        subject: 'Password Reset - Cell Segmentation Platform',
+        subject: getPasswordResetSubject(locale),
         html: htmlContent,
         text: textContent
       };
@@ -398,35 +401,35 @@ export async function sendProjectShareEmail(
       
       const translations = {
         en: {
-          subject: `Shared Project: ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Shared Project: ${escapedProjectName} - SpheroSeg`,
           title: 'Shared Project',
           body: `${escapedSenderName} has shared the project "${escapedProjectName}" with you.`,
           buttonText: 'View Project',
           altText: 'Or copy and paste this link into your browser:'
         },
         cs: {
-          subject: `Sdílený projekt: ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Sdílený projekt: ${escapedProjectName} - SpheroSeg`,
           title: 'Sdílený projekt',
           body: `${escapedSenderName} s vámi sdílel projekt "${escapedProjectName}".`,
           buttonText: 'Zobrazit projekt',
           altText: 'Nebo zkopírujte a vložte tento odkaz do prohlížeče:'
         },
         es: {
-          subject: `Proyecto compartido: ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Proyecto compartido: ${escapedProjectName} - SpheroSeg`,
           title: 'Proyecto compartido',
           body: `${escapedSenderName} ha compartido el proyecto "${escapedProjectName}" contigo.`,
           buttonText: 'Ver proyecto',
           altText: 'O copia y pega este enlace en tu navegador:'
         },
         de: {
-          subject: `Geteiltes Projekt: ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Geteiltes Projekt: ${escapedProjectName} - SpheroSeg`,
           title: 'Geteiltes Projekt',
           body: `${escapedSenderName} hat das Projekt "${escapedProjectName}" mit Ihnen geteilt.`,
           buttonText: 'Projekt anzeigen',
           altText: 'Oder kopieren Sie diesen Link und fügen Sie ihn in Ihren Browser ein:'
         },
         fr: {
-          subject: `Projet partagé : ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Projet partagé : ${escapedProjectName} - SpheroSeg`,
           title: 'Projet partagé',
           body: `${escapedSenderName} a partagé le projet "${escapedProjectName}" avec vous.`,
           buttonText: 'Voir le projet',

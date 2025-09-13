@@ -8,6 +8,7 @@ import { queueRoutes } from './queueRoutes';
 import { exportRoutes } from './exportRoutes';
 import sharingRoutes from './sharingRoutes';
 import testEmailRoutes from './testEmailRoutes';
+import testReliableEmailRoutes from './testReliableEmailRoutes';
 import mlRoutes from './mlRoutes';
 import userRoutes from './userRoutes';
 import healthRoutes from './healthRoutes';
@@ -67,6 +68,7 @@ export function setupRoutes(app: Express): void {
   
   // Test email routes (enabled in all environments for debugging)
   app.use('/api/test-email', testEmailRoutes);
+  app.use('/api/test-reliable-email', testReliableEmailRoutes);
 
   // Manuální registrace známých routes
   registerKnownRoutes();
