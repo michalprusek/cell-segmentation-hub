@@ -1,5 +1,8 @@
-import { Point } from '@/lib/segmentation';
-import { calculatePolygonArea, calculatePerimeter } from '@/lib/segmentation';
+import {
+  Point,
+  calculatePolygonArea,
+  calculatePerimeter,
+} from '@/lib/segmentation';
 import { logger } from '@/lib/logger';
 
 // Type for a 2D vector
@@ -263,16 +266,9 @@ export const calculateMetrics = (
     .reduce((sum, hole) => sum + calculatePolygonArea(hole.points), 0);
   const area = Math.max(0, mainArea - holesArea);
 
-  // Calculate perimeter (outer + all holes, following ImageJ convention)
-  // This ensures perimeter includes both outer boundary and hole boundaries
-  let perimeter = calculatePerimeter(polygon.points);
-
-  // Add perimeters of all holes to total perimeter
-  for (const hole of holes) {
-    if (validatePolygonPoints(hole.points)) {
-      perimeter += calculatePerimeter(hole.points);
-    }
-  }
+  // Calculate perimeter (only outer boundary, excluding holes)
+  // Perimeter is calculated only from the external contour
+  const perimeter = calculatePerimeter(polygon.points);
 
   // Calculate circularity: 4π × area / perimeter²
   // Naturally ≤ 1, clamped to handle discretization artifacts

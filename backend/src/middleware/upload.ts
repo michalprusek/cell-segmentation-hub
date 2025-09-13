@@ -2,9 +2,13 @@ import multer from 'multer';
 import path from 'path';
 import { Request, Response, NextFunction } from 'express';
 import type { Express } from 'express-serve-static-core';
-import { SUPPORTED_MIME_TYPES, SUPPORTED_EXTENSIONS, MAX_FILE_SIZE } from '../storage/interface';
+import { SUPPORTED_MIME_TYPES, SUPPORTED_EXTENSIONS } from '../storage/interface';
+import { getUploadLimitsForEnvironment } from '../config/uploadLimits';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
+
+// Get environment-specific upload limits
+const uploadLimits = getUploadLimitsForEnvironment();
 
 /**
  * Multer configuration for file uploads
@@ -12,10 +16,10 @@ import { logger } from '../utils/logger';
 const upload = multer({
   storage: multer.memoryStorage(), // Store files in memory
   limits: {
-    fileSize: MAX_FILE_SIZE,
-    files: 20, // Maximum 20 files per request
-    fields: 5, // Maximum 5 non-file fields
-    fieldSize: 1024 // 1KB per field
+    fileSize: uploadLimits.MAX_FILE_SIZE_BYTES,
+    files: uploadLimits.MAX_FILES_PER_REQUEST, // Increased from 20 to 50
+    fields: uploadLimits.MAX_FIELDS, // Increased from 5 to 10
+    fieldSize: uploadLimits.MAX_FIELD_SIZE_KB * 1024 // Convert KB to bytes
   },
   fileFilter: (req, file, cb) => {
     // Check MIME type
@@ -49,7 +53,7 @@ const upload = multer({
 /**
  * Middleware for handling multiple file uploads
  */
-export const uploadImages = upload.array('images', 20);
+export const uploadImages = upload.array('images', uploadLimits.MAX_FILES_PER_REQUEST);
 
 /**
  * Middleware for handling single file upload
@@ -74,10 +78,10 @@ export const handleUploadError = (
 
     switch (error.code) {
       case 'LIMIT_FILE_SIZE':
-        ResponseHelper.validationError(res, `Soubor je příliš velký. Maximální velikost: ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
+        ResponseHelper.validationError(res, `Soubor je příliš velký. Maximální velikost: ${uploadLimits.MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB`);
         return;
       case 'LIMIT_FILE_COUNT':
-        ResponseHelper.validationError(res, 'Příliš mnoho souborů. Maximálně lze nahrát 20 souborů najednou');
+        ResponseHelper.validationError(res, `Příliš mnoho souborů. Maximálně lze nahrát ${uploadLimits.MAX_FILES_PER_REQUEST} souborů najednou`);
         return;
       case 'LIMIT_UNEXPECTED_FILE':
         ResponseHelper.validationError(res, `Neočekávané pole souboru: ${error.field}`);

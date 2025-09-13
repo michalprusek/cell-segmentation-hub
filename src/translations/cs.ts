@@ -732,6 +732,9 @@ export default {
     registrationFailed: 'Registrace selhala',
     logoutFailed: 'Odhlášení selhalo',
     profileUpdateFailed: 'Aktualizace profilu selhala',
+    tokenMissing: 'Chybí autentizační token',
+    tokenExpired: 'Platnost tokenu vypršela',
+    pleaseSignInAgain: 'Prosím přihlaste se znovu',
     welcomeMessage: 'Vítejte na platformě pro segmentaci sféroidů',
     confirmationRequired:
       'Potvrzovací text je povinný a musí se shodovat s vaší e-mailovou adresou',
@@ -915,6 +918,11 @@ export default {
       started: 'Segmentace byla zahájena',
       completed: 'Segmentace byla úspěšně dokončena',
       completedWithCount: 'Segmentace dokončena! Nalezeno {{count}} objektů',
+      batchStarted: 'Segmentace zahájena pro {{count}} obrázků',
+      batchCompleted:
+        '✅ {{count}} obrázků úspěšně segmentováno ({{duration}}s)',
+      batchCompletedWithErrors:
+        '⚠️ Dávka dokončena: {{successful}} úspěšných, {{failed}} neúspěšných ({{duration}}s)',
       noPolygons: 'Nebyly nalezeny žádné polygony segmentace',
       reloadFailed:
         'Nepodařilo se načíst výsledky segmentace. Obnovte prosím stránku.',
@@ -1005,6 +1013,7 @@ export default {
     includeJsonMetadata: 'Zahrnout JSON metadata',
     preparing: 'Příprava exportu...',
     processing: 'Zpracování {{current}} z {{total}}',
+    processingExport: 'Zpracování...',
     packaging: 'Vytváření balíčku...',
     completed: 'Export dokončen',
     downloading: 'Stahování...',

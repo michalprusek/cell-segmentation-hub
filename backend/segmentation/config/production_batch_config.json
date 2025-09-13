@@ -11,6 +11,12 @@
       "max_safe": 4,
       "p95_latency_ms": 396.9,
       "throughput_img_s": 5.1
+    },
+    "unet_spherohq": {
+      "optimal": 4,
+      "max_safe": 6,
+      "p95_latency_ms": 302.0,
+      "throughput_img_s": 13.2
     }
   },
   "dynamic_batching": {
@@ -124,6 +130,56 @@
           "p95_ms": Infinity,
           "throughput": 0,
           "memory_gb": 0,
+          "stable": false
+        }
+      ]
+    },
+    "unet_spherohq": {
+      "model": "unet_spherohq",
+      "optimal_batch_size": 4,
+      "max_safe_batch_size": 6,
+      "p95_latency_ms": 302.0,
+      "throughput_img_per_sec": 13.2,
+      "memory_gb": 0.95,
+      "benchmarks": [
+        {
+          "batch_size": 1,
+          "p50_ms": 95.5,
+          "p95_ms": 96.8,
+          "throughput": 10.4,
+          "memory_gb": 0.88,
+          "stable": true
+        },
+        {
+          "batch_size": 2,
+          "p50_ms": 151.2,
+          "p95_ms": 152.5,
+          "throughput": 13.1,
+          "memory_gb": 0.91,
+          "stable": true
+        },
+        {
+          "batch_size": 4,
+          "p50_ms": 301.5,
+          "p95_ms": 302.0,
+          "throughput": 13.2,
+          "memory_gb": 0.95,
+          "stable": true
+        },
+        {
+          "batch_size": 6,
+          "p50_ms": 452.3,
+          "p95_ms": 453.8,
+          "throughput": 13.2,
+          "memory_gb": 0.99,
+          "stable": true
+        },
+        {
+          "batch_size": 8,
+          "p50_ms": 605.1,
+          "p95_ms": 608.2,
+          "throughput": 13.2,
+          "memory_gb": 1.03,
           "stable": false
         }
       ]

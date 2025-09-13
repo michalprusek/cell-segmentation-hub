@@ -138,8 +138,8 @@ export class DashboardPage extends BasePage {
         }
       }
       return false;
-    } catch (error) {
-      console.error('Error checking if dashboard is loaded:', error);
+    } catch (_error) {
+      // console.error('Error checking if dashboard is loaded:', _error);
       return false;
     }
   }

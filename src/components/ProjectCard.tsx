@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { useNavigate } from 'react-router-dom';
+// useNavigate unused - available for future use
 import ProjectThumbnail from '@/components/project/ProjectThumbnail';
 import ProjectActions from '@/components/project/ProjectActions';
 import ProjectMetadata from '@/components/project/ProjectMetadata';
@@ -34,13 +34,13 @@ const ProjectCard = React.memo(
     imageCount,
     onClick,
     isShared = false,
-    sharedBy,
+    sharedBy: _sharedBy,
     owner,
     shareId,
     onProjectUpdate,
   }: ProjectCardProps) => {
     const { t } = useLanguage();
-    const { user } = useAuth();
+    const { user: _user } = useAuth();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
 
     const handleCardClick = (e: React.MouseEvent) => {
@@ -60,7 +60,7 @@ const ProjectCard = React.memo(
       }
     };
 
-    const handleAccessError = (projectId: string, error: unknown) => {
+    const handleAccessError = (projectId: string, _error: unknown) => {
       onProjectUpdate?.(projectId, 'access-denied');
     };
 

@@ -3,8 +3,7 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { prismaPool } from './prismaPool';
 import { databaseMetrics } from '../monitoring/databaseMetrics';
-import { logDatabasePoolConfig } from '../config/database.ts';
-import { getPrismaConfig } from './prismaConfig';
+import { getPrismaConfig } from './prismaConfig.js';
 
 // Create a global variable to store Prisma client
 declare global {
@@ -44,7 +43,7 @@ export const initializeDatabase = async (): Promise<PrismaClient> => {
         try {
           const userCount = await prisma.user.count();
           logger.info(`Database has ${userCount} users`, 'Database');
-        } catch (e) {
+        } catch (_e) {
           logger.warn('Tables not yet created, run migrations', 'Database');
         }
         
@@ -102,7 +101,7 @@ export const checkDatabaseHealth = async (): Promise<{healthy: boolean; message:
       healthy: poolHealth.healthy,
       message: poolHealth.healthy ? 'Database connection pool is healthy' : 'Database connection pool issues detected'
     };
-  } catch (error) {
+  } catch (_error) {
     // Fallback to basic health check
     try {
       await prisma.$queryRaw`SELECT 1`;
@@ -158,7 +157,7 @@ export const executeMutation = async <T>(
 };
 
 export const executeTransaction = async <T>(
-  operation: (prisma: any) => Promise<T>,
+  operation: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
   operationName?: string
 ): Promise<T> => {
   return prismaPool.executeTransaction(operation, operationName);

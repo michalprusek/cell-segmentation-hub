@@ -1,5 +1,5 @@
-import { jest } from '@jest/globals'
-import { PrismaClient } from '@prisma/client'
+import { jest, beforeEach, afterEach } from '@jest/globals'
+// import { PrismaClient } from '@prisma/client'
 
 // Create a comprehensive Prisma mock
 const createPrismaMock = () => {
@@ -100,7 +100,6 @@ jest.mock('nodemailer')
 jest.mock('axios')
 
 // Setup and teardown
-import { beforeEach, afterEach } from '@jest/globals'
 
 beforeEach(() => {
   // mockReset(prismaMock)

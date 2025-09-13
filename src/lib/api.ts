@@ -1,7 +1,16 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { Profile, UpdateProfile, PolygonData } from '@/types';
+import { Profile, UpdateProfile } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
+import {
+  chunkFiles,
+  processChunksWithConcurrency,
+  DEFAULT_CHUNKING_CONFIG,
+  ChunkProgress,
+  ChunkedUploadResult,
+  validateFiles,
+  formatFileSize,
+} from '@/lib/uploadUtils';
 
 export interface LoginRequest {
   email: string;
@@ -44,6 +53,7 @@ export interface ProjectImage {
   user_id: string;
   image_url: string;
   thumbnail_url?: string;
+  segmentationThumbnailUrl?: string; // New field for segmentation thumbnails
   segmentation_status: 'pending' | 'processing' | 'completed' | 'failed';
   created_at: string;
   updated_at: string;
@@ -208,6 +218,44 @@ class ApiClient {
           originalRequest.url?.includes('/auth/login') ||
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/refresh');
+
+        // Check if error is due to missing authentication token
+        if (
+          error.response?.status === 401 &&
+          error.response?.data?.message === 'Chybí autentizační token'
+        ) {
+          // Token is missing - immediately logout the user
+          logger.debug('🔒 Missing authentication token - logging out user');
+          this.clearTokensFromStorage();
+
+          // Emit event to notify the app about missing token
+          if (typeof window !== 'undefined') {
+            // Import dynamically to avoid circular dependencies
+            import('./authEvents').then(({ authEventEmitter }) => {
+              authEventEmitter.emit({
+                type: 'token_missing',
+                data: {
+                  message: 'Authentication required',
+                  description:
+                    'Your session has expired. Please sign in again.',
+                },
+              });
+            });
+
+            // Only redirect if not already on sign-in page
+            if (
+              window.location.pathname !== '/sign-in' &&
+              window.location.pathname !== '/sign-up' &&
+              !window.location.pathname.startsWith('/public')
+            ) {
+              setTimeout(() => {
+                window.location.href = '/sign-in';
+              }, 100); // Small delay to allow event to be processed
+            }
+          }
+
+          return Promise.reject(error);
+        }
 
         if (
           error.response?.status === 401 &&
@@ -905,7 +953,7 @@ class ApiClient {
    * const images = await apiClient.uploadImages(
    *   'project-123',
    *   fileInput.files,
-   *   (progress) => console.log(`Upload progress: ${progress}%`)
+   *   (progress) => logger.info(`Upload progress: ${progress}%`)
    * );
    */
   async uploadImages(
@@ -952,6 +1000,192 @@ class ApiClient {
     return Array.isArray(data) ? this.mapImagesFields(data) : [];
   }
 
+  /**
+   * Uploads multiple images to a project using chunking for large batches
+   * @param {string} projectId - The project ID to upload images to
+   * @param {File[]} files - Array of image files to upload
+   * @param {Function} [onProgress] - Optional callback for upload progress
+   * @param {Function} [onChunkProgress] - Optional callback for chunk-level progress
+   * @returns {Promise<ChunkedUploadResult<ProjectImage[]>>} Chunked upload results
+   * @throws {Error} If upload fails or files are invalid
+   * @example
+   * const result = await apiClient.uploadImagesChunked(
+   *   'project-123',
+   *   fileArray,
+   *   (progress) => logger.info(`Overall progress: ${progress}%`),
+   *   (chunkProgress) => logger.info(`Chunk ${chunkProgress.chunkIndex + 1}: ${chunkProgress.chunkProgress}%`)
+   * );
+   */
+  async uploadImagesChunked(
+    projectId: string,
+    files: File[],
+    onProgress?: (progressPercent: number) => void,
+    onChunkProgress?: (progress: ChunkProgress) => void
+  ): Promise<ChunkedUploadResult<ProjectImage[]>> {
+    logger.info(
+      `Starting chunked upload of ${files.length} files to project ${projectId}`
+    );
+
+    // Validate files first
+    const validation = validateFiles(files);
+    if (validation.invalid.length > 0) {
+      logger.warn(
+        `${validation.invalid.length} files failed validation:`,
+        validation.invalid.map(v => `${v.file.name}: ${v.reason}`)
+      );
+    }
+
+    const validFiles = validation.valid;
+    if (validFiles.length === 0) {
+      throw new Error('No valid files to upload');
+    }
+
+    // If we have a small number of files, use regular upload
+    if (validFiles.length <= DEFAULT_CHUNKING_CONFIG.chunkSize) {
+      logger.info(
+        `Using regular upload for ${validFiles.length} files (under chunk limit)`
+      );
+      try {
+        const result = await this.uploadImages(
+          projectId,
+          validFiles,
+          onProgress
+        );
+        return {
+          success: [result],
+          failed: [],
+          totalProcessed: validFiles.length,
+        };
+      } catch (error) {
+        return {
+          success: [],
+          failed: [
+            {
+              files: validFiles,
+              error: error as Error,
+              chunkIndex: 0,
+            },
+          ],
+          totalProcessed: 0,
+        };
+      }
+    }
+
+    // Split files into chunks
+    const chunks = chunkFiles(validFiles, DEFAULT_CHUNKING_CONFIG.chunkSize);
+    logger.info(
+      `Split ${validFiles.length} files into ${chunks.length} chunks`
+    );
+
+    // Track overall progress
+    let overallProgress = 0;
+    const updateOverallProgress = (chunkProgress: ChunkProgress) => {
+      overallProgress = chunkProgress.overallProgress;
+      if (onProgress) {
+        onProgress(overallProgress);
+      }
+      if (onChunkProgress) {
+        onChunkProgress(chunkProgress);
+      }
+    };
+
+    // Process chunks
+    const result = await processChunksWithConcurrency(
+      chunks,
+      async (chunk: File[], chunkIndex: number) => {
+        logger.debug(
+          `Processing chunk ${chunkIndex + 1}/${chunks.length} with ${chunk.length} files`
+        );
+
+        // Create FormData for this chunk
+        const formData = new FormData();
+        chunk.forEach(file => {
+          formData.append('images', file);
+        });
+
+        const response = await this.instance.post(
+          `/projects/${projectId}/images`,
+          formData,
+          {
+            headers: {
+              'Content-Type': 'multipart/form-data',
+            },
+            timeout: 300000, // 5 minutes timeout for chunk uploads (100 files)
+            onUploadProgress: progressEvent => {
+              if (progressEvent.total) {
+                const chunkProgressPercent = Math.round(
+                  (progressEvent.loaded * 100) / progressEvent.total
+                );
+
+                // Calculate overall progress including current chunk progress
+                const overallProgressValue = Math.round(
+                  ((chunkIndex + chunkProgressPercent / 100) / chunks.length) *
+                    100
+                );
+
+                // Create chunk progress data
+                const chunkProgressData: ChunkProgress = {
+                  chunkIndex,
+                  totalChunks: chunks.length,
+                  filesInChunk: chunk.length,
+                  totalFiles: validFiles.length,
+                  chunkProgress: chunkProgressPercent,
+                  overallProgress: overallProgressValue,
+                  currentOperation: `Uploading chunk ${chunkIndex + 1} of ${chunks.length}`,
+                };
+
+                // Update both overall and chunk progress
+                updateOverallProgress(chunkProgressData);
+              }
+            },
+          }
+        );
+
+        const data = this.extractData(response);
+
+        // Extract images from backend response
+        if (data && typeof data === 'object' && 'images' in data) {
+          const typedData = data as {
+            images: Record<string, unknown>[];
+            count: number;
+          };
+          return this.mapImagesFields(typedData.images || []);
+        }
+
+        return Array.isArray(data) ? this.mapImagesFields(data) : [];
+      },
+      DEFAULT_CHUNKING_CONFIG,
+      updateOverallProgress
+    );
+
+    // Log results
+    const successfulUploads = result.success.reduce(
+      (sum, chunk) => sum + chunk.length,
+      0
+    );
+    const failedUploads = result.failed.reduce(
+      (sum, failure) => sum + failure.files.length,
+      0
+    );
+
+    logger.info(
+      `Chunked upload completed: ${successfulUploads} successful, ${failedUploads} failed`
+    );
+
+    if (result.failed.length > 0) {
+      logger.warn(
+        'Failed chunks:',
+        result.failed.map(f => ({
+          chunkIndex: f.chunkIndex,
+          fileCount: f.files.length,
+          error: f.error.message,
+        }))
+      );
+    }
+
+    return result;
+  }
+
   async getImage(projectId: string, imageId: string): Promise<ProjectImage> {
     const response = await this.instance.get(
       `/projects/${projectId}/images/${imageId}`
@@ -995,7 +1229,7 @@ class ApiClient {
    * @throws {Error} If segmentation results not found or request fails
    * @example
    * const results = await apiClient.getSegmentationResults('project-123', 'image-456');
-   * console.log(`Found ${results.polygons.length} segmented cells`);
+   * logger.info(`Found ${results.polygons.length} segmented cells`);
    */
   async getSegmentationResults(
     imageId: string,
@@ -1039,6 +1273,65 @@ class ApiClient {
       ) {
         return null; // No segmentation exists yet
       }
+      throw error;
+    }
+  }
+
+  /**
+   * Batch fetch segmentation results for multiple images
+   * Performance optimization: Fetches all results in a single API call
+   * @param imageIds Array of image IDs to fetch segmentation for
+   * @returns Map of imageId to segmentation results
+   */
+  async getBatchSegmentationResults(
+    imageIds: string[]
+  ): Promise<Record<string, SegmentationResultData | null>> {
+    try {
+      // Validate input
+      if (!Array.isArray(imageIds) || imageIds.length === 0) {
+        logger.warn(
+          'getBatchSegmentationResults called with invalid imageIds:',
+          imageIds
+        );
+        return {};
+      }
+      // Batch requests in chunks of 500 to avoid overwhelming the server
+      const BATCH_SIZE = 500;
+      const results: Record<string, SegmentationResultData | null> = {};
+
+      for (let i = 0; i < imageIds.length; i += BATCH_SIZE) {
+        const chunk = imageIds.slice(i, i + BATCH_SIZE);
+
+        const response = await this.instance.post(
+          '/segmentation/batch/results',
+          { imageIds: chunk }
+        );
+
+        const batchData = this.extractData<Record<string, any>>(response);
+
+        // Process each result in the batch
+        for (const [imageId, data] of Object.entries(batchData)) {
+          if (!data) {
+            results[imageId] = null;
+            continue;
+          }
+
+          results[imageId] = {
+            polygons: data.polygons || [],
+            imageWidth: data.imageWidth,
+            imageHeight: data.imageHeight,
+            modelUsed: data.modelUsed,
+            confidence: data.confidence,
+            processingTime: data.processingTime,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+          };
+        }
+      }
+
+      return results;
+    } catch (error) {
+      logger.error('Failed to batch fetch segmentation results', error);
       throw error;
     }
   }

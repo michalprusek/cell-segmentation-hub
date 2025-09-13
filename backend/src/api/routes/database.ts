@@ -201,7 +201,7 @@ router.post('/analyze-query',
   validateBody(queryAnalysisSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const { query, parameters } = req.body;
+      const { query, parameters: _parameters } = req.body;
       logger.info('🔬 Database: Analyzing query performance');
       
       // Placeholder query analysis (should use EXPLAIN ANALYZE in production)

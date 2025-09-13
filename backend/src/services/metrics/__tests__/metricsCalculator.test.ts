@@ -1,5 +1,4 @@
-import { MetricsCalculator } from '../metricsCalculator';
-import { PolygonMetrics, ImageWithSegmentation } from '../metricsCalculator';
+import { MetricsCalculator, PolygonMetrics, ImageWithSegmentation } from '../metricsCalculator';
 
 // Mock ExcelJS
 const mockWorksheet = {

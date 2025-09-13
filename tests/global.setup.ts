@@ -25,7 +25,7 @@ async function verifyServiceHealth(
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[${attempt}/${maxRetries}] Checking ${service.name}...`);
+      // console.log(`[${attempt}/${maxRetries}] Checking ${service.name}...`);
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
@@ -52,33 +52,33 @@ async function verifyServiceHealth(
         }
       }
 
-      console.log(`✓ ${service.name} is healthy`);
+      // console.log(`✓ ${service.name} is healthy`);
       return; // Success!
-    } catch (error) {
-      console.log(`✗ ${service.name} check failed: ${error.message}`);
+    } catch (_error) {
+      // console.log(`✗ ${service.name} check failed: ${_error.message}`);
 
       if (attempt === maxRetries) {
         throw new Error(
-          `${service.name} failed health check after ${maxRetries} attempts: ${error.message}`
+          `${service.name} failed health check after ${maxRetries} attempts: ${_error.message}`
         );
       }
 
-      console.log(`Waiting ${retryDelay}ms before retry...`);
+      // console.log(`Waiting ${retryDelay}ms before retry...`);
       await new Promise(resolve => setTimeout(resolve, retryDelay));
     }
   }
 }
 
 async function globalSetup(): Promise<void> {
-  console.log(
-    '🔍 Verifying all services are healthy before running E2E tests...'
-  );
+  // console.log(
+  //   '🔍 Verifying all services are healthy before running E2E tests...'
+  // );
 
   for (const service of SERVICES) {
     await verifyServiceHealth(service);
   }
 
-  console.log('✅ All services are healthy! Starting E2E tests...');
+  // console.log('✅ All services are healthy! Starting E2E tests...');
 }
 
 export default globalSetup;

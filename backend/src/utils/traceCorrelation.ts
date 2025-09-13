@@ -6,7 +6,7 @@ export class CrossServiceTraceLinker {
     // Placeholder implementation
   }
   
-  static createServiceCallSpan(config: any): any {
+  static createServiceCallSpan(_config: any): any {
     // Placeholder implementation - return a mock span object
     return {
       setStatus: () => {},
@@ -48,10 +48,10 @@ export class TraceCorrelatedLogger {
 // Functions expected by server.ts
 export function initializeTraceCorrelation(): void {
   // Placeholder implementation
-  console.log('Trace correlation initialized (placeholder)');
+  // console.log('Trace correlation initialized (placeholder)');
 }
 
 export function shutdownTraceCorrelation(): void {
   // Placeholder implementation
-  console.log('Trace correlation shutdown (placeholder)');
+  // console.log('Trace correlation shutdown (placeholder)');
 }

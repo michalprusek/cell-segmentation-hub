@@ -239,8 +239,8 @@ export class SegmentationEditorPage extends BasePage {
     try {
       await addVertexOption.waitFor({ state: 'visible', timeout: 2000 });
       await addVertexOption.click();
-    } catch (error) {
-      console.warn('Add vertex context menu option not found:', error);
+    } catch (_error) {
+      // console.warn('Add vertex context menu option not found:', _error);
       throw error; // Re-throw to fail the test
     }
   }
@@ -256,8 +256,8 @@ export class SegmentationEditorPage extends BasePage {
     try {
       await removeVertexOption.waitFor({ state: 'visible', timeout: 2000 });
       await removeVertexOption.click();
-    } catch (error) {
-      console.warn('Remove vertex context menu option not found:', error);
+    } catch (_error) {
+      // console.warn('Remove vertex context menu option not found:', _error);
       throw error; // Re-throw to fail the test
     }
   }

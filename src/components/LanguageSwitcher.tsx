@@ -7,8 +7,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { useLanguage } from '@/contexts/exports';
-import type { Language } from '@/contexts/exports';
+import { useLanguage, type Language } from '@/contexts/exports';
 
 const LanguageSwitcher = () => {
   const { language, setLanguage, t } = useLanguage();
@@ -22,7 +21,7 @@ const LanguageSwitcher = () => {
     { value: 'zh' as Language, name: '中文', flag: '🇨🇳' },
   ];
 
-  const currentLanguage = languageOptions.find(
+  const _currentLanguage = languageOptions.find(
     option => option.value === language
   );
 

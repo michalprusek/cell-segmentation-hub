@@ -1,6 +1,6 @@
-import { test, expect, Browser } from '@playwright/test';
+import { test, expect, Browser as _Browser } from '@playwright/test';
 import {
-  LandingPage,
+  LandingPage as _LandingPage,
   SignInPage,
   SignUpPage,
   DashboardPage,
@@ -31,8 +31,8 @@ test.describe('Comprehensive Authentication Flow Tests', () => {
       await expect(page).toHaveURL('/dashboard', { timeout: 15000 });
 
       // Logout
-      const dashboardPage = new DashboardPage(page);
-      await dashboardPage.logout();
+      const _dashboardPage = new DashboardPage(page);
+      await _dashboardPage.logout();
 
       // Go to sign in and click forgot password
       await signInPage.navigate();
@@ -93,7 +93,7 @@ test.describe('Comprehensive Authentication Flow Tests', () => {
   test.describe('Session Management', () => {
     test('should handle session timeout gracefully', async ({ page }) => {
       const signUpPage = new SignUpPage(page);
-      const dashboardPage = new DashboardPage(page);
+      const _dashboardPage = new DashboardPage(page);
 
       // Register and login
       await signUpPage.navigate();
@@ -192,7 +192,7 @@ test.describe('Comprehensive Authentication Flow Tests', () => {
   test.describe('Account Management', () => {
     test('should allow user to change password', async ({ page }) => {
       const signUpPage = new SignUpPage(page);
-      const dashboardPage = new DashboardPage(page);
+      const _dashboardPage = new DashboardPage(page);
 
       // Register and login
       await signUpPage.navigate();
@@ -249,7 +249,7 @@ test.describe('Comprehensive Authentication Flow Tests', () => {
 
     test('should handle account deletion flow', async ({ page }) => {
       const signUpPage = new SignUpPage(page);
-      const dashboardPage = new DashboardPage(page);
+      const _dashboardPage = new DashboardPage(page);
 
       // Register and login
       await signUpPage.navigate();

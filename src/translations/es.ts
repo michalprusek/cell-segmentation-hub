@@ -927,6 +927,11 @@ export default {
       completed: 'Segmentación completada exitosamente',
       completedWithCount:
         '¡Segmentación completa! Se encontraron {{count}} objetos',
+      batchStarted: 'Segmentación iniciada para {{count}} imágenes',
+      batchCompleted:
+        '✅ {{count}} imágenes segmentadas exitosamente ({{duration}}s)',
+      batchCompletedWithErrors:
+        '⚠️ Lote completado: {{successful}} exitosas, {{failed}} fallidas ({{duration}}s)',
       noPolygons: 'No se detectaron polígonos de segmentación',
       reloadFailed:
         'Error al cargar los resultados de segmentación. Por favor, actualiza la página.',
@@ -999,6 +1004,7 @@ export default {
     includeJsonMetadata: 'Incluir metadatos JSON',
     preparing: 'Preparando exportación...',
     processing: 'Procesando {{current}} de {{total}}',
+    processingExport: 'Procesando...',
     packaging: 'Creando paquete...',
     completed: 'Exportación completada',
     downloading: 'Descargando...',

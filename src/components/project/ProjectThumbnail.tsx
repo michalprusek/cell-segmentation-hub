@@ -45,7 +45,8 @@ const ProjectThumbnail = ({
         } catch (error: unknown) {
           // Handle different types of errors with better granularity
           if (error && typeof error === 'object' && 'response' in error) {
-            const response = (error as any).response;
+            const response = (error as { response?: { status?: number } })
+              .response;
             const status = response?.status;
 
             if (status === 403 || status === 500) {

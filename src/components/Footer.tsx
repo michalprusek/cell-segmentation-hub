@@ -56,30 +56,6 @@ const Footer = () => {
                   {t('footer.documentation')}
                 </Link>
               </li>
-              <li>
-                <a
-                  href="#features"
-                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
-                >
-                  {t('footer.features')}
-                </a>
-              </li>
-              <li>
-                <Link
-                  to="#"
-                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
-                >
-                  {t('footer.tutorials')}
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="#"
-                  className="text-base text-gray-600 hover:text-blue-600 transition-colors"
-                >
-                  {t('footer.research')}
-                </Link>
-              </li>
             </ul>
           </div>
 

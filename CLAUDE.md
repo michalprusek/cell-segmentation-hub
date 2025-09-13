@@ -1,877 +1,523 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
+
+## 🔍 Session Start Protocol
+
+**ALWAYS at the beginning of each session:**
+
+```bash
+# Get repository context
+git status          # Check current branch and changes
+git log --oneline -10  # Review recent commits
+git ls-files | head -20  # See project structure
+cat .active-environment  # Check active environment (if exists)
+```
+
+This helps understand the current state, branch, uncommitted changes, and recent work history before starting any task.
 
 ## ⚠️ PRODUCTION SAFETY WARNING ⚠️
 
-**VERY IMPORTANT: NEVER modify, deploy to, or interfere with the GREEN (production) environment unless explicitly instructed by the user!**
+**NEVER modify or deploy to production environments without explicit permission!**
 
-- **Green Environment (Ports 5000-5008)**: This is PRODUCTION - DO NOT TOUCH without explicit permission
-- **Blue Environment (Ports 4000-4008)**: This is staging - safe for testing
-- **Local Development (Ports 3000-3001)**: Use this for development work
+**⚠️ CRITICAL: ALWAYS check @.active-environment file to determine which environment is currently active!**
 
-**If the user asks to "run the app" or "test changes", ALWAYS use the local development environment (make up), NOT the green production environment!**
+- **Blue Environment (Ports 4000-4008)**: Production environment
+- **Green Environment (Ports 5000-5008)**: Staging/Secondary production - for testing & zero-downtime deployments
+- **Local Development (Ports 3000-3001)**: Use for all development work
 
-## Development Commands
+**Note:** The active environment can change! Never assume which is active - always verify!
 
-**CRITICAL: This project runs entirely in Docker containers - DO NOT use npm commands directly!**
+## Core Development Guidelines
 
-VERY IMPORTANT: Always read relevant docs and fetch relevant documentation using available MCP servers.
+### Docker-First Development
 
-VERY IMPORTANT: Use subagents often to save context. They dont have shared context with main agent, so give them comprehensive and clear instructions, also recommend them to use available knowledge systems.
+**CRITICAL: This project runs entirely in Docker containers - NEVER use npm/node commands directly!**
 
-## Knowledge Management System
+#### Essential Commands
 
-**Knowledge storage and retrieval** is available through the connected MCP servers for storing and retrieving application knowledge, best practices, and implementation details.
+```bash
+# Development
+make up              # Start all services
+make down            # Stop services
+make logs-f          # View logs (all services)
+make health          # Health check
+make reset           # Clean rebuild
 
-### Usage Guidelines
+# Service Access
+make shell-fe        # Frontend shell
+make shell-be        # Backend shell
+make shell-ml        # ML service shell
 
-**ALWAYS use knowledge systems when:**
+# Testing (use Desktop Commander MCP for long-running tests)
+make lint            # Linting
+make type-check      # TypeScript check
+make test            # Unit tests
+make test-e2e        # E2E tests
+```
 
-- **Planning tasks**: Retrieve relevant knowledge before starting implementation
-- **Solving problems**: Check for existing solutions and patterns
-- **After completing work**: Store insights, solutions, and best practices
-- **Debugging issues**: Look for similar problems and their resolutions
+#### 🚀 Optimized Docker Build System
 
-### Knowledge Storage Strategy
+**New intelligent build system with automatic cache management:**
 
-Store these types of information in the knowledge system:
+```bash
+# Optimized builds with automatic cleanup
+make build-optimized     # Smart build with pre-cleanup
+make build-clean        # Full rebuild without cache
+make build-service SERVICE=frontend  # Build specific service
 
-- **Code patterns**: Successful implementation approaches for common tasks
-- **Bug fixes**: Solutions to specific errors and their root causes
-- **Architecture decisions**: Why certain technical choices were made
-- **Configuration solutions**: Docker, database, and service setup fixes
-- **Performance optimizations**: Techniques that improved application performance
-- **API integrations**: Working examples of third-party service integrations
-- **Testing approaches**: Effective testing strategies and test case patterns
+# Docker storage management
+make docker-usage       # Show current Docker disk usage
+make optimize-storage   # Run optimization (keeps recent images)
+make deep-clean        # Aggressive cleanup (removes more)
 
-### Retrieval Best Practices
+# Manual scripts for advanced control
+./scripts/smart-docker-build.sh --env blue --service backend
+./scripts/docker-build-optimizer.sh --aggressive --dry-run
+```
 
-Before starting work, query the knowledge system for:
+**Build Optimization Features:**
 
-- Similar features or components already implemented
-- Known issues and their solutions related to your task
-- Established patterns for the type of work you're doing
-- Configuration requirements for related services
+- **Automatic cache cleanup** before builds to prevent disk overflow
+- **Multi-stage builds** reducing image sizes by 40-60%
+- **Cache mounting** for npm/pip packages (faster rebuilds)
+- **Parallel builds** when building multiple services
+- **Smart image tagging** with environment and timestamp
+- **Keeps only 2 latest images** per service (configurable)
 
-### Example Queries
+**Expected Size Reductions:**
 
-- "React hook patterns for data fetching"
-- "Docker container debugging techniques"
-- "Prisma database migration best practices"
-- "TypeScript error resolution strategies"
-- "ML model integration patterns"
+- ML Service: 8GB → 3-5GB (60% reduction)
+- Frontend: 2GB → 600MB (70% reduction)
+- Backend: 1.5GB → 750MB (50% reduction)
 
-**Remember**: The knowledge system serves as the project's institutional memory - use it to avoid repeating work and to build upon proven solutions.
+#### Service URLs
 
-### Docker Environment (Required)
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:3001
+- ML Service: http://localhost:8000
+- API Docs: http://localhost:3001/api-docs
 
-- **Start all services**: `make up` or `make dev-setup`
-- **View logs**: `make logs-f` (all services) or `make logs-fe`/`make logs-be`/`make logs-ml`
-- **Stop services**: `make down`
-- **Health check**: `make health` or `make test`
-- **Reset environment**: `make reset` (clean + rebuild)
-- **Shell access**: `make shell-fe`/`make shell-be`/`make shell-ml`
+### Knowledge Management
 
-### Service URLs (Docker only)
+**ALWAYS use knowledge systems (MCP servers) for:**
 
-- **Frontend**: http://localhost:3000
-- **Backend API**: http://localhost:3001
-- **ML Service**: http://localhost:8000
-- **API Documentation**: http://localhost:3001/api-docs
-- **Prometheus**: http://localhost:9090
-- **Grafana**: http://localhost:3030
+- Planning tasks - retrieve relevant patterns
+- Solving problems - check existing solutions
+- After completing work - store insights
+- Debugging - look for similar issues
 
-**Note**: Some documentation may reference port 8082 for frontend - this is legacy. Always use port 3000 for Docker development.
+### Important Development Practices
 
-### Legacy Frontend Commands (Do NOT use in development)
+1. **File Operations**: Always prefer editing existing files over creating new ones
+2. **Documentation**: Only create docs when explicitly requested
+3. **Terminal Safety**: Use Desktop Commander MCP for long operations (>30s)
+4. **Subagents**: Use frequently to save context - provide comprehensive instructions
+5. **Testing**: All tests must run in Docker containers
+6. **Git Commits**: Never commit unless explicitly asked
 
-These only work for building static assets, but the app must run in Docker:
+## Configuration Management
 
-- `npm run build` - Production build
-- `npm run lint` - Code linting
-- `npm run preview` - Preview build (but use Docker for development)
+### Environment-Based Configuration
 
-### Docker Build Commands (Use Desktop Commander MCP)
+The project uses a **template-based configuration system** with environment variables for blue-green deployment:
 
-**IMPORTANT: Use Desktop Commander MCP for long-running build operations to prevent macOS terminal crashes**
+#### Configuration Structure
 
-- For Docker builds longer than 30s, use `mcp__desktop-commander__start_process` instead of Bash tool
-- Example: `mcp__desktop-commander__start_process("docker compose build backend", 600000)`
-- Monitor with `mcp__desktop-commander__read_process_output` and `mcp__desktop-commander__interact_with_process`
+```
+.env.common          # Shared configuration (email, JWT, SSL, etc.)
+.env.blue            # Blue-specific variables (ports, services)
+.env.green           # Green-specific variables (ports, services)
+nginx.template.conf  # Template for nginx configuration
+```
+
+#### Switching Environments
+
+```bash
+# Switch to blue environment
+./scripts/switch-environment.sh blue
+
+# Switch to green environment
+./scripts/switch-environment.sh green
+
+# The script will:
+# 1. Load environment variables from .env.common and .env.{color}
+# 2. Generate nginx configuration from template
+# 3. Create symlinks for active configuration
+# 4. Show service status
+```
+
+### Nginx Configuration
+
+**Template-based system with proper variable handling**:
+
+- `nginx.template.conf` - Master template using NGINX*VAR* prefix for nginx variables
+- `nginx.blue.conf` - Generated for blue environment via switch script
+- `nginx.green.conf` - Generated for green environment via switch script
+- `nginx.active.conf` - Symlink to currently active configuration
+- **Key fix**: Uses `NGINX_VAR_` prefix for nginx runtime variables ($host, $remote_addr) to prevent envsubst conflicts
+
+#### Rate Limiting Zones (Critical for preventing 503 errors)
+
+- `general`: 10 req/s - General requests
+- `api`: 30 req/s (burst 80) - API endpoints
+- `segmentation`: 100 req/s (burst 100) - **Segmentation bulk results (fixes 503 errors)**
+- `upload`: 5 req/s (burst 10) - File uploads
+
+**Important**: Segmentation zone was specifically configured to handle 84+ simultaneous requests
+
+#### Special Endpoints
+
+- `/api/segmentation/images/[id]/results` - Higher limits for bulk result fetching
+- `/api/images/upload` - Special handling for file uploads
+- `/socket.io/` - WebSocket support with extended timeouts
+
+### Port Mapping
+
+| Service     | Blue | Green | Development |
+| ----------- | ---- | ----- | ----------- |
+| Frontend    | 4000 | 5000  | 3000        |
+| Backend     | 4001 | 5001  | 3001        |
+| ML Service  | 4008 | 5008  | 8000        |
+| Nginx HTTP  | 4080 | 5080  | 80          |
+| Nginx HTTPS | 4443 | 5443  | 443         |
+| Redis       | 4379 | 5379  | 6379        |
+| PostgreSQL  | 4432 | 5432  | 5432        |
 
 ## Project Architecture
 
-This is a React-based cell segmentation application with a full-stack microservices architecture. The system consists of three main services running in Docker containers:
+### Tech Stack
 
-### Core Technologies
+- **Frontend**: React 18 + TypeScript + Vite + shadcn/ui
+- **Backend**: Node.js + Express + TypeScript + Prisma
+- **ML Service**: Python + FastAPI + PyTorch
+- **Database**: SQLite (dev) / PostgreSQL (prod)
+- **Real-time**: WebSocket (Socket.io)
+- **Auth**: JWT with refresh tokens
 
-- **Frontend**: React 18 + TypeScript + Vite (port 3000)
-- **Backend API**: Node.js + Express + TypeScript (port 3001)
-- **ML Service**: Python + FastAPI + PyTorch (port 8000)
-- **Database**: SQLite (development) / PostgreSQL (CI/production) with Prisma ORM
-- **Authentication**: JWT access/refresh tokens
-- **UI Framework**: shadcn/ui components with Radix UI primitives
-- **Styling**: Tailwind CSS
-- **State Management**: React Query for server state, React Context for client state
-- **Monitoring**: Prometheus + Grafana stack
+### Key Directories
 
-### Key Directory Structure
+```
+/src/                        # Frontend React app
+  /pages/segmentation/       # Complex segmentation editor
+  /components/               # Reusable UI components
+  /contexts/                 # React contexts
+  /hooks/                    # Custom hooks
+  /lib/                      # Utilities
 
-**Frontend (React/TypeScript):**
+/backend/
+  /src/api/                  # REST API routes
+  /src/services/             # Business logic
+  /prisma/                   # Database schema
 
-- `/src/pages/` - Main application pages (Dashboard, ProjectDetail, SegmentationEditor)
-- `/src/pages/segmentation/` - Complex segmentation editor with advanced polygon editing
-- `/src/components/` - Reusable UI components organized by feature
-- `/src/contexts/` - React contexts (Auth, Theme, Language, Model, WebSocket)
-- `/src/hooks/` - Custom React hooks for data fetching and state management
-- `/src/lib/` - Utility libraries (API client, image processing, segmentation algorithms)
+/backend/segmentation/       # ML service
+  /api/                      # FastAPI routes
+  /models/                   # PyTorch models
 
-**Backend (Node.js/Express):**
-
-- `/backend/src/api/` - Controllers and routes for REST API
-- `/backend/src/services/` - Business logic services
-- `/backend/src/middleware/` - Authentication, validation, error handling, monitoring
-- `/backend/src/storage/` - File storage abstraction layer
-- `/backend/prisma/` - Database schema and migrations
-
-**ML Service (Python/FastAPI):**
-
-- `/backend/segmentation/api/` - FastAPI routes and models
-- `/backend/segmentation/services/` - ML inference and postprocessing
-- `/backend/segmentation/models/` - PyTorch model definitions (HRNet, CBAM-ResUNet)
-- `/backend/segmentation/weights/` - Pre-trained model weights
-
-### Segmentation Editor Architecture
-
-The segmentation editor (`/src/pages/segmentation/`) is the most complex part of the application:
-
-- **Main Editor**: `SegmentationEditor.tsx` orchestrates the entire editing experience
-- **Canvas System**: Located in `components/canvas/` - handles image display, polygon rendering, and interactive editing
-- **Edit Modes**: Supports multiple editing modes including point addition, polygon modification, and slicing
-- **Polygon Interaction**: Complex hooks in `hooks/polygonInteraction/` manage geometry operations, vertex manipulation, and spatial calculations
-- **Context System**: Uses React Context to share segmentation state across components
-- **Export System**: Supports COCO format export and Excel-based metrics
-
-### Database Schema
-
-The application uses Prisma ORM with different databases per environment:
-
-- **Development**: SQLite (`file:./data/dev.db`)
-- **CI/Testing**: PostgreSQL 15 (service container)
-- **Production**: PostgreSQL (managed service)
-
-Key tables include:
-
-- `User` - User accounts and authentication
-- `Project` - Project metadata and settings
-- `ProjectImage` - Image files and processing status
-- `SegmentationResult` - ML model results and polygon annotations
-- `QueueItem` - Processing queue for ML operations
-
-### Path Aliases
-
-- `@/` maps to `./src/` for clean import paths
-
-### TypeScript Configuration
-
-- Relaxed TypeScript settings (`noImplicitAny: false`, `strictNullChecks: false`)
-- Path mapping configured for `@/*` imports
-- Separate configs for app and Node.js code
-
-### Authentication Flow
-
-Uses JWT-based authentication with access/refresh tokens. The `AuthContext` manages user state and the `ProtectedRoute` component guards authenticated pages.
-
-### ML Models in Production
-
-- **HRNetV2** - Fast and efficient, ~0.2s per image, 5.5 images/second throughput
-- **CBAM-ResUNet** - Precise segmentation with attention mechanisms, ~0.3s per image, 3.0 images/second throughput
-
-**Production Performance Metrics (Measured 2025-08-31):**
-
-- HRNet: 0.2s average per image, P95 <0.3s, batch size 8 (optimal), 12 (max)
-- CBAM-ResUNet: 0.3s average per image, P95 <0.7s, batch size 2 (optimal), 4 (max)
-- Dynamic batching enabled with 5ms queue delay
-- GPU: NVIDIA RTX A5000 (24GB VRAM)
-
-### API Documentation
-
-- **Swagger UI**: http://localhost:3001/api-docs (interactive documentation)
-- **OpenAPI spec**: http://localhost:3001/api-docs/openapi.json
-- **Endpoint registry**: http://localhost:3001/api/endpoints
-
-### WebSocket Real-time Updates
-
-The application uses WebSocket (Socket.io) for real-time segmentation status updates and queue notifications.
-
-**WebSocket Events:**
-
-- `segmentationStatus` - Updates on segmentation processing status (queued, processing, completed, failed)
-- `queueStats` - Queue statistics including position and total items
-- `segmentationCompleted` - Fired when segmentation finishes successfully with polygon count
-- `segmentationFailed` - Fired when segmentation fails with error details
-- `connectionStatus` - WebSocket connection state changes
-
-**Key Features:**
-
-- **Auto-reconnection**: Automatically reconnects with exponential backoff
-- **Auto-refresh**: Polygons automatically reload when segmentation completes
-- **Visual indicators**: Real-time connection status shown in UI
-- **State persistence**: Loading states persist across page refreshes (5-minute TTL)
-- **Queue position**: Shows user's position in the processing queue
-
-**Usage in Components:**
-
-```typescript
-// Hook for WebSocket segmentation updates
-const { lastUpdate, queueStats, isConnected } = useSegmentationQueue(projectId);
-
-// Hook for reloading segmentation with retry logic
-const { isReloading, reloadSegmentation } = useSegmentationReload({
-  projectId,
-  imageId,
-  onPolygonsLoaded: setPolygons,
-  maxRetries: 2,
-});
+/docker/nginx/              # Nginx configurations
+  /snippets/                # Shared SSL parameters
 ```
 
-### Internationalization
-
-Multi-language support via `LanguageContext` with translations in `/src/translations/`. The system includes comprehensive validation to ensure translation completeness across all supported languages (EN, CS, ES, DE, FR, ZH).
-
-## Development Best Practices
-
-### Important Reminders
-
-- **Docker-first development**: Always use `make` commands, never direct npm/node commands
-- **File editing**: Always prefer editing existing files over creating new ones
-- **Documentation**: Only create docs when explicitly requested by the user
-- **Terminal safety**: Never use KillBash tool as it terminates the user's session
-- **VERY IMPORTANT - MacOS Terminal Issue**: When running long commands (>30s), ALWAYS use the appropriate MCP tools for process management instead of Bash tool, as long-running Bash commands cause Claude Code terminal crashes on macOS
-
-### Testing and Quality
-
-**IMPORTANT: Always use Desktop Commander MCP for running tests inside Docker containers to prevent terminal timeouts**
-
-- For Docker test commands, use `mcp__desktop-commander__start_process` instead of Bash tool
-- Example: `mcp__desktop-commander__start_process("make test", 300000)`
-- Note: All test commands must run inside Docker containers per Docker-first development policy
-
-- **Linting**: Run `make lint` for code quality checks in Docker
-- **Lint fix**: Run `make lint-fix` to auto-fix ESLint issues in Docker
-- **Type checking**: Run `make type-check` to verify TypeScript types in Docker
-- **Unit tests**: Run `make test` for Vitest unit tests in Docker (USE DESKTOP COMMANDER, timeout: 300000)
-- **Test UI**: Run `make test-ui` for interactive Vitest interface in Docker
-- **E2E tests**: Run `make test-e2e` for Playwright end-to-end tests in Docker (USE DESKTOP COMMANDER, timeout: 600000)
-- **E2E UI**: Run `make test-e2e-ui` for interactive Playwright interface in Docker
-- **Test coverage**: Run `make test-coverage` to generate coverage report in Docker (USE DESKTOP COMMANDER, timeout: 600000)
-- **Formatting**: Run `npm run format` to format code with Prettier
-- **Format check**: Run `npm run format:check` to check formatting without changes
-- **API testing**: Use Swagger UI at http://localhost:3001/api-docs
-- **Health checks**: Use `make health` to verify all services are running
-- **Service logs**: Use `make logs-f` to monitor all services in real-time
-
-### Performance Testing
-
-- **Script**: `python3 measure-all-models.py` - Comprehensive performance measurement
-- **Features**:
-  - 100 samples per model for statistical significance
-  - 5-iteration warmup phase
-  - 95% confidence intervals using t-distribution
-  - Measures: inference, preprocessing, postprocessing times
-  - Outputs LaTeX-ready tables
-- **ML Service Endpoint**: `POST http://localhost:8000/api/v1/segment`
-- **Test Images**: Located in `test-images/` directory
-
-### Internationalization (i18n)
-
-- **Translation validation**: Run `npm run i18n:validate` to check translation completeness and consistency
-- **Translation check**: Run `npm run i18n:check` to verify all translation keys exist
-- **Translation lint**: Run `npm run i18n:lint` to lint i18n-specific rules
-- **Supported languages**: English (en), Czech (cs), Spanish (es), German (de), French (fr), Chinese (zh)
-- **Translation files**: Located in `/src/translations/`
-
-### Git Hooks and Pre-commit Checks
-
-The project uses Husky for comprehensive pre-commit validation:
-
-**Automated Checks (Cannot be bypassed):**
-
-- **ESLint**: Code quality with 0 warnings allowed
-- **Prettier**: Code formatting verification
-- **TypeScript**: Type checking for both frontend and backend
-- **Security**: Prevents console.log in production code
-- **Code quality**: Blocks debugger statements and merge conflict markers
-- **File size**: Warns about files >1MB
-- **Package consistency**: Validates package-lock.json updates
-
-**Manual bypass** (emergency only): Use `git commit --no-verify`
-
-**Conventional Commits**: Use format `feat:`, `fix:`, `chore:`, `docs:`, `style:`, `refactor:`, `test:`
-
-### Common Development Tasks
-
-- **Adding new API endpoints**: Add routes in `/backend/src/api/routes/`, controllers in `/backend/src/api/controllers/`, and update OpenAPI spec
-- **Frontend components**: Create in `/src/components/` following existing patterns, use shadcn/ui primitives
-- **ML model changes**: Modify `/backend/segmentation/models/` and update model loading in `/backend/segmentation/services/`
-- **Adding translations**: Add new keys to all language files in `/src/translations/`, run `npm run i18n:validate` to verify
-- **Database changes**:
-  - Update `/backend/prisma/schema.prisma`
-  - Shell into backend container: `make shell-be`
-  - Run migration: `npx prisma migrate dev --name your_migration_name`
-  - Generate client: `npx prisma generate`
-- **Viewing database**: Run `cd backend && npm run db:studio` (opens Prisma Studio)
-- **Docker operations**: All docker commands available via `make` targets (see `make help`)
-- **Running single tests**: Use Vitest filtering: `npm run test -- --run specific-test-name`
-- **Frontend debugging**: Use browser dev tools with source maps enabled in development
-
-## Current System Status (Updated 2025-08-26)
-
-**Enterprise-Grade Production Platform:**
-
-- ✅ **Full-stack architecture**: React frontend + Node.js API + Python ML service
-- ✅ **Authentication system**: JWT with email verification and refresh tokens
-- ✅ **Database layer**: Prisma ORM with connection pooling (5-25 connections)
-- ✅ **ML pipeline**: 3 production models with circuit breaker protection
-- ✅ **File storage**: Local storage with Redis caching layer
-- ✅ **API documentation**: Swagger UI with OpenAPI 3.0 specification
-- ✅ **Monitoring stack**: Prometheus + Grafana + Jaeger distributed tracing
-- ✅ **Docker environment**: Full containerization with health checks
-- ✅ **Security hardening**: Zero console.logs, rate limiting, automated scanning
-- ✅ **Performance optimization**: 62% faster tests, 60-80% reduced DB load
-- ✅ **Operational excellence**: Slack/PagerDuty alerts, baseline monitoring
-- ✅ **Self-maintaining**: Dependabot updates, quarterly security audits
-
-**Key Features Working:**
-
-- User registration with email verification
-- Project creation and management with image uploads
-- Real-time ML segmentation with polygon extraction
-- Advanced polygon editing with multiple interaction modes
-- Export functionality (COCO format, Excel metrics)
-- Multi-language support (EN, CS, ES, DE, FR, ZH)
-- Real-time WebSocket notifications with queue processing
-- Redis session management and API caching
-- Circuit breaker protection for all external services
-- Multi-tier rate limiting (Anonymous/Auth/Premium/Admin)
-- Distributed tracing across microservices
-- Self-adjusting monitoring baselines
-- Automated security vulnerability scanning
-
-**Enterprise Infrastructure:**
-
-- **Security**: JWT tokens, email verification, rate limiting, security scanning
-- **Performance**: Redis caching, connection pooling, parallel testing
-- **Scalability**: Microservices, queue-based processing, circuit breakers
-- **Observability**: Prometheus metrics, Grafana dashboards, Jaeger tracing
-- **Reliability**: Health checks, circuit breakers, fallback strategies
-- **Maintenance**: Automated updates, security audits, TypeScript migration
-
-## Monitoring & Observability
-
-### Access Points
-
-- **Prometheus**: http://localhost:9090 (metrics collection)
-- **Grafana**: http://localhost:3030 (dashboards)
-- **Jaeger**: http://localhost:16686 (distributed tracing)
-- **Redis Commander**: http://localhost:8081 (cache inspection)
-
-### Key Dashboards
-
-- **Business Overview**: Active users, queue status, feature usage
-- **Performance Dashboard**: Resource utilization, API performance
-- **Security Metrics**: Vulnerability trends, rate limit violations
-- **Baseline Analysis**: Statistical thresholds, anomaly detection
-
-### Alert Channels
-
-- **Slack**: `/alerts` command for interactive management
-- **PagerDuty**: Incident creation with escalation policies
-- **Email**: HTML notifications with system metrics
-
-## Security & Compliance
-
-### Security Features
-
-- **Rate Limiting**: 4-tier system with cost-based limiting
-- **Circuit Breakers**: Service-specific protection with fallbacks
-- **Security Scanning**: CodeQL, Trivy, TruffleHog, GitLeaks
-- **Dependency Updates**: Daily Dependabot checks
-- **Quarterly Audits**: Automated security assessment framework
-
-### Security Commands
+### Database Operations
 
 ```bash
-npm run security:check        # Check for console.log and secrets
-npm run security:audit:full   # Complete security audit
-node scripts/security-audit/generate-audit-report.js
+# Always from backend shell (make shell-be)
+npx prisma migrate dev --name migration_name
+npx prisma generate
+npx prisma studio  # View database
 ```
 
-## Performance Optimizations
+## Testing & Quality
 
-### Caching Strategy
+### Pre-commit Hooks (Husky)
 
-- **Redis**: Session management, API responses, ML results
-- **Cache Keys**: User-scoped with intelligent TTL management
-- **Invalidation**: Pattern-based with automatic triggers
+- ESLint with 0 warnings
+- Prettier formatting
+- TypeScript checking
+- No console.log in production
+- Conventional commits: `feat:`, `fix:`, `chore:`, etc.
 
-### Database Optimization
-
-- **Connection Pooling**: 5-25 connections for production
-- **Query Monitoring**: Slow query detection and alerting
-- **Performance Baselines**: P50, P95, P99 tracking
-
-### Test Performance
+### Testing Commands
 
 ```bash
-npm run test:parallel    # 4-thread execution (45s)
-npm run test:critical   # Essential tests only (8s)
-npm run test:performance # Performance suite
+# Use Desktop Commander MCP for these:
+make test           # Unit tests (timeout: 300000)
+make test-e2e       # E2E tests (timeout: 600000)
+make test-coverage  # Coverage (timeout: 600000)
+
+# Quick checks:
+make lint
+make type-check
+npm run format:check
 ```
 
-## Operational Procedures
+## Internationalization
 
-### Daily Operations
+Supports 6 languages: EN, CS, ES, DE, FR, ZH
+
+- Translation files: `/src/translations/`
+- Validation: `npm run i18n:validate`
+
+## WebSocket Real-time Updates
+
+Events:
+
+- `segmentationStatus` - Processing status
+- `queueStats` - Queue position
+- `segmentationCompleted/Failed` - Results
+- Auto-reconnection with exponential backoff
+
+## Production Deployment
+
+### Blue-Green Deployment
 
 ```bash
-# Morning checks
-node scripts/monitoring/collect-baselines.js --range=24h
-make health
-make logs-f
+# ALWAYS check active environment first!
+cat .active-environment
 
-# Review alerts
-curl http://localhost:3001/api/webhooks/alerts/summary
+# Switch environments (generates nginx config from template)
+./scripts/switch-environment.sh blue   # Production
+./scripts/switch-environment.sh green  # Staging
+
+# Start nginx-main container after switching
+docker run -d --name nginx-main \
+  --network spheroseg-blue \
+  -v $(pwd)/docker/nginx/nginx.active.conf:/etc/nginx/conf.d/default.conf:ro \
+  -v /etc/letsencrypt:/etc/letsencrypt:ro \
+  -v $(pwd)/backend/uploads:/app/uploads:ro \
+  -v $(pwd)/docker/nginx/snippets:/etc/nginx/snippets:ro \
+  -p 80:4080 -p 443:4443 \
+  nginx:alpine
+
+# Deploy specific environment
+docker compose -f docker-compose.blue.yml up -d
+docker compose -f docker-compose.green.yml up -d
+
+# Reload nginx configuration after changes
+docker exec nginx-main nginx -s reload
+
+# Health check
+curl http://localhost/health
+# Returns: "blue-production-healthy" or "green-production-healthy"
 ```
 
-### Weekly Tasks
+### Build & Deployment System
+
+#### 🚀 NEW: Optimized Build System with Auto-Cleanup
+
+**Use the new smart build system for all builds:**
 
 ```bash
-# TypeScript migration checkpoint
-bash scripts/weekly-checkpoints/week${WEEK}-checkpoint.sh
+# Build with automatic optimization and cleanup
+make build-optimized              # All services for current environment
+make build-service SERVICE=frontend  # Specific service
 
-# Performance review
-node scripts/monitoring/generate-performance-report.js
+# Or use the smart build script directly
+./scripts/smart-docker-build.sh --env blue    # Build for blue environment
+./scripts/smart-docker-build.sh --env green   # Build for green environment
+./scripts/smart-docker-build.sh --service backend --env blue  # Specific service
 
-# Security check
-npm run security:check
+# Clean builds (no cache)
+make build-clean                  # Full rebuild without cache
+./scripts/smart-docker-build.sh --no-cache --env blue
 ```
 
-### Monthly Tasks
+**Benefits of new system:**
+
+- ✅ Automatic cleanup before build (prevents disk overflow)
+- ✅ 40-70% smaller images (ML: 10GB→4GB, Backend: 2GB→750MB)
+- ✅ Faster builds with intelligent caching
+- ✅ Keeps only 2 latest images per service
+- ✅ No manual cache management needed
+
+#### Docker Storage Management
 
 ```bash
-# Dependency review
-npm outdated
-npm audit
+# Monitor Docker usage
+make docker-usage          # Show current disk usage
+./scripts/docker-monitor.sh  # Detailed analysis with recommendations
 
-# TypeScript migration progress
-npm run migration-report
-
-# Capacity planning
-node scripts/monitoring/capacity-planning.js
+# Cleanup commands
+make optimize-storage      # Regular cleanup (safe)
+make deep-clean           # Aggressive cleanup (removes more)
+./scripts/docker-build-optimizer.sh --aggressive  # Emergency cleanup
 ```
 
-### Quarterly Tasks
+#### Frontend Rebuild (Production)
+
+**Recommended method using optimized build:**
 
 ```bash
-# Security audit
-npm run security:audit:full
+# For blue environment
+./scripts/smart-docker-build.sh --env blue --service blue-frontend
 
-# Dependency license review
-node scripts/dependency-review/license-audit.js
+# For green environment
+./scripts/smart-docker-build.sh --env green --service green-frontend
 
-# Generate security scorecard
-node scripts/security-audit/generate-scorecard.js
+# The script automatically:
+# - Cleans old images
+# - Builds with optimization
+# - Tags properly
+# - Removes intermediate layers
 ```
 
-## Recent Implementations & Important Notes
+**Note**: Manual cache clearing is handled automatically by the new build system!
 
-### Polygon Metrics with Scientific Standards (2025-09-07)
+### Zero-Downtime Deployment Process
 
-- **Rotating Calipers Algorithm**: Implemented for accurate Feret diameter calculations
-- **Metrics Updated**:
-  - ✅ **Sphericity removed** - 3D metric not applicable to 2D analysis
-  - ✅ **Compactness → Extent** - Renamed to match scientific terminology (area/bbox_area)
-  - ✅ **Feret diameters** - Now use proper rotating calipers on convex hull
-  - ✅ **Perimeter calculation** - Includes holes (outer + Σ inner) following ImageJ convention
-- **Location**: `/src/pages/segmentation/utils/metricCalculations.ts`
-- **Excel Export**: Updated headers with units (px, px²)
+1. **Deploy to inactive environment** (e.g., green if blue is active)
+2. **Test inactive environment** on staging ports
+3. **Switch router** to new environment
+4. **Monitor** for issues
+5. **Rollback** if needed by switching back
 
-### Model Performance Benchmarks (2025-09-07)
+### Critical Configuration
 
-Based on 100 real measurements per model on NVIDIA A5000:
+**Database Safety:**
 
-| Model        | Inference (ms) | 95% CI     | Total E2E (ms) |
-| ------------ | -------------- | ---------- | -------------- |
-| HRNet        | 196.0          | [195, 197] | 301            |
-| CBAM-ResUNet | 396.1          | [395, 397] | 501            |
-| U-Net        | 196.9          | [196, 198] | 302            |
+- Databases are SEPARATE (spheroseg_blue vs spheroseg_green)
+- Always backup before deployment
+- Rollback only reverts code, NOT data
 
-- **Performance Test Script**: `measure-all-models.py` - Tests with 100 samples, warmup, statistical analysis
-- **Key findings**:
-  - Preprocessing/postprocessing < 0.1ms (negligible)
-  - Very stable performance (CV < 3%)
-  - All models suitable for real-time processing
-
-### Storage Space Indicator (Dashboard)
-
-- **Backend Endpoint**: `GET /api/auth/storage-stats` - Returns user's total storage usage
-- **Frontend**: Replaced average segmentation time with storage usage indicator in dashboard
-- **Location**: `StatsOverview` component shows storage in MB/GB with HardDrive icon from lucide-react
-- **Translation keys**: Already exist - `dashboard.storageUsed` in all language files
-
-### Critical Import Paths
-
-- **Backend Prisma imports**: Use stable import aliases like `@db/prisma` or `@/db` instead of fragile relative paths. Configure TypeScript path aliases in `tsconfig.json` paths and update bundler/module resolution configs (webpack/ts-node/next) so imports work from any directory depth. Example alias: `"@db/*": ["./src/db/*"]` then use `import { prisma } from '@db/prisma'`. Relative fallback `import { prisma } from '../../db'` may be used but is discouraged.
-- **This is essential** - wrong import path causes MODULE_NOT_FOUND errors and backend crash
-
-### WebSocket Segmentation Queue Fix
-
-- **Problem**: WebSocket disconnecting with "transport close" and not reconnecting
-- **Solution**: Enable Socket.io auto-reconnection, add keep-alive pings, fix disconnect handling
-- **Key settings**: `reconnection: true`, ping interval every 25s, proper reconnect event handlers
-- **Location**: `/src/services/webSocketManager.ts`
-
-## Blue-Green Deployment System
-
-### ⚠️ CRITICAL DATABASE SAFETY WARNING
-
-**VŽDY PŘED DEPLOYMENTEM:**
-
-1. **ZÁLOHA DATABÁZE JE POVINNÁ** - deployment skripty to dělají automaticky, ale vždy zkontroluj!
-2. **Nikdy neměň docker-compose volumes sekci** - může způsobit ztrátu dat
-3. **Databáze jsou ODDĚLENÉ** - blue má `spheroseg_blue`, green má `spheroseg_green`
-4. **Při rollbacku se data NEVRACÍ** - rollback vrátí jen kód, ne databázi
-
-### Current Production Setup (AKTUALIZOVÁNO 20.8.2025)
-
-**DŮLEŽITÉ**: Produkce nyní běží na **BLUE** prostředí (porty 4000-4008), nikoliv staging!
-
-- Blue prostředí je aktivní a nginx směřuje na `blue-backend`, `blue-frontend`, `blue-ml`
-- Green prostředí (porty 5000-5008) je připraveno pro další deployment
-
-### Deployment Strategy
-
-The system uses **Blue-Green deployment** for zero-downtime releases:
-
-1. **Two identical environments**:
-   - **Staging** (Blue): Ports 4000-4008, database: spheroseg_staging
-   - **Production** (Green): Ports 5000-5008, database: spheroseg_production
-   - **Nginx**: Routes traffic to active environment via `docker/nginx/nginx.prod.conf`
-
-2. **Deployment Process**:
-
-   ```bash
-   # VŽDY NEJDŘÍV - zkontroluj aktivní prostředí!
-   docker ps | grep -E "blue|green"
-
-   # Deploy new version (automatic zero-downtime)
-   ./scripts/deploy-blue-green.sh
-
-   # Emergency rollback (takes seconds) - POZOR: nevrací data!
-   ./scripts/rollback-deployment.sh
-
-   # Health check both environments
-   ./scripts/deployment-health-check.sh
-   ```
-
-   **⚠️ POZOR NA NGINX KONFIGURACI:**
-   - Vždy zkontroluj, že nginx upstream směřuje na správné kontejnery
-   - Aktuálně musí být: `server blue-backend:3001`, NE `staging-backend`!
-
-3. **How it works**:
-   - Detects current active environment from nginx config
-   - Backs up database before deployment
-   - Deploys new version to inactive environment
-   - Runs database migrations automatically
-   - Switches nginx routing (milliseconds downtime)
-   - Keeps old environment running for instant rollback
-
-4. **Key files**:
-   - `docker-compose.staging.yml` - Staging environment config
-   - `docker-compose.production.yml` - Production environment config (new)
-   - `docker/nginx/nginx.prod.conf` - Nginx routing configuration
-   - `scripts/deploy-blue-green.sh` - Main deployment script
-   - `scripts/rollback-deployment.sh` - Emergency rollback script
-   - `scripts/deployment-health-check.sh` - Health monitoring
-   - `docs/DEPLOYMENT.md` - Full deployment documentation
-
-5. **Port mapping**:
-   - **Staging**: Frontend 4000, Backend 4001, ML 4008, Grafana 3031
-   - **Production**: Frontend 5000, Backend 5001, ML 5008, Grafana 3032
-   - **Public**: https://spherosegapp.utia.cas.cz (nginx on 80/443)
-
-6. **Current status**:
-   - **Active environment**: staging (serving production traffic)
-   - **Next deployment**: Will automatically go to production environment
-   - **Databases**: Separate (spheroseg_staging, spheroseg_production)
-   - **File storage**: Separate directories per environment
-
-### Nginx Routing - KRITICKÉ BODY
-
-**WebSocket podpora (MUSÍ BÝT!):**
-
-```nginx
-location /socket.io/ {
-    proxy_pass http://backend/socket.io/;
-    proxy_http_version 1.1;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    # WebSocket timeouts - důležité pro real-time notifikace
-    proxy_connect_timeout 7d;
-    proxy_send_timeout 7d;
-    proxy_read_timeout 7d;
-}
-```
-
-**API routing fix:**
-
-- **Issue**: API routes returning 404 due to incorrect rewrite rule
-- **Solution**: Changed from `rewrite ^/api/(.*)$ /api/$1 break;` to `proxy_pass http://backend/api/;`
-- **Location**: `/docker/nginx/nginx.prod.conf` line 132
-- **Test**: `curl -X POST https://spherosegapp.utia.cas.cz/api/auth/login`
-
-### Environment Variables - POVINNÉ PRO BLUE/GREEN
-
-**Při spuštění docker-compose VŽDY exportuj:**
-
-```bash
-export STAGING_JWT_ACCESS_SECRET=<hodnota z .env.blue>
-export STAGING_JWT_REFRESH_SECRET=<hodnota z .env.blue>
-export FROM_EMAIL=spheroseg@utia.cas.cz
-```
-
-**WebSocket CORS - MUSÍ být nastaveno:**
-
-- V `.env.blue` nebo `.env.green`: `WS_ALLOWED_ORIGINS=https://spherosegapp.utia.cas.cz`
-- V docker-compose.yml environment sekci obou!
-
-### Upload Permissions - KRITICKÉ
-
-**Složky musí mít správná oprávnění (UID 1001):**
+**Required Permissions:**
 
 ```bash
 sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/blue/
 sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/green/
 ```
 
-**Podsložky MUSÍ existovat:**
+## Email Configuration
 
-- `/images`
-- `/thumbnails`
-- `/temp`
+### SMTP Server Settings
 
-## Email Service Configuration
-
-### Local Development - MailHog
-
-The project includes MailHog for local email testing. All emails are captured locally and viewable through web UI.
-
-**Configuration (automatic with `make up`):**
-
-- SMTP Server: mailhog:1025
-- Web UI: http://localhost:8025
-- Sender: spheroseg@utia.cas.cz
-- All emails are captured locally, not sent externally
-
-**View sent emails:**
+**UTIA Mail Server Configuration:**
 
 ```bash
-open http://localhost:8025
+# SMTP Connection Settings
+SMTP_HOST=mail.utia.cas.cz
+SMTP_PORT=25  # Port 25 with STARTTLS (Ports 465 and 587 are blocked)
+SMTP_SECURE=false  # false for STARTTLS
+SMTP_REQUIRE_TLS=true
+
+# No authentication required
+SMTP_AUTH=false
+EMAIL_FROM=spheroseg@utia.cas.cz  # Sender address
+
+# Extended timeouts for UTIA server delays (up to 10 minutes)
+EMAIL_TIMEOUT=300000
+SMTP_SOCKET_TIMEOUT_MS=600000
+EMAIL_GLOBAL_TIMEOUT=600000
 ```
 
-### Production - UTIA SMTP Server
+**Important Notes:**
 
-For production or real email testing, use UTIA SMTP configuration:
+- Server: mail.utia.cas.cz (Axigen ESMTP)
+- Sends emails from: spheroseg@utia.cas.cz
+- **No authentication required** for internal UTIA network
+- UTIA server has significant delays (2-10 minutes) for email processing
+- Emails are queued automatically for background processing
+- Password reset emails are always queued to prevent user timeout
 
-**Configuration file:** `.env.utia`
+## Key Features & Capabilities
 
-- Host: mail.utia.cas.cz
-- Port: 465 (SSL/TLS)
-- Sender: spheroseg@utia.cas.cz
-- Authentication: Required (add password to SMTP_PASS)
+### Batch Processing
 
-**Activate UTIA config:**
+- **Supports batch processing up to 10,000 images** per request
+- Located in `/backend/src/api/controllers/queueController.ts`
+- Supports massive bulk segmentation operations
+
+### Blue-Green Deployment
+
+- **Zero-downtime deployments** with blue-green architecture
+- Template-based nginx configuration with NGINX*VAR* prefix for variables
+- Environment switching via `./scripts/switch-environment.sh`
+- Rate limiting: 100 req/s (burst 100) for segmentation endpoints
+- nginx variables properly preserved through sed post-processing
+- Full documentation: `/docs/BLUE-GREEN-DEPLOYMENT.md`
+
+### Email Service
+
+- Robust email service with queue support
+- Extended timeouts for slow SMTP servers
+- Automatic queue for password reset emails
+- Background processing for all email operations
+
+### Model Performance Benchmarks
+
+- HRNet: ~196ms inference, 301ms total
+- CBAM-ResUNet: ~396ms inference, 501ms total
+- U-Net: ~197ms inference, 302ms total
+
+### Polygon Metrics
+
+- Implemented rotating calipers for Feret diameter
+- Perimeter includes holes (ImageJ convention)
+- Location: `/src/pages/segmentation/utils/metricCalculations.ts`
+
+## Quick Reference
+
+### Common Tasks
+
+- **New API endpoint**: Add to `/backend/src/api/routes/`
+- **New component**: Use shadcn/ui patterns in `/src/components/`
+- **Translations**: Update all files in `/src/translations/`
+- **Database changes**: Update schema, migrate, generate
+- **Switch environment**: `./scripts/switch-environment.sh [blue|green]`
+
+### Security
+
+- No console.log in production
+- JWT authentication required
+- Rate limiting enabled (see nginx zones above)
+- Security scanning with CodeQL
+
+### Performance
+
+- Redis caching enabled
+- Connection pooling (5-25 connections)
+- Circuit breakers for external services
+- Prometheus + Grafana monitoring
+- Segmentation endpoints have 100 req/s rate limit
+- **Batch processing limit: 10,000 images** per request (increased from 500)
+
+## Important Reminders
+
+1. **NEVER** touch production without permission
+2. **ALWAYS CHECK** `.active-environment` file BEFORE any operations - active env can change!
+3. **ALWAYS** use optimized build commands: `make build-optimized` or `./scripts/smart-docker-build.sh`
+4. **USE** Desktop Commander MCP for long operations
+5. **PREFER** editing existing files
+6. **STORE** knowledge after completing tasks
+7. **TEST** in Docker containers only
+8. **SWITCH** environments using the provided script: `./scripts/switch-environment.sh`
+9. **VERIFY** active environment after switching: `cat .active-environment`
+10. **REMEMBER** batch processing supports up to 10,000 images per request
+11. **USE** new build system - it handles cleanup and caching automatically
+12. **MONITOR** Docker usage regularly: `make docker-usage`
+
+## Docker Optimization System
+
+### Quick Reference - New Build Commands
 
 ```bash
-# 1. Add password to .env.utia
-# 2. Restart backend with UTIA config
-make restart-backend-utia
+# ALWAYS use these optimized commands:
+make build-optimized         # Replaces 'make build'
+make build-service SERVICE=frontend  # Build specific service
+make docker-usage           # Check disk usage
+make optimize-storage       # Clean up space
+
+# Emergency cleanup:
+./scripts/docker-build-optimizer.sh --aggressive
 ```
 
-### Testing Email Service
+### Deprecated Files (DO NOT USE)
 
-**Test endpoints (development only):**
+The following files are replaced by optimized versions:
 
-- `GET /api/test-email/test-connection` - Test SMTP connection
-- `POST /api/test-email/send-test` - Send test email
+- ❌ `docker/frontend.Dockerfile` → ✅ `docker/frontend.optimized.Dockerfile`
+- ❌ `docker/backend.Dockerfile` → ✅ `docker/backend.optimized.Dockerfile`
+- ❌ `docker/ml.Dockerfile` → ✅ `docker/ml.optimized.Dockerfile`
+- ❌ `docker/frontend.prod.Dockerfile` → ✅ `docker/frontend.optimized.Dockerfile`
+- ❌ `docker/backend.prod.Dockerfile` → ✅ `docker/backend.optimized.Dockerfile`
 
-**Features using email service:**
-
-- Password reset - sends reset link via email
-- Project sharing - sends invitation emails
-- Both properly configured and tested ✅
-
-### Makefile Commands
-
-```bash
-make test-email-mailhog    # Info about MailHog testing
-make test-email-utia       # Info about UTIA SMTP testing
-make restart-backend-utia  # Restart backend with UTIA config
-```
-
-- vždy používej desktop commander k získání logs!
-
-## Enterprise Features Summary (Added 2025-08-26)
-
-### 🛡️ Security Layer
-
-- **Authentication**: JWT + Email verification with multilingual support
-- **Authorization**: Role-based access control with user tiers
-- **Rate Limiting**: 4-tier system (Anonymous: 20/min, Auth: 60/min, Premium: 120/min, Admin: 500/min)
-- **DDoS Protection**: Automatic IP blocking after 10 violations
-- **Security Scanning**: CodeQL, Trivy, TruffleHog, GitLeaks
-- **Audit Logging**: Comprehensive activity tracking with retention policies
-
-### ⚡ Performance Layer
-
-- **Caching**: Redis with 60-80% database load reduction
-- **Connection Pooling**: 5-25 connections optimized for production
-- **Circuit Breakers**: Service-specific protection with fallback strategies
-- **Parallel Testing**: 62% faster execution with 4-thread support
-- **Lazy Loading**: Code splitting and async component loading
-- **Image Optimization**: Automatic thumbnail generation and caching
-
-### 📊 Monitoring Layer
-
-- **Business Metrics**: 50+ custom metrics for user activity and feature usage
-- **Technical Metrics**: CPU, memory, network, and disk utilization
-- **Distributed Tracing**: OpenTelemetry with Jaeger visualization
-- **Error Tracking**: Centralized aggregation with severity classification
-- **Performance Baselines**: P50/P95/P99 statistical monitoring
-- **Alert Correlation**: Multi-metric validation to reduce false positives
-
-### 🔄 Automation Layer
-
-- **Dependency Updates**: Daily Dependabot scans with grouped PRs
-- **Security Audits**: Quarterly automated reviews with scoring
-- **TypeScript Migration**: 4-week phased migration tools
-- **Alert Management**: Self-adjusting thresholds based on baselines
-- **Backup & Recovery**: Automated database backups before deployments
-- **CI/CD Pipeline**: Pre-commit hooks, security scanning, E2E tests
-
-## Quick Command Reference
-
-### Security & Quality
-
-```bash
-npm run security:check         # Check for security issues
-npm run security:audit:full    # Complete security audit
-npm run type-check:all         # Full TypeScript validation
-npm run lint:fix              # Fix linting issues
-npm run test:critical         # 8-second smoke test
-npm run test:parallel         # Fast parallel tests (45s)
-```
-
-### Monitoring & Operations
-
-```bash
-# Baseline collection
-node scripts/monitoring/collect-baselines.js --range=7d
-
-# Rate limit tuning
-node scripts/monitoring/tune-rate-limits.js --analyze
-
-# Alert management (in Slack)
-/alerts status
-/alerts silence <alert-name> <duration>
-/alerts test
-
-# Performance reports
-node scripts/monitoring/generate-performance-report.js
-```
-
-### Migration & Maintenance
-
-```bash
-# TypeScript migration
-npm run migration:validate
-bash scripts/weekly-checkpoints/week1-checkpoint.sh
-
-# Dependency review
-npm outdated
-npm audit fix
-
-# Database management
-npx prisma migrate dev
-npx prisma studio
-```
-
-## Operational Runbooks
-
-### Incident Response
-
-1. Check Grafana dashboards for anomalies
-2. Review Jaeger traces for failed requests
-3. Check circuit breaker status: `curl http://localhost:3001/api/resilience/health`
-4. Review rate limit violations: `curl http://localhost:3001/api/admin/rate-limits/violations`
-5. Check Redis cache status: `redis-cli ping`
-
-### Performance Degradation
-
-1. Review slow query logs in Grafana
-2. Check database pool utilization: `curl http://localhost:3001/api/database/metrics`
-3. Analyze cache hit rates: `curl http://localhost:3001/api/cache/stats`
-4. Review circuit breaker metrics for service failures
-5. Check ML processing queue length
-
-### Security Incident
-
-1. Review security dashboard for vulnerability trends
-2. Check rate limit violations for attack patterns
-3. Review audit logs for suspicious activity
-4. Run security scan: `npm run security:audit:full`
-5. Generate incident report: `node scripts/security-audit/generate-incident-report.js`
-
-## Important Production Configurations
-
-### Environment Variables (Production)
-
-```bash
-# Security
-REQUIRE_EMAIL_VERIFICATION=true
-JWT_ACCESS_SECRET=<strong-secret>
-JWT_REFRESH_SECRET=<strong-secret>
-
-# Performance
-REDIS_URL=redis://redis:6379
-DATABASE_CONNECTION_LIMIT=25
-RATE_LIMIT_WINDOW_MS=60000
-
-# Monitoring
-ENABLE_TRACING=true
-JAEGER_ENDPOINT=http://jaeger:14268/api/traces
-PROMETHEUS_PORT=9090
-
-# Alerts
-SLACK_WEBHOOK_URL=<webhook-url>
-PAGERDUTY_API_KEY=<api-key>
-ALERT_EMAIL_RECIPIENTS=ops@example.com
-```
-
-### Health Check Endpoints
-
-- **Overall Health**: GET /health
-- **Database Health**: GET /api/database/health
-- **Redis Health**: GET /api/cache/health
-- **ML Service Health**: GET /api/ml/health
-- **Monitoring Health**: GET /metrics
-
-## Session Context
-
-This codebase has been enhanced with 25 comprehensive improvements (2025-08-26):
-
-- 21 technical improvements (security, performance, monitoring)
-- 4 operational excellence tasks (baselines, alerts, migration, audits)
-
-All systems are production-ready with enterprise-grade security, monitoring, and self-maintaining automation.
+All docker-compose files have been updated to use optimized versions automatically.

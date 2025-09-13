@@ -16,19 +16,21 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config, getOrigins } from './utils/config';
+import { getUploadLimitsForEnvironment } from './config/uploadLimits';
+
+// Get environment-specific upload limits
+const uploadLimits = getUploadLimitsForEnvironment();
 import { logger, createRequestLogger } from './utils/logger';
 import { requireValidEnvironment } from './utils/envValidator';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { ResponseHelper } from './utils/response';
-import { initializeDatabase, disconnectDatabase, checkDatabaseHealth } from './db';
+import { initializeDatabase, disconnectDatabase, checkDatabaseHealth, prisma } from './db';
 import { setupSwagger } from './middleware/swagger';
 import { setupRoutes, createEndpointTracker } from './api/routes';
 import { createMonitoringMiddleware, getMetricsEndpoint, getMonitoringHealth, initializeMetricsCollection } from './middleware/monitoring';
 import { WebSocketService } from './services/websocketService';
-import { prisma } from './db';
 import { initializeStorageDirectories } from './utils/initializeStorage';
 import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
-import { sessionService } from './services/sessionService';
 import { initializeRateLimitingSystem, cleanupRateLimitingSystem } from './monitoring/rateLimitingInitialization';
 // import { 
 //   createTracingMiddleware, 
@@ -104,9 +106,9 @@ if (config.RATE_LIMIT_ENABLED) {
   logger.warn('⚠️  Rate limiting is disabled');
 }
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing middleware - increased limits for large uploads
+app.use(express.json({ limit: uploadLimits.EXPRESS_JSON_LIMIT }));
+app.use(express.urlencoded({ extended: true, limit: uploadLimits.EXPRESS_URL_ENCODED_LIMIT }));
 
 // Distributed tracing middleware (MUST be early in the middleware stack)
 // app.use(createContextPropagationMiddleware()); // Temporarily disabled

@@ -6,7 +6,7 @@ import path from 'path';
 import { URL } from 'url';
 import { logger } from '../../utils/logger';
 import { config } from '../../utils/config';
-import { SCALE_CONFIG, validateScale, getScaleValidationMessage, getScaleWarningMessage } from './scaleConfig';
+import { /* SCALE_CONFIG, */ validateScale, /* getScaleValidationMessage, getScaleWarningMessage */ } from './scaleConfig';
 
 export interface PolygonMetrics {
   imageId: string;
@@ -349,7 +349,7 @@ export class MetricsCalculator {
     );
     let area = mainArea - holesArea;
 
-    // Calculate perimeter
+    // Calculate perimeter (only outer boundary, excluding holes)
     let perimeter = this.calculatePerimeter(polygon.points);
 
     // Add geometric value guards - clamp to safe ranges

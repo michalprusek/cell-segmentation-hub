@@ -1,5 +1,12 @@
 import { logger } from '@/lib/logger';
-import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useMemo,
+  useEffect,
+} from 'react';
+import { unstable_batchedUpdates } from 'react-dom';
 import { toast } from 'sonner';
 import { Point, Polygon } from '@/lib/segmentation';
 import {
@@ -18,6 +25,8 @@ import {
 } from '@/lib/coordinateUtils';
 import { rafThrottle } from '@/lib/performanceUtils';
 import { useLanguage } from '@/contexts/exports';
+import { useAbortController } from '@/hooks/shared/useAbortController';
+import { handleCancelledError } from '@/lib/errorUtils';
 
 interface UseEnhancedSegmentationEditorProps {
   initialPolygons?: Polygon[];
@@ -28,7 +37,8 @@ interface UseEnhancedSegmentationEditorProps {
   onSave?: (
     polygons: Polygon[],
     imageId?: string,
-    dimensions?: { width: number; height: number }
+    dimensions?: { width: number; height: number },
+    signal?: AbortSignal
   ) => Promise<void>;
   onPolygonsChange?: (polygons: Polygon[]) => void;
   imageId?: string; // Add imageId to detect image changes
@@ -51,6 +61,11 @@ export const useEnhancedSegmentationEditor = ({
   isFromGallery = false,
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
+
+  // AbortController for autosave operations
+  const { getSignal, abort: abortAutosave } = useAbortController(
+    'EnhancedSegmentationEditor'
+  );
 
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
@@ -152,7 +167,7 @@ export const useEnhancedSegmentationEditor = ({
     }
   }, [imageWidth, imageHeight, imageId]);
 
-  // Autosave function - defined early to be used in useEffect
+  // Autosave function with cancellation support - defined early to be used in useEffect
   const autosaveBeforeReset = useCallback(async () => {
     const currentImageId = imageId;
     const previousImageId = previousImageIdRef.current;
@@ -181,20 +196,33 @@ export const useEnhancedSegmentationEditor = ({
       // Save the polygons from the previous image
       const polygonsToSave = history[historyIndex] || [];
 
+      // Get abort signal for autosave operation
+      const signal = getSignal('autosave');
+
       try {
-        // Pass the previous image dimensions to ensure correct coordinate context
+        // Pass the previous image dimensions and abort signal to ensure correct coordinate context
         await onSave(
           polygonsToSave,
           previousImageId,
-          previousImageDimensionsRef.current
+          previousImageDimensionsRef.current,
+          signal
         );
-        logger.debug(
-          '✅ Autosave completed for image:',
-          previousImageId,
-          'with dimensions:',
-          previousImageDimensionsRef.current
-        );
+
+        // Only log success if not cancelled
+        if (!signal.aborted) {
+          logger.debug(
+            '✅ Autosave completed for image:',
+            previousImageId,
+            'with dimensions:',
+            previousImageDimensionsRef.current
+          );
+        }
       } catch (error) {
+        // Handle cancellation gracefully
+        if (handleCancelledError(error, 'autosave')) {
+          return;
+        }
+
         logger.error('Autosave failed when switching images:', error);
         toast.error(t('toast.autosaveFailed'));
       }
@@ -203,38 +231,47 @@ export const useEnhancedSegmentationEditor = ({
     // Update the ref for next comparison
     previousImageIdRef.current = currentImageId;
     // Note: dimensions are now tracked separately in a useEffect to ensure they're captured BEFORE image changes
-  }, [imageId, hasUnsavedChanges, onSave, history, historyIndex, t]);
+  }, [imageId, hasUnsavedChanges, onSave, history, historyIndex, t, getSignal]);
 
   useEffect(() => {
-    const loadNewData = async () => {
-      // Check if this is truly new data (different imageId, different length, or first load)
-      const imageChanged = currentImageIdRef.current !== imageId;
-      const lengthChanged =
-        initialPolygons.length !== initialPolygonsRef.current.length;
-      const isNewData =
-        !hasInitialized.current || imageChanged || lengthChanged;
+    // Check if this is truly new data (different imageId, different length, or first load)
+    const imageChanged = currentImageIdRef.current !== imageId;
+    const lengthChanged =
+      initialPolygons.length !== initialPolygonsRef.current.length;
+    const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
 
-      if (isNewData) {
-        // First, handle autosave if imageId changed
-        if (imageChanged) {
-          await autosaveBeforeReset();
-        }
+    if (isNewData) {
+      // First, cancel any ongoing autosave for the previous image
+      if (imageChanged) {
+        abortAutosave('autosave');
+        logger.debug('🛑 Cancelled previous autosave operation');
 
-        // Then proceed with resetting editor state
-        if (process.env.NODE_ENV === 'development') {
-          logger.debug(
-            '🔄 Loading new polygon data:',
-            initialPolygons.length,
-            'polygons for image:',
-            imageId,
-            {
-              imageChanged,
-              lengthChanged,
-              isFirstLoad: !hasInitialized.current,
-            }
-          );
-        }
+        // Handle autosave in background - DON'T BLOCK NAVIGATION
+        autosaveBeforeReset().catch(error => {
+          // Handle cancellation gracefully
+          if (!handleCancelledError(error, 'background autosave')) {
+            logger.error('Background autosave failed:', error);
+          }
+        });
+      }
 
+      // Immediately proceed with resetting editor state (don't wait for autosave)
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug(
+          '🔄 Loading new polygon data:',
+          initialPolygons.length,
+          'polygons for image:',
+          imageId,
+          {
+            imageChanged,
+            lengthChanged,
+            isFirstLoad: !hasInitialized.current,
+          }
+        );
+      }
+
+      // Batch state updates to prevent multiple re-renders
+      unstable_batchedUpdates(() => {
         // Reset all editor state when switching images
         setPolygons(initialPolygons);
         setSelectedPolygonId(null); // Clear selection
@@ -266,44 +303,45 @@ export const useEnhancedSegmentationEditor = ({
         setHistoryIndex(0);
         setSavedHistoryIndex(0); // Reset saved index when changing images
         setHasUnsavedChanges(false);
+      });
 
-        // Update refs
-        initialPolygonsRef.current = initialPolygons;
-        currentImageIdRef.current = imageId;
-        hasInitialized.current = true;
+      // Update refs
+      initialPolygonsRef.current = initialPolygons;
+      currentImageIdRef.current = imageId;
+      hasInitialized.current = true;
 
-        if (process.env.NODE_ENV === 'development') {
-          logger.debug(
-            '✅ Loaded',
-            initialPolygons.length,
-            'polygons for image:',
-            imageId
-          );
-        }
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug(
+          '✅ Loaded',
+          initialPolygons.length,
+          'polygons for image:',
+          imageId
+        );
       }
-    };
-
-    loadNewData();
-  }, [initialPolygons, imageId, autosaveBeforeReset]);
+    }
+  }, [initialPolygons, imageId, autosaveBeforeReset, abortAutosave]);
 
   // Auto-reset view when opening image from gallery
   useEffect(() => {
     if (isFromGallery && imageId && hasInitialized.current) {
-      // Calculate and apply reset transform
-      const newTransform = calculateCenteringTransform(
-        imageWidth,
-        imageHeight,
-        canvasWidth,
-        canvasHeight
-      );
-      setTransform(newTransform);
-
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug(
-          '🔄 Auto-reset view for image opened from gallery:',
-          imageId
+      // Defer transform calculation to prevent blocking navigation
+      setTimeout(() => {
+        // Calculate and apply reset transform
+        const newTransform = calculateCenteringTransform(
+          imageWidth,
+          imageHeight,
+          canvasWidth,
+          canvasHeight
         );
-      }
+        setTransform(newTransform);
+
+        if (process.env.NODE_ENV === 'development') {
+          logger.debug(
+            '🔄 Auto-reset view for image opened from gallery:',
+            imageId
+          );
+        }
+      }, 0); // Defer to next tick
     }
   }, [
     isFromGallery,
@@ -315,16 +353,17 @@ export const useEnhancedSegmentationEditor = ({
   ]);
 
   // Handle beforeunload - show warning when user leaves page with unsaved changes
-  // DISABLED AUTOSAVE: Was causing unwanted saves, now only shows warning
+  // IMPORTANT: Fixed navigation freeze by removing event.preventDefault()
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (hasUnsavedChanges) {
-        // Only show browser warning, don't try to autosave
-        // User must manually save or will lose changes
-        event.preventDefault();
-        event.returnValue =
+        // CRITICAL FIX: Do NOT call event.preventDefault() as it blocks React Router navigation
+        // Only set returnValue to trigger browser's native unload warning
+        // This allows in-app navigation to work while still warning on page close/refresh
+        const message =
           'You have unsaved changes. Are you sure you want to leave?';
-        return event.returnValue;
+        event.returnValue = message;
+        return message;
       }
     };
 
@@ -446,7 +485,7 @@ export const useEnhancedSegmentationEditor = ({
     }
   }, [canRedo, historyIndex, history, savedHistoryIndex, onPolygonsChange]);
 
-  // Save operation
+  // Save operation with cancellation support
   const handleSave = useCallback(async () => {
     if (!onSave || !hasUnsavedChanges) {
       logger.debug('💾 Save skipped', {
@@ -466,21 +505,41 @@ export const useEnhancedSegmentationEditor = ({
       triggerContext: saveContext,
     });
 
+    // Get abort signal for manual save operation
+    const signal = getSignal('manual-save');
+
     setIsSaving(true);
     try {
-      await onSave(polygons, imageId);
-      setHasUnsavedChanges(false);
-      // Update the saved history index to current position
-      setSavedHistoryIndex(historyIndex);
-      toast.success(t('toast.segmentation.saved'));
-      logger.debug('✅ Save completed successfully');
+      await onSave(polygons, imageId, undefined, signal);
+
+      // Only update state if not cancelled
+      if (!signal.aborted) {
+        setHasUnsavedChanges(false);
+        // Update the saved history index to current position
+        setSavedHistoryIndex(historyIndex);
+        toast.success(t('toast.segmentation.saved'));
+        logger.debug('✅ Save completed successfully');
+      }
     } catch (error) {
+      // Handle cancellation gracefully
+      if (handleCancelledError(error, 'manual save')) {
+        return;
+      }
+
       toast.error(t('toast.segmentation.failed'));
       logger.error('Save error:', error);
     } finally {
       setIsSaving(false);
     }
-  }, [onSave, hasUnsavedChanges, polygons, historyIndex, t, imageId]);
+  }, [
+    onSave,
+    hasUnsavedChanges,
+    polygons,
+    historyIndex,
+    t,
+    imageId,
+    getSignal,
+  ]);
 
   // Transform operations with improved constraints
   const handleZoomIn = useCallback(() => {

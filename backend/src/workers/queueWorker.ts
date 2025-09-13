@@ -104,7 +104,7 @@ export class QueueWorker {
    * Trigger immediate queue processing when new items are added
    */
   public triggerImmediateProcessing(): void {
-    if (!this.isRunning) return;
+    if (!this.isRunning) {return;}
     
     // If not currently processing and no immediate timer set, process immediately
     if (!this.isProcessing && !this.immediateProcessTimer) {

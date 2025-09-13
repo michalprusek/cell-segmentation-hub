@@ -1,7 +1,6 @@
 import apiClient from '@/lib/api';
-import type { SegmentationData } from '@/types';
+import { getErrorMessage, type SegmentationData } from '@/types';
 import { toast } from 'sonner';
-import { getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 
 interface ProcessImageParams {
@@ -16,9 +15,9 @@ interface ProcessImageParams {
 }
 
 export const updateImageProcessingStatus = async ({
-  projectId,
+  projectId: _projectId,
   imageId,
-  imageUrl,
+  imageUrl: _imageUrl,
   model,
   threshold,
   detectHoles,

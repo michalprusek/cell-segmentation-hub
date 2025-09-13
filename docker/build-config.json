@@ -1,0 +1,125 @@
+{
+  "buildOptimization": {
+    "version": "1.0.0",
+    "updated": "2025-09-10",
+    "description": "Docker build optimization configuration",
+    
+    "cache": {
+      "maxBuildCacheGB": 10,
+      "maxImageAgeDays": 7,
+      "keepLatestImages": 2,
+      "cleanupSchedule": "0 2 * * *",
+      "aggressiveCleanupThresholdGB": 20
+    },
+    
+    "services": {
+      "frontend": {
+        "dockerfile": "docker/frontend.optimized.Dockerfile",
+        "fallbackDockerfile": "docker/frontend.prod.Dockerfile",
+        "expectedSizeMB": 600,
+        "maxSizeMB": 1000,
+        "buildArgs": {
+          "VITE_API_BASE_URL": "/api",
+          "VITE_ML_SERVICE_URL": "/api/ml"
+        },
+        "cacheFrom": ["spheroseg/frontend:cache"],
+        "labels": {
+          "service": "frontend",
+          "maintainer": "Cell Segmentation Hub Team"
+        }
+      },
+      
+      "backend": {
+        "dockerfile": "docker/backend.optimized.Dockerfile",
+        "fallbackDockerfile": "docker/backend.prod.Dockerfile",
+        "expectedSizeMB": 750,
+        "maxSizeMB": 1500,
+        "buildArgs": {},
+        "cacheFrom": ["spheroseg/backend:cache"],
+        "labels": {
+          "service": "backend",
+          "maintainer": "Cell Segmentation Hub Team"
+        }
+      },
+      
+      "ml-service": {
+        "dockerfile": "docker/ml.optimized.Dockerfile",
+        "fallbackDockerfile": "backend/segmentation/Dockerfile",
+        "expectedSizeMB": 3500,
+        "maxSizeMB": 5000,
+        "variants": {
+          "cpu": "docker/ml.optimized.Dockerfile",
+          "gpu": "docker/ml-gpu.Dockerfile",
+          "cuda12": "docker/ml-cuda12.Dockerfile"
+        },
+        "buildArgs": {
+          "PYTORCH_VERSION": "2.0.1",
+          "CUDA_VERSION": "11.8"
+        },
+        "cacheFrom": ["spheroseg/ml:cache"],
+        "labels": {
+          "service": "ml-service",
+          "variant": "cpu",
+          "maintainer": "Cell Segmentation Hub Team"
+        }
+      }
+    },
+    
+    "environments": {
+      "development": {
+        "composeFile": "docker-compose.yml",
+        "envFile": ".env.development",
+        "buildParallel": true,
+        "autoCleanup": false
+      },
+      "blue": {
+        "composeFile": "docker-compose.blue.yml",
+        "envFile": ".env.blue",
+        "buildParallel": true,
+        "autoCleanup": true,
+        "registry": "registry.spheroseg.com"
+      },
+      "green": {
+        "composeFile": "docker-compose.green.yml",
+        "envFile": ".env.green",
+        "buildParallel": true,
+        "autoCleanup": true,
+        "registry": "registry.spheroseg.com"
+      }
+    },
+    
+    "optimization": {
+      "useBuildKit": true,
+      "mountCache": true,
+      "compressLayers": true,
+      "multiStage": true,
+      "parallelBuilds": true,
+      "squashLayers": false,
+      "pruneAfterBuild": true
+    },
+    
+    "monitoring": {
+      "trackBuildTime": true,
+      "trackImageSize": true,
+      "alertOnSizeExceed": true,
+      "logDirectory": "logs/docker",
+      "metricsFile": "logs/docker/build-metrics.json"
+    },
+    
+    "cleanup": {
+      "preClean": {
+        "enabled": true,
+        "removeStoppedContainers": true,
+        "removeDanglingImages": true,
+        "pruneBuilderCache": true,
+        "maxCacheAge": "24h"
+      },
+      "postClean": {
+        "enabled": true,
+        "removeIntermediateImages": true,
+        "compactBuildCache": true,
+        "truncateLogs": true
+      }
+    }
+  }
+}

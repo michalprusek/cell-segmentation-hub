@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { Progress } from './progress';
-import { AnimatedLoader, StepLoader } from './animated-loader';
 import { cn } from '@/lib/utils';
 import { CheckCircle, Clock, AlertCircle, Loader2 } from 'lucide-react';
 

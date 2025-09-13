@@ -10,6 +10,7 @@ import { MetricsCalculator } from './metrics/metricsCalculator';
 import { FormatConverter } from './export/formatConverter';
 import { WebSocketService } from './websocketService';
 import * as SharingService from './sharingService';
+import { batchProcessor } from '../utils/batchProcessor';
 // import { Queue } from 'bull';
 // import { RedisClient } from '../redis/client';
 
@@ -252,7 +253,7 @@ export class ExportService {
         throw new Error('Access denied: You do not have permission to export this project');
       }
 
-      // Get project data
+      // Get project data with optimized query - only select needed fields
       const project = await prisma.project.findUnique({
         where: { id: projectId },
         select: {
@@ -262,8 +263,22 @@ export class ExportService {
             where: options.selectedImageIds
               ? { id: { in: options.selectedImageIds } }
               : undefined,
-            include: {
-              segmentation: true,
+            select: {
+              id: true,
+              name: true,
+              originalPath: true,
+              width: true,
+              height: true,
+              segmentation: {
+                select: {
+                  id: true,
+                  polygons: true,
+                  model: true,
+                  threshold: true,
+                  confidence: true,
+                  processingTime: true
+                }
+              }
             },
           },
         },
@@ -284,49 +299,87 @@ export class ExportService {
       await this.createFolderStructure(exportDir);
       this.updateJobProgress(jobId, 10);
 
-      // Process images
+      // Parallel export processing - run independent tasks concurrently
+      const exportTasks: Promise<void>[] = [];
+      let progressStep = 0;
+      const totalSteps = [
+        options.includeOriginalImages,
+        options.includeVisualizations,
+        options.annotationFormats?.length,
+        options.metricsFormats?.length,
+        options.includeDocumentation
+      ].filter(Boolean).length;
+      
+      const progressIncrement = totalSteps > 0 ? 80 / totalSteps : 0;
+      
+      // Copy original images (can run in parallel)
       if (options.includeOriginalImages && project.images) {
-        await this.copyOriginalImages(project.images, exportDir);
-        this.updateJobProgress(jobId, 20);
+        exportTasks.push(
+          this.copyOriginalImages(project.images, exportDir).then(() => {
+            progressStep++;
+            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+          })
+        );
       }
 
-      // Generate visualizations
+      // Generate visualizations (can run in parallel)
       if (options.includeVisualizations && project.images) {
-        await this.generateVisualizations(
-          project.images,
-          exportDir,
-          options.visualizationOptions
+        exportTasks.push(
+          this.generateVisualizations(
+            project.images,
+            exportDir,
+            options.visualizationOptions
+          ).then(() => {
+            progressStep++;
+            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+          })
         );
-        this.updateJobProgress(jobId, 40);
       }
 
-      // Generate annotations
+      // Generate annotations (can run in parallel)
       if (options.annotationFormats?.length && project.images) {
-        await this.generateAnnotations(
-          project.images,
-          exportDir,
-          options.annotationFormats
+        exportTasks.push(
+          this.generateAnnotations(
+            project.images,
+            exportDir,
+            options.annotationFormats
+          ).then(() => {
+            progressStep++;
+            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+          })
         );
-        this.updateJobProgress(jobId, 60);
       }
 
-      // Generate metrics
+      // Generate metrics (can run in parallel)
       if (options.metricsFormats?.length && project.images) {
-        await this.generateMetrics(
-          project.images,
-          exportDir,
-          options.metricsFormats,
-          project.title,
-          options
+        exportTasks.push(
+          this.generateMetrics(
+            project.images,
+            exportDir,
+            options.metricsFormats,
+            project.title,
+            options
+          ).then(() => {
+            progressStep++;
+            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+          })
         );
-        this.updateJobProgress(jobId, 80);
       }
 
-      // Generate documentation
+      // Generate documentation (can run in parallel)
       if (options.includeDocumentation) {
-        await this.generateDocumentation(project, exportDir, options);
-        this.updateJobProgress(jobId, 90);
+        exportTasks.push(
+          this.generateDocumentation(project, exportDir, options).then(() => {
+            progressStep++;
+            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+          })
+        );
       }
+      
+      // Wait for all export tasks to complete in parallel
+      logger.info(`Running ${exportTasks.length} export tasks in parallel`, undefined, 'ExportService');
+      await Promise.all(exportTasks);
+      this.updateJobProgress(jobId, 90);
 
       // Create ZIP archive (no compression)
       const zipPath = await this.createZipArchive(
@@ -384,36 +437,69 @@ export class ExportService {
     // Resolve upload directory to prevent path traversal
     const resolvedUploadDir = path.resolve(uploadDir);
     
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      if (image && image.originalPath) {
-        const candidateSourcePath = path.join(uploadDir, image.originalPath);
-        const resolvedSourcePath = path.resolve(candidateSourcePath);
-        
-        // Security check: ensure resolved path starts with upload directory
-        if (!resolvedSourcePath.startsWith(resolvedUploadDir)) {
-          logger.warn(`Path traversal attempt detected for image ${image.id}`, 'ExportService', {
-            imageId: image.id,
-            imagePath: image.originalPath,
-            resolvedPath: resolvedSourcePath,
-            uploadDir: resolvedUploadDir
-          });
-          continue;
-        }
-        
-        const destPath = path.join(imagesDir, image.name);
-        
-        try {
-          await fs.copyFile(resolvedSourcePath, destPath);
-        } catch (error) {
-          logger.warn(`Failed to copy image ${image.id}:`, 'ExportService', { 
-            error: error instanceof Error ? error.message : String(error),
-            imageId: image.id,
-            sourcePath: resolvedSourcePath
-          });
+    logger.info(`Starting parallel copy of ${images.length} original images`, undefined, 'ExportService');
+    let copiedCount = 0;
+    let skippedCount = 0;
+    
+    // Use higher concurrency for file copying (I/O bound operation)
+    const concurrency = Math.min(16, Math.max(8, Math.floor(images.length / 5)));
+    
+    const copyImage = async (image: ImageWithSegmentation): Promise<'copied' | 'skipped'> => {
+      if (!image || !image.originalPath) {
+        return 'skipped';
+      }
+      
+      const candidateSourcePath = path.join(uploadDir, image.originalPath);
+      const resolvedSourcePath = path.resolve(candidateSourcePath);
+      
+      // Security check: ensure resolved path starts with upload directory
+      if (!resolvedSourcePath.startsWith(resolvedUploadDir)) {
+        logger.warn(`Path traversal attempt detected for image ${image.id}`, 'ExportService', {
+          imageId: image.id,
+          imagePath: image.originalPath,
+          resolvedPath: resolvedSourcePath,
+          uploadDir: resolvedUploadDir
+        });
+        return 'skipped';
+      }
+      
+      const destPath = path.join(imagesDir, image.name);
+      
+      try {
+        await fs.copyFile(resolvedSourcePath, destPath);
+        return 'copied';
+      } catch (error) {
+        logger.warn(`Failed to copy image ${image.id}:`, 'ExportService', { 
+          error: error instanceof Error ? error.message : String(error),
+          imageId: image.id,
+          sourcePath: resolvedSourcePath
+        });
+        return 'skipped';
+      }
+    };
+    
+    // Process images in parallel batches
+    await batchProcessor.processBatch(
+      images,
+      copyImage,
+      {
+        batchSize: Math.ceil(images.length / 2), // Process in 2 batches for faster copying
+        concurrency: concurrency,
+        onBatchComplete: (batchIndex, batchResults) => {
+          const batchCopied = batchResults.filter(r => r === 'copied').length;
+          const batchSkipped = batchResults.filter(r => r === 'skipped').length;
+          copiedCount += batchCopied;
+          skippedCount += batchSkipped;
+          logger.info(`Copy batch ${batchIndex + 1} completed: ${batchCopied} copied, ${batchSkipped} skipped`, undefined, 'ExportService');
+        },
+        onItemError: (item, error) => {
+          logger.error('Image copy failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService');
+          skippedCount++;
         }
       }
-    }
+    );
+    
+    logger.info(`Parallel image copy completed: ${copiedCount} copied, ${skippedCount} skipped out of ${images.length} total`, undefined, 'ExportService');
   }
 
   private async generateVisualizations(
@@ -423,37 +509,33 @@ export class ExportService {
   ): Promise<void> {
     const vizDir = path.join(exportDir, 'visualizations');
     
-    logger.info(`Starting visualization generation for ${images.length} images`, undefined, 'ExportService');
+    logger.info(`Starting parallel visualization generation for ${images.length} images`, undefined, 'ExportService');
     let processedCount = 0;
     let skippedCount = 0;
     
-    for (let i = 0; i < images.length; i++) {
-      const image = images[i];
-      
+    // Use optimal concurrency based on system resources
+    // Typically 4-8 concurrent operations work well for I/O bound tasks
+    const concurrency = Math.min(8, Math.max(4, Math.floor(images.length / 10)));
+    
+    const processImage = async (image: ImageWithSegmentation): Promise<'processed' | 'skipped'> => {
       if (!image) {
-        logger.warn(`Image at index ${i} is undefined`, 'ExportService');
-        skippedCount++;
-        continue;
+        logger.warn(`Image is undefined`, 'ExportService');
+        return 'skipped';
       }
       
       if (!image.segmentation) {
         logger.warn(`Image ${image.name} (${image.id}) has no segmentation results`, 'ExportService');
-        skippedCount++;
-        continue;
+        return 'skipped';
       }
       
       const result = image.segmentation;
       if (!result.polygons) {
         logger.warn(`Image ${image.name} (${image.id}) has segmentation but no polygons`, 'ExportService');
-        skippedCount++;
-        continue;
+        return 'skipped';
       }
       
       const imageNameWithoutExt = path.parse(image.name).name;
-      const vizPath = path.join(
-        vizDir,
-        `${imageNameWithoutExt}_viz.png`
-      );
+      const vizPath = path.join(vizDir, `${imageNameWithoutExt}_viz.png`);
       
       let polygons;
       try {
@@ -463,16 +545,14 @@ export class ExportService {
           imageId: image.id,
           imageName: image.name
         });
-        skippedCount++;
-        continue;
+        return 'skipped';
       }
       
       try {
         // Validate originalPath before joining
         if (typeof image.originalPath !== 'string' || !image.originalPath) {
           logger.error('Invalid or empty originalPath for image', new Error(`Invalid originalPath for image ${image.id}: ${image.originalPath}`));
-          skippedCount++;
-          continue; // Skip this image
+          return 'skipped';
         }
         
         // Construct full path to the image
@@ -487,22 +567,42 @@ export class ExportService {
         );
         
         if (result === 'success') {
-          processedCount++;
+          return 'processed';
         } else {
-          skippedCount++;
           logger.warn(`Visualization generation returned ${result} for image ${image.name}`, 'ExportService');
+          return 'skipped';
         }
       } catch (error) {
         logger.error('Visualization generation failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService', {
           imageId: image.id,
           imagePath: image.originalPath
         });
-        skippedCount++;
-        // Continue with other images even if visualization fails
+        return 'skipped';
       }
-    }
+    };
     
-    logger.info(`Visualization generation completed: ${processedCount} processed, ${skippedCount} skipped out of ${images.length} total`, undefined, 'ExportService');
+    // Process images in parallel batches
+    const _results = await batchProcessor.processBatch(
+      images,
+      processImage,
+      {
+        batchSize: Math.ceil(images.length / 4), // Process in 4 batches
+        concurrency: concurrency,
+        onBatchComplete: (batchIndex, batchResults) => {
+          const batchProcessed = batchResults.filter(r => r === 'processed').length;
+          const batchSkipped = batchResults.filter(r => r === 'skipped').length;
+          processedCount += batchProcessed;
+          skippedCount += batchSkipped;
+          logger.info(`Batch ${batchIndex + 1} completed: ${batchProcessed} processed, ${batchSkipped} skipped`, undefined, 'ExportService');
+        },
+        onItemError: (item, error) => {
+          logger.error('Image processing failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService');
+          skippedCount++;
+        }
+      }
+    );
+    
+    logger.info(`Parallel visualization generation completed: ${processedCount} processed, ${skippedCount} skipped out of ${images.length} total`, undefined, 'ExportService');
   }
 
   private async generateAnnotations(
@@ -1005,7 +1105,8 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
 
     const output = await fs.open(zipPath, 'w');
     const archive = archiver('zip', {
-      zlib: { level: 0 }, // No compression
+      zlib: { level: 6 }, // Balanced compression (6 is default, good balance of speed vs size)
+      highWaterMark: 16 * 1024 * 1024, // 16MB buffer for better streaming performance
     });
 
     return new Promise((resolve, reject) => {

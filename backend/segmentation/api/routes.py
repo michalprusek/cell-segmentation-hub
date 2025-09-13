@@ -222,7 +222,7 @@ async def batch_segment_images(
     detect_holes: bool = Form(True, description="Whether to detect holes in segmentation"),
     loader = Depends(get_model_loader)
 ):
-    """Batch segmentation endpoint for processing multiple images"""
+    """Batch segmentation endpoint for processing multiple images using optimized batch processing"""
     start_time = time.time()
     
     try:
@@ -242,49 +242,115 @@ async def batch_segment_images(
                     detail=f"Invalid image file: {file.filename}. Supported formats: PNG, JPG, JPEG, TIFF, BMP"
                 )
         
-        results = []
-        
-        # Process each image in the batch
+        # Read all images into memory first
+        images = []
+        filenames = []
         for i, file in enumerate(files):
             try:
-                # Read image data and convert to PIL Image
                 image_data = await file.read()
                 image = Image.open(io.BytesIO(image_data))
-                
-                logger.info(f"Processing batch image {i+1}/{len(files)}: {file.filename}, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
-                
-                # Perform segmentation
-                result = loader.predict(image, model, threshold, detect_holes)
-                
-                # Add file information to result
-                result["filename"] = file.filename
-                result["batch_index"] = i
-                result["success"] = True
-                
-                results.append(result)
-                
-                logger.info(f"Batch image {i+1} completed, found {len(result['polygons'])} polygons")
-                
-            except (InferenceTimeoutError, TimeoutError) as e:
-                logger.error(f"Timeout processing batch image {i+1}: {file.filename}: {e}")
-                
-                # Extract timeout details
-                if isinstance(e, InferenceTimeoutError):
-                    error_msg = f"Timeout after {e.timeout}s for model '{e.model_name}'"
-                    error_detail = {
-                        "type": "timeout",
-                        "message": str(e),
-                        "model": e.model_name,
-                        "timeout": e.timeout,
-                        "image_size": e.image_size
-                    }
+                images.append(image)
+                filenames.append(file.filename)
+            except Exception as e:
+                logger.error(f"Failed to read image {file.filename}: {e}")
+                # Add placeholder for failed image to maintain index alignment
+                images.append(None)
+                filenames.append(file.filename)
+        
+        # Filter out None values but keep track of indices
+        valid_images = []
+        valid_indices = []
+        for i, img in enumerate(images):
+            if img is not None:
+                valid_images.append(img)
+                valid_indices.append(i)
+        
+        if not valid_images:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid images could be processed"
+            )
+        
+        logger.info(f"Processing batch of {len(valid_images)} images using predict_batch, Model: {model}, Threshold: {threshold}, Detect holes: {detect_holes}")
+        
+        # Use the optimized batch processing method
+        try:
+            # Get optimal batch size for the model
+            optimal_batch_size = loader.get_batch_limit(model)
+            
+            # Process all valid images using predict_batch
+            batch_results = loader.predict_batch(
+                valid_images, 
+                model, 
+                batch_size=optimal_batch_size,
+                threshold=threshold,
+                detect_holes=detect_holes
+            )
+            
+            # Create results array with proper index alignment
+            results = []
+            result_index = 0
+            
+            for i in range(len(files)):
+                if i in valid_indices:
+                    # This image was processed
+                    batch_result = batch_results[result_index] if result_index < len(batch_results) else None
+                    result_index += 1
+                    
+                    if batch_result:
+                        # Add file information to result
+                        batch_result["filename"] = filenames[i]
+                        batch_result["batch_index"] = i
+                        batch_result["success"] = True
+                        results.append(batch_result)
+                        logger.info(f"Batch image {i+1} completed, found {len(batch_result.get('polygons', []))} polygons")
+                    else:
+                        # No result for this image
+                        results.append({
+                            "filename": filenames[i],
+                            "batch_index": i,
+                            "success": False,
+                            "error": "No result from batch processing",
+                            "polygons": [],
+                            "model_used": model,
+                            "threshold_used": threshold
+                        })
                 else:
-                    error_msg = "Inference timeout"
-                    error_detail = str(e)
-                
-                # Add timeout error result
+                    # This image failed to load
+                    results.append({
+                        "filename": filenames[i],
+                        "batch_index": i,
+                        "success": False,
+                        "error": "Failed to load image",
+                        "polygons": [],
+                        "model_used": model,
+                        "threshold_used": threshold
+                    })
+            
+            logger.info(f"Batch processing completed using predict_batch, processed {len(valid_images)} images")
+            
+        except (InferenceTimeoutError, TimeoutError) as e:
+            logger.error(f"Timeout processing batch: {e}")
+            
+            # Extract timeout details
+            if isinstance(e, InferenceTimeoutError):
+                error_msg = f"Batch timeout after {e.timeout}s for model '{e.model_name}'"
+                error_detail = {
+                    "type": "timeout",
+                    "message": str(e),
+                    "model": e.model_name,
+                    "timeout": e.timeout,
+                    "image_size": e.image_size
+                }
+            else:
+                error_msg = "Batch inference timeout"
+                error_detail = str(e)
+            
+            # Return error for all images in batch
+            results = []
+            for i, filename in enumerate(filenames):
                 results.append({
-                    "filename": file.filename,
+                    "filename": filename,
                     "batch_index": i,
                     "success": False,
                     "error": error_msg,
@@ -294,26 +360,30 @@ async def batch_segment_images(
                     "threshold_used": threshold
                 })
                 
-            except InferenceError as e:
-                logger.error(f"Inference error processing batch image {i+1}: {file.filename}: {e}")
-                
-                # Add inference error result
+        except InferenceError as e:
+            logger.error(f"Inference error processing batch: {e}")
+            
+            # Return error for all images in batch
+            results = []
+            for i, filename in enumerate(filenames):
                 results.append({
-                    "filename": file.filename,
+                    "filename": filename,
                     "batch_index": i,
                     "success": False,
-                    "error": "Inference failed",
+                    "error": "Batch inference failed",
                     "error_detail": str(e),
                     "polygons": [],
                     "model_used": model,
                     "threshold_used": threshold
                 })
-            except Exception as e:
-                logger.error(f"Failed to process batch image {i+1}: {file.filename}: {e}")
-                
-                # Add error result
+        except Exception as e:
+            logger.error(f"Failed to process batch: {e}")
+            
+            # Return error for all images in batch  
+            results = []
+            for i, filename in enumerate(filenames):
                 results.append({
-                    "filename": file.filename,
+                    "filename": filename,
                     "batch_index": i,
                     "success": False,
                     "error": str(e),

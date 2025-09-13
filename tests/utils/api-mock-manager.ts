@@ -353,7 +353,7 @@ export class APIMockManager {
     this.addMock('projects-create', {
       method: 'POST',
       url: '/api/projects',
-      response: req => ({
+      response: _req => ({
         status: 201,
         body: {
           id: `mock-project-${Date.now()}`,

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals'
+import { describe, it, expect, beforeAll, afterAll, /* beforeEach, afterEach */ } from '@jest/globals'
 import { PrismaClient, User } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 
@@ -33,15 +33,15 @@ describe('Database Integration Tests', () => {
       await prisma.project.deleteMany({});
       await prisma.profile.deleteMany({});
       await prisma.user.deleteMany({});
-    } catch (error) {
+    } catch (_error) {
       // Log full error details for debugging
-      console.error('Database cleanup failed during setup:', {
-        message: error.message,
-        stack: error.stack,
-        code: error.code
-      });
+      // console.error('Database cleanup failed during setup:', {
+      //   message: _error.message,
+      //   stack: _error.stack,
+      //   code: _error.code
+      // });
       // Continue anyway - database might be empty
-      console.warn('Continuing despite cleanup error - database might be empty');
+      // console.warn('Continuing despite cleanup error - database might be empty');
     }
   })
 
@@ -49,49 +49,49 @@ describe('Database Integration Tests', () => {
     try {
       // Clean up without transaction
       await prisma.segmentationQueue.deleteMany({}).catch((error) => {
-        console.warn('SegmentationQueue cleanup failed:', error.message);
+//         console.warn('SegmentationQueue cleanup failed:', _error.message);
         if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
           throw error;
         }
       });
       await prisma.segmentation.deleteMany({}).catch((error) => {
-        console.warn('Segmentation cleanup failed:', error.message);
+//         console.warn('Segmentation cleanup failed:', _error.message);
         if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
           throw error;
         }
       });
       await prisma.image.deleteMany({}).catch((error) => {
-        console.warn('Image cleanup failed:', error.message);
+//         console.warn('Image cleanup failed:', _error.message);
         if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
           throw error;
         }
       });
       await prisma.project.deleteMany({}).catch((error) => {
-        console.warn('Project cleanup failed:', error.message);
+//         console.warn('Project cleanup failed:', _error.message);
         if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
           throw error;
         }
       });
       await prisma.session.deleteMany({}).catch((error) => {
-        console.warn('Session cleanup failed:', error.message);
+//         console.warn('Session cleanup failed:', _error.message);
         if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
           throw error;
         }
       });
       await prisma.profile.deleteMany({}).catch((error) => {
-        console.warn('Profile cleanup failed:', error.message);
+//         console.warn('Profile cleanup failed:', _error.message);
         if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
           throw error;
         }
       });
       await prisma.user.deleteMany({}).catch((error) => {
-        console.warn('User cleanup failed:', error.message);
+//         console.warn('User cleanup failed:', _error.message);
         if (!error.message.includes('No records found') && !error.message.includes('does not exist')) {
           throw error;
         }
       });
-    } catch (error) {
-      console.warn('Database cleanup failed in afterAll:', error)
+    } catch (_error) {
+//       console.warn('Database cleanup failed in afterAll:', _error)
     }
     await prisma.$disconnect()
   })
@@ -384,7 +384,7 @@ describe('Database Integration Tests', () => {
 
   describe('Complex Queries', () => {
     let testUser: any
-    let testProjects: any[]
+    let _testProjects: any[]
 
     beforeAll(async () => {
       testUser = await prisma.user.create({
@@ -562,7 +562,7 @@ describe('Database Integration Tests', () => {
           // Simulate an error
           throw new Error('Simulated transaction error')
         })
-      } catch (error) {
+      } catch (_error) {
         // Expected to fail
       }
 

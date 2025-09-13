@@ -349,7 +349,7 @@ export class TestDataManager {
       id: `polygon-${i}`,
       vertices: Array.from(
         { length: 50 + Math.floor(Math.random() * 200) },
-        (_, j) => ({
+        () => ({
           x: Math.random() * 2000,
           y: Math.random() * 2000,
         })
@@ -390,10 +390,10 @@ export class TestDataManager {
     for (const cleanupFn of this.cleanup) {
       try {
         await cleanupFn();
-      } catch (error) {
-        console.warn('Cleanup error:', error);
+      } catch (_error) {
+        // console.warn('Cleanup error:', _error);
         cleanupErrors.push(
-          error instanceof Error ? error : new Error(String(error))
+          _error instanceof Error ? _error : new Error(String(_error))
         );
       }
     }
@@ -451,8 +451,8 @@ export class TestDataManager {
       }
 
       // Test data imported successfully
-    } catch (error) {
-      console.error('Failed to import test data:', error);
+    } catch (_error) {
+      // console.error('Failed to import test data:', _error);
     }
   }
 }

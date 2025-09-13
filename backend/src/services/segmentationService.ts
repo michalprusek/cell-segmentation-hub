@@ -6,16 +6,18 @@ import { v4 as uuidv4 } from 'uuid';
 // import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
+import { PolygonValidator } from '../utils/polygonValidation';
 import { ImageService } from './imageService';
 import { ThumbnailService } from './thumbnailService';
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
+import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
 import { 
   CrossServiceTraceLinker, 
   RequestIdGenerator,
-  TraceCorrelatedLogger 
+  // TraceCorrelatedLogger 
 } from '../utils/traceCorrelation';
-import { addSpanAttributes, addSpanEvent, markSpanError, injectTraceHeaders } from '../middleware/tracing';
+import { /* addSpanAttributes, */ addSpanEvent, markSpanError, injectTraceHeaders } from '../middleware/tracing';
 
 export interface SegmentationPoint {
   x: number;
@@ -90,6 +92,7 @@ export class SegmentationService {
   private pythonServiceUrl: string;
   private thumbnailService: ThumbnailService;
   private segmentationThumbnailService: SegmentationThumbnailService;
+  private thumbnailManager: ThumbnailManager;
   
   constructor(
     private prisma: PrismaClient,
@@ -97,6 +100,7 @@ export class SegmentationService {
   ) {
     this.thumbnailService = new ThumbnailService(prisma);
     this.segmentationThumbnailService = new SegmentationThumbnailService(prisma);
+    this.thumbnailManager = new ThumbnailManager(prisma);
     // Python microservice URL - can be configured via environment
     this.pythonServiceUrl = config.SEGMENTATION_SERVICE_URL;
     
@@ -182,7 +186,7 @@ export class SegmentationService {
     const requestId = RequestIdGenerator.generateRequestId();
     
     // Log request for debugging in development
-    console.log('Segmentation request (dev mode):', {
+    logger.debug('Segmentation request (dev mode):', {
         'segmentation.image_id': request.imageId,
         'segmentation.model': request.model || 'hrnet',
         'segmentation.threshold': request.threshold || 0.5,
@@ -455,7 +459,7 @@ export class SegmentationService {
     imageWidth: number | null = null,
     imageHeight: number | null = null,
     _userId: string,
-    awaitThumbnails: boolean = false
+    awaitThumbnails = false
   ): Promise<void> {
     // Create compatible segmentation result object
     const segmentationResult: SegmentationResponse = {
@@ -479,7 +483,7 @@ export class SegmentationService {
   private async saveSegmentationResultsInternal(
     imageId: string,
     segmentationResult: SegmentationResponse,
-    awaitThumbnails: boolean = false
+    awaitThumbnails = false
   ): Promise<void> {
     try {
       // Log the full segmentation result for debugging
@@ -621,46 +625,29 @@ export class SegmentationService {
       // Save to database - create or update segmentation data
       const result = await this.prisma.segmentation.upsert(upsertData);
 
-      // Generate thumbnails - await if this is the last batch to ensure thumbnails are ready
-      if (awaitThumbnails) {
-        try {
-          // Generate polygon data thumbnails
-          await this.thumbnailService.generateThumbnails(result.id);
-          
-          // Generate actual thumbnail image with segmentation overlay
-          const segmentationThumbnailUrl = await this.segmentationThumbnailService.generateSegmentationThumbnail(result.id);
-          
-          logger.info('Thumbnails generated synchronously for last batch item', 'SegmentationService', {
-            imageId,
-            segmentationId: result.id,
-            segmentationThumbnailUrl
-          });
-        } catch (error) {
-          logger.error(
-            `Failed to generate thumbnails after ML segmentation for ${imageId} (last batch)`,
-            error instanceof Error ? error : new Error(String(error)),
-            'SegmentationService'
-          );
-          // Don't throw - just log the error to prevent blocking the queue
-        }
-      } else {
-        // Generate thumbnails asynchronously for regular batches to maintain performance
-        this.thumbnailService.generateThumbnails(result.id).catch(error => {
-          logger.error(
-            `Failed to generate polygon thumbnails after ML segmentation for ${imageId}`,
-            error instanceof Error ? error : new Error(String(error)),
-            'SegmentationService'
-          );
-        });
+      // Generate thumbnails synchronously for ALL batches to prevent silent failures
+      // This is critical for ensuring thumbnails are created reliably in batch processing
+      try {
+        // Use unified ThumbnailManager for both polygon and image thumbnails with retry logic
+        await this.thumbnailManager.generateAllThumbnails(result.id);
         
-        // Also generate actual thumbnail image asynchronously
-        this.segmentationThumbnailService.generateSegmentationThumbnail(result.id).catch(error => {
-          logger.error(
-            `Failed to generate segmentation thumbnail image for ${imageId}`,
-            error instanceof Error ? error : new Error(String(error)),
-            'SegmentationService'
-          );
+        logger.info('Thumbnails generated successfully', 'SegmentationService', {
+          imageId,
+          segmentationId: result.id,
+          batchType: awaitThumbnails ? 'last-batch' : 'regular-batch'
         });
+      } catch (error) {
+        logger.error(
+          `Failed to generate thumbnails after ML segmentation for ${imageId}`,
+          error instanceof Error ? error : new Error(String(error)),
+          'SegmentationService',
+          {
+            segmentationId: result.id,
+            batchType: awaitThumbnails ? 'last-batch' : 'regular-batch',
+            errorMessage: error instanceof Error ? error.message : String(error)
+          }
+        );
+        // Continue processing - don't block the queue, but log the failure for potential regeneration
       }
 
       logger.info('Segmentation results saved to database', 'SegmentationService', {
@@ -875,17 +862,14 @@ export class SegmentationService {
       return null;
     }
 
-    // Always use full polygons - no simplification
-    let polygons = [];
-    try {
-      polygons = JSON.parse(segmentationData.polygons);
-    } catch (error) {
-      logger.error('Failed to parse polygons JSON', error instanceof Error ? error : undefined, 'SegmentationService', { 
-        imageId, 
-        polygonsRaw: segmentationData.polygons 
-      });
-      polygons = [];
-    }
+    // Use centralized polygon validator for consistent parsing
+    const polygonResult = PolygonValidator.parsePolygonData(
+      segmentationData.polygons, 
+      'single-fetch', 
+      imageId
+    );
+    
+    const polygons = polygonResult.isValid ? polygonResult.polygons : [];
 
     const result: SegmentationResponse = {
       success: true,
@@ -978,7 +962,7 @@ export class SegmentationService {
       });
 
       // Generate thumbnails asynchronously after update
-      this.thumbnailService.generateThumbnails(updated.id).catch(error => {
+      this.thumbnailManager.generateAllThumbnails(updated.id).catch(error => {
         logger.error(
           `Failed to generate thumbnails after segmentation update for ${imageId}`,
           error instanceof Error ? error : new Error(String(error)),
@@ -1037,7 +1021,7 @@ export class SegmentationService {
       await this.imageService.updateSegmentationStatus(imageId, 'segmented', userId);
 
       // Generate thumbnails asynchronously after creation
-      this.thumbnailService.generateThumbnails(created.id).catch(error => {
+      this.thumbnailManager.generateAllThumbnails(created.id).catch(error => {
         logger.error(
           `Failed to generate thumbnails after segmentation creation for ${imageId}`,
           error instanceof Error ? error : new Error(String(error)),
@@ -1128,17 +1112,13 @@ export class SegmentationService {
     // Calculate statistics
     const totalSegmented = segmentationData.length;
     
-    // Calculate total polygons by parsing JSON data
+    // Calculate total polygons using centralized validator
     const totalPolygons = segmentationData.reduce((sum, data) => {
-      try {
-        const polygons = JSON.parse(data.polygons);
-        return sum + (Array.isArray(polygons) ? polygons.length : 0);
-      } catch {
-        return sum;
-      }
+      const polygonCount = PolygonValidator.getPolygonCount(data.polygons);
+      return sum + polygonCount;
     }, 0);
 
-    const averagePolygonsPerImage = totalSegmented > 0 ? totalPolygons / totalSegmented : 0;
+    const _averagePolygonsPerImage = totalSegmented > 0 ? totalPolygons / totalSegmented : 0;
     
     const averageConfidence = segmentationData.length > 0
       ? segmentationData.reduce((sum, data) => sum + (data.confidence || 0), 0) / segmentationData.length
@@ -1225,6 +1205,89 @@ export class SegmentationService {
       failed,
       results
     };
+  }
+
+  /**
+   * Batch fetch segmentation results for multiple images
+   * Performance optimization: Fetches all results in a single database query
+   * instead of N individual queries
+   */
+  async getBatchSegmentationResults(
+    imageIds: string[],
+    userId: string
+  ): Promise<Record<string, any>> {
+    try {
+      // First, verify user has access to all requested images
+      const accessibleImages = await this.prisma.image.findMany({
+        where: {
+          id: { in: imageIds },
+          project: { userId }
+        },
+        select: { id: true }
+      });
+
+      const accessibleImageIds = new Set(accessibleImages.map(img => img.id));
+      
+      // Fetch all segmentation results in a single query - NO INCLUDES, use JSON parsing
+      const segmentations = await this.prisma.segmentation.findMany({
+        where: {
+          imageId: { in: Array.from(accessibleImageIds) }
+        }
+        // Removed the problematic segmentationPolygons include
+      });
+
+      // Transform results into a map for easy lookup
+      const results: Record<string, any> = {};
+      
+      for (const segmentation of segmentations) {
+        // Use centralized polygon validator for consistent parsing
+        const polygonResult = PolygonValidator.parsePolygonData(
+          segmentation.polygons, 
+          'batch-fetch', 
+          segmentation.imageId
+        );
+        
+        const polygons = polygonResult.isValid ? polygonResult.polygons : [];
+
+        // Use same response format as single getSegmentationResults method
+        results[segmentation.imageId] = {
+          success: true,
+          polygons: polygons,
+          model_used: segmentation.model,
+          threshold_used: segmentation.threshold,
+          confidence: segmentation.confidence,
+          processing_time: segmentation.processingTime ? segmentation.processingTime / 1000 : null,
+          image_size: { 
+            width: segmentation.imageWidth || 0, 
+            height: segmentation.imageHeight || 0 
+          },
+          // Add image dimensions for frontend rendering
+          imageWidth: segmentation.imageWidth || 0,
+          imageHeight: segmentation.imageHeight || 0
+        };
+      }
+
+      // Add null entries for images without segmentation
+      for (const imageId of imageIds) {
+        if (accessibleImageIds.has(imageId) && !results[imageId]) {
+          results[imageId] = null;
+        }
+      }
+
+      logger.debug('Batch segmentation results fetched successfully', 'SegmentationService', {
+        requestedImages: imageIds.length,
+        accessibleImages: accessibleImageIds.size,
+        resultsFound: Object.keys(results).filter(id => results[id] !== null).length
+      });
+
+      return results;
+    } catch (error) {
+      logger.error('Failed to batch fetch segmentation results', error as Error, 'SegmentationService', {
+        imageCount: imageIds.length,
+        userId
+      });
+      throw error;
+    }
   }
 }
 

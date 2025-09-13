@@ -6,7 +6,7 @@ import { logger } from '@/lib/logger';
 import {
   ThemeContext,
   type Theme,
-  type ThemeContextType,
+  // type ThemeContextType,
 } from './ThemeContext.types';
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
@@ -88,7 +88,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
                   '(prefers-color-scheme: dark)'
                 );
                 return mediaQuery && mediaQuery.matches ? 'dark' : 'light';
-              } catch (error) {
+              } catch (_error) {
                 return 'light';
               }
             })()
@@ -142,7 +142,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({
             return () => mediaQuery.removeEventListener('change', handleChange);
           }
         }
-      } catch (error) {
+      } catch (_error) {
         // Silently handle matchMedia errors in test environment
       }
     }

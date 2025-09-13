@@ -724,6 +724,9 @@ export default {
     registrationFailed: 'Registration failed',
     logoutFailed: 'Logout failed',
     profileUpdateFailed: 'Profile update failed',
+    tokenMissing: 'Authentication token missing',
+    tokenExpired: 'Authentication token expired',
+    pleaseSignInAgain: 'Please sign in again',
     welcomeMessage: 'Welcome to the Spheroid Segmentation Platform',
     confirmationRequired:
       'Confirmation text is required and must match your email address',
@@ -757,6 +760,20 @@ export default {
     didntReceiveEmail: "Didn't receive email?",
     rememberPassword: 'Remember your password?',
     tryAgain: 'Try Again',
+    // Reset Password page specific
+    enterNewPassword: 'Enter your new password',
+    newPassword: 'New Password',
+    confirmPassword: 'Confirm Password',
+    confirmPasswordPlaceholder: 'Confirm your password',
+    passwordRequirements: 'Password must be at least 8 characters long',
+    resettingPassword: 'Resetting password...',
+    passwordResetSuccess: 'Password Reset Successful',
+    passwordResetSuccessMessage:
+      'Your password has been successfully reset. You can now sign in with your new password.',
+    invalidResetToken: 'Invalid Reset Link',
+    invalidResetTokenMessage:
+      'This password reset link is invalid or has expired. Please request a new password reset.',
+    requestNewReset: 'Request New Reset',
   },
   profile: {
     title: 'Profile',
@@ -903,6 +920,11 @@ export default {
       started: 'Segmentation has started',
       completed: 'Segmentation completed successfully',
       completedWithCount: 'Segmentation complete! Found {{count}} objects',
+      batchStarted: 'Segmentation started for {{count}} images',
+      batchCompleted:
+        '✅ {{count}} images segmented successfully ({{duration}}s)',
+      batchCompletedWithErrors:
+        '⚠️ Batch completed: {{successful}} successful, {{failed}} failed ({{duration}}s)',
       noPolygons: 'No segmentation polygons detected',
       reloadFailed:
         'Failed to load segmentation results. Please refresh the page.',
@@ -995,6 +1017,7 @@ export default {
     // Progress and status
     preparing: 'Preparing export...',
     processing: 'Processing {{current}} of {{total}}',
+    processingExport: 'Processing...',
     packaging: 'Creating package...',
     completed: 'Export completed',
     downloading: 'Downloading...',

@@ -2,6 +2,7 @@ import { getRedisClient } from '../config/redis';
 import { logger } from '../utils/logger';
 import rateLimit, { RateLimitRequestHandler, Options } from 'express-rate-limit';
 import { Request, Response, NextFunction } from 'express';
+import { TIER_LIMITS, RATE_LIMITS } from '../config/uploadLimits';
 
 interface RateLimitTier {
   name: string;
@@ -36,48 +37,48 @@ class RateLimitingSystem {
     // Anonymous tier - most restrictive
     this.tiers.set('anonymous', {
       name: 'anonymous',
-      windowMs: 1 * 60 * 1000, // 1 minute
-      max: 20, // 20 requests per minute
+      windowMs: TIER_LIMITS.anonymous.windowMs, // 1 minute
+      max: TIER_LIMITS.anonymous.max, // 100 requests per minute (increased from 20)
       message: 'Too many requests from this IP, please try again later',
     });
     
     // Authenticated tier - standard users
     this.tiers.set('authenticated', {
       name: 'authenticated',
-      windowMs: 1 * 60 * 1000, // 1 minute
-      max: 60, // 60 requests per minute
+      windowMs: TIER_LIMITS.authenticated.windowMs, // 1 minute
+      max: TIER_LIMITS.authenticated.max, // 300 requests per minute (increased from 60)
       message: 'Rate limit exceeded, please slow down',
     });
     
     // Premium tier - premium users
     this.tiers.set('premium', {
       name: 'premium',
-      windowMs: 1 * 60 * 1000, // 1 minute
-      max: 120, // 120 requests per minute
+      windowMs: TIER_LIMITS.premium.windowMs, // 1 minute
+      max: TIER_LIMITS.premium.max, // 500 requests per minute (increased from 120)
       message: 'Premium rate limit exceeded',
     });
     
     // Admin tier - administrative users
     this.tiers.set('admin', {
       name: 'admin',
-      windowMs: 1 * 60 * 1000, // 1 minute
-      max: 500, // 500 requests per minute
+      windowMs: TIER_LIMITS.admin.windowMs, // 1 minute
+      max: TIER_LIMITS.admin.max, // 1000 requests per minute (increased from 500)
       message: 'Admin rate limit exceeded',
     });
     
     // API tier - for API endpoints
     this.tiers.set('api', {
       name: 'api',
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 100, // 100 requests per 15 minutes
+      windowMs: RATE_LIMITS.API_WINDOW_MS, // 5 minutes
+      max: RATE_LIMITS.API_MAX_REQUESTS, // 1000 requests per 5 minutes (increased from 100/15min)
       message: 'API rate limit exceeded, please try again later',
     });
     
     // Auth tier - for authentication endpoints
     this.tiers.set('auth', {
       name: 'auth',
-      windowMs: 15 * 60 * 1000, // 15 minutes
-      max: 5, // 5 attempts per 15 minutes
+      windowMs: RATE_LIMITS.AUTH_WINDOW_MS, // 15 minutes
+      max: RATE_LIMITS.AUTH_MAX_REQUESTS, // 20 attempts per 15 minutes (increased from 5)
       message: 'Too many authentication attempts, please try again later',
       skipSuccessfulRequests: true, // Only count failed attempts
     });
@@ -85,8 +86,8 @@ class RateLimitingSystem {
     // Upload tier - for file uploads
     this.tiers.set('upload', {
       name: 'upload',
-      windowMs: 60 * 60 * 1000, // 1 hour
-      max: 10, // 10 uploads per hour
+      windowMs: RATE_LIMITS.UPLOAD_WINDOW_MS, // 5 minutes
+      max: RATE_LIMITS.UPLOAD_MAX_REQUESTS, // 100 uploads per 5 minutes (increased from 10/hour)
       message: 'Upload limit exceeded, please try again later',
     });
   }

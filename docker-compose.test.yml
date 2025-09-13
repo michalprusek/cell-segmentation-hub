@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Test database
+  test-database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpass
+      POSTGRES_DB: spheroseg_test
+    ports:
+      - "5433:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
+
+  # Test Redis
+  test-redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    tmpfs:
+      - /data
+    command: redis-server --save ""
+
+  # Backend test service
+  test-backend:
+    build:
+      context: .
+      dockerfile: docker/backend.optimized.Dockerfile
+    environment:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://testuser:testpass@test-database:5432/spheroseg_test
+      REDIS_URL: redis://test-redis:6379
+      JWT_SECRET: test-secret
+      EMAIL_FROM: test@spheroseg.local
+      EMAIL_TIMEOUT: 1000
+      LOG_LEVEL: error
+    ports:
+      - "3002:3001"
+    depends_on:
+      - test-database
+      - test-redis
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    command: npm run test
+
+  # ML service test
+  test-ml:
+    build:
+      context: .
+      dockerfile: docker/ml.optimized.Dockerfile
+    environment:
+      ENVIRONMENT: test
+      LOG_LEVEL: ERROR
+      MODEL_PATH: /tmp/test_models
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./backend/segmentation:/app
+      - /tmp/test_models:/tmp/test_models
+    command: python -m pytest tests/ -v --tb=short
+
+  # Frontend test service
+  test-frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.optimized.Dockerfile
+      target: test
+    environment:
+      NODE_ENV: test
+      VITE_API_URL: http://test-backend:3001/api
+      VITE_ML_SERVICE_URL: http://test-ml:8000
+      VITE_WS_URL: ws://test-backend:3001
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - /app/node_modules
+    command: npm run test
+
+networks:
+  default:
+    name: spheroseg-test

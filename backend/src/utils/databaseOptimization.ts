@@ -55,7 +55,7 @@ class DatabaseOptimization {
    * Track query performance
    */
   public trackQuery(queryName: string, duration: number): void {
-    if (!this.config.enableQueryAnalysis) return;
+    if (!this.config.enableQueryAnalysis) {return;}
 
     this.metrics.totalQueries++;
     

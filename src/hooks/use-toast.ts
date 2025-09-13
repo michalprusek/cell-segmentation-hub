@@ -1,6 +1,5 @@
 import { toast as sonnerToast, type ToastT } from 'sonner';
-import { useState } from 'react';
-import { ReactElement } from 'react';
+import { useState, ReactElement } from 'react';
 
 type ToastProps = {
   title?: string;

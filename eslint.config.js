@@ -36,8 +36,18 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
-      '@typescript-eslint/no-unused-vars': 'off',
+      // Stricter TypeScript rules
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
       '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
       '@typescript-eslint/no-unused-expressions': [
         'error',
         {
@@ -46,6 +56,18 @@ export default tseslint.config(
           allowTaggedTemplates: true,
         },
       ],
+      // Prevent console.log in production
+      'no-console': ['warn', { allow: ['warn', 'error', 'info', 'debug'] }],
+      // Prevent debugger statements
+      'no-debugger': 'error',
+      // Require === instead of ==
+      eqeqeq: ['error', 'always', { null: 'ignore' }],
+      // Prevent var usage
+      'no-var': 'error',
+      // Prefer const
+      'prefer-const': 'error',
+      // No duplicate imports
+      'no-duplicate-imports': 'error',
     },
   },
   // Disable Fast Refresh warnings for test files

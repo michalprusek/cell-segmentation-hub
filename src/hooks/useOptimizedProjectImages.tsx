@@ -116,7 +116,7 @@ export const useOptimizedProjectImages = ({
                 },
               };
             }
-          } catch (error) {
+          } catch (_error) {
             logger.debug('No cached thumbnail found', { imageId: image.id });
           }
 
@@ -133,7 +133,7 @@ export const useOptimizedProjectImages = ({
               levelOfDetail,
               image.segmentationResult
             );
-          } catch (error) {
+          } catch (_error) {
             logger.error(
               `Failed to cache thumbnail for image ${image.id}`,
               error instanceof Error ? error : new Error(String(error)),
@@ -234,7 +234,7 @@ export const useOptimizedProjectImages = ({
 
         // Refetch data
         apiRefetch();
-      } catch (error) {
+      } catch (_error) {
         logger.error(
           'Failed to invalidate thumbnail cache',
           error instanceof Error ? error : new Error(String(error)),

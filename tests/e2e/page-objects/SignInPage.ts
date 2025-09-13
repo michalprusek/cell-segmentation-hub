@@ -61,28 +61,23 @@ export class SignInPage extends BasePage {
    * Sign in with email and password
    */
   async signIn(email: string, password: string, rememberMe = false) {
-    try {
-      await this.fillWithWait(this.emailInput, email);
-      await this.fillWithWait(this.passwordInput, password);
+    await this.fillWithWait(this.emailInput, email);
+    await this.fillWithWait(this.passwordInput, password);
 
-      if (rememberMe) {
-        await this.clickWithWait(this.rememberMeCheckbox);
-      }
-
-      await this.clickWithWait(this.signInButton);
-
-      // Wait for navigation to complete (either success or error state)
-      // Race between navigation and error display
-      await Promise.any([
-        this.page.waitForURL(/\/dashboard/, { timeout: 10000 }),
-        this.errorMessage.waitFor({ timeout: 5000 }),
-      ]).catch(() => {
-        // If both fail, continue - test will handle verification
-      });
-    } catch (error) {
-      console.error('Sign in failed:', error);
-      throw error;
+    if (rememberMe) {
+      await this.clickWithWait(this.rememberMeCheckbox);
     }
+
+    await this.clickWithWait(this.signInButton);
+
+    // Wait for navigation to complete (either success or error state)
+    // Race between navigation and error display
+    await Promise.any([
+      this.page.waitForURL(/\/dashboard/, { timeout: 10000 }),
+      this.errorMessage.waitFor({ timeout: 5000 }),
+    ]).catch(() => {
+      // If both fail, continue - test will handle verification
+    });
   }
 
   /**

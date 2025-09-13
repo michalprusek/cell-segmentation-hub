@@ -10,10 +10,7 @@ import type {
   InteractionState,
   TransformState,
 } from '@/pages/segmentation/types';
-import {
-  createMockCanvasContext,
-  MockCanvasRenderingContext2D,
-} from './canvasTestUtils';
+import { createMockCanvasContext } from './canvasTestUtils';
 
 /**
  * Mock segmentation editor props type

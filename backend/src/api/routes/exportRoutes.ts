@@ -1,7 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import { authenticate } from '../../middleware/auth';
-import { validationResult } from 'express-validator';
-import { body, param } from 'express-validator';
+import { validationResult, body, param } from 'express-validator';
 import { ExportController } from '../controllers/exportController';
 
 // Validation middleware for express-validator

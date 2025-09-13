@@ -5,10 +5,17 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // Ensure test environment is properly set
+    'process.env.NODE_ENV': '"test"',
+  },
   test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
+    env: {
+      NODE_ENV: 'test',
+    },
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],

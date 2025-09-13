@@ -1,8 +1,7 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 import ProjectCard from '../ProjectCard';
 import ProjectsList from '../ProjectsList';
-import ProjectThumbnail from '../project/ProjectThumbnail';
 
 // Mock React Router
 vi.mock('react-router-dom', () => ({

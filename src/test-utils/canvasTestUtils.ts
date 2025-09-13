@@ -321,12 +321,20 @@ export const createMockCanvasContext = (): MockCanvasRenderingContext2D => {
         currentTransform = currentTransform.multiply(matrix);
       }
     ),
-    setTransform: vi.fn(
-      (a: number, b: number, c: number, d: number, e: number, f: number) => {
+    setTransform: vi.fn((...args: any[]) => {
+      if (args.length === 1 && args[0] instanceof DOMMatrix) {
+        recordCall('setTransform', [args[0]]);
+        currentTransform = new DOMMatrix(args[0]);
+      } else if (args.length === 6) {
+        const [a, b, c, d, e, f] = args;
         recordCall('setTransform', [a, b, c, d, e, f]);
         currentTransform = new DOMMatrix([a, b, c, d, e, f]);
+      } else {
+        recordCall('setTransform', args);
+        // Reset to identity if invalid arguments
+        currentTransform = new DOMMatrix();
       }
-    ),
+    }),
     resetTransform: vi.fn(() => {
       recordCall('resetTransform', []);
       currentTransform = new DOMMatrix();

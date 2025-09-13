@@ -3,7 +3,8 @@ import * as authController from '../controllers/authController';
 import { authenticate } from '../../middleware/auth';
 import { validateBody, validateParams } from '../../middleware/validation';
 import { uploadSingleImage, handleUploadError } from '../../middleware/upload';
-import { authLimiter, passwordResetLimiter, apiLimiter } from '../../middleware/rateLimiter';
+import { authLimiter, passwordResetLimiter } from '../../middleware/rateLimiter';
+// apiLimiter unused - available for future use
 import {
   loginSchema,
   registerSchema,
@@ -59,7 +60,6 @@ router.post('/reset-password',
   validateBody(resetPasswordConfirmSchema),
   authController.resetPasswordWithToken
 );
-
 
 router.get('/verify-email/:token',
   validateParams(z.object({ token: z.string() })),

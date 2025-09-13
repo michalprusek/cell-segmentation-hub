@@ -854,6 +854,10 @@ export default {
       started: '分割已开始',
       completed: '分割成功完成',
       completedWithCount: '分割完成！找到 {{count}} 个对象',
+      batchStarted: '已开始对 {{count}} 张图像进行分割',
+      batchCompleted: '✅ 成功分割 {{count}} 张图像 ({{duration}}秒)',
+      batchCompletedWithErrors:
+        '⚠️ 批处理完成：{{successful}} 成功，{{failed}} 失败 ({{duration}}秒)',
       noPolygons: '未检测到分割多边形',
       reloadFailed: '加载分割结果失败。请刷新页面。',
       autosaveFailed: '自动保存失败 - 更改可能丢失',
@@ -920,6 +924,7 @@ export default {
     includeJsonMetadata: '包含JSON元数据',
     preparing: '准备导出中...',
     processing: '处理 {{current}} / {{total}}',
+    processingExport: '处理中...',
     packaging: '创建包中...',
     completed: '导出完成',
     downloading: '下载中...',
