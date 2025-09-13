@@ -689,6 +689,7 @@ const ProjectDetail = () => {
     shouldNavigateOnComplete,
     navigationTargetImageId,
     navigate,
+    batchSubmitted,
   ]);
 
   // Cleanup debounce timeouts on unmount

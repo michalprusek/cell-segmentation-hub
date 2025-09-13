@@ -70,7 +70,7 @@ const StatsOverview = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
   const [projectCount, setProjectCount] = useState(0);
-  const [imageCount, _setImageCount] = useState(0);
+  const [_imageCount, _setImageCount] = useState(0);
   const [completedImageCount, setCompletedImageCount] = useState(0);
   const [todayUploadCount, setTodayUploadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -173,7 +173,7 @@ const StatsOverview = () => {
         }
 
         setProjectCount(projectsCount);
-        setImageCount(totalImages);
+        _setImageCount(totalImages);
         setCompletedImageCount(completedImages);
         setTodayUploadCount(todayImages);
 

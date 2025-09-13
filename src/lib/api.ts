@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
-import { Profile, UpdateProfile, PolygonData } from '@/types';
+import { Profile, UpdateProfile } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import {

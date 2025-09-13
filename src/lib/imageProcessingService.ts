@@ -15,9 +15,9 @@ interface ProcessImageParams {
 }
 
 export const updateImageProcessingStatus = async ({
-  projectId,
+  projectId: _projectId,
   imageId,
-  imageUrl,
+  imageUrl: _imageUrl,
   model,
   threshold,
   detectHoles,

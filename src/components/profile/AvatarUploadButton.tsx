@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Camera, Upload } from 'lucide-react';
+import { Camera } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { toast } from '@/hooks/use-toast';
 

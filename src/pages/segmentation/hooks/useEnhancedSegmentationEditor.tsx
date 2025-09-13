@@ -319,7 +319,7 @@ export const useEnhancedSegmentationEditor = ({
         );
       }
     }
-  }, [initialPolygons, imageId, autosaveBeforeReset]);
+  }, [initialPolygons, imageId, autosaveBeforeReset, abortAutosave]);
 
   // Auto-reset view when opening image from gallery
   useEffect(() => {

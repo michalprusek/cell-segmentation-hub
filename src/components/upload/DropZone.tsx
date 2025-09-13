@@ -1,5 +1,5 @@
 import React from 'react';
-import { DropzoneOptions, useDropzone } from 'react-dropzone';
+import { useDropzone } from 'react-dropzone';
 import { Upload } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { toast } from 'sonner';

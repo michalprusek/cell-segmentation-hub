@@ -328,13 +328,22 @@ export async function logout(refreshToken: string): Promise<void> {
    * Request password reset - generates secure token and sends reset link via email
    */
 export async function requestPasswordReset(data: ResetPasswordRequestData): Promise<{ message: string; resetToken?: string }> {
+    logger.info('Password reset requested for email', 'AuthService', { email: data.email });
+    
     try {
       const user = await prisma.user.findUnique({
         where: { email: data.email }
       });
 
+      logger.info('User lookup result', 'AuthService', { 
+        email: data.email, 
+        userFound: !!user,
+        userId: user?.id 
+      });
+
       if (!user) {
         // Don't reveal if user exists - always return success
+        logger.info('User not found, returning generic message', 'AuthService', { email: data.email });
         return { message: 'Pokud email existuje, byl odeslán odkaz pro reset hesla.' };
       }
 
@@ -345,6 +354,12 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
       // Set token expiry to 1 hour from now
       const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
 
+      logger.info('Updating user with reset token', 'AuthService', { 
+        userId: user.id,
+        email: data.email,
+        tokenExpiry: resetTokenExpiry 
+      });
+
       // Store hashed token and expiry
       await prisma.user.update({
         where: { id: user.id },
@@ -354,7 +369,7 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
         }
       });
 
-      logger.info('Password reset token generated', 'AuthService', { email: data.email });
+      logger.info('Password reset token generated and stored', 'AuthService', { email: data.email });
 
       // Send email with reset link asynchronously (fire-and-forget)
       // Don't await the email sending to prevent timeout issues
@@ -364,6 +379,8 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
           tokenExpiry: resetTokenExpiry 
         });
       } else {
+        logger.info('Preparing to send password reset email', 'AuthService', { email: data.email });
+        
         // Fire and forget - don't await the email sending
         // This prevents the request from timing out due to slow SMTP server
         EmailService.sendPasswordResetEmail(data.email, resetToken, resetTokenExpiry)
@@ -388,9 +405,14 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
         response.resetToken = resetToken;
       }
       
+      logger.info('Password reset response prepared', 'AuthService', { 
+        email: data.email,
+        includesToken: !!response.resetToken 
+      });
+      
       return response;
     } catch (error) {
-      logger.error('Password reset request failed:', error as Error, 'AuthService');
+      logger.error('Password reset request failed:', error as Error, 'AuthService', { email: data.email });
       throw ApiError.internalError('Žádost o reset hesla se nezdařila');
     }
   }
