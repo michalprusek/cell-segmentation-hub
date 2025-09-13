@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
 import express from 'express';
 import { ImageController } from '../imageController';
 import { ImageService } from '../../../services/imageService';
 import { ThumbnailService } from '../../../services/thumbnailService';
 import { authenticate } from '../../../middleware/auth';
-import { uploadImages, handleUploadError } from '../../../middleware/upload';
+// Unused imports removed: uploadImages, handleUploadError
 import { prisma } from '../../../db/index';
 
 // Mock dependencies
@@ -33,14 +33,14 @@ vi.mock('../../../db/index', () => ({
 }));
 
 const MockImageService = vi.mocked(ImageService);
-const MockThumbnailService = vi.mocked(ThumbnailService);
+// MockThumbnailService - kept for potential future use
 const mockAuthenticate = vi.mocked(authenticate);
 
 describe('ImageController - Large Batch Upload Tests', () => {
   let app: express.Application;
   let imageController: ImageController;
-  let mockImageService: any;
-  let mockThumbnailService: any;
+  let mockImageService: ReturnType<typeof vi.mocked<typeof ImageService>>;
+  let _mockThumbnailService: ReturnType<typeof vi.mocked<typeof ThumbnailService>>;
 
   const mockUser = {
     id: 'user-123',
@@ -106,7 +106,7 @@ describe('ImageController - Large Batch Upload Tests', () => {
     MockImageService.prototype.getBrowserCompatibleImage = mockImageService.getBrowserCompatibleImage;
 
     // Mock auth middleware
-    mockAuthenticate.mockImplementation((req: any, res: any, next: any) => {
+    mockAuthenticate.mockImplementation((req: express.Request & {user?: Record<string, unknown>}, res: express.Response, next: express.NextFunction) => {
       req.user = mockUser;
       next();
     });
@@ -434,7 +434,7 @@ describe('ImageController - Large Batch Upload Tests', () => {
           originalname: 'corrupt-image.jpg',
           encoding: '7bit',
           mimetype: 'image/jpeg',
-          buffer: null as any, // Simulate corrupted buffer
+          buffer: null as unknown as Buffer, // Simulate corrupted buffer
           size: 0,
         }];
         next();

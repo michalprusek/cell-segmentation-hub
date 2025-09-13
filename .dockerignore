@@ -45,6 +45,8 @@ e2e/
 **/__tests__/
 **/*.test.*
 **/*.spec.*
+# But keep tsconfig files
+!tsconfig*.json
 
 # Python cache
 __pycache__/

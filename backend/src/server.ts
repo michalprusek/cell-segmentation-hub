@@ -24,15 +24,13 @@ import { logger, createRequestLogger } from './utils/logger';
 import { requireValidEnvironment } from './utils/envValidator';
 import { errorHandler, notFoundHandler } from './middleware/error';
 import { ResponseHelper } from './utils/response';
-import { initializeDatabase, disconnectDatabase, checkDatabaseHealth } from './db';
+import { initializeDatabase, disconnectDatabase, checkDatabaseHealth, prisma } from './db';
 import { setupSwagger } from './middleware/swagger';
 import { setupRoutes, createEndpointTracker } from './api/routes';
 import { createMonitoringMiddleware, getMetricsEndpoint, getMonitoringHealth, initializeMetricsCollection } from './middleware/monitoring';
 import { WebSocketService } from './services/websocketService';
-import { prisma } from './db';
 import { initializeStorageDirectories } from './utils/initializeStorage';
 import { initializeRedis, closeRedis, redisHealthCheck } from './config/redis';
-import { sessionService } from './services/sessionService';
 import { initializeRateLimitingSystem, cleanupRateLimitingSystem } from './monitoring/rateLimitingInitialization';
 // import { 
 //   createTracingMiddleware, 

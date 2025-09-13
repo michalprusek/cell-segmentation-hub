@@ -72,7 +72,7 @@ describe('Large Batch Upload Integration Tests', () => {
           formData.append('images', blob, file.originalname);
         });
 
-        const response = await request(app)
+        const _response = await request(app)
           .post(`/api/projects/${projectId}/images`)
           .set('Authorization', `Bearer ${authToken}`)
           .send(formData)
@@ -143,8 +143,8 @@ describe('Large Batch Upload Integration Tests', () => {
           // Respect rate limits
           await UploadMockGenerator.simulateNetworkDelay(200);
 
-        } catch (error) {
-          console.error(`Chunk ${chunkIndex} failed:`, error);
+        } catch (_error) {
+//           console.error(`Chunk ${chunkIndex} failed:`, _error);
           failedChunks.push(chunkIndex);
         }
       }
@@ -368,7 +368,7 @@ describe('Large Batch Upload Integration Tests', () => {
           if (response.status === 200) {
             successfulUploads += response.body.data.images.length;
           }
-        } catch (error) {
+        } catch (_error) {
           failedChunks++;
         }
 
@@ -390,7 +390,7 @@ describe('Large Batch Upload Integration Tests', () => {
       const totalFiles = 30;
       
       // Mock storage service failure
-      const originalStorageWrite = vi.fn();
+      const _originalStorageWrite = vi.fn();
       
       const mockFiles = UploadMockGenerator.createMockFiles(totalFiles, {
         fileSize: 1024 * 100
@@ -485,7 +485,7 @@ describe('Large Batch Upload Integration Tests', () => {
           formData.append('images', blob, file.originalname);
         });
 
-        const response = await request(app)
+        const _response = await request(app)
           .post(`/api/projects/${projectId}/images`)
           .set('Authorization', `Bearer ${authToken}`)
           .send(formData)
@@ -575,7 +575,7 @@ describe('Large Batch Upload Integration Tests', () => {
     if (uploadDir) {
       try {
         await fs.rm(uploadDir, { recursive: true, force: true });
-      } catch (error) {
+      } catch (_error) {
         // Ignore cleanup errors
       }
     }

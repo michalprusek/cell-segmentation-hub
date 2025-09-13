@@ -217,17 +217,17 @@ export async function getDatabaseMetricsSummary(): Promise<{
     
     const getMetricValue = (name: string): number => {
       const metric = metrics.find(m => m.name === name);
-      if (!metric || !metric.values) return 0;
+      if (!metric || !metric.values) {return 0;}
       
       return metric.values.reduce((sum, v) => sum + (v.value || 0), 0);
     };
     
     const getMetricAverage = (name: string): number => {
       const metric = metrics.find(m => m.name === name);
-      if (!metric || !metric.values) return 0;
+      if (!metric || !metric.values) {return 0;}
       
       const values = metric.values.filter(v => v.value);
-      if (values.length === 0) return 0;
+      if (values.length === 0) {return 0;}
       
       const sum = values.reduce((acc, v) => acc + (v.value || 0), 0);
       return sum / values.length;
@@ -262,7 +262,7 @@ class DatabaseMetricsService {
    * Start database metrics collection
    */
   public start(): void {
-    if (this.isStarted) return;
+    if (this.isStarted) {return;}
     
     try {
       initializeDatabaseMetrics();
@@ -277,7 +277,7 @@ class DatabaseMetricsService {
    * Stop database metrics collection
    */
   public stop(): void {
-    if (!this.isStarted) return;
+    if (!this.isStarted) {return;}
     
     try {
       // Reset all metrics

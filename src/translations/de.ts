@@ -1021,6 +1021,7 @@ export default {
     includeJsonMetadata: 'JSON-Metadaten einschließen',
     preparing: 'Export wird vorbereitet...',
     processing: 'Verarbeitung {{current}} von {{total}}',
+    processingExport: 'Verarbeitung...',
     packaging: 'Paket wird erstellt...',
     completed: 'Export abgeschlossen',
     downloading: 'Herunterladen...',

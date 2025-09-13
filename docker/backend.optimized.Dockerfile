@@ -45,6 +45,12 @@ RUN apk add --no-cache \
     fontconfig font-noto font-noto-emoji \
     && fc-cache -fv
 
+# Add build dependencies temporarily for canvas compilation
+RUN apk add --no-cache --virtual .build-deps \
+    python3 make g++ \
+    cairo-dev jpeg-dev pango-dev giflib-dev librsvg-dev \
+    pkgconfig pixman-dev
+
 # Create non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001 -G nodejs
@@ -58,6 +64,9 @@ COPY backend/package*.json ./
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --prefer-offline --no-audit || \
     npm install --omit=dev
+
+# Remove build dependencies after installation
+RUN apk del .build-deps
 
 # Install tsx for runtime TypeScript execution
 RUN npm install tsx

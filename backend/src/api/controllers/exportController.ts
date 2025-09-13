@@ -145,7 +145,23 @@ export class ExportController {
         return;
       }
 
-      res.download(resolvedFilePath);
+      // Get file name for download
+      const fileName = `export_${jobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+      
+      // Set proper headers for file download
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      
+      // Use res.download with callback for error handling
+      res.download(resolvedFilePath, fileName, (err) => {
+        if (err) {
+          logger.error('Download stream error:', err, 'ExportController');
+          // Response might be already sent, so we just log the error
+        }
+      });
     } catch (error) {
       logger.error('Download export failed:', error instanceof Error ? error : new Error(String(error)), 'ExportController');
       res.status(500).json({ error: 'Failed to download export' });

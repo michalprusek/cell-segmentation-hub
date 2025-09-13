@@ -1,10 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { queueController } from '../controllers/queueController';
 import { authenticate } from '../../middleware/auth';
-import { validateBody, validateParams } from '../../middleware/validation';
-import { addImageToQueueSchema, batchQueueSchema, resetStuckItemsSchema, cleanupQueueSchema } from '../../types/validation';
-import { body, param } from 'express-validator';
-import { validationResult, ValidationError } from 'express-validator';
+import { validateBody } from '../../middleware/validation';
+// validateParams unused - available for future use
+import { addImageToQueueSchema, batchQueueSchema } from '../../types/validation';
+// resetStuckItemsSchema, cleanupQueueSchema unused - available for future use
+import { validationResult, ValidationError, body, param } from 'express-validator';
 import { ResponseHelper } from '../../utils/response';
 
 // Middleware to handle express-validator results

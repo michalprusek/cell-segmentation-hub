@@ -25,7 +25,7 @@ export interface RateLimitConfig {
  */
 const generateRateLimitKey = (req: Request): string => {
   // Use user ID if authenticated, otherwise use IP address
-  const userId = (req as any).user?.id;
+  const userId = (req as Request & { user?: { id?: string } }).user?.id;
   const ip = req.ip || req.connection.remoteAddress || 'unknown';
   
   return userId ? `user:${userId}` : `ip:${ip}`;
@@ -37,7 +37,7 @@ const generateRateLimitKey = (req: Request): string => {
 const rateLimitHandler = (req: Request, res: Response): void => {
   logger.warn('Rate limit exceeded', 'RateLimit', {
     ip: req.ip,
-    userId: (req as any).user?.id,
+    userId: (req as Request & { user?: { id?: string } }).user?.id,
     path: req.path,
     method: req.method
   });
@@ -196,8 +196,8 @@ export const createConditionalSkipRateLimiter = (
   skipCondition: (req: Request) => boolean
 ): RateLimitRequestHandler => {
   const limiter = createRateLimiter(config);
-  
-  return (req: Request, res: Response, next) => {
+
+  return (req: Request, res: Response, next: unknown) => {
     if (skipCondition(req)) {
       return next();
     }
@@ -210,7 +210,7 @@ export const createConditionalSkipRateLimiter = (
  */
 export const createAuthSkipRateLimiter = (config: RateLimitConfig): RateLimitRequestHandler => {
   return createConditionalSkipRateLimiter(config, (req: Request) => {
-    return !!(req as any).user; // Skip if user is authenticated
+    return !!(req as Request & { user?: unknown }).user; // Skip if user is authenticated
   });
 };
 
@@ -227,7 +227,7 @@ export const burstRateLimiter = createRateLimiter({
  * Combine multiple rate limiters
  */
 export const combineRateLimiters = (...limiters: RateLimitRequestHandler[]) => {
-  return (req: Request, res: Response, next) => {
+  return (req: Request, res: Response, next: unknown) => {
     let currentIndex = 0;
     
     const runNextLimiter = () => {
@@ -236,7 +236,7 @@ export const combineRateLimiters = (...limiters: RateLimitRequestHandler[]) => {
       }
       
       const limiter = limiters[currentIndex++];
-      limiter(req, res, (err?: any) => {
+      limiter(req, res, (err?: unknown) => {
         if (err) {
           return next(err);
         }

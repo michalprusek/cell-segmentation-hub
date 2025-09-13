@@ -7,8 +7,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { useTheme, useLanguage } from '@/contexts/exports';
-import type { Theme } from '@/contexts/exports';
+import { useTheme, useLanguage, type Theme } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
 
 const ThemeSwitcher = () => {

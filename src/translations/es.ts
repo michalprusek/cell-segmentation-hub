@@ -1004,6 +1004,7 @@ export default {
     includeJsonMetadata: 'Incluir metadatos JSON',
     preparing: 'Preparando exportación...',
     processing: 'Procesando {{current}} de {{total}}',
+    processingExport: 'Procesando...',
     packaging: 'Creando paquete...',
     completed: 'Exportación completada',
     downloading: 'Descargando...',

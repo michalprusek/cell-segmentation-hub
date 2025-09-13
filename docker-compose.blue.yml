@@ -5,7 +5,7 @@ services:
   blue-frontend:
     build:
       context: .
-      dockerfile: docker/frontend.optimized.Dockerfile
+      dockerfile: docker/frontend.prod.Dockerfile
       args:
         - VITE_API_BASE_URL=/api
         - VITE_ML_SERVICE_URL=/api/ml
@@ -27,8 +27,8 @@ services:
   # Blue Backend API (port 4001)
   blue-backend:
     build:
-      context: ./backend
-      dockerfile: ../docker/backend.optimized.Dockerfile
+      context: .
+      dockerfile: docker/backend.prod.Dockerfile
     container_name: blue-backend
     env_file: .env.blue.production
     ports:
@@ -98,8 +98,8 @@ services:
   # Blue ML Service (port 4008)
   blue-ml:
     build:
-      context: ./backend/segmentation
-      dockerfile: ../../docker/ml.optimized.Dockerfile
+      context: .
+      dockerfile: docker/ml.Dockerfile
     container_name: blue-ml
     ports:
       - "4008:8000"

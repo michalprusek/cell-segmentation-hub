@@ -4,7 +4,7 @@ import {
   ModelContext,
   type ModelType,
   type ModelInfo,
-  type ModelContextType,
+  // type ModelContextType,
 } from './ModelContext.types';
 import { AuthContext } from './AuthContext.types';
 

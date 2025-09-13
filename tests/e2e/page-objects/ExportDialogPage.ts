@@ -371,8 +371,8 @@ export class ExportDialogPage extends BasePage {
 
       // Validate the parsed count
       return isNaN(count) ? 0 : count;
-    } catch (error) {
-      console.warn('Failed to extract selected image count:', error);
+    } catch (_error) {
+      // console.warn('Failed to extract selected image count:', _error);
       return 0;
     }
   }
@@ -655,7 +655,7 @@ export class ExportDialogPage extends BasePage {
           // PNG export configuration would go here
           break;
         default:
-          console.warn(`Unknown export format: ${config.format}`);
+          // console.warn(`Unknown export format: ${config.format}`);
           break;
       }
     }

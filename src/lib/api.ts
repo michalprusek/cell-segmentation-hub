@@ -53,6 +53,7 @@ export interface ProjectImage {
   user_id: string;
   image_url: string;
   thumbnail_url?: string;
+  segmentationThumbnailUrl?: string; // New field for segmentation thumbnails
   segmentation_status: 'pending' | 'processing' | 'completed' | 'failed';
   created_at: string;
   updated_at: string;
@@ -952,7 +953,7 @@ class ApiClient {
    * const images = await apiClient.uploadImages(
    *   'project-123',
    *   fileInput.files,
-   *   (progress) => console.log(`Upload progress: ${progress}%`)
+   *   (progress) => logger.info(`Upload progress: ${progress}%`)
    * );
    */
   async uploadImages(
@@ -1011,8 +1012,8 @@ class ApiClient {
    * const result = await apiClient.uploadImagesChunked(
    *   'project-123',
    *   fileArray,
-   *   (progress) => console.log(`Overall progress: ${progress}%`),
-   *   (chunkProgress) => console.log(`Chunk ${chunkProgress.chunkIndex + 1}: ${chunkProgress.chunkProgress}%`)
+   *   (progress) => logger.info(`Overall progress: ${progress}%`),
+   *   (chunkProgress) => logger.info(`Chunk ${chunkProgress.chunkIndex + 1}: ${chunkProgress.chunkProgress}%`)
    * );
    */
   async uploadImagesChunked(
@@ -1228,7 +1229,7 @@ class ApiClient {
    * @throws {Error} If segmentation results not found or request fails
    * @example
    * const results = await apiClient.getSegmentationResults('project-123', 'image-456');
-   * console.log(`Found ${results.polygons.length} segmented cells`);
+   * logger.info(`Found ${results.polygons.length} segmented cells`);
    */
   async getSegmentationResults(
     imageId: string,

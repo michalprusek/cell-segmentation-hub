@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React /* , { useState, useEffect } */ from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   User as UserIcon,
@@ -17,7 +17,7 @@ import { useAuth } from '@/contexts/useAuth';
 import { useLanguage } from '@/contexts/useLanguage';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
-import api from '@/lib/api';
+// import api from '@/lib/api';
 
 interface UserProfileDropdownProps {
   username: string;
@@ -25,7 +25,7 @@ interface UserProfileDropdownProps {
 
 const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
   const navigate = useNavigate();
-  const { signOut, user, profile } = useAuth();
+  const { signOut, user: _user, profile } = useAuth();
   const { t } = useLanguage();
 
   // Use avatar from AuthContext profile (updated by refreshProfile)

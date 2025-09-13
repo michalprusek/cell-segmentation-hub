@@ -2,6 +2,20 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with this repository.
 
+## 🔍 Session Start Protocol
+
+**ALWAYS at the beginning of each session:**
+
+```bash
+# Get repository context
+git status          # Check current branch and changes
+git log --oneline -10  # Review recent commits
+git ls-files | head -20  # See project structure
+cat .active-environment  # Check active environment (if exists)
+```
+
+This helps understand the current state, branch, uncommitted changes, and recent work history before starting any task.
+
 ## ⚠️ PRODUCTION SAFETY WARNING ⚠️
 
 **NEVER modify or deploy to production environments without explicit permission!**
@@ -42,7 +56,7 @@ make test            # Unit tests
 make test-e2e        # E2E tests
 ```
 
-#### 🚀 Optimized Docker Build System (Updated 2025-09-10)
+#### 🚀 Optimized Docker Build System
 
 **New intelligent build system with automatic cache management:**
 
@@ -102,7 +116,7 @@ make deep-clean        # Aggressive cleanup (removes more)
 5. **Testing**: All tests must run in Docker containers
 6. **Git Commits**: Never commit unless explicitly asked
 
-## Configuration Management (Updated 2025-09-10)
+## Configuration Management
 
 ### Environment-Based Configuration
 
@@ -135,7 +149,7 @@ nginx.template.conf  # Template for nginx configuration
 
 ### Nginx Configuration
 
-**Template-based system with proper variable handling** (Fixed 2025-09-10):
+**Template-based system with proper variable handling**:
 
 - `nginx.template.conf` - Master template using NGINX*VAR* prefix for nginx variables
 - `nginx.blue.conf` - Generated for blue environment via switch script
@@ -255,7 +269,7 @@ Events:
 
 ## Production Deployment
 
-### Blue-Green Deployment (Updated 2025-09-10)
+### Blue-Green Deployment
 
 ```bash
 # ALWAYS check active environment first!
@@ -287,7 +301,7 @@ curl http://localhost/health
 # Returns: "blue-production-healthy" or "green-production-healthy"
 ```
 
-### Build & Deployment System (Updated 2025-09-10)
+### Build & Deployment System
 
 #### 🚀 NEW: Optimized Build System with Auto-Cleanup
 
@@ -372,23 +386,22 @@ sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/blue/
 sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/green/
 ```
 
-## Email Configuration (2025-09-10)
+## Email Configuration
 
-### UTIA SMTP Server Settings
+### SMTP Server Settings
 
-**VERIFIED WORKING CONFIGURATION:**
+**UTIA Mail Server Configuration:**
 
 ```bash
-# Use Port 25 with STARTTLS (Ports 465 and 587 are blocked)
+# SMTP Connection Settings
 SMTP_HOST=mail.utia.cas.cz
-SMTP_PORT=25
-SMTP_SECURE=false
+SMTP_PORT=25  # Port 25 with STARTTLS (Ports 465 and 587 are blocked)
+SMTP_SECURE=false  # false for STARTTLS
 SMTP_REQUIRE_TLS=true
 
-# Authentication (optional but recommended)
-SMTP_AUTH=true
-SMTP_USER=prusek@utia.cas.cz
-SMTP_PASS=M1i2c3h4a5l6
+# No authentication required
+SMTP_AUTH=false
+EMAIL_FROM=spheroseg@utia.cas.cz  # Sender address
 
 # Extended timeouts for UTIA server delays (up to 10 minutes)
 EMAIL_TIMEOUT=300000
@@ -398,35 +411,38 @@ EMAIL_GLOBAL_TIMEOUT=600000
 
 **Important Notes:**
 
-- Server: hermes.utia.cas.cz (Axigen ESMTP)
-- UTIA server has extreme delays (2-8 minutes) for email confirmation
+- Server: mail.utia.cas.cz (Axigen ESMTP)
+- Sends emails from: spheroseg@utia.cas.cz
+- **No authentication required** for internal UTIA network
+- UTIA server has significant delays (2-10 minutes) for email processing
 - Emails are queued automatically for background processing
 - Password reset emails are always queued to prevent user timeout
 
-## Recent Updates
+## Key Features & Capabilities
 
-### Batch Processing Limit Increase (2025-09-10)
+### Batch Processing
 
-- **Increased batch processing limit to 10,000 images** (from 500)
+- **Supports batch processing up to 10,000 images** per request
 - Located in `/backend/src/api/controllers/queueController.ts`
 - Supports massive bulk segmentation operations
 
-### Blue-Green Deployment Fix (2025-09-10)
+### Blue-Green Deployment
 
-- **Fixed 503 Service Unavailable errors** for bulk segmentation requests
-- Implemented template-based nginx configuration with NGINX*VAR* prefix solution
-- Created `./scripts/switch-environment.sh` for clean environment switching
-- Increased segmentation rate limit to 100 req/s (burst 100) to handle 84+ simultaneous requests
-- nginx variables ($host, $remote_addr) now properly preserved through sed post-processing
+- **Zero-downtime deployments** with blue-green architecture
+- Template-based nginx configuration with NGINX*VAR* prefix for variables
+- Environment switching via `./scripts/switch-environment.sh`
+- Rate limiting: 100 req/s (burst 100) for segmentation endpoints
+- nginx variables properly preserved through sed post-processing
 - Full documentation: `/docs/BLUE-GREEN-DEPLOYMENT.md`
 
-### Email Service Fix (2025-09-10)
+### Email Service
 
-- Fixed Docker container email timeouts with UTIA SMTP
-- Extended timeouts to 10 minutes for UTIA server delays
-- Implemented automatic queue for password reset emails
+- Robust email service with queue support
+- Extended timeouts for slow SMTP servers
+- Automatic queue for password reset emails
+- Background processing for all email operations
 
-### Model Performance (2025-09-07)
+### Model Performance Benchmarks
 
 - HRNet: ~196ms inference, 301ms total
 - CBAM-ResUNet: ~396ms inference, 501ms total
@@ -479,7 +495,7 @@ EMAIL_GLOBAL_TIMEOUT=600000
 11. **USE** new build system - it handles cleanup and caching automatically
 12. **MONITOR** Docker usage regularly: `make docker-usage`
 
-## Docker Optimization System (2025-09-10)
+## Docker Optimization System
 
 ### Quick Reference - New Build Commands
 

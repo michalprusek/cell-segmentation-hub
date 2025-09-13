@@ -5,9 +5,11 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useAuth } from '@/contexts/useAuth';
 import apiClient, { SegmentationResultData } from '@/lib/api';
-import type { SegmentationData } from '@/types';
-import type { ProjectImage } from '@/types';
-import { getErrorMessage } from '@/types';
+import {
+  getErrorMessage,
+  type SegmentationData,
+  type ProjectImage,
+} from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
 
 // Utility function to enrich images with segmentation results
@@ -206,10 +208,12 @@ export const useProjectData = (
         // Always fetch all images to ensure proper pagination on frontend
         while (hasMore) {
           try {
-            const imagesResponse = await apiClient.getProjectImages(projectId, {
-              limit,
-              page,
-            });
+            const imagesResponse =
+              await apiClient.getProjectImagesWithThumbnails(projectId, {
+                limit,
+                page,
+                lod: 'low',
+              });
 
             if (
               !imagesResponse.images ||
@@ -222,7 +226,10 @@ export const useProjectData = (
             allImages = [...allImages, ...imagesResponse.images];
 
             // Check if we've fetched all images
-            hasMore = page * limit < imagesResponse.total;
+            // The new endpoint returns pagination.total
+            const totalImages =
+              imagesResponse.pagination?.total || imagesResponse.total || 0;
+            hasMore = page * limit < totalImages;
             page++;
 
             // Safety limit to prevent infinite loops (max 2000 images)
@@ -255,11 +262,13 @@ export const useProjectData = (
             width: img.width,
             height: img.height,
             thumbnail_url: img.thumbnail_url,
+            segmentationThumbnailUrl: img.segmentationThumbnailUrl,
+            segmentationThumbnailPath: img.segmentationThumbnailPath,
             createdAt: new Date(img.created_at || img.createdAt),
             updatedAt: new Date(img.updated_at || img.updatedAt),
             segmentationStatus: segmentationStatus,
             // Will be populated by enriching with segmentation results
-            segmentationResult: undefined,
+            segmentationResult: img.segmentationResult || undefined,
           };
         });
 

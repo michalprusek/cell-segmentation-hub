@@ -3,6 +3,10 @@ import apiClient from '@/lib/api';
 import { useWebSocket } from '@/contexts/useWebSocket';
 import { logger } from '@/lib/logger';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
+import {
+  downloadFromResponse,
+  canDownloadLargeFiles,
+} from '@/lib/downloadUtils';
 
 export interface ExportOptions {
   includeOriginalImages?: boolean;
@@ -61,6 +65,7 @@ export const useAdvancedExport = (projectId: string) => {
     null
   );
   const [wsConnected, setWsConnected] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
 
   const { socket } = useWebSocket();
 
@@ -211,43 +216,49 @@ export const useAdvancedExport = (projectId: string) => {
     if (completedJobId) {
       const autoDownload = async () => {
         try {
+          // Set downloading state
+          setIsDownloading(true);
+
+          // Check if browser supports large file downloads - warn but don't block
+          if (!canDownloadLargeFiles()) {
+            logger.warn('Browser may have issues with large file downloads');
+            // Continue with download attempt instead of returning
+          }
+
           const response = await apiClient.get(
             `/projects/${projectId}/export/${completedJobId}/download`,
-            { responseType: 'blob' }
+            {
+              responseType: 'blob',
+              // Add timeout for large files (5 minutes)
+              timeout: 300000,
+            }
           );
 
-          // Create download link
-          const url = window.URL.createObjectURL(new Blob([response.data]));
+          // Use centralized download utility
+          const filename = `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+          await downloadFromResponse(response, filename);
 
-          // Track the URL for cleanup
-          setCreatedBlobUrls(prev => [...prev, url]);
-
-          const link = document.createElement('a');
-          link.href = url;
-          link.setAttribute(
-            'download',
-            `export_${new Date().toISOString().slice(0, 10)}.zip`
+          // Show downloading status briefly, then auto-dismiss after a reasonable time
+          setExportStatus(
+            'Download initiated. The file should appear in your downloads folder.'
           );
-          document.body.appendChild(link);
-          link.click();
 
-          // Cleanup immediately after download
+          // Auto-dismiss after 5 seconds (reasonable time for download to start)
           setTimeout(() => {
-            link.remove();
-            window.URL.revokeObjectURL(url);
-            setCreatedBlobUrls(prev => prev.filter(u => u !== url));
-          }, 100);
-
-          // Clear the completed job after download
-          setCompletedJobId(null);
-          setExportStatus('Export downloaded successfully');
+            setIsDownloading(false);
+            setCompletedJobId(null);
+            setExportStatus('');
+            logger.info('Export auto-dismissed after download');
+          }, 5000);
 
           logger.info('Export auto-downloaded', { jobId: completedJobId });
         } catch (error) {
           logger.error('Failed to auto-download export', error);
           setExportStatus(
-            'Export completed, but auto-download failed. Please try manual download.'
+            "Export completed! Click below to download if it didn't start automatically."
           );
+          setIsDownloading(false);
+          // Keep completedJobId available for manual download
         }
       };
 
@@ -262,6 +273,8 @@ export const useAdvancedExport = (projectId: string) => {
 
   const startExport = useCallback(async () => {
     try {
+      // Clear any previous completed job when starting new export
+      setCompletedJobId(null);
       setIsExporting(true);
       setExportProgress(0);
       setExportStatus('Starting export...');
@@ -288,46 +301,65 @@ export const useAdvancedExport = (projectId: string) => {
   }, [projectId, exportOptions]);
 
   const triggerDownload = useCallback(async () => {
-    if (!completedJobId) return;
+    if (!completedJobId) {
+      logger.warn('No completed export job ID available');
+      return;
+    }
+
+    // If already downloading, clicking again dismisses everything
+    if (isDownloading) {
+      setIsDownloading(false);
+      setCompletedJobId(null);
+      setExportStatus('');
+      logger.info('Export dismissed by user during download');
+      return;
+    }
 
     try {
+      setIsDownloading(true);
+      setExportStatus('Starting download...');
+
+      // Check if browser supports large file downloads - warn but don't block
+      if (!canDownloadLargeFiles()) {
+        logger.warn('Browser may have issues with large file downloads');
+        // Continue with download attempt
+      }
+
       const response = await apiClient.get(
         `/projects/${projectId}/export/${completedJobId}/download`,
-        { responseType: 'blob' }
+        {
+          responseType: 'blob',
+          // Add timeout for large files (5 minutes)
+          timeout: 300000,
+        }
       );
 
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      // Use centralized download utility with unique filename
+      const filename = `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+      await downloadFromResponse(response, filename);
 
-      // Track the URL for cleanup
-      setCreatedBlobUrls(prev => [...prev, url]);
-
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute(
-        'download',
-        `export_${new Date().toISOString().slice(0, 10)}.zip`
+      // Show downloading status briefly, then auto-dismiss
+      setExportStatus(
+        'Download initiated. The file should appear in your downloads folder.'
       );
-      document.body.appendChild(link);
-      link.click();
 
-      // Cleanup immediately after download
+      // Auto-dismiss after 5 seconds
       setTimeout(() => {
-        link.remove();
-        window.URL.revokeObjectURL(url);
-        setCreatedBlobUrls(prev => prev.filter(u => u !== url));
-      }, 100);
+        setIsDownloading(false);
+        setCompletedJobId(null);
+        setExportStatus('');
+        logger.info('Export auto-dismissed after manual download');
+      }, 5000);
 
-      // Clear the completed job after download
-      setCompletedJobId(null);
-      setExportStatus('Export downloaded successfully');
-
-      logger.info('Export downloaded', { jobId: completedJobId });
+      logger.info('Export manually downloaded', { jobId: completedJobId });
     } catch (error) {
-      logger.error('Failed to download export', error);
-      setExportStatus('Failed to download export');
+      logger.error('Failed to download export', { error, completedJobId });
+      setExportStatus('Failed to download export. Please try again.');
+      setIsDownloading(false);
+
+      // Don't clear completedJobId on error so user can retry
     }
-  }, [projectId, completedJobId]);
+  }, [projectId, completedJobId, isDownloading]);
 
   const cancelExport = useCallback(async () => {
     if (!currentJob) return;
@@ -372,6 +404,14 @@ export const useAdvancedExport = (projectId: string) => {
     }
   }, [projectId]);
 
+  // Function to dismiss/clear completed export
+  const dismissExport = useCallback(() => {
+    setCompletedJobId(null);
+    setExportStatus('');
+    setIsDownloading(false);
+    logger.info('Export dismissed by user');
+  }, []);
+
   // Fixed downloadExport issue - using triggerDownload
   return {
     exportOptions,
@@ -381,9 +421,11 @@ export const useAdvancedExport = (projectId: string) => {
     cancelExport,
     getExportStatus,
     getExportHistory,
+    dismissExport,
     exportProgress,
     exportStatus,
     isExporting,
+    isDownloading,
     currentJob,
     completedJobId,
     wsConnected,

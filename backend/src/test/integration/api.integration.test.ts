@@ -1,5 +1,5 @@
 import request from 'supertest'
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from '@jest/globals'
+import { describe, it, expect, beforeAll, afterAll, /* beforeEach, afterEach */ } from '@jest/globals'
 import app from '../../server'
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
@@ -20,7 +20,7 @@ describe('API Integration Tests', () => {
     const isValidPostgresUrl = /^postgres(?:ql)?(?:\+[a-z0-9-]+)?:\/\//i.test(databaseUrl)
     
     if (!isValidPostgresUrl) {
-      console.warn('Invalid DATABASE_URL, using default PostgreSQL URL for tests')
+//       console.warn('Invalid DATABASE_URL, using default PostgreSQL URL for tests')
       process.env.DATABASE_URL = 'postgresql://postgres:testpass@localhost:5432/testdb'
     } else {
       process.env.DATABASE_URL = databaseUrl
@@ -357,7 +357,7 @@ describe('API Integration Tests', () => {
             description: 'Test description'
           })
           .expect(400)
-      } catch (error) {
+      } catch (_error) {
         // Expected to fail
       }
 

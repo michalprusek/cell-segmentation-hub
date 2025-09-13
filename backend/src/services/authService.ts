@@ -1,10 +1,9 @@
 import { prisma } from '../db';
 import { hashPassword, verifyPassword, generateSecureToken } from '../auth/password';
-import { generateTokenPair, JwtPayload, verifyRefreshToken } from '../auth/jwt';
+import { generateTokenPair, JwtPayload } from '../auth/jwt';
 import { logger } from '../utils/logger';
 import { ApiError } from '../middleware/error';
 import * as EmailService from './emailService';
-import { generateFriendlyPassword } from '../utils/passwordGenerator';
 import { getStorageProvider } from '../storage/index';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
@@ -219,7 +218,7 @@ export async function login(data: LoginData & { rememberMe?: boolean }): Promise
       // Store refresh token in Redis and create session
       const userId = parseInt(user.id, 10);
       await sessionService.storeRefreshToken(userId, refreshToken);
-      const sessionId = await sessionService.createSession(
+      const _sessionId = await sessionService.createSession(
         userId, 
         tokenPayload.email, 
         {
@@ -727,18 +726,16 @@ export async function resendVerificationEmail(email: string): Promise<{ message:
 
       logger.info('Verification email resent', 'AuthService', { email });
 
-      // Send verification email using user's preferred language
-      try {
-        const locale = user.profile?.preferredLang || 'cs';
-        await EmailService.sendVerificationEmail(email, verificationToken, locale);
-        logger.info('Verification email resent successfully', 'AuthService', { 
-          email, 
-          locale 
+      // Send verification email using user's preferred language (non-blocking)
+      const locale = user.profile?.preferredLang || 'cs';
+      EmailService.sendVerificationEmail(email, verificationToken, locale)
+        .then(() => {
+          logger.info('Verification email sent successfully', 'AuthService', { email, locale });
+        })
+        .catch((emailError) => {
+          logger.error('Failed to send verification email:', emailError as Error, 'AuthService', { email });
         });
-      } catch (emailError) {
-        logger.error('Failed to resend verification email:', emailError as Error, 'AuthService', { email });
         // Don't fail the request - user should still get success message for security
-      }
 
       const response: { message: string; verificationToken?: string } = {
         message: 'Pokud email existuje a není ověřen, byl odeslán ověřovací email.'

@@ -48,12 +48,23 @@ router.delete(
 
 /**
  * Get project images with optimized thumbnails
- * GET /projects/:projectId/images/with-thumbnails?lod=low&page=1&limit=50
+ * GET /projects/:id/images-with-thumbnails?lod=low&page=1&limit=50
  */
 router.get(
-  '/:projectId/images/with-thumbnails',
+  '/:id/images-with-thumbnails',
   validateParams(projectIdSchema),
   imageController.getProjectImagesWithThumbnails
+);
+
+/**
+ * Regenerate missing segmentation thumbnails for a project
+ * POST /projects/:id/regenerate-thumbnails
+ * POZOR: Musí být před /:id/images kvůli pořadí matchování routes
+ */
+router.post(
+  '/:id/regenerate-thumbnails',
+  validateParams(projectIdSchema),
+  imageController.regenerateThumbnails
 );
 
 /**

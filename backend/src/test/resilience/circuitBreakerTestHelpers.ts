@@ -60,7 +60,7 @@ export const testScenarios = {
       for (let i = 0; i < failureThreshold + 1; i++) {
         try {
           await breaker.call(() => mockOp.execute());
-        } catch (error) {
+        } catch (_error) {
           // Expected failures
         }
       }
@@ -72,13 +72,13 @@ export const testScenarios = {
       let wasRejected = false;
       try {
         await breaker.call(() => mockOp.execute());
-      } catch (error) {
+      } catch (_error) {
         wasRejected = error.message.includes('Circuit breaker is OPEN');
       }
       
       return isOpen && wasRejected;
       
-    } catch (error) {
+    } catch (_error) {
       logger.error('Circuit opening test failed', error);
       return false;
     }
@@ -106,7 +106,7 @@ export const testScenarios = {
       
       return breaker.getState() === CircuitState.CLOSED;
       
-    } catch (error) {
+    } catch (_error) {
       logger.error('Circuit recovery test failed', error);
       return false;
     }
@@ -120,13 +120,13 @@ export const testScenarios = {
       let timedOut = false;
       try {
         await breaker.call(() => mockOp.execute());
-      } catch (error) {
+      } catch (_error) {
         timedOut = error.message.includes('timeout');
       }
       
       return timedOut;
       
-    } catch (error) {
+    } catch (_error) {
       logger.error('Timeout handling test failed', error);
       return false;
     }
@@ -143,7 +143,7 @@ export const testScenarios = {
       try {
         const result = await breaker.call(() => mockOp.execute());
         results.push({ success: true, result });
-      } catch (error) {
+      } catch (_error) {
         results.push({ success: false, error: error.message });
       }
     }
@@ -173,7 +173,7 @@ export class ChaosTestRunner {
   addChaosScenario(
     name: string,
     scenario: () => Promise<void>,
-    probability: number = 0.1
+    probability = 0.1
   ): void {
     this.chaosScenarios.push({ name, execute: scenario, probability });
   }
@@ -181,7 +181,7 @@ export class ChaosTestRunner {
   // Run chaos test
   async runChaosTest(
     durationMs: number,
-    concurrentOperations: number = 10
+    concurrentOperations = 10
   ): Promise<ChaosTestResults> {
     const startTime = Date.now();
     const results: ChaosTestResults = {
@@ -239,7 +239,7 @@ export class ChaosTestRunner {
     try {
       await operation();
       results.successfulOperations++;
-    } catch (error) {
+    } catch (_error) {
       results.failedOperations++;
       
       const errorType = error.constructor.name || 'UnknownError';
@@ -261,7 +261,7 @@ export class ChaosTestRunner {
           });
           
           logger.warn(`Chaos event triggered: ${scenario.name}`);
-        } catch (error) {
+        } catch (_error) {
           logger.error(`Chaos scenario failed: ${scenario.name}`, error);
         }
       }
@@ -285,7 +285,7 @@ export interface ChaosTestResults {
 // Pre-built chaos scenarios
 export const chaosScenarios = {
   // Network delays
-  networkDelay: (minMs: number = 1000, maxMs: number = 5000) => async () => {
+  networkDelay: (minMs = 1000, maxMs = 5000) => async () => {
     const delay = Math.random() * (maxMs - minMs) + minMs;
     await new Promise(resolve => setTimeout(resolve, delay));
   },
@@ -297,14 +297,14 @@ export const chaosScenarios = {
   },
 
   // Memory pressure simulation
-  memoryPressure: (sizeMB: number = 100) => async () => {
-    const bigArray = new Array(sizeMB * 1024 * 1024).fill('x');
+  memoryPressure: (sizeMB = 100) => async () => {
+    const _bigArray = new Array(sizeMB * 1024 * 1024).fill('x');
     await new Promise(resolve => setTimeout(resolve, 1000));
     // Array will be garbage collected
   },
 
   // CPU spike simulation
-  cpuSpike: (durationMs: number = 1000) => async () => {
+  cpuSpike: (durationMs = 1000) => async () => {
     const endTime = Date.now() + durationMs;
     while (Date.now() < endTime) {
       void (Math.random() * Math.random()); // Busy work - void operator suppresses unused expression warning
@@ -334,7 +334,7 @@ export class CircuitBreakerTestSuite {
     this.testResults = [];
 
     // Test 1: Circuit opens on failures
-    const openingTest = await this.runTest(
+    const _openingTest = await this.runTest(
       'Circuit Opening',
       () => testScenarios.testCircuitOpening(this.breaker, 5)
     );
@@ -343,7 +343,7 @@ export class CircuitBreakerTestSuite {
     this.breaker.reset();
 
     // Test 2: Circuit recovers
-    const recoveryTest = await this.runTest(
+    const _recoveryTest = await this.runTest(
       'Circuit Recovery',
       () => testScenarios.testCircuitRecovery(this.breaker, 3, 1000)
     );
@@ -352,7 +352,7 @@ export class CircuitBreakerTestSuite {
     this.breaker.reset();
 
     // Test 3: Timeout handling
-    const timeoutTest = await this.runTest(
+    const _timeoutTest = await this.runTest(
       'Timeout Handling',
       () => testScenarios.testTimeoutHandling(this.breaker, 1000)
     );
@@ -361,7 +361,7 @@ export class CircuitBreakerTestSuite {
     this.breaker.reset();
 
     // Test 4: Mixed pattern handling
-    const mixedPatternTest = await this.runTest(
+    const _mixedPatternTest = await this.runTest(
       'Mixed Pattern',
       async () => {
         const result = await testScenarios.testMixedPattern(this.breaker);
@@ -397,7 +397,7 @@ export class CircuitBreakerTestSuite {
       logger.info(`Test ${name}: ${passed ? 'PASSED' : 'FAILED'} (${duration}ms)`);
       return result;
       
-    } catch (error) {
+    } catch (_error) {
       const duration = Date.now() - startTime;
       
       const result: TestResult = {

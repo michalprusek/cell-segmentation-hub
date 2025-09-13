@@ -5,13 +5,13 @@ import {
   segmentImage,
   calculatePolygonArea,
   calculatePerimeter,
+  type Point,
 } from '@/lib/segmentation';
 import {
   createTestPolygons,
   createMockImageData,
   measurePerformance,
 } from '@/test-utils/polygonTestUtils';
-import type { Point } from '@/lib/segmentation';
 
 // Mock DOM APIs for testing
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {

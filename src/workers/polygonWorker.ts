@@ -408,7 +408,7 @@ function crossProduct(a: Point, b: Point, c: Point): number {
 function bufferPolygon(
   points: Point[],
   distance: number,
-  segments: number = 8
+  _segments: number = 8
 ): Point[] {
   if (points.length < 3 || distance <= 0) return [...points];
 

@@ -155,7 +155,7 @@ test.describe('Batch Segmentation Result Fetching', () => {
     await expect(page.locator('[data-testid="project-image"]')).toHaveCount(3);
 
     // Check that batch API was called
-    const batchRequests = page.locator('body').evaluate(() => {
+    const _batchRequests = page.locator('body').evaluate(() => {
       return (window as any).__batchApiCalls || [];
     });
 

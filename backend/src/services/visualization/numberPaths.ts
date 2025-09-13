@@ -537,7 +537,7 @@ export const NUMBER_PATHS = {
             ctx.fillText(displayText, centerX, centerY);
           }
           ctx.restore();
-        } catch (error) {
+        } catch (_error) {
           // Font rendering failed, dot pattern already drawn as fallback
           ctx.restore();
         }

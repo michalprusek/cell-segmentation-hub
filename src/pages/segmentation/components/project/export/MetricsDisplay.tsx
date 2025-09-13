@@ -8,6 +8,7 @@ import {
 } from '../../../utils/metricCalculations';
 import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
 import { useLanguage } from '@/contexts/useLanguage';
+import { downloadJSON } from '@/lib/downloadUtils';
 
 interface MetricsDisplayProps {
   segmentation: SegmentationResult;
@@ -29,15 +30,11 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
   };
 
   const handleDownload = (content: string, filename: string) => {
-    const blob = new Blob([content], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Use centralized download utility for better browser support
+    const data = JSON.parse(content);
+    // Remove .json extension from filename since downloadJSON adds it
+    const baseFilename = filename.replace(/\.json$/, '');
+    downloadJSON(data, baseFilename);
   };
 
   // Get external polygons for metrics

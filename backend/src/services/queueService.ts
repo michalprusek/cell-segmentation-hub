@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { SegmentationService, SegmentationResponse } from './segmentationService';
 import { ImageService } from './imageService';
 import { WebSocketService } from './websocketService';
+import { batchProcessor } from '../utils/batchProcessor';
 
 export interface QueueStats {
   queued: number;
@@ -34,7 +35,7 @@ export class QueueService {
     cbam_resunet: 4
   };
   private websocketService: WebSocketService | null = null;
-  private queueWorkerInstance: any = null; // Reference to QueueWorker for triggering
+  private queueWorkerInstance: unknown = null; // Reference to QueueWorker for triggering
 
   constructor(
     private prisma: PrismaClient,
@@ -44,13 +45,38 @@ export class QueueService {
     // WebSocket service will be set after initialization
     this.websocketService = null;
   }
+
+  /**
+   * Helper method to process simple operations using shared BatchProcessor
+   */
+  private async processBatchOperations<T, R>(
+    items: T[],
+    processor: (item: T) => Promise<R>,
+    operationName: string,
+    batchSize = 10
+  ): Promise<R[]> {
+    return batchProcessor.processBatch(
+      items,
+      processor,
+      {
+        batchSize,
+        concurrency: 3,
+        onBatchComplete: (index, results) => {
+          logger.debug(`${operationName} batch ${index + 1} completed, ${results.length} successful`);
+        },
+        onItemError: (item, error) => {
+          logger.error(`${operationName} failed for item`, error);
+        }
+      }
+    );
+  }
   
   public setWebSocketService(wsService: WebSocketService): void {
     this.websocketService = wsService;
     logger.info('WebSocket service connected to QueueService', 'QueueService');
   }
 
-  public setQueueWorker(queueWorker: any): void {
+  public setQueueWorker(queueWorker: unknown): void {
     this.queueWorkerInstance = queueWorker;
     logger.info('QueueWorker connected to QueueService for immediate processing', 'QueueService');
   }
@@ -509,7 +535,7 @@ export class QueueService {
       
       // Group notifications by userId for efficient emission
       const groupedNotifications = notifications.reduce((acc, notif) => {
-        if (!acc[notif.userId]) acc[notif.userId] = [];
+        if (!acc[notif.userId]) {acc[notif.userId] = [];}
         acc[notif.userId].push(notif.data);
         return acc;
       }, {} as Record<string, any[]>);

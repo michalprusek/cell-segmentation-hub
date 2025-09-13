@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Polygon, Point } from '@/lib/segmentation';
 import CanvasPolygonLayer from '../pages/segmentation/components/canvas/CanvasPolygonLayer';
-import { useOptimizedPolygonRendering } from '../hooks/useOptimizedPolygonRendering';
+import { useOptimizedPolygonRendering as _useOptimizedPolygonRendering } from '../hooks/useOptimizedPolygonRendering';
 
 // Generate test polygons
 const generateTestPolygons = (
@@ -239,7 +239,7 @@ const OptimizedRenderingDemo: React.FC = () => {
     null
   );
   const [zoom, setZoom] = useState(1.0);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [_offset, _setOffset] = useState({ x: 0, y: 0 });
   const [fps, setFPS] = useState(60);
   const [frameTime, setFrameTime] = useState(16.67);
 
@@ -370,7 +370,7 @@ const OptimizedRenderingDemo: React.FC = () => {
           vertexIndex: null,
         }}
         zoom={zoom}
-        offset={offset}
+        offset={_offset}
         containerWidth={1200}
         containerHeight={800}
         editMode={false}
@@ -387,19 +387,19 @@ const OptimizedRenderingDemo: React.FC = () => {
         isShiftPressed={false}
         isZooming={false}
         onSelectPolygon={handlePolygonSelect}
-        onDeletePolygon={id => {
+        onDeletePolygon={_id => {
           /* Test handler */
         }}
-        onSlicePolygon={id => {
+        onSlicePolygon={_id => {
           /* Test handler */
         }}
-        onEditPolygon={id => {
+        onEditPolygon={_id => {
           /* Test handler */
         }}
-        onDeleteVertex={(polygonId, vertexIndex) => {
+        onDeleteVertex={(_polygonId, _vertexIndex) => {
           /* Test handler */
         }}
-        onDuplicateVertex={(polygonId, vertexIndex) => {
+        onDuplicateVertex={(_polygonId, _vertexIndex) => {
           /* Test handler */
         }}
         pointAddingTempPoints={[]}

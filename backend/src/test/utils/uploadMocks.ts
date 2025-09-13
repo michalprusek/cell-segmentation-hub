@@ -7,7 +7,7 @@ export class UploadMockGenerator {
   /**
    * Generate a mock image file buffer with specified size
    */
-  static createMockImageBuffer(size: number = 1024, format: 'JPEG' | 'PNG' | 'TIFF' = 'JPEG'): Buffer {
+  static createMockImageBuffer(size = 1024, format: 'JPEG' | 'PNG' | 'TIFF' = 'JPEG'): Buffer {
     const buffer = Buffer.alloc(size);
     
     // Add basic file headers to make it look like a real image
@@ -288,7 +288,7 @@ export class UploadMockGenerator {
           rss: current.rss - initialMemory.rss,
         };
       },
-      assertMemoryWithinLimits: (maxHeapIncreaseMB: number = 100) => {
+      assertMemoryWithinLimits: (maxHeapIncreaseMB = 100) => {
         const increase = process.memoryUsage().heapUsed - initialMemory.heapUsed;
         const increaseMB = increase / (1024 * 1024);
         
@@ -305,9 +305,9 @@ export class UploadMockGenerator {
    * Helper to get format from MIME type
    */
   private static getMimeTypeFormat(mimeType: string): 'JPEG' | 'PNG' | 'TIFF' {
-    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) return 'JPEG';
-    if (mimeType.includes('png')) return 'PNG';
-    if (mimeType.includes('tiff') || mimeType.includes('tif')) return 'TIFF';
+    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {return 'JPEG';}
+    if (mimeType.includes('png')) {return 'PNG';}
+    if (mimeType.includes('tiff') || mimeType.includes('tif')) {return 'TIFF';}
     return 'JPEG'; // default
   }
 }
@@ -319,11 +319,11 @@ export class MockRateLimiter {
   private requests: Array<{ timestamp: number; ip: string }> = [];
   
   constructor(
-    private maxRequests: number = 100,
+    private maxRequests = 100,
     private windowMs: number = 60 * 1000 // 1 minute
   ) {}
 
-  isAllowed(ip: string = 'test-ip'): boolean {
+  isAllowed(ip = 'test-ip'): boolean {
     const now = Date.now();
     
     // Clean old requests
@@ -347,7 +347,7 @@ export class MockRateLimiter {
     this.requests = [];
   }
 
-  getRequestCount(ip: string = 'test-ip'): number {
+  getRequestCount(ip = 'test-ip'): number {
     const now = Date.now();
     return this.requests
       .filter(req => req.ip === ip && now - req.timestamp < this.windowMs)
@@ -375,12 +375,12 @@ export class PerformanceMetrics {
   }
 
   getDuration(): number {
-    if (!this.endTime) this.end();
+    if (!this.endTime) {this.end();}
     return this.endTime! - this.startTime;
   }
 
   getMemoryUsage(): { initial: NodeJS.MemoryUsage; final: NodeJS.MemoryUsage; increase: NodeJS.MemoryUsage } {
-    if (!this.memoryEnd) this.end();
+    if (!this.memoryEnd) {this.end();}
     
     return {
       initial: this.memoryStart,

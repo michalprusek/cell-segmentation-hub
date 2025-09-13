@@ -33,7 +33,7 @@ export class PolygonValidator {
    */
   static parsePolygonData(
     polygonData: string | any, 
-    context: string = 'unknown', 
+    context = 'unknown', 
     imageId?: string
   ): ParsedPolygonResult {
     try {
@@ -186,7 +186,7 @@ export class PolygonValidator {
    * @param index Index in array for logging
    * @returns Validated polygon or null if invalid
    */
-  private static validateSinglePolygon(polygon: any, index: number): Polygon | null {
+  private static validateSinglePolygon(polygon: any, _index: number): Polygon | null {
     if (!polygon || typeof polygon !== 'object') {
       return null;
     }
@@ -274,7 +274,7 @@ export class PolygonValidator {
    * @returns True if data exists and is parseable
    */
   static hasValidPolygonData(polygonData: string | any): boolean {
-    if (!polygonData) return false;
+    if (!polygonData) {return false;}
     
     const result = this.parsePolygonData(polygonData, 'validation-check');
     return result.isValid && result.polygons.length > 0;

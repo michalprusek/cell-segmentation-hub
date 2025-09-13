@@ -2,7 +2,7 @@ import multer from 'multer';
 import path from 'path';
 import { Request, Response, NextFunction } from 'express';
 import type { Express } from 'express-serve-static-core';
-import { SUPPORTED_MIME_TYPES, SUPPORTED_EXTENSIONS, MAX_FILE_SIZE } from '../storage/interface';
+import { SUPPORTED_MIME_TYPES, SUPPORTED_EXTENSIONS } from '../storage/interface';
 import { getUploadLimitsForEnvironment } from '../config/uploadLimits';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';

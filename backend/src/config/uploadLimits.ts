@@ -72,7 +72,7 @@ export function calculateChunks(fileCount: number, env?: string): number {
 /**
  * Estimate upload time in minutes
  */
-export function estimateUploadTime(fileCount: number, avgFileSizeMB: number = 1.5): number {
+export function estimateUploadTime(fileCount: number, _avgFileSizeMB = 1.5): number {
   const chunks = calculateChunks(fileCount, 'production');
   // Assume 10 seconds per chunk (network + processing)
   const secondsPerChunk = 10;

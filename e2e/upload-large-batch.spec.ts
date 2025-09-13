@@ -70,7 +70,7 @@ async function cleanupTestImages(files: string[]) {
   for (const file of files) {
     try {
       await fs.promises.unlink(file);
-    } catch (error) {
+    } catch (_error) {
       // Ignore cleanup errors
     }
   }
@@ -156,7 +156,7 @@ test.describe('Large Batch Upload E2E Tests', () => {
               progressUpdates.push(progress);
             }
           }
-        } catch (error) {
+        } catch (_error) {
           // Element might not be available
         }
       }, 500);
@@ -231,7 +231,7 @@ test.describe('Large Batch Upload E2E Tests', () => {
           if (chunkText && !chunkUpdates.includes(chunkText)) {
             chunkUpdates.push(chunkText);
           }
-        } catch (error) {
+        } catch (_error) {
           // Element might not be available
         }
       }, 1000);
@@ -380,7 +380,7 @@ test.describe('Large Batch Upload E2E Tests', () => {
               });
             }
           }
-        } catch (error) {
+        } catch (_error) {
           // Elements might not be available
         }
       }, 500);

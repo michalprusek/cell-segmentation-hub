@@ -7,7 +7,7 @@ import ProjectCard from '@/components/ProjectCard';
 // Mock the child components
 vi.mock('@/components/project/ProjectThumbnail', () => ({
   default: ({
-    projectId,
+    projectId: _projectId,
     fallbackSrc,
   }: {
     projectId: string;
@@ -22,7 +22,7 @@ vi.mock('@/components/project/ProjectThumbnail', () => ({
 }));
 
 vi.mock('@/components/project/ProjectActions', () => ({
-  default: ({ projectId }: { projectId: string }) => (
+  default: ({ projectId: _projectId }: { projectId: string }) => (
     <button aria-label="More options" data-testid="project-actions">
       Actions
     </button>

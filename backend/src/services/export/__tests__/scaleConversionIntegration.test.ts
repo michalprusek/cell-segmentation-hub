@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import { ExportService, ExportOptions } from '../../exportService';
 import { MetricsCalculator } from '../../metrics/metricsCalculator';
-import { VisualizationGenerator } from '../../visualization/visualizationGenerator';
 import * as fs from 'fs/promises';
 import path from 'path';
 // Mock prisma for integration tests
@@ -9,7 +8,7 @@ const prismaMock = {
   project: {
     findUnique: jest.fn()
   }
-} as any;
+} as { project: { findUnique: ReturnType<typeof jest.fn> } };
 
 /**
  * Integration tests for scale conversion feature
@@ -32,12 +31,12 @@ describe('Scale Conversion Integration Tests', () => {
     // Clean up temp directory - use compatible method
     try {
       await fs.rmdir(tempDir, { recursive: true });
-    } catch (error) {
+    } catch (_error) {
       // Fallback for older Node.js versions or if directory doesn't exist
       try {
         await fs.rm(tempDir, { recursive: true, force: true });
-      } catch (fallbackError) {
-        console.warn('Failed to clean up temp directory:', fallbackError);
+      } catch (_fallbackError) {
+//         console.warn('Failed to clean up temp directory:', _fallbackError);
       }
     }
   });
@@ -86,7 +85,7 @@ describe('Scale Conversion Integration Tests', () => {
         };
 
         // Mock database query
-        prismaMock.project.findUnique.mockResolvedValue(mockProject as any);
+        prismaMock.project.findUnique.mockResolvedValue(mockProject as unknown);
 
         // Perform export - using startExportJob
         const jobId = await exportService.startExportJob(
@@ -292,7 +291,7 @@ describe('Scale Conversion Integration Tests', () => {
           }]
         };
 
-        prismaMock.project.findUnique.mockResolvedValue(mockProject as any);
+        prismaMock.project.findUnique.mockResolvedValue(mockProject as unknown);
 
         return exportService.startExportJob(projectId, 'test-user', exportOptions);
       });
@@ -321,9 +320,9 @@ describe('Scale Conversion Integration Tests', () => {
         name: `test-${i}.jpg`,
         segmentation: {
           polygons: JSON.stringify(
-            Array.from({ length: 50 }, (_, j) => ({
+            Array.from({ length: 50 }, (_, _j) => ({
               type: 'external',
-              points: Array.from({ length: 20 }, (_, k) => ({
+              points: Array.from({ length: 20 }, (_, _k) => ({
                 x: Math.random() * 1000,
                 y: Math.random() * 1000
               }))

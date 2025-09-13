@@ -1,6 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import axios from 'axios';
-import type { AxiosResponse, AxiosError } from 'axios';
+import axios, { type AxiosResponse, type AxiosError } from 'axios';
 
 // Mock axios completely
 vi.mock('axios', () => ({
@@ -932,7 +931,7 @@ describe('API Client - Advanced Features', () => {
     test('should handle extremely malformed responses', async () => {
       // Skip test if apiClient or method is not available
       if (!apiClient || typeof apiClient.getProjects !== 'function') {
-        console.warn('Skipping test: apiClient.getProjects not available');
+        //         console.warn('Skipping test: apiClient.getProjects not available');
         return;
       }
 
@@ -978,7 +977,7 @@ describe('API Client - Advanced Features', () => {
         !apiClient ||
         !mockAxiosInstance.interceptors.response.use.mock?.calls?.length
       ) {
-        console.warn('Skipping test: Response interceptor not properly mocked');
+        //         console.warn('Skipping test: Response interceptor not properly mocked');
         return;
       }
 
@@ -1014,10 +1013,10 @@ describe('API Client - Advanced Features', () => {
         expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
       } catch (error) {
         // If test infrastructure fails, that's acceptable
-        console.warn(
-          'Concurrent token refresh test failed due to mocking issues:',
-          error
-        );
+        // console.warn(
+        //   'Concurrent token refresh test failed due to mocking issues:',
+        //   error
+        // );
         expect(error).toBeDefined();
       }
     });
@@ -1028,9 +1027,7 @@ describe('API Client - Advanced Features', () => {
         !apiClient ||
         typeof apiClient.getSegmentationResults !== 'function'
       ) {
-        console.warn(
-          'Skipping test: apiClient.getSegmentationResults not available'
-        );
+        // console.warn('Skipping test: apiClient.getSegmentationResults not available');
         return;
       }
 

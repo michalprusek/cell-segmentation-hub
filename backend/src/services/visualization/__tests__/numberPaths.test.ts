@@ -60,7 +60,7 @@ describe('NumberPaths Caching System', () => {
       // Render a two-digit number
       NUMBER_PATHS.drawLargeNumber(ctx, 42, 100, 100, 32);
       let stats = NUMBER_PATHS.getCacheStats();
-      const initialMisses = stats.misses;
+      const _initialMisses = stats.misses;
       
       // Render same number again
       NUMBER_PATHS.drawLargeNumber(ctx, 42, 100, 100, 32);

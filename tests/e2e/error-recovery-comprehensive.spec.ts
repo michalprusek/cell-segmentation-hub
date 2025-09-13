@@ -18,7 +18,7 @@ test.describe('Comprehensive Error Recovery Tests', () => {
   };
 
   const testImagePath = path.join(__dirname, '../fixtures/test-image.jpg');
-  const corruptedImagePath = path.join(
+  const _corruptedImagePath = path.join(
     __dirname,
     '../fixtures/corrupted-image.txt'
   );
@@ -587,7 +587,7 @@ test.describe('Comprehensive Error Recovery Tests', () => {
         await canvas.click({ position: { x: 150, y: 150 } });
 
         // Get current URL to return to after refresh
-        const currentUrl = page.url();
+        const _currentUrl = page.url();
 
         // Refresh the page
         await page.reload();
@@ -923,8 +923,8 @@ test.describe('Comprehensive Error Recovery Tests', () => {
           setTimeout(() => {
             delete (window as any).testArrays;
           }, 1000);
-        } catch (error) {
-          console.warn('Memory pressure test failed gracefully:', error);
+        } catch (_error) {
+          //           console.warn('Memory pressure test failed gracefully:', _error);
           // Skip heavy allocation in low-memory environments
         }
       });

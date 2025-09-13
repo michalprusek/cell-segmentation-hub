@@ -4,15 +4,14 @@
  * Tests for TypeScript type safety and Zod validation in queue endpoints
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Request, Response } from 'express';
+import { describe, it, expect } from 'vitest';
+// Unused imports removed: beforeEach, vi, Request, Response
 import { z } from 'zod';
 import {
   addImageToQueueSchema,
-  addBatchToQueueSchema,
+  batchQueueSchema,
   imageIdSchema,
-  projectIdSchema,
-  queueProjectIdSchema
+  projectIdSchema
 } from '../../../types/validation';
 
 describe('Queue Controller Type Safety', () => {
@@ -57,7 +56,7 @@ describe('Queue Controller Type Safety', () => {
         
         const tooHigh = {
           model: 'hrnet',
-          threshold: 1.5
+          threshold: 0.95
         };
         
         const resultHigh = addImageToQueueSchema.safeParse(tooHigh);
@@ -89,18 +88,18 @@ describe('Queue Controller Type Safety', () => {
       });
     });
 
-    describe('addBatchToQueueSchema', () => {
+    describe('batchQueueSchema', () => {
       it('should validate correct batch request', () => {
         const validData = {
           imageIds: ['550e8400-e29b-41d4-a716-446655440000', '550e8400-e29b-41d4-a716-446655440001'],
           projectId: '550e8400-e29b-41d4-a716-446655440002',
-          model: 'resunet_advanced',
+          model: 'cbam_resunet',
           threshold: 0.7,
           priority: 3,
           detectHoles: false
         };
         
-        const result = addBatchToQueueSchema.safeParse(validData);
+        const result = batchQueueSchema.safeParse(validData);
         expect(result.success).toBe(true);
       });
 
@@ -111,7 +110,7 @@ describe('Queue Controller Type Safety', () => {
           model: 'hrnet'
         };
         
-        const result = addBatchToQueueSchema.safeParse(invalidData);
+        const result = batchQueueSchema.safeParse(invalidData);
         expect(result.success).toBe(false);
         if (!result.success) {
           expect(result.error.issues.some(issue => issue.message.includes('UUID'))).toBe(true);
@@ -124,17 +123,17 @@ describe('Queue Controller Type Safety', () => {
           projectId: '550e8400-e29b-41d4-a716-446655440002'
         };
         
-        const result = addBatchToQueueSchema.safeParse(invalidData);
+        const result = batchQueueSchema.safeParse(invalidData);
         expect(result.success).toBe(false);
       });
 
-      it('should reject more than 100 images', () => {
+      it('should reject more than 10000 images', () => {
         const tooManyImages = {
-          imageIds: Array(101).fill('550e8400-e29b-41d4-a716-446655440000'),
+          imageIds: Array(10001).fill('550e8400-e29b-41d4-a716-446655440000'),
           projectId: '550e8400-e29b-41d4-a716-446655440002'
         };
         
-        const result = addBatchToQueueSchema.safeParse(tooManyImages);
+        const result = batchQueueSchema.safeParse(tooManyImages);
         expect(result.success).toBe(false);
       });
     });
@@ -185,7 +184,7 @@ describe('Queue Controller Type Safety', () => {
   describe('Type Inference', () => {
     it('should infer correct types from schemas', () => {
       type AddImageData = z.infer<typeof addImageToQueueSchema>;
-      type AddBatchData = z.infer<typeof addBatchToQueueSchema>;
+      type BatchQueueData = z.infer<typeof batchQueueSchema>;
       
       // These checks happen at compile time
       const imageData: AddImageData = {
@@ -195,7 +194,7 @@ describe('Queue Controller Type Safety', () => {
         detectHoles: true
       };
       
-      const batchData: AddBatchData = {
+      const batchData: BatchQueueData = {
         imageIds: ['550e8400-e29b-41d4-a716-446655440000'],
         projectId: '550e8400-e29b-41d4-a716-446655440002',
         model: 'hrnet',
@@ -213,7 +212,7 @@ describe('Queue Controller Type Safety', () => {
     it('should handle validation errors gracefully', () => {
       const invalidData = {
         model: 'invalid',
-        threshold: 2.0,
+        threshold: 1.0,
         priority: -1
       };
       
@@ -247,7 +246,7 @@ describe('Queue Controller Type Safety', () => {
 
   describe('Model Type Safety', () => {
     it('should only accept valid model names', () => {
-      const validModels = ['hrnet', 'resunet_advanced', 'resunet_small'];
+      const validModels = ['hrnet', 'cbam_resunet', 'unet_spherohq'];
       
       validModels.forEach(model => {
         const result = addImageToQueueSchema.safeParse({ model });
@@ -266,14 +265,14 @@ describe('Queue Controller Type Safety', () => {
     it('should handle threshold boundaries correctly', () => {
       // Valid boundaries
       const minValid = { threshold: 0.1 };
-      const maxValid = { threshold: 1.0 };
+      const maxValid = { threshold: 0.9 };
       
       expect(addImageToQueueSchema.safeParse(minValid).success).toBe(true);
       expect(addImageToQueueSchema.safeParse(maxValid).success).toBe(true);
       
       // Invalid boundaries
       const belowMin = { threshold: 0.09 };
-      const aboveMax = { threshold: 1.01 };
+      const aboveMax = { threshold: 0.91 };
       
       expect(addImageToQueueSchema.safeParse(belowMin).success).toBe(false);
       expect(addImageToQueueSchema.safeParse(aboveMax).success).toBe(false);

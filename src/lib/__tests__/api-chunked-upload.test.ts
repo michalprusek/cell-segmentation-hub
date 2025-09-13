@@ -231,7 +231,7 @@ describe('ApiClient - Chunked Upload Tests', () => {
             filesInChunk
           );
           uploadedImages.push(...result);
-        } catch (error) {
+        } catch (_error) {
           failedChunks.push(chunkIndex);
         }
       }
@@ -266,9 +266,9 @@ describe('ApiClient - Chunked Upload Tests', () => {
         try {
           result = await apiClient.uploadImages('project-123', mockFiles);
           break; // Success, exit retry loop
-        } catch (error) {
+        } catch (_error) {
           if (attempt === maxRetries - 1) {
-            throw error; // Last attempt failed
+            throw _error; // Last attempt failed
           }
           // Wait before retry (in real implementation)
           await new Promise(resolve =>
@@ -332,12 +332,12 @@ describe('ApiClient - Chunked Upload Tests', () => {
               filesInChunk
             );
             uploadedImages.push(...result);
-          } catch (error) {
+          } catch (_error) {
             if (
-              error instanceof Error &&
-              error.message === 'Upload cancelled'
+              _error instanceof Error &&
+              _error.message === 'Upload cancelled'
             ) {
-              throw error;
+              throw _error;
             }
           }
         }
@@ -517,8 +517,8 @@ describe('ApiClient - Chunked Upload Tests', () => {
 
         try {
           await apiClient.uploadImages('project-123', filesInChunk);
-        } catch (error) {
-          uploadErrors.push({ chunkIndex, error });
+        } catch (_error) {
+          uploadErrors.push({ chunkIndex, error: _error });
         }
       }
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '@/lib/api';
 import { toast } from 'sonner';
@@ -140,7 +140,11 @@ export const useProjectImageActions = ({
 
     // Always navigate directly to segmentation editor
     // Segmentation should only be triggered by "Segment All" button
-    navigate(`/segmentation/${projectId}/${imageId}`);
+    // Use startTransition to ensure proper React 18 concurrent rendering
+    // This fixes navigation freezing after segmentation
+    startTransition(() => {
+      navigate(`/segmentation/${projectId}/${imageId}`);
+    });
   };
 
   return {

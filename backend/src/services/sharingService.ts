@@ -687,9 +687,15 @@ async function sendShareInvitationEmail(
       text: generateShareInvitationText(share, acceptUrl, message)
     };
 
-    await EmailService.sendEmail(emailOptions);
+    EmailService.sendEmail(emailOptions)
+      .then(() => {
+        logger.info('Share invitation email sent successfully', 'SharingService', { shareId: share.id, email: share.email });
+      })
+      .catch((emailError) => {
+        logger.error('Failed to send share invitation email:', emailError as Error, 'SharingService', { shareId: share.id, email: share.email });
+      });
   } catch (error) {
-    logger.error('Failed to send share invitation email:', error as Error, 'SharingService', {
+    logger.error('Failed to prepare share invitation email:', error as Error, 'SharingService', {
       shareId: share.id,
       email: share.email
     });

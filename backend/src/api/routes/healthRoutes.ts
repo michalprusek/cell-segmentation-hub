@@ -24,12 +24,12 @@ router.get('/', async (req: Request, res: Response) => {
       data: health,
       message: `Server is ${health.status}`,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Health check failed:', error);
     res.status(503).json({
       success: false,
       error: 'Health check failed',
-      message: error.message,
+      message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 });
@@ -65,10 +65,10 @@ router.get('/ready', async (req: Request, res: Response) => {
         timestamp: new Date().toISOString(),
       });
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     res.status(503).json({
       ready: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : 'Unknown error',
       timestamp: new Date().toISOString(),
     });
   }
@@ -94,12 +94,12 @@ router.get('/detailed', async (req: Request, res: Response) => {
         unhealthyChecks: history.filter(h => h.status === 'unhealthy').length,
       },
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Detailed health check failed:', error);
     res.status(500).json({
       success: false,
       error: 'Detailed health check failed',
-      message: error.message,
+      message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 });
@@ -127,12 +127,12 @@ router.get('/components/:component', async (req: Request, res: Response) => {
       health: health.checks[component],
       timestamp: health.timestamp,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error(`Component health check failed for ${req.params.component}:`, error);
     res.status(500).json({
       success: false,
       error: 'Component health check failed',
-      message: error.message,
+      message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 });
@@ -150,12 +150,12 @@ router.post('/check', async (req: Request, res: Response) => {
       data: health,
       message: 'Health check completed',
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     logger.error('Manual health check failed:', error);
     res.status(500).json({
       success: false,
       error: 'Manual health check failed',
-      message: error.message,
+      message: error instanceof Error ? error.message : 'Unknown error',
     });
   }
 });

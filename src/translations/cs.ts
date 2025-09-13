@@ -1013,6 +1013,7 @@ export default {
     includeJsonMetadata: 'Zahrnout JSON metadata',
     preparing: 'Příprava exportu...',
     processing: 'Zpracování {{current}} z {{total}}',
+    processingExport: 'Zpracování...',
     packaging: 'Vytváření balíčku...',
     completed: 'Export dokončen',
     downloading: 'Stahování...',

@@ -20,12 +20,12 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [isDragActive, setIsDragActive] = useState(false);
-  const [chunkProgress, setChunkProgress] = useState<ChunkProgress | null>(
+  const [isDragActive, _setIsDragActive] = useState(false);
+  const [_chunkProgress, setChunkProgress] = useState<ChunkProgress | null>(
     null
   );
-  const [currentOperation, setCurrentOperation] = useState<string>('');
-  const { user } = useAuth();
+  const [_currentOperation, setCurrentOperation] = useState<string>('');
+  const { user: _user } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
   const { t } = useLanguage();
@@ -142,7 +142,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
           })
         );
 
-        let uploadedImages: any[] = [];
+        let uploadedImages: Array<Record<string, unknown>> = [];
 
         // Use chunked upload for large batches, regular upload for small ones
         if (filesToUpload.length > DEFAULT_CHUNKING_CONFIG.chunkSize) {

@@ -413,7 +413,7 @@ test.describe('Complete Segmentation Workflow', () => {
       await expect(page).toHaveURL(/.*\/segmentation.*/);
 
       // Verify status indicator component is present
-      const statusIndicator = page.locator(
+      const _statusIndicator = page.locator(
         '[data-testid="status-indicator"], .status-indicator'
       );
 
@@ -489,8 +489,8 @@ test.describe('Complete Segmentation Workflow', () => {
       if (fileCreated && fs.default.existsSync(invalidFilePath)) {
         try {
           fs.default.unlinkSync(invalidFilePath);
-        } catch (error) {
-          console.warn('Failed to cleanup test file:', error);
+        } catch (_error) {
+          //           console.warn('Failed to cleanup test file:', _error);
         }
       }
     };
@@ -504,8 +504,8 @@ test.describe('Complete Segmentation Workflow', () => {
         await expect(
           page.getByText(/invalid.*file|unsupported.*format|error/i)
         ).toBeVisible({ timeout: 5000 });
-      } catch (error) {
-        console.log('Invalid file test failed:', error);
+      } catch (_error) {
+        //         console.log('Invalid file test failed:', _error);
       }
     }
 
@@ -649,7 +649,7 @@ test.describe('Complete Segmentation Workflow', () => {
     );
 
     // Get current URL to verify state
-    const currentUrl = page.url();
+    const _currentUrl = page.url();
 
     // Simulate session interruption by refreshing the page
     await page.reload();

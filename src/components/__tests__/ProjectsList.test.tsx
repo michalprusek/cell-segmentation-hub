@@ -24,7 +24,7 @@ vi.mock('@/components/ProjectListItem', () => ({
 vi.mock('@/components/NewProjectCard', () => ({
   default: ({
     isOpen,
-    onOpenChange,
+    onOpenChange: _onOpenChange,
   }: {
     isOpen: boolean;
     onOpenChange: (open: boolean) => void;

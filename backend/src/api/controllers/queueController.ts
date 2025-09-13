@@ -7,24 +7,24 @@ import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
 
-// Import validation types
-import { 
-  AddImageToQueueData,
-  BatchQueueData,
-  CleanupQueueData,
-  ResetStuckItemsData
+// Import validation types (some types for future use)
+import {
+  AddImageToQueueData as _AddImageToQueueData,
+  BatchQueueData as _BatchQueueData,
+  CleanupQueueData as _CleanupQueueData,
+  ResetStuckItemsData as _ResetStuckItemsData
 } from '../../types/validation';
 
-// Import queue-specific types
+// Import queue-specific types (some types for future use)
 import {
-  ImageIdParams,
-  ProjectIdParams,
-  QueueIdParams,
+  ImageIdParams as _ImageIdParams,
+  ProjectIdParams as _ProjectIdParams,
+  QueueIdParams as _QueueIdParams,
   BatchQueueResponse,
-  QueueStatsResponse,
-  QueueHealthResponse,
-  ResetStuckItemsResponse,
-  CleanupResponse,
+  QueueStatsResponse as _QueueStatsResponse,
+  QueueHealthResponse as _QueueHealthResponse,
+  ResetStuckItemsResponse as _ResetStuckItemsResponse,
+  CleanupResponse as _CleanupResponse,
   AddImageToQueueRequest,
   BatchQueueRequest,
   GetQueueStatsRequest,
@@ -32,9 +32,9 @@ import {
   RemoveFromQueueRequest,
   ResetStuckItemsRequest,
   CleanupQueueRequest,
-  QueueError,
-  QueueTimeoutError,
-  MLServiceUnavailableError,
+  QueueError as _QueueError,
+  QueueTimeoutError as _QueueTimeoutError,
+  MLServiceUnavailableError as _MLServiceUnavailableError,
   QueuePriority,
   QueueStatus
 } from '../../types/queue';
@@ -68,7 +68,7 @@ interface QueueEntryResponse {
 /**
  * Map queue entry from database to response format
  */
-function mapQueueEntryToResponse(entry: any): QueueEntryResponse {
+function mapQueueEntryToResponse(entry: Record<string, unknown>): QueueEntryResponse {
   return {
     id: entry.id,
     imageId: entry.imageId,

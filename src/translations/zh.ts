@@ -924,6 +924,7 @@ export default {
     includeJsonMetadata: '包含JSON元数据',
     preparing: '准备导出中...',
     processing: '处理 {{current}} / {{total}}',
+    processingExport: '处理中...',
     packaging: '创建包中...',
     completed: '导出完成',
     downloading: '下载中...',

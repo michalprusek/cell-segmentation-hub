@@ -4,8 +4,9 @@ import React, {
   useRef,
   useCallback,
   useMemo,
+  startTransition,
 } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { useAuth, useLanguage, useModel } from '@/contexts/exports';
 import ProjectHeader from '@/components/project/ProjectHeader';
@@ -34,12 +35,13 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
+  // AlertDialogTrigger,"
 } from '@/components/ui/alert-dialog';
-import { Checkbox } from '@/components/ui/checkbox';
+// import { Checkbox } from '@/components/ui/checkbox';
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useLanguage();
   const { selectedModel, confidenceThreshold, detectHoles } = useModel();
@@ -51,6 +53,11 @@ const ProjectDetail = () => {
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
+  const [shouldNavigateOnComplete, setShouldNavigateOnComplete] =
+    useState<boolean>(false);
+  const [navigationTargetImageId, setNavigationTargetImageId] = useState<
+    string | null
+  >(null);
 
   // Debouncing and deduplication for segmentation refresh
   const debounceTimeoutRef = useRef<{ [imageId: string]: NodeJS.Timeout }>({});
@@ -68,7 +75,7 @@ const ProjectDetail = () => {
   });
 
   // Optimized refresh function for real-time updates
-  const debouncedRefreshSegmentation = useCallback(
+  const _debouncedRefreshSegmentation = useCallback(
     (imageId: string, currentStatus: string) => {
       // Clear existing timeout for this image
       if (debounceTimeoutRef.current[imageId]) {
@@ -131,7 +138,7 @@ const ProjectDetail = () => {
                 })
               );
             }
-          } catch (error) {
+          } catch (_error) {
             logger.error(
               'Failed to fetch updated image after thumbnail update',
               error,
@@ -158,7 +165,7 @@ const ProjectDetail = () => {
   const {
     currentPage,
     totalPages,
-    itemsPerPage,
+    itemsPerPage: _itemsPerPage,
     startIndex,
     endIndex,
     canGoNext,
@@ -225,7 +232,7 @@ const ProjectDetail = () => {
                   }
                 : null,
             };
-          } catch (error) {
+          } catch (_error) {
             if (
               error &&
               typeof error === 'object' &&
@@ -259,7 +266,7 @@ const ProjectDetail = () => {
             return img;
           })
         );
-      } catch (error) {
+      } catch (_error) {
         logger.error('Error loading visible segmentation data:', error);
       }
     };
@@ -291,6 +298,27 @@ const ProjectDetail = () => {
     () => queueStats && (queueStats.processing > 0 || queueStats.queued > 0),
     [queueStats]
   );
+
+  // Auto-reset batchSubmitted if WebSocket disconnects for too long
+  useEffect(() => {
+    if (!isConnected && batchSubmitted) {
+      const disconnectionTimeout = setTimeout(() => {
+        logger.warn(
+          'WebSocket disconnected for 60s with batchSubmitted=true - auto-resetting',
+          'ProjectDetail',
+          {
+            projectId: id,
+            disconnectedForMs: 60000,
+          }
+        );
+        setBatchSubmitted(false);
+        setShouldNavigateOnComplete(false);
+        setNavigationTargetImageId(null);
+      }, 60000); // 60 second timeout for disconnection
+
+      return () => clearTimeout(disconnectionTimeout);
+    }
+  }, [isConnected, batchSubmitted, id]);
 
   // Image operations
   const { handleDeleteImage, handleOpenSegmentationEditor } =
@@ -559,7 +587,7 @@ const ProjectDetail = () => {
                 return prevImg;
               });
             });
-          } catch (error) {
+          } catch (_error) {
             logger.error('Failed to refresh image data', error);
 
             // Even if refresh fails, ensure correct status based on segmentation data
@@ -604,7 +632,7 @@ const ProjectDetail = () => {
       }
     }
 
-    // Reset batch submitted state when queue becomes empty
+    // Reset batch submitted state when queue becomes empty and navigate if needed
     if (lastUpdate.status === 'segmented' || lastUpdate.status === 'failed') {
       // Trigger status reconciliation after a short delay
       const timeoutId = setTimeout(() => {
@@ -614,9 +642,37 @@ const ProjectDetail = () => {
           currentQueueStats.processing <= 1 &&
           currentQueueStats.queued === 0
         ) {
+          logger.info(
+            'Queue processing complete - resetting batch state',
+            'ProjectDetail',
+            {
+              projectId: id,
+              processing: currentQueueStats.processing,
+              queued: currentQueueStats.queued,
+              batchSubmitted,
+            }
+          );
           setBatchSubmitted(false);
           // Force reconciliation to catch any missed updates
           reconcileRef.current();
+
+          // Navigate to segmentation editor if batch is complete and navigation was requested
+          if (shouldNavigateOnComplete && navigationTargetImageId) {
+            logger.info(
+              'Batch processing complete, navigating to segmentation editor',
+              'ProjectDetail',
+              {
+                projectId: id,
+                imageId: navigationTargetImageId,
+              }
+            );
+            // Use startTransition to ensure navigation works with React 18 concurrent features
+            startTransition(() => {
+              navigate(`/segmentation/${id}/${navigationTargetImageId}`);
+            });
+            setShouldNavigateOnComplete(false);
+            setNavigationTargetImageId(null);
+          }
         }
       }, 2000);
 
@@ -630,6 +686,9 @@ const ProjectDetail = () => {
     setBatchSubmitted,
     images,
     processBatchUpdates,
+    shouldNavigateOnComplete,
+    navigationTargetImageId,
+    navigate,
   ]);
 
   // Cleanup debounce timeouts on unmount
@@ -727,6 +786,13 @@ const ProjectDetail = () => {
               return {
                 ...newImg,
                 segmentationResult: existingImg.segmentationResult,
+                // Preserve segmentation thumbnail URLs
+                segmentationThumbnailUrl:
+                  existingImg.segmentationThumbnailUrl ||
+                  newImg.segmentationThumbnailUrl,
+                segmentationThumbnailPath:
+                  existingImg.segmentationThumbnailPath ||
+                  newImg.segmentationThumbnailPath,
                 // Also preserve the segmentation status if it was completed
                 segmentationStatus:
                   existingImg.segmentationStatus === 'completed' ||
@@ -785,7 +851,7 @@ const ProjectDetail = () => {
                       )
                     );
                   }
-                } catch (error) {
+                } catch (_error) {
                   // Silently fail for individual images - they'll be fetched later if needed
                   logger.debug(
                     `Could not fetch segmentation for image ${img.id}`,
@@ -804,7 +870,7 @@ const ProjectDetail = () => {
           detail: { projectId: id, newImageCount: formattedImages.length },
         });
         window.dispatchEvent(event);
-      } catch (error) {
+      } catch (_error) {
         toast.error(t('toast.upload.failed'));
       }
     }
@@ -891,7 +957,7 @@ const ProjectDetail = () => {
           t('project.imagesDeleteFailed', { count: result.failedIds.length })
         );
       }
-    } catch (error) {
+    } catch (_error) {
       toast.error(t('errors.deleteImages'));
     } finally {
       setShowDeleteDialog(false);
@@ -949,11 +1015,35 @@ const ProjectDetail = () => {
 
       if (allImagesToProcess.length === 0) {
         toast.info(t('projects.allImagesAlreadySegmented'));
+        // Reset batchSubmitted state since we're not actually processing anything
+        setBatchSubmitted(false);
         return;
       }
 
       // Mark as submitted to prevent double clicks
       setBatchSubmitted(true);
+
+      // Set navigation flags to navigate to first image after batch completion
+      if (allImagesToProcess.length > 0) {
+        setShouldNavigateOnComplete(true);
+        setNavigationTargetImageId(allImagesToProcess[0].id);
+      }
+
+      // Safety timeout to reset batchSubmitted state if WebSocket updates are missed
+      // This prevents the button from getting permanently stuck in "adding to queue" state
+      setTimeout(() => {
+        logger.warn(
+          'Safety timeout triggered - resetting batchSubmitted state',
+          'ProjectDetail',
+          {
+            projectId: id,
+            timeoutAfterMs: 30000,
+          }
+        );
+        setBatchSubmitted(false);
+        setShouldNavigateOnComplete(false);
+        setNavigationTargetImageId(null);
+      }, 30000); // 30 second safety timeout
 
       // Prepare image IDs for batch processing
       const imageIdsWithoutSegmentation = imagesWithoutSegmentation.map(
@@ -1056,10 +1146,13 @@ const ProjectDetail = () => {
 
       // Refresh queue stats
       requestQueueStats();
-    } catch (error) {
+    } catch (_error) {
       toast.error(t('projects.errorAddingToQueue'));
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);
+      // Reset navigation flags on error
+      setShouldNavigateOnComplete(false);
+      setNavigationTargetImageId(null);
 
       // Dismiss progress toast if it exists
       toast.dismiss('batch-progress');

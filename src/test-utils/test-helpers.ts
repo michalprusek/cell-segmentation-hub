@@ -11,7 +11,7 @@ import {
 } from '@testing-library/react';
 import { vi } from 'vitest';
 import type {
-  EditMode,
+  _EditMode,
   TransformState,
   InteractionState,
 } from '@/pages/segmentation/types';

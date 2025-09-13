@@ -10,7 +10,6 @@ import {
   expectCanvasToHaveDrawn,
   expectPolygonDrawn,
   simulateCanvasInteraction,
-  MockCanvasRenderingContext2D,
 } from '../canvasTestUtils';
 import type { Point } from '@/lib/segmentation';
 

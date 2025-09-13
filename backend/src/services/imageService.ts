@@ -7,8 +7,7 @@ import { ImageQueryParams } from '../types/validation';
 import { v4 as _uuidv4 } from 'uuid';
 import sharp from 'sharp';
 import path from 'path';
-import { existsSync } from 'fs';
-import { promises as fs } from 'fs';
+import { existsSync, promises as fs } from 'fs';
 import { ApiError } from '../middleware/error';
 
 export interface UploadImageData {
@@ -21,6 +20,7 @@ export interface UploadImageData {
 export interface ImageWithUrls extends Image {
   originalUrl: string;
   thumbnailUrl?: string;
+  segmentationThumbnailUrl?: string; // URL for segmentation thumbnail
   displayUrl: string; // Browser-compatible URL for display
 }
 
@@ -150,11 +150,15 @@ export class ImageService {
         const thumbnailUrl = uploadResult.thumbnailPath 
           ? await storage.getUrl(uploadResult.thumbnailPath)
           : undefined;
+        
+        // No segmentation thumbnail yet for newly uploaded images
+        const segmentationThumbnailUrl = undefined;
 
         uploadedImages.push({
           ...image,
           originalUrl,
           thumbnailUrl,
+          segmentationThumbnailUrl,
           displayUrl: this.getDisplayUrl(image.id)
         });
 
@@ -284,11 +288,15 @@ export class ImageService {
         const thumbnailUrl = uploadResult.thumbnailPath 
           ? await storage.getUrl(uploadResult.thumbnailPath)
           : undefined;
+        
+        // No segmentation thumbnail yet for newly uploaded images
+        const segmentationThumbnailUrl = undefined;
 
         uploadedImages.push({
           ...image,
           originalUrl,
           thumbnailUrl,
+          segmentationThumbnailUrl,
           displayUrl: this.getDisplayUrl(image.id)
         });
 
@@ -403,11 +411,17 @@ export class ImageService {
         const thumbnailUrl = image.thumbnailPath 
           ? await storage.getUrl(image.thumbnailPath)
           : undefined;
+        
+        // Include segmentation thumbnail URL if available
+        const segmentationThumbnailUrl = image.segmentationThumbnailPath 
+          ? await storage.getUrl(image.segmentationThumbnailPath)
+          : undefined;
 
         return {
           ...image,
           originalUrl,
           thumbnailUrl,
+          segmentationThumbnailUrl,
           displayUrl: this.getDisplayUrl(image.id)
         };
       })
@@ -476,11 +490,17 @@ export class ImageService {
     const thumbnailUrl = image.thumbnailPath 
       ? await storage.getUrl(image.thumbnailPath)
       : undefined;
+    
+    // Include segmentation thumbnail URL if available
+    const segmentationThumbnailUrl = image.segmentationThumbnailPath 
+      ? await storage.getUrl(image.segmentationThumbnailPath)
+      : undefined;
 
     return {
       ...image,
       originalUrl,
       thumbnailUrl,
+      segmentationThumbnailUrl,
       displayUrl: this.getDisplayUrl(image.id)
     };
   }

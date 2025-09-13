@@ -45,7 +45,24 @@ ENV VITE_WS_URL=${VITE_WS_URL}
 RUN --mount=type=cache,target=/app/.vite \
     npm run build
 
-# Stage 4: Optimized production image
+# Stage 4: Test environment
+FROM deps AS test
+WORKDIR /app
+
+# Copy configs and source code
+COPY tsconfig*.json vitest.config.ts vite.config.ts tailwind.config.ts postcss.config.js ./
+COPY components.json ./
+COPY public ./public
+COPY src ./src
+COPY index.html ./
+
+# Set test environment
+ENV NODE_ENV=test
+
+# Default command for test stage
+CMD ["npm", "run", "test"]
+
+# Stage 5: Optimized production image
 FROM nginx:alpine AS production
 
 # Add labels for better image management
@@ -61,8 +78,8 @@ RUN apk add --no-cache wget
 # Copy built assets from builder
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Optimized nginx configuration with gzip and caching
-RUN cat > /etc/nginx/conf.d/default.conf << 'EOF'
+# Create nginx configuration file
+COPY <<'EOF' /etc/nginx/conf.d/default.conf
 server {
     listen 80;
     server_name _;
