@@ -3,6 +3,60 @@ import * as SharingService from '../../services/sharingService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import { ShareByEmailData, ShareByLinkData } from '../../types/validation';
 import { logger } from '../../utils/logger';
+import { ProjectShare, Project, User } from '@prisma/client';
+
+// Type for project with nested user data
+interface ProjectWithUser extends Project {
+  user: {
+    id: string;
+    email: string;
+  };
+  _count?: {
+    images: number;
+  };
+  images?: Array<{
+    id: string;
+    name: string;
+    thumbnailPath: string | null;
+    originalPath: string;
+  }>;
+}
+
+// Type for share with detailed project and user information
+interface ShareWithDetailedProject extends ProjectShare {
+  project: ProjectWithUser;
+  sharedBy: User;
+  sharedWith?: User;
+}
+
+// Type for validated share token result
+interface ValidatedShare {
+  id: string;
+  email: string;
+  status: string;
+  shareToken: string;
+  tokenExpiry: Date | null;
+  sharedWithId?: string | null;
+  project: {
+    id: string;
+    title: string;
+    description: string | null;
+    user: {
+      id: string;
+      email: string;
+    };
+  };
+  sharedBy: {
+    id: string;
+    email: string;
+  };
+}
+
+// Type for share invitation acceptance result
+interface ShareAcceptanceResult {
+  needsLogin?: boolean;
+  share: ValidatedShare;
+}
 
 /**
  * Share project via email invitation
@@ -255,7 +309,7 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
   }
 
   try {
-    const shares = await SharingService.getSharedProjects(req.user.id);
+    const shares = await SharingService.getSharedProjects(req.user.id) as ShareWithDetailedProject[];
     
     logger.info(`Found ${shares?.length || 0} shared projects for user`, 'SharingController', {
       userId: req.user.id,
@@ -270,7 +324,7 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
     
     // Debug log to check data structure
     if (shares.length > 0) {
-      logger.info('First share data structure:', {
+      logger.info('First share data structure', 'SharingController', {
         hasProject: !!shares[0].project,
         hasUser: !!shares[0].project?.user,
         projectUserId: shares[0].project?.user?.id,
@@ -304,8 +358,8 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
           id: share.project.user.id,
           email: share.project.user.email
         },
-        image_count: (share.project as Record<string, unknown> & {_count?: {images?: number}})._count?.images || 0,
-        images: (share.project as Record<string, unknown> & {images?: unknown[]}).images || [],
+        image_count: share.project._count?.images || 0,
+        images: share.project.images || [],
         updated_at: share.project.updatedAt
       },
       sharedBy: {
@@ -344,10 +398,18 @@ export const validateShareToken = asyncHandler(async (req: Request, res: Respons
   }
 
   try {
-    const share = await SharingService.validateShareToken(token);
-    
-    if (!share) {
+    const shareData = await SharingService.validateShareToken(token);
+
+    if (!shareData) {
       ResponseHelper.notFound(res, 'Invalid or expired share link');
+      return;
+    }
+
+    // Type guard and assertion for share data
+    const share = shareData as ValidatedShare;
+
+    if (!share.project || !share.sharedBy) {
+      ResponseHelper.notFound(res, 'Invalid share data');
       return;
     }
 
@@ -390,8 +452,16 @@ export const acceptShareInvitation = asyncHandler(async (req: Request, res: Resp
   }
 
   try {
-    const result = await SharingService.acceptShareInvitation(token, req.user?.id);
-    
+    const resultData = await SharingService.acceptShareInvitation(token, req.user?.id);
+
+    // Type assertion for the result
+    const result = resultData as ShareAcceptanceResult;
+
+    if (!result.share || !result.share.project || !result.share.sharedBy) {
+      ResponseHelper.notFound(res, 'Invalid share data');
+      return;
+    }
+
     if (result.needsLogin) {
       ResponseHelper.success(
         res,

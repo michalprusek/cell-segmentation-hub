@@ -328,7 +328,7 @@ class SessionService {
               await client.del(key);
               cleanedSessions++;
             }
-          } catch (_e) {
+          } catch {
             // Invalid data, delete it
             await client.del(key);
             cleanedSessions++;
@@ -346,7 +346,7 @@ class SessionService {
               await client.del(key);
               cleanedTokens++;
             }
-          } catch (_e) {
+          } catch {
             // Invalid data, delete it
             await client.del(key);
             cleanedTokens++;

@@ -21,10 +21,10 @@ export interface AuthUser {
 // Properly typed AuthRequest with all Express Request properties
 export interface AuthRequest<
   P = ParamsDictionary,
-  ResBody = any,
-  ReqBody = any,
+  ResBody = unknown,
+  ReqBody = unknown,
   ReqQuery = qs.ParsedQs,
-  Locals extends Record<string, any> = Record<string, any>
+  Locals extends Record<string, unknown> = Record<string, unknown>
 > extends Request<P, ResBody, ReqBody, ReqQuery, Locals> {
   user?: AuthUser;
   profile?: UserProfile;

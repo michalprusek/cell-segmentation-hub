@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { ExportService } from '../../services/exportService';
+import { ExportService, ExportOptions } from '../../services/exportService';
 import { logger } from '../../utils/logger';
 import * as path from 'path';
 import { promises as fs } from 'fs';
@@ -23,7 +23,7 @@ export class ExportController {
   async startExport(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { projectId } = req.params;
-      const { options } = req.body;
+      const options = req.body as { options?: ExportOptions };
       const userId = req.user?.id;
 
       if (!userId) {
@@ -39,7 +39,7 @@ export class ExportController {
       const jobId = await this.exportService.startExportJob(
         projectId,
         userId,
-        options
+        options.options || {}
       );
 
       res.json({

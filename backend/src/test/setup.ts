@@ -4,12 +4,12 @@ import { jest, beforeEach, afterEach } from '@jest/globals'
 // Create a comprehensive Prisma mock
 const createPrismaMock = () => {
   const models = ['user', 'project', 'projectImage', 'segmentationResult', 'queueItem', 'share', 'passwordResetToken'];
-  const mock: any = {
+  const mock: Record<string, unknown> = {
     $connect: jest.fn(() => Promise.resolve()),
     $disconnect: jest.fn(() => Promise.resolve()),
     $executeRaw: jest.fn(),
     $queryRaw: jest.fn(),
-    $transaction: jest.fn((cb: any) => cb(mock)),
+    $transaction: jest.fn((cb: (mock: Record<string, unknown>) => unknown) => cb(mock)),
   };
   
   models.forEach(model => {

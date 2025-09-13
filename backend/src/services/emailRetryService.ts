@@ -127,8 +127,9 @@ export async function sendEmailWithRetry(
       throw new Error('Email service not properly initialized.');
     }
 
+    const fromConfig = config.from as { name: string; email: string };
     const mailOptions: SendMailOptions = {
-      from: `"${config.from.name}" <${config.from.email}>`,
+      from: `"${fromConfig.name}" <${fromConfig.email}>`,
       to: options.to,
       subject: options.subject,
       html: options.html,
@@ -289,7 +290,9 @@ async function processEmailQueue(): Promise<void> {
   
   while (emailQueue.length > 0) {
     const queuedEmail = emailQueue.shift();
-    if (!queuedEmail) continue;
+    if (!queuedEmail) {
+      continue;
+    }
     
     try {
       queuedEmail.attempts++;

@@ -15,7 +15,7 @@ import { Request } from 'express';
 /**
  * Available segmentation models
  */
-export type SegmentationModel = 'hrnet' | 'cbam_resunet' | 'unet_spherohq';
+export type SegmentationModel = 'hrnet' | 'cbam_resunet' | 'unet_spherohq' | 'resunet_advanced' | 'resunet_small';
 
 /**
  * Queue item status
@@ -120,6 +120,7 @@ export interface QueueEntryResponse {
   status: QueueStatus;
   error?: string | null;
   batchId?: string | null;
+  retryCount?: number;
   createdAt: Date;
   updatedAt: Date;
   startedAt?: Date | null;
@@ -324,7 +325,7 @@ export function isAddImageToQueueData(data: unknown): data is AddImageToQueueDat
  * Type guard for SegmentationModel
  */
 export function isSegmentationModel(value: unknown): value is SegmentationModel {
-  return value === 'hrnet' || value === 'cbam_resunet' || value === 'unet_spherohq';
+  return value === 'hrnet' || value === 'cbam_resunet' || value === 'unet_spherohq' || value === 'resunet_advanced' || value === 'resunet_small';
 }
 
 /**

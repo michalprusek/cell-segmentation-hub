@@ -25,7 +25,7 @@ router.get('/', async (req: Request, res: Response) => {
       message: `Server is ${health.status}`,
     });
   } catch (error: unknown) {
-    logger.error('Health check failed:', error);
+    logger.error('Health check failed:', error instanceof Error ? error : new Error(String(error)));
     res.status(503).json({
       success: false,
       error: 'Health check failed',
@@ -95,7 +95,7 @@ router.get('/detailed', async (req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    logger.error('Detailed health check failed:', error);
+    logger.error('Detailed health check failed:', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({
       success: false,
       error: 'Detailed health check failed',
@@ -128,7 +128,7 @@ router.get('/components/:component', async (req: Request, res: Response) => {
       timestamp: health.timestamp,
     });
   } catch (error: unknown) {
-    logger.error(`Component health check failed for ${req.params.component}:`, error);
+    logger.error(`Component health check failed for ${req.params.component}:`, error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({
       success: false,
       error: 'Component health check failed',
@@ -151,7 +151,7 @@ router.post('/check', async (req: Request, res: Response) => {
       message: 'Health check completed',
     });
   } catch (error: unknown) {
-    logger.error('Manual health check failed:', error);
+    logger.error('Manual health check failed:', error instanceof Error ? error : new Error(String(error)));
     res.status(500).json({
       success: false,
       error: 'Manual health check failed',

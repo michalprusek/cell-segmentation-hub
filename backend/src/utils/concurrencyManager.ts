@@ -3,9 +3,9 @@ import { logger } from './logger';
 export class ConcurrencyManager {
   private active = 0;
   private queue: Array<{
-    operation: () => Promise<any>;
-    resolve: (value: any) => void;
-    reject: (error: any) => void;
+    operation: () => Promise<unknown>;
+    resolve: (value: unknown) => void;
+    reject: (error: unknown) => void;
   }> = [];
   
   constructor(private maxConcurrent: number) {}
@@ -32,12 +32,16 @@ export class ConcurrencyManager {
     }
   }
   
-  private async processQueue() {
+  private async processQueue(): Promise<void> {
     if (this.queue.length === 0 || this.active >= this.maxConcurrent) {
       return;
     }
     
-    const { operation, resolve, reject } = this.queue.shift()!;
+    const queueItem = this.queue.shift();
+    if (!queueItem) {
+      return;
+    }
+    const { operation, resolve, reject } = queueItem;
     this.active++;
     
     try {
@@ -51,7 +55,7 @@ export class ConcurrencyManager {
     }
   }
   
-  getStatus() {
+  getStatus(): { active: number; queued: number; maxConcurrent: number } {
     return {
       active: this.active,
       queued: this.queue.length,

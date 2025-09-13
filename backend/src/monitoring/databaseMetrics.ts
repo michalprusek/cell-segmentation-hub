@@ -1,6 +1,14 @@
 import client from 'prom-client';
 import { logger } from '../utils/logger';
 
+export interface DatabaseMetricsSummary {
+  totalQueries: number;
+  totalSlowQueries: number;
+  totalErrors: number;
+  avgQueryTime: number;
+  connectionPoolSize: number;
+}
+
 // Database metrics registry
 const dbMetricsRegistry = new client.Registry();
 
@@ -205,13 +213,7 @@ export function initializeDatabaseMetrics(): void {
 /**
  * Get database metrics summary
  */
-export async function getDatabaseMetricsSummary(): Promise<{
-  totalQueries: number;
-  totalSlowQueries: number;
-  totalErrors: number;
-  avgQueryTime: number;
-  connectionPoolSize: number;
-}> {
+export async function getDatabaseMetricsSummary(): Promise<DatabaseMetricsSummary> {
   try {
     const metrics = await dbMetricsRegistry.getMetricsAsJSON();
     
@@ -329,7 +331,7 @@ class DatabaseMetricsService {
   /**
    * Get metrics summary
    */
-  public async getMetricsSummary() {
+  public async getMetricsSummary(): Promise<DatabaseMetricsSummary> {
     return await getDatabaseMetricsSummary();
   }
 }

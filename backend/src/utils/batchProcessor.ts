@@ -4,8 +4,8 @@ import { ConcurrencyManager } from './concurrencyManager';
 export interface BatchOptions {
   batchSize: number;
   concurrency?: number;
-  onBatchComplete?: (batchIndex: number, results: any[]) => void;
-  onItemError?: (item: any, error: any) => void;
+  onBatchComplete?: (batchIndex: number, results: unknown[]) => void;
+  onItemError?: (item: unknown, error: unknown) => void;
 }
 
 export class BatchProcessor {
@@ -26,7 +26,7 @@ export class BatchProcessor {
       logger.debug(`Processing batch ${batchIndex + 1}/${Math.ceil(items.length / options.batchSize)}`);
       
       const batchPromises = batch.map(item => {
-        const processItem = async () => {
+        const processItem = async (): Promise<R> => {
           try {
             return await processor(item);
           } catch (error) {
@@ -37,8 +37,8 @@ export class BatchProcessor {
           }
         };
         
-        return concurrencyManager 
-          ? concurrencyManager.execute(processItem)
+        return concurrencyManager
+          ? concurrencyManager.execute(processItem) as Promise<R>
           : processItem();
       });
       

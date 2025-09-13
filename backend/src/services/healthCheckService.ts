@@ -8,6 +8,7 @@ import Redis from 'ioredis';
 import axios from 'axios';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { Server as SocketIOServer } from 'socket.io';
 import { logger } from '../utils/logger';
 
 export interface HealthStatus {
@@ -53,20 +54,20 @@ export class HealthCheckService {
     this.initializeRedis();
   }
 
-  private initializeRedis() {
+  private initializeRedis(): void {
     try {
       const redisUrl = process.env.REDIS_URL || 'redis://redis-blue:6379';
       this.redis = new Redis(redisUrl, {
         maxRetriesPerRequest: 3,
-        retryStrategy: (times) => Math.min(times * 50, 2000),
+        retryStrategy: (times): number => Math.min(times * 50, 2000),
         enableReadyCheck: true,
         lazyConnect: true,
       });
 
       this.redis.on('error', (err) => {
-        logger.warn('Redis health check connection error:', err);
+        logger.warn('Redis health check connection error:', 'HealthCheck', { error: err.message });
       });
-    } catch (_error) {
+    } catch {
       logger.warn('Redis initialization failed for health checks');
     }
   }
@@ -126,13 +127,13 @@ export class HealthCheckService {
           60,
           JSON.stringify(healthStatus)
         );
-      } catch (_error) {
+      } catch {
         logger.warn('Failed to store health status in Redis');
       }
     }
 
     const totalTime = Date.now() - startTime;
-    logger.info(`Health check completed in ${totalTime}ms`, { status: overallStatus });
+    logger.info(`Health check completed in ${totalTime}ms`, 'HealthCheck', { status: overallStatus });
 
     return healthStatus;
   }
@@ -151,8 +152,14 @@ export class HealthCheckService {
         ),
       ]);
 
-      // Check connection pool
-      const poolMetrics = await this.prisma.$metrics.json();
+      // Check connection pool (if metrics are available)
+      let poolMetrics = null;
+      try {
+        poolMetrics = await (this.prisma as unknown as { $metrics: { json(): Promise<unknown> } }).$metrics.json();
+      } catch {
+        // Metrics not available in this Prisma version
+        poolMetrics = null;
+      }
       const responseTime = Date.now() - startTime;
 
       return {
@@ -169,7 +176,7 @@ export class HealthCheckService {
     } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        message: `Database error: ${error.message}`,
+        message: `Database error: ${error instanceof Error ? error.message : String(error)}`,
         responseTime: Date.now() - startTime,
         lastCheck: new Date(),
       };
@@ -213,7 +220,7 @@ export class HealthCheckService {
     } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        message: `Redis error: ${error.message}`,
+        message: `Redis error: ${error instanceof Error ? error.message : String(error)}`,
         responseTime: Date.now() - startTime,
         lastCheck: new Date(),
       };
@@ -246,7 +253,7 @@ export class HealthCheckService {
     } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        message: `ML service error: ${error.message}`,
+        message: `ML service error: ${error instanceof Error ? error.message : String(error)}`,
         responseTime: Date.now() - startTime,
         lastCheck: new Date(),
       };
@@ -298,7 +305,7 @@ export class HealthCheckService {
     } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        message: `File system error: ${error.message}`,
+        message: `File system error: ${error instanceof Error ? error.message : String(error)}`,
         responseTime: Date.now() - startTime,
         lastCheck: new Date(),
       };
@@ -310,7 +317,7 @@ export class HealthCheckService {
    */
   private async checkWebSocket(): Promise<ComponentHealth> {
     // Check if WebSocket server is running
-    const io = (global as any).io;
+    const io = (global as Record<string, unknown>).io as SocketIOServer | undefined;
     
     if (!io) {
       return {
@@ -331,7 +338,7 @@ export class HealthCheckService {
         },
         lastCheck: new Date(),
       };
-    } catch (_error: unknown) {
+    } catch {
       return {
         status: 'degraded',
         message: 'WebSocket status unknown',
@@ -416,10 +423,10 @@ export class HealthCheckService {
     } catch (error: unknown) {
       return {
         status: 'unhealthy',
-        message: `Email service error: ${error.message}`,
+        message: `Email service error: ${error instanceof Error ? error.message : String(error)}`,
         responseTime: Date.now() - startTime,
         details: {
-          error: error.message,
+          error: error instanceof Error ? error.message : String(error),
           configured: !!(process.env.SMTP_HOST || process.env.SENDGRID_API_KEY)
         },
         lastCheck: new Date(),
@@ -514,8 +521,8 @@ export class HealthCheckService {
    * Get active connections (placeholder)
    */
   private getActiveConnections(): number {
-    const io = (global as any).io;
-    return io ? io.engine.clientsCount : 0;
+    const io = (global as Record<string, unknown>).io as SocketIOServer | undefined;
+    return io ? (io.engine as { clientsCount?: number })?.clientsCount || 0 : 0;
   }
 
   /**
@@ -529,7 +536,7 @@ export class HealthCheckService {
   /**
    * Add health status to history
    */
-  private addToHistory(status: HealthStatus) {
+  private addToHistory(status: HealthStatus): void {
     this.healthHistory.push(status);
     if (this.healthHistory.length > this.maxHistorySize) {
       this.healthHistory.shift();
@@ -553,7 +560,7 @@ export class HealthCheckService {
   /**
    * Start periodic health checks
    */
-  startPeriodicChecks(intervalMs = 30000) {
+  startPeriodicChecks(intervalMs = 30000): void {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
     }
@@ -576,7 +583,7 @@ export class HealthCheckService {
   /**
    * Stop periodic health checks
    */
-  stopPeriodicChecks() {
+  stopPeriodicChecks(): void {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
       this.checkInterval = null;
@@ -618,7 +625,7 @@ export class HealthCheckService {
   /**
    * Cleanup resources
    */
-  async cleanup() {
+  async cleanup(): Promise<void> {
     this.stopPeriodicChecks();
     
     if (this.redis) {

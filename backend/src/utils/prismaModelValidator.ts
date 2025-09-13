@@ -75,14 +75,15 @@ export function validateFieldName(fieldName: string): string | null {
  * @param where - The where clause object
  * @returns Sanitized where clause or empty object if invalid
  */
-export function sanitizeWhereClause(where: any): any {
+export function sanitizeWhereClause(where: unknown): unknown {
   if (!where || typeof where !== 'object') {
     return {};
   }
+
+  const sanitized: Record<string, unknown> = {};
+  const whereObj = where as Record<string, unknown>;
   
-  const sanitized: any = {};
-  
-  for (const [key, value] of Object.entries(where)) {
+  for (const [key, value] of Object.entries(whereObj)) {
     const validKey = validateFieldName(key);
     if (!validKey) {
       continue; // Skip invalid field names
@@ -114,14 +115,14 @@ export function sanitizeWhereClause(where: any): any {
  * @param prisma - The Prisma client instance
  * @returns A function to safely access Prisma models
  */
-export function createSafeModelAccessor(prisma: any) {
-  return function getModel(modelName: string) {
+export function createSafeModelAccessor(prisma: Record<string, unknown>) {
+  return function getModel(modelName: string): unknown {
     const validModel = validatePrismaModel(modelName);
     if (!validModel) {
       throw new Error(`Invalid or unauthorized model name: ${modelName}`);
     }
     
-    return prisma[validModel];
+    return prisma[validModel] as unknown;
   };
 }
 
