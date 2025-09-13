@@ -175,7 +175,7 @@ export async function shareProjectByLink(
 export async function acceptShareInvitation(
   token: string,
   userId?: string
-): Promise<{ share: any; needsLogin: boolean }> {
+): Promise<{ share: unknown; needsLogin: boolean }> {
   try {
     // Find the share by token
     const share = await prisma.projectShare.findFirst({
@@ -608,7 +608,7 @@ export async function hasProjectAccess(
 /**
  * Validate a share token and return share info
  */
-export async function validateShareToken(token: string): Promise<any | null> {
+export async function validateShareToken(token: string): Promise<unknown | null> {
   try {
     const share = await prisma.projectShare.findFirst({
       where: {

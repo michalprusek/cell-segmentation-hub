@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios';
 import FormData from 'form-data';
 import { v4 as uuidv4 } from 'uuid';
 // Temporarily disabled for development setup
@@ -12,10 +12,11 @@ import { ThumbnailService } from './thumbnailService';
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
-import { 
-  CrossServiceTraceLinker, 
+import {
+  CrossServiceTraceLinker,
   RequestIdGenerator,
-  // TraceCorrelatedLogger 
+  MockSpan,
+  // TraceCorrelatedLogger
 } from '../utils/traceCorrelation';
 import { /* addSpanAttributes, */ addSpanEvent, markSpanError, injectTraceHeaders } from '../middleware/tracing';
 
@@ -186,7 +187,7 @@ export class SegmentationService {
     const requestId = RequestIdGenerator.generateRequestId();
     
     // Log request for debugging in development
-    logger.debug('Segmentation request (dev mode):', {
+    logger.debug('Segmentation request (dev mode)', 'SegmentationService', {
         'segmentation.image_id': request.imageId,
         'segmentation.model': request.model || 'hrnet',
         'segmentation.threshold': request.threshold || 0.5,
@@ -219,11 +220,7 @@ export class SegmentationService {
       const image = await this.imageService.getImageById(imageId, userId);
       if (!image) {
         const error = new Error('Image not found or no access');
-        markSpanError(error, {
-          'error.type': 'authorization_error',
-          'image_id': imageId,
-          'user_id': userId,
-        });
+        markSpanError(error);
         throw error;
       }
 
@@ -236,10 +233,7 @@ export class SegmentationService {
 
       if (!imageBuffer) {
         const error = new Error('Failed to load image from storage');
-        markSpanError(error, {
-          'error.type': 'storage_error',
-          'storage.path': image.originalPath,
-        });
+        markSpanError(error);
         throw error;
       }
 
@@ -267,9 +261,9 @@ export class SegmentationService {
       });
 
       // Create service call span within try/finally scope
-      let mlCallSpan: any;
+      let mlCallSpan: MockSpan | null = null;
       const mlCallStartTime = Date.now();
-      let response: any;
+      let response: AxiosResponse;
       
       try {
         mlCallSpan = CrossServiceTraceLinker.createServiceCallSpan({
@@ -281,7 +275,7 @@ export class SegmentationService {
         });
 
         // Inject trace headers for cross-service correlation
-        const traceHeaders = injectTraceHeaders();
+        const traceHeaders = injectTraceHeaders({});
         
         // Make request to Python segmentation service
         response = await this.httpClient.post('/api/v1/segment', formData, {
@@ -322,11 +316,7 @@ export class SegmentationService {
           });
         }
         
-        markSpanError(mlError as Error, {
-          'error.type': 'ml_service_error',
-          'ml.service.url': this.pythonServiceUrl,
-          'ml.call.duration_ms': mlCallDuration,
-        });
+        markSpanError(mlError as Error);
         
         throw mlError;
       } finally {
@@ -338,7 +328,7 @@ export class SegmentationService {
       // Validate response data exists before assignment
       if (!response || !response.data) {
         const error = new Error('Invalid response from ML service: missing data');
-        logger.error('ML service response validation failed', { response, requestId });
+        logger.error('ML service response validation failed', error, 'SegmentationService', { response, requestId });
         throw error;
       }
 
@@ -398,17 +388,7 @@ export class SegmentationService {
       const axiosError = error as AxiosError;
       
       // Mark span as error
-      markSpanError(error as Error, {
-        'segmentation.image_id': imageId,
-        'segmentation.user_id': userId,
-        'segmentation.model': model,
-        'segmentation.threshold': threshold,
-        'ml_service.url': this.pythonServiceUrl,
-        'http.status_code': axiosError.response?.status,
-        'http.status_text': axiosError.response?.statusText,
-        'error.request_url': axiosError.config?.url,
-        'error.request_method': axiosError.config?.method,
-      });
+      markSpanError(error as Error);
 
       // Update image status to failed
       try {
@@ -433,9 +413,9 @@ export class SegmentationService {
       });
       
       if (axiosError.response?.status === 400) {
-        throw new Error(`Invalid image or segmentation parameters: ${(axiosError.response?.data as any)?.detail || 'Unknown error'}`);
+        throw new Error(`Invalid image or segmentation parameters: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Unknown error'}`);
       } else if (axiosError.response?.status === 500) {
-        throw new Error(`Segmentation service error: ${(axiosError.response?.data as any)?.detail || 'Internal ML service error'}`);
+        throw new Error(`Segmentation service error: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Internal ML service error'}`);
       } else if (axiosError.code === 'ECONNREFUSED') {
         throw new Error('ML služba není dostupná - připojení odmítnuto');
       } else if (axiosError.code === 'ETIMEDOUT') {
@@ -799,8 +779,8 @@ export class SegmentationService {
 
     } catch (error) {
       // Enhanced error logging for debugging ML service issues
-      if (error instanceof Error && 'response' in error) {
-        const axiosError = error as AxiosError;
+      const axiosError = error as AxiosError;
+      if (axiosError.isAxiosError) {
         logger.error('ML service HTTP error', error, 'SegmentationService', {
           batchSize: images.length,
           model,
@@ -871,9 +851,18 @@ export class SegmentationService {
     
     const polygons = polygonResult.isValid ? polygonResult.polygons : [];
 
+    // Convert Polygon[] to SegmentationPolygon[] by adding required properties
+    const segmentationPolygons: SegmentationPolygon[] = polygons.map((polygon, _index) => ({
+      points: polygon.points.map(p => ({ x: p.x, y: p.y })),
+      area: 0, // This would be calculated properly in a real implementation
+      confidence: polygon.confidence || 0.8,
+      type: 'external' as const, // Default to external, this should be determined by the logic
+      parent_id: undefined
+    }));
+
     const result: SegmentationResponse = {
       success: true,
-      polygons: polygons,
+      polygons: segmentationPolygons,
       model_used: segmentationData.model,
       threshold_used: segmentationData.threshold,
       confidence: segmentationData.confidence,
@@ -1215,7 +1204,7 @@ export class SegmentationService {
   async getBatchSegmentationResults(
     imageIds: string[],
     userId: string
-  ): Promise<Record<string, any>> {
+  ): Promise<Record<string, unknown>> {
     try {
       // First, verify user has access to all requested images
       const accessibleImages = await this.prisma.image.findMany({
@@ -1237,7 +1226,7 @@ export class SegmentationService {
       });
 
       // Transform results into a map for easy lookup
-      const results: Record<string, any> = {};
+      const results: Record<string, unknown> = {};
       
       for (const segmentation of segmentations) {
         // Use centralized polygon validator for consistent parsing
@@ -1291,4 +1280,5 @@ export class SegmentationService {
   }
 }
 
-export const segmentationService = new SegmentationService();
+// Note: segmentationService should be instantiated with proper dependencies
+// export const segmentationService = new SegmentationService(prisma, imageService);

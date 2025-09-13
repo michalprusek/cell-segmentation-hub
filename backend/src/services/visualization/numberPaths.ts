@@ -537,7 +537,7 @@ export const NUMBER_PATHS = {
             ctx.fillText(displayText, centerX, centerY);
           }
           ctx.restore();
-        } catch (_error) {
+        } catch {
           // Font rendering failed, dot pattern already drawn as fallback
           ctx.restore();
         }
@@ -555,10 +555,10 @@ export const NUMBER_PATHS = {
   /**
    * Get cache statistics for monitoring
    */
-  getCacheStats: () => pathCache.getStats(),
-  
+  getCacheStats: (): unknown => pathCache.getStats(),
+
   /**
    * Clear the cache (useful for testing)
    */
-  clearCache: () => pathCache.clear()
+  clearCache: (): void => pathCache.clear()
 };

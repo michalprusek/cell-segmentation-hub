@@ -66,7 +66,11 @@ export function init(): void {
           pass: process.env.SMTP_PASS || ''
         };
 
-        const transportConfig: SMTPTransport.Options = {
+        const transportConfig: SMTPTransport.Options & {
+          pool?: boolean;
+          maxConnections?: number;
+          maxMessages?: number;
+        } = {
           host: config.smtp.host,
           port: config.smtp.port,
           secure: config.smtp.secure,
@@ -74,7 +78,7 @@ export function init(): void {
           requireTLS: getBooleanEnvVar('SMTP_REQUIRE_TLS', true) && !getBooleanEnvVar('SMTP_IGNORE_TLS', false),
           // Optimized timeouts for UTIA SMTP server
           connectionTimeout: parseEmailTimeout('SMTP_CONNECTION_TIMEOUT_MS', 15000), // Connection is fast
-          greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', 15000), // Greeting is fast  
+          greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', 15000), // Greeting is fast
           socketTimeout: parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', 120000), // Extended for UTIA server response delays
           logger: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
           debug: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
@@ -208,7 +212,7 @@ export async function sendEmail(options: EmailServiceOptions, allowQueue = true)
       }
       
       // Use retry logic for email sending with timeout protection
-      const _result = await sendEmailWithRetry(_transporter, _config, options);
+      const _result = await sendEmailWithRetry(_transporter, _config as unknown as Record<string, unknown>, options);
       
       // Update metrics for successful send
       updateEmailMetrics(true, retryCount);
@@ -442,7 +446,7 @@ export async function sendProjectShareEmail(
       // Validate the project URL first
       try {
         new URL(projectUrl);
-      } catch (_error) {
+      } catch {
         throw new Error('Invalid project URL provided');
       }
       

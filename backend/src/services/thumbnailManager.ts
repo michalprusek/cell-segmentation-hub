@@ -71,13 +71,13 @@ export class ThumbnailManager {
           logger.info(`Thumbnail batch ${index + 1} completed, ${results.length} successful`);
         },
         onItemError: (id, error) => {
-          logger.error(`Failed to generate thumbnail for ${id}`, error);
+          logger.error(`Failed to generate thumbnail for ${id}`, error instanceof Error ? error : new Error(String(error)));
         }
       }
     );
   }
   
-  getConcurrencyStatus() {
+  getConcurrencyStatus(): unknown {
     return this.concurrencyManager.getStatus();
   }
 }

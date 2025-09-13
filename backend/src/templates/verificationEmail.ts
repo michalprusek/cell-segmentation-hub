@@ -101,7 +101,7 @@ export function generateVerificationEmailHTML(data: VerificationEmailData): {
       throw new Error('Invalid protocol');
     }
     safeUrl = escapeHtml(data.verificationUrl);
-  } catch (_error) {
+  } catch {
     // Fall back to safe default if URL is invalid
     safeUrl = escapeHtml('#');
   }

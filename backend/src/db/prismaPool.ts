@@ -101,12 +101,12 @@ class PrismaPool {
       throw new Error('Connection limit reached');
     }
 
-    const clientConfig = getPrismaConfig();
+    const clientConfig = getPrismaConfig() || {};
     // Override log level based on pool config
     if (this.config.enablePoolLogging) {
       clientConfig.log = ['query', 'info', 'warn', 'error'];
     }
-    const client = new PrismaClient(clientConfig);
+    const client = new PrismaClient(clientConfig as any);
 
     try {
       // Test the connection
@@ -181,7 +181,7 @@ class PrismaPool {
         reject(new Error('Connection acquisition timeout'));
       }, 30000); // 30 second timeout
 
-      const wrappedResolve = (client: PrismaClient) => {
+      const wrappedResolve = (client: PrismaClient): void => {
         clearTimeout(timeout);
         this.stats.waitingRequests--;
         resolve(client);

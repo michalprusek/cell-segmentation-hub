@@ -113,10 +113,13 @@ fi
 
 if [ -f "backend/tsconfig.json" ] && command -v npx >/dev/null 2>&1; then
     echo "⏳ Checking backend TypeScript..."
-    # Skip TypeScript checks temporarily - tracked in issue #19
-    # Will be re-enabled after fixing backend TS compilation errors
-    echo -e "${YELLOW}⚠️  Backend TypeScript checks disabled - see issue #19${NC}"
-    WARNINGS=$((WARNINGS + 1))
+    cd backend
+    if ! npx tsc --noEmit; then
+        echo -e "${RED}❌ Error: Backend TypeScript compilation failed${NC}"
+        cd ..
+        exit 1
+    fi
+    cd ..
 fi
 
 # 9. Check Python files (if changed)
