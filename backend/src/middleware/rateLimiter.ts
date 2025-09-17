@@ -1,11 +1,11 @@
 import rateLimit, { RateLimitRequestHandler } from 'express-rate-limit';
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { logger } from '../utils/logger';
 import { ResponseHelper } from '../utils/response';
-import { getRateLimitsForEnvironment } from '../config/uploadLimits';
+import { getUploadLimitsForEnvironment } from '../config/uploadLimits';
 
 // Get environment-specific rate limits
-const rateLimits = getRateLimitsForEnvironment();
+const rateLimits = getUploadLimitsForEnvironment();
 
 /**
  * Rate limiting middleware configurations
@@ -197,12 +197,14 @@ export const createConditionalSkipRateLimiter = (
 ): RateLimitRequestHandler => {
   const limiter = createRateLimiter(config);
 
-  return (req: Request, res: Response, next: unknown) => {
+  const conditionalLimiter = (req: Request, res: Response, next: NextFunction): void => {
     if (skipCondition(req)) {
       return next();
     }
-    return limiter(req, res, next);
+    limiter(req, res, next);
   };
+
+  return conditionalLimiter as RateLimitRequestHandler;
 };
 
 /**
@@ -227,10 +229,10 @@ export const burstRateLimiter = createRateLimiter({
  * Combine multiple rate limiters
  */
 export const combineRateLimiters = (...limiters: RateLimitRequestHandler[]) => {
-  return (req: Request, res: Response, next: unknown) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     let currentIndex = 0;
     
-    const runNextLimiter = () => {
+    const runNextLimiter = (): void => {
       if (currentIndex >= limiters.length) {
         return next();
       }

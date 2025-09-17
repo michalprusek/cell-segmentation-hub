@@ -10,7 +10,7 @@ let isRedisConnected = false;
 const redisConfig = {
   url: process.env.REDIS_URL || 'redis://localhost:6379',
   socket: {
-    reconnectStrategy: (retries: number) => {
+    reconnectStrategy: (retries: number): number | Error => {
       if (retries > 10) {
         logger.error('Redis: Maximum reconnection attempts reached');
         return new Error('Maximum reconnection attempts reached');

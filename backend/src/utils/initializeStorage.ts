@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { logger } from './logger';
 
 /**
  * Initialize storage directories for the application
@@ -17,7 +18,7 @@ export async function initializeStorageDirectories(): Promise<void> {
     try {
       await fs.mkdir(dir, { recursive: true });
     } catch (error) {
-      console.error(`Failed to create directory ${dir}:`, error);
+      logger.error(`Failed to create directory ${dir}:`, error);
     }
   }
 }

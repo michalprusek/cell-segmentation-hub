@@ -69,7 +69,10 @@ class DatabaseOptimization {
       this.queryTimings.set(queryName, []);
     }
     
-    const timings = this.queryTimings.get(queryName)!;
+    const timings = this.queryTimings.get(queryName);
+    if (!timings) {
+      return;
+    }
     timings.push(duration);
     
     // Keep only last 100 timings per query

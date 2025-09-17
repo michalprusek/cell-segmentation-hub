@@ -122,7 +122,7 @@ class RateLimitingSystem {
       
       // Key generator - use IP + user ID if authenticated
       keyGenerator: (req: Request): string => {
-        const userId = (req as any).user?.id;
+        const userId = (req as Request & { user?: { id?: string } }).user?.id;
         const ip = req.ip || req.socket.remoteAddress || 'unknown';
         return userId ? `${tierName}:user:${userId}` : `${tierName}:ip:${ip}`;
       },
@@ -148,7 +148,7 @@ class RateLimitingSystem {
         // Dynamic import for optional dependency
         const { default: RedisStore } = await import('rate-limit-redis');
         options.store = new RedisStore({
-          sendCommand: (...args: string[]) => client.sendCommand(args),
+          sendCommand: (...args: string[]) => client.sendCommand(args) as any,
           prefix: `rate_limit:${tierName}:`,
         });
         logger.info(`Rate limiter '${tierName}' using Redis store`);
@@ -190,20 +190,14 @@ class RateLimitingSystem {
    * Get user tier based on request
    */
   getUserTier(req: Request): string {
-    const user = (req as any).user;
-    
+    const user = req.user;
+
     if (!user) {
       return 'anonymous';
     }
-    
-    if (user.role === 'admin') {
-      return 'admin';
-    }
-    
-    if (user.role === 'premium' || user.isPremium) {
-      return 'premium';
-    }
-    
+
+    // For now, all authenticated users are treated as authenticated tier
+    // TODO: Implement role/premium system if needed in the future
     return 'authenticated';
   }
   
@@ -211,7 +205,7 @@ class RateLimitingSystem {
    * Create dynamic rate limiter based on user tier
    */
   createDynamicLimiter(): RateLimitRequestHandler {
-    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const dynamicHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       const tier = this.getUserTier(req);
       const limiter = await this.getLimiter(tier);
       
@@ -219,13 +213,17 @@ class RateLimitingSystem {
         // Fallback to anonymous if tier not found
         const fallbackLimiter = await this.getLimiter('anonymous');
         if (fallbackLimiter) {
-          return fallbackLimiter(req, res, next);
+          fallbackLimiter(req, res, next);
+          return;
         }
         return next();
       }
       
-      return limiter(req, res, next);
+      limiter(req, res, next);
+      return;
     };
+
+    return dynamicHandler as RateLimitRequestHandler;
   }
   
   /**

@@ -158,18 +158,21 @@ export function validateUploadRequest(fileCount: number, totalSize: number, conf
 }
 
 // Get upload statistics
-export function getUploadStats(fileCount: number, config?: UploadLimits) {
+export function getUploadStats(fileCount: number, config?: UploadLimits): {
+  chunkCount: number;
+  estimatedTimeMinutes: number;
+  maxFileSize: number;
+  maxTotalSize: number;
+} {
   const limits = config || getUploadConfig();
   const chunkCount = calculateChunkCount(fileCount, limits);
   const estimatedTimeMinutes = Math.ceil((chunkCount / limits.chunkConcurrency) * 0.5); // Assume 30s per chunk
-  
+
   return {
-    totalFiles: fileCount,
     chunkCount,
-    filesPerChunk: limits.maxFilesPerChunk,
-    concurrentUploads: limits.chunkConcurrency,
     estimatedTimeMinutes,
-    maxAllowedFiles: limits.maxTotalFiles
+    maxFileSize: limits.maxFileSize,
+    maxTotalSize: limits.maxTotalUploadSize
   };
 }
 

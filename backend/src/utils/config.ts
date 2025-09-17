@@ -52,7 +52,7 @@ const configSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   FROM_EMAIL: z.string().email(),
-  FROM_NAME: z.string().default('Cell Segmentation Platform'),
+  FROM_NAME: z.string().default('SpheroSeg'),
   
   // File Storage
   STORAGE_TYPE: z.enum(['local', 's3']).default('local'),
