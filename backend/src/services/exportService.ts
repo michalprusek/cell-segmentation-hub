@@ -40,7 +40,20 @@ type ProjectWithImages = Prisma.ProjectGetPayload<{
     id: true;
     title: true;
     images: {
-      include: {
+      select: {
+        id: true;
+        name: true;
+        originalPath: true;
+        thumbnailPath: true;
+        segmentationThumbnailPath: true;
+        width: true;
+        height: true;
+        fileSize: true;
+        mimeType: true;
+        projectId: true;
+        segmentationStatus: true;
+        createdAt: true;
+        updatedAt: true;
         segmentation: true;
       };
     };
@@ -267,16 +280,29 @@ export class ExportService {
               id: true,
               name: true,
               originalPath: true,
+              thumbnailPath: true,
+              segmentationThumbnailPath: true,
               width: true,
               height: true,
+              fileSize: true,
+              mimeType: true,
+              projectId: true,
+              segmentationStatus: true,
+              createdAt: true,
+              updatedAt: true,
               segmentation: {
                 select: {
                   id: true,
+                  createdAt: true,
+                  updatedAt: true,
+                  imageId: true,
                   polygons: true,
                   model: true,
                   threshold: true,
                   confidence: true,
-                  processingTime: true
+                  processingTime: true,
+                  imageHeight: true,
+                  imageWidth: true
                 }
               }
             },
@@ -315,7 +341,7 @@ export class ExportService {
       // Copy original images (can run in parallel)
       if (options.includeOriginalImages && project.images) {
         exportTasks.push(
-          this.copyOriginalImages(project.images, exportDir).then(() => {
+          this.copyOriginalImages(project.images as ImageWithSegmentation[], exportDir).then(() => {
             progressStep++;
             this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
           })
@@ -326,7 +352,7 @@ export class ExportService {
       if (options.includeVisualizations && project.images) {
         exportTasks.push(
           this.generateVisualizations(
-            project.images,
+            project.images as ImageWithSegmentation[],
             exportDir,
             options.visualizationOptions
           ).then(() => {
@@ -340,7 +366,7 @@ export class ExportService {
       if (options.annotationFormats?.length && project.images) {
         exportTasks.push(
           this.generateAnnotations(
-            project.images,
+            project.images as ImageWithSegmentation[],
             exportDir,
             options.annotationFormats
           ).then(() => {
@@ -354,7 +380,7 @@ export class ExportService {
       if (options.metricsFormats?.length && project.images) {
         exportTasks.push(
           this.generateMetrics(
-            project.images,
+            project.images as ImageWithSegmentation[],
             exportDir,
             options.metricsFormats,
             project.title,

@@ -31,7 +31,7 @@ export const generatePasswordResetEmailHTML = (data: PasswordResetEmailData): st
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Reset hesla - Cell Segmentation Platform</title>
+    <title>Reset hesla - SpheroSeg</title>
 </head>
 <body style="font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5;">
     <div style="max-width: 500px; margin: 0 auto; background-color: white; padding: 30px; border-radius: 8px;">
@@ -39,7 +39,7 @@ export const generatePasswordResetEmailHTML = (data: PasswordResetEmailData): st
         
         <p>Dobrý den,</p>
         
-        <p>Byla vyžádána změna hesla pro váš účet <strong>${safeUserEmail}</strong> na platformě Cell Segmentation Platform.</p>
+        <p>Byla vyžádána změna hesla pro váš účet <strong>${safeUserEmail}</strong> na platformě SpheroSeg.</p>
         
         <div style="text-align: center; margin: 30px 0;">
             <a href="${safeResetUrl}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Nastavit nové heslo</a>
@@ -56,7 +56,7 @@ export const generatePasswordResetEmailHTML = (data: PasswordResetEmailData): st
         
         <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;">
         <p style="font-size: 12px; color: #666; text-align: center;">
-            Cell Segmentation Platform<br>
+            SpheroSeg<br>
             Tento email byl odeslán automaticky.
         </p>
     </div>
@@ -97,11 +97,11 @@ export const generatePasswordResetEmailText = (data: PasswordResetEmailData): st
   });
   
   return `
-Reset hesla - Cell Segmentation Platform
+Reset hesla - SpheroSeg
 
 Dobrý den,
 
-Byla vyžádána změna hesla pro váš účet (${safeEmail}) na platformě Cell Segmentation Platform.
+Byla vyžádána změna hesla pro váš účet (${safeEmail}) na platformě SpheroSeg.
 
 Pro nastavení nového hesla klikněte na tento odkaz:
 ${safeResetUrl}
@@ -111,7 +111,7 @@ Pokud odkaz vypršel, můžete požádat o nový reset hesla.
 
 Pokud jste si reset hesla nevyžádali, ignorujte tento email. Vaše heslo zůstane beze změny.
 
-Cell Segmentation Platform
+SpheroSeg
 Tento email byl odeslán automaticky, neodpovídejte na něj.
   `.trim();
 };

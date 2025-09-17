@@ -77,20 +77,21 @@ export async function withTransaction<T>(
           logger.debug(`Starting transaction (attempt ${attempt}/${retries})`, 'Database');
           return await operation(tx as PrismaTransactionClient);
         },
-        defaultOptions as any
+        defaultOptions as Record<string, unknown>
       );
       
       logger.debug('Transaction completed successfully', 'Database');
       return result;
-    } catch (error: any) {
-      logger.error(`Transaction failed (attempt ${attempt}/${retries})`, error, 'Database');
-      
+    } catch (error: unknown) {
+      logger.error(`Transaction failed (attempt ${attempt}/${retries})`, error instanceof Error ? error : new Error(String(error)), 'Database');
+
       // Check if it's a deadlock or timeout error that we should retry
-      const isRetryableError = 
-        error.code === 'P2034' || // Transaction failed due to concurrent update
-        error.code === 'P2024' || // Timed out fetching a new connection from the pool
-        error.message?.includes('deadlock') ||
-        error.message?.includes('timeout');
+      const errorObj = error as { code?: string; message?: string };
+      const isRetryableError =
+        errorObj.code === 'P2034' || // Transaction failed due to concurrent update
+        errorObj.code === 'P2024' || // Timed out fetching a new connection from the pool
+        errorObj.message?.includes('deadlock') ||
+        errorObj.message?.includes('timeout');
       
       if (!isRetryableError || attempt === retries) {
         throw error;
@@ -154,7 +155,7 @@ export async function cleanupOrphanedRecords(
       where: {
         AND: [
           { status: { in: ['completed', 'failed'] } },
-          { updatedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } // Older than 7 days
+          { completedAt: { lt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } } // Older than 7 days
         ]
       }
     });

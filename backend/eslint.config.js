@@ -5,7 +5,40 @@ import tsParser from '@typescript-eslint/parser';
 export default [
   js.configs.recommended,
   {
-    files: ['**/*.ts', '!node_modules/**'],
+    files: ['*.js', '**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        global: 'readonly',
+        NodeJS: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setImmediate: 'readonly',
+        clearImmediate: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        exports: 'readonly',
+      },
+    },
+    rules: {
+      'no-console': 'off',
+      'no-undef': 'off',
+    },
+  },
+  {
+    files: ['src/**/*.ts', 'prisma/**/*.ts', '!node_modules/**', '!*.js', '!**/*.config.js', '!**/*.setup.js'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
@@ -23,6 +56,17 @@ export default [
         clearInterval: 'readonly',
         setTimeout: 'readonly',
         clearTimeout: 'readonly',
+        setImmediate: 'readonly',
+        clearImmediate: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        AbortController: 'readonly',
+        AbortSignal: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+        exports: 'readonly',
       },
     },
     plugins: {
@@ -53,7 +97,7 @@ export default [
     },
   },
   {
-    files: ['**/*.test.ts', '**/__tests__/**/*.ts', '**/test/**/*.ts'],
+    files: ['src/**/*.test.ts', 'src/**/__tests__/**/*.ts', 'src/**/test/**/*.ts'],
     languageOptions: {
       globals: {
         // Jest globals are now imported from @jest/globals, so we don't need them as globals anymore
@@ -77,6 +121,6 @@ export default [
     },
   },
   {
-    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '**/__tests__/**', '**/*.test.ts'],
+    ignores: ['dist/**', 'node_modules/**', 'coverage/**', '**/__tests__/**', '**/*.test.ts', '*.config.js', 'jest.*.js', 'jest.setup.js'],
   },
 ];

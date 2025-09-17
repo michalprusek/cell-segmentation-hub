@@ -35,7 +35,7 @@ export const validate = <T>(
         });
 
         // Enhanced logging for validation errors with request details
-        logger.warn('Validation failed', undefined, 'ValidationMiddleware', {
+        logger.warn('Validation failed', 'ValidationMiddleware', {
           target: target,
           url: req.url,
           method: req.method,

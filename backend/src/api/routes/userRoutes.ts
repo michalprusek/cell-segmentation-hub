@@ -92,7 +92,7 @@ router.put('/profile',
       const userId = (req as Request & { userId: string }).userId;
       const updates = req.body;
       
-      logger.info(`✏️ User: Updating profile for user ${userId}`, { updates });
+      logger.info(`✏️ User: Updating profile for user ${userId}`, 'UserRoutes', { updates });
       
       // Placeholder profile update
       res.json({

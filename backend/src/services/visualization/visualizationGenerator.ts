@@ -117,7 +117,7 @@ export class VisualizationGenerator {
       ctx.drawImage(image, 0, 0);
 
       // Reset any transformations before drawing polygons
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.resetTransform();
 
       // Draw polygons - reset polygon numbering for each image
       let polygonNumber = 1;
@@ -245,7 +245,7 @@ export class VisualizationGenerator {
     ctx.save();
     
     // Reset transformation matrix to ensure clean positioning
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.resetTransform();
     
     // Draw white background circle with strong border
     ctx.fillStyle = 'rgba(255, 255, 255, 0.98)';

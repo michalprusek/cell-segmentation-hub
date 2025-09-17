@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { prisma } from '../db';
 import { logger } from '../utils/logger';
 import * as EmailService from './emailService';
-import { User, ProjectShare, Project } from '@prisma/client';
+import { User, ProjectShare, Project, Profile } from '@prisma/client';
 import { ShareByEmailData, ShareByLinkData } from '../types/validation';
 
 /**
@@ -85,7 +85,11 @@ export async function shareProjectByEmail(
       },
       include: {
         project: true,
-        sharedBy: true
+        sharedBy: {
+          include: {
+            profile: true
+          }
+        }
       }
     });
 
@@ -175,7 +179,7 @@ export async function shareProjectByLink(
 export async function acceptShareInvitation(
   token: string,
   userId?: string
-): Promise<{ share: any; needsLogin: boolean }> {
+): Promise<{ share: unknown; needsLogin: boolean }> {
   try {
     // Find the share by token
     const share = await prisma.projectShare.findFirst({
@@ -608,7 +612,7 @@ export async function hasProjectAccess(
 /**
  * Validate a share token and return share info
  */
-export async function validateShareToken(token: string): Promise<any | null> {
+export async function validateShareToken(token: string): Promise<unknown | null> {
   try {
     const share = await prisma.projectShare.findFirst({
       where: {
@@ -656,7 +660,7 @@ export async function validateShareToken(token: string): Promise<any | null> {
  * Send share invitation email
  */
 async function sendShareInvitationEmail(
-  share: ProjectShare & { project: Project; sharedBy: User },
+  share: ProjectShare & { project: Project; sharedBy: User & { profile: Profile | null } },
   message?: string
 ): Promise<void> {
   try {
@@ -680,9 +684,12 @@ async function sendShareInvitationEmail(
       return; // Skip email sending for link-only shares
     }
     
+    // TODO: Use sharer's preferred language in future implementation
+    // const sharerLocale = share.sharedBy.profile?.preferredLang || 'en';
+
     const emailOptions: EmailService.EmailServiceOptions = {
       to: share.email,
-      subject: `${share.sharedBy.email} shared a project with you - Cell Segmentation Platform`,
+      subject: `${share.sharedBy.email} shared a project with you - SpheroSeg`,
       html: generateShareInvitationHTML(share, acceptUrl, message),
       text: generateShareInvitationText(share, acceptUrl, message)
     };
@@ -917,7 +924,7 @@ function generateShareInvitationHTML(
                     ` : ''}
                     
                     <p style="color: #4a5568; text-align: center; margin: 30px 0;">
-                        Join the Cell Segmentation Platform to start analyzing and collaborating on this project.
+                        Join SpheroSeg to start analyzing and collaborating on this project.
                     </p>
                     
                     <div class="button-container">
@@ -934,7 +941,7 @@ function generateShareInvitationHTML(
                     </p>
                 </div>
                 <div class="footer">
-                    <div class="footer-logo">Cell Segmentation Platform</div>
+                    <div class="footer-logo">SpheroSeg</div>
                     <div class="footer-text">
                         Advancing cell analysis through collaboration
                     </div>
@@ -963,7 +970,7 @@ Project Shared With You
 
 Hello!
 
-${share.sharedBy.email} has shared a project with you on the Cell Segmentation Platform.
+${share.sharedBy.email} has shared a project with you on SpheroSeg.
 
 Project: ${share.project.title}
 ${share.project.description ? `Description: ${share.project.description}` : ''}
@@ -974,6 +981,6 @@ Click this link to accept the invitation:
 ${acceptUrl}
 
 Best regards,
-Cell Segmentation Platform Team
+SpheroSeg Team
   `.trim();
 }

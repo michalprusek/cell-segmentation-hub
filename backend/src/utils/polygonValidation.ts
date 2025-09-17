@@ -23,7 +23,7 @@ export interface ParsedPolygonResult {
  * Centralized polygon validation and parsing utility
  * This eliminates code duplication across the segmentation service
  */
-export class PolygonValidator {
+export const PolygonValidator = {
   /**
    * Safely parse polygon JSON data with comprehensive validation
    * @param polygonData Raw polygon data (string or already parsed)
@@ -31,13 +31,13 @@ export class PolygonValidator {
    * @param imageId Optional image ID for detailed logging
    * @returns Validated polygon data with success status
    */
-  static parsePolygonData(
-    polygonData: string | any, 
-    context = 'unknown', 
+  parsePolygonData(
+    polygonData: string | unknown,
+    context = 'unknown',
     imageId?: string
   ): ParsedPolygonResult {
     try {
-      let parsed: any;
+      let parsed: unknown;
       
       // Handle string input - parse JSON
       if (typeof polygonData === 'string') {
@@ -69,7 +69,7 @@ export class PolygonValidator {
       }
 
       // Handle null or undefined
-      if (parsed == null) {
+      if (parsed === null || parsed === undefined) {
         return { polygons: [], isValid: true };
       }
 
@@ -83,8 +83,9 @@ export class PolygonValidator {
       }
 
       // Handle object format (might have nested polygons property)
-      if (typeof parsed === 'object' && parsed.polygons && Array.isArray(parsed.polygons)) {
-        const validatedPolygons = this.validatePolygonArray(parsed.polygons, context, imageId);
+      const parsedObj = parsed as { polygons?: unknown };
+      if (typeof parsed === 'object' && parsedObj.polygons && Array.isArray(parsedObj.polygons)) {
+        const validatedPolygons = this.validatePolygonArray(parsedObj.polygons, context, imageId);
         return {
           polygons: validatedPolygons,
           isValid: true
@@ -123,7 +124,7 @@ export class PolygonValidator {
         error: 'Parsing failed with unexpected error'
       };
     }
-  }
+  },
 
   /**
    * Validate an array of polygon objects
@@ -132,9 +133,9 @@ export class PolygonValidator {
    * @param imageId Optional image ID for detailed logging
    * @returns Validated and cleaned polygon array
    */
-  private static validatePolygonArray(
-    polygonArray: any[], 
-    context: string, 
+  validatePolygonArray(
+    polygonArray: unknown[],
+    context: string,
     imageId?: string
   ): Polygon[] {
     if (!Array.isArray(polygonArray)) {
@@ -145,7 +146,7 @@ export class PolygonValidator {
     let invalidCount = 0;
 
     for (let i = 0; i < polygonArray.length; i++) {
-      const polygon = polygonArray[i];
+      const polygon = polygonArray[i] as unknown;
       
       try {
         const validatedPolygon = this.validateSinglePolygon(polygon, i);
@@ -178,7 +179,7 @@ export class PolygonValidator {
     }
 
     return validPolygons;
-  }
+  },
 
   /**
    * Validate a single polygon object
@@ -186,23 +187,26 @@ export class PolygonValidator {
    * @param index Index in array for logging
    * @returns Validated polygon or null if invalid
    */
-  private static validateSinglePolygon(polygon: any, _index: number): Polygon | null {
+  validateSinglePolygon(polygon: unknown, _index: number): Polygon | null {
     if (!polygon || typeof polygon !== 'object') {
       return null;
     }
 
+    const polygonObj = polygon as Record<string, unknown>;
+
     // Validate points array
-    if (!Array.isArray(polygon.points) || polygon.points.length < 3) {
+    if (!Array.isArray(polygonObj.points) || polygonObj.points.length < 3) {
       return null;
     }
 
     // Validate each point
     const validPoints: PolygonPoint[] = [];
-    for (const point of polygon.points) {
+    for (const point of polygonObj.points as unknown[]) {
       if (this.isValidPoint(point)) {
+        const validPoint = point as { x: number; y: number };
         validPoints.push({
-          x: Number(point.x),
-          y: Number(point.y)
+          x: Number(validPoint.x),
+          y: Number(validPoint.y)
         });
       }
     }
@@ -218,65 +222,67 @@ export class PolygonValidator {
     };
 
     // Add optional properties if present and valid
-    if (polygon.id && typeof polygon.id === 'string') {
-      validatedPolygon.id = polygon.id;
+    if (polygonObj.id && typeof polygonObj.id === 'string') {
+      validatedPolygon.id = polygonObj.id;
     }
-    
-    if (polygon.color && typeof polygon.color === 'string') {
-      validatedPolygon.color = polygon.color;
+
+    if (polygonObj.color && typeof polygonObj.color === 'string') {
+      validatedPolygon.color = polygonObj.color;
     }
-    
-    if (polygon.category && typeof polygon.category === 'string') {
-      validatedPolygon.category = polygon.category;
+
+    if (polygonObj.category && typeof polygonObj.category === 'string') {
+      validatedPolygon.category = polygonObj.category;
     }
-    
-    if (polygon.confidence && typeof polygon.confidence === 'number' && 
-        polygon.confidence >= 0 && polygon.confidence <= 1) {
-      validatedPolygon.confidence = polygon.confidence;
+
+    if (polygonObj.confidence && typeof polygonObj.confidence === 'number' &&
+        polygonObj.confidence >= 0 && polygonObj.confidence <= 1) {
+      validatedPolygon.confidence = polygonObj.confidence;
     }
 
     return validatedPolygon;
-  }
+  },
 
   /**
    * Validate a single point object
    * @param point Point object to validate
    * @returns True if point is valid
    */
-  private static isValidPoint(point: any): boolean {
-    return point && 
-           typeof point === 'object' &&
-           typeof point.x === 'number' && 
-           typeof point.y === 'number' &&
-           !isNaN(point.x) && 
-           !isNaN(point.y) &&
-           isFinite(point.x) && 
-           isFinite(point.y);
-  }
+  isValidPoint(point: unknown): boolean {
+    if (!point || typeof point !== 'object') {
+      return false;
+    }
+    const pointObj = point as Record<string, unknown>;
+    return typeof pointObj.x === 'number' &&
+           typeof pointObj.y === 'number' &&
+           !isNaN(pointObj.x) &&
+           !isNaN(pointObj.y) &&
+           isFinite(pointObj.x) &&
+           isFinite(pointObj.y);
+  },
 
   /**
    * Quick validation for polygon count without full parsing
    * @param polygonData Raw polygon data
    * @returns Number of polygons or 0 if parsing fails
    */
-  static getPolygonCount(polygonData: string | any): number {
+  getPolygonCount(polygonData: string | unknown): number {
     try {
       const result = this.parsePolygonData(polygonData, 'count-only');
       return result.isValid ? result.polygons.length : 0;
     } catch {
       return 0;
     }
-  }
+  },
 
   /**
    * Check if polygon data exists and is valid
    * @param polygonData Raw polygon data
    * @returns True if data exists and is parseable
    */
-  static hasValidPolygonData(polygonData: string | any): boolean {
+  hasValidPolygonData(polygonData: string | unknown): boolean {
     if (!polygonData) {return false;}
     
     const result = this.parsePolygonData(polygonData, 'validation-check');
     return result.isValid && result.polygons.length > 0;
   }
-}
+} as const;

@@ -153,7 +153,7 @@ export class SegmentationThumbnailService {
       // Clean up temp file
       try {
         await fs.unlink(tempVisualizationPath);
-      } catch (_error) {
+      } catch {
         logger.warn('Failed to clean up temp visualization file', 'SegmentationThumbnailService', {
           tempPath: tempVisualizationPath
         });
@@ -205,7 +205,7 @@ export class SegmentationThumbnailService {
           ...DEFAULT_THUMBNAIL_RETRY_CONFIG,
           operationName: `Thumbnail generation for ${segmentationId}`
         },
-        (error) => this.isRetriableError(error)
+        (error) => this.isRetriableError(error instanceof Error ? error : new Error(String(error)))
       );
     }, `Thumbnail generation for ${segmentationId}`);
   }
@@ -274,8 +274,9 @@ export class SegmentationThumbnailService {
           logger.info(`Thumbnail batch ${index + 1} completed, ${batchResults.length} successful`);
         },
         onItemError: (id, error) => {
-          logger.error(`Failed to generate thumbnail for ${id}`, error);
-          results.set(id, null);
+          const segmentationId = String(id);
+          logger.error(`Failed to generate thumbnail for ${segmentationId}`, error instanceof Error ? error : new Error(String(error)));
+          results.set(segmentationId, null);
         }
       }
     );
