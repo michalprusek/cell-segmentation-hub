@@ -4,7 +4,7 @@
 
 set -e
 
-STAGING_DIR="/home/cvat/cell-segmentation-hub"
+STAGING_DIR="/home/cvat/spheroseg-app"
 BRANCH="staging"
 CHECK_INTERVAL=30  # Check every 30 seconds
 LOG_FILE="/tmp/auto-deploy-staging.log"

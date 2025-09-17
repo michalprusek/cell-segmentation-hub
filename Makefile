@@ -452,7 +452,7 @@ monitor-resources:
 clean-monitoring:
 	@echo "🧹 Cleaning monitoring data..."
 	@$(DOCKER_COMPOSE) down prometheus grafana
-	@docker volume rm cell-segmentation-hub_prometheus_data cell-segmentation-hub_grafana_data 2>/dev/null || true
+	@docker volume rm spheroseg-app_prometheus_data spheroseg-app_grafana_data 2>/dev/null || true
 	@echo "✅ Monitoring data cleaned. Run 'make up' to restart with fresh data."
 
 # ============================================================================

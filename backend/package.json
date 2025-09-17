@@ -1,7 +1,7 @@
 {
-  "name": "cell-segmentation-backend",
+  "name": "spheroseg-app-backend",
   "version": "1.0.0",
-  "description": "Backend API for cell segmentation platform",
+  "description": "Backend API for SpheroSeg App platform",
   "type": "module",
   "main": "dist/server.js",
   "scripts": {
@@ -27,7 +27,7 @@
     "docker:dev": "docker-compose -f ../docker-compose.yml up backend -d"
   },
   "keywords": [
-    "cell-segmentation",
+    "spheroseg-app",
     "api",
     "backend"
   ],

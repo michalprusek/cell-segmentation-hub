@@ -221,7 +221,7 @@ def main():
     print("="*60)
     
     try:
-        with open('/home/cvat/cell-segmentation-hub/backend/segmentation/config/batch_sizes.json', 'r') as f:
+        with open('/home/cvat/spheroseg-app/backend/segmentation/config/batch_sizes.json', 'r') as f:
             current_config = json.load(f)
             
         print("\nCurrent configuration vs. tested optimal:")

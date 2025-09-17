@@ -18,7 +18,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m'
 
 # Cesta k nginx konfiguraci
-NGINX_CONF="/home/cvat/cell-segmentation-hub/docker/nginx/nginx.prod.conf"
+NGINX_CONF="/home/cvat/spheroseg-app/docker/nginx/nginx.prod.conf"
 NGINX_CONTAINER="nginx-blue"
 
 # Funkce pro zobrazení nápovědy

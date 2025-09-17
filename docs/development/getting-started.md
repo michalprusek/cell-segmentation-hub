@@ -23,8 +23,8 @@ The fastest way to get started is using Docker Compose:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/cell-segmentation-hub.git
-cd cell-segmentation-hub
+git clone https://github.com/your-org/spheroseg-app.git
+cd spheroseg-app
 
 # 2. Start all services with Docker
 npm run docker:dev
@@ -43,8 +43,8 @@ For development with hot reloading and debugging:
 
 ```bash
 # Clone repository
-git clone https://github.com/your-org/cell-segmentation-hub.git
-cd cell-segmentation-hub
+git clone https://github.com/your-org/spheroseg-app.git
+cd spheroseg-app
 
 # Copy environment files
 cp .env.example .env

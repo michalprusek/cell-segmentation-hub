@@ -559,14 +559,29 @@ export default {
     sendNewPassword: 'Neues Passwort senden',
     emailSent: 'E-Mail gesendet',
     checkEmailForNewPassword:
-      'Überprüfen Sie Ihre E-Mail für den Passwort-Reset-Link',
-    resetPasswordEmailSent: 'Passwort-Reset-E-Mail gesendet',
-    resetPasswordError: 'Fehler beim Zurücksetzen des Passworts',
+      'Überprüfen Sie Ihre E-Mail für den Passwort-Reset-Link. Die E-Mail-Zustellung kann bis zu 10 Minuten dauern.',
+    resetPasswordEmailSent:
+      'Falls die E-Mail existiert, wurde ein Passwort-Reset-Link gesendet. Die E-Mail-Zustellung kann bis zu 10 Minuten dauern.',
+    resetPasswordError: 'Fehler beim Senden der Passwort-Reset-E-Mail',
     backToSignIn: 'Zurück zur Anmeldung',
     didntReceiveEmail: 'E-Mail nicht erhalten?',
     rememberPassword: 'Passwort wieder eingefallen?',
     redirectingToSignIn: 'Redirecting to sign-in...',
     tryAgain: 'Erneut versuchen',
+    // Reset Password page specific
+    enterNewPassword: 'Geben Sie Ihr neues Passwort ein',
+    newPassword: 'Neues Passwort',
+    confirmPassword: 'Passwort bestätigen',
+    confirmPasswordPlaceholder: 'Bestätigen Sie Ihr Passwort',
+    passwordRequirements: 'Passwort muss mindestens 8 Zeichen lang sein',
+    resettingPassword: 'Passwort wird zurückgesetzt...',
+    passwordResetSuccess: 'Passwort erfolgreich zurückgesetzt',
+    passwordResetSuccessMessage:
+      'Ihr Passwort wurde erfolgreich zurückgesetzt. Sie können sich jetzt mit Ihrem neuen Passwort anmelden.',
+    invalidResetToken: 'Ungültiger Reset-Link',
+    invalidResetTokenMessage:
+      'Dieser Passwort-Reset-Link ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Passwort-Reset an.',
+    requestNewReset: 'Neuen Reset anfordern',
   },
   profile: {
     title: 'Profil',

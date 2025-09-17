@@ -258,7 +258,7 @@ openssl s_client -connect staging.spherosegapp.utia.cas.cz:443
 ```bash
 # Zkontroluj network připojení
 docker network inspect staging_staging-network
-docker network inspect cell-segmentation-hub_spheroseg-network
+docker network inspect spheroseg-app_spheroseg-network
 
 # Reconnect production nginx to staging network
 docker network connect staging_staging-network spheroseg-nginx

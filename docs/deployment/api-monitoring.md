@@ -570,7 +570,7 @@ import apm from 'elastic-apm-node';
 
 // Initialize APM
 apm.start({
-  serviceName: 'cell-segmentation-hub',
+  serviceName: 'spheroseg-app',
   secretToken: process.env.ELASTIC_APM_SECRET_TOKEN,
   serverUrl: process.env.ELASTIC_APM_SERVER_URL,
   environment: process.env.NODE_ENV,

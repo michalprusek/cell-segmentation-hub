@@ -17,7 +17,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-BACKEND_DIR="/home/cvat/cell-segmentation-hub/backend"
+BACKEND_DIR="/home/cvat/spheroseg-app/backend"
 UPLOADS_DIR="$BACKEND_DIR/uploads"
 BLUE_DIR="$UPLOADS_DIR/blue"
 BLUE_NESTED_DIR="$BLUE_DIR/blue"

@@ -1,4 +1,4 @@
-# Cell Segmentation Hub
+# SpheroSeg App
 
 Advanced cell segmentation platform powered by deep learning models. Complete system with React frontend, Node.js backend, and Python ML microservice.
 
@@ -7,8 +7,8 @@ Advanced cell segmentation platform powered by deep learning models. Complete sy
 ### Development Environment
 
 ```bash
-git clone https://github.com/your-org/cell-segmentation-hub.git
-cd cell-segmentation-hub
+git clone https://github.com/your-org/spheroseg-app.git
+cd spheroseg-app
 
 # Start development environment
 docker compose up -d

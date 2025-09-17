@@ -77,7 +77,7 @@ sudo systemctl start disk-cleanup.timer
 
 ## Configuration
 
-Edit `/home/cvat/cell-segmentation-hub/scripts/auto-cleanup-disk.sh` to adjust:
+Edit `/home/cvat/spheroseg-app/scripts/auto-cleanup-disk.sh` to adjust:
 
 - `MIN_FREE_SPACE_GB=50` - Minimum free space threshold
 - `CLEANUP_AGE_DAYS=7` - Age of items to clean

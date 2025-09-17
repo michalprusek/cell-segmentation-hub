@@ -500,14 +500,30 @@ export default {
     sending: '发送中...',
     sendNewPassword: '发送新密码',
     emailSent: '邮件已发送',
-    checkEmailForNewPassword: '请检查您的邮箱获取新密码',
-    resetPasswordEmailSent: '密码重置邮件已发送',
-    resetPasswordError: '重置密码时出错',
+    checkEmailForNewPassword:
+      '请检查您的邮箱获取新密码。邮件递送可能需要长达10分钟。',
+    resetPasswordEmailSent:
+      '如果邮箱存在，已发送密码重置链接。邮件递送可能需要长达10分钟。',
+    resetPasswordError: '发送密码重置邮件时出错',
     backToSignIn: '返回登录',
     didntReceiveEmail: '没有收到邮件？',
     rememberPassword: '想起密码了？',
     redirectingToSignIn: 'Redirecting to sign-in...',
     tryAgain: '重试',
+    // Reset Password page specific
+    enterNewPassword: '请输入您的新密码',
+    newPassword: '新密码',
+    confirmPassword: '确认密码',
+    confirmPasswordPlaceholder: '确认您的密码',
+    passwordRequirements: '密码长度至少为8个字符',
+    resettingPassword: '重置密码中...',
+    passwordResetSuccess: '密码重置成功',
+    passwordResetSuccessMessage:
+      '您的密码已成功重置。现在您可以使用新密码登录。',
+    invalidResetToken: '无效的重置链接',
+    invalidResetTokenMessage:
+      '此密码重置链接无效或已过期。请重新申请密码重置。',
+    requestNewReset: '申请新的重置',
   },
   profile: {
     title: '个人资料',

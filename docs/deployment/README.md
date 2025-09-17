@@ -8,8 +8,8 @@ The fastest way to deploy is using the provided Docker Compose configuration:
 
 ```bash
 # 1. Clone and configure
-git clone https://github.com/your-org/cell-segmentation-hub.git
-cd cell-segmentation-hub
+git clone https://github.com/your-org/spheroseg-app.git
+cd spheroseg-app
 
 # 2. Set production environment variables
 cp .env.example .env.production

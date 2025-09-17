@@ -29,7 +29,7 @@ while true; do
             echo ""
             
             # Run full verification
-            /home/cvat/cell-segmentation-hub/scripts/verify-sendgrid-dns.sh
+            /home/cvat/spheroseg-app/scripts/verify-sendgrid-dns.sh
             
             # Check if all records are OK
             TOTAL_OK=$(./scripts/verify-sendgrid-dns.sh 2>/dev/null | grep "Total:" | grep -o "[0-9]/6" | cut -d'/' -f1)
@@ -62,7 +62,7 @@ while true; do
                 echo ""
                 echo "🎉 All DNS records are now propagated!"
                 echo ""
-                /home/cvat/cell-segmentation-hub/scripts/verify-sendgrid-dns.sh
+                /home/cvat/spheroseg-app/scripts/verify-sendgrid-dns.sh
                 ALL_RECORDS_OK=true
                 break
             fi

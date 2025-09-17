@@ -7,13 +7,13 @@ echo "Initializing green database..."
 docker exec postgres-green psql -U spheroseg -c "CREATE DATABASE spheroseg_green;" 2>/dev/null || echo "Database already exists"
 
 # Run Prisma migrations
-cd /home/cvat/cell-segmentation-hub/backend
+cd /home/cvat/spheroseg-app/backend
 
 # Export environment for Prisma
 export DATABASE_URL="postgresql://spheroseg:spheroseg_green_2024@localhost:5433/spheroseg_green?schema=public"
 
 # Temporarily expose postgres port
-docker run -d --rm --name temp-postgres-tunnel --network cell-segmentation-hub_green-network -p 5433:5432 alpine/socat TCP-LISTEN:5432,fork TCP-CONNECT:postgres-green:5432
+docker run -d --rm --name temp-postgres-tunnel --network spheroseg-app_green-network -p 5433:5432 alpine/socat TCP-LISTEN:5432,fork TCP-CONNECT:postgres-green:5432
 
 sleep 2
 

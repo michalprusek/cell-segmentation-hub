@@ -11,7 +11,7 @@ if docker exec spheroseg-nginx test -f /etc/nginx/nginx.conf.backup; then
     docker exec spheroseg-nginx cp /etc/nginx/nginx.conf.backup /etc/nginx/nginx.conf
 else
     echo "⚠️  Backup not found, using original production config..."
-    docker cp /home/cvat/cell-segmentation-hub/backend/docker/nginx/nginx.conf spheroseg-nginx:/etc/nginx/nginx.conf
+    docker cp /home/cvat/spheroseg-app/backend/docker/nginx/nginx.conf spheroseg-nginx:/etc/nginx/nginx.conf
 fi
 
 # Test nginx configuration

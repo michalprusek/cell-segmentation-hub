@@ -175,7 +175,7 @@ nvidia-smi
 watch -n 1 nvidia-smi
 
 # View application logs
-docker logs cell-segmentation-hub-ml-1
+docker logs spheroseg-app-ml-1
 ```
 
 ## WebSocket Notifications

@@ -1,6 +1,6 @@
 [Unit]
 Description=Automatic Disk Cleanup Service
-Documentation=https://github.com/your-org/cell-segmentation-hub
+Documentation=https://github.com/your-org/spheroseg-app
 After=docker.service
 Requires=docker.service
 
@@ -8,7 +8,7 @@ Requires=docker.service
 Type=oneshot
 User=cvat
 Group=cvat
-ExecStart=/home/cvat/cell-segmentation-hub/scripts/auto-cleanup-disk.sh
+ExecStart=/home/cvat/spheroseg-app/scripts/auto-cleanup-disk.sh
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=disk-cleanup
@@ -18,7 +18,7 @@ PrivateTmp=yes
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/var/log /var/lib/docker /tmp /var/tmp /home/cvat/.cache /home/cvat/cell-segmentation-hub
+ReadWritePaths=/var/log /var/lib/docker /tmp /var/tmp /home/cvat/.cache /home/cvat/spheroseg-app
 
 # Restart policy
 Restart=on-failure

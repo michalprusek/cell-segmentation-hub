@@ -42,7 +42,7 @@
 ### Upload Directory Fix
 
 1. **Fixed Docker Volume Mapping**:
-   - File: `/home/cvat/cell-segmentation-hub/docker-compose.blue.yml`
+   - File: `/home/cvat/spheroseg-app/docker-compose.blue.yml`
    - Line 73: Changed from `./backend/uploads/blue/blue:/app/uploads`
    - Changed to: `./backend/uploads/blue:/app/uploads`
 
@@ -95,7 +95,7 @@ sudo chmod -R 755 backend/uploads/blue/
 
 ## Nginx Configuration
 
-File: `/home/cvat/cell-segmentation-hub/docker/nginx/nginx.ssl.conf`
+File: `/home/cvat/spheroseg-app/docker/nginx/nginx.ssl.conf`
 
 ```nginx
 location /uploads/ {

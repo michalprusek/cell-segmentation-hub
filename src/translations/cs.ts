@@ -757,14 +757,28 @@ export default {
     sendNewPassword: 'Odeslat nové heslo',
     emailSent: 'Email odeslán',
     checkEmailForNewPassword:
-      'Zkontrolujte svůj email pro odkaz na reset hesla',
+      'Zkontrolujte svůj email pro odkaz na reset hesla. Doručení emailu může trvat až 10 minut.',
     resetPasswordEmailSent:
-      'Pokud email existuje, byl odeslán odkaz na reset hesla',
+      'Pokud email existuje, byl odeslán odkaz na reset hesla. Doručení emailu může trvat až 10 minut.',
     resetPasswordError: 'Nepodařilo se odeslat email s novým heslem',
     backToSignIn: 'Zpět na přihlášení',
     didntReceiveEmail: 'Nedostali jste email?',
     rememberPassword: 'Vzpomněli jste si na heslo?',
     tryAgain: 'Zkusit znovu',
+    // Reset Password page specific
+    enterNewPassword: 'Zadejte své nové heslo',
+    newPassword: 'Nové heslo',
+    confirmPassword: 'Potvrdit heslo',
+    confirmPasswordPlaceholder: 'Potvrďte své heslo',
+    passwordRequirements: 'Heslo musí být dlouhé alespoň 8 znaků',
+    resettingPassword: 'Resetování hesla...',
+    passwordResetSuccess: 'Reset hesla úspěšný',
+    passwordResetSuccessMessage:
+      'Heslo bylo úspěšně změněno. Nyní se můžete přihlásit s novým heslem.',
+    invalidResetToken: 'Neplatný nebo vypršený reset token',
+    invalidResetTokenMessage:
+      'Tento odkaz na reset hesla je neplatný nebo vypršel. Požádejte prosím o nový reset hesla.',
+    requestNewReset: 'Požádat o nový reset',
   },
   profile: {
     title: 'Profil',

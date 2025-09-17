@@ -1,7 +1,7 @@
 {
-  "name": "@cell-segmentation/shared",
+  "name": "@spheroseg-app/shared",
   "version": "1.0.0",
-  "description": "Shared types and validations for cell segmentation platform",
+  "description": "Shared types and validations for SpheroSeg App platform",
   "main": "index.js",
   "types": "types/index.d.ts",
   "private": true,

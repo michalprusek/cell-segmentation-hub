@@ -8,7 +8,7 @@ set -euo pipefail
 trap 'echo "Error at line $LINENO: Command \"$BASH_COMMAND\" failed with exit code $?" >&2' ERR
 
 # Allow environment overrides with validation
-STAGING_DIR="${STAGING_DIR:-"/home/cvat/cell-segmentation-hub"}"
+STAGING_DIR="${STAGING_DIR:-"/home/cvat/spheroseg-app"}"
 BRANCH="${BRANCH:-"staging"}"
 CHECK_INTERVAL="${CHECK_INTERVAL:-30}"  # Check every 30 seconds
 PROJECT="${PROJECT:-"staging"}"  # Docker Compose project name

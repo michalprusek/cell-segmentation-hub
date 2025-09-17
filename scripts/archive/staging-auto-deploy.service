@@ -1,5 +1,5 @@
 [Unit]
-Description=Auto-deploy staging for cell-segmentation-hub
+Description=Auto-deploy staging for spheroseg-app
 After=network.target docker.service
 Requires=docker.service
 
@@ -7,8 +7,8 @@ Requires=docker.service
 Type=simple
 User=cvat
 Group=cvat
-WorkingDirectory=/home/cvat/cell-segmentation-hub
-ExecStart=/home/cvat/cell-segmentation-hub/scripts/auto-deploy-staging.sh
+WorkingDirectory=/home/cvat/spheroseg-app
+ExecStart=/home/cvat/spheroseg-app/scripts/auto-deploy-staging.sh
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/staging-auto-deploy.log

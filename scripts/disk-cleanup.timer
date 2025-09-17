@@ -1,6 +1,6 @@
 [Unit]
 Description=Daily Automatic Disk Cleanup Timer
-Documentation=https://github.com/your-org/cell-segmentation-hub
+Documentation=https://github.com/your-org/spheroseg-app
 Requires=disk-cleanup.service
 
 [Timer]

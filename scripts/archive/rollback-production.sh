@@ -38,14 +38,14 @@ if ! docker images | grep -q "rollback"; then
     fi
     
     echo "Found previous version: $PREV_TAG"
-    docker tag cell-segmentation-hub-frontend:$PREV_TAG cell-segmentation-hub-frontend:latest
-    docker tag cell-segmentation-hub-backend:$PREV_TAG cell-segmentation-hub-backend:latest
-    docker tag cell-segmentation-hub-ml-service:$PREV_TAG cell-segmentation-hub-ml-service:latest
+    docker tag spheroseg-app-frontend:$PREV_TAG spheroseg-app-frontend:latest
+    docker tag spheroseg-app-backend:$PREV_TAG spheroseg-app-backend:latest
+    docker tag spheroseg-app-ml-service:$PREV_TAG spheroseg-app-ml-service:latest
 else
     # Use rollback images
-    docker tag cell-segmentation-hub-frontend:rollback cell-segmentation-hub-frontend:latest
-    docker tag cell-segmentation-hub-backend:rollback cell-segmentation-hub-backend:latest
-    docker tag cell-segmentation-hub-ml-service:rollback cell-segmentation-hub-ml-service:latest
+    docker tag spheroseg-app-frontend:rollback spheroseg-app-frontend:latest
+    docker tag spheroseg-app-backend:rollback spheroseg-app-backend:latest
+    docker tag spheroseg-app-ml-service:rollback spheroseg-app-ml-service:latest
 fi
 
 # 2. Restore previous environment if backup exists

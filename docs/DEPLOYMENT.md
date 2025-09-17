@@ -31,8 +31,8 @@ Nginx funguje jako reverzní proxy a směruje provoz na aktivní prostředí.
 
 ```bash
 # 1. Naklonujte repository
-git clone https://github.com/your-org/cell-segmentation-hub.git
-cd cell-segmentation-hub
+git clone https://github.com/your-org/spheroseg-app.git
+cd spheroseg-app
 
 # 2. Nastavte práva pro skripty
 chmod +x scripts/*.sh

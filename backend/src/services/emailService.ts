@@ -1,10 +1,11 @@
 import nodemailer, { Transporter, SendMailOptions } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from '../utils/logger';
-import { getNumericEnvVar, getBooleanEnvVar } from '../utils/envValidator';
-import { sendEmailWithRetry, parseEmailTimeout, updateEmailMetrics } from './emailRetryService';
-import { generatePasswordResetEmailHTML, generatePasswordResetEmailText, PasswordResetEmailData } from '../templates/passwordResetEmail';
-import { generateVerificationEmailHTML } from '../templates/verificationEmail';
+import { getBooleanEnvVar } from '../utils/envValidator';
+import { sendEmailWithRetry, parseEmailTimeout, updateEmailMetrics, queueEmailForRetry } from './emailRetryService';
+import { generateUltraSimpleHTML, generateUltraSimpleText, PasswordResetEmailData } from '../templates/passwordResetEmailUltraSimple';
+import { generateVerificationText, getVerificationSubject } from '../templates/verificationEmailPlainText';
+import { generateShareText, getShareSubject } from '../templates/shareInvitationPlainText';
 import { escapeHtml, sanitizeUrl } from '../utils/escapeHtml';
 
 export interface EmailConfig {
@@ -201,15 +202,38 @@ export async function sendPasswordResetEmail(userEmail: string, resetToken: stri
         expiresAt
       };
 
-      const htmlContent = generatePasswordResetEmailHTML(emailData);
-      const textContent = generatePasswordResetEmailText(emailData);
+      // Use ULTRA SIMPLE template for UTIA compatibility
+      const htmlContent = generateUltraSimpleHTML(emailData);
+      const textContent = generateUltraSimpleText(emailData);
 
-      await sendEmail({
+      const emailOptions = {
         to: userEmail,
-        subject: 'Password Reset - Cell Segmentation Platform',
-        html: htmlContent,
-        text: textContent
-      });
+        subject: 'Password Reset',
+        text: textContent  // ONLY plain text, NO HTML!
+        // html removed for UTIA compatibility
+      };
+
+      // For UTIA SMTP server with extreme delays (>2 min response), always queue password reset emails
+      if (process.env.SMTP_HOST === 'mail.utia.cas.cz') {
+        logger.info('Password reset email queued for background processing (UTIA SMTP)', 'EmailService', {
+          userEmail,
+          reason: 'UTIA server has >120s response delays after DATA transmission'
+        });
+
+        const queueId = queueEmailForRetry(emailOptions);
+
+        logger.info('Password reset email queued successfully', 'EmailService', {
+          userEmail,
+          queueId,
+          tokenExpiry: expiresAt
+        });
+
+        // Return immediately to prevent 504 timeout errors
+        return;
+      }
+
+      // For other SMTP servers, attempt immediate send
+      await sendEmail(emailOptions);
 
       logger.info('Password reset email sent', 'EmailService', { userEmail });
     } catch (error) {
@@ -226,17 +250,32 @@ export async function sendVerificationEmail(userEmail: string, verificationToken
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const verificationUrl = `${baseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
 
-      const emailContent = generateVerificationEmailHTML({
+      // PLAIN TEXT ONLY - no HTML!
+      const textContent = generateVerificationText({
         verificationUrl,
         userEmail,
         locale
       });
 
-      await sendEmail({
+      const emailOptions = {
         to: userEmail,
-        subject: emailContent.subject,
-        html: emailContent.html
-      });
+        subject: getVerificationSubject(locale),
+        text: textContent  // ONLY plain text, NO HTML!
+      };
+
+      // For UTIA SMTP, always queue verification emails to prevent blocking
+      if (process.env.SMTP_HOST === 'mail.utia.cas.cz') {
+        const queueId = queueEmailForRetry(emailOptions);
+        logger.info('Verification email queued for background processing (UTIA SMTP)', 'EmailService', {
+          userEmail,
+          locale,
+          queueId
+        });
+        return;
+      }
+
+      // For other SMTP servers, attempt immediate send
+      await sendEmail(emailOptions);
 
       logger.info('Verification email sent', 'EmailService', { userEmail, locale });
     } catch (error) {
@@ -263,42 +302,42 @@ export async function sendProjectShareEmail(
       
       const translations = {
         en: {
-          subject: `Shared Project: ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Shared Project: ${escapedProjectName} - SpheroSeg`,
           title: 'Shared Project',
           body: `${escapedSenderName} has shared the project "${escapedProjectName}" with you.`,
           buttonText: 'View Project',
           altText: 'Or copy and paste this link into your browser:'
         },
         cs: {
-          subject: `Sdílený projekt: ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Sdílený projekt: ${escapedProjectName} - SpheroSeg`,
           title: 'Sdílený projekt',
           body: `${escapedSenderName} s vámi sdílel projekt "${escapedProjectName}".`,
           buttonText: 'Zobrazit projekt',
           altText: 'Nebo zkopírujte a vložte tento odkaz do prohlížeče:'
         },
         es: {
-          subject: `Proyecto compartido: ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Proyecto compartido: ${escapedProjectName} - SpheroSeg`,
           title: 'Proyecto compartido',
           body: `${escapedSenderName} ha compartido el proyecto "${escapedProjectName}" contigo.`,
           buttonText: 'Ver proyecto',
           altText: 'O copia y pega este enlace en tu navegador:'
         },
         de: {
-          subject: `Geteiltes Projekt: ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Geteiltes Projekt: ${escapedProjectName} - SpheroSeg`,
           title: 'Geteiltes Projekt',
           body: `${escapedSenderName} hat das Projekt "${escapedProjectName}" mit Ihnen geteilt.`,
           buttonText: 'Projekt anzeigen',
           altText: 'Oder kopieren Sie diesen Link und fügen Sie ihn in Ihren Browser ein:'
         },
         fr: {
-          subject: `Projet partagé : ${escapedProjectName} - Cell Segmentation Platform`,
+          subject: `Projet partagé : ${escapedProjectName} - SpheroSeg`,
           title: 'Projet partagé',
           body: `${escapedSenderName} a partagé le projet "${escapedProjectName}" avec vous.`,
           buttonText: 'Voir le projet',
           altText: 'Ou copiez et collez ce lien dans votre navigateur :'
         },
         zh: {
-          subject: `共享项目：${escapedProjectName} - 细胞分割平台`,
+          subject: `共享项目：${escapedProjectName} - SpheroSeg`,
           title: '共享项目',
           body: `${escapedSenderName} 与您分享了项目 "${escapedProjectName}"。`,
           buttonText: '查看项目',
@@ -321,29 +360,19 @@ export async function sendProjectShareEmail(
         throw new Error('Invalid project URL provided');
       }
       
-      const htmlContent = `
-        <h2>${escapeHtml(t.title)}</h2>
-        <p>${t.body}</p>
-        <a href="${sanitizedUrl}" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
-          ${escapeHtml(t.buttonText)}
-        </a>
-        <p>${escapeHtml(t.altText)}</p>
-        <p>${escapeHtml(sanitizedUrl)}</p>
-      `;
-
-      const textContent = `
-        ${t.title}
-        
-        ${t.body}
-        
-        ${t.buttonText}: ${projectUrl}
-      `;
+      // PLAIN TEXT ONLY - no HTML!
+      const textContent = generateShareText({
+        projectUrl,
+        projectName,
+        senderName,
+        recipientEmail,
+        locale
+      });
 
       await sendEmail({
         to: recipientEmail,
-        subject: t.subject,
-        html: htmlContent,
-        text: textContent
+        subject: getShareSubject(projectName, locale),
+        text: textContent  // ONLY plain text, NO HTML!
       });
 
       logger.info('Project share email sent', 'EmailService', { recipientEmail, projectName, locale });

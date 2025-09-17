@@ -39,7 +39,7 @@ const swaggerOptions: swaggerJsdoc.Options = {
       description: 'API pro platformu segmentace buněčných struktur',
       contact: {
         name: 'API Support',
-        url: 'https://github.com/michalprusek/cell-segmentation-hub',
+        url: 'https://github.com/michalprusek/spheroseg-app',
       },
       license: {
         name: 'MIT',

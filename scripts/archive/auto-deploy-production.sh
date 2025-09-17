@@ -9,7 +9,7 @@ trap 'echo "Error at line $LINENO: Command \"$BASH_COMMAND\" failed with exit co
 trap 'echo "Script interrupted by signal" >&2; exit 130' INT TERM
 trap 'echo "Script exiting" >&2' EXIT
 
-PRODUCTION_DIR="/home/cvat/cell-segmentation-hub"
+PRODUCTION_DIR="/home/cvat/spheroseg-app"
 BRANCH="main"
 CHECK_INTERVAL=60  # Check every 60 seconds for production
 

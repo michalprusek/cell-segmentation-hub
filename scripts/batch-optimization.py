@@ -27,7 +27,7 @@ from contextlib import contextmanager
 import psutil
 
 # Add the segmentation module to path
-sys.path.append('/home/cvat/cell-segmentation-hub/backend/segmentation')
+sys.path.append('/home/cvat/spheroseg-app/backend/segmentation')
 
 from models.hrnet import HRNetV2
 from models.resunet_advanced import AdvancedResUNet
@@ -99,7 +99,7 @@ class GPUMemoryMonitor:
 class BatchSizeOptimizer:
     """Optimize batch sizes for segmentation models"""
     
-    def __init__(self, weights_path: str = "/home/cvat/cell-segmentation-hub/backend/segmentation/weights"):
+    def __init__(self, weights_path: str = "/home/cvat/spheroseg-app/backend/segmentation/weights"):
         self.weights_path = Path(weights_path)
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.memory_monitor = GPUMemoryMonitor()
@@ -347,8 +347,8 @@ class BatchSizeOptimizer:
                 
         return results
         
-    def save_configuration(self, results: Dict[str, ModelOptimizationResult], 
-                          output_path: str = "/home/cvat/cell-segmentation-hub/backend/segmentation/config/batch_sizes.json"):
+    def save_configuration(self, results: Dict[str, ModelOptimizationResult],
+                          output_path: str = "/home/cvat/spheroseg-app/backend/segmentation/config/batch_sizes.json"):
         """Save optimization results to configuration file"""
         
         # Create config directory if it doesn't exist
@@ -409,9 +409,9 @@ def main():
     parser.add_argument("--models", nargs="+", 
                        choices=["hrnet", "resunet_small", "resunet_advanced"],
                        help="Models to optimize (default: all)")
-    parser.add_argument("--output", default="/home/cvat/cell-segmentation-hub/backend/segmentation/config/batch_sizes.json",
+    parser.add_argument("--output", default="/home/cvat/spheroseg-app/backend/segmentation/config/batch_sizes.json",
                        help="Output configuration file path")
-    parser.add_argument("--weights-path", default="/home/cvat/cell-segmentation-hub/backend/segmentation/weights",
+    parser.add_argument("--weights-path", default="/home/cvat/spheroseg-app/backend/segmentation/weights",
                        help="Path to model weights directory")
     
     args = parser.parse_args()

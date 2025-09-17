@@ -20,7 +20,7 @@ NC='\033[0m'
 # Databázové parametry
 DB_USER="${DB_USER:-spheroseg}"
 DB_PASSWORD="${DB_PASSWORD:?Error: DB_PASSWORD environment variable is required}"
-BACKUP_DIR="${BACKUP_DIR:-/home/cvat/cell-segmentation-hub/backups}"
+BACKUP_DIR="${BACKUP_DIR:-/home/cvat/spheroseg-app/backups}"
 
 # Funkce pro zobrazení nápovědy
 show_help() {

@@ -555,13 +555,29 @@ export default {
     sending: 'Enviando...',
     sendNewPassword: 'Enviar nueva contraseña',
     emailSent: 'Email enviado',
-    checkEmailForNewPassword: 'Revisa tu email para la nueva contraseña',
-    resetPasswordEmailSent: 'Email de restablecimiento de contraseña enviado',
-    resetPasswordError: 'Error al restablecer contraseña',
+    checkEmailForNewPassword:
+      'Revisa tu email para la nueva contraseña. La entrega del correo puede tardar hasta 10 minutos.',
+    resetPasswordEmailSent:
+      'Si el email existe, se ha enviado un enlace para restablecer la contraseña. La entrega del correo puede tardar hasta 10 minutos.',
+    resetPasswordError: 'Error al enviar email de restablecimiento',
     backToSignIn: 'Volver al inicio de sesión',
     didntReceiveEmail: '¿No recibiste el email?',
     rememberPassword: '¿Recordaste tu contraseña?',
     tryAgain: 'Intentar de nuevo',
+    // Reset Password page specific
+    enterNewPassword: 'Ingresa tu nueva contraseña',
+    newPassword: 'Nueva Contraseña',
+    confirmPassword: 'Confirmar contraseña',
+    confirmPasswordPlaceholder: 'Confirma tu contraseña',
+    passwordRequirements: 'La contraseña debe tener al menos 8 caracteres',
+    resettingPassword: 'Restableciendo contraseña...',
+    passwordResetSuccess: 'Restablecimiento de Contraseña Exitoso',
+    passwordResetSuccessMessage:
+      'Tu contraseña ha sido restablecida exitosamente. Ahora puedes iniciar sesión con tu nueva contraseña.',
+    invalidResetToken: 'Enlace de Restablecimiento Inválido',
+    invalidResetTokenMessage:
+      'Este enlace de restablecimiento de contraseña es inválido o ha expirado. Por favor solicita un nuevo restablecimiento de contraseña.',
+    requestNewReset: 'Solicitar Nuevo Restablecimiento',
   },
   profile: {
     title: 'Perfil',

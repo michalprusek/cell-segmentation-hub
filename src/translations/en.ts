@@ -749,9 +749,10 @@ export default {
     sending: 'Sending...',
     sendNewPassword: 'Send New Password',
     emailSent: 'Email Sent',
-    checkEmailForNewPassword: 'Check your email for new password',
+    checkEmailForNewPassword:
+      'Check your email for new password. Please note that email delivery may take up to 10 minutes.',
     resetPasswordEmailSent:
-      'If email exists, an email with new password was sent',
+      'If email exists, a password reset link has been sent. Email delivery may take up to 10 minutes.',
     resetPasswordError: 'Failed to send password reset email',
     backToSignIn: 'Back to Sign In',
     didntReceiveEmail: "Didn't receive email?",

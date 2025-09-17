@@ -5,8 +5,8 @@ set -e
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 AUTO_DEPLOY_SCRIPT="$SCRIPT_DIR/auto-deploy-production.sh"
-LOG_FILE="/home/cvat/cell-segmentation-hub/production-auto-deploy.log"
-PID_FILE="/home/cvat/cell-segmentation-hub/production-auto-deploy.pid"
+LOG_FILE="/home/cvat/spheroseg-app/production-auto-deploy.log"
+PID_FILE="/home/cvat/spheroseg-app/production-auto-deploy.pid"
 
 echo "🔴 Installing PRODUCTION auto-deploy..."
 echo "⚠️  WARNING: This will auto-deploy to PRODUCTION when main branch changes!"

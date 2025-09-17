@@ -25,4 +25,4 @@ services:
 networks:
   green-network:
     external: true
-    name: cell-segmentation-hub_green-network
+    name: spheroseg-app_green-network

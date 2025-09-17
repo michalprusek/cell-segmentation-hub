@@ -162,7 +162,7 @@ main() {
     check_memory
     
     # Detect active environment from nginx
-    if grep -q "staging-backend" "/home/cvat/cell-segmentation-hub/docker/nginx/nginx.prod.conf"; then
+    if grep -q "staging-backend" "/home/cvat/spheroseg-app/docker/nginx/nginx.prod.conf"; then
         ACTIVE_ENV="staging"
     else
         ACTIVE_ENV="production"

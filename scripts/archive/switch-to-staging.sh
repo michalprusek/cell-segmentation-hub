@@ -11,7 +11,7 @@ docker exec spheroseg-nginx cp /etc/nginx/nginx.conf /etc/nginx/nginx.conf.backu
 
 # Copy staging config to nginx container
 echo "📋 Applying staging nginx configuration..."
-docker cp /home/cvat/cell-segmentation-hub/backend/docker/nginx/nginx.staging.conf spheroseg-nginx:/etc/nginx/nginx.conf
+docker cp /home/cvat/spheroseg-app/backend/docker/nginx/nginx.staging.conf spheroseg-nginx:/etc/nginx/nginx.conf
 
 # Test nginx configuration
 echo "🧪 Testing nginx configuration..."

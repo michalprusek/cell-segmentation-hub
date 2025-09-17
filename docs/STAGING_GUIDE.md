@@ -37,7 +37,7 @@ export GRAFANA_ADMIN_PASSWORD="<grafana-password>"
 ### 2. File Structure
 
 ```
-cell-segmentation-hub/
+spheroseg-app/
 ├── .env.staging                 # Staging environment variables
 ├── docker-compose.staging.yml   # Staging Docker configuration
 ├── scripts/
@@ -56,8 +56,8 @@ cell-segmentation-hub/
 
 ```bash
 # Clone repository
-git clone https://github.com/michalprusek/cell-segmentation-hub.git
-cd cell-segmentation-hub
+git clone https://github.com/michalprusek/spheroseg-app.git
+cd spheroseg-app
 
 # Create required directories
 mkdir -p backend/uploads/staging/{images,thumbnails,temp}
@@ -267,5 +267,5 @@ docker-compose -f docker-compose.staging.yml up -d --scale staging-ml=2
 
 For issues or questions about staging deployment:
 
-- GitHub Issues: https://github.com/michalprusek/cell-segmentation-hub/issues
+- GitHub Issues: https://github.com/michalprusek/spheroseg-app/issues
 - Email: spheroseg@utia.cas.cz

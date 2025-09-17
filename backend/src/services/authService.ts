@@ -389,8 +389,8 @@ export async function requestPasswordReset(data: ResetPasswordRequestData): Prom
    */
 export async function resetPasswordWithToken(data: ResetPasswordConfirmData): Promise<{ message: string }> {
     try {
-      // Find user with non-expired reset token
-      const user = await prisma.user.findFirst({
+      // Find ALL users with non-expired reset tokens
+      const usersWithTokens = await prisma.user.findMany({
         where: {
           resetTokenExpiry: {
             gte: new Date() // Token must not be expired
@@ -401,15 +401,27 @@ export async function resetPasswordWithToken(data: ResetPasswordConfirmData): Pr
         }
       });
 
-      if (!user || !user.resetToken) {
+      if (!usersWithTokens || usersWithTokens.length === 0) {
         throw ApiError.badRequest('Neplatný nebo vypršený reset token');
       }
 
-      // Verify the token matches (compare against hashed version)
-      const isTokenValid = await verifyPassword(data.token, user.resetToken);
-      if (!isTokenValid) {
+      // Find the user whose token matches the provided token
+      let validUser = null;
+      for (const user of usersWithTokens) {
+        if (user.resetToken) {
+          const isTokenValid = await verifyPassword(data.token, user.resetToken);
+          if (isTokenValid) {
+            validUser = user;
+            break;
+          }
+        }
+      }
+
+      if (!validUser) {
         throw ApiError.badRequest('Neplatný nebo vypršený reset token');
       }
+
+      const user = validUser;
 
       // Hash the new password
       const hashedPassword = await hashPassword(data.newPassword);

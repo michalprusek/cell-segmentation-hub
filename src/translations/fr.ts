@@ -554,15 +554,29 @@ export default {
     sendNewPassword: 'Envoyer nouveau mot de passe',
     emailSent: 'Email envoyé',
     checkEmailForNewPassword:
-      'Vérifiez votre email pour des instructions de sécurité',
+      "Vérifiez votre email pour des instructions de sécurité. La livraison de l'email peut prendre jusqu'à 10 minutes.",
     resetPasswordEmailSent:
-      'Email de réinitialisation envoyé si le compte existe',
-    resetPasswordError: 'Erreur lors de la réinitialisation du mot de passe',
+      "Email de réinitialisation envoyé si le compte existe. La livraison de l'email peut prendre jusqu'à 10 minutes.",
+    resetPasswordError: "Erreur lors de l'envoi de l'email de réinitialisation",
     backToSignIn: 'Retour à la connexion',
     didntReceiveEmail: "Vous n'avez pas reçu l'email ?",
     rememberPassword: 'Vous vous souvenez de votre mot de passe ?',
     redirectingToSignIn: 'Redirecting to sign-in...',
     tryAgain: 'Réessayer',
+    // Reset Password page specific
+    enterNewPassword: 'Entrez votre nouveau mot de passe',
+    newPassword: 'Nouveau mot de passe',
+    confirmPassword: 'Confirmer le mot de passe',
+    confirmPasswordPlaceholder: 'Confirmez votre mot de passe',
+    passwordRequirements: 'Le mot de passe doit contenir au moins 8 caractères',
+    resettingPassword: 'Réinitialisation du mot de passe...',
+    passwordResetSuccess: 'Réinitialisation du mot de passe réussie',
+    passwordResetSuccessMessage:
+      'Votre mot de passe a été réinitialisé avec succès. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.',
+    invalidResetToken: 'Lien de réinitialisation invalide',
+    invalidResetTokenMessage:
+      'Ce lien de réinitialisation de mot de passe est invalide ou a expiré. Veuillez demander une nouvelle réinitialisation de mot de passe.',
+    requestNewReset: 'Demander une nouvelle réinitialisation',
   },
   profile: {
     title: 'Profil',

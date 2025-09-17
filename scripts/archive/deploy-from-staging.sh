@@ -16,7 +16,7 @@ echo -e "${GREEN}    SpheroSeg - Staging to Production Deployment${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
 
 # Check if running on production server
-if [ ! -f "/home/cvat/cell-segmentation-hub/docker-compose.prod.yml" ]; then
+if [ ! -f "/home/cvat/spheroseg-app/docker-compose.prod.yml" ]; then
     echo -e "${RED}Error: This script must be run on the production server${NC}"
     exit 1
 fi
@@ -69,14 +69,14 @@ echo -e "\n${YELLOW}Step 3: Preparing staging images for production${NC}"
 echo "Tagging staging images as production..."
 
 # Tag staging images as production
-docker tag cell-segmentation-hub-frontend:latest cell-segmentation-hub-frontend:production-$(date +%Y%m%d-%H%M%S)
-docker tag cell-segmentation-hub-backend:latest cell-segmentation-hub-backend:production-$(date +%Y%m%d-%H%M%S)
-docker tag cell-segmentation-hub-ml-service:latest cell-segmentation-hub-ml-service:production-$(date +%Y%m%d-%H%M%S)
+docker tag spheroseg-app-frontend:latest spheroseg-app-frontend:production-$(date +%Y%m%d-%H%M%S)
+docker tag spheroseg-app-backend:latest spheroseg-app-backend:production-$(date +%Y%m%d-%H%M%S)
+docker tag spheroseg-app-ml-service:latest spheroseg-app-ml-service:production-$(date +%Y%m%d-%H%M%S)
 
 # Keep current production as rollback
-docker tag cell-segmentation-hub-frontend:latest cell-segmentation-hub-frontend:rollback
-docker tag cell-segmentation-hub-backend:latest cell-segmentation-hub-backend:rollback
-docker tag cell-segmentation-hub-ml-service:latest cell-segmentation-hub-ml-service:rollback
+docker tag spheroseg-app-frontend:latest spheroseg-app-frontend:rollback
+docker tag spheroseg-app-backend:latest spheroseg-app-backend:rollback
+docker tag spheroseg-app-ml-service:latest spheroseg-app-ml-service:rollback
 
 echo -e "${GREEN}✓ Images tagged for deployment${NC}"
 
@@ -157,9 +157,9 @@ else
     
     if confirm "Rollback to previous version?"; then
         echo "Rolling back..."
-        docker tag cell-segmentation-hub-frontend:rollback cell-segmentation-hub-frontend:latest
-        docker tag cell-segmentation-hub-backend:rollback cell-segmentation-hub-backend:latest
-        docker tag cell-segmentation-hub-ml-service:rollback cell-segmentation-hub-ml-service:latest
+        docker tag spheroseg-app-frontend:rollback spheroseg-app-frontend:latest
+        docker tag spheroseg-app-backend:rollback spheroseg-app-backend:latest
+        docker tag spheroseg-app-ml-service:rollback spheroseg-app-ml-service:latest
         
         docker compose -f docker-compose.prod.yml up -d --force-recreate
         echo -e "${YELLOW}Rolled back to previous version${NC}"

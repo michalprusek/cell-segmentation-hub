@@ -651,8 +651,8 @@ export FROM_EMAIL=spheroseg@utia.cas.cz
 **Složky musí mít správná oprávnění (UID 1001):**
 
 ```bash
-sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/blue/
-sudo chown -R 1001:1001 /home/cvat/cell-segmentation-hub/backend/uploads/green/
+sudo chown -R 1001:1001 /home/cvat/spheroseg-app/backend/uploads/blue/
+sudo chown -R 1001:1001 /home/cvat/spheroseg-app/backend/uploads/green/
 ```
 
 **Podsložky MUSÍ existovat:**

@@ -27,7 +27,7 @@
 
 ### 1. Fixed Validation Schema Mismatch
 
-**File**: `/home/cvat/cell-segmentation-hub/backend/src/types/validation.ts`
+**File**: `/home/cvat/spheroseg-app/backend/src/types/validation.ts`
 
 **Changed**:
 
@@ -62,7 +62,7 @@ export const segmentationModelSchema = z.enum(
 
 ### 2. Enhanced Validation Error Logging
 
-**File**: `/home/cvat/cell-segmentation-hub/backend/src/middleware/validation.ts`
+**File**: `/home/cvat/spheroseg-app/backend/src/middleware/validation.ts`
 
 **Added comprehensive logging** to capture validation failures:
 

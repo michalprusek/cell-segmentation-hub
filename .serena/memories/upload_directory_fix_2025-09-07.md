@@ -44,13 +44,13 @@ Instead of moving files (which had permission issues), updated Docker volume map
 
 ### Scripts Created
 
-**`/home/cvat/cell-segmentation-hub/scripts/fix-upload-safe.sh`**
+**`/home/cvat/spheroseg-app/scripts/fix-upload-safe.sh`**
 
 - Safe fix that updates Docker volume mappings
 - Preserves existing file structure
 - Creates backup of docker-compose file
 
-**`/home/cvat/cell-segmentation-hub/backend/scripts/init-uploads.sh`**
+**`/home/cvat/spheroseg-app/backend/scripts/init-uploads.sh`**
 
 - Container initialization script
 - Ensures proper directory structure inside container
@@ -78,7 +78,7 @@ curl -f http://localhost:4001/health
 ### Host System
 
 ```
-/home/cvat/cell-segmentation-hub/backend/uploads/
+/home/cvat/spheroseg-app/backend/uploads/
 ├── blue/
 │   ├── blue/                    ← Files are here
 │   │   ├── [user-folders]/

@@ -17,7 +17,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-PROJECT_ROOT="/home/cvat/cell-segmentation-hub"
+PROJECT_ROOT="/home/cvat/spheroseg-app"
 BACKEND_DIR="$PROJECT_ROOT/backend"
 UPLOADS_DIR="$BACKEND_DIR/uploads"
 BLUE_DIR="$UPLOADS_DIR/blue"
@@ -97,7 +97,7 @@ ${GREEN}=== Fix Applied Successfully ===${NC}
 ${YELLOW}Next Steps:${NC}
 
 1. Stop the current Blue environment:
-   cd /home/cvat/cell-segmentation-hub
+   cd /home/cvat/spheroseg-app
    docker-compose -f docker-compose.blue.yml down
 
 2. Start the Blue environment with new mapping:
