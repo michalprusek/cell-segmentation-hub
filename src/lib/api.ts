@@ -913,6 +913,138 @@ class ApiClient {
     files: File[],
     onProgress?: (progressPercent: number) => void
   ): Promise<ProjectImage[]> {
+    // Chunked upload configuration optimized for large batches (up to 2000 files)
+    const CHUNK_SIZE = 50; // Increased chunk size (50 files × 1.5MB avg = 75MB per chunk)
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000; // Base delay for exponential backoff
+
+    // If files are within single chunk limit, use original implementation
+    if (files.length <= CHUNK_SIZE) {
+      return this.uploadSingleChunk(projectId, files, onProgress);
+    }
+
+    // Implement chunked upload for larger batches
+    console.log(
+      `[${new Date().toISOString()}] [INFO] Using chunked upload for ${files.length} files`
+    );
+
+    const chunks: File[][] = [];
+    for (let i = 0; i < files.length; i += CHUNK_SIZE) {
+      chunks.push(files.slice(i, Math.min(i + CHUNK_SIZE, files.length)));
+    }
+
+    console.log(
+      `[${new Date().toISOString()}] [INFO] Split ${files.length} files into ${chunks.length} chunks`
+    );
+
+    const results: ProjectImage[] = [];
+    let totalProcessed = 0;
+    const failedChunks: {
+      chunkIndex: number;
+      fileCount: number;
+      error: string;
+    }[] = [];
+
+    // Process chunks sequentially to avoid overwhelming the server
+    for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+      const chunk = chunks[chunkIndex];
+      let retryCount = 0;
+      let chunkSuccess = false;
+      let lastError: Error | null = null;
+
+      while (retryCount < MAX_RETRIES && !chunkSuccess) {
+        try {
+          console.log(
+            `[${new Date().toISOString()}] [INFO] Uploading chunk ${chunkIndex + 1}/${chunks.length} (${chunk.length} files)`
+          );
+
+          const chunkResults = await this.uploadSingleChunk(
+            projectId,
+            chunk,
+            chunkProgress => {
+              // Calculate overall progress across all chunks
+              const baseProgress = (totalProcessed / files.length) * 100;
+              const chunkContribution =
+                (chunk.length / files.length) * chunkProgress;
+              const overallProgress = Math.round(
+                baseProgress + chunkContribution
+              );
+
+              if (onProgress) {
+                onProgress(overallProgress);
+              }
+            }
+          );
+
+          results.push(...chunkResults);
+          totalProcessed += chunk.length;
+          chunkSuccess = true;
+
+          console.log(
+            `[${new Date().toISOString()}] [INFO] Chunk ${chunkIndex + 1} uploaded successfully`
+          );
+        } catch (error) {
+          lastError = error as Error;
+          retryCount++;
+
+          console.warn(
+            `[${new Date().toISOString()}] [WARN] Chunk ${chunkIndex + 1} upload failed (attempt ${retryCount}/${MAX_RETRIES}): ${lastError.message}`
+          );
+
+          if (retryCount < MAX_RETRIES) {
+            // Exponential backoff with jitter
+            const delay =
+              RETRY_DELAY * Math.pow(2, retryCount - 1) + Math.random() * 1000;
+            console.log(
+              `[${new Date().toISOString()}] [INFO] Retrying chunk ${chunkIndex + 1} after ${Math.round(delay)}ms`
+            );
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+      }
+
+      if (!chunkSuccess && lastError) {
+        failedChunks.push({
+          chunkIndex,
+          fileCount: chunk.length,
+          error: lastError.message,
+        });
+        console.error(
+          `[${new Date().toISOString()}] [ERROR] Chunk ${chunkIndex + 1} failed after ${MAX_RETRIES} attempts`
+        );
+      }
+    }
+
+    // Report results
+    console.log(
+      `[${new Date().toISOString()}] [INFO] Chunked upload completed: ${results.length} successful, ${files.length - results.length} failed`
+    );
+
+    if (failedChunks.length > 0) {
+      console.warn(
+        `[${new Date().toISOString()}] [WARN] Failed chunks:`,
+        failedChunks
+      );
+      const totalFailed = failedChunks.reduce(
+        (sum, chunk) => sum + chunk.fileCount,
+        0
+      );
+      console.warn(
+        `[${new Date().toISOString()}] [WARN] ${failedChunks.length} chunks failed, affecting ${totalFailed} files`
+      );
+    }
+
+    return results;
+  }
+
+  /**
+   * Helper method to upload a single chunk of files
+   */
+  private async uploadSingleChunk(
+    projectId: string,
+    files: File[],
+    onProgress?: (progressPercent: number) => void
+  ): Promise<ProjectImage[]> {
     const formData = new FormData();
     files.forEach(file => {
       formData.append('images', file);
@@ -925,7 +1057,7 @@ class ApiClient {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 300000, // 5 minutes for file uploads (increased from 60s)
+        timeout: 300000, // 5 minutes for file uploads
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(

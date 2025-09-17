@@ -104,9 +104,9 @@ if (config.RATE_LIMIT_ENABLED) {
   logger.warn('⚠️  Rate limiting is disabled');
 }
 
-// Body parsing middleware
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// Body parsing middleware - increased for large batch uploads (up to 2000 files)
+app.use(express.json({ limit: '200mb' }));
+app.use(express.urlencoded({ extended: true, limit: '200mb' }));
 
 // Distributed tracing middleware (MUST be early in the middleware stack)
 // app.use(createContextPropagationMiddleware()); // Temporarily disabled

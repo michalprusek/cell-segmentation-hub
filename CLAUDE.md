@@ -867,6 +867,36 @@ ALERT_EMAIL_RECIPIENTS=ops@example.com
 - **ML Service Health**: GET /api/ml/health
 - **Monitoring Health**: GET /metrics
 
+## File Upload Limits Configuration (KRITICKÉ!)
+
+⚠️ **DŮLEŽITÉ**: Při nastavování limitů pro nahrávání souborů je nutné dodržet správnou hierarchii limitů:
+
+### Hierarchie limitů (od nejvyššího):
+
+1. **Nginx** (`client_max_body_size`): 300MB - MUSÍ být nejvyšší!
+2. **Express** (body parser): 200MB - musí být menší než nginx
+3. **Multer** (per chunk): 100 souborů × 1.5MB avg = 150MB
+
+### Aktuální konfigurace (podporuje až 2000 souborů):
+
+- **Nginx**: `client_max_body_size 300M` v `/docker/nginx/nginx.prod.conf`
+- **Express**: `limit: '200mb'` v `/backend/src/server.ts`
+- **Multer**: `MAX_FILES_PER_CHUNK=100` v `/backend/src/middleware/upload.ts`
+- **Frontend chunking**: 50 souborů per chunk v `/src/lib/api.ts`
+
+### Proč je to důležité:
+
+- Pokud nginx limit < Express limit → nginx odmítne požadavek s HTTP 413 dřív než se dostane k Express
+- Frontend automaticky rozdělí soubory do chunků po 50 souborech
+- Každý chunk má retry logiku s exponential backoff
+
+### Při změně limitů:
+
+1. VŽDY nejdřív zvyš nginx limit
+2. Pak upravit Express limit (musí být menší než nginx)
+3. Nakonec upravit Multer a frontend chunking
+4. Restartovat kontejnery: `docker restart blue-backend nginx-main`
+
 ## Session Context
 
 This codebase has been enhanced with 25 comprehensive improvements (2025-08-26):

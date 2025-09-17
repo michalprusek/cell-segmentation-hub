@@ -9,13 +9,16 @@ import { logger } from '../utils/logger';
 /**
  * Multer configuration for file uploads
  */
+// Configurable maximum files per upload chunk
+const MAX_FILES_PER_CHUNK = parseInt(process.env.MAX_FILES_PER_CHUNK || '100', 10);
+
 const upload = multer({
   storage: multer.memoryStorage(), // Store files in memory
   limits: {
     fileSize: MAX_FILE_SIZE,
-    files: 20, // Maximum 20 files per request
-    fields: 5, // Maximum 5 non-file fields
-    fieldSize: 1024 // 1KB per field
+    files: MAX_FILES_PER_CHUNK, // Increased for chunked uploads
+    fields: 10, // Increased for additional metadata
+    fieldSize: 2048 // 2KB per field
   },
   fileFilter: (req, file, cb) => {
     // Check MIME type
@@ -49,7 +52,7 @@ const upload = multer({
 /**
  * Middleware for handling multiple file uploads
  */
-export const uploadImages = upload.array('images', 20);
+export const uploadImages = upload.array('images', MAX_FILES_PER_CHUNK);
 
 /**
  * Middleware for handling single file upload
@@ -77,7 +80,7 @@ export const handleUploadError = (
         ResponseHelper.validationError(res, `Soubor je příliš velký. Maximální velikost: ${MAX_FILE_SIZE / (1024 * 1024)}MB`);
         return;
       case 'LIMIT_FILE_COUNT':
-        ResponseHelper.validationError(res, 'Příliš mnoho souborů. Maximálně lze nahrát 20 souborů najednou');
+        ResponseHelper.validationError(res, `Příliš mnoho souborů. Maximálně lze nahrát ${MAX_FILES_PER_CHUNK} souborů najednou`);
         return;
       case 'LIMIT_UNEXPECTED_FILE':
         ResponseHelper.validationError(res, `Neočekávané pole souboru: ${error.field}`);

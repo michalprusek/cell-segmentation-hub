@@ -4,7 +4,20 @@ import react from '@vitejs/plugin-react-swc';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      jsxRuntime: 'automatic',
+      jsxImportSource: 'react',
+      // Force development mode for tests
+      development: true,
+    }),
+  ],
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('test'),
+    'import.meta.env.DEV': true,
+    'import.meta.env.PROD': false,
+  },
+  mode: 'test',
   test: {
     globals: true,
     environment: 'jsdom',

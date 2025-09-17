@@ -9,12 +9,10 @@ services:
       - "443:443"
     volumes:
       - ./docker/nginx/nginx.prod.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
       - ./certbot/www:/var/www/certbot:ro
-    depends_on:
-      - nginx-green
     networks:
-      - green-network
+      - blue-network
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
@@ -23,6 +21,6 @@ services:
       retries: 3
 
 networks:
-  green-network:
+  blue-network:
     external: true
-    name: spheroseg-app_green-network
+    name: spheroseg-blue

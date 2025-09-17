@@ -1,6 +1,13 @@
 import '@testing-library/jest-dom';
 import { vi } from 'vitest';
 
+// CRITICAL: Set NODE_ENV to 'test' BEFORE any React imports to enable development mode
+// This fixes "act(...) is not supported in production builds" and "jsxDEV is not a function" errors
+process.env.NODE_ENV = 'test';
+
+// Import React in development mode to ensure act() and jsxDEV are available
+import React from 'react';
+
 // Set required environment variables for tests
 process.env.VITE_API_URL = 'http://localhost:3001/api';
 process.env.VITE_ML_SERVICE_URL = 'http://localhost:8000';
