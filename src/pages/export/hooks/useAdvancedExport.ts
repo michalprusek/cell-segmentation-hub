@@ -7,6 +7,7 @@ import {
   downloadFromResponse,
   canDownloadLargeFiles,
 } from '@/lib/downloadUtils';
+import ExportStateManager from '@/lib/exportStateManager';
 
 export interface ExportOptions {
   includeOriginalImages?: boolean;
@@ -69,6 +70,129 @@ export const useAdvancedExport = (projectId: string) => {
 
   const { socket } = useWebSocket();
 
+  // Check resumed export status from server - defined early to avoid dependency issues
+  const checkResumedExportStatus = useCallback(
+    async (jobId: string) => {
+      try {
+        const response = await apiClient.get(
+          `/projects/${projectId}/export/${jobId}/status`
+        );
+        const status = response.data;
+
+        if (status.status === 'completed') {
+          setCurrentJob(prev =>
+            prev ? { ...prev, status: 'completed' } : null
+          );
+          setExportStatus('Export completed! Starting download...');
+          setIsExporting(false);
+          setCompletedJobId(jobId);
+        } else if (
+          status.status === 'failed' ||
+          status.status === 'cancelled'
+        ) {
+          setCurrentJob(prev =>
+            prev
+              ? { ...prev, status: status.status, message: status.message }
+              : null
+          );
+          setExportStatus(
+            `Export ${status.status}: ${status.message || 'Unknown error'}`
+          );
+          setIsExporting(false);
+          ExportStateManager.clearExportState(projectId);
+        } else {
+          // Still processing, continue monitoring
+          setExportProgress(status.progress || 0);
+          setExportStatus(`Processing... ${Math.round(status.progress || 0)}%`);
+          // Re-establish monitoring - WebSocket will auto-reconnect
+          setCurrentJob({
+            id: jobId,
+            status: 'processing',
+            progress: status.progress || 0,
+          });
+        }
+      } catch (error) {
+        logger.error('Failed to check resumed export status:', error);
+        setIsExporting(false);
+        ExportStateManager.clearExportState(projectId);
+        setExportStatus('Failed to resume export monitoring');
+      }
+    },
+    [projectId]
+  );
+
+  // Initialize from persisted state on mount
+  useEffect(() => {
+    if (!projectId) return;
+
+    const persistedState = ExportStateManager.getExportState(projectId);
+    if (persistedState) {
+      logger.info('Restoring export state from localStorage', persistedState);
+
+      setCurrentJob({
+        id: persistedState.jobId,
+        status:
+          persistedState.status === 'downloading' ? 'completed' : 'processing',
+        progress: persistedState.progress,
+      });
+
+      if (
+        persistedState.status === 'exporting' ||
+        persistedState.status === 'processing'
+      ) {
+        setIsExporting(true);
+        setExportProgress(persistedState.progress);
+        setExportStatus(
+          persistedState.exportStatus ||
+            `Processing... ${Math.round(persistedState.progress)}%`
+        );
+
+        // Check current status from server
+        checkResumedExportStatus(persistedState.jobId);
+      } else if (persistedState.status === 'downloading') {
+        setIsDownloading(true);
+        setCompletedJobId(persistedState.jobId);
+        setExportStatus('Download ready');
+      }
+    }
+  }, [projectId, checkResumedExportStatus]);
+
+  // Persist state changes to localStorage
+  useEffect(() => {
+    if (!projectId) return;
+
+    if (isExporting && currentJob) {
+      ExportStateManager.saveExportState(projectId, {
+        projectId,
+        jobId: currentJob.id,
+        status: 'exporting',
+        startedAt: Date.now(),
+        progress: exportProgress,
+        exportStatus: exportStatus,
+      });
+    } else if (isDownloading && completedJobId) {
+      ExportStateManager.saveExportState(projectId, {
+        projectId,
+        jobId: completedJobId,
+        status: 'downloading',
+        startedAt: Date.now(),
+        progress: 100,
+        exportStatus: 'Download ready',
+      });
+    } else if (!isExporting && !isDownloading) {
+      // Clear state when neither exporting nor downloading
+      ExportStateManager.clearExportState(projectId);
+    }
+  }, [
+    isExporting,
+    isDownloading,
+    currentJob,
+    completedJobId,
+    exportProgress,
+    exportStatus,
+    projectId,
+  ]);
+
   // Cleanup blob URLs and polling interval on unmount
   useEffect(() => {
     return () => {
@@ -125,6 +249,8 @@ export const useAdvancedExport = (projectId: string) => {
         );
         setExportStatus(`Export failed: ${data.error}`);
         setIsExporting(false);
+        // Clear persisted state on failure
+        ExportStateManager.clearExportState(projectId);
       }
     };
 
@@ -137,7 +263,7 @@ export const useAdvancedExport = (projectId: string) => {
       socket.off('export:completed', handleCompleted);
       socket.off('export:failed', handleFailed);
     };
-  }, [socket, currentJob]);
+  }, [socket, currentJob, projectId]);
 
   // Fallback polling mechanism when WebSocket is not connected
   useEffect(() => {

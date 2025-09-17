@@ -19,6 +19,7 @@ import ErrorBoundary from '@/components/ErrorBoundary';
 import { ToastEventProvider } from '@/components/AuthToastProvider';
 import { toast } from 'sonner';
 import PageLoadingFallback from '@/components/PageLoadingFallback';
+import ExportStateManager from '@/lib/exportStateManager';
 
 // Enhanced lazy load with better error handling and displayName support
 const Index = createLazyComponent(() => import('./pages/Index'), 'Index');
@@ -91,6 +92,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Initialize export state manager
+ExportStateManager.initialize();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
