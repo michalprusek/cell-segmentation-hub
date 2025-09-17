@@ -84,7 +84,7 @@ docker exec blue-backend sh -c "nslookup mail.utia.cas.cz"
 
 ### Test Script Location
 
-`/home/cvat/spheroseg-app/backend/test-docker-fix.cjs`
+`/home/cvat/cell-segmentation-hub/backend/test-docker-fix.cjs`
 
 ## Important Notes
 
@@ -104,7 +104,7 @@ After applying the fix:
 
 ## Related Files
 
-- `/home/cvat/spheroseg-app/.env.blue.production`
-- `/home/cvat/spheroseg-app/backend/src/services/emailService.ts`
-- `/home/cvat/spheroseg-app/backend/src/services/emailRetryService.ts`
-- `/home/cvat/spheroseg-app/docker-compose.blue.yml`
+- `/home/cvat/cell-segmentation-hub/.env.blue.production`
+- `/home/cvat/cell-segmentation-hub/backend/src/services/emailService.ts`
+- `/home/cvat/cell-segmentation-hub/backend/src/services/emailRetryService.ts`
+- `/home/cvat/cell-segmentation-hub/docker-compose.blue.yml`

@@ -119,8 +119,8 @@ curl -X POST http://localhost:3001/api/auth/request-password-reset \
 
 ## Files Modified
 
-1. `/home/cvat/spheroseg-app/.env` - Fixed configuration
-2. `/home/cvat/spheroseg-app/backend/src/services/emailRetryService.ts` - Improved queue processing
+1. `/home/cvat/cell-segmentation-hub/.env` - Fixed configuration
+2. `/home/cvat/cell-segmentation-hub/backend/src/services/emailRetryService.ts` - Improved queue processing
 
 ## Deployment Steps
 

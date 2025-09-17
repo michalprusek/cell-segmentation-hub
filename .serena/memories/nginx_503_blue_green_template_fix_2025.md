@@ -37,7 +37,7 @@ location ~ ^/api/segmentation/images/[^/]+/results$ {
 
 ### Environment Switching Script
 
-Location: `/home/cvat/spheroseg-app/scripts/switch-environment.sh`
+Location: `/home/cvat/cell-segmentation-hub/scripts/switch-environment.sh`
 
 Key processing line:
 
@@ -72,7 +72,7 @@ nginx.active.conf          # Symlink to active environment
 # Start nginx-main container
 docker run -d --name nginx-main \
   --network spheroseg-blue \
-  -v /home/cvat/spheroseg-app/docker/nginx/nginx.active.conf:/etc/nginx/conf.d/default.conf:ro \
+  -v /home/cvat/cell-segmentation-hub/docker/nginx/nginx.active.conf:/etc/nginx/conf.d/default.conf:ro \
   -v /etc/letsencrypt:/etc/letsencrypt:ro \
   -p 80:4080 -p 443:4443 \
   nginx:alpine

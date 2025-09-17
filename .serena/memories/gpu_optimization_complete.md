@@ -56,9 +56,9 @@ environment:
 
 ## Files Modified
 
-- `/home/cvat/spheroseg-app/docker-compose.green.yml` - GPU support
-- `/home/cvat/spheroseg-app/docker/ml-gpu.Dockerfile` - CUDA base image
-- `/home/cvat/spheroseg-app/backend/segmentation/config/batch_sizes.json` - Optimized batch sizes
+- `/home/cvat/cell-segmentation-hub/docker-compose.green.yml` - GPU support
+- `/home/cvat/cell-segmentation-hub/docker/ml-gpu.Dockerfile` - CUDA base image
+- `/home/cvat/cell-segmentation-hub/backend/segmentation/config/batch_sizes.json` - Optimized batch sizes
 - All translation files (6 languages) - Updated with GPU timing
 
 ## Testing Scripts Created

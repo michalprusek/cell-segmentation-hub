@@ -513,7 +513,6 @@ export default {
     // Reset Password page specific
     enterNewPassword: '请输入您的新密码',
     newPassword: '新密码',
-    confirmPassword: '确认密码',
     confirmPasswordPlaceholder: '确认您的密码',
     passwordRequirements: '密码长度至少为8个字符',
     resettingPassword: '重置密码中...',

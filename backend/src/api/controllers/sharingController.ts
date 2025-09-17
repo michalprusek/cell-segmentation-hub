@@ -270,7 +270,7 @@ export const getSharedProjects = asyncHandler(async (req: Request, res: Response
     
     // Debug log to check data structure
     if (shares.length > 0) {
-      logger.info('First share data structure:', {
+      logger.info('First share data structure:', 'SharingController', {
         hasProject: !!shares[0].project,
         hasUser: !!shares[0].project?.user,
         projectUserId: shares[0].project?.user?.id,

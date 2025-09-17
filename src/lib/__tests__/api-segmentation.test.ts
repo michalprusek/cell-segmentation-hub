@@ -1055,7 +1055,7 @@ describe('API Client - Segmentation & Queue Methods', () => {
         });
 
         expect(mockAxiosInstance.get).toHaveBeenCalledWith(
-          '/projects/proj1/images-with-thumbnails',
+          '/projects/proj1/images/with-thumbnails',
           {
             params: {
               lod: 'medium',
@@ -1083,7 +1083,7 @@ describe('API Client - Segmentation & Queue Methods', () => {
         await apiClient.getProjectImagesWithThumbnails('proj1');
 
         expect(mockAxiosInstance.get).toHaveBeenCalledWith(
-          '/projects/proj1/images-with-thumbnails',
+          '/projects/proj1/images/with-thumbnails',
           {
             params: {
               lod: 'low',

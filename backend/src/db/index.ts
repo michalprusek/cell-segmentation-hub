@@ -3,7 +3,7 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { prismaPool } from './prismaPool';
 import { databaseMetrics } from '../monitoring/databaseMetrics';
-import { logDatabasePoolConfig } from '../config/database.ts';
+import { logDatabasePoolConfig } from '../config/database';
 import { getPrismaConfig } from './prismaConfig';
 
 // Create a global variable to store Prisma client
@@ -58,7 +58,7 @@ export const initializeDatabase = async (): Promise<PrismaClient> => {
       logger.error(`Database connection attempt ${attempt}/${maxRetries} failed:`, error as Error, 'Database');
       
       if (attempt === maxRetries) {
-        logger.error('❌ All database connection attempts failed', 'Database');
+        logger.error('❌ All database connection attempts failed', undefined, 'Database');
         // Don't throw - let the app run without database
         logger.warn('⚠️ Running without database connection - most features will not work!', 'Database');
         return prisma;
@@ -131,13 +131,13 @@ export const transaction = async <T>(
 // Export enhanced database utilities
 export { prismaPool } from './prismaPool';
 export { databaseMetrics } from '../monitoring/databaseMetrics';
-export { databaseOptimization } from '../utils/databaseOptimization.ts';
-export { 
+export { databaseOptimization } from '../utils/databaseOptimization';
+export {
   getDatabasePoolConfig,
   getRetryConfig,
   getHealthCheckConfig,
   getPerformanceBaselines
-} from '../config/database.ts';
+} from '../config/database';
 
 // Enhanced transaction and query helpers
 export const executeQuery = async <T>(

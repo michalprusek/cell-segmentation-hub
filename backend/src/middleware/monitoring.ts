@@ -102,7 +102,7 @@ export function createMonitoringMiddleware(): (req: Request, res: Response, next
       if (res.statusCode >= 400) {
         const userType = (req as any).user ? 'authenticated' : 'anonymous';
         const errorType = res.statusCode >= 500 ? 'server_error' : 'client_error';
-        trackApiError(route, errorType, status, userType);
+        trackApiError(route, errorType, res.statusCode);
       }
 
       // Track feature usage for authenticated users
@@ -237,7 +237,10 @@ export function initializeMetricsCollection(): void {
     clearInterval(metricsCollectionInterval);
   }
   
-  metricsCollectionInterval = initializeBusinessMetricsCollection(5); // 5-minute intervals
+  initializeBusinessMetricsCollection(); // Initialize metrics collection
+  metricsCollectionInterval = setInterval(() => {
+    // Periodic metrics collection could go here in the future
+  }, 5 * 60 * 1000); // 5-minute intervals
   logger.info('Business metrics collection initialized');
 }
 

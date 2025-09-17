@@ -440,7 +440,7 @@ class ApiClient {
       throw new Error('No refresh token available');
     }
 
-    const response = await this.instance.post('/auth/refresh', {
+    const response = await this.instance.post('/auth/refresh-token', {
       refreshToken: this.refreshToken,
     });
 
@@ -841,7 +841,7 @@ class ApiClient {
     };
   }> {
     const response = await this.instance.get(
-      `/projects/${projectId}/images-with-thumbnails`,
+      `/projects/${projectId}/images/with-thumbnails`,
       {
         params: {
           lod: 'low',

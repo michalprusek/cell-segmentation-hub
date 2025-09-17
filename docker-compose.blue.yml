@@ -56,15 +56,17 @@ services:
       - ALLOWED_ORIGINS=http://localhost:4000,http://localhost:4080
       - WS_ALLOWED_ORIGINS=http://localhost:4000,http://localhost:4080
       - FRONTEND_URL=https://spherosegapp.utia.cas.cz
-      # Email configuration - UTIA SMTP
+      # Email configuration - UTIA SMTP (Port 465 with special handling)
       - EMAIL_SERVICE=smtp
       - SMTP_HOST=mail.utia.cas.cz
-      - SMTP_PORT=25
-      - SMTP_SECURE=false
-      - SMTP_AUTH=false
+      - SMTP_PORT=465
+      - SMTP_SECURE=true
+      - SMTP_AUTH=true
+      - SMTP_USER=prusek@utia.cas.cz
+      - SMTP_PASS=M1i2c3h4a5l6
       - SMTP_REQUIRE_TLS=false
-      - SMTP_IGNORE_TLS=true
-      - SKIP_EMAIL_SEND=true  # TEMPORARY: Skip email sending due to SMTP timeout
+      - SMTP_IGNORE_TLS=false
+      - SKIP_EMAIL_SEND=false  # Email sending enabled with port 465 fixes
       - UPLOAD_DIR=/app/uploads
       - ENABLE_TRACING=false
       - ALLOWED_ORIGINS=http://localhost:4000,http://localhost:4080,https://spherosegapp.utia.cas.cz

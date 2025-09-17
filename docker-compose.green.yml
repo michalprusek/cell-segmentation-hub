@@ -124,20 +124,12 @@ services:
       - green-network
     deploy:
       resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
         limits:
           memory: 8G
     environment:
       - PYTHONUNBUFFERED=1
       - ENVIRONMENT=production
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - CUDA_DEVICE_ORDER=PCI_BUS_ID
-      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:128
+      - USE_CPU_ONLY=true
     volumes:
       - ./backend/segmentation/weights:/app/weights
       - ./backend/uploads/green:/app/uploads

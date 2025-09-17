@@ -479,7 +479,7 @@ export class ImageController {
 
   /**
    * Get project images with optimized thumbnail data for cards
-   * GET /api/projects/:projectId/images-with-thumbnails
+   * GET /api/projects/:projectId/images/with-thumbnails
    */
   getProjectImagesWithThumbnails = async (req: Request, res: Response): Promise<void> => {
     try {

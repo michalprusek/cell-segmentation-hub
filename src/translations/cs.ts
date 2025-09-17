@@ -768,7 +768,6 @@ export default {
     // Reset Password page specific
     enterNewPassword: 'Zadejte své nové heslo',
     newPassword: 'Nové heslo',
-    confirmPassword: 'Potvrdit heslo',
     confirmPasswordPlaceholder: 'Potvrďte své heslo',
     passwordRequirements: 'Heslo musí být dlouhé alespoň 8 znaků',
     resettingPassword: 'Resetování hesla...',

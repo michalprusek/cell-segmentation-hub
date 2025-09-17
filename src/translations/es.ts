@@ -567,7 +567,6 @@ export default {
     // Reset Password page specific
     enterNewPassword: 'Ingresa tu nueva contraseña',
     newPassword: 'Nueva Contraseña',
-    confirmPassword: 'Confirmar contraseña',
     confirmPasswordPlaceholder: 'Confirma tu contraseña',
     passwordRequirements: 'La contraseña debe tener al menos 8 caracteres',
     resettingPassword: 'Restableciendo contraseña...',

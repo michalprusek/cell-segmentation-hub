@@ -25,7 +25,16 @@ function escapeHtml(str: string | null | undefined): string {
 
 export interface ShareWithDetails extends ProjectShare {
   sharedWith?: User;
-  project: Project;
+  project: Project & {
+    user: Pick<User, 'id' | 'email'>;
+    _count?: { images: number };
+    images?: Array<{
+      id: string;
+      name: string;
+      thumbnailPath: string | null;
+      originalPath: string;
+    }>;
+  };
   sharedBy: User;
 }
 
@@ -400,7 +409,16 @@ export async function getProjectShares(
         status: { in: ['pending', 'accepted'] }
       },
       include: {
-        project: true,
+        project: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true
+              }
+            }
+          }
+        },
         sharedBy: true,
         sharedWith: true
       },

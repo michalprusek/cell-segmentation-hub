@@ -16,7 +16,7 @@ Successfully integrated UNet model optimized for SpheroHQ dataset into the Cell 
 - **Features**: [64, 128, 256, 512, 1024]
 - **Parameters**: 45.20M
 - **Weight File**: `/app/weights/unet_spherohq_best.pth` (429MB)
-- **Original Location**: `/home/cvat/spheroseg-app/best_model.pth`
+- **Original Location**: `/home/cvat/cell-segmentation-hub/best_model.pth`
 
 ## Performance Metrics
 

@@ -28,7 +28,7 @@ Upload files (thumbnails) are returning 404 when accessed via HTTPS through ngin
 
 ### Configuration Analysis
 
-**Nginx configuration file**: `/home/cvat/spheroseg-app/docker/nginx/nginx.ssl.conf`
+**Nginx configuration file**: `/home/cvat/cell-segmentation-hub/docker/nginx/nginx.ssl.conf`
 
 - Main nginx container: `nginx-main` (ports 80, 443)
 - Container mount: `/etc/nginx/nginx.conf` -> `nginx.ssl.conf`

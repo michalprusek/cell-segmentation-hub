@@ -64,30 +64,48 @@ export function init(): void {
           pass: process.env.SMTP_PASS || ''
         };
 
+        // Special handling for UTIA mail server on port 465
+        const isUTIAPort465 = config.smtp.host === 'mail.utia.cas.cz' && config.smtp.port === 465;
+
         const transportConfig: SMTPTransport.Options = {
           host: config.smtp.host,
           port: config.smtp.port,
           secure: config.smtp.secure,
           ignoreTLS: getBooleanEnvVar('SMTP_IGNORE_TLS', false),
           requireTLS: getBooleanEnvVar('SMTP_REQUIRE_TLS', true) && !getBooleanEnvVar('SMTP_IGNORE_TLS', false),
-          // Use improved timeout parsing with UTIA SMTP defaults
-          connectionTimeout: parseEmailTimeout('SMTP_CONNECTION_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
-          greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
-          socketTimeout: parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
+          // Extended timeouts for port 465 (needs 60-120 seconds)
+          connectionTimeout: isUTIAPort465 ? 120000 : parseEmailTimeout('SMTP_CONNECTION_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
+          greetingTimeout: isUTIAPort465 ? 120000 : parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
+          socketTimeout: isUTIAPort465 ? 120000 : parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', parseEmailTimeout('EMAIL_TIMEOUT', 30000)),
           logger: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
-          debug: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false)
+          debug: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
+          // Disable connection pooling for port 465 (causes issues with non-standard banner)
+          pool: !isUTIAPort465,
+          maxConnections: isUTIAPort465 ? 1 : 5,
+          maxMessages: isUTIAPort465 ? 1 : 100
         };
-        
-        // Configure TLS settings for UTIA SMTP (port 465 with SSL)
+
+        // Configure TLS settings
         if (process.env.SMTP_IGNORE_TLS !== 'true') {
-          transportConfig.tls = {
-            // Certificate validation enabled by default, only disable with explicit flag
-            rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true',
-            // Support STARTTLS and direct SSL connections
-            minVersion: 'TLSv1.2',
-            // Use secure default ciphers for modern mail servers
-            secureProtocol: 'TLS_method'
-          };
+          if (isUTIAPort465) {
+            // Special TLS configuration for UTIA port 465
+            transportConfig.tls = {
+              rejectUnauthorized: false, // Self-signed certificate
+              minVersion: 'TLSv1.2',
+              maxVersion: 'TLSv1.2', // Force TLSv1.2 (works best with UTIA)
+              // Use specific cipher that works with UTIA
+              ciphers: 'ECDHE-RSA-AES256-GCM-SHA384',
+              servername: config.smtp.host,
+              enableTrace: true // Help debug TLS issues
+            };
+          } else {
+            // Default TLS configuration for other servers
+            transportConfig.tls = {
+              rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true',
+              minVersion: 'TLSv1.2',
+              secureProtocol: 'TLS_method'
+            };
+          }
         }
 
         // Only include auth if explicitly enabled and credentials are provided
@@ -106,7 +124,9 @@ export function init(): void {
           requireTLS: transportConfig.requireTLS,
           hasAuth: !!transportConfig.auth,
           authDisabled: process.env.SMTP_AUTH === 'false',
-          isUTIAConfig: config.smtp.host === 'mail.utia.cas.cz'
+          isUTIAPort465: isUTIAPort465,
+          timeouts: isUTIAPort465 ? '120s (extended for port 465)' : '30s (standard)',
+          pooling: transportConfig.pool ? 'enabled' : 'disabled'
         });
         
         _transporter = nodemailer.createTransport(transportConfig);
@@ -202,9 +222,32 @@ export async function sendPasswordResetEmail(userEmail: string, resetToken: stri
         expiresAt
       };
 
-      // Use ULTRA SIMPLE template for UTIA compatibility
-      const htmlContent = generateUltraSimpleHTML(emailData);
-      const textContent = generateUltraSimpleText(emailData);
+      // Use ULTRA SIMPLE template for UTIA compatibility with validation
+      let textContent: string;
+      let htmlContent: string | undefined;
+
+      try {
+        textContent = generateUltraSimpleText(emailData);
+        if (!textContent || textContent.trim() === '') {
+          throw new Error('Failed to generate email text content');
+        }
+
+        // HTML is optional for UTIA compatibility
+        try {
+          htmlContent = generateUltraSimpleHTML(emailData);
+        } catch (htmlError) {
+          logger.warn('HTML template generation failed, using text-only', 'EmailService', {
+            error: (htmlError as Error).message
+          });
+          htmlContent = undefined;
+        }
+      } catch (error) {
+        logger.error('Email template generation failed', error as Error, 'EmailService', {
+          userEmail,
+          templateType: 'passwordReset'
+        });
+        throw new Error('Unable to prepare password reset email');
+      }
 
       const emailOptions = {
         to: userEmail,
@@ -250,12 +293,27 @@ export async function sendVerificationEmail(userEmail: string, verificationToken
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
       const verificationUrl = `${baseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
 
-      // PLAIN TEXT ONLY - no HTML!
-      const textContent = generateVerificationText({
-        verificationUrl,
-        userEmail,
-        locale
-      });
+      // PLAIN TEXT ONLY - no HTML! with validation
+      let textContent: string;
+
+      try {
+        textContent = generateVerificationText({
+          verificationUrl,
+          userEmail,
+          locale
+        });
+
+        if (!textContent || textContent.trim() === '') {
+          throw new Error('Failed to generate verification email content');
+        }
+      } catch (error) {
+        logger.error('Verification email template generation failed', error as Error, 'EmailService', {
+          userEmail,
+          locale,
+          templateType: 'verification'
+        });
+        throw new Error('Unable to prepare verification email');
+      }
 
       const emailOptions = {
         to: userEmail,
@@ -360,14 +418,30 @@ export async function sendProjectShareEmail(
         throw new Error('Invalid project URL provided');
       }
       
-      // PLAIN TEXT ONLY - no HTML!
-      const textContent = generateShareText({
-        projectUrl,
-        projectName,
-        senderName,
-        recipientEmail,
-        locale
-      });
+      // PLAIN TEXT ONLY - no HTML! with validation
+      let textContent: string;
+
+      try {
+        textContent = generateShareText({
+          projectUrl,
+          projectName,
+          senderName,
+          recipientEmail,
+          locale
+        });
+
+        if (!textContent || textContent.trim() === '') {
+          throw new Error('Failed to generate share email content');
+        }
+      } catch (error) {
+        logger.error('Share email template generation failed', error as Error, 'EmailService', {
+          recipientEmail,
+          projectName,
+          locale,
+          templateType: 'projectShare'
+        });
+        throw new Error('Unable to prepare project share email');
+      }
 
       await sendEmail({
         to: recipientEmail,

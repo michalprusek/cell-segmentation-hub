@@ -15,7 +15,7 @@ import { z } from 'zod';
 /**
  * Available segmentation models
  */
-export type SegmentationModel = 'hrnet' | 'cbam_resunet' | 'unet_spherohq';
+export type SegmentationModel = 'hrnet' | 'resunet_advanced' | 'resunet_small';
 
 /**
  * Queue item status

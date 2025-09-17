@@ -13,7 +13,7 @@ Nginx configuration had two issues:
 
 ## Solution
 
-Modified `/home/cvat/spheroseg-app/docker/nginx/nginx.ssl.conf`:
+Modified `/home/cvat/cell-segmentation-hub/docker/nginx/nginx.ssl.conf`:
 
 1. Added `^~` prefix to uploads location block:
 
@@ -37,7 +37,7 @@ location ~* ^(?!/uploads/).*\.(js|css|map|png|jpg|jpeg|gif|ico|svg|woff|woff2|tt
 
 ## Important Notes
 
-- nginx-main container uses bind mount: `/home/cvat/spheroseg-app/docker/nginx/nginx.ssl.conf` → `/etc/nginx/nginx.conf`
+- nginx-main container uses bind mount: `/home/cvat/cell-segmentation-hub/docker/nginx/nginx.ssl.conf` → `/etc/nginx/nginx.conf`
 - Cannot directly copy files to container due to bind mount (device busy error)
 - Must edit the source file and restart container
 - Thumbnails are stored in project-specific paths: `/uploads/[userId]/[projectId]/thumbnails/[filename].jpg`
