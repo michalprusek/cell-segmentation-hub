@@ -162,7 +162,8 @@ export const useAdvancedExport = (projectId: string) => {
     if (!projectId) return;
 
     if (isExporting && currentJob) {
-      ExportStateManager.saveExportState(projectId, {
+      // Use throttled save for frequent progress updates
+      ExportStateManager.saveExportStateThrottled(projectId, {
         projectId,
         jobId: currentJob.id,
         status: 'exporting',
@@ -171,6 +172,7 @@ export const useAdvancedExport = (projectId: string) => {
         exportStatus: exportStatus,
       });
     } else if (isDownloading && completedJobId) {
+      // Use immediate save for download state (less frequent)
       ExportStateManager.saveExportState(projectId, {
         projectId,
         jobId: completedJobId,

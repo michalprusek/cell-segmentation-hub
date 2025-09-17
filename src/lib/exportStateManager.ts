@@ -27,6 +27,7 @@ class ExportStateManager {
   private static readonly EXPIRATION_TIME = 2 * 60 * 60 * 1000; // 2 hours
   private static readonly CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
   private static cleanupTimer: NodeJS.Timeout | null = null;
+  private static throttledSaves: Map<string, NodeJS.Timeout> = new Map();
 
   /**
    * Initialize the manager - starts periodic cleanup
@@ -45,7 +46,7 @@ class ExportStateManager {
   }
 
   /**
-   * Save export state to localStorage
+   * Save export state to localStorage with quota error handling
    */
   static saveExportState(projectId: string, state: PersistedExportState): void {
     try {
@@ -60,9 +61,56 @@ class ExportStateManager {
       );
 
       logger.debug('Export state saved', { projectId, status: state.status });
-    } catch (error) {
-      logger.warn('Failed to save export state:', error);
+    } catch (error: any) {
+      // Handle quota exceeded error
+      if (error.name === 'QuotaExceededError' || error.code === 22) {
+        logger.warn('localStorage quota exceeded, attempting cleanup');
+        this.cleanupExpiredStates();
+
+        // Retry once after cleanup
+        try {
+          const stored: StoredExportState = {
+            timestamp: Date.now(),
+            state,
+          };
+          localStorage.setItem(
+            this.getStorageKey(projectId),
+            JSON.stringify(stored)
+          );
+          logger.debug('Export state saved after cleanup', { projectId });
+        } catch (retryError) {
+          logger.error(
+            'Failed to save export state even after cleanup:',
+            retryError
+          );
+        }
+      } else {
+        logger.warn('Failed to save export state:', error);
+      }
     }
+  }
+
+  /**
+   * Throttled save for frequent updates (e.g., progress updates)
+   * Delays save by 500ms, replacing any pending save for the same project
+   */
+  static saveExportStateThrottled(
+    projectId: string,
+    state: PersistedExportState
+  ): void {
+    // Clear any pending save for this project
+    const existingTimeout = this.throttledSaves.get(projectId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Schedule new save
+    const timeout = setTimeout(() => {
+      this.saveExportState(projectId, state);
+      this.throttledSaves.delete(projectId);
+    }, 500);
+
+    this.throttledSaves.set(projectId, timeout);
   }
 
   /**
@@ -101,10 +149,28 @@ class ExportStateManager {
    */
   static clearExportState(projectId: string): void {
     try {
+      // Clear any pending throttled saves
+      const pendingSave = this.throttledSaves.get(projectId);
+      if (pendingSave) {
+        clearTimeout(pendingSave);
+        this.throttledSaves.delete(projectId);
+      }
+
       localStorage.removeItem(this.getStorageKey(projectId));
       logger.debug('Export state cleared', { projectId });
     } catch (error) {
       logger.warn('Failed to clear export state:', error);
+    }
+  }
+
+  /**
+   * Check if export state exists without loading it
+   */
+  static hasExportState(projectId: string): boolean {
+    try {
+      return localStorage.getItem(this.getStorageKey(projectId)) !== null;
+    } catch {
+      return false;
     }
   }
 
@@ -235,10 +301,15 @@ class ExportStateManager {
    * Cleanup on app unmount
    */
   static cleanup(): void {
+    // Clear cleanup timer
     if (this.cleanupTimer) {
       clearInterval(this.cleanupTimer);
       this.cleanupTimer = null;
     }
+
+    // Clear all pending throttled saves
+    this.throttledSaves.forEach(timeout => clearTimeout(timeout));
+    this.throttledSaves.clear();
   }
 }
 
