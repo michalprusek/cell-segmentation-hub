@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SlidersHorizontal, Package, Trash2, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AdvancedExportDialog } from '@/pages/export/AdvancedExportDialog';
+import ExportStateManager from '@/lib/exportStateManager';
 
 interface ProjectToolbarProps {
   searchTerm?: string;
@@ -65,6 +66,49 @@ const ProjectToolbar = ({
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+
+  // Check for persisted export state on mount
+  useEffect(() => {
+    if (projectId) {
+      const persistedState = ExportStateManager.getExportState(projectId);
+      if (persistedState) {
+        if (
+          persistedState.status === 'exporting' ||
+          persistedState.status === 'processing'
+        ) {
+          setIsExporting(true);
+        } else if (persistedState.status === 'downloading') {
+          setIsDownloading(true);
+        }
+      }
+    }
+  }, [projectId]);
+
+  // Subscribe to cross-tab storage changes
+  useEffect(() => {
+    if (!projectId) return;
+
+    const unsubscribe = ExportStateManager.subscribeToChanges(
+      projectId,
+      state => {
+        if (state) {
+          if (state.status === 'exporting' || state.status === 'processing') {
+            setIsExporting(true);
+            setIsDownloading(false);
+          } else if (state.status === 'downloading') {
+            setIsExporting(false);
+            setIsDownloading(true);
+          }
+        } else {
+          // State was cleared
+          setIsExporting(false);
+          setIsDownloading(false);
+        }
+      }
+    );
+
+    return unsubscribe;
+  }, [projectId]);
 
   const handleExport = () => {
     setShowExportDialog(true);
