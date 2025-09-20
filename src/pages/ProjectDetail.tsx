@@ -109,7 +109,42 @@ const ProjectDetail = () => {
 
   // Queue management - must be declared before using queueStats
   const { isConnected, queueStats, lastUpdate, requestQueueStats } =
-    useSegmentationQueue(id);
+    useSegmentationQueue(
+      id,
+      useCallback(() => {
+        // Batch completion callback - reset batchSubmitted state
+        logger.info(
+          'Batch completion detected - resetting batchSubmitted state',
+          'ProjectDetail',
+          {
+            projectId: id,
+          }
+        );
+        setBatchSubmitted(false);
+
+        // Force reconciliation to catch any missed updates
+        reconcileRef.current();
+
+        // Navigate to segmentation editor if batch is complete and navigation was requested
+        if (shouldNavigateOnComplete && navigationTargetImageId) {
+          logger.info(
+            'Batch processing complete, navigating to segmentation editor',
+            'ProjectDetail',
+            {
+              projectId: id,
+              imageId: navigationTargetImageId,
+            }
+          );
+          // Use startTransition to ensure navigation works with React 18 concurrent features
+          startTransition(() => {
+            navigate(`/segmentation/${id}/${navigationTargetImageId}`);
+          });
+        }
+
+        setShouldNavigateOnComplete(false);
+        setNavigationTargetImageId(null);
+      }, [id, shouldNavigateOnComplete, navigationTargetImageId, navigate])
+    );
 
   // Handle thumbnail updates via WebSocket
   useThumbnailUpdates({
@@ -635,65 +670,9 @@ const ProjectDetail = () => {
       }
     }
 
-    // Reset batch submitted state when queue becomes empty and navigate if needed
-    if (lastUpdate.status === 'segmented' || lastUpdate.status === 'failed') {
-      // Trigger status reconciliation after a short delay
-      const timeoutId = setTimeout(() => {
-        const currentQueueStats = queueStats;
-        if (
-          currentQueueStats &&
-          currentQueueStats.processing <= 1 &&
-          currentQueueStats.queued === 0
-        ) {
-          logger.info(
-            'Queue processing complete - resetting batch state',
-            'ProjectDetail',
-            {
-              projectId: id,
-              processing: currentQueueStats.processing,
-              queued: currentQueueStats.queued,
-              batchSubmitted,
-            }
-          );
-          setBatchSubmitted(false);
-          // Force reconciliation to catch any missed updates
-          reconcileRef.current();
-
-          // Navigate to segmentation editor if batch is complete and navigation was requested
-          if (shouldNavigateOnComplete && navigationTargetImageId) {
-            logger.info(
-              'Batch processing complete, navigating to segmentation editor',
-              'ProjectDetail',
-              {
-                projectId: id,
-                imageId: navigationTargetImageId,
-              }
-            );
-            // Use startTransition to ensure navigation works with React 18 concurrent features
-            startTransition(() => {
-              navigate(`/segmentation/${id}/${navigationTargetImageId}`);
-            });
-            setShouldNavigateOnComplete(false);
-            setNavigationTargetImageId(null);
-          }
-        }
-      }, 2000);
-
-      // Cleanup timeout if component unmounts
-      return () => clearTimeout(timeoutId);
-    }
-  }, [
-    lastUpdate,
-    id,
-    queueStats,
-    setBatchSubmitted,
-    images,
-    processBatchUpdates,
-    shouldNavigateOnComplete,
-    navigationTargetImageId,
-    navigate,
-    batchSubmitted,
-  ]);
+    // Note: Batch completion detection is now handled by useSegmentationQueue callback
+    // This removes the conflicting duplicate logic that was causing the loading state to persist
+  }, [lastUpdate, id, queueStats, images, processBatchUpdates]);
 
   // Cleanup debounce timeouts on unmount
   useEffect(() => {
