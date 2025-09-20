@@ -144,9 +144,10 @@ class InferenceExecutor:
             self.cuda_streams = [torch.cuda.Stream() for _ in range(max_workers)]
             logger.info(f"Created {len(self.cuda_streams)} CUDA streams for parallel inference")
 
-        # Thread safety (removed model locks for parallel processing)
+        # Thread safety - model locks restored for CUDA safety
         self._sessions: Dict[str, InferenceSession] = {}
         self._global_lock = threading.RLock()
+        self._model_locks: Dict[str, threading.RLock] = {}
 
         # Memory pressure monitoring
         self._memory_pressure_threshold = 0.9  # 90% of GPU memory
@@ -245,38 +246,42 @@ class InferenceExecutor:
         cuda_stream = self.get_next_cuda_stream()
 
         def _run_inference():
-            """Inner function to run inference with CUDA streams for parallelism"""
+            """Inner function to run inference with CUDA streams and model locks for safety"""
+            # Get model lock for CUDA thread safety
+            model_lock = self.get_model_lock(model_name)
+
             try:
-                if cuda_stream is not None:
-                    # Use dedicated CUDA stream for true parallel execution
-                    with torch.cuda.stream(cuda_stream):
+                with model_lock:  # Serialize access to model instance
+                    if cuda_stream is not None:
+                        # Use dedicated CUDA stream for true parallel execution
+                        with torch.cuda.stream(cuda_stream):
+                            with torch.no_grad():
+                                # Ensure model is in eval mode
+                                model.eval()
+
+                                # Run inference on dedicated stream
+                                output = model(input_tensor)
+
+                                # Synchronize stream to ensure completion
+                                cuda_stream.synchronize()
+
+                                # Handle different output formats
+                                if isinstance(output, tuple):
+                                    output = output[0]
+
+                                return output
+                    else:
+                        # Fallback to default stream
                         with torch.no_grad():
                             # Ensure model is in eval mode
                             model.eval()
 
-                            # Run inference on dedicated stream
+                            # Run inference
                             output = model(input_tensor)
-
-                            # Synchronize stream to ensure completion
-                            cuda_stream.synchronize()
 
                             # Handle different output formats
                             if isinstance(output, tuple):
                                 output = output[0]
-
-                            return output
-                else:
-                    # Fallback to default stream
-                    with torch.no_grad():
-                        # Ensure model is in eval mode
-                        model.eval()
-
-                        # Run inference
-                        output = model(input_tensor)
-
-                        # Handle different output formats
-                        if isinstance(output, tuple):
-                            output = output[0]
 
                         return output
 
@@ -345,7 +350,23 @@ class InferenceExecutor:
         except Exception as e:
             logger.error(f"Inference execution error for {model_name}: {e}")
             raise
-    
+
+    def get_model_lock(self, model_name: str) -> threading.RLock:
+        """
+        Get or create a lock for the specified model to ensure CUDA thread safety
+
+        Args:
+            model_name: Name of the model to get lock for
+
+        Returns:
+            RLock for the model
+        """
+        with self._global_lock:
+            if model_name not in self._model_locks:
+                self._model_locks[model_name] = threading.RLock()
+                logger.debug(f"Created new model lock for {model_name}")
+            return self._model_locks[model_name]
+
     def _check_resources(self):
         """Check if resources are within limits"""
         memory_usage = self._get_memory_usage()

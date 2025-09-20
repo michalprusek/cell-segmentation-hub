@@ -58,9 +58,9 @@
     "cuda_streams": 4,
     "memory_pressure_threshold": 0.9,
     "emergency_cleanup_threshold": 0.95,
-    "total_memory_budget_gb": 20.0,
+    "total_memory_budget_gb": 22.0,
     "memory_safety_margin_gb": 2.0,
-    "description": "Configuration optimized for RTX A5000 24GB - supports 4 concurrent users with dedicated CUDA streams"
+    "description": "Configuration optimized for RTX A5000 24GB - supports 4 concurrent users with dedicated CUDA streams. Budget increased to 22GB to accommodate worst-case scenarios (all models: 20.4GB + safety margin)"
   },
   "memory_reserve_percent": 15,
   "detailed_results": {

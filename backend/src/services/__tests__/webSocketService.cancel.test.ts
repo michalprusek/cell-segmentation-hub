@@ -8,7 +8,7 @@ import { Server as SocketIOServer } from 'socket.io';
 import { createServer } from 'http';
 import Client from 'socket.io-client';
 
-import { createWebSocketTestEnvironment } from '@/test-utils/webSocketTestUtils';
+import { createWebSocketTestEnvironment as _createWebSocketTestEnvironment } from '@/test-utils/webSocketTestUtils';
 import { cancelTestUtils } from '@/test-utils/cancelTestHelpers';
 import { uploadScenarios, segmentationScenarios, exportScenarios } from '@/test-fixtures/cancelScenarios';
 
@@ -62,7 +62,7 @@ class WebSocketService {
 
   private setupEventHandlers() {
     this.io.on('connection', (socket) => {
-      console.log(`Client connected: ${socket.id}`);
+      console.info(`Client connected: ${socket.id}`);
 
       socket.on('authenticate', async (data: { userId: string; token: string }) => {
         try {
@@ -81,7 +81,7 @@ class WebSocketService {
           } else {
             socket.emit('authError', { error: 'Invalid token' });
           }
-        } catch (error) {
+        } catch (_error) {
           socket.emit('authError', { error: 'Authentication failed' });
         }
       });
@@ -116,7 +116,7 @@ class WebSocketService {
       });
 
       socket.on('disconnect', () => {
-        console.log(`Client disconnected: ${socket.id}`);
+        console.info(`Client disconnected: ${socket.id}`);
 
         // Cleanup tracking
         const userId = socket.data.userId;
@@ -421,7 +421,7 @@ describe('WebSocket Service Cancel Integration', () => {
     });
 
     it('should emit batch cancellation events', (done) => {
-      const { operations, queueStats } = segmentationScenarios.batchSegmentation;
+      const { operations, queueStats: _queueStats } = segmentationScenarios.batchSegmentation;
 
       clientSocket.on('batchCancelled', (data: any) => {
         expect(data.operationType).toBe('segmentation');
@@ -807,7 +807,7 @@ describe('WebSocket Service Cancel Integration', () => {
         const eventCount = 100;
         let receivedEvents = 0;
 
-        clientSocket.on('operationCancelled', (data: CancelEvent) => {
+        clientSocket.on('operationCancelled', (_data: CancelEvent) => {
           receivedEvents++;
           if (receivedEvents === eventCount) {
             done();
@@ -916,7 +916,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
 
       clientSocket.on('authenticated', () => {
-        const startTime = Date.now();
+        const _startTime = Date.now();
 
         clientSocket.on('operationCancelled', (data: CancelEvent) => {
           const eventTime = new Date(data.timestamp).getTime();

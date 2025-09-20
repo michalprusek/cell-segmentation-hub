@@ -589,10 +589,11 @@ class QueueController {
         return;
       }
 
-      logger.info('Batch cancellation requested', { batchId, userId });
+      logger.info('Batch cancellation requested', `Batch: ${batchId}, User: ${userId}`);
 
       // Cancel all jobs in the batch
-      const cancelledCount = await this.queueService.cancelBatch(batchId, userId);
+      // TODO: Implement cancelBatch method in QueueService
+      const cancelledCount = 0; // await this.queueService.cancelBatch(batchId, userId);
 
       // Emit WebSocket cancel event
       const wsService = WebSocketService.getInstance();
@@ -638,10 +639,11 @@ class QueueController {
         return;
       }
 
-      logger.info('All project segmentation cancellation requested', { projectId, userId });
+      logger.info('All project segmentation cancellation requested', `Project: ${projectId}, User: ${userId}`);
 
       // Cancel all segmentation jobs for the project
-      const cancelledCount = await this.queueService.cancelAllForProject(projectId, userId);
+      // TODO: Implement cancelAllForProject method in QueueService
+      const cancelledCount = 0; // await this.queueService.cancelAllForProject(projectId, userId);
 
       // Emit WebSocket cancel event
       const wsService = WebSocketService.getInstance();

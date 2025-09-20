@@ -3,10 +3,9 @@
  * Tests POST /api/uploads/:uploadId/cancel functionality
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, _afterAll } from 'vitest';
 import request from 'supertest';
-import { Express } from 'express';
-import express from 'express';
+import express, { Express } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 

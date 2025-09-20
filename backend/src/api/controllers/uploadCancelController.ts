@@ -1,7 +1,7 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AuthRequest } from '../../types/auth';
 import { logger } from '../../utils/logger';
-import { webSocketService } from '../../services/webSocketService';
+import { WebSocketService } from '../../services/websocketService';
 
 export class UploadCancelController {
   constructor() {
@@ -29,13 +29,13 @@ export class UploadCancelController {
         return;
       }
 
-      logger.info('Upload cancellation requested', { uploadId, userId });
+      logger.info('Upload cancellation requested', `Upload: ${uploadId}, User: ${userId}`);
 
       // TODO: Implement actual upload cancellation logic
       // For now, we'll just emit the cancel event
 
       // Emit WebSocket cancel event to all clients for this user
-      webSocketService.emitToUser(userId, 'operation:cancelled', {
+      WebSocketService.getInstance().emitToUser(userId, 'operation:cancelled', {
         operationId: uploadId,
         operationType: 'upload',
         message: 'Upload cancelled by user',
@@ -72,10 +72,10 @@ export class UploadCancelController {
         return;
       }
 
-      logger.info('All uploads cancellation requested', { projectId, userId });
+      logger.info('All uploads cancellation requested', `Project: ${projectId}, User: ${userId}`);
 
       // Emit WebSocket cancel event to all clients for this user
-      webSocketService.emitToUser(userId, 'operation:cancelled', {
+      WebSocketService.getInstance().emitToUser(userId, 'operation:cancelled', {
         operationId: `project_${projectId}_uploads`,
         operationType: 'upload',
         projectId,

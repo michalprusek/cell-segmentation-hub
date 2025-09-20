@@ -2,6 +2,8 @@ import { PrismaClient, Prisma } from '@prisma/client';
 import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios';
 import FormData from 'form-data';
 import { v4 as uuidv4 } from 'uuid';
+import { Agent as HttpAgent } from 'http';
+import { Agent as HttpsAgent } from 'https';
 // Temporarily disabled for development setup
 // import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import { logger } from '../utils/logger';
@@ -119,14 +121,14 @@ export class SegmentationService {
       // Enable connection pooling for concurrent requests
       maxRedirects: 5,
       decompress: true,
-      httpAgent: new (require('http').Agent)({
+      httpAgent: new HttpAgent({
         keepAlive: true,
         maxSockets: 4, // Support up to 4 concurrent connections
         maxFreeSockets: 2,
         timeout: 60000, // 60 seconds
         keepAliveMsecs: 1000
       }),
-      httpsAgent: new (require('https').Agent)({
+      httpsAgent: new HttpsAgent({
         keepAlive: true,
         maxSockets: 4,
         maxFreeSockets: 2,

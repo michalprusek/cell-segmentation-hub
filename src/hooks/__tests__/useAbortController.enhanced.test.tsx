@@ -32,7 +32,7 @@ interface UseAbortControllerReturn {
 const useAbortController = (
   options: UseAbortControllerOptions = {}
 ): UseAbortControllerReturn => {
-  const { onAbort, timeout, operationId, operationType } = options;
+  const { onAbort, timeout, operationId: _operationId, operationType: _operationType } = options;
 
   const [controller, setController] = React.useState(
     () => new AbortController()
@@ -54,7 +54,7 @@ const useAbortController = (
         }
       };
     }
-  }, [timeout]);
+  }, [timeout, abort]);
 
   // Setup abort listener
   React.useEffect(() => {
@@ -805,7 +805,7 @@ describe('useAbortController Enhanced Hook', () => {
         }
 
         // Combine all signals
-        const combined = result.current.combine(signals);
+        const _combined = result.current.combine(signals);
 
         // Abort one to trigger combined
         signals[0].dispatchEvent(new Event('abort'));

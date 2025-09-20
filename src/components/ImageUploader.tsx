@@ -12,7 +12,7 @@ import { logger } from '@/lib/logger';
 import { ChunkProgress, DEFAULT_CHUNKING_CONFIG } from '@/lib/uploadUtils';
 import { useAbortController } from '@/hooks/shared/useAbortController';
 import { useOperationManager } from '@/hooks/shared/useOperationManager';
-import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
+import { UniversalCancelButton as _UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 import {
   FileWithPreview,
   createFileWithPreview,
@@ -381,7 +381,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         setIsCancelling(false);
       }
     },
-    [navigate, t, onUploadComplete, operationManager, getSignal, abort]
+    [navigate, t, onUploadComplete, operationManager, getSignal]
   );
 
   // Cancel upload function

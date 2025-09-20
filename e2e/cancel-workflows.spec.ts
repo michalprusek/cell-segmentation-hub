@@ -53,7 +53,7 @@ class CancelTestHelpers {
     await this.page.click('[data-testid="new-project-button"]');
     await this.page.fill('[data-testid="project-name-input"]', name);
     await this.page.click('[data-testid="create-project-button"]');
-    await this.page.waitForURL(/\/project\/[^\/]+$/);
+    await this.page.waitForURL(/\/project\/[^/]+$/);
 
     // Return project ID from URL
     const url = this.page.url();
@@ -129,14 +129,14 @@ class CancelTestHelpers {
 test.describe('Cancel Workflows E2E Tests', () => {
   let helpers: CancelTestHelpers;
 
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page: _page }) => {
     helpers = new CancelTestHelpers(page);
     await helpers.login();
   });
 
   test.describe('Upload Cancellation', () => {
-    test('should cancel single file upload', async ({ page }) => {
-      const projectId = await helpers.createTestProject('Upload Cancel Test');
+    test('should cancel single file upload', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject('Upload Cancel Test');
 
       // Start upload
       await helpers.uploadFiles([TEST_CONFIG.files.singleImage]);
@@ -160,8 +160,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
       await expect(page.locator('[data-testid="upload-button"]')).toBeVisible();
     });
 
-    test('should cancel multiple file upload', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should cancel multiple file upload', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject(
         'Batch Upload Cancel Test'
       );
 
@@ -184,8 +184,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
       }
     });
 
-    test('should cancel large file upload', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should cancel large file upload', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject(
         'Large File Cancel Test'
       );
 
@@ -212,7 +212,7 @@ test.describe('Cancel Workflows E2E Tests', () => {
     test('should handle upload cancellation with network interruption', async ({
       page,
     }) => {
-      const projectId = await helpers.createTestProject(
+      const _projectId = await helpers.createTestProject(
         'Network Interruption Test'
       );
 
@@ -238,8 +238,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
   });
 
   test.describe('Segmentation Cancellation', () => {
-    test('should cancel single image segmentation', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should cancel single image segmentation', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject(
         'Segmentation Cancel Test'
       );
 
@@ -271,8 +271,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
       ).toBeVisible();
     });
 
-    test('should cancel batch segmentation', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should cancel batch segmentation', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject(
         'Batch Segmentation Cancel Test'
       );
 
@@ -310,8 +310,10 @@ test.describe('Cancel Workflows E2E Tests', () => {
       ).toBeVisible();
     });
 
-    test('should handle partial batch cancellation', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should handle partial batch cancellation', async ({
+      page: _page,
+    }) => {
+      const _projectId = await helpers.createTestProject(
         'Partial Batch Cancel Test'
       );
 
@@ -341,8 +343,10 @@ test.describe('Cancel Workflows E2E Tests', () => {
       await expect(completedImages.count()).toBeGreaterThan(0);
     });
 
-    test('should cancel high-volume batch segmentation', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should cancel high-volume batch segmentation', async ({
+      page: _page,
+    }) => {
+      const _projectId = await helpers.createTestProject(
         'High Volume Cancel Test'
       );
 
@@ -386,8 +390,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
   });
 
   test.describe('Export Cancellation', () => {
-    test('should cancel COCO format export', async ({ page }) => {
-      const projectId = await helpers.createTestProject('Export Cancel Test');
+    test('should cancel COCO format export', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject('Export Cancel Test');
 
       // Setup completed segmentation data
       await page.evaluate(() => {
@@ -428,8 +432,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
       ).toBeVisible();
     });
 
-    test('should cancel Excel export', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should cancel Excel export', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject(
         'Excel Export Cancel Test'
       );
 
@@ -471,8 +475,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
       await expect(page.locator('[data-testid="include-area"]')).toBeChecked();
     });
 
-    test('should cancel large dataset export', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should cancel large dataset export', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject(
         'Large Export Cancel Test'
       );
 
@@ -524,8 +528,10 @@ test.describe('Cancel Workflows E2E Tests', () => {
       await page.waitForSelector('[data-testid="cleanup-complete"]');
     });
 
-    test('should handle concurrent export cancellations', async ({ page }) => {
-      const projectId = await helpers.createTestProject(
+    test('should handle concurrent export cancellations', async ({
+      page: _page,
+    }) => {
+      const _projectId = await helpers.createTestProject(
         'Concurrent Export Cancel Test'
       );
 
@@ -567,7 +573,7 @@ test.describe('Cancel Workflows E2E Tests', () => {
     test('should handle concurrent upload and segmentation cancellation', async ({
       page,
     }) => {
-      const projectId = await helpers.createTestProject(
+      const _projectId = await helpers.createTestProject(
         'Concurrent Operations Test'
       );
 
@@ -601,7 +607,7 @@ test.describe('Cancel Workflows E2E Tests', () => {
     test('should maintain operation isolation during cancellation', async ({
       page,
     }) => {
-      const projectId = await helpers.createTestProject(
+      const _projectId = await helpers.createTestProject(
         'Operation Isolation Test'
       );
 
@@ -639,12 +645,12 @@ test.describe('Cancel Workflows E2E Tests', () => {
   });
 
   test.describe('Error Recovery', () => {
-    test('should handle server errors during cancellation', async ({
+    test('should handle server _errors during cancellation', async ({
       page,
     }) => {
-      const projectId = await helpers.createTestProject('Server Error Test');
+      const _projectId = await helpers.createTestProject('Server Error Test');
 
-      // Mock server error
+      // Mock server _error
       await page.route('**/api/uploads/*/cancel', route => {
         route.fulfill({ status: 500, body: 'Internal Server Error' });
       });
@@ -656,9 +662,9 @@ test.describe('Cancel Workflows E2E Tests', () => {
       // Try to cancel
       await helpers.clickCancelButton('upload');
 
-      // Verify error handling
+      // Verify _error handling
       await expect(
-        page.locator('[data-testid="cancel-error-message"]')
+        page.locator('[data-testid="cancel-_error-message"]')
       ).toBeVisible();
 
       // Verify retry option
@@ -677,7 +683,9 @@ test.describe('Cancel Workflows E2E Tests', () => {
     test('should handle network timeout during cancellation', async ({
       page,
     }) => {
-      const projectId = await helpers.createTestProject('Network Timeout Test');
+      const _projectId = await helpers.createTestProject(
+        'Network Timeout Test'
+      );
 
       // Mock slow network response
       await page.route('**/api/queue/batch/*/cancel', route => {
@@ -713,7 +721,7 @@ test.describe('Cancel Workflows E2E Tests', () => {
     test('should not cause memory leaks with repeated cancellations', async ({
       page,
     }) => {
-      const projectId = await helpers.createTestProject('Memory Leak Test');
+      const _projectId = await helpers.createTestProject('Memory Leak Test');
 
       // Perform multiple cancel cycles
       for (let i = 0; i < 10; i++) {
@@ -734,8 +742,10 @@ test.describe('Cancel Workflows E2E Tests', () => {
       await helpers.verifyNoMemoryLeaks();
     });
 
-    test('should handle rapid cancel/restart cycles', async ({ page }) => {
-      const projectId = await helpers.createTestProject('Rapid Cycle Test');
+    test('should handle rapid cancel/restart cycles', async ({
+      page: _page,
+    }) => {
+      const _projectId = await helpers.createTestProject('Rapid Cycle Test');
 
       const cycles = 5;
       const startTime = Date.now();
@@ -763,7 +773,7 @@ test.describe('Cancel Workflows E2E Tests', () => {
     test('should maintain performance with high operation volume', async ({
       page,
     }) => {
-      const projectId = await helpers.createTestProject(
+      const _projectId = await helpers.createTestProject(
         'High Volume Performance Test'
       );
 
@@ -802,8 +812,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
   });
 
   test.describe('Accessibility', () => {
-    test('should be keyboard navigable', async ({ page }) => {
-      const projectId = await helpers.createTestProject('Accessibility Test');
+    test('should be keyboard navigable', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject('Accessibility Test');
 
       // Start upload
       await helpers.uploadFiles([TEST_CONFIG.files.singleImage]);
@@ -827,8 +837,10 @@ test.describe('Cancel Workflows E2E Tests', () => {
       await helpers.waitForCancellation('upload');
     });
 
-    test('should provide screen reader friendly updates', async ({ page }) => {
-      const projectId = await helpers.createTestProject('Screen Reader Test');
+    test('should provide screen reader friendly updates', async ({
+      page: _page,
+    }) => {
+      const _projectId = await helpers.createTestProject('Screen Reader Test');
 
       // Start upload
       await helpers.uploadFiles([TEST_CONFIG.files.singleImage]);
@@ -848,8 +860,8 @@ test.describe('Cancel Workflows E2E Tests', () => {
       await expect(liveRegion).toContainText('Upload cancelled');
     });
 
-    test('should work with high contrast mode', async ({ page }) => {
-      const projectId = await helpers.createTestProject('High Contrast Test');
+    test('should work with high contrast mode', async ({ page: _page }) => {
+      const _projectId = await helpers.createTestProject('High Contrast Test');
 
       // Enable high contrast simulation
       await page.emulateMedia({ colorScheme: 'dark', forcedColors: 'active' });
@@ -876,7 +888,7 @@ test.describe('Cancel Workflows E2E Tests', () => {
       page,
       browserName,
     }) => {
-      const projectId = await helpers.createTestProject(
+      const _projectId = await helpers.createTestProject(
         `${browserName} Cancel Test`
       );
 
@@ -895,7 +907,9 @@ test.describe('Cancel Workflows E2E Tests', () => {
     test('should handle browser refresh during operations', async ({
       page,
     }) => {
-      const projectId = await helpers.createTestProject('Browser Refresh Test');
+      const _projectId = await helpers.createTestProject(
+        'Browser Refresh Test'
+      );
 
       // Start upload
       await helpers.uploadFiles([TEST_CONFIG.files.singleImage]);
@@ -911,13 +925,13 @@ test.describe('Cancel Workflows E2E Tests', () => {
     });
   });
 
-  test.afterEach(async ({ page }) => {
+  test.afterEach(async ({ page: _page }) => {
     // Cleanup: Cancel any remaining operations
     try {
       await page.click('[data-testid="cancel-all-operations-button"]', {
         timeout: 1000,
       });
-    } catch (error) {
+    } catch (_error) {
       // Ignore if button doesn't exist
     }
 

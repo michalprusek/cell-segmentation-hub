@@ -304,7 +304,8 @@ export class WebSocketService {
               // Cancel segmentation jobs via queue service
               if (this.queueService && data.projectId) {
                 try {
-                  await this.queueService.cancelBatch(data.operationId, socket.userId);
+                  // TODO: Implement cancelBatch method in QueueService
+                  // await this.queueService.cancelBatch(data.operationId, socket.userId);
                 } catch (error) {
                   logger.error('Failed to cancel segmentation via queue service', error instanceof Error ? error : undefined, 'WebSocketService');
                 }

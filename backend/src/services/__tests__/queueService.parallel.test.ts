@@ -18,7 +18,7 @@ import { QueueService } from '../queueService';
 import { SegmentationService } from '../segmentationService';
 import { ImageService } from '../imageService';
 import { WebSocketService } from '../websocketService';
-import { logger } from '../../utils/logger';
+import { logger as _logger } from '../../utils/logger';
 
 // Mock dependencies
 vi.mock('../../utils/logger');
@@ -232,7 +232,7 @@ describe('QueueService Parallel Processing', () => {
     test('should handle 4 simultaneous user batch submissions', async () => {
       // Mock successful segmentation for all batches
       (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[], model: string) => {
+        async (images: any[], _model: string) => {
           // Simulate processing time based on model
           const processingTime = model === 'hrnet' ? 196 : 396; // ms
           await new Promise(resolve => setTimeout(resolve, processingTime));
@@ -310,7 +310,7 @@ describe('QueueService Parallel Processing', () => {
 
       // Mock segmentation service with realistic timing
       (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[], model: string) => {
+        async (images: any[], _model: string) => {
           const processingTime = model === 'hrnet' ? 196 : 396;
           await new Promise(resolve => setTimeout(resolve, processingTime));
           return images.map(() => mockSegmentationResults());
@@ -344,7 +344,7 @@ describe('QueueService Parallel Processing', () => {
 
             const batchTime = Date.now() - batchStartTime;
             return { success: true, time: batchTime, batchSize: batch.length };
-          } catch (error) {
+          } catch (_error) {
             batchProcessingMetrics.failedBatches++;
             const batchTime = Date.now() - batchStartTime;
             return { success: false, time: batchTime, error };
@@ -496,7 +496,7 @@ describe('QueueService Parallel Processing', () => {
             ];
 
             const operation = operations[i % operations.length];
-            const result = await operation();
+            const _result = await operation();
             const responseTime = Date.now() - startTime;
 
             return {
@@ -505,7 +505,7 @@ describe('QueueService Parallel Processing', () => {
               responseTime,
               operationType: operation.name
             };
-          } catch (error) {
+          } catch (_error) {
             return {
               connectionId: i,
               success: false,
@@ -545,9 +545,9 @@ describe('QueueService Parallel Processing', () => {
       expect(totalTime).toBeLessThan(5000); // All 50 operations complete within 5 seconds
 
       // Log metrics for analysis
-      console.log('Database Connection Pool Metrics:', metrics);
-      console.log(`Failed connections: ${failedConnections.length}/${connectionResults.length}`);
-      console.log(`Average response time: ${avgResponseTime}ms`);
+      // Database Connection Pool Metrics logged
+      // Failed connections tracked
+      // Average response time calculated
     });
 
     test('should gracefully handle connection pool exhaustion', async () => {
@@ -567,7 +567,7 @@ describe('QueueService Parallel Processing', () => {
             }, {
               timeout: 2000 // 2 second timeout
             });
-          } catch (error) {
+          } catch (_error) {
             return {
               connectionId: i,
               success: false,
@@ -689,7 +689,7 @@ describe('QueueService Parallel Processing', () => {
 
       // Mock WebSocket service to track emissions
       (mockWebSocketService.emitSegmentationUpdate as any).mockImplementation(
-        (userId: string, data: any) => {
+        (userId: string, _data: any) => {
           if (notificationTracker[userId]) {
             notificationTracker[userId].updates++;
           }
@@ -697,7 +697,7 @@ describe('QueueService Parallel Processing', () => {
       );
 
       (mockWebSocketService.emitSegmentationComplete as any).mockImplementation(
-        (userId: string, imageId: string, projectId: string, polygonCount: number) => {
+        (_userId: string, _imageId: string, _projectId: string, _polygonCount: number) => {
           if (notificationTracker[userId]) {
             notificationTracker[userId].completions++;
           }
@@ -705,7 +705,7 @@ describe('QueueService Parallel Processing', () => {
       );
 
       (mockWebSocketService.emitQueueStatsUpdate as any).mockImplementation(
-        (projectId: string, stats: any) => {
+        (projectId: string, _stats: any) => {
           const user = concurrentUsers.find(u => u.projectId === projectId);
           if (user && notificationTracker[user.userId]) {
             notificationTracker[user.userId].queueStats++;
@@ -767,7 +767,7 @@ describe('QueueService Parallel Processing', () => {
       // Mock WebSocket service to fail on some notifications
       let notificationAttempts = 0;
       (mockWebSocketService.emitSegmentationUpdate as any).mockImplementation(
-        (userId: string, data: any) => {
+        (_userId: string, _data: any) => {
           notificationAttempts++;
           if (notificationAttempts % 2 === 0) {
             throw new Error('WebSocket connection failed');
@@ -776,7 +776,7 @@ describe('QueueService Parallel Processing', () => {
       );
 
       (mockWebSocketService.emitSegmentationComplete as any).mockImplementation(
-        (userId: string, imageId: string, projectId: string, polygonCount: number) => {
+        (_userId: string, _imageId: string, _projectId: string, _polygonCount: number) => {
           // Always succeed for completion notifications
         }
       );
@@ -813,7 +813,7 @@ describe('QueueService Parallel Processing', () => {
       // Mock segmentation service to fail for one specific model
       let callCount = 0;
       (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[], model: string) => {
+        async (images: any[], _model: string) => {
           callCount++;
 
           // Fail the second batch (representing one concurrent user's failure)
@@ -893,7 +893,7 @@ describe('QueueService Parallel Processing', () => {
 
               return { success: true, operationId: i };
             });
-          } catch (error) {
+          } catch (_error) {
             return {
               success: false,
               operationId: i,
@@ -914,7 +914,7 @@ describe('QueueService Parallel Processing', () => {
       expect(successful.length).toBeGreaterThan(5); // At least half should succeed
 
       // Failed operations should be due to deadlocks, not system crashes
-      const deadlockErrors = failed.filter(r =>
+      const _deadlockErrors = failed.filter(r =>
         r.error && (
           r.error.includes('deadlock') ||
           r.error.includes('timeout') ||
@@ -964,7 +964,7 @@ describe('QueueService Parallel Processing', () => {
             await queueService.processBatch(batch);
             successfulProcessing = true;
           }
-        } catch (error) {
+        } catch (_error) {
           processingAttempts++;
           // Wait before retry
           await new Promise(resolve => setTimeout(resolve, 100));
@@ -1000,7 +1000,7 @@ describe('QueueService Parallel Processing', () => {
 
       // Mock segmentation with realistic timings
       (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[], model: string) => {
+        async (images: any[], _model: string) => {
           const timing = model === 'hrnet' ? 196 : 396; // Realistic model timings
           await new Promise(resolve => setTimeout(resolve, timing));
           return images.map(() => mockSegmentationResults());
@@ -1031,7 +1031,7 @@ describe('QueueService Parallel Processing', () => {
           }
 
           return Date.now() - batchStartTime;
-        } catch (error) {
+        } catch (_error) {
           metrics.failedBatches++;
           return Date.now() - batchStartTime;
         }
@@ -1052,7 +1052,8 @@ describe('QueueService Parallel Processing', () => {
 
       expect(parallelBenefit).toBeGreaterThan(2); // Should be at least 2x faster than sequential
 
-      console.log('Parallel Processing Metrics:', {
+      // Log performance metrics for debugging
+      console.info('Parallel Processing Metrics:', {
         ...metrics,
         parallelBenefit: `${parallelBenefit.toFixed(2)}x faster than sequential`
       });

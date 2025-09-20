@@ -208,7 +208,7 @@ export class ExportService {
         });
         finalProjectName = project?.title;
       } catch (error) {
-        logger.warn('Failed to fetch project name for export', error instanceof Error ? error : new Error(String(error)), 'ExportService');
+        logger.warn('Failed to fetch project name for export', error instanceof Error ? error.message : String(error), 'ExportService');
       }
     }
 

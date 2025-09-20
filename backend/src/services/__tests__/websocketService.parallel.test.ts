@@ -29,7 +29,7 @@ describe('WebSocketService - Parallel Processing', () => {
     } as any;
 
     // Mock Socket.IO constructor
-    (require('socket.io').Server as jest.Mock).mockReturnValue(mockSocketIOServer);
+    (SocketIOServer as jest.Mock).mockReturnValue(mockSocketIOServer);
 
     // Create WebSocketService instance
     webSocketService = WebSocketService.getInstance(mockHttpServer, mockPrisma);

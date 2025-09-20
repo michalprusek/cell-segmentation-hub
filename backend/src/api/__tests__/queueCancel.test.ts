@@ -5,8 +5,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import request from 'supertest';
-import { Express } from 'express';
-import express from 'express';
+import express, { Express } from 'express';
 
 // Mock dependencies before imports
 vi.mock('@/db', () => ({
@@ -237,7 +236,7 @@ const createMockApp = (): Express => {
 
       // Send queue stats update
       const totalJobs = jobs.length;
-      const remainingJobs = totalJobs - completedJobs.length - jobsToCancel.length;
+      const _remainingJobs = totalJobs - completedJobs.length - jobsToCancel.length;
 
       webSocketService.emitToRoom(`project:${project.id}`, 'queueStats', {
         projectId: project.id,

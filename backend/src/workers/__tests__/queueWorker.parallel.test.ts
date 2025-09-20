@@ -1,7 +1,7 @@
 import { QueueWorker } from '../queueWorker';
 import { QueueService, QueueBatch } from '../../services/queueService';
-import { SegmentationService } from '../../services/segmentationService';
-import { ImageService } from '../../services/imageService';
+import { SegmentationService as _SegmentationService } from '../../services/segmentationService';
+import { ImageService as _ImageService } from '../../services/imageService';
 import { PrismaClient, SegmentationQueue } from '@prisma/client';
 
 // Mock dependencies

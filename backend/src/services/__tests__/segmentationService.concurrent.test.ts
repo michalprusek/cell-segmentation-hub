@@ -246,7 +246,7 @@ describe('SegmentationService - Concurrent Request Handling', () => {
 
   describe('Request Queue Management', () => {
     it('should queue requests when at capacity limit', async () => {
-      let resolveCount = 0;
+      const _resolveCount = 0;
       const resolvers: Array<(value: any) => void> = [];
 
       // Mock ML service to respond only when we trigger it

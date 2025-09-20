@@ -153,7 +153,12 @@ export const ProcessingSlots: React.FC<ProcessingSlotsProps> = ({
       </div>
 
       {/* Processing slots grid */}
-      <div className="grid grid-cols-4 gap-2">{allSlots.map(renderSlot)}</div>
+      <div
+        className="grid gap-2"
+        style={{ gridTemplateColumns: `repeat(${totalSlots}, minmax(0, 1fr))` }}
+      >
+        {allSlots.map(renderSlot)}
+      </div>
 
       {/* Status summary */}
       <div className="flex flex-col gap-1 text-xs">

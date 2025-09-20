@@ -193,23 +193,23 @@ class MemoryAwareBatchSizer:
 - CUDA context overhead: ~500MB per stream = 2GB total
 - Model instance sharing: No additional overhead (shared GPU memory)
 
-**Total Memory Allocation (8 users, FP16):**
+**⚠️ INITIAL CALCULATION (8 users, FP16) - EXCEEDS CAPACITY:**
 
 ```
 Base models (shared): 2.0GB
 Worker thread overhead: 0.064GB
 CUDA streams: 2.0GB
 Active batch processing: 8 × 2.75GB = 22GB
-Total: ~26GB (exceeds 24GB - need optimization)
+Total: ~26GB (exceeds 24GB RTX A5000 capacity)
 ```
 
-**Refined Strategy - Model Partitioning:**
+**✅ CORRECTED STRATEGY - Model Partitioning (4 users):**
 
 - 4 users: HRNet (1.3GB each = 5.2GB)
 - 2 users: CBAM-ResUNet (0.7GB each = 1.4GB)
 - 2 users: UNet-SpheroHQ (1.6GB each = 3.2GB)
 - Overhead: 2.1GB
-- **Total: 11.9GB** ✅ Fits in 24GB with 50% headroom
+- **Total: 11.9GB** ✅ Fits safely in 24GB with 50% headroom
 
 ### 5. Implementation Complexity Assessment
 

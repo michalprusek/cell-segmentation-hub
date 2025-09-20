@@ -7,7 +7,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
-import { cancelTestUtils } from '@/test-utils/cancelTestHelpers';
+import { cancelTestUtils as _cancelTestUtils } from '@/test-utils/cancelTestHelpers';
 import { segmentationScenarios } from '@/test-fixtures/cancelScenarios';
 import { createWebSocketTestEnvironment } from '@/test-utils/webSocketTestUtils';
 
@@ -60,8 +60,17 @@ interface BatchSegmentationState {
   jobIds: string[];
 }
 
+// Create mock outside component to prevent infinite renders
+const mockOperationManager = {
+  registerOperation: vi.fn(),
+  updateOperationProgress: vi.fn(),
+  completeOperation: vi.fn(),
+  isOperationActive: vi.fn(() => false),
+  getActiveOperations: vi.fn(() => []),
+};
+
 const QueueStatsPanel: React.FC<QueueStatsProps> = ({
-  projectId,
+  projectId: _projectId,
   queueStats = { queued: 0, processing: 0, completed: 0, total: 0 },
   onBatchComplete,
   onBatchCancel,
@@ -75,10 +84,6 @@ const QueueStatsPanel: React.FC<QueueStatsProps> = ({
     currentImage: null,
     jobIds: [],
   });
-
-  const { mockOperationManager } = cancelTestUtils.renderWithCancelProviders(
-    <div />
-  );
 
   const startBatchSegmentation = async () => {
     const batchId = `batch-seg-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -179,7 +184,7 @@ const QueueStatsPanel: React.FC<QueueStatsProps> = ({
     }
   };
 
-  const hasActiveJobs = queueStats.processing > 0 || queueStats.queued > 0;
+  const _hasActiveJobs = queueStats.processing > 0 || queueStats.queued > 0;
   const canStartBatch = queueStats.total > 0 && !batchState.isProcessing;
 
   return (
@@ -382,9 +387,9 @@ describe('QueueStatsPanel Cancel Integration', () => {
       });
 
       // Mock delayed cancellation
-      let resolveCancellation: () => void;
-      const cancellationPromise = new Promise<void>(resolve => {
-        resolveCancellation = resolve;
+      let _resolveCancellation: () => void;
+      const _cancellationPromise = new Promise<void>(resolve => {
+        _resolveCancellation = resolve;
       });
 
       // Click cancel and verify loading state
@@ -398,7 +403,7 @@ describe('QueueStatsPanel Cancel Integration', () => {
     });
 
     it('should handle partial batch cancellation', async () => {
-      const { operations, queueStats } =
+      const { operations: _operations, queueStats } =
         segmentationScenarios.batchSegmentation;
       const onBatchCancel = vi.fn();
 
@@ -469,7 +474,7 @@ describe('QueueStatsPanel Cancel Integration', () => {
 
   describe('WebSocket Integration', () => {
     it('should emit WebSocket events during batch cancellation', async () => {
-      const webSocketManager = vi.mocked(
+      const _webSocketManager = vi.mocked(
         await import('@/services/webSocketManager')
       ).webSocketManager;
 

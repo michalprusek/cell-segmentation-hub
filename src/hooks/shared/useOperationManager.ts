@@ -85,7 +85,7 @@ export function useOperationManager(): OperationManager {
       socket.off('operation:cancelled', handleOperationCancelled);
       socket.off('operation:progress', handleOperationProgress);
     };
-  }, [socket]);
+  }, [socket, completeOperation, updateOperationProgress]);
 
   const startOperation = useCallback((id: string, type: OperationType) => {
     const operation: OperationState = {
