@@ -147,6 +147,10 @@ class InferenceExecutor:
         # Thread safety - model locks restored for CUDA safety
         self._sessions: Dict[str, InferenceSession] = {}
         self._global_lock = threading.RLock()
+
+        # Proactive memory monitoring
+        self._memory_warning_threshold = 0.8  # 80% of limit
+        self._memory_critical_threshold = 0.9  # 90% of limit
         self._model_locks: Dict[str, threading.RLock] = {}
 
         # Memory pressure monitoring
@@ -237,10 +241,11 @@ class InferenceExecutor:
         # Check resources before starting
         if self.enable_monitoring:
             self._check_resources()
-        
-        # Check GPU memory pressure before inference
+
+        # Proactive memory management
         if self.enable_monitoring and torch.cuda.is_available():
             self._check_gpu_memory_pressure()
+            self._proactive_memory_check()
 
         # Get CUDA stream for parallel execution
         cuda_stream = self.get_next_cuda_stream()
@@ -422,7 +427,39 @@ class InferenceExecutor:
             gc.collect()
 
             logger.info("Emergency GPU memory cleanup completed")
-    
+
+    def _proactive_memory_check(self):
+        """Proactive memory management with early warning and cleanup"""
+        if not torch.cuda.is_available():
+            return
+
+        total_memory = torch.cuda.get_device_properties(0).total_memory
+        allocated_memory = torch.cuda.memory_allocated()
+        memory_utilization = allocated_memory / total_memory
+
+        # Early warning at 80% threshold
+        if memory_utilization > self._memory_warning_threshold:
+            logger.warning(f"Memory usage approaching limit: {memory_utilization:.1%} utilized")
+
+            # Light cleanup at warning level
+            torch.cuda.empty_cache()
+            gc.collect()
+
+        # Critical threshold at 90% - more aggressive cleanup
+        if memory_utilization > self._memory_critical_threshold:
+            logger.error(f"Critical memory usage: {memory_utilization:.1%} utilized - triggering cleanup")
+            self._emergency_memory_cleanup()
+
+            # Re-check after cleanup
+            allocated_memory = torch.cuda.memory_allocated()
+            memory_utilization = allocated_memory / total_memory
+
+            if memory_utilization > self._memory_critical_threshold:
+                raise InferenceResourceError(
+                    f"GPU memory critically low after cleanup: {memory_utilization:.1%} utilized "
+                    f"({allocated_memory / 1024**3:.2f}GB / {total_memory / 1024**3:.2f}GB)"
+                )
+
     def _get_memory_usage(self) -> int:
         """Get current memory usage in bytes"""
         if torch.cuda.is_available():

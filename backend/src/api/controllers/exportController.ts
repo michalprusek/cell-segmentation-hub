@@ -145,7 +145,8 @@ export class ExportController {
       const resolvedFilePath = path.resolve(filePath);
       
       // Verify the resolved path is within the exports directory
-      if (!resolvedFilePath.startsWith(exportsBaseDir + path.sep) && resolvedFilePath !== exportsBaseDir) {
+      const rel = path.relative(exportsBaseDir, resolvedFilePath);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) {
         res.status(400).json({ error: 'Invalid file path' });
         return;
       }

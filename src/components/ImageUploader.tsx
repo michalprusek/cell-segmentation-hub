@@ -209,11 +209,13 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
               );
 
               setFiles(prev =>
-                prev.map((f, fileIndex) => {
+                prev.map(f => {
                   const fileId = getFileIdentifier(f);
                   if (fileIdentifiers.includes(fileId)) {
+                    const idx = fileIdentifiers.indexOf(fileId);
+                    if (idx === -1) return f;
                     // Calculate individual file progress
-                    if (fileIndex < currentChunkStartIndex) {
+                    if (idx < currentChunkStartIndex) {
                       // Files in completed chunks
                       return {
                         ...f,
@@ -221,8 +223,8 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
                         status: 'complete' as const,
                       };
                     } else if (
-                      fileIndex >= currentChunkStartIndex &&
-                      fileIndex < currentChunkEndIndex
+                      idx >= currentChunkStartIndex &&
+                      idx < currentChunkEndIndex
                     ) {
                       // Files in current chunk
                       return {
@@ -462,11 +464,17 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
     }
   }, [filesToUpload, projectId, handleUpload]);
 
+  const filesRef = React.useRef<FileWithPreview[]>([]);
+  useEffect(() => {
+    filesRef.current = files;
+  }, [files]);
   useEffect(() => {
     return () => {
-      files.forEach(file => URL.revokeObjectURL(file.preview || ''));
+      filesRef.current.forEach(f => {
+        if (f.preview) URL.revokeObjectURL(f.preview);
+      });
     };
-  }, [files]);
+  }, []);
 
   return (
     <div className="space-y-6">

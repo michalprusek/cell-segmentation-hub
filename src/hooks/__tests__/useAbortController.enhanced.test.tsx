@@ -32,7 +32,12 @@ interface UseAbortControllerReturn {
 const useAbortController = (
   options: UseAbortControllerOptions = {}
 ): UseAbortControllerReturn => {
-  const { onAbort, timeout, operationId: _operationId, operationType: _operationType } = options;
+  const {
+    onAbort,
+    timeout,
+    operationId: _operationId,
+    operationType: _operationType,
+  } = options;
 
   const [controller, setController] = React.useState(
     () => new AbortController()

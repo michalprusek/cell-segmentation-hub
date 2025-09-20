@@ -1208,4 +1208,85 @@ export class QueueService {
       throw error;
     }
   }
+
+  /**
+   * Cancel batch processing for a specific user and batch
+   * @param batchId Batch ID to cancel
+   * @param userId User ID requesting cancellation
+   * @returns Number of cancelled queue items
+   */
+  async cancelBatch(batchId: string, userId: string): Promise<number> {
+    try {
+      logger.info('Cancelling batch', 'QueueService', { batchId, userId });
+
+      // Find all queued items for this batch and user
+      const queuedItems = await this.prisma.segmentationQueue.findMany({
+        where: {
+          batchId,
+          userId,
+          status: 'queued'
+        },
+        include: {
+          image: true
+        }
+      });
+
+      if (queuedItems.length === 0) {
+        logger.info('No queued items found for batch cancellation', 'QueueService', { batchId, userId });
+        return 0;
+      }
+
+      // Delete queued items
+      const deleteResult = await this.prisma.segmentationQueue.deleteMany({
+        where: {
+          batchId,
+          userId,
+          status: 'queued'
+        }
+      });
+
+      // Update affected images' segmentation status to 'no_segmentation'
+      const imageIds = queuedItems.map(item => item.imageId);
+      await this.prisma.image.updateMany({
+        where: {
+          id: { in: imageIds }
+        },
+        data: {
+          segmentationStatus: 'no_segmentation'
+        }
+      });
+
+      // Emit cancellation events via WebSocket
+      const webSocketService = new (await import('./websocketService')).WebSocketService();
+      for (const item of queuedItems) {
+        webSocketService.sendToUser(userId, 'segmentation:cancelled', {
+          imageId: item.imageId,
+          batchId,
+          message: 'Batch processing cancelled by user'
+        });
+      }
+
+      // Update queue stats for affected projects
+      const projectIds = [...new Set(queuedItems.map(item => item.image.projectId))];
+      for (const projectId of projectIds) {
+        const stats = await this.getQueueStats(projectId);
+        webSocketService.sendToProject(projectId, 'queue:stats', stats);
+      }
+
+      logger.info('Batch cancelled successfully', 'QueueService', {
+        batchId,
+        userId,
+        cancelledCount: deleteResult.count,
+        affectedImages: imageIds.length
+      });
+
+      return deleteResult.count;
+    } catch (error) {
+      logger.error('Failed to cancel batch', error instanceof Error ? error : undefined, 'QueueService', {
+        batchId,
+        userId
+      });
+      throw error;
+    }
+  }
 }
