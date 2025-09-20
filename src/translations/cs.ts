@@ -338,12 +338,20 @@ export default {
     uploading: 'Nahrávání',
     processing: 'Zpracování',
     complete: 'Dokončeno',
+    completed: 'Dokončeno',
+    failed: 'Selhalo',
     error: 'Chyba',
+    unknownSize: 'Neznámá velikost',
     imageDeleted: 'Obrázek byl úspěšně smazán',
     deleteImageFailed: 'Smazání obrázku selhalo',
     deleteImageError: 'Chyba při mazání obrázku',
     imageAlreadyProcessing: 'Obrázek se již zpracovává',
     processImageFailed: 'Zpracování obrázku selhalo',
+    uploadCancelled: 'Nahrávání zrušeno',
+    uploadCancelledWithCleanup:
+      'Nahrávání zrušeno. Některé nahrané soubory může být nutné ručně vyčistit.',
+    uploadCancelledCleanupFailed:
+      'Nahrávání zrušeno, ale nepodařilo se vyčistit nahrané soubory',
   },
   settings: {
     pageTitle: 'Nastavení',
@@ -967,6 +975,7 @@ export default {
   },
   export: {
     advancedExport: 'Pokročilý export',
+    cancelExport: 'Zrušit export',
     advancedOptions: 'Pokročilé možnosti exportu',
     configureSettings:
       'Nakonfigurujte nastavení exportu pro vytvoření komplexního balíčku dat',

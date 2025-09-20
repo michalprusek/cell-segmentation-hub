@@ -418,6 +418,91 @@ class CacheService {
      */
     statistics: async (): Promise<number> => {
       return this.invalidatePattern('stats:*');
+    },
+
+    /**
+     * Invalidate project statistics after image operations
+     */
+    projectStats: async (projectId: string, userId: string): Promise<number> => {
+      const patterns = [
+        `stats:project:${projectId}:*`,
+        `stats:user:${userId}:dashboard:*`,
+        `stats:user:${userId}:projects:*`,
+        `project:${projectId}:stats:*`,
+        `user:${userId}:dashboard:*`,
+        // HTTP API cache patterns - CRITICAL for fixing stale project cards
+        `api:projects:*`,                    // Project list endpoints
+        `api:projects:${projectId}:*`,       // Individual project endpoints
+        `api:dashboard:*`,                   // Dashboard endpoints
+        `api:user:${userId}:projects:*`,     // User-specific project endpoints
+        `api:stats:*`                        // Statistics endpoints
+      ];
+
+      let totalDeleted = 0;
+      for (const pattern of patterns) {
+        totalDeleted += await this.invalidatePattern(pattern);
+      }
+
+      return totalDeleted;
+    },
+
+    /**
+     * Invalidate dashboard metrics for a user
+     */
+    dashboardMetrics: async (userId: string): Promise<number> => {
+      const patterns = [
+        `stats:user:${userId}:dashboard:*`,
+        `user:${userId}:dashboard:*`,
+        `stats:user:${userId}:overview:*`
+      ];
+
+      let totalDeleted = 0;
+      for (const pattern of patterns) {
+        totalDeleted += await this.invalidatePattern(pattern);
+      }
+
+      return totalDeleted;
+    },
+
+    /**
+     * Invalidate shared project caches for multiple users
+     */
+    sharedProject: async (projectId: string, userIds: string[]): Promise<number> => {
+      let totalDeleted = 0;
+
+      // Invalidate project stats
+      totalDeleted += await this.invalidatePattern(`stats:project:${projectId}:*`);
+
+      // Invalidate each user's dashboard and project list caches
+      for (const userId of userIds) {
+        const patterns = [
+          `stats:user:${userId}:dashboard:*`,
+          `stats:user:${userId}:projects:*`,
+          `user:${userId}:dashboard:*`,
+          `projects:user:${userId}:*`
+        ];
+
+        for (const pattern of patterns) {
+          totalDeleted += await this.invalidatePattern(pattern);
+        }
+      }
+
+      return totalDeleted;
+    },
+
+    /**
+     * Invalidate image-related caches including project stats
+     */
+    imageWithStats: async (imageId: string, projectId: string, userId: string): Promise<number> => {
+      let totalDeleted = 0;
+
+      // Invalidate image caches
+      totalDeleted += await this.invalidationStrategies.image(imageId, projectId);
+
+      // Invalidate project stats
+      totalDeleted += await this.invalidationStrategies.projectStats(projectId, userId);
+
+      return totalDeleted;
     }
   };
 

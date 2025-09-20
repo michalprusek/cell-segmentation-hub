@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 // useNavigate unused - available for future use
 import ProjectThumbnail from '@/components/project/ProjectThumbnail';
 import ProjectActions from '@/components/project/ProjectActions';
 import ProjectMetadata from '@/components/project/ProjectMetadata';
 import { Badge } from '@/components/ui/badge';
-import { Share2, Users, User } from 'lucide-react';
+import { Share2, Users, User, Activity } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useAuth } from '@/contexts/useAuth';
+import { useProjectCardUpdates } from '@/hooks/useProjectCardUpdates';
+import { formatDistanceToNow } from 'date-fns';
 
 interface ProjectCardProps {
   id: string;
@@ -16,6 +18,8 @@ interface ProjectCardProps {
   thumbnail: string;
   date: string;
   imageCount: number;
+  segmentedCount?: number;
+  lastUpdated?: string;
   onClick?: () => void;
   isShared?: boolean;
   sharedBy?: { email: string };
@@ -32,6 +36,8 @@ const ProjectCard = React.memo(
     thumbnail,
     date,
     imageCount,
+    segmentedCount = 0,
+    lastUpdated,
     onClick,
     isShared = false,
     sharedBy: _sharedBy,
@@ -42,6 +48,45 @@ const ProjectCard = React.memo(
     const { t } = useLanguage();
     const { user: _user } = useAuth();
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+
+    // Get real-time project stats updates
+    const {
+      stats,
+      lastUpdate,
+      error: wsError,
+    } = useProjectCardUpdates({
+      projectId: id,
+      isShared,
+      ownerId: owner?.email ? owner.email : undefined,
+    });
+
+    // Calculate display values - use real-time stats when available, fallback to props
+    const displayValues = useMemo(() => {
+      const currentImageCount = stats?.imageCount ?? imageCount;
+      const currentSegmentedCount = stats?.segmentedCount ?? segmentedCount;
+      const currentLastUpdated =
+        stats?.lastUpdated ?? (lastUpdated ? new Date(lastUpdated) : null);
+
+      // Calculate segmentation progress
+      const segmentationProgress =
+        currentImageCount > 0
+          ? Math.round((currentSegmentedCount / currentImageCount) * 100)
+          : 0;
+
+      // Format last updated time
+      const formattedLastUpdate = currentLastUpdated
+        ? formatDistanceToNow(currentLastUpdated, { addSuffix: true })
+        : date;
+
+      return {
+        imageCount: currentImageCount,
+        segmentedCount: currentSegmentedCount,
+        segmentationProgress,
+        lastUpdated: formattedLastUpdate,
+        hasRecentUpdate:
+          lastUpdate && Date.now() - lastUpdate.getTime() < 60000, // Updated in last minute
+      };
+    }, [stats, imageCount, segmentedCount, lastUpdated, lastUpdate, date]);
 
     const handleCardClick = (e: React.MouseEvent) => {
       // Don't navigate if any dialog is open
@@ -121,7 +166,52 @@ const ProjectCard = React.memo(
           <p className="text-sm text-gray-500 line-clamp-2 mb-3">
             {description}
           </p>
-          <ProjectMetadata date={date} imageCount={imageCount} />
+
+          {/* Enhanced metadata with real-time stats */}
+          <div className="space-y-2">
+            <ProjectMetadata
+              date={displayValues.lastUpdated}
+              imageCount={displayValues.imageCount}
+            />
+
+            {/* Segmentation progress bar and stats */}
+            {displayValues.segmentedCount > 0 && (
+              <div className="flex items-center justify-between text-xs text-gray-500">
+                <div className="flex items-center space-x-1">
+                  <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-green-500 transition-all duration-300"
+                      style={{
+                        width: `${displayValues.segmentationProgress}%`,
+                      }}
+                    />
+                  </div>
+                  <span>
+                    {displayValues.segmentedCount}/{displayValues.imageCount}{' '}
+                    {t('common.segmented').toLowerCase()}
+                  </span>
+                </div>
+                <span className="font-medium">
+                  {displayValues.segmentationProgress}%
+                </span>
+              </div>
+            )}
+
+            {/* Real-time update indicator */}
+            {displayValues.hasRecentUpdate && (
+              <div className="flex items-center text-xs text-green-600 dark:text-green-400">
+                <Activity className="h-3 w-3 mr-1 animate-pulse" />
+                <span>Recently updated</span>
+              </div>
+            )}
+
+            {/* WebSocket error indicator */}
+            {wsError && (
+              <div className="text-xs text-amber-600 dark:text-amber-400">
+                Real-time updates unavailable
+              </div>
+            )}
+          </div>
         </CardContent>
       </Card>
     );

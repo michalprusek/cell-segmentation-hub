@@ -342,7 +342,10 @@ export default {
     uploading: 'Hochladen',
     processing: 'Verarbeitung',
     complete: 'Abgeschlossen',
+    completed: 'Abgeschlossen',
+    failed: 'Fehlgeschlagen',
     error: 'Fehler',
+    unknownSize: 'Unbekannte Größe',
     imageDeleted: 'Bild erfolgreich gelöscht',
     deleteImageFailed: 'Löschen des Bildes fehlgeschlagen',
     deleteImageError: 'Fehler beim Löschen des Bildes',
@@ -973,6 +976,7 @@ export default {
   },
   export: {
     advancedExport: 'Erweiterter Export',
+    cancelExport: 'Export abbrechen',
     advancedOptions: 'Erweiterte Export-Optionen',
     configureSettings:
       'Konfigurieren Sie Ihre Export-Einstellungen, um ein umfassendes Datenpaket zu erstellen',

@@ -88,7 +88,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         completedJobId,
         wsConnected,
         currentJob,
-      } = useAdvancedExport(projectId);
+      } = useAdvancedExport(projectId, projectName);
 
       const [activeTab, setActiveTab] = useState('general');
 
@@ -751,12 +751,8 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
             )}
 
             <DialogFooter>
-              <Button
-                variant={isExporting ? 'destructive' : 'outline'}
-                onClick={isExporting ? cancelExport : onClose}
-                disabled={false}
-              >
-                {t('export.cancel')}
+              <Button variant="outline" onClick={onClose} disabled={false}>
+                {t('common.close')}
               </Button>
               {!isExporting && (
                 <Button onClick={handleExport} disabled={isExporting}>

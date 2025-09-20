@@ -1,4 +1,4 @@
-import { vi } from 'vitest';
+// Mock utilities for upload testing (Jest-compatible)
 
 /**
  * Mock file data generator for upload testing
@@ -203,21 +203,21 @@ export class UploadMockGenerator {
    */
   static createMockWebSocket() {
     const mockSocket = {
-      emit: vi.fn(),
-      on: vi.fn(),
-      off: vi.fn(),
-      join: vi.fn(),
-      leave: vi.fn(),
-      to: vi.fn().mockReturnThis(),
+      emit: jest.fn(),
+      on: jest.fn(),
+      off: jest.fn(),
+      join: jest.fn(),
+      leave: jest.fn(),
+      to: jest.fn().mockReturnThis(),
       connected: true,
       id: 'mock-socket-id',
     };
 
     const mockIo = {
-      to: vi.fn().mockReturnValue({
-        emit: vi.fn(),
+      to: jest.fn().mockReturnValue({
+        emit: jest.fn(),
       }),
-      emit: vi.fn(),
+      emit: jest.fn(),
     };
 
     return { mockSocket, mockIo };
@@ -228,7 +228,7 @@ export class UploadMockGenerator {
    */
   static createMockProgressCallback() {
     const progressEvents: number[] = [];
-    const callback = vi.fn((progress: number) => {
+    const callback = jest.fn((progress: number) => {
       progressEvents.push(progress);
     });
 

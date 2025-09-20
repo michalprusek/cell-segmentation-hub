@@ -4,7 +4,15 @@ import React, { useState, useEffect } from 'react';
 // Constants
 const MAX_PAGES = 40;
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Microscope, Image, FileUp, HardDrive, Activity, Wifi, WifiOff } from 'lucide-react';
+import {
+  Microscope,
+  Image,
+  FileUp,
+  HardDrive,
+  Activity,
+  Wifi,
+  WifiOff,
+} from 'lucide-react';
 import apiClient from '@/lib/api';
 import { useAuth, useLanguage } from '@/contexts/exports';
 import { getErrorMessage } from '@/types';
@@ -34,7 +42,9 @@ const StatCard = ({
   hasRecentUpdate = false,
   isLoading = false,
 }: StatCardProps) => (
-  <Card className={`transition-all duration-300 hover:shadow-md dark:bg-gray-800 dark:border-gray-700 ${hasRecentUpdate ? 'ring-2 ring-green-200 dark:ring-green-800' : ''}`}>
+  <Card
+    className={`transition-all duration-300 hover:shadow-md dark:bg-gray-800 dark:border-gray-700 ${hasRecentUpdate ? 'ring-2 ring-green-200 dark:ring-green-800' : ''}`}
+  >
     <CardHeader className="flex flex-row items-center justify-between pb-2">
       <div className="flex items-center space-x-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -116,14 +126,15 @@ const StatsOverview = () => {
     lastUpdate,
     isLoading: metricsLoading,
     error: metricsError,
-    refreshMetrics
+    refreshMetrics,
   } = useDashboardMetrics({
     enableNotifications: true,
-    notificationThreshold: 1
+    notificationThreshold: 1,
   });
 
   // Check if we have recent real-time updates
-  const hasRecentUpdate = lastUpdate && Date.now() - lastUpdate.getTime() < 60000; // Within last minute
+  const hasRecentUpdate =
+    lastUpdate && Date.now() - lastUpdate.getTime() < 60000; // Within last minute
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -272,17 +283,22 @@ const StatsOverview = () => {
   const displayValues = {
     totalProjects: realTimeMetrics?.totalProjects ?? projectCount,
     processedImages: realTimeMetrics?.totalSegmented ?? completedImageCount,
-    uploadedToday: realTimeMetrics?.recentActivity.imagesUploadedToday ?? todayUploadCount,
+    uploadedToday:
+      realTimeMetrics?.recentActivity.imagesUploadedToday ?? todayUploadCount,
     storageUsed: formattedMetrics?.storageFormatted.totalSize ?? storageUsed,
-    storageGrowth: formattedMetrics?.storageFormatted.averageImageSize ?? storageGrowth,
+    storageGrowth:
+      formattedMetrics?.storageFormatted.averageImageSize ?? storageGrowth,
     segmentationEfficiency: formattedMetrics?.storageFormatted.efficiency ?? 0,
-    queueLength: realTimeMetrics?.systemStats.queueLength ?? 0
+    queueLength: realTimeMetrics?.systemStats.queueLength ?? 0,
   };
 
   const stats = [
     {
       title: t('dashboard.stats.totalProjects'),
-      value: (loading && !realTimeMetrics) ? '...' : String(displayValues.totalProjects),
+      value:
+        loading && !realTimeMetrics
+          ? '...'
+          : String(displayValues.totalProjects),
       description: t('dashboard.stats.totalProjectsDesc'),
       icon: <Microscope size={16} />,
       isRealTime: !!realTimeMetrics,
@@ -291,33 +307,45 @@ const StatsOverview = () => {
     },
     {
       title: t('dashboard.stats.processedImages'),
-      value: (loading && !realTimeMetrics) ? '...' : String(displayValues.processedImages),
+      value:
+        loading && !realTimeMetrics
+          ? '...'
+          : String(displayValues.processedImages),
       description: t('dashboard.stats.processedImagesDesc'),
       icon: <Image size={16} />,
       isRealTime: !!realTimeMetrics,
       hasRecentUpdate: hasRecentUpdate,
       isLoading: metricsLoading,
-      trend: displayValues.segmentationEfficiency > 0 ? {
-        value: `${displayValues.segmentationEfficiency}% efficiency`,
-        isPositive: displayValues.segmentationEfficiency > 50
-      } : undefined,
+      trend:
+        displayValues.segmentationEfficiency > 0
+          ? {
+              value: `${displayValues.segmentationEfficiency}% efficiency`,
+              isPositive: displayValues.segmentationEfficiency > 50,
+            }
+          : undefined,
     },
     {
       title: t('dashboard.stats.uploadedToday'),
-      value: (loading && !realTimeMetrics) ? '...' : String(displayValues.uploadedToday),
+      value:
+        loading && !realTimeMetrics
+          ? '...'
+          : String(displayValues.uploadedToday),
       description: t('dashboard.stats.uploadedTodayDesc'),
       icon: <FileUp size={16} />,
       isRealTime: !!realTimeMetrics,
       hasRecentUpdate: hasRecentUpdate,
       isLoading: metricsLoading,
-      trend: displayValues.queueLength > 0 ? {
-        value: `${displayValues.queueLength} in queue`,
-        isPositive: false
-      } : undefined,
+      trend:
+        displayValues.queueLength > 0
+          ? {
+              value: `${displayValues.queueLength} in queue`,
+              isPositive: false,
+            }
+          : undefined,
     },
     {
       title: t('dashboard.stats.storageUsed'),
-      value: (loading && !realTimeMetrics) ? '...' : displayValues.storageUsed,
+      value: loading && !realTimeMetrics ? '...' : displayValues.storageUsed,
       description:
         displayValues.storageGrowth !== '0 MB'
           ? `Avg: ${displayValues.storageGrowth}`
@@ -359,7 +387,8 @@ const StatsOverview = () => {
       {/* Real-time info footer */}
       {realTimeMetrics && lastUpdate && (
         <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-          Last updated: {lastUpdate.toLocaleTimeString()} • Real-time data enabled
+          Last updated: {lastUpdate.toLocaleTimeString()} • Real-time data
+          enabled
         </div>
       )}
     </div>

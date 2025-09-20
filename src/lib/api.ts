@@ -1039,10 +1039,19 @@ class ApiClient {
       throw new Error('No valid files to upload');
     }
 
-    // If we have a small number of files, use regular upload
-    if (validFiles.length <= DEFAULT_CHUNKING_CONFIG.chunkSize) {
+    // Smart chunking decision: consider both file count AND payload size
+    const totalPayloadSize = validFiles.reduce(
+      (sum, file) => sum + file.size,
+      0
+    );
+    const maxPayloadSize = 40 * 1024 * 1024; // 40MB safety limit (below 50MB Express limit)
+    const shouldUseChunking =
+      validFiles.length > DEFAULT_CHUNKING_CONFIG.chunkSize ||
+      totalPayloadSize > maxPayloadSize;
+
+    if (!shouldUseChunking) {
       logger.info(
-        `Using regular upload for ${validFiles.length} files (under chunk limit)`
+        `Using regular upload for ${validFiles.length} files (${(totalPayloadSize / (1024 * 1024)).toFixed(1)}MB payload)`
       );
       try {
         const result = await this.uploadImages(

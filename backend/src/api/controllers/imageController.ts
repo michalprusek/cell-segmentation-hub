@@ -3,22 +3,29 @@ import { ImageService } from '../../services/imageService';
 import { ThumbnailService } from '../../services/thumbnailService';
 import { SegmentationThumbnailService } from '../../services/segmentationThumbnailService';
 import { WebSocketService } from '../../services/websocketService';
+import { ProjectStatsService } from '../../services/projectStatsService';
 import { WebSocketEvent, UploadProgressData, UploadCompletedData } from '../../types/websocket';
 import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/index';
 import { getStorageProvider } from '../../storage/index';
 import { ApiError } from '../../middleware/error';
+import { cacheService } from '../../services/cacheService';
 
 export class ImageController {
   private imageService: ImageService;
   private thumbnailService: ThumbnailService;
   private segmentationThumbnailService: SegmentationThumbnailService;
+  private projectStatsService: ProjectStatsService;
 
   constructor() {
     this.imageService = new ImageService(prisma);
     this.thumbnailService = new ThumbnailService(prisma);
     this.segmentationThumbnailService = new SegmentationThumbnailService(prisma);
+
+    // Initialize ProjectStatsService with WebSocket service
+    const wsService = WebSocketService.getInstance();
+    this.projectStatsService = new ProjectStatsService(prisma, wsService);
   }
 
   /**
@@ -158,6 +165,23 @@ export class ImageController {
       };
       
       wsService.emitToUser(userId, WebSocketEvent.UPLOAD_COMPLETED, completedData);
+
+      // Update project statistics and emit real-time updates
+      if (uploadedImages.length > 0) {
+        const uploadedImageIds = uploadedImages.map(img => img.id);
+
+        // Handle statistics update with WebSocket emissions
+        await this.projectStatsService.handleImageUpload(projectId, userId, uploadedImageIds);
+
+        // Invalidate relevant caches
+        await cacheService.invalidationStrategies.projectStats(projectId, userId);
+
+        logger.info('Project statistics updated after image upload', 'ImageController', {
+          projectId,
+          userId,
+          uploadedCount: uploadedImages.length
+        });
+      }
 
       ResponseHelper.success(res, {
         images: uploadedImages,
@@ -333,7 +357,28 @@ export class ImageController {
         userId
       });
 
+      // Get image details before deletion to retrieve project ID
+      const image = await this.imageService.getImageById(imageId, userId);
+      if (!image) {
+        ResponseHelper.notFound(res, 'Obrázek nenalezen');
+        return;
+      }
+
+      const projectId = image.projectId;
+
       await this.imageService.deleteImage(imageId, userId);
+
+      // Update project statistics and emit real-time updates
+      await this.projectStatsService.handleImageDeletion(projectId, userId, [imageId]);
+
+      // Invalidate relevant caches
+      await cacheService.invalidationStrategies.imageWithStats(imageId, projectId, userId);
+
+      logger.info('Project statistics updated after image deletion', 'ImageController', {
+        projectId,
+        userId,
+        imageId
+      });
 
       ResponseHelper.success(res, null, 'Obrázek byl úspěšně smazán');
 
@@ -378,6 +423,23 @@ export class ImageController {
       });
 
       const result = await this.imageService.deleteBatch(imageIds, userId, projectId);
+
+      // Update project statistics and emit real-time updates for successful deletions
+      if (result.deletedCount > 0) {
+        const deletedImageIds = imageIds.filter(id => !result.failedIds?.includes(id));
+
+        // Handle batch statistics update with WebSocket emissions
+        await this.projectStatsService.handleBatchOperation(projectId, userId, 'batch_deleted', deletedImageIds);
+
+        // Invalidate relevant caches
+        await cacheService.invalidationStrategies.projectStats(projectId, userId);
+
+        logger.info('Project statistics updated after batch deletion', 'ImageController', {
+          projectId,
+          userId,
+          deletedCount: result.deletedCount
+        });
+      }
 
       logger.info('Batch delete completed', 'ImageController', {
         deletedCount: result.deletedCount,

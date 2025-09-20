@@ -335,12 +335,20 @@ export default {
     uploading: 'Uploading',
     processing: 'Processing',
     complete: 'Complete',
+    completed: 'Completed',
+    failed: 'Failed',
     error: 'Error',
+    unknownSize: 'Unknown size',
     imageDeleted: 'Image deleted successfully',
     deleteImageFailed: 'Failed to delete image',
     deleteImageError: 'Error deleting image',
     imageAlreadyProcessing: 'Image is already being processed',
     processImageFailed: 'Failed to process image',
+    uploadCancelled: 'Upload cancelled',
+    uploadCancelledWithCleanup:
+      'Upload cancelled. Some uploaded files may need manual cleanup.',
+    uploadCancelledCleanupFailed:
+      'Upload cancelled but failed to clean up uploaded files',
   },
   settings: {
     pageTitle: 'Settings',
@@ -968,6 +976,7 @@ export default {
   export: {
     // Dialog headers
     advancedExport: 'Advanced Export',
+    cancelExport: 'Cancel Export',
     advancedOptions: 'Advanced Export Options',
     configureSettings:
       'Configure your export settings to create a comprehensive dataset package',

@@ -1125,8 +1125,8 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
     exportDir: string,
     projectName: string
   ): Promise<string> {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    const zipName = `${projectName}_export_${timestamp}.zip`;
+    const { createExportFilename } = await import('../utils/filenameUtils');
+    const zipName = createExportFilename(projectName);
     const zipPath = path.join(process.env.EXPORT_DIR || './exports', zipName);
 
     const output = await fs.open(zipPath, 'w');

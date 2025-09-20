@@ -337,7 +337,10 @@ export default {
     uploading: 'Téléchargement',
     processing: 'Traitement',
     complete: 'Terminé',
+    completed: 'Terminé',
+    failed: 'Échoué',
     error: 'Erreur',
+    unknownSize: 'Taille inconnue',
     imageDeleted: 'Image supprimée avec succès',
     deleteImageFailed: "Échec de la suppression de l'image",
     deleteImageError: "Erreur lors de la suppression de l'image",
@@ -963,6 +966,7 @@ export default {
   },
   export: {
     advancedExport: 'Export Avancé',
+    cancelExport: "Annuler l'export",
     advancedOptions: "Options d'Exportation Avancées",
     configureSettings:
       "Configurez vos paramètres d'exportation pour créer un package de données complet",

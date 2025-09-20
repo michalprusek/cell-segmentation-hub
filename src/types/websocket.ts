@@ -117,6 +117,114 @@ export interface ParallelProcessingStatusMessage extends BaseWebSocketMessage {
   };
 }
 
+// ============================================================================
+// Project Statistics Events
+// ============================================================================
+
+/**
+ * Project statistics data structure
+ */
+export interface ProjectStats {
+  imageCount: number;
+  segmentedCount: number;
+  pendingCount: number;
+  failedCount: number;
+  lastUpdated: Date;
+  lastImageAdded?: Date;
+  lastSegmentationCompleted?: Date;
+  totalFileSize?: number;
+}
+
+/**
+ * Project statistics update message
+ */
+export interface ProjectStatsUpdateMessage extends BaseWebSocketMessage {
+  type: 'projectStatsUpdate';
+  stats: ProjectStats;
+  operation:
+    | 'images_added'
+    | 'images_deleted'
+    | 'segmentation_completed'
+    | 'segmentation_failed'
+    | 'batch_uploaded'
+    | 'batch_deleted';
+  affectedImageIds?: string[];
+}
+
+/**
+ * Shared project update message
+ */
+export interface SharedProjectUpdateMessage extends BaseWebSocketMessage {
+  type: 'sharedProjectUpdate';
+  ownerId: string;
+  sharedWithUserIds: string[];
+  updateType:
+    | 'images_added'
+    | 'images_deleted'
+    | 'segmentation_completed'
+    | 'project_updated';
+  stats: ProjectStats;
+}
+
+// ============================================================================
+// Dashboard Metrics Events
+// ============================================================================
+
+/**
+ * Dashboard metrics data structure
+ */
+export interface DashboardMetrics {
+  totalProjects: number;
+  totalImages: number;
+  totalSegmented: number;
+  recentActivity: {
+    imagesUploadedToday: number;
+    segmentationsCompletedToday: number;
+    projectsCreatedThisWeek: number;
+  };
+  systemStats: {
+    queueLength: number;
+    processingImages: number;
+    avgProcessingTime: number;
+  };
+  storageStats: {
+    totalStorageMB: number;
+    totalStorageGB: number;
+    averageImageSizeMB: number;
+  };
+}
+
+/**
+ * Dashboard metrics update message
+ */
+export interface DashboardMetricsUpdateMessage extends BaseWebSocketMessage {
+  type: 'dashboardMetricsUpdate';
+  metrics: DashboardMetrics;
+  changedFields: string[]; // Array of field names that changed
+}
+
+/**
+ * User activity update message
+ */
+export interface UserActivityUpdateMessage extends BaseWebSocketMessage {
+  type: 'userActivityUpdate';
+  activity: {
+    type:
+      | 'project_created'
+      | 'images_uploaded'
+      | 'segmentation_completed'
+      | 'project_shared'
+      | 'images_deleted';
+    projectName?: string;
+    details: {
+      count?: number;
+      duration?: number;
+      success?: boolean;
+      fileNames?: string[];
+    };
+  };
+}
+
 /**
  * Union type of all possible WebSocket messages
  */
@@ -127,7 +235,11 @@ export type WebSocketMessage =
   | SegmentationFailedMessage
   | SegmentationProgressMessage
   | ConnectionStatusMessage
-  | ParallelProcessingStatusMessage;
+  | ParallelProcessingStatusMessage
+  | ProjectStatsUpdateMessage
+  | SharedProjectUpdateMessage
+  | DashboardMetricsUpdateMessage
+  | UserActivityUpdateMessage;
 
 /**
  * Type guard functions for message type checking
@@ -161,6 +273,23 @@ export const isParallelProcessingStatusMessage = (
 ): msg is ParallelProcessingStatusMessage =>
   msg.type === 'parallelProcessingStatus';
 
+export const isProjectStatsUpdateMessage = (
+  msg: WebSocketMessage
+): msg is ProjectStatsUpdateMessage => msg.type === 'projectStatsUpdate';
+
+export const isSharedProjectUpdateMessage = (
+  msg: WebSocketMessage
+): msg is SharedProjectUpdateMessage => msg.type === 'sharedProjectUpdate';
+
+export const isDashboardMetricsUpdateMessage = (
+  msg: WebSocketMessage
+): msg is DashboardMetricsUpdateMessage =>
+  msg.type === 'dashboardMetricsUpdate';
+
+export const isUserActivityUpdateMessage = (
+  msg: WebSocketMessage
+): msg is UserActivityUpdateMessage => msg.type === 'userActivityUpdate';
+
 /**
  * WebSocket event names mapped to their payload types
  */
@@ -172,6 +301,10 @@ export interface WebSocketEventMap {
   segmentationProgress: SegmentationProgressMessage;
   connectionStatus: ConnectionStatusMessage;
   parallelProcessingStatus: ParallelProcessingStatusMessage;
+  projectStatsUpdate: ProjectStatsUpdateMessage;
+  sharedProjectUpdate: SharedProjectUpdateMessage;
+  dashboardMetricsUpdate: DashboardMetricsUpdateMessage;
+  userActivityUpdate: UserActivityUpdateMessage;
   connect: void;
   disconnect: { reason?: string };
   error: Error;

@@ -3,6 +3,7 @@ import { logger } from '../utils/logger';
 import { SegmentationService, SegmentationResponse } from './segmentationService';
 import { ImageService } from './imageService';
 import { WebSocketService } from './websocketService';
+import { ProjectStatsService } from './projectStatsService';
 import { batchProcessor } from '../utils/batchProcessor';
 import { SegmentationUpdateData, ParallelProcessingStatusData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
@@ -37,6 +38,7 @@ export class QueueService {
     cbam_resunet: 4
   };
   private websocketService: WebSocketService | null = null;
+  private projectStatsService: ProjectStatsService | null = null;
   private queueWorkerInstance: unknown = null; // Reference to QueueWorker for triggering
 
   constructor(
@@ -46,6 +48,7 @@ export class QueueService {
   ) {
     // WebSocket service will be set after initialization
     this.websocketService = null;
+    this.projectStatsService = null;
   }
 
   /**
@@ -75,6 +78,12 @@ export class QueueService {
   
   public setWebSocketService(wsService: WebSocketService): void {
     this.websocketService = wsService;
+
+    // Initialize ProjectStatsService with WebSocket service
+    if (!this.projectStatsService) {
+      this.projectStatsService = new ProjectStatsService(this.prisma, wsService);
+    }
+
     logger.info('WebSocket service connected to QueueService', 'QueueService');
   }
 
@@ -706,13 +715,26 @@ export class QueueService {
               status: 'segmented',  // Changed from 'completed' to match database status
               queueId: item.id
             });
-            
+
             this.websocketService.emitSegmentationComplete(
               item.userId,
               item.imageId,
               item.projectId,
               result.polygons.length
             );
+          }
+
+          // Update project statistics after successful segmentation
+          if (this.projectStatsService) {
+            try {
+              await this.projectStatsService.handleSegmentationCompletion(item.projectId, item.userId, item.imageId);
+            } catch (error) {
+              logger.error('Failed to update project stats after segmentation completion', error instanceof Error ? error : undefined, 'QueueService', {
+                projectId: item.projectId,
+                userId: item.userId,
+                imageId: item.imageId
+              });
+            }
           }
 
           logger.info('Batch item processed successfully and removed from queue', 'QueueService', {
@@ -770,6 +792,19 @@ export class QueueService {
               item.projectId,
               0 // 0 polygons found
             );
+          }
+
+          // Update project statistics after segmentation attempt (even if no polygons found)
+          if (this.projectStatsService) {
+            try {
+              await this.projectStatsService.handleSegmentationCompletion(item.projectId, item.userId, item.imageId);
+            } catch (error) {
+              logger.error('Failed to update project stats after segmentation completion (no polygons)', error instanceof Error ? error : undefined, 'QueueService', {
+                projectId: item.projectId,
+                userId: item.userId,
+                imageId: item.imageId
+              });
+            }
           }
 
           logger.info('Batch item completed with no polygons - empty result saved as no_segmentation and removed from queue', 'QueueService', {

@@ -127,3 +127,5 @@ real-*-measurements-*.json
 
 .eslintcache
 .github/workflows/ci-cd.yml
+*.md
+.serena/

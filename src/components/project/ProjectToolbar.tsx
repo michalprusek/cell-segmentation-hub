@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { SlidersHorizontal, Package, Trash2, Loader2 } from 'lucide-react';
+import { SlidersHorizontal, Package, Trash2, Loader2, X } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -13,6 +13,8 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AdvancedExportDialog } from '@/pages/export/AdvancedExportDialog';
 import ExportStateManager from '@/lib/exportStateManager';
+import { useAdvancedExport } from '@/pages/export/hooks/useAdvancedExport';
+import { toast } from 'sonner';
 
 interface ProjectToolbarProps {
   searchTerm?: string;
@@ -67,6 +69,9 @@ const ProjectToolbar = ({
   const [isExporting, setIsExporting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // Use the advanced export hook for cancellation functionality
+  const { cancelExport, currentJob } = useAdvancedExport(projectId || '');
+
   // Check for persisted export state on mount
   useEffect(() => {
     if (projectId) {
@@ -112,6 +117,16 @@ const ProjectToolbar = ({
 
   const handleExport = () => {
     setShowExportDialog(true);
+  };
+
+  const handleCancelExport = async () => {
+    try {
+      await cancelExport();
+      toast.success(t('export.cancelled'));
+    } catch (error) {
+      console.error('Failed to cancel export:', error);
+      toast.error(t('export.cancelFailed'));
+    }
   };
 
   return (
@@ -208,19 +223,20 @@ const ProjectToolbar = ({
           </Button>
         )}
 
-        {/* Export tlačítko zobrazit pouze pokud je požadováno */}
+        {/* Export/Cancel Export tlačítko zobrazit pouze pokud je požadováno */}
         {showExportButton && projectId && (
           <Button
-            variant="outline"
+            variant={isExporting ? 'destructive' : 'outline'}
             size="sm"
             className="flex items-center h-9"
-            onClick={handleExport}
-            disabled={isExporting || isDownloading}
+            onClick={isExporting ? handleCancelExport : handleExport}
+            disabled={isDownloading}
           >
             {isExporting ? (
               <>
                 <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                {t('export.processingExport')}
+                <X className="mr-1 h-4 w-4" />
+                {t('export.cancelExport')}
               </>
             ) : isDownloading ? (
               <>

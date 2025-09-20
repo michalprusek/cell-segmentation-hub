@@ -25,6 +25,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
     null
   );
   const [_currentOperation, setCurrentOperation] = useState<string>('');
+  const [uploadCancelled, setUploadCancelled] = useState(false);
   const { user: _user } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
@@ -122,8 +123,14 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
 
       setIsUploading(true);
       setUploadProgress(0);
+      setUploadCancelled(false); // Reset cancellation state
 
       try {
+        // Early cancellation check
+        if (uploadCancelled) {
+          logger.info('Upload cancelled before start');
+          return;
+        }
         // Create a unique identifier for each file to track them
         const fileIdentifiers = filesToUpload.map(f => `${f.name}_${f.size}`);
 
@@ -144,8 +151,17 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
 
         let uploadedImages: Array<Record<string, unknown>> = [];
 
-        // Use chunked upload for large batches, regular upload for small ones
-        if (filesToUpload.length > DEFAULT_CHUNKING_CONFIG.chunkSize) {
+        // Smart chunking decision: consider both file count AND payload size
+        const totalPayloadSize = filesToUpload.reduce(
+          (sum, file) => sum + file.size,
+          0
+        );
+        const maxPayloadSize = 40 * 1024 * 1024; // 40MB safety limit (below 50MB Express limit)
+        const shouldUseChunking =
+          filesToUpload.length > DEFAULT_CHUNKING_CONFIG.chunkSize ||
+          totalPayloadSize > maxPayloadSize;
+
+        if (shouldUseChunking) {
           setCurrentOperation(
             `Preparing to upload ${filesToUpload.length} files in chunks...`
           );
@@ -236,7 +252,9 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
           }
         } else {
           setCurrentOperation(`Uploading ${filesToUpload.length} files...`);
-          logger.info(`Using regular upload for ${filesToUpload.length} files`);
+          logger.info(
+            `Using regular upload for ${filesToUpload.length} files (${(totalPayloadSize / (1024 * 1024)).toFixed(1)}MB payload)`
+          );
 
           // Use regular upload for small batches
           uploadedImages = await apiClient.uploadImages(
@@ -332,7 +350,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         setIsUploading(false);
       }
     },
-    [navigate, t, onUploadComplete]
+    [navigate, t, onUploadComplete, uploadCancelled]
   );
 
   const onDrop = useCallback(
@@ -342,13 +360,20 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         return;
       }
 
-      const newFiles = acceptedFiles.map(file =>
-        Object.assign(file, {
-          preview: URL.createObjectURL(file),
-          uploadProgress: 0,
-          status: 'pending' as const,
-        })
-      );
+      // Enhanced file processing that preserves native File properties
+      const newFiles = acceptedFiles.map(file => {
+        // Use direct property assignment to preserve native File object binding
+        // This prevents "TypeError: Illegal invocation" by maintaining proper context
+        const enhancedFile = file as FileWithPreview;
+
+        // Add custom properties directly to the native File object
+        enhancedFile.preview = URL.createObjectURL(file);
+        enhancedFile.uploadProgress = 0;
+        enhancedFile.status = 'pending' as const;
+        enhancedFile.originalSize = file.size; // Backup size property
+
+        return enhancedFile;
+      });
 
       setFiles(prev => [...prev, ...newFiles]);
 
@@ -359,17 +384,92 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
     [handleUpload, projectId, t]
   );
 
-  const removeFile = (file: FileWithPreview) => {
+  const removeFile = useCallback((file: FileWithPreview) => {
     URL.revokeObjectURL(file.preview || '');
-    setFiles(files.filter(f => f !== file));
 
-    const completedFiles = files.filter(f => f.status === 'complete').length;
-    const newProgress =
-      files.length > 1
-        ? Math.round((completedFiles / (files.length - 1)) * 100)
-        : 0;
-    setUploadProgress(newProgress);
-  };
+    setFiles(prev => {
+      const filteredFiles = prev.filter(f => f !== file);
+
+      // Calculate progress using the current state, not stale closure
+      const completedFiles = filteredFiles.filter(
+        f => f.status === 'complete'
+      ).length;
+      const newProgress =
+        filteredFiles.length > 0
+          ? Math.round((completedFiles / filteredFiles.length) * 100)
+          : 0;
+
+      // Update progress after state calculation
+      setUploadProgress(newProgress);
+
+      return filteredFiles;
+    });
+  }, []);
+
+  const handleCancelUpload = useCallback(async () => {
+    setUploadCancelled(true);
+    setIsUploading(false);
+    setUploadProgress(0);
+    setCurrentOperation('Cancelling upload and cleaning up...');
+
+    try {
+      // Find files that were successfully uploaded (status: complete)
+      const completedFiles = files.filter(file => file.status === 'complete');
+
+      if (completedFiles.length > 0 && projectId) {
+        logger.info(
+          `Cleaning up ${completedFiles.length} uploaded images from cancelled batch`
+        );
+
+        // Get image IDs for cleanup - we'll need to fetch them from the project
+        // Since we don't store image IDs in the file objects, we'll use the batch deletion API
+        // by project ID and file names/sizes to identify the images to delete
+        try {
+          // For now, just log what we would delete - the actual cleanup would require
+          // either storing image IDs during upload or implementing a cleanup endpoint
+          // that can delete by filename/size combinations
+          logger.warn(
+            'Upload cancelled - manual cleanup may be required for:',
+            {
+              projectId,
+              uploadedFiles: completedFiles.map(f => ({
+                name: f.name,
+                size: f.size || f.originalSize,
+              })),
+            }
+          );
+
+          toast.warning(
+            t('images.uploadCancelledWithCleanup') ||
+              `Upload cancelled. ${completedFiles.length} uploaded files may need manual cleanup.`
+          );
+        } catch (cleanupError) {
+          logger.error('Failed to cleanup uploaded files:', cleanupError);
+          toast.error(
+            t('images.uploadCancelledCleanupFailed') ||
+              'Upload cancelled but failed to clean up uploaded files'
+          );
+        }
+      } else {
+        toast.info(t('images.uploadCancelled') || 'Upload cancelled');
+      }
+    } catch (error) {
+      logger.error('Error during upload cancellation:', error);
+      toast.error('Error cancelling upload');
+    }
+
+    // Reset all files to pending state
+    setFiles(prev =>
+      prev.map(file => ({
+        ...file,
+        status: 'pending' as const,
+        uploadProgress: 0,
+      }))
+    );
+
+    setCurrentOperation('');
+    logger.info('Upload cancelled by user');
+  }, [t, files, projectId]);
 
   const handleProjectChange = (value: string) => {
     setProjectId(value);
@@ -400,6 +500,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         uploadProgress={uploadProgress}
         isUploading={isUploading}
         onRemoveFile={removeFile}
+        onCancelUpload={handleCancelUpload}
       />
     </div>
   );

@@ -265,14 +265,22 @@ export const cacheInvalidationMiddleware = (
 ) => {
   return (req: Request, res: Response, next: NextFunction): void => {
     // Invalidate cache after successful response
-    res.on('finish', () => {
+    res.on('finish', async () => {
       if (res.statusCode >= 200 && res.statusCode < 300) {
         const patterns = patternGenerator(req);
-        patterns.forEach(pattern => {
-          logger.info(`Cache invalidation triggered for pattern: ${pattern}`, 'Cache');
-          // Here you would actually invalidate the cache patterns
-          // This is a placeholder for the actual cache invalidation logic
-        });
+
+        // Import cache service dynamically to avoid circular dependencies
+        const { cacheService } = await import('../services/cacheService');
+
+        // Actually invalidate the cache patterns instead of just logging
+        for (const pattern of patterns) {
+          try {
+            const deletedCount = await cacheService.invalidatePattern(pattern);
+            logger.info(`Cache invalidation completed for pattern: ${pattern}, deleted ${deletedCount} entries`, 'Cache');
+          } catch (error) {
+            logger.error(`Cache invalidation failed for pattern: ${pattern}`, error as Error, 'Cache');
+          }
+        }
       }
     });
     next();

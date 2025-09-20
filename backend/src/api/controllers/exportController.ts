@@ -4,6 +4,8 @@ import { logger } from '../../utils/logger';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import { AuthRequest } from '../../types/auth';
+import { getProjectById } from '../../services/projectService';
+import { createExportFilename } from '../../utils/filenameUtils';
 
 export class ExportController {
   private exportService: ExportService;
@@ -145,8 +147,16 @@ export class ExportController {
         return;
       }
 
-      // Get file name for download
-      const fileName = `export_${jobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+      // Get project name for clean filename
+      const project = await getProjectById(projectId, userId);
+      
+      if (!project) {
+        res.status(404).json({ error: 'Project not found' });
+        return;
+      }
+
+      // Generate clean filename using project name
+      const fileName = createExportFilename(project.title);
       
       // Set proper headers for file download
       res.setHeader('Content-Type', 'application/zip');

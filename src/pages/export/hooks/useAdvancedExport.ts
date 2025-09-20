@@ -8,6 +8,7 @@ import {
   canDownloadLargeFiles,
 } from '@/lib/downloadUtils';
 import ExportStateManager from '@/lib/exportStateManager';
+import { createExportFilename } from '@/lib/filenameUtils';
 
 export interface ExportOptions {
   includeOriginalImages?: boolean;
@@ -37,7 +38,7 @@ interface ExportJob {
   filePath?: string;
 }
 
-export const useAdvancedExport = (projectId: string) => {
+export const useAdvancedExport = (projectId: string, projectName?: string) => {
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
     includeOriginalImages: EXPORT_DEFAULTS.OPTIONS.INCLUDE_ORIGINAL_IMAGES,
     includeVisualizations: EXPORT_DEFAULTS.OPTIONS.INCLUDE_VISUALIZATIONS,
@@ -236,11 +237,16 @@ export const useAdvancedExport = (projectId: string) => {
     };
 
     const handleCompleted = (data: { jobId: string }) => {
-      if (data.jobId === currentJob.id) {
+      // Only process completion if export hasn't been cancelled
+      if (data.jobId === currentJob.id && currentJob.status !== 'cancelled') {
         setCurrentJob(prev => (prev ? { ...prev, status: 'completed' } : null));
         setExportStatus('Export completed! Starting download...');
         setIsExporting(false);
         setCompletedJobId(data.jobId);
+      } else if (currentJob.status === 'cancelled') {
+        logger.info('Export completion ignored - export was cancelled', {
+          jobId: data.jobId,
+        });
       }
     };
 
@@ -286,24 +292,32 @@ export const useAdvancedExport = (projectId: string) => {
             setExportStatus(`Processing... ${Math.round(status.progress)}%`);
 
             if (status.status === 'completed') {
-              setCurrentJob(prev =>
-                prev ? { ...prev, status: 'completed' } : null
-              );
-              setExportStatus('Export completed! Starting download...');
-              setIsExporting(false);
-              setCompletedJobId(currentJob.id);
+              // Only process completion if not cancelled
+              if (currentJob.status !== 'cancelled') {
+                setCurrentJob(prev =>
+                  prev ? { ...prev, status: 'completed' } : null
+                );
+                setExportStatus('Export completed! Starting download...');
+                setIsExporting(false);
+                setCompletedJobId(currentJob.id);
+              }
               clearInterval(interval);
               setPollingInterval(null);
-            } else if (status.status === 'failed') {
+            } else if (
+              status.status === 'failed' ||
+              status.status === 'cancelled'
+            ) {
               setCurrentJob(prev =>
                 prev
-                  ? { ...prev, status: 'failed', message: status.message }
+                  ? { ...prev, status: status.status, message: status.message }
                   : null
               );
               setExportStatus(
-                `Export failed: ${status.message || 'Unknown error'}`
+                `Export ${status.status}: ${status.message || 'Unknown error'}`
               );
               setIsExporting(false);
+              // Clear state on failure or cancellation
+              ExportStateManager.clearExportState(projectId);
               clearInterval(interval);
               setPollingInterval(null);
             }
@@ -341,9 +355,16 @@ export const useAdvancedExport = (projectId: string) => {
 
   // Auto-download when export completes
   useEffect(() => {
-    if (completedJobId) {
+    // Only auto-download if export completed and wasn't cancelled
+    if (completedJobId && currentJob?.status !== 'cancelled') {
       const autoDownload = async () => {
         try {
+          // Additional runtime check before download to prevent race conditions
+          if (!currentJob || currentJob.status === 'cancelled') {
+            logger.info('Auto-download skipped - export was cancelled');
+            return;
+          }
+
           // Set downloading state
           setIsDownloading(true);
 
@@ -362,8 +383,10 @@ export const useAdvancedExport = (projectId: string) => {
             }
           );
 
-          // Use centralized download utility
-          const filename = `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+          // Use centralized download utility with project name
+          const filename = projectName
+            ? createExportFilename(projectName)
+            : `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
           await downloadFromResponse(response, filename);
 
           // Show downloading status briefly, then auto-dismiss after a reasonable time
@@ -392,8 +415,12 @@ export const useAdvancedExport = (projectId: string) => {
 
       // Small delay to ensure the export file is fully ready
       setTimeout(autoDownload, 1000);
+    } else if (completedJobId && currentJob?.status === 'cancelled') {
+      // Clear completedJobId if export was cancelled to prevent future auto-downloads
+      logger.info('Clearing completedJobId for cancelled export');
+      setCompletedJobId(null);
     }
-  }, [completedJobId, projectId]);
+  }, [completedJobId, projectId, currentJob]); // Added currentJob dependency for cancel state
 
   const updateExportOptions = useCallback((updates: Partial<ExportOptions>) => {
     setExportOptions(prev => ({ ...prev, ...updates }));
@@ -462,8 +489,10 @@ export const useAdvancedExport = (projectId: string) => {
         }
       );
 
-      // Use centralized download utility with unique filename
-      const filename = `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+      // Use centralized download utility with project name
+      const filename = projectName
+        ? createExportFilename(projectName)
+        : `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
       await downloadFromResponse(response, filename);
 
       // Show downloading status briefly, then auto-dismiss
@@ -496,10 +525,20 @@ export const useAdvancedExport = (projectId: string) => {
       await apiClient.post(
         `/projects/${projectId}/export/${currentJob.id}/cancel`
       );
+
+      // Clear ALL related states immediately to prevent race conditions
       setCurrentJob(prev => (prev ? { ...prev, status: 'cancelled' } : null));
       setIsExporting(false);
+      setCompletedJobId(null); // Prevent auto-download
+      setIsDownloading(false); // Clear downloading state
       setExportStatus('Export cancelled');
-      logger.info('Export cancelled', { jobId: currentJob.id });
+
+      // Clear persistence immediately to prevent cross-tab sync issues
+      ExportStateManager.clearExportState(projectId);
+
+      logger.info('Export cancelled - all states cleared', {
+        jobId: currentJob.id,
+      });
     } catch (error) {
       logger.error('Failed to cancel export', error);
     }

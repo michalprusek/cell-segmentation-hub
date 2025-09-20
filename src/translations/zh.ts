@@ -298,7 +298,10 @@ export default {
     uploading: '上传中',
     processing: '处理中',
     complete: '完成',
+    completed: '已完成',
+    failed: '失败',
     error: '错误',
+    unknownSize: '未知大小',
     imageDeleted: '图像删除成功',
     deleteImageFailed: '删除图像失败',
     deleteImageError: '删除图像时出错',
@@ -881,6 +884,7 @@ export default {
   },
   export: {
     advancedExport: '高级导出',
+    cancelExport: '取消导出',
     advancedOptions: '高级导出选项',
     configureSettings: '配置您的导出设置以创建全面的数据包',
     general: '常规',

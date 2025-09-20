@@ -58,8 +58,8 @@ const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
   MAX_FIELD_SIZE_KB: 50,
   CHUNK_SIZE: 50,
   NGINX_BODY_LIMIT: '200M',
-  EXPRESS_JSON_LIMIT: '20mb',
-  EXPRESS_URL_ENCODED_LIMIT: '20mb',
+  EXPRESS_JSON_LIMIT: '200mb',      // Fixed: Increased from 20mb to handle large payloads
+  EXPRESS_URL_ENCODED_LIMIT: '200mb', // Fixed: Increased from 20mb to handle large payloads
   // Rate limiting properties
   UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
   UPLOAD_MAX_REQUESTS: 1000, // More permissive for development

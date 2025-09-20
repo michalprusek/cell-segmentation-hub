@@ -51,7 +51,20 @@ export enum WebSocketEvent {
   SHARE_RECEIVED = 'shareReceived',
   SHARE_ACCEPTED = 'shareAccepted',
   SHARE_REJECTED = 'shareRejected',
-  
+
+  // Project statistics events
+  PROJECT_STATS_UPDATE = 'projectStatsUpdate',
+  PROJECT_IMAGE_COUNT_CHANGE = 'projectImageCountChange',
+  SHARED_PROJECT_UPDATE = 'sharedProjectUpdate',
+
+  // Dashboard metrics events
+  DASHBOARD_METRICS_UPDATE = 'dashboardMetricsUpdate',
+  USER_ACTIVITY_UPDATE = 'userActivityUpdate',
+
+  // Image deletion events
+  IMAGE_DELETED = 'imageDeleted',
+  BATCH_IMAGES_DELETED = 'batchImagesDeleted',
+
   // Error events
   ERROR = 'error',
   VALIDATION_ERROR = 'validationError'
@@ -372,6 +385,144 @@ export interface SharePermissions {
 }
 
 // ============================================================================
+// Project Statistics Events
+// ============================================================================
+
+/**
+ * Project statistics data structure
+ */
+export interface ProjectStats {
+  imageCount: number;
+  segmentedCount: number;
+  pendingCount: number;
+  failedCount: number;
+  lastUpdated: Date;
+  lastImageAdded?: Date;
+  lastSegmentationCompleted?: Date;
+  totalFileSize?: number;
+}
+
+/**
+ * Project statistics update event
+ */
+export interface ProjectStatsUpdateData {
+  projectId: string;
+  userId: string; // Project owner
+  stats: ProjectStats;
+  operation: 'images_added' | 'images_deleted' | 'segmentation_completed' | 'segmentation_failed' | 'batch_uploaded' | 'batch_deleted';
+  affectedImageIds?: string[];
+  timestamp: Date;
+}
+
+/**
+ * Project image count change event
+ */
+export interface ProjectImageCountChangeData {
+  projectId: string;
+  userId: string;
+  previousCount: number;
+  newCount: number;
+  changeType: 'upload' | 'delete' | 'bulk_delete' | 'bulk_upload';
+  affectedImageIds: string[];
+  timestamp: Date;
+}
+
+/**
+ * Shared project update event
+ */
+export interface SharedProjectUpdateData {
+  projectId: string;
+  ownerId: string;
+  sharedWithUserIds: string[];
+  updateType: 'images_added' | 'images_deleted' | 'segmentation_completed' | 'project_updated';
+  stats: ProjectStats;
+  timestamp: Date;
+}
+
+// ============================================================================
+// Dashboard Metrics Events
+// ============================================================================
+
+/**
+ * Dashboard metrics data structure
+ */
+export interface DashboardMetrics {
+  totalProjects: number;
+  totalImages: number;
+  totalSegmented: number;
+  recentActivity: {
+    imagesUploadedToday: number;
+    segmentationsCompletedToday: number;
+    projectsCreatedThisWeek: number;
+  };
+  systemStats: {
+    queueLength: number;
+    processingImages: number;
+    avgProcessingTime: number;
+  };
+  storageStats: {
+    totalStorageMB: number;
+    totalStorageGB: number;
+    averageImageSizeMB: number;
+  };
+}
+
+/**
+ * Dashboard metrics update event
+ */
+export interface DashboardMetricsUpdateData {
+  userId: string;
+  metrics: DashboardMetrics;
+  changedFields: string[]; // Array of field names that changed
+  timestamp: Date;
+}
+
+/**
+ * User activity update event
+ */
+export interface UserActivityUpdateData {
+  userId: string;
+  activity: {
+    type: 'project_created' | 'images_uploaded' | 'segmentation_completed' | 'project_shared' | 'images_deleted';
+    projectId?: string;
+    projectName?: string;
+    details: {
+      count?: number;
+      duration?: number;
+      success?: boolean;
+      fileNames?: string[];
+    };
+    timestamp: Date;
+  };
+}
+
+// ============================================================================
+// Image Deletion Events
+// ============================================================================
+
+/**
+ * Image deleted event
+ */
+export interface ImageDeletedData {
+  imageId: string;
+  projectId: string;
+  userId: string;
+  imageName: string;
+  timestamp: Date;
+}
+
+/**
+ * Batch images deleted event
+ */
+export interface BatchImagesDeletedData {
+  projectId: string;
+  userId: string;
+  deletedImageIds: string[];
+  deletedCount: number;
+  timestamp: Date;
+}
+
+// ============================================================================
 // Error Events
 // ============================================================================
 
@@ -542,6 +693,81 @@ export function isWebSocketMessage(data: unknown): data is WebSocketMessage {
   );
 }
 
+/**
+ * Type guard for ProjectStatsUpdateData
+ */
+export function isProjectStatsUpdateData(data: unknown): data is ProjectStatsUpdateData {
+  if (typeof data !== 'object' || data === null) {return false;}
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.projectId === 'string' &&
+    typeof d.userId === 'string' &&
+    typeof d.stats === 'object' &&
+    typeof d.operation === 'string' &&
+    d.timestamp !== undefined
+  );
+}
+
+/**
+ * Type guard for DashboardMetricsUpdateData
+ */
+export function isDashboardMetricsUpdateData(data: unknown): data is DashboardMetricsUpdateData {
+  if (typeof data !== 'object' || data === null) {return false;}
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.userId === 'string' &&
+    typeof d.metrics === 'object' &&
+    Array.isArray(d.changedFields) &&
+    d.timestamp !== undefined
+  );
+}
+
+/**
+ * Type guard for SharedProjectUpdateData
+ */
+export function isSharedProjectUpdateData(data: unknown): data is SharedProjectUpdateData {
+  if (typeof data !== 'object' || data === null) {return false;}
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.projectId === 'string' &&
+    typeof d.ownerId === 'string' &&
+    Array.isArray(d.sharedWithUserIds) &&
+    typeof d.updateType === 'string' &&
+    typeof d.stats === 'object' &&
+    d.timestamp !== undefined
+  );
+}
+
+/**
+ * Type guard for ImageDeletedData
+ */
+export function isImageDeletedData(data: unknown): data is ImageDeletedData {
+  if (typeof data !== 'object' || data === null) {return false;}
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.imageId === 'string' &&
+    typeof d.projectId === 'string' &&
+    typeof d.userId === 'string' &&
+    typeof d.imageName === 'string' &&
+    d.timestamp !== undefined
+  );
+}
+
+/**
+ * Type guard for BatchImagesDeletedData
+ */
+export function isBatchImagesDeletedData(data: unknown): data is BatchImagesDeletedData {
+  if (typeof data !== 'object' || data === null) {return false;}
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.projectId === 'string' &&
+    typeof d.userId === 'string' &&
+    Array.isArray(d.deletedImageIds) &&
+    typeof d.deletedCount === 'number' &&
+    d.timestamp !== undefined
+  );
+}
+
 // ============================================================================
 // Export
 // ============================================================================
@@ -557,5 +783,10 @@ export default {
   isSegmentationFailedData,
   isQueueStatsData,
   isParallelProcessingStatusData,
-  isWebSocketMessage
+  isWebSocketMessage,
+  isProjectStatsUpdateData,
+  isDashboardMetricsUpdateData,
+  isSharedProjectUpdateData,
+  isImageDeletedData,
+  isBatchImagesDeletedData
 };

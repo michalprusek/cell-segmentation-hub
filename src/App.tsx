@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 import ExportStateManager from '@/lib/exportStateManager';
 import { useParallelProcessingStatus } from '@/hooks/useParallelProcessingStatus';
+import { useSharedProjectNotificationsFull } from '@/hooks/useSharedProjectNotifications';
 
 // Enhanced lazy load with better error handling and displayName support
 const Index = createLazyComponent(() => import('./pages/Index'), 'Index');
@@ -100,6 +101,12 @@ const ParallelProcessingStatusHandler = () => {
   return null; // This component doesn't render anything
 };
 
+// Component to handle shared project notifications inside WebSocket context
+const SharedProjectNotificationsHandler = () => {
+  useSharedProjectNotificationsFull();
+  return null; // This component doesn't render anything
+};
+
 const App = () => {
   // Initialize export state manager inside React lifecycle
   React.useEffect(() => {
@@ -120,6 +127,7 @@ const App = () => {
           <AuthProvider>
             <WebSocketProvider>
               <ParallelProcessingStatusHandler />
+              <SharedProjectNotificationsHandler />
               <ThemeProvider>
                 <LanguageProvider>
                   <ToastEventProvider>

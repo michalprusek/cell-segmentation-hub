@@ -884,8 +884,8 @@ const ProjectDetail = () => {
   );
 
   const handleSelectAll = useCallback(() => {
-    setSelectedImageIds(new Set(paginatedImages.map(img => img.id)));
-  }, [paginatedImages]);
+    setSelectedImageIds(new Set(images.map(img => img.id)));
+  }, [images]);
 
   const handleDeselectAll = useCallback(() => {
     setSelectedImageIds(new Set());
@@ -893,14 +893,13 @@ const ProjectDetail = () => {
 
   const handleSelectAllToggle = useCallback(() => {
     const allSelected =
-      paginatedImages.length > 0 &&
-      paginatedImages.every(img => selectedImageIds.has(img.id));
+      images.length > 0 && images.every(img => selectedImageIds.has(img.id));
     if (allSelected) {
       handleDeselectAll();
     } else {
       handleSelectAll();
     }
-  }, [paginatedImages, selectedImageIds, handleSelectAll, handleDeselectAll]);
+  }, [images, selectedImageIds, handleSelectAll, handleDeselectAll]);
 
   const handleBatchDeleteConfirm = async () => {
     if (!id || !user?.id || selectedImageIds.size === 0) {
@@ -969,10 +968,9 @@ const ProjectDetail = () => {
   // Calculate selection state
   const selectedCount = selectedImageIds.size;
   const isAllSelected =
-    paginatedImages.length > 0 &&
-    paginatedImages.every(img => selectedImageIds.has(img.id));
+    images.length > 0 && images.every(img => selectedImageIds.has(img.id));
   const isPartiallySelected =
-    selectedCount > 0 && selectedCount < paginatedImages.length;
+    selectedCount > 0 && selectedCount < images.length;
 
   // Handle batch segmentation of all images without segmentation + selected images
   const handleSegmentAll = async () => {
@@ -1189,7 +1187,7 @@ const ProjectDetail = () => {
       setIsCancelling(true);
 
       // Get current queue items for this project
-      const response = await apiClient.get(`/api/queue/projects/${id}/items`);
+      const response = await apiClient.get(`/queue/projects/${id}/items`);
       const queueItems = response.data;
 
       if (queueItems && queueItems.length > 0) {
@@ -1202,7 +1200,7 @@ const ProjectDetail = () => {
           // Cancel items one by one (following existing API pattern)
           for (const item of userQueueItems) {
             try {
-              await apiClient.delete(`/api/queue/items/${item.id}`);
+              await apiClient.delete(`/queue/items/${item.id}`);
             } catch (error) {
               logger.warn('Failed to cancel queue item', {
                 itemId: item.id,

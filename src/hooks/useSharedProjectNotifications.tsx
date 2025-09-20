@@ -14,7 +14,7 @@ import {
   isSharedProjectUpdateMessage,
   isUserActivityUpdateMessage,
   SharedProjectUpdateMessage,
-  UserActivityUpdateMessage
+  UserActivityUpdateMessage,
 } from '@/types/websocket';
 
 interface UseSharedProjectNotificationsProps {
@@ -26,107 +26,124 @@ interface UseSharedProjectNotificationsProps {
 export const useSharedProjectNotifications = ({
   enableToasts = true,
   showOwnerActivity = true,
-  quietMode = false
+  quietMode = false,
 }: UseSharedProjectNotificationsProps = {}) => {
   const { manager } = useWebSocket();
   const { user } = useAuth();
 
   // Handle shared project updates
-  const handleSharedProjectUpdate = useCallback((data: SharedProjectUpdateMessage) => {
-    if (!user || !data.sharedWithUserIds.includes(user.id)) return;
+  const handleSharedProjectUpdate = useCallback(
+    (data: SharedProjectUpdateMessage) => {
+      if (!user || !data.sharedWithUserIds.includes(user.id)) return;
 
-    logger.info('Shared project notification received', 'useSharedProjectNotifications', {
-      projectId: data.projectId,
-      updateType: data.updateType,
-      ownerId: data.ownerId
-    });
+      logger.info(
+        'Shared project notification received',
+        'useSharedProjectNotifications',
+        {
+          projectId: data.projectId,
+          updateType: data.updateType,
+          ownerId: data.ownerId,
+        }
+      );
 
-    if (!enableToasts || quietMode) return;
+      if (!enableToasts || quietMode) return;
 
-    // Show different notifications based on update type
-    switch (data.updateType) {
-      case 'images_added':
-        toast.info('New images added to shared project', {
-          description: `${data.stats.imageCount} total images (${data.stats.segmentedCount} segmented)`,
-          action: {
-            label: 'View Project',
-            onClick: () => {
-              // Navigate to project - could be implemented with router
-              window.location.href = `/projects/${data.projectId}`;
-            }
-          }
-        });
-        break;
-
-      case 'images_deleted':
-        toast.info('Images removed from shared project', {
-          description: `${data.stats.imageCount} images remaining`,
-        });
-        break;
-
-      case 'segmentation_completed':
-        toast.success('Segmentation completed in shared project', {
-          description: `${data.stats.segmentedCount}/${data.stats.imageCount} images processed`,
-          action: {
-            label: 'View Results',
-            onClick: () => {
-              window.location.href = `/projects/${data.projectId}`;
-            }
-          }
-        });
-        break;
-
-      case 'project_updated':
-        toast.info('Shared project has been updated', {
-          description: 'Check the project for latest changes'
-        });
-        break;
-
-      default:
-        break;
-    }
-  }, [user, enableToasts, quietMode]);
-
-  // Handle user activity from project owners (if enabled)
-  const handleUserActivity = useCallback((data: UserActivityUpdateMessage) => {
-    if (!user || !showOwnerActivity || !enableToasts || quietMode) return;
-
-    // Only show notifications for significant activities
-    const { activity } = data;
-
-    switch (activity.type) {
-      case 'project_shared':
-        if (activity.projectName) {
-          toast.success('New project shared with you', {
-            description: `You now have access to "${activity.projectName}"`,
+      // Show different notifications based on update type
+      switch (data.updateType) {
+        case 'images_added':
+          toast.info('New images added to shared project', {
+            description: `${data.stats.imageCount} total images (${data.stats.segmentedCount} segmented)`,
             action: {
               label: 'View Project',
               onClick: () => {
-                if (activity.projectId) {
-                  window.location.href = `/projects/${activity.projectId}`;
-                }
-              }
-            }
+                // Navigate to project - could be implemented with router
+                window.location.href = `/projects/${data.projectId}`;
+              },
+            },
           });
-        }
-        break;
+          break;
 
-      default:
-        // Don't show notifications for other user activities
-        break;
-    }
-  }, [user, showOwnerActivity, enableToasts, quietMode]);
+        case 'images_deleted':
+          toast.info('Images removed from shared project', {
+            description: `${data.stats.imageCount} images remaining`,
+          });
+          break;
+
+        case 'segmentation_completed':
+          toast.success('Segmentation completed in shared project', {
+            description: `${data.stats.segmentedCount}/${data.stats.imageCount} images processed`,
+            action: {
+              label: 'View Results',
+              onClick: () => {
+                window.location.href = `/projects/${data.projectId}`;
+              },
+            },
+          });
+          break;
+
+        case 'project_updated':
+          toast.info('Shared project has been updated', {
+            description: 'Check the project for latest changes',
+          });
+          break;
+
+        default:
+          break;
+      }
+    },
+    [user, enableToasts, quietMode]
+  );
+
+  // Handle user activity from project owners (if enabled)
+  const handleUserActivity = useCallback(
+    (data: UserActivityUpdateMessage) => {
+      if (!user || !showOwnerActivity || !enableToasts || quietMode) return;
+
+      // Only show notifications for significant activities
+      const { activity } = data;
+
+      switch (activity.type) {
+        case 'project_shared':
+          if (activity.projectName) {
+            toast.success('New project shared with you', {
+              description: `You now have access to "${activity.projectName}"`,
+              action: {
+                label: 'View Project',
+                onClick: () => {
+                  if (activity.projectId) {
+                    window.location.href = `/projects/${activity.projectId}`;
+                  }
+                },
+              },
+            });
+          }
+          break;
+
+        default:
+          // Don't show notifications for other user activities
+          break;
+      }
+    },
+    [user, showOwnerActivity, enableToasts, quietMode]
+  );
 
   // Handle WebSocket connection errors
-  const handleWebSocketError = useCallback((error: Error) => {
-    logger.error('WebSocket error in shared project notifications', error, 'useSharedProjectNotifications');
+  const handleWebSocketError = useCallback(
+    (error: Error) => {
+      logger.error(
+        'WebSocket error in shared project notifications',
+        error,
+        'useSharedProjectNotifications'
+      );
 
-    if (enableToasts && !quietMode) {
-      toast.error('Connection lost', {
-        description: 'Shared project updates may be delayed'
-      });
-    }
-  }, [enableToasts, quietMode]);
+      if (enableToasts && !quietMode) {
+        toast.error('Connection lost', {
+          description: 'Shared project updates may be delayed',
+        });
+      }
+    },
+    [enableToasts, quietMode]
+  );
 
   // Set up WebSocket event listeners
   useEffect(() => {
@@ -135,30 +152,49 @@ export const useSharedProjectNotifications = ({
     // Generic event handler for all WebSocket messages
     const handleWebSocketMessage = (event: string, data: any) => {
       try {
-        // Handle shared project updates
-        if (event === 'shared-project-update' && isSharedProjectUpdateMessage(data)) {
+        // Handle shared project updates - FIXED: Using camelCase event names
+        if (
+          event === 'sharedProjectUpdate' &&
+          isSharedProjectUpdateMessage(data)
+        ) {
           handleSharedProjectUpdate(data);
         }
-        // Handle user activity updates
-        else if (event === 'user-activity-update' && isUserActivityUpdateMessage(data)) {
+        // Handle user activity updates - FIXED: Using camelCase event names
+        else if (
+          event === 'userActivityUpdate' &&
+          isUserActivityUpdateMessage(data)
+        ) {
           handleUserActivity(data);
         }
       } catch (error) {
-        logger.error('Error handling shared project notification', error instanceof Error ? error : new Error(String(error)), 'useSharedProjectNotifications', {
-          event
-        });
+        logger.error(
+          'Error handling shared project notification',
+          error instanceof Error ? error : new Error(String(error)),
+          'useSharedProjectNotifications',
+          {
+            event,
+          }
+        );
       }
     };
 
-    // Register event listeners
-    manager.on('shared-project-update', (data) => handleWebSocketMessage('shared-project-update', data));
-    manager.on('user-activity-update', (data) => handleWebSocketMessage('user-activity-update', data));
+    // Register event listeners - FIXED: Using camelCase event names to match backend
+    manager.on('sharedProjectUpdate', data =>
+      handleWebSocketMessage('sharedProjectUpdate', data)
+    );
+    manager.on('userActivityUpdate', data =>
+      handleWebSocketMessage('userActivityUpdate', data)
+    );
     manager.on('error', handleWebSocketError);
 
-    // Cleanup function
+    // Cleanup function - FIXED: Using camelCase event names
     return () => {
-      manager.off('shared-project-update', (data) => handleWebSocketMessage('shared-project-update', data));
-      manager.off('user-activity-update', (data) => handleWebSocketMessage('user-activity-update', data));
+      manager.off('sharedProjectUpdate', data =>
+        handleWebSocketMessage('sharedProjectUpdate', data)
+      );
+      manager.off('userActivityUpdate', data =>
+        handleWebSocketMessage('userActivityUpdate', data)
+      );
       manager.off('error', handleWebSocketError);
     };
   }, [
@@ -166,21 +202,21 @@ export const useSharedProjectNotifications = ({
     user,
     handleSharedProjectUpdate,
     handleUserActivity,
-    handleWebSocketError
+    handleWebSocketError,
   ]);
 
   return {
     // Could return state or methods if needed in the future
-    isConnected: manager?.isConnected ?? false
+    isConnected: manager?.isConnected ?? false,
   };
-};;
+};
 
 // Export convenience hooks with different configurations
 export const useSharedProjectNotificationsQuiet = () => {
   return useSharedProjectNotifications({
     enableToasts: true,
     showOwnerActivity: false,
-    quietMode: true
+    quietMode: true,
   });
 };
 
@@ -188,7 +224,7 @@ export const useSharedProjectNotificationsFull = () => {
   return useSharedProjectNotifications({
     enableToasts: true,
     showOwnerActivity: true,
-    quietMode: false
+    quietMode: false,
   });
 };
 
