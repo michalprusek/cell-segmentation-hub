@@ -3,6 +3,7 @@ import { CreateProjectData, UpdateProjectData, ProjectQueryParams } from '../typ
 import { calculatePagination } from '../utils/response';
 import { logger } from '../utils/logger';
 import * as SharingService from './sharingService';
+import { cacheService, CacheService } from './cacheService';
 import type { Project, Prisma, User } from '@prisma/client';
 
 // Extended project type with metadata
@@ -56,6 +57,16 @@ export async function createProject(userId: string, data: CreateProjectData): Pr
 export async function getUserProjects(userId: string, options: ProjectQueryParams): Promise<{ projects: ProjectWithMeta[]; pagination: { page: number; limit: number; total: number; totalPages: number } }> {
     try {
       const { page, limit, search, sortBy, sortOrder } = options;
+
+      // Create cache key for this specific query
+      const cacheKey = `projects:user:${userId}:page:${page}:limit:${limit}:search:${search || 'none'}:sort:${sortBy}:${sortOrder}`;
+
+      // Try to get from cache first (short TTL due to real-time updates)
+      const cached = await cacheService.get(cacheKey, { ttl: CacheService.TTL_PRESETS.SHORT });
+      if (cached) {
+        logger.debug('Returning cached project list', 'ProjectService', { userId, cacheKey });
+        return cached;
+      }
       
       // Get user for context
       const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -104,27 +115,24 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       const total = await prisma.project.count({ where });
       const pagination = calculatePagination(page, limit, total);
 
-      // Get projects with image count, latest image, and sharing info
+      // Get projects with optimized data selection to reduce N+1 queries
       const projects = await prisma.project.findMany({
         where,
         orderBy,
         skip: pagination.offset,
         take: limit,
-        include: {
+        select: {
+          id: true,
+          title: true,
+          description: true,
+          userId: true,
+          createdAt: true,
+          updatedAt: true,
           _count: {
             select: {
-              images: true
-            }
-          },
-          images: {
-            take: 1,
-            orderBy: { createdAt: 'desc' },
-            select: {
-              id: true,
-              name: true,
-              thumbnailPath: true,
-              originalPath: true,
-              segmentationStatus: true
+              images: {
+                where: {}
+              }
             }
           },
           user: {
@@ -132,27 +140,56 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
               id: true,
               email: true
             }
-          },
-          shares: {
-            where: {
-              sharedWithId: userId,
-              status: 'accepted'
-            },
-            select: {
-              id: true,
-              status: true
-            }
           }
         }
       });
 
-      // Add metadata to each project
-      const projectsWithMeta = projects.map(project => ({
-        ...project,
-        isOwned: project.userId === userId,
-        isShared: project.userId !== userId && project.shares.length > 0,
-        owner: project.user
-      }));
+      // Get latest image for each project in a separate optimized query
+      const projectIds = projects.map(p => p.id);
+      const latestImages = await prisma.image.findMany({
+        where: {
+          projectId: { in: projectIds }
+        },
+        orderBy: { createdAt: 'desc' },
+        distinct: ['projectId'],
+        select: {
+          id: true,
+          name: true,
+          thumbnailPath: true,
+          originalPath: true,
+          segmentationStatus: true,
+          projectId: true
+        }
+      });
+
+      // Get share info for each project in one query
+      const shareInfo = await prisma.projectShare.findMany({
+        where: {
+          projectId: { in: projectIds },
+          sharedWithId: userId,
+          status: 'accepted'
+        },
+        select: {
+          id: true,
+          status: true,
+          projectId: true
+        }
+      });
+
+      // Add metadata to each project with optimized data merging
+      const projectsWithMeta = projects.map(project => {
+        const latestImage = latestImages.find(img => img.projectId === project.id);
+        const shares = shareInfo.filter(share => share.projectId === project.id);
+
+        return {
+          ...project,
+          images: latestImage ? [latestImage] : [],
+          shares,
+          isOwned: project.userId === userId,
+          isShared: project.userId !== userId && shares.length > 0,
+          owner: project.user
+        };
+      });
 
       logger.info(`Retrieved ${projectsWithMeta.length} projects for user`, 'ProjectService', { 
         userId, 
@@ -161,7 +198,7 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
         limit 
       });
 
-      return {
+      const result = {
         projects: projectsWithMeta as ProjectWithMeta[],
         pagination: {
           page: pagination.page,
@@ -170,6 +207,11 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
           totalPages: pagination.totalPages
         }
       };
+
+      // Cache the result for future requests
+      await cacheService.set(cacheKey, result, { ttl: CacheService.TTL_PRESETS.SHORT });
+
+      return result;
     } catch (error) {
       logger.error('Failed to get user projects:', error as Error, 'ProjectService', { userId, options });
       throw error;

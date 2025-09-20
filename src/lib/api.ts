@@ -958,7 +958,8 @@ class ApiClient {
   async uploadImages(
     projectId: string,
     files: File[],
-    onProgress?: (progressPercent: number) => void
+    onProgress?: (progressPercent: number) => void,
+    signal?: AbortSignal
   ): Promise<ProjectImage[]> {
     const formData = new FormData();
     files.forEach(file => {
@@ -973,6 +974,7 @@ class ApiClient {
           'Content-Type': 'multipart/form-data',
         },
         timeout: 300000, // 5 minutes for file uploads (increased from 60s)
+        signal, // Add abort signal support
         onUploadProgress: progressEvent => {
           if (onProgress && progressEvent.total) {
             const percentCompleted = Math.round(
@@ -1019,7 +1021,8 @@ class ApiClient {
     projectId: string,
     files: File[],
     onProgress?: (progressPercent: number) => void,
-    onChunkProgress?: (progress: ChunkProgress) => void
+    onChunkProgress?: (progress: ChunkProgress) => void,
+    signal?: AbortSignal
   ): Promise<ChunkedUploadResult<ProjectImage[]>> {
     logger.info(
       `Starting chunked upload of ${files.length} files to project ${projectId}`
@@ -1119,6 +1122,7 @@ class ApiClient {
               'Content-Type': 'multipart/form-data',
             },
             timeout: 300000, // 5 minutes timeout for chunk uploads (100 files)
+            signal, // Add abort signal support
             onUploadProgress: progressEvent => {
               if (progressEvent.total) {
                 const chunkProgressPercent = Math.round(
@@ -1613,7 +1617,7 @@ class ApiClient {
   }> {
     try {
       // Log the request for debugging
-      this.logger.debug('API deleteBatch request', {
+      logger.debug('API deleteBatch request', {
         imageCount: imageIds.length,
         projectId,
         firstFewIds: imageIds.slice(0, 3),
@@ -1632,7 +1636,7 @@ class ApiClient {
         errors: string[];
       }>(response);
 
-      this.logger.debug('API deleteBatch response', {
+      logger.debug('API deleteBatch response', {
         deletedCount: result.deletedCount,
         failedCount: result.failedIds?.length || 0,
       });
@@ -1640,7 +1644,7 @@ class ApiClient {
       return result;
     } catch (error) {
       // Enhanced error logging for debugging 400 errors
-      this.logger.error('API deleteBatch failed', {
+      logger.error('API deleteBatch failed', {
         imageCount: imageIds.length,
         projectId,
         error: error instanceof Error ? error.message : 'Unknown error',

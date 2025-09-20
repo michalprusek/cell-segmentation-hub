@@ -16,6 +16,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import CanvasThumbnailRenderer from './CanvasThumbnailRenderer';
+import { isTiffFile, createImagePreviewUrl } from '@/lib/tiffConverter';
 
 interface ImageCardProps {
   image: ProjectImage & {
@@ -102,12 +103,16 @@ export const ImageCard = ({
   const [isHovered, setIsHovered] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [fallbackIndex, setFallbackIndex] = useState(0);
+  const [tiffDataUrl, setTiffDataUrl] = useState<string | null>(null);
+  const [tiffLoading, setTiffLoading] = useState(false);
   const { t } = useLanguage();
 
   // Reset fallback state when image changes
   React.useEffect(() => {
     setFallbackIndex(0);
     setImageError(false);
+    setTiffDataUrl(null);
+    setTiffLoading(false);
   }, [
     image.id,
     image.segmentationThumbnailUrl,
@@ -116,6 +121,38 @@ export const ImageCard = ({
     image.url,
     image.image_url,
   ]);
+
+  // Function to check if current URL is a TIFF file and convert if needed
+  const handleTiffConversion = React.useCallback(
+    async (imageUrl: string) => {
+      // Check if URL appears to be a TIFF file
+      const isTiff =
+        imageUrl.toLowerCase().includes('.tiff') ||
+        imageUrl.toLowerCase().includes('.tif');
+
+      if (isTiff && !tiffDataUrl && !tiffLoading) {
+        setTiffLoading(true);
+        try {
+          // Create a fake file object to use TIFF converter
+          const response = await fetch(imageUrl);
+          const blob = await response.blob();
+          const file = new File([blob], image.name || 'image.tiff', {
+            type: blob.type || 'image/tiff',
+          });
+
+          if (isTiffFile(file)) {
+            const convertedUrl = await createImagePreviewUrl(file);
+            setTiffDataUrl(convertedUrl);
+          }
+        } catch (error) {
+          console.warn('Failed to convert TIFF:', error);
+        } finally {
+          setTiffLoading(false);
+        }
+      }
+    },
+    [image.name, tiffDataUrl, tiffLoading]
+  );
 
   // Create ordered list of candidate URLs, deduplicating falsy/identical entries
   const candidateUrls = React.useMemo(() => {
@@ -170,9 +207,9 @@ export const ImageCard = ({
           'hover:shadow-xl hover:scale-[1.02]'
         )}
         style={{
-          // Fixed dimensions for stable rendering across viewport changes
+          // Fixed dimensions for consistent card layout
           width: '250px',
-          height: '167px', // Proportional height (250/280 * 192 = 171, rounded to 167)
+          height: '167px', // Proportional height (3:2 aspect ratio)
           minWidth: '250px',
           minHeight: '167px',
         }}
@@ -181,26 +218,46 @@ export const ImageCard = ({
         {/* Image preview */}
         <div className="absolute inset-0">
           {!imageError && candidateUrls.length > 0 ? (
-            <img
-              src={
-                candidateUrls[
-                  Math.min(fallbackIndex, candidateUrls.length - 1)
-                ] || ''
-              }
-              alt={image.name || 'Image'}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={() => {
-                const nextIndex = fallbackIndex + 1;
-                if (nextIndex < candidateUrls.length) {
-                  // Try the next candidate URL
-                  setFallbackIndex(nextIndex);
-                } else {
-                  // All URLs failed, show placeholder
-                  setImageError(true);
+            tiffLoading ? (
+              <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700">
+                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+              </div>
+            ) : (
+              <img
+                src={
+                  tiffDataUrl ||
+                  candidateUrls[
+                    Math.min(fallbackIndex, candidateUrls.length - 1)
+                  ] ||
+                  ''
                 }
-              }}
-            />
+                alt={image.name || 'Image'}
+                className="w-full h-full object-cover"
+                loading="lazy"
+                onError={async () => {
+                  const currentUrl =
+                    candidateUrls[
+                      Math.min(fallbackIndex, candidateUrls.length - 1)
+                    ];
+
+                  // If we haven't tried TIFF conversion yet, try it
+                  if (currentUrl && !tiffDataUrl && !tiffLoading) {
+                    await handleTiffConversion(currentUrl);
+                    return;
+                  }
+
+                  const nextIndex = fallbackIndex + 1;
+                  if (nextIndex < candidateUrls.length) {
+                    // Try the next candidate URL
+                    setFallbackIndex(nextIndex);
+                    setTiffDataUrl(null); // Reset TIFF data for next URL
+                  } else {
+                    // All URLs failed, show placeholder
+                    setImageError(true);
+                  }
+                }}
+              />
+            )
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700">
               <span className="text-gray-400 dark:text-gray-500 text-sm">

@@ -37,10 +37,18 @@ class PrismaPool {
   private healthCheckInterval?: NodeJS.Timeout;
 
   constructor(config?: Partial<PoolConfig>) {
+    // Calculate optimal connection pool size based on environment
+    const getOptimalConnectionLimit = (): number => {
+      if (process.env.NODE_ENV === 'production') {
+        return parseInt(process.env.DATABASE_CONNECTION_LIMIT || '25'); // Increased for production
+      }
+      return parseInt(process.env.DATABASE_CONNECTION_LIMIT || '10'); // Moderate for development
+    };
+
     this.config = {
-      connectionLimit: parseInt(process.env.DATABASE_CONNECTION_LIMIT || '15'),
-      maxIdleTime: 30000, // 30 seconds
-      queueLimit: 100,
+      connectionLimit: getOptimalConnectionLimit(),
+      maxIdleTime: 60000, // Increased to 60 seconds for better connection reuse
+      queueLimit: 200, // Increased queue limit for high-load scenarios
       enablePoolLogging: process.env.NODE_ENV === 'development',
       ...config,
     };

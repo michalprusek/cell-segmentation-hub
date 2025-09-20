@@ -354,6 +354,21 @@ class WebSocketManager {
       }
       this.emitToListeners('system-message', message);
     });
+
+    // Queue cancellation events
+    this.socket.on('queue:cancelled', (data: any) => {
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug('Queue cancelled event received:', data);
+      }
+      this.emitToListeners('queue:cancelled', data);
+    });
+
+    this.socket.on('batch:cancelled', (data: any) => {
+      if (process.env.NODE_ENV === 'development') {
+        logger.debug('Batch cancelled event received:', data);
+      }
+      this.emitToListeners('batch:cancelled', data);
+    });
   }
 
   private handleReconnect(): void {

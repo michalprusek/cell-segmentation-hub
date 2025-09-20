@@ -40,7 +40,7 @@ const getImageComparator = (settings?: FilterSettings) => {
 
     switch (sortField) {
       case 'name':
-        comparison = a.name.localeCompare(b.name);
+        comparison = (a.name || '').localeCompare(b.name || '');
         break;
       case 'updatedAt':
         comparison = a.updatedAt.getTime() - b.updatedAt.getTime();

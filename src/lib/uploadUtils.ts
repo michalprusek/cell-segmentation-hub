@@ -205,9 +205,13 @@ export function validateFiles(
   maxTotalSize: number = 500 * 1024 * 1024, // 500MB default
   supportedTypes: string[] = [
     'image/jpeg',
+    'image/jpg',
     'image/png',
     'image/tiff',
+    'image/tif',
+    'image/x-tiff',
     'image/bmp',
+    'image/x-ms-bmp',
   ]
 ): { valid: File[]; invalid: Array<{ file: File; reason: string }> } {
   const valid: File[] = [];
@@ -225,11 +229,17 @@ export function validateFiles(
       return;
     }
 
-    // Check file type
-    if (!supportedTypes.includes(file.type)) {
+    // Check file type - include file extension fallback for TIFF files
+    const fileExtension = file.name.toLowerCase().split('.').pop() || '';
+    const isValidType =
+      supportedTypes.includes(file.type) ||
+      (file.type === '' &&
+        ['tiff', 'tif', 'jpg', 'jpeg', 'png', 'bmp'].includes(fileExtension));
+
+    if (!isValidType) {
       invalid.push({
         file,
-        reason: `Unsupported file type: ${file.type}`,
+        reason: `Unsupported file type: ${file.type || 'unknown'} (.${fileExtension})`,
       });
       return;
     }

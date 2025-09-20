@@ -148,4 +148,32 @@ router.post(
   queueController.cleanupQueue
 );
 
+/**
+ * @route POST /api/queue/projects/:projectId/cancel
+ * @description Cancel all queue items for current user in a project
+ * @access Private
+ */
+router.post(
+  '/projects/:projectId/cancel',
+  [
+    param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')
+  ],
+  handleValidation,
+  queueController.cancelProjectQueue
+);
+
+/**
+ * @route POST /api/queue/batches/:batchId/cancel
+ * @description Cancel specific batch
+ * @access Private
+ */
+router.post(
+  '/batches/:batchId/cancel',
+  [
+    param('batchId').isUUID().withMessage('ID batch musí být platné UUID')
+  ],
+  handleValidation,
+  queueController.cancelBatch
+);
+
 export { router as queueRoutes };

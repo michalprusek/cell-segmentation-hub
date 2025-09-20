@@ -178,23 +178,21 @@ export const useSharedProjectNotifications = ({
       }
     };
 
+    // Create stable handler functions to ensure proper cleanup
+    const handleSharedProjectUpdateWrapper = (data: any) =>
+      handleWebSocketMessage('sharedProjectUpdate', data);
+    const handleUserActivityUpdateWrapper = (data: any) =>
+      handleWebSocketMessage('userActivityUpdate', data);
+
     // Register event listeners - FIXED: Using camelCase event names to match backend
-    manager.on('sharedProjectUpdate', data =>
-      handleWebSocketMessage('sharedProjectUpdate', data)
-    );
-    manager.on('userActivityUpdate', data =>
-      handleWebSocketMessage('userActivityUpdate', data)
-    );
+    manager.on('sharedProjectUpdate', handleSharedProjectUpdateWrapper);
+    manager.on('userActivityUpdate', handleUserActivityUpdateWrapper);
     manager.on('error', handleWebSocketError);
 
-    // Cleanup function - FIXED: Using camelCase event names
+    // Cleanup function - FIXED: Using camelCase event names and proper function references
     return () => {
-      manager.off('sharedProjectUpdate', data =>
-        handleWebSocketMessage('sharedProjectUpdate', data)
-      );
-      manager.off('userActivityUpdate', data =>
-        handleWebSocketMessage('userActivityUpdate', data)
-      );
+      manager.off('sharedProjectUpdate', handleSharedProjectUpdateWrapper);
+      manager.off('userActivityUpdate', handleUserActivityUpdateWrapper);
       manager.off('error', handleWebSocketError);
     };
   }, [

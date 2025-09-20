@@ -24,7 +24,10 @@ const ProjectUploaderSection = ({
           {t('common.cancel')}
         </Button>
       </div>
-      <ImageUploader onUploadComplete={onUploadComplete} />
+      <ImageUploader
+        onUploadComplete={onUploadComplete}
+        onUploadCancel={onCancel}
+      />
     </div>
   );
 };

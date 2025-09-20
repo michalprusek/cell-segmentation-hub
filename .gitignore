@@ -127,5 +127,7 @@ real-*-measurements-*.json
 
 .eslintcache
 .github/workflows/ci-cd.yml
-*.md
+# Ignore only temporary markdown files, not documentation
+temp*.md
+build/*.md
 .serena/

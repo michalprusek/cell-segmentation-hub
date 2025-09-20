@@ -9,6 +9,7 @@ import sharp from 'sharp';
 import path from 'path';
 import { existsSync, promises as fs } from 'fs';
 import { ApiError } from '../middleware/error';
+import { cacheService, CacheService } from './cacheService';
 
 export interface UploadImageData {
   originalname: string;
@@ -334,13 +335,23 @@ export class ImageService {
   }
 
   /**
-   * Get paginated list of images in a project
+   * Get paginated list of images in a project with caching
    */
   async getProjectImages(
     projectId: string,
     userId: string,
     options: ImageQueryParams
   ): Promise<PaginatedImages> {
+    const { page, limit, status, sortBy, sortOrder } = options;
+
+    // Create cache key
+    const cacheKey = `images:project:${projectId}:page:${page}:limit:${limit}:status:${status || 'all'}:sort:${sortBy}:${sortOrder}`;
+
+    // Try cache first
+    const cached = await cacheService.get(cacheKey, { ttl: CacheService.TTL_PRESETS.SHORT });
+    if (cached) {
+      return cached;
+    }
     // Get user email for share checking
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -429,7 +440,7 @@ export class ImageService {
 
     const totalPages = Math.ceil(total / limit);
 
-    return {
+    const result = {
       images: imagesWithUrls,
       pagination: {
         page,
@@ -440,6 +451,11 @@ export class ImageService {
         hasPrev: page > 1
       }
     };
+
+    // Cache the result
+    await cacheService.set(cacheKey, result, { ttl: CacheService.TTL_PRESETS.SHORT });
+
+    return result;
   }
 
   /**

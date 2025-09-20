@@ -116,8 +116,7 @@ export const convertImageToDataUrl = async (file: File): Promise<string> => {
         URL.revokeObjectURL(url);
         resolve(dataUrl);
       } else {
-        URL.revokeObjectURL(url);
-        // Fallback to object URL if canvas fails
+        // Don't revoke URL if we're going to return it
         resolve(url);
       }
     };

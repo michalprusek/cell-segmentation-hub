@@ -808,8 +808,10 @@ export default {
       '{{new}} 个新图像将被分割，{{resegment}} 个选中图像将被重新分割',
     cancel: '取消',
     cancelling: '正在取消...',
+    cancelled: '已取消 {{count}} 个队列项目',
     batchCancelled: '已取消 {{count}} 个队列项目',
     nothingToCancel: '没有可取消的项目',
+    itemsAlreadyProcessing: '图像已经被处理或正在处理中',
     cancelFailed: '取消批处理操作失败',
   },
   toast: {

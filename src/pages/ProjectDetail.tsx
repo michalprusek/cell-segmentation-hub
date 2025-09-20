@@ -49,6 +49,7 @@ const ProjectDetail = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [userHasQueueItems, setUserHasQueueItems] = useState<boolean>(false);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
     new Set()
   );
@@ -121,6 +122,7 @@ const ProjectDetail = () => {
           }
         );
         setBatchSubmitted(false);
+        setUserHasQueueItems(false);
 
         // Force reconciliation to catch any missed updates
         reconcileRef.current();
@@ -335,6 +337,40 @@ const ProjectDetail = () => {
     [queueStats]
   );
 
+  // Check if current user has any queue items
+  useEffect(() => {
+    const checkUserQueueItems = async () => {
+      if (!id || !user?.id || !isConnected) {
+        setUserHasQueueItems(false);
+        return;
+      }
+
+      // Only check if there might be something in queue
+      if (!hasActiveQueue && !batchSubmitted) {
+        setUserHasQueueItems(false);
+        return;
+      }
+
+      try {
+        // Use the proper apiClient method that handles extractData
+        const queueItems = await apiClient.getQueueItems(id);
+
+        const userQueueItems = queueItems.filter(
+          (item: any) =>
+            item.userId === user.id &&
+            (item.status === 'queued' || item.status === 'processing')
+        );
+
+        setUserHasQueueItems(userQueueItems.length > 0);
+      } catch (error) {
+        logger.error('Failed to check user queue items', error);
+        setUserHasQueueItems(false);
+      }
+    };
+
+    checkUserQueueItems();
+  }, [hasActiveQueue, batchSubmitted, id, user?.id, isConnected]);
+
   // Auto-reset batchSubmitted if WebSocket disconnects for too long
   useEffect(() => {
     if (!isConnected && batchSubmitted) {
@@ -348,6 +384,7 @@ const ProjectDetail = () => {
           }
         );
         setBatchSubmitted(false);
+        setUserHasQueueItems(false);
         setShouldNavigateOnComplete(false);
         setNavigationTargetImageId(null);
       }, 60000); // 60 second timeout for disconnection
@@ -355,6 +392,58 @@ const ProjectDetail = () => {
       return () => clearTimeout(disconnectionTimeout);
     }
   }, [isConnected, batchSubmitted, id]);
+
+  // Handle queue cancellation events via WebSocket
+  useEffect(() => {
+    if (!user?.id || !id) return;
+
+    // Import the WebSocket manager
+    import('@/services/webSocketManager').then(
+      ({ default: WebSocketManager }) => {
+        const manager = WebSocketManager.getInstance();
+
+        const handleQueueCancelled = (data: any) => {
+          if (data.projectId === id) {
+            toast.success(t('queue.cancelled', { count: data.cancelledCount }));
+            setBatchSubmitted(false);
+            setUserHasQueueItems(false);
+            setIsCancelling(false);
+
+            // Refresh queue stats and image data
+            if (requestQueueStats) {
+              requestQueueStats();
+            }
+            refreshImageSegmentation();
+          }
+        };
+
+        const handleBatchCancelled = (data: any) => {
+          toast.success(
+            t('queue.batchCancelled', { count: data.cancelledCount })
+          );
+          setBatchSubmitted(false);
+          setUserHasQueueItems(false);
+          setIsCancelling(false);
+
+          // Refresh queue stats and image data
+          if (requestQueueStats) {
+            requestQueueStats();
+          }
+          refreshImageSegmentation();
+        };
+
+        // Add event listeners
+        manager.on('queue:cancelled', handleQueueCancelled);
+        manager.on('batch:cancelled', handleBatchCancelled);
+
+        // Cleanup function
+        return () => {
+          manager.off('queue:cancelled', handleQueueCancelled);
+          manager.off('batch:cancelled', handleBatchCancelled);
+        };
+      }
+    );
+  }, [id, user?.id, t, requestQueueStats, refreshImageSegmentation]);
 
   // Image operations
   const { handleDeleteImage, handleOpenSegmentationEditor } =
@@ -1012,6 +1101,7 @@ const ProjectDetail = () => {
         toast.info(t('projects.allImagesAlreadySegmented'));
         // Reset batchSubmitted state since we're not actually processing anything
         setBatchSubmitted(false);
+        setUserHasQueueItems(false);
         return;
       }
 
@@ -1036,6 +1126,7 @@ const ProjectDetail = () => {
           }
         );
         setBatchSubmitted(false);
+        setUserHasQueueItems(false);
         setShouldNavigateOnComplete(false);
         setNavigationTargetImageId(null);
       }, 30000); // 30 second safety timeout
@@ -1145,6 +1236,7 @@ const ProjectDetail = () => {
       toast.error(t('projects.errorAddingToQueue'));
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);
+      setUserHasQueueItems(false);
       // Reset navigation flags on error
       setShouldNavigateOnComplete(false);
       setNavigationTargetImageId(null);
@@ -1187,33 +1279,38 @@ const ProjectDetail = () => {
       setIsCancelling(true);
 
       // Get current queue items for this project
-      const response = await apiClient.get(`/queue/projects/${id}/items`);
-      const queueItems = response.data;
+      // Use the proper apiClient method that handles extractData
+      const queueItems = await apiClient.getQueueItems(id);
 
-      if (queueItems && queueItems.length > 0) {
-        // Cancel all queued items for this user
-        const userQueueItems = queueItems.filter(
-          (item: any) => item.userId === user.id
-        );
+      if (queueItems.length === 0) {
+        toast.info(t('queue.nothingToCancel'));
+        return;
+      }
 
-        if (userQueueItems.length > 0) {
-          // Cancel items one by one (following existing API pattern)
-          for (const item of userQueueItems) {
-            try {
-              await apiClient.delete(`/queue/items/${item.id}`);
-            } catch (error) {
-              logger.warn('Failed to cancel queue item', {
-                itemId: item.id,
-                error,
-              });
-            }
+      // Cancel all queued items for this user
+      const userQueueItems = queueItems.filter(
+        (item: any) => item.userId === user.id
+      );
+
+      if (userQueueItems.length > 0) {
+        // Cancel items one by one (following existing API pattern)
+        let cancelledCount = 0;
+        for (const item of userQueueItems) {
+          try {
+            await apiClient.delete(`/queue/items/${item.id}`);
+            cancelledCount++;
+          } catch (error) {
+            logger.warn('Failed to cancel queue item', {
+              itemId: item.id,
+              error,
+            });
           }
+        }
 
-          toast.success(
-            t('queue.batchCancelled', { count: userQueueItems.length })
-          );
+        if (cancelledCount > 0) {
+          toast.success(t('queue.batchCancelled', { count: cancelledCount }));
         } else {
-          toast.info(t('queue.nothingToCancel'));
+          toast.warning(t('queue.itemsAlreadyProcessing'));
         }
       } else {
         toast.info(t('queue.nothingToCancel'));
@@ -1221,6 +1318,7 @@ const ProjectDetail = () => {
 
       // Reset batch state
       setBatchSubmitted(false);
+      setUserHasQueueItems(false);
       setShouldNavigateOnComplete(false);
       setNavigationTargetImageId(null);
 
@@ -1323,7 +1421,7 @@ const ProjectDetail = () => {
               isConnected={isConnected}
               onSegmentAll={handleSegmentAll}
               onCancelBatch={handleCancelBatch}
-              batchSubmitted={batchSubmitted || hasActiveQueue}
+              batchSubmitted={batchSubmitted || userHasQueueItems}
               isCancelling={isCancelling}
               imagesToSegmentCount={imagesToSegmentCount}
               selectedImageIds={selectedImageIds}

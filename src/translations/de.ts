@@ -890,8 +890,11 @@ export default {
       '{{new}} neue Bilder werden segmentiert, {{resegment}} ausgewählte Bilder werden re-segmentiert',
     cancel: 'Abbrechen',
     cancelling: 'Abbrechen...',
+    cancelled: '{{count}} Warteschlangen-Einträge abgebrochen',
     batchCancelled: '{{count}} Warteschlangen-Einträge abgebrochen',
     nothingToCancel: 'Nichts zum Abbrechen',
+    itemsAlreadyProcessing:
+      'Bilder wurden bereits verarbeitet oder werden verarbeitet',
     cancelFailed: 'Fehler beim Abbrechen der Stapelverarbeitung',
   },
   toast: {

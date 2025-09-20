@@ -880,8 +880,11 @@ export default {
     addingToQueue: 'Přidáváno do fronty...',
     cancel: 'Zrušit',
     cancelling: 'Ruším...',
+    cancelled: 'Zrušeno {{count}} položek fronty',
     batchCancelled: 'Zrušeno {{count}} položek fronty',
     nothingToCancel: 'Není co zrušit',
+    itemsAlreadyProcessing:
+      'Obrázky již byly zpracovány nebo jsou ve zpracování',
     cancelFailed: 'Nepodařilo se zrušit dávkovou operaci',
   },
   toast: {

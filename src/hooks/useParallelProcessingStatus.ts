@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useWebSocket } from '@/contexts/useWebSocket';
 import { useLanguage } from '@/contexts/useLanguage';
 import { toast } from 'sonner';
@@ -27,7 +27,7 @@ export const useParallelProcessingStatus = () => {
   const { socket } = useWebSocket();
   const { t } = useLanguage();
   const [status, setStatus] = useState<ParallelProcessingStatus | null>(null);
-  const [lastToastTime, setLastToastTime] = useState(0);
+  const lastToastTime = useRef(0);
 
   useEffect(() => {
     if (!socket) return;
@@ -40,7 +40,7 @@ export const useParallelProcessingStatus = () => {
       // Show toast notification only if significant change in activity
       // and not too frequently (max once every 3 seconds)
       const now = Date.now();
-      const shouldShowToast = now - lastToastTime > 3000;
+      const shouldShowToast = now - lastToastTime.current > 3000;
 
       if (shouldShowToast) {
         const activeWorkers = data.mlWorkers.active;
@@ -99,7 +99,7 @@ export const useParallelProcessingStatus = () => {
           );
         }
 
-        setLastToastTime(now);
+        lastToastTime.current = now;
       }
     };
 
@@ -109,7 +109,7 @@ export const useParallelProcessingStatus = () => {
     return () => {
       socket.off('parallelProcessingStatus', handleParallelProcessingStatus);
     };
-  }, [socket, t, lastToastTime]);
+  }, [socket, t]);
 
   return {
     status,

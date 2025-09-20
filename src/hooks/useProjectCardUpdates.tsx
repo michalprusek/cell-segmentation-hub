@@ -219,26 +219,24 @@ export const useProjectCardUpdates = ({
       }
     };
 
+    // Store handler functions for proper cleanup
+    const projectStatsHandler = (data: any) =>
+      handleWebSocketMessage('projectStatsUpdate', data);
+    const sharedProjectHandler = (data: any) =>
+      handleWebSocketMessage('sharedProjectUpdate', data);
+
     // Register event listeners - FIXED: Using camelCase event names to match backend
-    manager.on('projectStatsUpdate', data =>
-      handleWebSocketMessage('projectStatsUpdate', data)
-    );
-    manager.on('sharedProjectUpdate', data =>
-      handleWebSocketMessage('sharedProjectUpdate', data)
-    );
+    manager.on('projectStatsUpdate', projectStatsHandler);
+    manager.on('sharedProjectUpdate', sharedProjectHandler);
     manager.on('error', handleWebSocketError);
     manager.on('connectionStatus', handleConnectionStatus);
 
     setState(prev => ({ ...prev, isLoading: false }));
 
-    // Cleanup function - FIXED: Using camelCase event names
+    // Cleanup function - FIXED: Using camelCase event names and proper function references
     return () => {
-      manager.off('projectStatsUpdate', data =>
-        handleWebSocketMessage('projectStatsUpdate', data)
-      );
-      manager.off('sharedProjectUpdate', data =>
-        handleWebSocketMessage('sharedProjectUpdate', data)
-      );
+      manager.off('projectStatsUpdate', projectStatsHandler);
+      manager.off('sharedProjectUpdate', sharedProjectHandler);
       manager.off('error', handleWebSocketError);
       manager.off('connectionStatus', handleConnectionStatus);
     };

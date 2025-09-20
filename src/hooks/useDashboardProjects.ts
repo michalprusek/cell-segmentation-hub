@@ -285,7 +285,7 @@ export const useDashboardProjects = ({
 
           // Handle string comparison
           if (typeof aValue === 'string' && typeof bValue === 'string') {
-            const result = aValue.localeCompare(bValue);
+            const result = (aValue || '').localeCompare(bValue || '');
             return sortDirection === 'asc' ? result : -result;
           }
 
@@ -307,8 +307,8 @@ export const useDashboardProjects = ({
           }
 
           // Fallback comparison
-          const aStr = String(aValue);
-          const bStr = String(bValue);
+          const aStr = String(aValue || '');
+          const bStr = String(bValue || '');
           const result = aStr.localeCompare(bStr);
           return sortDirection === 'asc' ? result : -result;
         });

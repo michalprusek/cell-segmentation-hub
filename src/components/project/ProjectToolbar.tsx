@@ -70,7 +70,9 @@ const ProjectToolbar = ({
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Use the advanced export hook for cancellation functionality
-  const { cancelExport, currentJob: _currentJob } = useAdvancedExport(projectId || '');
+  const { cancelExport, currentJob: _currentJob } = useAdvancedExport(
+    projectId || ''
+  );
 
   // Check for persisted export state on mount
   useEffect(() => {

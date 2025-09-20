@@ -882,8 +882,11 @@ export default {
       '{{new}} nouvelles images seront segmentées, {{resegment}} images sélectionnées seront re-segmentées',
     cancel: 'Annuler',
     cancelling: 'Annulation...',
+    cancelled: '{{count}} éléments de file annulés',
     batchCancelled: '{{count}} éléments de file annulés',
     nothingToCancel: 'Rien à annuler',
+    itemsAlreadyProcessing:
+      'Les images ont déjà été traitées ou sont en cours de traitement',
     cancelFailed: "Échec de l'annulation de l'opération par lots",
   },
   toast: {

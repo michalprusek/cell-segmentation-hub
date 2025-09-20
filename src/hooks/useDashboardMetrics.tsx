@@ -5,7 +5,7 @@
  * image statistics, processing queue status, and storage information.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useWebSocket } from '@/contexts/useWebSocket';
 import { useAuth } from '@/contexts/useAuth';
 import { toast } from 'sonner';
@@ -45,9 +45,8 @@ export const useDashboardMetrics = ({
     recentActivity: [],
   });
 
-  // Store previous values for comparison
-  const [previousMetrics, setPreviousMetrics] =
-    useState<DashboardMetrics | null>(null);
+  // Store previous values for comparison using ref to avoid stale closure
+  const previousMetricsRef = useRef<DashboardMetrics | null>(null);
 
   // Handle dashboard metrics updates
   const handleDashboardMetricsUpdate = useCallback(
@@ -68,12 +67,13 @@ export const useDashboardMetrics = ({
       }));
 
       // Show notifications for significant changes
-      if (enableNotifications && previousMetrics) {
+      if (enableNotifications && previousMetricsRef.current) {
         const changes: string[] = [];
 
         // Check for significant changes in key metrics
         if (data.changedFields.includes('totalImages')) {
-          const diff = data.metrics.totalImages - previousMetrics.totalImages;
+          const diff =
+            data.metrics.totalImages - previousMetricsRef.current.totalImages;
           if (Math.abs(diff) >= notificationThreshold) {
             changes.push(`${diff > 0 ? '+' : ''}${diff} images`);
           }
@@ -81,7 +81,8 @@ export const useDashboardMetrics = ({
 
         if (data.changedFields.includes('totalSegmented')) {
           const diff =
-            data.metrics.totalSegmented - previousMetrics.totalSegmented;
+            data.metrics.totalSegmented -
+            previousMetricsRef.current.totalSegmented;
           if (Math.abs(diff) >= notificationThreshold) {
             changes.push(`${diff > 0 ? '+' : ''}${diff} segmented`);
           }
@@ -89,7 +90,8 @@ export const useDashboardMetrics = ({
 
         if (data.changedFields.includes('totalProjects')) {
           const diff =
-            data.metrics.totalProjects - previousMetrics.totalProjects;
+            data.metrics.totalProjects -
+            previousMetricsRef.current.totalProjects;
           if (Math.abs(diff) >= notificationThreshold) {
             changes.push(`${diff > 0 ? '+' : ''}${diff} projects`);
           }
@@ -102,9 +104,9 @@ export const useDashboardMetrics = ({
       }
 
       // Update previous metrics for next comparison
-      setPreviousMetrics(data.metrics);
+      previousMetricsRef.current = data.metrics;
     },
-    [user, enableNotifications, previousMetrics, notificationThreshold]
+    [user, enableNotifications, notificationThreshold]
   );
 
   // Handle user activity updates
@@ -233,13 +235,15 @@ export const useDashboardMetrics = ({
       }
     };
 
+    // Create stable handler functions for proper cleanup
+    const handleDashboardMetrics = (data: any) =>
+      handleWebSocketMessage('dashboard-metrics-update', data);
+    const handleUserActivity = (data: any) =>
+      handleWebSocketMessage('user-activity-update', data);
+
     // Register event listeners
-    manager.on('dashboard-metrics-update', data =>
-      handleWebSocketMessage('dashboard-metrics-update', data)
-    );
-    manager.on('user-activity-update', data =>
-      handleWebSocketMessage('user-activity-update', data)
-    );
+    manager.on('dashboard-metrics-update', handleDashboardMetrics);
+    manager.on('user-activity-update', handleUserActivity);
     manager.on('error', handleWebSocketError);
     manager.on('connectionStatus', handleConnectionStatus);
 
@@ -247,12 +251,8 @@ export const useDashboardMetrics = ({
 
     // Cleanup function
     return () => {
-      manager.off('dashboard-metrics-update', data =>
-        handleWebSocketMessage('dashboard-metrics-update', data)
-      );
-      manager.off('user-activity-update', data =>
-        handleWebSocketMessage('user-activity-update', data)
-      );
+      manager.off('dashboard-metrics-update', handleDashboardMetrics);
+      manager.off('user-activity-update', handleUserActivity);
       manager.off('error', handleWebSocketError);
       manager.off('connectionStatus', handleConnectionStatus);
     };

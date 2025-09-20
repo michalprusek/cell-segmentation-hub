@@ -879,8 +879,11 @@ export default {
     addingToQueue: 'Añadiendo a la cola...',
     cancel: 'Cancelar',
     cancelling: 'Cancelando...',
+    cancelled: 'Cancelados {{count}} elementos de la cola',
     batchCancelled: 'Cancelados {{count}} elementos de la cola',
     nothingToCancel: 'Nada que cancelar',
+    itemsAlreadyProcessing:
+      'Las imágenes ya han sido procesadas o están siendo procesadas',
     cancelFailed: 'Error al cancelar la operación por lotes',
   },
   toast: {

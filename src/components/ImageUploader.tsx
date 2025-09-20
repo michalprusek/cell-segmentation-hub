@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { useAuth } from '@/contexts/useAuth';
@@ -10,12 +10,17 @@ import FileList, { FileWithPreview } from '@/components/upload/FileList';
 import UploaderOptions from '@/components/upload/UploaderOptions';
 import { logger } from '@/lib/logger';
 import { ChunkProgress, DEFAULT_CHUNKING_CONFIG } from '@/lib/uploadUtils';
+import { isTiffFile, createImagePreviewUrl } from '@/lib/tiffConverter';
 
 interface ImageUploaderProps {
   onUploadComplete?: () => void;
+  onUploadCancel?: () => void;
 }
 
-const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
+const ImageUploader = ({
+  onUploadComplete,
+  onUploadCancel,
+}: ImageUploaderProps) => {
   const [files, setFiles] = useState<FileWithPreview[]>([]);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [projectId, setProjectId] = useState<string | null>(null);
@@ -26,6 +31,8 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   );
   const [_currentOperation, setCurrentOperation] = useState<string>('');
   const [uploadCancelled, setUploadCancelled] = useState(false);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const previewUrlsRef = useRef<Set<string>>(new Set());
   const { user: _user } = useAuth();
   const navigate = useNavigate();
   const params = useParams();
@@ -121,23 +128,30 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         return;
       }
 
+      // Check for early cancellation before starting
+      if (uploadCancelled) {
+        logger.info('Upload cancelled before start');
+        return;
+      }
+
       setIsUploading(true);
       setUploadProgress(0);
       setUploadCancelled(false); // Reset cancellation state
 
+      // Create AbortController for cancelling requests
+      const abortController = new AbortController();
+      abortControllerRef.current = abortController;
+
       try {
-        // Early cancellation check
-        if (uploadCancelled) {
-          logger.info('Upload cancelled before start');
-          return;
-        }
         // Create a unique identifier for each file to track them
-        const fileIdentifiers = filesToUpload.map(f => `${f.name}_${f.size}`);
+        const fileIdentifiers = filesToUpload.map(
+          f => `${f.name}_${f.size || f.originalSize || 0}`
+        );
 
         // Mark all files as uploading - preserve all File properties
         setFiles(prev =>
           prev.map(f => {
-            const fileId = `${f.name}_${f.size}`;
+            const fileId = `${f.name}_${f.size || f.originalSize || 0}`;
             if (fileIdentifiers.includes(fileId)) {
               return {
                 ...f,
@@ -153,7 +167,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
 
         // Smart chunking decision: consider both file count AND payload size
         const totalPayloadSize = filesToUpload.reduce(
-          (sum, file) => sum + file.size,
+          (sum, file) => sum + (file.size || file.originalSize || 0),
           0
         );
         const maxPayloadSize = 40 * 1024 * 1024; // 40MB safety limit (below 50MB Express limit)
@@ -167,9 +181,12 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
           );
           logger.info(`Using chunked upload for ${filesToUpload.length} files`);
 
+          // Convert FileWithPreview back to File objects for API
+          const actualFiles = filesToUpload.map(f => f._file || f);
+
           const result = await apiClient.uploadImagesChunked(
             selectedProjectId,
-            filesToUpload,
+            actualFiles,
             progressPercent => {
               // For smooth updates, only update if the new progress is higher
               setUploadProgress(prev => Math.max(prev, progressPercent));
@@ -195,7 +212,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
 
               setFiles(prev =>
                 prev.map((f, fileIndex) => {
-                  const fileId = `${f.name}_${f.size}`;
+                  const fileId = `${f.name}_${f.size || f.originalSize || 0}`;
                   if (fileIdentifiers.includes(fileId)) {
                     // Calculate individual file progress
                     if (fileIndex < currentChunkStartIndex) {
@@ -229,7 +246,8 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
                   return f;
                 })
               );
-            }
+            },
+            abortController.signal
           );
 
           // Flatten successful uploads from chunks
@@ -256,10 +274,13 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
             `Using regular upload for ${filesToUpload.length} files (${(totalPayloadSize / (1024 * 1024)).toFixed(1)}MB payload)`
           );
 
+          // Convert FileWithPreview back to File objects for API
+          const actualFiles = filesToUpload.map(f => f._file || f);
+
           // Use regular upload for small batches
           uploadedImages = await apiClient.uploadImages(
             selectedProjectId,
-            filesToUpload,
+            actualFiles,
             progressPercent => {
               // Update overall progress
               setUploadProgress(progressPercent);
@@ -267,7 +288,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
               // Update individual file progress
               setFiles(prev =>
                 prev.map(f => {
-                  const fileId = `${f.name}_${f.size}`;
+                  const fileId = `${f.name}_${f.size || f.originalSize || 0}`;
                   if (fileIdentifiers.includes(fileId)) {
                     return {
                       ...f,
@@ -277,7 +298,8 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
                   return f;
                 })
               );
-            }
+            },
+            abortController.signal
           );
         }
 
@@ -286,7 +308,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         // Mark all uploaded files as complete
         setFiles(prev =>
           prev.map(f => {
-            const fileId = `${f.name}_${f.size}`;
+            const fileId = `${f.name}_${f.size || f.originalSize || 0}`;
             if (fileIdentifiers.includes(fileId)) {
               return {
                 ...f,
@@ -324,13 +346,21 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
           navigate(`/project/${selectedProjectId}`, { replace: true });
         }
       } catch (error) {
+        // Check if error is due to cancellation
+        if (error.name === 'AbortError' || error.code === 'ERR_CANCELED') {
+          logger.info('Upload cancelled via AbortSignal');
+          return; // Exit early, don't show error
+        }
+
         logger.error('Upload error:', error);
 
         // Mark all files as error
-        const fileIdentifiers = filesToUpload.map(f => `${f.name}_${f.size}`);
+        const fileIdentifiers = filesToUpload.map(
+          f => `${f.name}_${f.size || f.originalSize || 0}`
+        );
         setFiles(prev =>
           prev.map(f => {
-            const fileId = `${f.name}_${f.size}`;
+            const fileId = `${f.name}_${f.size || f.originalSize || 0}`;
             if (fileIdentifiers.includes(fileId)) {
               return {
                 ...f,
@@ -354,28 +384,78 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   );
 
   const onDrop = useCallback(
-    (acceptedFiles: File[]) => {
+    async (acceptedFiles: File[]) => {
       if (!projectId) {
         toast.error(t('images.selectProjectFirst'));
         return;
       }
 
-      // Enhanced file processing that preserves native File properties
-      const newFiles = acceptedFiles.map(file => {
-        // Use direct property assignment to preserve native File object binding
-        // This prevents "TypeError: Illegal invocation" by maintaining proper context
-        const enhancedFile = file as FileWithPreview;
+      // Sort accepted files by name for stable ordering
+      const sortedFiles = acceptedFiles.sort((a, b) =>
+        (a.name || '').localeCompare(b.name || '')
+      );
 
-        // Add custom properties directly to the native File object
-        enhancedFile.preview = URL.createObjectURL(file);
-        enhancedFile.uploadProgress = 0;
-        enhancedFile.status = 'pending' as const;
-        enhancedFile.originalSize = file.size; // Backup size property
+      // Enhanced file processing with batch throttling for performance
+      const PREVIEW_BATCH_SIZE = 20; // Process previews in smaller batches
+      const newFiles: FileWithPreview[] = [];
 
-        return enhancedFile;
+      for (let i = 0; i < sortedFiles.length; i += PREVIEW_BATCH_SIZE) {
+        const batch = sortedFiles.slice(i, i + PREVIEW_BATCH_SIZE);
+
+        const batchFiles = await Promise.all(
+          batch.map(async file => {
+            let preview: string | undefined;
+
+            // For TIFF files, try to create a converted preview
+            if (isTiffFile(file)) {
+              try {
+                preview = await createImagePreviewUrl(file);
+              } catch (error) {
+                logger.warn('Failed to create TIFF preview:', error);
+                // Fallback to blob URL for TIFF files (may not display properly)
+                preview = URL.createObjectURL(file);
+                if (preview.startsWith('blob:')) {
+                  previewUrlsRef.current.add(preview);
+                }
+              }
+            } else {
+              // For other files, use standard blob URL
+              preview = URL.createObjectURL(file);
+              if (preview.startsWith('blob:')) {
+                previewUrlsRef.current.add(preview);
+              }
+            }
+
+            return {
+              // Spread File properties and methods
+              ...file,
+              // Keep reference to original File object for FormData
+              _file: file,
+              // Add custom properties
+              preview,
+              uploadProgress: 0,
+              status: 'pending' as const,
+              // Backup original size in case file.size property gets lost during processing
+              originalSize: file.size,
+            };
+          })
+        );
+
+        newFiles.push(...batchFiles);
+
+        // Small delay between batches to prevent browser overwhelm
+        if (i + PREVIEW_BATCH_SIZE < sortedFiles.length) {
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
+      }
+
+      setFiles(prev => {
+        // Merge previous files with new files and sort by name for stable order
+        const allFiles = [...prev, ...newFiles];
+        return allFiles.sort((a, b) =>
+          (a.name || '').localeCompare(b.name || '')
+        );
       });
-
-      setFiles(prev => [...prev, ...newFiles]);
 
       if (projectId) {
         handleUpload(newFiles, projectId);
@@ -385,7 +465,10 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   );
 
   const removeFile = useCallback((file: FileWithPreview) => {
-    URL.revokeObjectURL(file.preview || '');
+    if (file.preview && file.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(file.preview);
+      previewUrlsRef.current.delete(file.preview);
+    }
 
     setFiles(prev => {
       const filteredFiles = prev.filter(f => f !== file);
@@ -411,6 +494,12 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
     setIsUploading(false);
     setUploadProgress(0);
     setCurrentOperation('Cancelling upload and cleaning up...');
+
+    // Abort any ongoing HTTP requests
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
 
     try {
       // Find files that were successfully uploaded (status: complete)
@@ -458,28 +547,40 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
       toast.error('Error cancelling upload');
     }
 
-    // Reset all files to pending state
+    // Reset only non-completed files to pending state
+    // Keep completed files as completed since they're already on the server
     setFiles(prev =>
       prev.map(file => ({
         ...file,
-        status: 'pending' as const,
-        uploadProgress: 0,
+        status: file.status === 'complete' ? 'complete' : ('pending' as const),
+        uploadProgress: file.status === 'complete' ? 100 : 0,
       }))
     );
 
     setCurrentOperation('');
     logger.info('Upload cancelled by user');
-  }, [t, files, projectId]);
+
+    // Navigate back to image gallery if callback provided
+    if (onUploadCancel) {
+      onUploadCancel();
+    }
+  }, [t, files, projectId, onUploadCancel]);
 
   const handleProjectChange = (value: string) => {
     setProjectId(value);
   };
 
+  // Cleanup blob URLs when component unmounts
   useEffect(() => {
+    const previewUrls = previewUrlsRef.current;
     return () => {
-      files.forEach(file => URL.revokeObjectURL(file.preview || ''));
+      // Clean up all tracked preview URLs
+      previewUrls.forEach(url => {
+        URL.revokeObjectURL(url);
+      });
+      previewUrls.clear();
     };
-  }, [files]);
+  }, []);
 
   return (
     <div className="space-y-6">

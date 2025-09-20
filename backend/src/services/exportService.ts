@@ -80,6 +80,7 @@ export interface ExportJob {
   filePath?: string;
   createdAt: Date;
   completedAt?: Date;
+  cancelledAt?: Date;
   options: ExportOptions;
   bullJobId?: string;
 }
@@ -125,9 +126,26 @@ export class ExportService {
   private sendToUser(userId: string, event: string, data: Record<string, unknown>): void {
     if (this.wsService) {
       try {
+        // ✅ CRITICAL: Validate job state before sending events
+        if (data.jobId) {
+          const job = this.exportJobs.get(data.jobId as string);
+
+          // Prevent sending completion/progress events for cancelled jobs
+          if (job && job.status === 'cancelled' && (event === 'export:completed' || event === 'export:progress')) {
+            logger.warn('Prevented WebSocket event for cancelled job', 'ExportService', {
+              userId,
+              event,
+              jobId: data.jobId,
+              jobStatus: job.status,
+              cancelledAt: job.cancelledAt
+            });
+            return;
+          }
+        }
+
         // Use the WebSocketService emitToUser method for all export events
         this.wsService.emitToUser(userId, event, data);
-        
+
         if (event === 'export:started') {
           logger.debug('Export started notification sent', 'ExportService', { userId, jobId: data.jobId });
         } else if (event === 'export:progress') {
@@ -136,6 +154,8 @@ export class ExportService {
           logger.info('Export completed notification sent', 'ExportService', { userId, jobId: data.jobId });
         } else if (event === 'export:failed') {
           logger.error('Export failed notification sent', new Error(String(data.error)), 'ExportService', { userId, jobId: data.jobId });
+        } else if (event === 'export:cancelled') {
+          logger.info('Export cancelled notification sent', 'ExportService', { userId, jobId: data.jobId, previousStatus: data.previousStatus });
         }
       } catch (error) {
         logger.error('Failed to send WebSocket message', error instanceof Error ? error : new Error(String(error)), 'ExportService', { userId, event, data });
@@ -257,6 +277,12 @@ export class ExportService {
     if (!job) {return;}
 
     try {
+      // ✅ CRITICAL: Check cancellation before starting processing
+      if (job.status === 'cancelled') {
+        await this.cleanupCancelledJob(jobId);
+        return;
+      }
+
       job.status = 'processing';
       this.updateJobProgress(jobId, 0);
 
@@ -264,6 +290,12 @@ export class ExportService {
       const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
       if (!accessCheck.hasAccess) {
         throw new Error('Access denied: You do not have permission to export this project');
+      }
+
+      // ✅ CRITICAL: Check cancellation after access check
+      if (job.status === 'cancelled') {
+        await this.cleanupCancelledJob(jobId);
+        return;
       }
 
       // Get project data with optimized query - only select needed fields
@@ -323,6 +355,13 @@ export class ExportService {
 
       // Create folder structure
       await this.createFolderStructure(exportDir);
+
+      // ✅ CRITICAL: Check cancellation after folder creation
+      if (job.status === 'cancelled') {
+        await this.cleanupCancelledJob(jobId);
+        return;
+      }
+
       this.updateJobProgress(jobId, 10);
 
       // Parallel export processing - run independent tasks concurrently
@@ -403,8 +442,21 @@ export class ExportService {
       }
       
       // Wait for all export tasks to complete in parallel
-      logger.info(`Running ${exportTasks.length} export tasks in parallel`, undefined, 'ExportService');
+      logger.info(`Running ${exportTasks.length} export tasks in parallel`, 'ExportService');
       await Promise.all(exportTasks);
+
+      // ✅ CRITICAL: Check cancellation after parallel tasks complete
+      if (job.status === 'cancelled') {
+        await this.cleanupCancelledJob(jobId);
+        return;
+      }
+
+      // ✅ Check cancellation before ZIP creation
+      if (job.status === 'cancelled') {
+        await this.cleanupCancelledJob(jobId);
+        return;
+      }
+
       this.updateJobProgress(jobId, 90);
 
       // Create ZIP archive (no compression)
@@ -412,30 +464,82 @@ export class ExportService {
         exportDir,
         project.title
       );
+
+      // ✅ CRITICAL: Final cancellation check before completion
+      if (job.status === 'cancelled') {
+        await this.cleanupCancelledJob(jobId);
+        return;
+      }
+
       this.updateJobProgress(jobId, 100);
 
-      // Update job with file path
-      job.filePath = zipPath;
-      job.status = 'completed';
-      job.completedAt = new Date();
+      // ✅ CRITICAL: Atomic completion with triple-check protection
+      if (job.status === 'processing') {
+        // Final status verification before completion
+        const currentJob = this.exportJobs.get(jobId);
+        if (!currentJob || currentJob.status !== 'processing') {
+          logger.warn('Job status changed during completion, aborting', 'ExportService', { jobId, currentStatus: currentJob?.status });
+          await this.cleanupCancelledJob(jobId);
+          return;
+        }
 
-      // Notify completion via WebSocket
-      this.sendToUser(userId, 'export:completed', { jobId });
+        // Atomic state transition with logging
+        const previousStatus = job.status;
+        job.status = 'completed';
+        job.completedAt = new Date();
+        job.filePath = zipPath;
+
+        // Log state transition for debugging
+        logger.info('Export job state transition', 'ExportService', {
+          jobId,
+          projectId,
+          fromStatus: previousStatus,
+          toStatus: 'completed',
+          completedAt: job.completedAt,
+          transitionType: 'processing_to_completed'
+        });
+
+        // ✅ Send WebSocket event only for truly completed jobs
+        this.sendToUser(userId, 'export:completed', {
+          jobId,
+          filePath: zipPath,
+          completedAt: job.completedAt
+        });
+
+        logger.info('Export job completed successfully', 'ExportService', {
+          jobId,
+          projectId,
+          completedAt: job.completedAt
+        });
+      } else {
+        // Job was cancelled during processing
+        logger.info('Export job was cancelled during final stages', 'ExportService', {
+          jobId,
+          projectId,
+          finalStatus: job.status,
+          cancelledAt: job.cancelledAt
+        });
+        await this.cleanupCancelledJob(jobId);
+      }
 
       // Clean up temporary directory
       await fs.rm(exportDir, { recursive: true, force: true });
 
     } catch (error) {
       logger.error(`Export job ${jobId} failed:`, error instanceof Error ? error : new Error(String(error)));
-      job.status = 'failed';
-      job.message = error instanceof Error ? error.message : 'Unknown error';
-      
-      // Notify failure via WebSocket
-      this.sendToUser(userId, 'export:failed', { 
-        jobId, 
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
-      
+
+      // ✅ Handle errors without overwriting cancellation
+      if (job.status !== 'cancelled') {
+        job.status = 'failed';
+        job.message = error instanceof Error ? error.message : 'Unknown error';
+
+        // Notify failure via WebSocket
+        this.sendToUser(userId, 'export:failed', {
+          jobId,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
+      }
+
       throw error;
     }
   }
@@ -1195,9 +1299,9 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
 
   private updateJobProgress(jobId: string, progress: number): void {
     const job = this.exportJobs.get(jobId);
-    if (job) {
+    if (job && job.status !== 'cancelled') {
       job.progress = progress;
-      // Send progress update via WebSocket
+      // ✅ CRITICAL: Only send progress updates for non-cancelled jobs
       this.sendToUser(job.userId, 'export:progress', { jobId, progress });
     }
   }
@@ -1271,8 +1375,52 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
     }
 
     const job = this.exportJobs.get(jobId);
-    if (job && job.projectId === projectId && job.filePath) {
-      return job.filePath;
+    if (job && job.projectId === projectId) {
+      // ✅ CRITICAL: Only return file path for completed jobs
+      if (job.status === 'completed' && job.filePath) {
+        return job.filePath;
+      }
+
+      // ✅ Log attempts to access file paths for non-completed jobs
+      if (job.status !== 'completed') {
+        logger.debug('File path requested for non-completed job', 'ExportService', {
+          jobId,
+          status: job.status,
+          cancelledAt: job.cancelledAt
+        });
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get job with complete status information for download validation
+   * CRITICAL: Used to prevent downloads of cancelled exports
+   */
+  async getJobWithStatus(jobId: string, projectId: string, userId: string): Promise<ExportJob | null> {
+    // Check if user has access to this project (owner or shared)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    if (!accessCheck.hasAccess) {
+      return null;
+    }
+
+    const job = this.exportJobs.get(jobId);
+    if (job && job.projectId === projectId) {
+      // Return complete job information including status
+      return {
+        id: job.id,
+        projectId: job.projectId,
+        userId: job.userId,
+        status: job.status,
+        progress: job.progress,
+        message: job.message,
+        filePath: job.filePath,
+        createdAt: job.createdAt,
+        completedAt: job.completedAt,
+        cancelledAt: job.cancelledAt,
+        options: job.options,
+        bullJobId: job.bullJobId
+      };
     }
     return null;
   }
@@ -1286,14 +1434,103 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
 
     const job = this.exportJobs.get(jobId);
     if (job && job.projectId === projectId) {
+      const previousStatus = job.status;
+
+      // ✅ CRITICAL: Prevent double cancellation
+      if (job.status === 'cancelled') {
+        logger.debug('Job already cancelled, skipping', 'ExportService', { jobId, cancelledAt: job.cancelledAt });
+        return;
+      }
+
+      // ✅ CRITICAL: Atomic status transition with timestamp
+      const cancelledAt = new Date();
       job.status = 'cancelled';
+      job.cancelledAt = cancelledAt;
+
+      // Log state transition for debugging
+      logger.info('Export job state transition', 'ExportService', {
+        jobId,
+        projectId,
+        fromStatus: previousStatus,
+        toStatus: 'cancelled',
+        cancelledAt,
+        transitionType: 'user_cancellation',
+        userId
+      });
+
+      // ✅ Cleanup any generated files
+      if (job.filePath) {
+        await this.cleanupExportFiles(job.filePath);
+        job.filePath = undefined;
+      }
+
       // Cancel the Bull queue job if bullJobId exists and queue is available
       if (job.bullJobId && this.exportQueue && typeof (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob === 'function') {
-        const queueJob = await (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob(job.bullJobId);
-        if (queueJob && ['waiting', 'delayed'].includes(await queueJob.getState())) {
-          await queueJob.remove();
+        try {
+          const queueJob = await (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob(job.bullJobId);
+          if (queueJob && ['waiting', 'delayed'].includes(await queueJob.getState())) {
+            await queueJob.remove();
+            logger.debug('Removed Bull queue job', 'ExportService', { jobId, bullJobId: job.bullJobId });
+          }
+        } catch (error) {
+          logger.warn('Failed to remove Bull queue job', 'ExportService', { jobId, bullJobId: job.bullJobId, error });
         }
       }
+
+      // ✅ Send immediate WebSocket notification
+      this.sendToUser(userId, 'export:cancelled', {
+        jobId,
+        projectId,
+        previousStatus,
+        cancelledAt: job.cancelledAt
+      });
+
+      // ✅ Log for debugging race conditions
+      logger.info('Export job cancelled successfully', 'ExportService', {
+        jobId,
+        projectId,
+        previousStatus,
+        cancelledAt: job.cancelledAt,
+        userId
+      });
+    } else {
+      logger.warn('Cannot cancel job: job not found or access denied', 'ExportService', {
+        jobId,
+        projectId,
+        userId,
+        jobExists: !!job,
+        projectMatch: job?.projectId === projectId
+      });
+    }
+  }
+
+  /**
+   * ✅ NEW METHOD: Cleanup cancelled jobs
+   * CRITICAL: Prevents file system pollution from cancelled exports
+   */
+  private async cleanupCancelledJob(jobId: string): Promise<void> {
+    const job = this.exportJobs.get(jobId);
+    if (!job) return;
+
+    // Clean up files and mark as cleaned
+    if (job.filePath) {
+      await this.cleanupExportFiles(job.filePath);
+      job.filePath = undefined;
+    }
+
+    logger.info('Cleaned up cancelled export job', 'ExportService', { jobId });
+  }
+
+  /**
+   * Helper method to clean up export files
+   */
+  private async cleanupExportFiles(filePath: string): Promise<void> {
+    try {
+      await fs.unlink(filePath);
+      logger.info('Deleted cancelled export file', 'ExportService', { filePath });
+    } catch (error) {
+      // File might not exist or already be deleted, log but don't throw
+      logger.warn('Failed to delete export file (may not exist)', 'ExportService', { filePath, error });
     }
   }
 

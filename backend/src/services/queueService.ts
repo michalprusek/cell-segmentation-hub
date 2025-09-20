@@ -463,6 +463,49 @@ export class QueueService {
     }
   }
 
+  /**
+   * Remove from queue with pre-fetched item to avoid race conditions
+   * This method accepts a queue item that was already validated by the controller
+   */
+  async removeFromQueueWithItem(queueId: string, userId: string, queueItem: any): Promise<void> {
+    try {
+      // Verify the item still exists and can be removed
+      const currentItem = await this.prisma.segmentationQueue.findFirst({
+        where: {
+          id: queueId,
+          userId,
+          status: { in: ['queued'] } // Only allow removal of queued items
+        }
+      });
+
+      if (!currentItem) {
+        throw new Error('Queue item no longer exists or cannot be removed');
+      }
+
+      // Remove from queue
+      await this.prisma.segmentationQueue.delete({
+        where: { id: queueId }
+      });
+
+      // Update image status back to no_segmentation
+      await this.imageService.updateSegmentationStatus(queueItem.imageId, 'no_segmentation', userId);
+
+      logger.info('Item removed from queue', 'QueueService', {
+        queueId,
+        imageId: queueItem.imageId
+      });
+
+      // Emit parallel processing status update
+      await this.getParallelProcessingStatus();
+    } catch (error) {
+      logger.error('Failed to remove item from queue', error instanceof Error ? error : undefined, 'QueueService', {
+        queueId,
+        userId
+      });
+      throw error;
+    }
+  }
+
 
   /**
    * Get next batch of queue items for batch processing
@@ -1072,6 +1115,152 @@ export class QueueService {
       return result.count;
     } catch (error) {
       logger.error('Failed to cleanup old queue entries', error instanceof Error ? error : undefined, 'QueueService');
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel all queue items for a user in a specific project
+   */
+  async cancelByProject(projectId: string, userId: string): Promise<number> {
+    try {
+      // Use transaction to ensure atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Find items to cancel
+        const itemsToCancel = await tx.segmentationQueue.findMany({
+          where: {
+            projectId,
+            userId,
+            status: { in: ['queued', 'processing'] }
+          }
+        });
+
+        if (itemsToCancel.length === 0) {
+          return 0;
+        }
+
+        // Update to cancelled status
+        const updateResult = await tx.segmentationQueue.updateMany({
+          where: {
+            projectId,
+            userId,
+            status: { in: ['queued', 'processing'] }
+          },
+          data: {
+            status: 'cancelled',
+            completedAt: new Date(),
+            error: 'Cancelled by user'
+          }
+        });
+
+        // Update image segmentation status for cancelled items
+        for (const item of itemsToCancel) {
+          await this.imageService.updateSegmentationStatus(item.imageId, 'no_segmentation', userId);
+        }
+
+        return updateResult.count;
+      });
+
+      if (result > 0) {
+        logger.info('Queue items cancelled by project', 'QueueService', {
+          projectId,
+          userId,
+          count: result
+        });
+
+        // Emit queue stats update
+        if (this.websocketService) {
+          const stats = await this.getQueueStats(projectId, userId);
+          this.websocketService.emitQueueStatsUpdate(projectId, {
+            projectId,
+            ...stats
+          });
+        }
+      }
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to cancel project queue', error instanceof Error ? error : undefined, 'QueueService', {
+        projectId,
+        userId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel all queue items for a specific batch
+   */
+  async cancelBatch(batchId: string, userId: string): Promise<number> {
+    try {
+      // Use transaction to ensure atomicity
+      const result = await this.prisma.$transaction(async (tx) => {
+        // Find items to cancel
+        const itemsToCancel = await tx.segmentationQueue.findMany({
+          where: {
+            batchId,
+            userId,
+            status: { in: ['queued', 'processing'] }
+          }
+        });
+
+        if (itemsToCancel.length === 0) {
+          return 0;
+        }
+
+        // Update to cancelled status
+        const updateResult = await tx.segmentationQueue.updateMany({
+          where: {
+            batchId,
+            userId,
+            status: { in: ['queued', 'processing'] }
+          },
+          data: {
+            status: 'cancelled',
+            completedAt: new Date(),
+            error: 'Cancelled by user'
+          }
+        });
+
+        // Update image segmentation status for cancelled items
+        for (const item of itemsToCancel) {
+          await this.imageService.updateSegmentationStatus(item.imageId, 'no_segmentation', userId);
+        }
+
+        return updateResult.count;
+      });
+
+      if (result > 0) {
+        logger.info('Batch cancelled', 'QueueService', {
+          batchId,
+          userId,
+          count: result
+        });
+
+        // Emit queue stats update for the project if we can determine it
+        if (this.websocketService && result > 0) {
+          // Get project ID from one of the cancelled items
+          const sampleItem = await this.prisma.segmentationQueue.findFirst({
+            where: { batchId },
+            select: { projectId: true }
+          });
+
+          if (sampleItem) {
+            const stats = await this.getQueueStats(sampleItem.projectId, userId);
+            this.websocketService.emitQueueStatsUpdate(sampleItem.projectId, {
+              projectId: sampleItem.projectId,
+              ...stats
+            });
+          }
+        }
+      }
+
+      return result;
+    } catch (error) {
+      logger.error('Failed to cancel batch', error instanceof Error ? error : undefined, 'QueueService', {
+        batchId,
+        userId
+      });
       throw error;
     }
   }

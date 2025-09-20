@@ -34,10 +34,19 @@ export enum WebSocketEvent {
   QUEUE_STATS = 'queueStats',
   QUEUE_POSITION = 'queuePosition',
   QUEUE_UPDATE = 'queueUpdate',
+  QUEUE_CANCELLED = 'queue:cancelled',
+  BATCH_CANCELLED = 'batch:cancelled',
 
   // Parallel processing events
   PARALLEL_PROCESSING_STATUS = 'parallelProcessingStatus',
   
+  // Export events
+  EXPORT_STARTED = 'export:started',
+  EXPORT_PROGRESS = 'export:progress',
+  EXPORT_COMPLETED = 'export:completed',
+  EXPORT_FAILED = 'export:failed',
+  EXPORT_CANCELLED = 'export:cancelled',
+
   // Upload events
   UPLOAD_PROGRESS = 'uploadProgress',
   UPLOAD_COMPLETED = 'uploadCompleted',
@@ -221,6 +230,24 @@ export interface QueueUpdateData {
   affectedCount: number;
   queueIds?: string[];
   newStats: QueueStatsData;
+}
+
+/**
+ * Queue cancelled event - when all queue items for a project are cancelled
+ */
+export interface QueueCancelledData {
+  projectId: string;
+  cancelledCount: number;
+  timestamp: string;
+}
+
+/**
+ * Batch cancelled event - when a specific batch is cancelled
+ */
+export interface BatchCancelledData {
+  batchId: string;
+  cancelledCount: number;
+  timestamp: string;
 }
 
 /**
@@ -523,6 +550,64 @@ export interface BatchImagesDeletedData {
 }
 
 // ============================================================================
+// Export Events
+// ============================================================================
+
+/**
+ * Export started event
+ */
+export interface ExportStartedData {
+  jobId: string;
+  projectId: string;
+  timestamp: Date;
+}
+
+/**
+ * Export progress event
+ */
+export interface ExportProgressData {
+  jobId: string;
+  projectId: string;
+  progress: number; // 0-100
+  stage?: string;
+  message?: string;
+  timestamp: Date;
+}
+
+/**
+ * Export completed event
+ */
+export interface ExportCompletedData {
+  jobId: string;
+  projectId: string;
+  filePath: string;
+  completedAt: Date;
+  timestamp: Date;
+}
+
+/**
+ * Export failed event
+ */
+export interface ExportFailedData {
+  jobId: string;
+  projectId: string;
+  error: string;
+  timestamp: Date;
+}
+
+/**
+ * Export cancelled event
+ * CRITICAL: Used to prevent downloads of cancelled exports
+ */
+export interface ExportCancelledData {
+  jobId: string;
+  projectId: string;
+  previousStatus: string;
+  cancelledAt: Date;
+  timestamp: Date;
+}
+
+// ============================================================================
 // Error Events
 // ============================================================================
 
@@ -768,6 +853,32 @@ export function isBatchImagesDeletedData(data: unknown): data is BatchImagesDele
   );
 }
 
+/**
+ * Type guard for QueueCancelledData
+ */
+export function isQueueCancelledData(data: unknown): data is QueueCancelledData {
+  if (typeof data !== 'object' || data === null) {return false;}
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.projectId === 'string' &&
+    typeof d.cancelledCount === 'number' &&
+    typeof d.timestamp === 'string'
+  );
+}
+
+/**
+ * Type guard for BatchCancelledData
+ */
+export function isBatchCancelledData(data: unknown): data is BatchCancelledData {
+  if (typeof data !== 'object' || data === null) {return false;}
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.batchId === 'string' &&
+    typeof d.cancelledCount === 'number' &&
+    typeof d.timestamp === 'string'
+  );
+}
+
 // ============================================================================
 // Export
 // ============================================================================
@@ -788,5 +899,7 @@ export default {
   isDashboardMetricsUpdateData,
   isSharedProjectUpdateData,
   isImageDeletedData,
-  isBatchImagesDeletedData
+  isBatchImagesDeletedData,
+  isQueueCancelledData,
+  isBatchCancelledData
 };

@@ -157,7 +157,7 @@ services:
     container_name: nginx-blue
     volumes:
       - ./docker/nginx/nginx-main.conf:/etc/nginx/nginx.conf:ro
-      - ./docker/nginx/nginx.blue.conf:/etc/nginx/conf.d/nginx.active.conf:ro
+      - ./docker/nginx/nginx.blue.conf:/etc/nginx/conf.d/default.conf:ro
       - ./docker/nginx/snippets:/etc/nginx/snippets:ro
       - ./backend/uploads:/app/uploads:ro
       # SSL certificates for production

@@ -431,9 +431,11 @@ class QueueController {
         ResponseHelper.badRequest(res, 'Queue ID is required');
         return;
       }
-      await this.queueService.removeFromQueue(queueId, userId);
 
-      // Emit WebSocket updates
+      // Pass the queue item to service to avoid race condition
+      await this.queueService.removeFromQueueWithItem(queueId, userId, queueItem);
+
+      // Emit WebSocket updates only if removal was successful
       const websocketService = WebSocketService.getInstance();
       const segmentationUpdate: SegmentationUpdateData = {
         imageId: queueItem.imageId,
@@ -567,6 +569,111 @@ class QueueController {
       });
       
       const errorMessage = error instanceof Error ? error.message : 'Chyba při resetování zaseknutých položek';
+      ResponseHelper.internalError(res, error as Error, errorMessage);
+    }
+  };
+
+  /**
+   * Cancel all queue items for current user in a project
+   * POST /api/queue/projects/:projectId/cancel
+   */
+  cancelProjectQueue = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectId } = req.params;
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+
+      // Verify project ownership or sharing access
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        ResponseHelper.unauthorized(res, 'Uživatel nenalezen');
+        return;
+      }
+
+      const project = await prisma.project.findFirst({
+        where: {
+          id: projectId,
+          OR: [
+            // Owned projects
+            { userId: userId },
+            // Shared projects
+            {
+              shares: {
+                some: {
+                  OR: [
+                    { sharedWithId: userId, status: 'accepted' },
+                    { email: user.email, status: { in: ['pending', 'accepted'] } }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      });
+
+      if (!project) {
+        ResponseHelper.notFound(res, 'Projekt nenalezen nebo nemáte oprávnění');
+        return;
+      }
+
+      const cancelledItems = await this.queueService.cancelByProject(projectId, userId);
+
+      // Emit WebSocket event
+      const websocketService = WebSocketService.getInstance();
+      websocketService.emitToUser(userId, 'queue:cancelled', {
+        projectId,
+        cancelledCount: cancelledItems,
+        timestamp: new Date().toISOString()
+      });
+
+      ResponseHelper.success(res, { cancelledItems }, `Zrušeno ${cancelledItems} položek z fronty`);
+
+    } catch (error) {
+      logger.error('Failed to cancel project queue', error instanceof Error ? error : undefined, 'QueueController', {
+        projectId: req.params.projectId,
+        userId: req.user?.id
+      });
+
+      const errorMessage = error instanceof Error ? error.message : 'Chyba při rušení fronty projektu';
+      ResponseHelper.internalError(res, error as Error, errorMessage);
+    }
+  };
+
+  /**
+   * Cancel specific batch
+   * POST /api/queue/batches/:batchId/cancel
+   */
+  cancelBatch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { batchId } = req.params;
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+
+      const cancelledItems = await this.queueService.cancelBatch(batchId, userId);
+
+      // Emit WebSocket event
+      const websocketService = WebSocketService.getInstance();
+      websocketService.emitToUser(userId, 'batch:cancelled', {
+        batchId,
+        cancelledCount: cancelledItems,
+        timestamp: new Date().toISOString()
+      });
+
+      ResponseHelper.success(res, { cancelledItems }, `Zrušeno ${cancelledItems} položek z batch operace`);
+
+    } catch (error) {
+      logger.error('Failed to cancel batch', error instanceof Error ? error : undefined, 'QueueController', {
+        batchId: req.params.batchId,
+        userId: req.user?.id
+      });
+
+      const errorMessage = error instanceof Error ? error.message : 'Chyba při rušení batch operace';
       ResponseHelper.internalError(res, error as Error, errorMessage);
     }
   };

@@ -225,6 +225,76 @@ export interface UserActivityUpdateMessage extends BaseWebSocketMessage {
   };
 }
 
+// ============================================================================
+// Export Events
+// ============================================================================
+
+/**
+ * Export started message
+ */
+export interface ExportStartedMessage extends BaseWebSocketMessage {
+  type: 'export:started';
+  jobId: string;
+}
+
+/**
+ * Export progress message
+ */
+export interface ExportProgressMessage extends BaseWebSocketMessage {
+  type: 'export:progress';
+  jobId: string;
+  progress: number; // 0-100
+  stage?: string;
+  message?: string;
+}
+
+/**
+ * Export completed message
+ */
+export interface ExportCompletedMessage extends BaseWebSocketMessage {
+  type: 'export:completed';
+  jobId: string;
+  filePath: string;
+  completedAt: string;
+}
+
+/**
+ * Export failed message
+ */
+export interface ExportFailedMessage extends BaseWebSocketMessage {
+  type: 'export:failed';
+  jobId: string;
+  error: string;
+}
+
+/**
+ * Export cancelled message
+ * CRITICAL: Used to prevent downloads of cancelled exports
+ */
+export interface ExportCancelledMessage extends BaseWebSocketMessage {
+  type: 'export:cancelled';
+  jobId: string;
+  previousStatus: string;
+  cancelledAt: string;
+}
+
+/**
+ * Queue cancelled message - when all queue items for a project are cancelled
+ */
+export interface QueueCancelledMessage extends BaseWebSocketMessage {
+  type: 'queue:cancelled';
+  cancelledCount: number;
+}
+
+/**
+ * Batch cancelled message - when a specific batch is cancelled
+ */
+export interface BatchCancelledMessage extends BaseWebSocketMessage {
+  type: 'batch:cancelled';
+  batchId: string;
+  cancelledCount: number;
+}
+
 /**
  * Union type of all possible WebSocket messages
  */
@@ -239,7 +309,14 @@ export type WebSocketMessage =
   | ProjectStatsUpdateMessage
   | SharedProjectUpdateMessage
   | DashboardMetricsUpdateMessage
-  | UserActivityUpdateMessage;
+  | UserActivityUpdateMessage
+  | ExportStartedMessage
+  | ExportProgressMessage
+  | ExportCompletedMessage
+  | ExportFailedMessage
+  | ExportCancelledMessage
+  | QueueCancelledMessage
+  | BatchCancelledMessage;
 
 /**
  * Type guard functions for message type checking
@@ -290,6 +367,34 @@ export const isUserActivityUpdateMessage = (
   msg: WebSocketMessage
 ): msg is UserActivityUpdateMessage => msg.type === 'userActivityUpdate';
 
+export const isExportStartedMessage = (
+  msg: WebSocketMessage
+): msg is ExportStartedMessage => msg.type === 'export:started';
+
+export const isExportProgressMessage = (
+  msg: WebSocketMessage
+): msg is ExportProgressMessage => msg.type === 'export:progress';
+
+export const isExportCompletedMessage = (
+  msg: WebSocketMessage
+): msg is ExportCompletedMessage => msg.type === 'export:completed';
+
+export const isExportFailedMessage = (
+  msg: WebSocketMessage
+): msg is ExportFailedMessage => msg.type === 'export:failed';
+
+export const isExportCancelledMessage = (
+  msg: WebSocketMessage
+): msg is ExportCancelledMessage => msg.type === 'export:cancelled';
+
+export const isQueueCancelledMessage = (
+  msg: WebSocketMessage
+): msg is QueueCancelledMessage => msg.type === 'queue:cancelled';
+
+export const isBatchCancelledMessage = (
+  msg: WebSocketMessage
+): msg is BatchCancelledMessage => msg.type === 'batch:cancelled';
+
 /**
  * WebSocket event names mapped to their payload types
  */
@@ -305,6 +410,13 @@ export interface WebSocketEventMap {
   sharedProjectUpdate: SharedProjectUpdateMessage;
   dashboardMetricsUpdate: DashboardMetricsUpdateMessage;
   userActivityUpdate: UserActivityUpdateMessage;
+  'export:started': ExportStartedMessage;
+  'export:progress': ExportProgressMessage;
+  'export:completed': ExportCompletedMessage;
+  'export:failed': ExportFailedMessage;
+  'export:cancelled': ExportCancelledMessage;
+  'queue:cancelled': QueueCancelledMessage;
+  'batch:cancelled': BatchCancelledMessage;
   connect: void;
   disconnect: { reason?: string };
   error: Error;
