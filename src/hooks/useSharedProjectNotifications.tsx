@@ -23,7 +23,7 @@ interface UseSharedProjectNotificationsProps {
   quietMode?: boolean;
 }
 
-export const export const useSharedProjectNotifications = ({
+export const useSharedProjectNotifications = ({
   enableToasts = true,
   showOwnerActivity = true,
   quietMode = false
