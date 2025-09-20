@@ -57,7 +57,7 @@ fi
 # Create the nginx configuration using envsubst
 # Export all variables for envsubst
 export BACKEND_SERVICE ML_SERVICE FRONTEND_SERVICE NGINX_HTTP_PORT NGINX_HTTPS_PORT
-export SSL_DOMAIN SSL_CERT_PATH ENVIRONMENT_NAME HEALTH_CHECK_MESSAGE UPLOAD_DIR
+export SSL_DOMAIN SSL_CERT_PATH ENVIRONMENT_NAME HEALTH_CHECK_MESSAGE UPLOAD_DIR NGINX_BODY_LIMIT
 
 # Use envsubst with all template variables and convert NGINX_VAR_ back to $ for nginx variables
 envsubst < docker/nginx/nginx.template.conf | sed 's/NGINX_VAR_/$/g' > docker/nginx/nginx.${DEPLOYMENT_COLOR}.conf

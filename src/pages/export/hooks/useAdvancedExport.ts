@@ -9,6 +9,16 @@ import {
 } from '@/lib/downloadUtils';
 import ExportStateManager from '@/lib/exportStateManager';
 
+// Sanitize filename to remove/replace invalid characters
+const sanitizeFilename = (filename: string): string => {
+  return filename
+    .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid filename characters
+    .replace(/[\s]+/g, '_') // Replace spaces with underscores
+    .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+    .substring(0, 100); // Limit length to prevent issues
+};
+
 export interface ExportOptions {
   includeOriginalImages?: boolean;
   includeVisualizations?: boolean;
@@ -67,6 +77,9 @@ export const useAdvancedExport = (projectId: string) => {
   );
   const [wsConnected, setWsConnected] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [currentProjectName, setCurrentProjectName] = useState<
+    string | undefined
+  >();
 
   const { socket } = useWebSocket();
 
@@ -362,8 +375,11 @@ export const useAdvancedExport = (projectId: string) => {
             }
           );
 
-          // Use centralized download utility
-          const filename = `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+          // Use centralized download utility with project name
+          const timestamp = new Date().toISOString().slice(0, 10);
+          const filename = currentProjectName
+            ? `${sanitizeFilename(currentProjectName)}_${timestamp}.zip`
+            : `export_${completedJobId}_${timestamp}.zip`;
           await downloadFromResponse(response, filename);
 
           // Show downloading status briefly, then auto-dismiss after a reasonable time
@@ -399,34 +415,41 @@ export const useAdvancedExport = (projectId: string) => {
     setExportOptions(prev => ({ ...prev, ...updates }));
   }, []);
 
-  const startExport = useCallback(async () => {
-    try {
-      // Clear any previous completed job when starting new export
-      setCompletedJobId(null);
-      setIsExporting(true);
-      setExportProgress(0);
-      setExportStatus('Starting export...');
+  const startExport = useCallback(
+    async (projectName?: string) => {
+      try {
+        // Clear any previous completed job when starting new export
+        setCompletedJobId(null);
+        setIsExporting(true);
+        setExportProgress(0);
+        setExportStatus('Starting export...');
 
-      const response = await apiClient.post(`/projects/${projectId}/export`, {
-        options: exportOptions,
-      });
+        // Store project name for download filename
+        setCurrentProjectName(projectName);
 
-      const jobId = response.data.jobId;
-      setCurrentJob({
-        id: jobId,
-        status: 'pending',
-        progress: 0,
-      });
+        const response = await apiClient.post(`/projects/${projectId}/export`, {
+          options: exportOptions,
+          projectName: projectName,
+        });
 
-      logger.info('Export job started', { jobId, projectId });
-      return jobId;
-    } catch (error) {
-      logger.error('Failed to start export', error);
-      setIsExporting(false);
-      setExportStatus('Failed to start export');
-      throw error;
-    }
-  }, [projectId, exportOptions]);
+        const jobId = response.data.jobId;
+        setCurrentJob({
+          id: jobId,
+          status: 'pending',
+          progress: 0,
+        });
+
+        logger.info('Export job started', { jobId, projectId });
+        return jobId;
+      } catch (error) {
+        logger.error('Failed to start export', error);
+        setIsExporting(false);
+        setExportStatus('Failed to start export');
+        throw error;
+      }
+    },
+    [projectId, exportOptions]
+  );
 
   const triggerDownload = useCallback(async () => {
     if (!completedJobId) {
@@ -462,8 +485,11 @@ export const useAdvancedExport = (projectId: string) => {
         }
       );
 
-      // Use centralized download utility with unique filename
-      const filename = `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+      // Use centralized download utility with project name
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const filename = currentProjectName
+        ? `${sanitizeFilename(currentProjectName)}_${timestamp}.zip`
+        : `export_${completedJobId}_${timestamp}.zip`;
       await downloadFromResponse(response, filename);
 
       // Show downloading status briefly, then auto-dismiss

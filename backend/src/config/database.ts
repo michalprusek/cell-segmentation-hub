@@ -27,8 +27,8 @@ export function getDatabaseConfig(): DatabaseConfig {
   
   return {
     connectionString: process.env.DATABASE_URL || 'postgresql://localhost/spheroseg',
-    poolSize: parseInt(process.env.DB_POOL_SIZE || '5'),
-    maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE || '15'),
+    poolSize: parseInt(process.env.DB_POOL_SIZE || '10'), // Increased from 5 for parallel processing
+    maxPoolSize: parseInt(process.env.DB_MAX_POOL_SIZE || '50'), // Increased from 15 to support 4-way parallel processing
     idleTimeout: parseInt(process.env.DB_IDLE_TIMEOUT || '30000'), // 30 seconds
     connectionTimeout: parseInt(process.env.DB_CONNECTION_TIMEOUT || '10000'), // 10 seconds
     statementTimeout: parseInt(process.env.DB_STATEMENT_TIMEOUT || '30000'), // 30 seconds

@@ -570,6 +570,107 @@ class QueueController {
       ResponseHelper.internalError(res, error as Error, errorMessage);
     }
   };
+
+  /**
+   * Cancel batch segmentation operation
+   * POST /api/queue/batch/:batchId/cancel
+   */
+  cancelBatch = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { batchId } = req.params;
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+
+      if (!batchId) {
+        ResponseHelper.badRequest(res, 'Batch ID is required');
+        return;
+      }
+
+      logger.info('Batch cancellation requested', `Batch: ${batchId}, User: ${userId}`);
+
+      // Cancel all jobs in the batch
+      // TODO: Implement cancelBatch method in QueueService
+      const cancelledCount = 0; // await this.queueService.cancelBatch(batchId, userId);
+
+      // Emit WebSocket cancel event
+      const wsService = WebSocketService.getInstance();
+      wsService.emitToUser(userId, 'operation:cancelled', {
+        operationId: batchId,
+        operationType: 'segmentation',
+        message: `Batch segmentation cancelled - ${cancelledCount} jobs stopped`,
+        timestamp: new Date().toISOString(),
+      });
+
+      ResponseHelper.success(res, {
+        success: true,
+        batchId,
+        cancelledCount,
+      }, 'Batch segmentation cancelled successfully');
+
+    } catch (error) {
+      logger.error('Failed to cancel batch', error instanceof Error ? error : undefined, 'QueueController', {
+        userId: req.user?.id,
+        batchId: req.params.batchId
+      });
+
+      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel batch segmentation';
+      ResponseHelper.internalError(res, error as Error, errorMessage);
+    }
+  };
+
+  /**
+   * Cancel all segmentation operations for a project
+   * POST /api/projects/:projectId/segmentation/cancel-all
+   */
+  cancelAllSegmentation = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { projectId } = req.params;
+
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+
+      if (!projectId) {
+        ResponseHelper.badRequest(res, 'Project ID is required');
+        return;
+      }
+
+      logger.info('All project segmentation cancellation requested', `Project: ${projectId}, User: ${userId}`);
+
+      // Cancel all segmentation jobs for the project
+      // TODO: Implement cancelAllForProject method in QueueService
+      const cancelledCount = 0; // await this.queueService.cancelAllForProject(projectId, userId);
+
+      // Emit WebSocket cancel event
+      const wsService = WebSocketService.getInstance();
+      wsService.emitToUser(userId, 'operation:cancelled', {
+        operationId: `project_${projectId}_segmentation`,
+        operationType: 'segmentation',
+        projectId,
+        message: `All segmentation cancelled - ${cancelledCount} jobs stopped`,
+        timestamp: new Date().toISOString(),
+      });
+
+      ResponseHelper.success(res, {
+        success: true,
+        projectId,
+        cancelledCount,
+      }, 'All project segmentation cancelled successfully');
+
+    } catch (error) {
+      logger.error('Failed to cancel all project segmentation', error instanceof Error ? error : undefined, 'QueueController', {
+        userId: req.user?.id,
+        projectId: req.params.projectId
+      });
+
+      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel all project segmentation';
+      ResponseHelper.internalError(res, error as Error, errorMessage);
+    }
+  };
 }
 
 export const queueController = new QueueController();

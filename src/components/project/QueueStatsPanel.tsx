@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Play, BarChart3, Settings } from 'lucide-react';
+import { Clock, Play, BarChart3, Settings, Users, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,33 +8,56 @@ import { cn } from '@/lib/utils';
 import { QueueStats } from '@/hooks/useSegmentationQueue';
 import { useLanguage } from '@/contexts/useLanguage';
 import { ProjectImage } from '@/types';
+import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
+import ProcessingSlots, { ProcessingSlot } from './ProcessingSlots';
+
+export interface ParallelProcessingStats {
+  totalSlots: number;
+  activeSlots: ProcessingSlot[];
+  concurrentUsers: number;
+  estimatedWaitTime?: number;
+  isParallelProcessingEnabled: boolean;
+}
 
 interface QueueStatsPanelProps {
   stats: QueueStats | null;
   isConnected: boolean;
   onSegmentAll: () => void;
+  onCancelSegmentation?: () => void;
   onOpenSettings?: () => void;
   className?: string;
   batchSubmitted?: boolean;
+  isCancelling?: boolean;
   imagesToSegmentCount?: number;
   selectedImageIds?: Set<string>;
   images?: ProjectImage[];
+  parallelStats?: ParallelProcessingStats;
+  currentUserId?: string;
 }
 
 export const QueueStatsPanel = ({
   stats,
   isConnected,
   onSegmentAll,
+  onCancelSegmentation,
   onOpenSettings,
   className,
   batchSubmitted = false,
+  isCancelling = false,
   imagesToSegmentCount = 0,
   selectedImageIds = new Set(),
   images = [],
+  parallelStats,
+  currentUserId,
 }: QueueStatsPanelProps) => {
   const { t } = useLanguage();
   const _hasQueuedItems = stats && stats.queued > 0;
   const isProcessing = stats && stats.processing > 0;
+  const hasParallelProcessing =
+    parallelStats?.isParallelProcessingEnabled || false;
+  const activeSlots = parallelStats?.activeSlots?.length || 0;
+  const totalSlots = parallelStats?.totalSlots || 4;
+  const concurrentUsers = parallelStats?.concurrentUsers || 0;
 
   // Calculate counts for button label
   const { selectedWithSegmentationCount, totalToProcess, buttonLabel } =
@@ -132,6 +155,30 @@ export const QueueStatsPanel = ({
                       </span>
                     </div>
                   )}
+
+                  {/* Parallel processing indicator */}
+                  {hasParallelProcessing && (
+                    <div className="flex items-center gap-1">
+                      <Zap className="h-4 w-4 text-purple-600" />
+                      <span className="font-medium">
+                        {activeSlots}/{totalSlots}
+                      </span>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {t('queue.parallel')}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Concurrent users indicator */}
+                  {concurrentUsers > 0 && (
+                    <div className="flex items-center gap-1">
+                      <Users className="h-4 w-4 text-green-600" />
+                      <span className="font-medium">{concurrentUsers}</span>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {t('queue.users')}
+                      </span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -154,35 +201,93 @@ export const QueueStatsPanel = ({
                 </Button>
               )}
 
-              <Button
-                onClick={onSegmentAll}
-                disabled={
-                  !isConnected || totalToProcess === 0 || batchSubmitted
-                }
-                className={cn(
-                  'gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white',
-                  (!isConnected || totalToProcess === 0 || batchSubmitted) &&
-                    'bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed'
-                )}
-                title={
-                  selectedWithSegmentationCount > 0
-                    ? t('queue.segmentTooltip', {
-                        new: imagesToSegmentCount,
-                        resegment: selectedWithSegmentationCount,
-                      })
-                    : undefined
-                }
-              >
-                <Play className="h-4 w-4" />
-                {batchSubmitted ? t('queue.addingToQueue') : buttonLabel}
-              </Button>
+              {onCancelSegmentation ? (
+                <UniversalCancelButton
+                  operationType="segmentation"
+                  isOperationActive={isProcessing || batchSubmitted}
+                  isCancelling={isCancelling}
+                  onCancel={onCancelSegmentation}
+                  onPrimaryAction={onSegmentAll}
+                  primaryText={
+                    batchSubmitted ? t('queue.addingToQueue') : buttonLabel
+                  }
+                  disabled={!isConnected || totalToProcess === 0}
+                  title={
+                    selectedWithSegmentationCount > 0
+                      ? t('queue.segmentTooltip', {
+                          new: imagesToSegmentCount,
+                          resegment: selectedWithSegmentationCount,
+                        })
+                      : undefined
+                  }
+                />
+              ) : (
+                <Button
+                  onClick={onSegmentAll}
+                  disabled={
+                    !isConnected || totalToProcess === 0 || batchSubmitted
+                  }
+                  className={cn(
+                    'gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white',
+                    (!isConnected || totalToProcess === 0 || batchSubmitted) &&
+                      'bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed'
+                  )}
+                  title={
+                    selectedWithSegmentationCount > 0
+                      ? t('queue.segmentTooltip', {
+                          new: imagesToSegmentCount,
+                          resegment: selectedWithSegmentationCount,
+                        })
+                      : undefined
+                  }
+                >
+                  <Play className="h-4 w-4" />
+                  {batchSubmitted ? t('queue.addingToQueue') : buttonLabel}
+                </Button>
+              )}
             </div>
           </div>
+
+          {/* Parallel processing visualization */}
+          {hasParallelProcessing && parallelStats && (
+            <div className="mt-4 p-3 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/30 dark:to-blue-950/30 border border-purple-200 dark:border-purple-800 rounded-lg">
+              <ProcessingSlots
+                totalSlots={totalSlots}
+                activeSlots={parallelStats.activeSlots}
+                currentUserId={currentUserId}
+              />
+
+              {/* Enhanced wait time estimation */}
+              {parallelStats.estimatedWaitTime && stats?.userPosition && (
+                <div className="mt-3 pt-3 border-t border-purple-200 dark:border-purple-700">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-600 dark:text-gray-400">
+                      {t('queue.yourPosition')}: #{stats.userPosition}
+                    </span>
+                    <span className="font-medium text-purple-700 dark:text-purple-300">
+                      {t('queue.estimatedWait')}: ~
+                      {Math.ceil(parallelStats.estimatedWaitTime / 60)}m
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Status messages */}
           {!isConnected && (
             <div className="mt-3 p-2 bg-yellow-50 dark:bg-yellow-950/50 border border-yellow-200 dark:border-yellow-800 rounded text-sm text-yellow-800 dark:text-yellow-200">
               {t('queue.connectingMessage')}
+            </div>
+          )}
+
+          {/* Parallel processing status message */}
+          {hasParallelProcessing && activeSlots === totalSlots && (
+            <div className="mt-3 p-2 bg-purple-50 dark:bg-purple-950/50 border border-purple-200 dark:border-purple-800 rounded text-sm text-purple-800 dark:text-purple-200">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4" />
+                {t('queue.allSlotsActive')}
+              </div>
             </div>
           )}
         </CardContent>

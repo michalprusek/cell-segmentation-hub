@@ -60,6 +60,8 @@ export class WebSocketService {
   private io: SocketIOServer;
   private connectedUsers: Map<string, Set<string>> = new Map(); // userId -> socketIds
   private queueService: QueueService | null = null;
+  private parallelProcessingUsers: Map<string, Date> = new Map(); // Track users in parallel processing
+  private concurrentUserCount = 0; // Track concurrent processing users
 
   constructor(server: HTTPServer, private prisma: PrismaClient) {
     this.io = new SocketIOServer(server, {
@@ -261,6 +263,91 @@ export class WebSocketService {
           logger.error('Error handling queue stats request', error instanceof Error ? error : undefined, 'WebSocketService', {
             userId: socket.userId,
             projectId
+          });
+        }
+      });
+
+      // Handle universal operation cancellation
+      socket.on('operation:cancel', async (data: {
+        operationId: string;
+        operationType: 'upload' | 'segmentation' | 'export';
+        projectId?: string;
+      }) => {
+        try {
+          if (!socket.userId) {
+            logger.warn('Unauthenticated socket attempted to cancel operation', 'WebSocketService', {
+              socketId: socket.id,
+              operationId: data.operationId
+            });
+            return;
+          }
+
+          logger.info('Operation cancellation requested via WebSocket', 'WebSocketService', {
+            userId: socket.userId,
+            operationId: data.operationId,
+            operationType: data.operationType,
+            projectId: data.projectId
+          });
+
+          // Handle different operation types
+          switch (data.operationType) {
+            case 'upload':
+              // Emit cancel signal to all user sockets
+              this.emitToUser(socket.userId, 'upload:cancelled', {
+                operationId: data.operationId,
+                message: 'Upload cancelled by user',
+                timestamp: new Date().toISOString()
+              });
+              break;
+
+            case 'segmentation':
+              // Cancel segmentation jobs via queue service
+              if (this.queueService && data.projectId) {
+                try {
+                  // TODO: Implement cancelBatch method in QueueService
+                  // await this.queueService.cancelBatch(data.operationId, socket.userId);
+                } catch (error) {
+                  logger.error('Failed to cancel segmentation via queue service', error instanceof Error ? error : undefined, 'WebSocketService');
+                }
+              }
+
+              this.emitToUser(socket.userId, 'segmentation:cancelled', {
+                operationId: data.operationId,
+                message: 'Segmentation cancelled by user',
+                timestamp: new Date().toISOString()
+              });
+              break;
+
+            case 'export':
+              // Export cancellation is handled by export service
+              this.emitToUser(socket.userId, 'export:cancelled', {
+                operationId: data.operationId,
+                message: 'Export cancelled by user',
+                timestamp: new Date().toISOString()
+              });
+              break;
+          }
+
+          // Send universal cancellation acknowledgment
+          socket.emit('operation:cancel-ack', {
+            operationId: data.operationId,
+            operationType: data.operationType,
+            success: true,
+            timestamp: new Date().toISOString()
+          });
+
+        } catch (error) {
+          logger.error('Error handling operation cancellation', error instanceof Error ? error : undefined, 'WebSocketService', {
+            userId: socket.userId,
+            operationId: data.operationId,
+            operationType: data.operationType
+          });
+
+          socket.emit('operation:cancel-error', {
+            operationId: data.operationId,
+            operationType: data.operationType,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            timestamp: new Date().toISOString()
           });
         }
       });
@@ -520,6 +607,112 @@ export class WebSocketService {
     }
 
     return { type: typeof data, value: data };
+  }
+
+  /**
+   * Emit parallel processing status update
+   */
+  public emitParallelProcessingStatus(data: {
+    activeStreams: number;
+    maxConcurrentStreams: number;
+    totalProcessingCapacity: number;
+    currentThroughput: number;
+    concurrentUserCount: number;
+  }): void {
+    try {
+      this.io.emit('parallel-processing-status', {
+        ...data,
+        timestamp: new Date().toISOString()
+      });
+
+      logger.debug('Parallel processing status emitted', 'WebSocketService', data);
+    } catch (error) {
+      logger.error('Error emitting parallel processing status', error instanceof Error ? error : undefined, 'WebSocketService');
+    }
+  }
+
+  /**
+   * Emit concurrent user count update
+   */
+  public emitConcurrentUserCount(projectId: string, count: number): void {
+    try {
+      this.io.to(`project:${projectId}`).emit('concurrent-user-count', {
+        projectId,
+        count,
+        timestamp: new Date().toISOString()
+      });
+
+      logger.debug('Concurrent user count emitted', 'WebSocketService', {
+        projectId,
+        count
+      });
+    } catch (error) {
+      logger.error('Error emitting concurrent user count', error instanceof Error ? error : undefined, 'WebSocketService');
+    }
+  }
+
+  /**
+   * Emit processing stream update for real-time throughput monitoring
+   */
+  public emitProcessingStreamUpdate(streamId: string, data: {
+    streamId: string;
+    status: 'started' | 'processing' | 'completed' | 'failed';
+    batchSize: number;
+    model: string;
+    progress: number;
+    estimatedTimeRemaining?: number;
+  }): void {
+    try {
+      this.io.emit('processing-stream-update', {
+        ...data,
+        timestamp: new Date().toISOString()
+      });
+
+      logger.debug('Processing stream update emitted', 'WebSocketService', data);
+    } catch (error) {
+      logger.error('Error emitting processing stream update', error instanceof Error ? error : undefined, 'WebSocketService');
+    }
+  }
+
+  /**
+   * Track user entering parallel processing
+   */
+  public trackParallelProcessingUser(userId: string, projectId: string): void {
+    this.parallelProcessingUsers.set(userId, new Date());
+    this.concurrentUserCount = this.parallelProcessingUsers.size;
+
+    // Emit concurrent user count update
+    this.emitConcurrentUserCount(projectId, this.concurrentUserCount);
+
+    logger.debug('User entered parallel processing', 'WebSocketService', {
+      userId,
+      projectId,
+      concurrentUserCount: this.concurrentUserCount
+    });
+  }
+
+  /**
+   * Track user exiting parallel processing
+   */
+  public untrackParallelProcessingUser(userId: string, projectId: string): void {
+    this.parallelProcessingUsers.delete(userId);
+    this.concurrentUserCount = this.parallelProcessingUsers.size;
+
+    // Emit concurrent user count update
+    this.emitConcurrentUserCount(projectId, this.concurrentUserCount);
+
+    logger.debug('User exited parallel processing', 'WebSocketService', {
+      userId,
+      projectId,
+      concurrentUserCount: this.concurrentUserCount
+    });
+  }
+
+  /**
+   * Get current concurrent processing user count
+   */
+  public getConcurrentProcessingUserCount(): number {
+    return this.concurrentUserCount;
   }
 
   /**

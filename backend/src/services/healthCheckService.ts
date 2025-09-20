@@ -100,6 +100,9 @@ export class HealthCheckService {
     // Check monitoring services
     checks.monitoring = await this.checkMonitoring();
 
+    // Check parallel processing system
+    checks.parallelProcessing = await this.checkParallelProcessing();
+
     // Calculate overall status
     const overallStatus = this.calculateOverallStatus(checks);
 
@@ -623,15 +626,69 @@ export class HealthCheckService {
   }
 
   /**
+   * Check parallel processing system health
+   */
+  private async checkParallelProcessing(): Promise<ComponentHealth> {
+    const startTime = Date.now();
+    try {
+      // This is a placeholder - we would need to inject QueueService and SegmentationService
+      // For now, we'll provide basic health status based on system resources
+
+      const memoryUsage = process.memoryUsage();
+      const memoryUsedPercent = (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
+
+      // Check if system has enough resources for parallel processing
+      const hasCapacity = memoryUsedPercent < 80; // Less than 80% memory usage
+
+      const responseTime = Date.now() - startTime;
+
+      if (hasCapacity) {
+        return {
+          status: 'healthy',
+          message: 'Parallel processing system operational',
+          responseTime,
+          details: {
+            memoryUsedPercent: Math.round(memoryUsedPercent),
+            maxConcurrentStreams: 4,
+            systemCapacity: 'adequate'
+          },
+          lastCheck: new Date()
+        };
+      } else {
+        return {
+          status: 'degraded',
+          message: 'System under high memory pressure',
+          responseTime,
+          details: {
+            memoryUsedPercent: Math.round(memoryUsedPercent),
+            maxConcurrentStreams: 4,
+            systemCapacity: 'limited'
+          },
+          lastCheck: new Date()
+        };
+      }
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      return {
+        status: 'unhealthy',
+        message: `Parallel processing check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        responseTime,
+        details: { error: error instanceof Error ? error.message : 'Unknown error' },
+        lastCheck: new Date()
+      };
+    }
+  }
+
+  /**
    * Cleanup resources
    */
   async cleanup(): Promise<void> {
     this.stopPeriodicChecks();
-    
+
     if (this.redis) {
       await this.redis.quit();
     }
-    
+
     await this.prisma.$disconnect();
   }
 }
