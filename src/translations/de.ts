@@ -304,6 +304,8 @@ export default {
         'Das Projekt kann nicht gelöscht werden. Stellen Sie sicher, dass Sie die erforderlichen Berechtigungen haben.',
     },
     deleteImages: 'Fehler beim Löschen der ausgewählten Bilder',
+    tooManyImagesSelected:
+      'Zu viele Bilder ausgewählt. Sie können maximal {{max}} Bilder auf einmal löschen, aber {{selected}} sind ausgewählt.',
     contexts: {
       dashboard: 'Dashboard-Fehler',
       project: 'Projekt-Fehler',
@@ -878,6 +880,11 @@ export default {
       'Segmentiere {{new}} + Re-segmentiere {{resegment}} ({{total}} gesamt)',
     segmentTooltip:
       '{{new}} neue Bilder werden segmentiert, {{resegment}} ausgewählte Bilder werden re-segmentiert',
+    cancel: 'Abbrechen',
+    cancelling: 'Abbrechen...',
+    batchCancelled: '{{count}} Warteschlangen-Einträge abgebrochen',
+    nothingToCancel: 'Nichts zum Abbrechen',
+    cancelFailed: 'Fehler beim Abbrechen der Stapelverarbeitung',
   },
   toast: {
     error: 'Ein Fehler ist aufgetreten',

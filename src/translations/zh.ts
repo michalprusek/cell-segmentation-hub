@@ -261,6 +261,8 @@ export default {
       deleteProject: '无法删除项目。请确保您有必要的权限。',
     },
     deleteImages: '删除所选图像失败',
+    tooManyImagesSelected:
+      '选择的图像过多。您一次最多可以删除{{max}}张图像，但已选择{{selected}}张。',
     contexts: {
       dashboard: '仪表板错误',
       project: '项目错误',
@@ -797,6 +799,11 @@ export default {
     segmentMixed: '分割 {{new}} + 重新分割 {{resegment}} (共 {{total}} 个)',
     segmentTooltip:
       '{{new}} 个新图像将被分割，{{resegment}} 个选中图像将被重新分割',
+    cancel: '取消',
+    cancelling: '正在取消...',
+    batchCancelled: '已取消 {{count}} 个队列项目',
+    nothingToCancel: '没有可取消的项目',
+    cancelFailed: '取消批处理操作失败',
   },
   toast: {
     error: '发生错误',

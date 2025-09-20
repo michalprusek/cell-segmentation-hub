@@ -3,15 +3,10 @@ import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import { webSocketEventEmitter } from '@/lib/websocketEvents';
 import type {
-  WebSocketEventMap,
   SegmentationUpdate,
   QueueStats,
-  SegmentationStatusMessage,
-  QueueStatsMessage,
   SegmentationCompletedMessage,
   SegmentationFailedMessage,
-  WebSocketConnectionOptions,
-  IWebSocketManager,
 } from '@/types/websocket';
 
 // Define internal message types for backward compatibility
@@ -69,6 +64,7 @@ class WebSocketManager {
     this.eventListeners = {
       'segmentation-update': new Set(),
       'queue-stats-update': new Set(),
+      'parallel-processing-status': new Set(),
       notification: new Set(),
       'system-message': new Set(),
       connect: new Set(),
@@ -280,21 +276,29 @@ class WebSocketManager {
     // Data events
     // Backend emits 'segmentationUpdate', we need to listen for that
     this.socket.on('segmentationUpdate', (update: SegmentationUpdate) => {
-      // ENHANCED DEBUG LOGGING
-      logger.warn('🔴 SEGMENTATION UPDATE RECEIVED:', {
-        imageId: update.imageId,
-        status: update.status,
-        hasSegmentationResult: !!(update as any).segmentationResult,
-        segmentationResultKeys: (update as any).segmentationResult
-          ? Object.keys((update as any).segmentationResult)
-          : [],
-        polygonCount: (update as any).segmentationResult?.polygonCount,
-        timestamp: new Date().toISOString(),
-      });
-
+      // Only log detailed debug info in development mode and use debug level
       if (process.env.NODE_ENV === 'development') {
+        const debugInfo = {
+          imageId: update.imageId,
+          status: update.status,
+          hasSegmentationResult: !!(update as any).segmentationResult,
+          segmentationResultKeys: (update as any).segmentationResult
+            ? Object.keys((update as any).segmentationResult)
+            : [],
+          polygonCount: (update as any).segmentationResult?.polygonCount,
+          timestamp: new Date().toISOString(),
+        };
+        logger.debug(
+          `SEGMENTATION UPDATE RECEIVED: ${JSON.stringify(debugInfo, null, 2)}`
+        );
         logger.debug('Full segmentation update:', update);
+      } else {
+        // In production, only log minimal info at debug level
+        logger.debug(
+          `Segmentation update: ${update.imageId} -> ${update.status}`
+        );
       }
+
       // Keep emitting with hyphenated name for backward compatibility
       this.emitToListeners('segmentation-update', update);
     });

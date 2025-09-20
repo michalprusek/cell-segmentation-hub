@@ -366,47 +366,35 @@ export class ImageController {
         return;
       }
 
+      // Body is already validated by validateBody(imageBatchDeleteSchema) middleware
+      // No need for manual validation - trust the Zod schema
       const { imageIds, projectId } = req.body;
 
-      // Validation
-      if (!Array.isArray(imageIds) || imageIds.length === 0) {
-        ResponseHelper.badRequest(res, 'Musíte zadat alespoň jeden obrázek');
-        return;
-      }
-
-      if (imageIds.length > 100) {
-        ResponseHelper.badRequest(res, 'Můžete smazat maximálně 100 obrázků najednou');
-        return;
-      }
-
-      if (!projectId) {
-        ResponseHelper.badRequest(res, 'ID projektu je povinné');
-        return;
-      }
-
-      // Validate all imageIds are UUIDs
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      const invalidIds = imageIds.filter(id => !uuidRegex.test(id));
-      if (invalidIds.length > 0) {
-        ResponseHelper.badRequest(res, 'Neplatná ID obrázků');
-        return;
-      }
-
       logger.info('Deleting images in batch', 'ImageController', {
-        imageIds,
+        imageIds: imageIds?.slice(0, 5), // Log only first 5 IDs to avoid huge logs
+        imageCount: imageIds?.length,
         projectId,
-        userId,
-        count: imageIds.length
+        userId
       });
 
       const result = await this.imageService.deleteBatch(imageIds, userId, projectId);
+
+      logger.info('Batch delete completed', 'ImageController', {
+        deletedCount: result.deletedCount,
+        failedCount: result.failedIds?.length || 0,
+        userId,
+        projectId
+      });
 
       ResponseHelper.success(res, result, `Úspěšně smazáno ${result.deletedCount} obrázků`);
 
     } catch (error) {
       logger.error('Failed to delete images in batch', error instanceof Error ? error : undefined, 'ImageController', {
         userId: req.user?.id,
-        imageIds: req.body?.imageIds
+        imageIds: req.body?.imageIds?.slice(0, 5), // Log only first 5 IDs
+        imageCount: req.body?.imageIds?.length,
+        projectId: req.body?.projectId,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error'
       });
 
       // Handle ApiError instances directly

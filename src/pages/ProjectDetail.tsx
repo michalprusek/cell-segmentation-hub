@@ -48,6 +48,7 @@ const ProjectDetail = () => {
   const [showUploader, setShowUploader] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
     new Set()
   );
@@ -288,7 +289,7 @@ const ProjectDetail = () => {
   );
 
   // Check if there are any images currently processing
-  const hasProcessingImages = useMemo(
+  const _hasProcessingImages = useMemo(
     () => images.some(img => img.segmentationStatus === 'processing'),
     [images]
   );
@@ -329,14 +330,16 @@ const ProjectDetail = () => {
     });
 
   // Status reconciliation for keeping UI in sync with backend
-  const { reconcileImageStatuses, hasStaleProcessingImages } =
-    useStatusReconciliation({
-      projectId: id,
-      images,
-      onImagesUpdate: updateImages,
-      queueStats,
-      isConnected,
-    });
+  const {
+    reconcileImageStatuses,
+    hasStaleProcessingImages: _hasStaleProcessingImages,
+  } = useStatusReconciliation({
+    projectId: id,
+    images,
+    onImagesUpdate: updateImages,
+    queueStats,
+    isConnected,
+  });
 
   // Store reconciliation function in ref to avoid dependency issues
   const reconcileRef = useRef(reconcileImageStatuses);
@@ -694,9 +697,12 @@ const ProjectDetail = () => {
 
   // Cleanup debounce timeouts on unmount
   useEffect(() => {
+    const timeoutsRef = debounceTimeoutRef;
+    const batchTimeoutRef = batchUpdateTimeoutRef;
+
     return () => {
       // Clear debounce timeouts
-      const timeouts = debounceTimeoutRef.current;
+      const timeouts = timeoutsRef.current;
       if (timeouts) {
         for (const timeout of Object.values(timeouts)) {
           clearTimeout(timeout);
@@ -704,8 +710,8 @@ const ProjectDetail = () => {
       }
 
       // Clear batch update timeout
-      if (batchUpdateTimeoutRef.current) {
-        clearTimeout(batchUpdateTimeoutRef.current);
+      if (batchTimeoutRef.current) {
+        clearTimeout(batchTimeoutRef.current);
       }
     };
   }, []);
@@ -928,11 +934,22 @@ const ProjectDetail = () => {
       return;
     }
 
+    const imageIds = Array.from(selectedImageIds);
+
+    // Frontend validation: Check 100-image limit before API call
+    if (imageIds.length > 100) {
+      toast.error(
+        t('errors.tooManyImagesSelected', {
+          max: 100,
+          selected: imageIds.length,
+        })
+      );
+      return;
+    }
+
     setIsBatchDeleting(true);
 
     try {
-      const imageIds = Array.from(selectedImageIds);
-
       const result = await apiClient.deleteBatch(imageIds, id);
 
       if (result.deletedCount > 0) {
@@ -1077,7 +1094,7 @@ const ProjectDetail = () => {
         })
       );
 
-      let totalQueued = 0;
+      let _totalQueued = 0;
 
       // Helper function to process image chunks
       const processImageChunks = async (
@@ -1127,13 +1144,13 @@ const ProjectDetail = () => {
           imageIdsWithoutSegmentation,
           false
         );
-        totalQueued += queuedCount;
+        _totalQueued += queuedCount;
       }
 
       // Process selected images with segmentation (force re-segment)
       if (imageIdsToResegment.length > 0) {
         const queuedCount = await processImageChunks(imageIdsToResegment, true);
-        totalQueued += queuedCount;
+        _totalQueued += queuedCount;
       }
 
       // Dismiss progress toast if it exists
@@ -1174,6 +1191,93 @@ const ProjectDetail = () => {
           return img;
         })
       );
+    }
+  };
+
+  // Handle batch cancellation
+  const handleCancelBatch = async () => {
+    if (!id || !user?.id) {
+      toast.error(t('errors.noProjectOrUser'));
+      return;
+    }
+
+    // Prevent double cancellation
+    if (isCancelling) {
+      return;
+    }
+
+    try {
+      setIsCancelling(true);
+
+      // Get current queue items for this project
+      const response = await apiClient.get(`/api/queue/projects/${id}/items`);
+      const queueItems = response.data;
+
+      if (queueItems && queueItems.length > 0) {
+        // Cancel all queued items for this user
+        const userQueueItems = queueItems.filter(
+          (item: any) => item.userId === user.id
+        );
+
+        if (userQueueItems.length > 0) {
+          // Cancel items one by one (following existing API pattern)
+          for (const item of userQueueItems) {
+            try {
+              await apiClient.delete(`/api/queue/items/${item.id}`);
+            } catch (error) {
+              logger.warn('Failed to cancel queue item', {
+                itemId: item.id,
+                error,
+              });
+            }
+          }
+
+          toast.success(
+            t('queue.batchCancelled', { count: userQueueItems.length })
+          );
+        } else {
+          toast.info(t('queue.nothingToCancel'));
+        }
+      } else {
+        toast.info(t('queue.nothingToCancel'));
+      }
+
+      // Reset batch state
+      setBatchSubmitted(false);
+      setShouldNavigateOnComplete(false);
+      setNavigationTargetImageId(null);
+
+      // Revert UI changes - restore original status for queued images
+      updateImages(prevImages =>
+        prevImages.map(img => {
+          if (img.segmentationStatus === 'queued') {
+            const originalImage = images.find(i => i.id === img.id);
+            if (originalImage) {
+              return {
+                ...img,
+                segmentationStatus:
+                  originalImage.segmentationStatus || 'no_segmentation',
+                segmentationResult: originalImage.segmentationResult,
+                segmentationData: originalImage.segmentationData,
+              };
+            }
+          }
+          return img;
+        })
+      );
+
+      logger.info('Batch segmentation cancelled', {
+        projectId: id,
+        userId: user.id,
+      });
+    } catch (error) {
+      logger.error('Failed to cancel batch segmentation', {
+        error,
+        projectId: id,
+      });
+      toast.error(t('queue.cancelFailed'));
+    } finally {
+      setIsCancelling(false);
     }
   };
 
@@ -1241,7 +1345,9 @@ const ProjectDetail = () => {
               stats={queueStats}
               isConnected={isConnected}
               onSegmentAll={handleSegmentAll}
+              onCancelBatch={handleCancelBatch}
               batchSubmitted={batchSubmitted || hasActiveQueue}
+              isCancelling={isCancelling}
               imagesToSegmentCount={imagesToSegmentCount}
               selectedImageIds={selectedImageIds}
               images={images}

@@ -308,6 +308,8 @@ export default {
       settings: 'Settings error',
     },
     deleteImages: 'Failed to delete selected images',
+    tooManyImagesSelected:
+      'Too many images selected. You can delete a maximum of {{max}} images at once, but {{selected}} are selected.',
   },
   images: {
     uploadImages: 'Upload Images',
@@ -763,7 +765,7 @@ export default {
     // Reset Password page specific
     enterNewPassword: 'Enter your new password',
     newPassword: 'New Password',
-    confirmPassword: 'Confirm Password',
+    confirmNewPassword: 'Confirm New Password',
     confirmPasswordPlaceholder: 'Confirm your password',
     passwordRequirements: 'Password must be at least 8 characters long',
     resettingPassword: 'Resetting password...',
@@ -846,6 +848,10 @@ export default {
     online: 'Online',
     offline: 'Offline',
     noPolygons: 'No polygons',
+    parallelProcessing:
+      'Parallel Processing: {{active}}/{{max}} workers active',
+    concurrentOps: 'Concurrent Operations: {{active}}/{{max}} active',
+    batchProcessing: 'Batch Processing: {{size}} images per batch',
   },
   queue: {
     title: 'Segmentation Queue',
@@ -868,6 +874,11 @@ export default {
     emptyMessage:
       'No images in queue. Upload images and add them to the queue for segmentation.',
     addingToQueue: 'Adding to queue...',
+    cancel: 'Cancel',
+    cancelling: 'Cancelling...',
+    batchCancelled: 'Cancelled {{count}} queue items',
+    nothingToCancel: 'No items to cancel',
+    cancelFailed: 'Failed to cancel batch operation',
   },
   toast: {
     // Generic messages

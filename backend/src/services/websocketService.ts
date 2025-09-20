@@ -14,6 +14,7 @@ import {
   // SegmentationFailedData,
   // SegmentationProgressData,
   QueueStatsData,
+  ParallelProcessingStatusData,
   // QueuePositionData,
   // ConnectionStatusData,
   // AuthenticationErrorData,
@@ -355,7 +356,7 @@ export class WebSocketService {
   public emitQueueStatsUpdate(projectId: string, stats: QueueStatsData): void {
     try {
       this.io.to(getProjectRoom(projectId)).emit(WebSocketEvent.QUEUE_STATS, stats);
-      
+
       logger.debug('Queue stats update emitted', 'WebSocketService', {
         projectId,
         stats
@@ -364,6 +365,27 @@ export class WebSocketService {
       logger.error('Error emitting queue stats update', error instanceof Error ? error : undefined, 'WebSocketService', {
         projectId,
         stats
+      });
+    }
+  }
+
+  /**
+   * Emit parallel processing status update to all connected users
+   */
+  public emitParallelProcessingStatus(status: ParallelProcessingStatusData): void {
+    try {
+      // Emit to all connected users since parallel processing affects system-wide capacity
+      this.io.emit(WebSocketEvent.PARALLEL_PROCESSING_STATUS, status);
+
+      logger.debug('Parallel processing status emitted', 'WebSocketService', {
+        concurrentActive: status.concurrentOperations.active,
+        concurrentMax: status.concurrentOperations.max,
+        mlWorkersActive: status.mlWorkers.active,
+        mlWorkersMax: status.mlWorkers.max
+      });
+    } catch (error) {
+      logger.error('Error emitting parallel processing status', error instanceof Error ? error : undefined, 'WebSocketService', {
+        status
       });
     }
   }

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Clock, Play, BarChart3, Settings } from 'lucide-react';
+import { Clock, Play, BarChart3, Settings, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -13,9 +13,11 @@ interface QueueStatsPanelProps {
   stats: QueueStats | null;
   isConnected: boolean;
   onSegmentAll: () => void;
+  onCancelBatch?: () => void;
   onOpenSettings?: () => void;
   className?: string;
   batchSubmitted?: boolean;
+  isCancelling?: boolean;
   imagesToSegmentCount?: number;
   selectedImageIds?: Set<string>;
   images?: ProjectImage[];
@@ -25,9 +27,11 @@ export const QueueStatsPanel = ({
   stats,
   isConnected,
   onSegmentAll,
+  onCancelBatch,
   onOpenSettings,
   className,
   batchSubmitted = false,
+  isCancelling = false,
   imagesToSegmentCount = 0,
   selectedImageIds = new Set(),
   images = [],
@@ -154,28 +158,48 @@ export const QueueStatsPanel = ({
                 </Button>
               )}
 
-              <Button
-                onClick={onSegmentAll}
-                disabled={
-                  !isConnected || totalToProcess === 0 || batchSubmitted
-                }
-                className={cn(
-                  'gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white',
-                  (!isConnected || totalToProcess === 0 || batchSubmitted) &&
-                    'bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed'
-                )}
-                title={
-                  selectedWithSegmentationCount > 0
-                    ? t('queue.segmentTooltip', {
-                        new: imagesToSegmentCount,
-                        resegment: selectedWithSegmentationCount,
-                      })
-                    : undefined
-                }
-              >
-                <Play className="h-4 w-4" />
-                {batchSubmitted ? t('queue.addingToQueue') : buttonLabel}
-              </Button>
+              {batchSubmitted ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="destructive"
+                    onClick={onCancelBatch}
+                    disabled={isCancelling || !onCancelBatch}
+                    className="gap-2"
+                  >
+                    {isCancelling ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <X className="h-4 w-4" />
+                    )}
+                    {isCancelling ? t('queue.cancelling') : t('queue.cancel')}
+                  </Button>
+                  <span className="text-sm text-gray-600 dark:text-gray-400 flex items-center gap-1">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    {t('queue.addingToQueue')}
+                  </span>
+                </div>
+              ) : (
+                <Button
+                  onClick={onSegmentAll}
+                  disabled={!isConnected || totalToProcess === 0}
+                  className={cn(
+                    'gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white',
+                    (!isConnected || totalToProcess === 0) &&
+                      'bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed'
+                  )}
+                  title={
+                    selectedWithSegmentationCount > 0
+                      ? t('queue.segmentTooltip', {
+                          new: imagesToSegmentCount,
+                          resegment: selectedWithSegmentationCount,
+                        })
+                      : undefined
+                  }
+                >
+                  <Play className="h-4 w-4" />
+                  {buttonLabel}
+                </Button>
+              )}
             </div>
           </div>
 

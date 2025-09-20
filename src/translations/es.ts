@@ -300,6 +300,8 @@ export default {
       deleteProject: 'No se pudo eliminar el proyecto',
     },
     deleteImages: 'Error al eliminar las imágenes seleccionadas',
+    tooManyImagesSelected:
+      'Demasiadas imágenes seleccionadas. Puedes eliminar un máximo de {{max}} imágenes a la vez, pero hay {{selected}} seleccionadas.',
     contexts: {
       dashboard: 'Error del dashboard',
       project: 'Error del proyecto',
@@ -867,6 +869,11 @@ export default {
     emptyMessage:
       'No hay imágenes en cola. Sube imágenes y añádelas a la cola para segmentación.',
     addingToQueue: 'Añadiendo a la cola...',
+    cancel: 'Cancelar',
+    cancelling: 'Cancelando...',
+    batchCancelled: 'Cancelados {{count}} elementos de la cola',
+    nothingToCancel: 'Nada que cancelar',
+    cancelFailed: 'Error al cancelar la operación por lotes',
   },
   toast: {
     error: 'Ha ocurrido un error',

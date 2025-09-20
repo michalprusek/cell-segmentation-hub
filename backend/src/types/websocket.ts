@@ -34,6 +34,9 @@ export enum WebSocketEvent {
   QUEUE_STATS = 'queueStats',
   QUEUE_POSITION = 'queuePosition',
   QUEUE_UPDATE = 'queueUpdate',
+
+  // Parallel processing events
+  PARALLEL_PROCESSING_STATUS = 'parallelProcessingStatus',
   
   // Upload events
   UPLOAD_PROGRESS = 'uploadProgress',
@@ -205,6 +208,28 @@ export interface QueueUpdateData {
   affectedCount: number;
   queueIds?: string[];
   newStats: QueueStatsData;
+}
+
+/**
+ * Parallel processing status update
+ */
+export interface ParallelProcessingStatusData {
+  concurrentOperations: {
+    active: number;
+    max: number;
+  };
+  mlWorkers: {
+    active: number;
+    max: number;
+  };
+  batchProcessing: {
+    currentBatchSize: number;
+    modelOptimalSizes: {
+      hrnet: number;
+      cbam_resunet: number;
+    };
+  };
+  timestamp: Date;
 }
 
 // ============================================================================
@@ -491,6 +516,20 @@ export function isSegmentationFailedData(data: unknown): data is SegmentationFai
 }
 
 /**
+ * Type guard for ParallelProcessingStatusData
+ */
+export function isParallelProcessingStatusData(data: unknown): data is ParallelProcessingStatusData {
+  if (typeof data !== 'object' || data === null) {return false;}
+  const d = data as Record<string, unknown>;
+  return (
+    typeof d.concurrentOperations === 'object' &&
+    typeof d.mlWorkers === 'object' &&
+    typeof d.batchProcessing === 'object' &&
+    d.timestamp !== undefined
+  );
+}
+
+/**
  * Type guard for WebSocketMessage
  */
 export function isWebSocketMessage(data: unknown): data is WebSocketMessage {
@@ -517,5 +556,6 @@ export default {
   isSegmentationCompletedData,
   isSegmentationFailedData,
   isQueueStatsData,
+  isParallelProcessingStatusData,
   isWebSocketMessage
 };

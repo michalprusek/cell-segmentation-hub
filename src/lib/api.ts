@@ -9,7 +9,6 @@ import {
   ChunkProgress,
   ChunkedUploadResult,
   validateFiles,
-  formatFileSize,
 } from '@/lib/uploadUtils';
 
 export interface LoginRequest {
@@ -1603,17 +1602,44 @@ class ApiClient {
     failedIds: string[];
     errors: string[];
   }> {
-    const response = await this.instance.delete('/images/batch', {
-      data: {
-        imageIds,
+    try {
+      // Log the request for debugging
+      this.logger.debug('API deleteBatch request', {
+        imageCount: imageIds.length,
         projectId,
-      },
-    });
-    return this.extractData<{
-      deletedCount: number;
-      failedIds: string[];
-      errors: string[];
-    }>(response);
+        firstFewIds: imageIds.slice(0, 3),
+      });
+
+      const response = await this.instance.delete('/images/batch', {
+        data: {
+          imageIds,
+          projectId,
+        },
+      });
+
+      const result = this.extractData<{
+        deletedCount: number;
+        failedIds: string[];
+        errors: string[];
+      }>(response);
+
+      this.logger.debug('API deleteBatch response', {
+        deletedCount: result.deletedCount,
+        failedCount: result.failedIds?.length || 0,
+      });
+
+      return result;
+    } catch (error) {
+      // Enhanced error logging for debugging 400 errors
+      this.logger.error('API deleteBatch failed', {
+        imageCount: imageIds.length,
+        projectId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        // Include validation details if available
+        validationErrors: (error as any)?.response?.data?.errors,
+      });
+      throw error;
+    }
   }
 
   async getQueueStats(projectId: string): Promise<QueueStats> {

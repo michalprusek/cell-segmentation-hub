@@ -212,11 +212,14 @@ export const projectImageParamsSchema = z.object({
  */
 export const imageBatchDeleteSchema = z.object({
   imageIds: z.array(z.string().uuid('Neplatné ID obrázku'))
-    .min(1, 'Musí být vybrán alespoň jeden obrázek')
-    .max(100, 'Maximálně 100 obrázků může být smazáno najednou'),
+    .min(1, 'Musíte zadat alespoň jeden obrázek pro smazání')
+    .max(100, 'Můžete smazat maximálně 100 obrázků najednou')
+    .refine(
+      (imageIds) => new Set(imageIds).size === imageIds.length,
+      'Duplicitní ID obrázků nejsou povoleny'
+    ),
   projectId: z.string()
-    .uuid('Neplatné ID projektu')
-    .optional()
+    .uuid('ID projektu musí být platné UUID')
 });
 
 // Sharing validation schemas

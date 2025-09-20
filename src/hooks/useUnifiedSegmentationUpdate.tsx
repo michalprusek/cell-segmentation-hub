@@ -10,7 +10,7 @@ import WebSocketManager from '@/services/webSocketManager';
 import type {
   QueueStats,
   SegmentationUpdate,
-  WebSocketEventMap,
+  _WebSocketEventMap,
 } from '@/types/websocket';
 
 interface ThumbnailUpdateData {

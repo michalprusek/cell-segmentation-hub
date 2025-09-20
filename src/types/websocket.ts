@@ -96,6 +96,28 @@ export interface ConnectionStatusMessage extends BaseWebSocketMessage {
 }
 
 /**
+ * Parallel processing status message
+ */
+export interface ParallelProcessingStatusMessage extends BaseWebSocketMessage {
+  type: 'parallelProcessingStatus';
+  concurrentOperations: {
+    active: number;
+    max: number;
+  };
+  mlWorkers: {
+    active: number;
+    max: number;
+  };
+  batchProcessing: {
+    currentBatchSize: number;
+    modelOptimalSizes: {
+      hrnet: number;
+      cbam_resunet: number;
+    };
+  };
+}
+
+/**
  * Union type of all possible WebSocket messages
  */
 export type WebSocketMessage =
@@ -104,7 +126,8 @@ export type WebSocketMessage =
   | SegmentationCompletedMessage
   | SegmentationFailedMessage
   | SegmentationProgressMessage
-  | ConnectionStatusMessage;
+  | ConnectionStatusMessage
+  | ParallelProcessingStatusMessage;
 
 /**
  * Type guard functions for message type checking
@@ -133,6 +156,11 @@ export const isConnectionStatusMessage = (
   msg: WebSocketMessage
 ): msg is ConnectionStatusMessage => msg.type === 'connectionStatus';
 
+export const isParallelProcessingStatusMessage = (
+  msg: WebSocketMessage
+): msg is ParallelProcessingStatusMessage =>
+  msg.type === 'parallelProcessingStatus';
+
 /**
  * WebSocket event names mapped to their payload types
  */
@@ -143,6 +171,7 @@ export interface WebSocketEventMap {
   segmentationFailed: SegmentationFailedMessage;
   segmentationProgress: SegmentationProgressMessage;
   connectionStatus: ConnectionStatusMessage;
+  parallelProcessingStatus: ParallelProcessingStatusMessage;
   connect: void;
   disconnect: { reason?: string };
   error: Error;

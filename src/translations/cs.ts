@@ -301,6 +301,8 @@ export default {
       deleteProject: 'Nepodařilo se smazat projekt',
     },
     deleteImages: 'Nepodařilo se smazat vybrané obrázky',
+    tooManyImagesSelected:
+      'Příliš mnoho obrázků vybráno. Můžete najednou smazat maximálně {{max}} obrázků, ale vybráno je {{selected}}.',
     contexts: {
       dashboard: 'Chyba dashboardu',
       project: 'Chyba projektu',
@@ -841,6 +843,10 @@ export default {
     online: 'Online',
     offline: 'Offline',
     noPolygons: 'Žádné polygony',
+    parallelProcessing:
+      'Paralelní zpracování: {{active}}/{{max}} aktivních pracovníků',
+    concurrentOps: 'Souběžné operace: {{active}}/{{max}} aktivních',
+    batchProcessing: 'Dávkové zpracování: {{size}} obrázků na dávku',
   },
   queue: {
     title: 'Segmentační fronta',
@@ -863,6 +869,11 @@ export default {
     emptyMessage:
       'Ve frontě nejsou žádné obrázky. Nahrajte obrázky a přidejte je do fronty pro segmentaci.',
     addingToQueue: 'Přidáváno do fronty...',
+    cancel: 'Zrušit',
+    cancelling: 'Ruším...',
+    batchCancelled: 'Zrušeno {{count}} položek fronty',
+    nothingToCancel: 'Není co zrušit',
+    cancelFailed: 'Nepodařilo se zrušit dávkovou operaci',
   },
   toast: {
     error: 'Došlo k chybě',

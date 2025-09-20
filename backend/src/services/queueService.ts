@@ -4,7 +4,7 @@ import { SegmentationService, SegmentationResponse } from './segmentationService
 import { ImageService } from './imageService';
 import { WebSocketService } from './websocketService';
 import { batchProcessor } from '../utils/batchProcessor';
-import { SegmentationUpdateData } from '../types/websocket';
+import { SegmentationUpdateData, ParallelProcessingStatusData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
 
 export interface QueueStats {
@@ -261,6 +261,9 @@ export class QueueService {
       // Trigger immediate processing for low latency
       if (queueEntries.length > 0) {
         this.triggerQueueProcessing();
+
+        // Emit parallel processing status update
+        await this.getParallelProcessingStatus();
       }
 
       return queueEntries;
@@ -319,6 +322,56 @@ export class QueueService {
         projectId,
         userId
       });
+      throw error;
+    }
+  }
+
+  /**
+   * Get parallel processing status and emit WebSocket update
+   */
+  async getParallelProcessingStatus(): Promise<ParallelProcessingStatusData> {
+    try {
+      // Get current processing count to estimate active ML workers
+      const processingCount = await this.prisma.segmentationQueue.count({
+        where: { status: 'processing' }
+      });
+
+      // Calculate active ML workers (max 2 based on ThreadPoolExecutor)
+      const activeMlWorkers = Math.min(processingCount, 2);
+
+      // Calculate active concurrent operations (max 3 based on ConcurrencyManager)
+      const activeConcurrentOps = Math.min(processingCount, 3);
+
+      // Get current batch size (assume hrnet as default, but in real implementation this would be dynamic)
+      const currentBatchSize = this.batchSizes.hrnet;
+
+      const status: ParallelProcessingStatusData = {
+        concurrentOperations: {
+          active: activeConcurrentOps,
+          max: 3
+        },
+        mlWorkers: {
+          active: activeMlWorkers,
+          max: 2
+        },
+        batchProcessing: {
+          currentBatchSize,
+          modelOptimalSizes: {
+            hrnet: this.batchSizes.hrnet,
+            cbam_resunet: this.batchSizes.cbam_resunet
+          }
+        },
+        timestamp: new Date()
+      };
+
+      // Emit via WebSocket if available
+      if (this.websocketService) {
+        this.websocketService.emitParallelProcessingStatus(status);
+      }
+
+      return status;
+    } catch (error) {
+      logger.error('Failed to get parallel processing status', error instanceof Error ? error : undefined, 'QueueService');
       throw error;
     }
   }
@@ -389,6 +442,9 @@ export class QueueService {
         queueId,
         imageId: queueItem.imageId
       });
+
+      // Emit parallel processing status update
+      await this.getParallelProcessingStatus();
     } catch (error) {
       logger.error('Failed to remove item from queue', error instanceof Error ? error : undefined, 'QueueService', {
         queueId,

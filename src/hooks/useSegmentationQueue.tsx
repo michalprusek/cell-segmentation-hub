@@ -8,11 +8,11 @@ import WebSocketManager from '@/services/webSocketManager';
 import type {
   QueueStats,
   SegmentationUpdate,
-  SegmentationStatusMessage,
-  QueueStatsMessage,
-  SegmentationCompletedMessage,
-  SegmentationFailedMessage,
-  WebSocketEventMap,
+  _SegmentationStatusMessage,
+  _QueueStatsMessage,
+  _SegmentationCompletedMessage,
+  _SegmentationFailedMessage,
+  _WebSocketEventMap,
 } from '@/types/websocket';
 
 export type { QueueStats, SegmentationUpdate } from '@/types/websocket';
@@ -29,7 +29,7 @@ export const useSegmentationQueue = (projectId?: string) => {
   const currentProjectRef = useRef<string | undefined>(
     isDisabled ? undefined : projectId
   );
-  const isInitializedRef = useRef(false);
+  const _isInitializedRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
   const [lastUpdate, setLastUpdate] = useState<SegmentationUpdate | null>(null);

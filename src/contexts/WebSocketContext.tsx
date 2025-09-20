@@ -5,7 +5,7 @@ import WebSocketManager from '@/services/webSocketManager';
 import { logger } from '@/lib/logger';
 import {
   WebSocketContext,
-  type WebSocketContextType,
+  type _WebSocketContextType,
 } from './WebSocketContext.types';
 
 interface WebSocketProviderProps {

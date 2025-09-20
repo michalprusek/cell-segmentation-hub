@@ -273,7 +273,7 @@ class WebSocketManager {
     // Backend emits 'segmentationUpdate', we need to listen for that
     this.socket.on('segmentationUpdate', (update: SegmentationUpdate) => {
       // ENHANCED DEBUG LOGGING
-      logger.warn('🔴 SEGMENTATION UPDATE RECEIVED:', {
+      const debugInfo = {
         imageId: update.imageId,
         status: update.status,
         hasSegmentationResult: !!(update as any).segmentationResult,
@@ -282,7 +282,10 @@ class WebSocketManager {
           : [],
         polygonCount: (update as any).segmentationResult?.polygonCount,
         timestamp: new Date().toISOString(),
-      });
+      };
+      logger.warn(
+        `🔴 SEGMENTATION UPDATE RECEIVED: ${JSON.stringify(debugInfo, null, 2)}`
+      );
 
       if (process.env.NODE_ENV === 'development') {
         logger.debug('Full segmentation update:', update);

@@ -299,6 +299,8 @@ export default {
         "Impossible de supprimer le projet. Assurez-vous d'avoir les permissions nécessaires.",
     },
     deleteImages: 'Erreur lors de la suppression des images sélectionnées',
+    tooManyImagesSelected:
+      "Trop d'images sélectionnées. Vous pouvez supprimer un maximum de {{max}} images à la fois, mais {{selected}} sont sélectionnées.",
     contexts: {
       dashboard: 'Erreur du tableau de bord',
       project: 'Erreur de projet',
@@ -870,6 +872,11 @@ export default {
       'Segmenter {{new}} + Re-segmenter {{resegment}} ({{total}} total)',
     segmentTooltip:
       '{{new}} nouvelles images seront segmentées, {{resegment}} images sélectionnées seront re-segmentées',
+    cancel: 'Annuler',
+    cancelling: 'Annulation...',
+    batchCancelled: '{{count}} éléments de file annulés',
+    nothingToCancel: 'Rien à annuler',
+    cancelFailed: "Échec de l'annulation de l'opération par lots",
   },
   toast: {
     error: "Une erreur s'est produite",
