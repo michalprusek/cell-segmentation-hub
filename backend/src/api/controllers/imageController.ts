@@ -23,8 +23,14 @@ export class ImageController {
     this.thumbnailService = new ThumbnailService(prisma);
     this.segmentationThumbnailService = new SegmentationThumbnailService(prisma);
 
-    // Initialize ProjectStatsService with WebSocket service
-    const wsService = WebSocketService.getInstance();
+    // Initialize ProjectStatsService with WebSocket service (may not be available during startup)
+    let wsService;
+    try {
+      wsService = WebSocketService.getInstance();
+    } catch {
+      logger.debug('WebSocket service not yet available during ImageController initialization');
+      wsService = null;
+    }
     this.projectStatsService = new ProjectStatsService(prisma, wsService);
   }
 
