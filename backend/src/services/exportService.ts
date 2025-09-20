@@ -82,6 +82,7 @@ export interface ExportJob {
   completedAt?: Date;
   options: ExportOptions;
   bullJobId?: string;
+  projectName?: string;
 }
 
 export class ExportService {
@@ -186,7 +187,8 @@ export class ExportService {
   async startExportJob(
     projectId: string,
     userId: string,
-    options: ExportOptions
+    options: ExportOptions,
+    projectName?: string
   ): Promise<string> {
     // Check if user has access to this project (owner or shared)
     const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
@@ -195,6 +197,20 @@ export class ExportService {
     }
 
     const jobId = uuidv4();
+
+    // Get project name if not provided
+    let finalProjectName = projectName;
+    if (!finalProjectName) {
+      try {
+        const project = await prisma.project.findUnique({
+          where: { id: projectId },
+          select: { title: true }
+        });
+        finalProjectName = project?.title;
+      } catch (error) {
+        logger.warn('Failed to fetch project name for export', error instanceof Error ? error : new Error(String(error)), 'ExportService');
+      }
+    }
 
     // Create job record
     const job: ExportJob = {
@@ -205,6 +221,7 @@ export class ExportService {
       progress: 0,
       createdAt: new Date(),
       options,
+      projectName: finalProjectName,
     };
 
     this.exportJobs.set(jobId, job);
@@ -1273,6 +1290,20 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
     const job = this.exportJobs.get(jobId);
     if (job && job.projectId === projectId && job.filePath) {
       return job.filePath;
+    }
+    return null;
+  }
+
+  async getExportJob(jobId: string, projectId: string, userId: string): Promise<ExportJob | null> {
+    // Check if user has access to this project (owner or shared)
+    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    if (!accessCheck.hasAccess) {
+      return null;
+    }
+
+    const job = this.exportJobs.get(jobId);
+    if (job && job.projectId === projectId) {
+      return job;
     }
     return null;
   }

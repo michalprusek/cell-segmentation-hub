@@ -94,6 +94,8 @@ export class SegmentationService {
   private thumbnailService: ThumbnailService;
   private segmentationThumbnailService: SegmentationThumbnailService;
   private thumbnailManager: ThumbnailManager;
+  private concurrentRequestsPool: Map<string, Promise<SegmentationResponse>> = new Map(); // Track concurrent requests
+  private maxConcurrentRequests = 4; // Limit concurrent ML service requests
   
   constructor(
     private prisma: PrismaClient,
@@ -105,7 +107,7 @@ export class SegmentationService {
     // Python microservice URL - can be configured via environment
     this.pythonServiceUrl = config.SEGMENTATION_SERVICE_URL;
     
-    // Configure HTTP client for Python microservice
+    // Configure HTTP client for Python microservice with connection pooling
     this.httpClient = axios.create({
       baseURL: this.pythonServiceUrl,
       timeout: 300000, // 5 minutes timeout for segmentation
@@ -113,7 +115,24 @@ export class SegmentationService {
         'Accept': 'application/json',
       },
       maxBodyLength: Infinity,
-      maxContentLength: Infinity
+      maxContentLength: Infinity,
+      // Enable connection pooling for concurrent requests
+      maxRedirects: 5,
+      decompress: true,
+      httpAgent: new (require('http').Agent)({
+        keepAlive: true,
+        maxSockets: 4, // Support up to 4 concurrent connections
+        maxFreeSockets: 2,
+        timeout: 60000, // 60 seconds
+        keepAliveMsecs: 1000
+      }),
+      httpsAgent: new (require('https').Agent)({
+        keepAlive: true,
+        maxSockets: 4,
+        maxFreeSockets: 2,
+        timeout: 60000,
+        keepAliveMsecs: 1000
+      })
     });
 
     // Add request/response interceptors for logging (only if httpClient is properly initialized)
@@ -176,6 +195,67 @@ export class SegmentationService {
       logger.error('Failed to get available models', error instanceof Error ? error : undefined, 'SegmentationService');
       throw new Error(`Error loading available models: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
+  }
+
+  /**
+   * Manage concurrent ML requests to prevent overloading the service
+   */
+  private async manageConcurrentRequest<T>(
+    requestId: string,
+    requestFn: () => Promise<T>
+  ): Promise<T> {
+    // Check if we're at the concurrent request limit
+    if (this.concurrentRequestsPool.size >= this.maxConcurrentRequests) {
+      logger.warn('ML service concurrent request limit reached, waiting for slot', 'SegmentationService', {
+        currentRequests: this.concurrentRequestsPool.size,
+        maxConcurrentRequests: this.maxConcurrentRequests,
+        requestId
+      });
+
+      // Wait for an available slot by monitoring the pool
+      while (this.concurrentRequestsPool.size >= this.maxConcurrentRequests) {
+        await new Promise(resolve => setTimeout(resolve, 100)); // Check every 100ms
+      }
+    }
+
+    // Create and track the request
+    const requestPromise = requestFn().finally(() => {
+      // Clean up when request completes
+      this.concurrentRequestsPool.delete(requestId);
+    });
+
+    this.concurrentRequestsPool.set(requestId, requestPromise as Promise<SegmentationResponse>);
+
+    logger.debug('ML service request started', 'SegmentationService', {
+      requestId,
+      activeRequests: this.concurrentRequestsPool.size,
+      maxConcurrentRequests: this.maxConcurrentRequests
+    });
+
+    return requestPromise;
+  }
+
+  /**
+   * Get current concurrent request metrics
+   */
+  getConcurrentRequestMetrics(): {
+    activeRequests: number;
+    maxConcurrentRequests: number;
+    utilizationPercentage: number;
+  } {
+    const activeRequests = this.concurrentRequestsPool.size;
+    return {
+      activeRequests,
+      maxConcurrentRequests: this.maxConcurrentRequests,
+      utilizationPercentage: (activeRequests / this.maxConcurrentRequests) * 100
+    };
+  }
+
+  /**
+   * Check if ML service has available capacity for new requests
+   */
+  hasAvailableCapacity(): boolean {
+    return this.concurrentRequestsPool.size < this.maxConcurrentRequests;
   }
 
   /**
@@ -260,70 +340,78 @@ export class SegmentationService {
         requestId
       });
 
-      // Create service call span within try/finally scope
-      let mlCallSpan: MockSpan | null = null;
-      const mlCallStartTime = Date.now();
-      let response: AxiosResponse;
-      
-      try {
-        mlCallSpan = CrossServiceTraceLinker.createServiceCallSpan({
-          targetService: 'ml-service',
-          operationName: 'segment',
-          method: 'POST',
-          endpoint: '/api/v1/segment',
-          requestId,
-        });
+      // Use concurrent request management for ML service calls
+      const response = await this.manageConcurrentRequest(
+        requestId,
+        async () => {
+          // Create service call span within try/finally scope
+          let mlCallSpan: MockSpan | null = null;
+          const mlCallStartTime = Date.now();
+          let response: AxiosResponse;
 
-        // Inject trace headers for cross-service correlation
-        const traceHeaders = injectTraceHeaders({});
-        
-        // Make request to Python segmentation service
-        response = await this.httpClient.post('/api/v1/segment', formData, {
-          headers: {
-            ...formData.getHeaders(),
-            ...traceHeaders,
-            'x-request-id': requestId,
-            'x-user-id': userId,
-            'x-operation': 'segmentation_request',
-          },
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity
-        });
+          try {
+            mlCallSpan = CrossServiceTraceLinker.createServiceCallSpan({
+              targetService: 'ml-service',
+              operationName: 'segment',
+              method: 'POST',
+              endpoint: '/api/v1/segment',
+              requestId,
+            });
 
-        const mlCallDuration = Date.now() - mlCallStartTime;
-        
-        if (mlCallSpan) {
-          mlCallSpan.setAttributes({
-            'http.response.status_code': response.status,
-            'ml.call.duration_ms': mlCallDuration,
-            'ml.call.success': true,
-            'response.size_bytes': JSON.stringify(response.data).length,
-          });
-          mlCallSpan.setStatus({ code: 'OK' });
+            // Inject trace headers for cross-service correlation
+            const traceHeaders = injectTraceHeaders({});
+
+            // Make request to Python segmentation service
+            response = await this.httpClient.post('/api/v1/segment', formData, {
+              headers: {
+                ...formData.getHeaders(),
+                ...traceHeaders,
+                'x-request-id': requestId,
+                'x-user-id': userId,
+                'x-operation': 'segmentation_request',
+              },
+              maxBodyLength: Infinity,
+              maxContentLength: Infinity
+            });
+
+            const mlCallDuration = Date.now() - mlCallStartTime;
+
+            if (mlCallSpan) {
+              mlCallSpan.setAttributes({
+                'http.response.status_code': response.status,
+                'ml.call.duration_ms': mlCallDuration,
+                'ml.call.success': true,
+                'response.size_bytes': JSON.stringify(response.data).length,
+              });
+              mlCallSpan.setStatus({ code: 'OK' });
+            }
+
+            return response;
+          } catch (mlError) {
+            const mlCallDuration = Date.now() - mlCallStartTime;
+
+            if (mlCallSpan) {
+              mlCallSpan.setAttributes({
+                'ml.call.duration_ms': mlCallDuration,
+                'ml.call.success': false,
+              });
+
+              mlCallSpan.setStatus({
+                code: 'ERROR',
+                message: (mlError as Error).message
+              });
+            }
+
+            markSpanError(mlError as Error);
+
+            throw mlError;
+          } finally {
+            if (mlCallSpan) {
+              mlCallSpan.end();
+            }
+          }
         }
-      } catch (mlError) {
-        const mlCallDuration = Date.now() - mlCallStartTime;
-        
-        if (mlCallSpan) {
-          mlCallSpan.setAttributes({
-            'ml.call.duration_ms': mlCallDuration,
-            'ml.call.success': false,
-          });
-          
-          mlCallSpan.setStatus({ 
-            code: 'ERROR', 
-            message: (mlError as Error).message 
-          });
-        }
-        
-        markSpanError(mlError as Error);
-        
-        throw mlError;
-      } finally {
-        if (mlCallSpan) {
-          mlCallSpan.end();
-        }
-      }
+      );
 
       // Validate response data exists before assignment
       if (!response || !response.data) {

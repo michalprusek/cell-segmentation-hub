@@ -7,35 +7,60 @@
   },
   "batch_configurations": {
     "hrnet": {
-      "optimal_batch_size": 8,
-      "max_safe_batch_size": 12,
+      "optimal_batch_size": 6,
+      "max_safe_batch_size": 8,
       "expected_throughput": 17.3,
-      "memory_limit_mb": 1200,
+      "memory_limit_mb": 1300,
       "p95_latency_ms": 464.3,
-      "production_optimized": true
+      "production_optimized": true,
+      "concurrent_processing": {
+        "max_concurrent_users": 4,
+        "memory_per_user_mb": 1300,
+        "expected_concurrent_throughput": 69.2
+      }
     },
     "cbam_resunet": {
-      "optimal_batch_size": 2,
-      "max_safe_batch_size": 4,
-      "expected_throughput": 5.1,
-      "memory_limit_mb": 900,
+      "optimal_batch_size": 4,
+      "max_safe_batch_size": 6,
+      "expected_throughput": 12.5,
+      "memory_limit_mb": 700,
       "p95_latency_ms": 396.9,
-      "production_optimized": true
+      "production_optimized": true,
+      "concurrent_processing": {
+        "max_concurrent_users": 4,
+        "memory_per_user_mb": 700,
+        "expected_concurrent_throughput": 50.0
+      }
     },
     "unet_spherohq": {
-      "optimal_batch_size": 4,
-      "max_safe_batch_size": 8,
+      "optimal_batch_size": 1,
+      "max_safe_batch_size": 2,
       "expected_throughput": 1.02,
       "memory_limit_mb": 3100,
       "p95_latency_ms": 1250.0,
       "production_optimized": true,
-      "note": "Optimized batch size 4 for RTX A5000 - 3.4x speedup"
+      "concurrent_processing": {
+        "max_concurrent_users": 4,
+        "memory_per_user_mb": 3100,
+        "expected_concurrent_throughput": 4.08
+      },
+      "note": "Reduced batch size for 4-way parallel processing to prevent OOM"
     }
   },
   "dynamic_batching": {
     "enabled": true,
     "max_queue_delay_ms": 5,
     "timeout_ms": 50
+  },
+  "parallel_processing": {
+    "enabled": true,
+    "max_concurrent_users": 4,
+    "cuda_streams": 4,
+    "memory_pressure_threshold": 0.9,
+    "emergency_cleanup_threshold": 0.95,
+    "total_memory_budget_gb": 20.0,
+    "memory_safety_margin_gb": 2.0,
+    "description": "Configuration optimized for RTX A5000 24GB - supports 4 concurrent users with dedicated CUDA streams"
   },
   "memory_reserve_percent": 15,
   "detailed_results": {

@@ -4,6 +4,7 @@ export default {
     loading: 'Loading...',
     save: 'Save',
     cancel: 'Cancel',
+    cancelling: 'Cancelling...',
     delete: 'Delete',
     edit: 'Edit',
     create: 'Create',
@@ -315,6 +316,7 @@ export default {
     clickToSelect: 'or click to select files',
     acceptedFormats: 'Accepted formats: JPEG, PNG, TIFF, BMP (max 10MB)',
     uploadProgress: 'Upload Progress',
+    readyToUpload: 'Ready to Upload',
     uploadingTo: 'Select a project first',
     currentProject: 'current project',
     autoSegment: 'Auto-segment images after upload',
@@ -763,7 +765,6 @@ export default {
     // Reset Password page specific
     enterNewPassword: 'Enter your new password',
     newPassword: 'New Password',
-    confirmPassword: 'Confirm Password',
     confirmPasswordPlaceholder: 'Confirm your password',
     passwordRequirements: 'Password must be at least 8 characters long',
     resettingPassword: 'Resetting password...',
@@ -868,6 +869,23 @@ export default {
     emptyMessage:
       'No images in queue. Upload images and add them to the queue for segmentation.',
     addingToQueue: 'Adding to queue...',
+    cancelSegmentation: 'Cancel Segmentation',
+    // Parallel processing
+    processingSlots: 'Processing Slots',
+    parallel: 'parallel',
+    users: 'users',
+    active: 'active',
+    you: 'You',
+    yourSlot: 'Your slot: #{{slot}}',
+    concurrentUsers: 'Also processing: {{users}}',
+    availableSlots: '{{count}} slot available',
+    availableSlots_other: '{{count}} slots available',
+    yourPosition: 'Your position',
+    estimatedWait: 'Est. wait',
+    allSlotsActive:
+      'All processing slots are active - maximum parallel processing capacity reached',
+    slotAvailable:
+      'Processing slot available! Position #{{position}} (~{{waitTime}}m wait)',
   },
   toast: {
     // Generic messages
@@ -908,6 +926,8 @@ export default {
     // Upload actions
     upload: {
       failed: 'Failed to refresh images after upload',
+      cancelUpload: 'Cancel Upload',
+      uploadCancelled: 'Upload cancelled',
     },
     // Segmentation actions
     segmentation: {
@@ -973,6 +993,8 @@ export default {
     selectedImages: 'Selected Images',
     imagesSelected: '{{count}} of {{total}} images selected',
     selectAll: 'Select All',
+    allSelected: 'All {{count}} images selected',
+    selectAllProject: 'Select All {{count}} images',
     selectNone: 'Select None',
     imageSelection: 'Image Selection',
     chooseImages: 'Choose which images to include in the export',
@@ -1022,6 +1044,7 @@ export default {
     completed: 'Export completed',
     downloading: 'Downloading...',
     cancelled: 'Export cancelled',
+    cancelExport: 'Cancel Export',
     // Connection status
     connected: 'Connected',
     disconnected: 'Disconnected',

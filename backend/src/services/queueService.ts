@@ -13,6 +13,23 @@ export interface QueueStats {
   total: number;
 }
 
+export interface ParallelProcessingStats {
+  activeStreams: number;
+  maxConcurrentStreams: number;
+  totalProcessingCapacity: number;
+  currentThroughput: number;
+  averageProcessingTime: number;
+}
+
+export interface QueueBatch {
+  id: string;
+  items: SegmentationQueue[];
+  model: string;
+  threshold: number;
+  priority: number;
+  estimatedProcessingTime: number;
+}
+
 export interface BatchConfig {
   hrnet: number;
   cbam_resunet: number;
@@ -33,11 +50,20 @@ export interface QueueItem {
 export class QueueService {
   private static instance: QueueService;
   private batchSizes: BatchConfig = {
-    hrnet: 8,
+    hrnet: 6, // Reduced for concurrent processing
     cbam_resunet: 4
   };
   private websocketService: WebSocketService | null = null;
   private queueWorkerInstance: unknown = null; // Reference to QueueWorker for triggering
+  private maxConcurrentBatches = 4; // Support 4-way parallel processing
+  private activeBatches: Map<string, Date> = new Map(); // Track active batch processing
+  private processingStats: ParallelProcessingStats = {
+    activeStreams: 0,
+    maxConcurrentStreams: 4,
+    totalProcessingCapacity: 0,
+    currentThroughput: 0,
+    averageProcessingTime: 0
+  };
 
   constructor(
     private prisma: PrismaClient,
@@ -400,19 +426,67 @@ export class QueueService {
 
 
   /**
-   * Get next batch of queue items for batch processing
-   * Groups items by model and threshold for efficient processing
+   * Get multiple batches for parallel processing
+   * Returns up to maxBatches for concurrent execution
    */
-  async getNextBatch(): Promise<SegmentationQueue[]> {
-    // Model batch size limits (from ML service)
+  async getMultipleBatches(maxBatches: number = 4): Promise<QueueBatch[]> {
+    const batches: QueueBatch[] = [];
+    const processedImageIds = new Set<string>();
+
+    for (let i = 0; i < maxBatches; i++) {
+      const batchItems = await this.getNextBatchExcluding(processedImageIds);
+      if (batchItems.length === 0) {
+        break; // No more items to process
+      }
+
+      const firstItem = batchItems[0];
+      const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+      batches.push({
+        id: batchId,
+        items: batchItems,
+        model: firstItem.model,
+        threshold: firstItem.threshold,
+        priority: firstItem.priority,
+        estimatedProcessingTime: this.estimateProcessingTime(batchItems.length, firstItem.model)
+      });
+
+      // Mark these images as being processed to avoid duplicates
+      batchItems.forEach(item => processedImageIds.add(item.imageId));
+    }
+
+    logger.info('Retrieved multiple batches for parallel processing', 'QueueService', {
+      batchCount: batches.length,
+      totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0),
+      models: [...new Set(batches.map(batch => batch.model))]
+    });
+
+    return batches;
+  }
+
+  /**
+   * Get next batch excluding specific image IDs (to avoid duplicate processing)
+   */
+  private async getNextBatchExcluding(excludeImageIds: Set<string>): Promise<SegmentationQueue[]> {
+    // Model batch size limits (reduced for concurrent processing)
     const BATCH_LIMITS = {
-      'hrnet': 8,
+      'hrnet': 6, // Reduced from 8 for parallel processing
       'cbam_resunet': 4  // Batch size of 4 for CBAM-ResUNet
     };
 
-    // Get the highest priority item first
+    // Get the highest priority item first, excluding specified image IDs
+    const whereClause: any = {
+      status: 'queued'
+    };
+
+    if (excludeImageIds.size > 0) {
+      whereClause.imageId = {
+        notIn: Array.from(excludeImageIds)
+      };
+    }
+
     const firstItem = await this.prisma.segmentationQueue.findFirst({
-      where: { status: 'queued' },
+      where: whereClause,
       orderBy: [
         { priority: 'desc' },
         { createdAt: 'asc' }
@@ -432,7 +506,10 @@ export class QueueService {
         status: 'queued',
         model: firstItem.model,
         threshold: firstItem.threshold,
-        priority: firstItem.priority
+        priority: firstItem.priority,
+        imageId: excludeImageIds.size > 0 ? {
+          notIn: Array.from(excludeImageIds)
+        } : undefined
       },
       orderBy: [
         { createdAt: 'asc' }
@@ -444,38 +521,6 @@ export class QueueService {
     if (batch.length === 0) {
       batch = [firstItem];
     }
-    
-    // IMPORTANT: Allow partial batches for remaining items
-    // If we have items but less than full batch, still process them
-    // This prevents the last odd items from being stuck
-    if (batch.length > 0 && batch.length < batchLimit) {
-      // Check if there are more items waiting with same model but different threshold/priority
-      const totalQueued = await this.prisma.segmentationQueue.count({
-        where: {
-          status: 'queued',
-          model: firstItem.model
-        }
-      });
-      
-      // If this is all that's left for this model, process as partial batch
-      if (totalQueued === batch.length) {
-        logger.info('Processing partial batch - remaining items for model', 'QueueService', {
-          batchSize: batch.length,
-          batchLimit,
-          model: firstItem.model,
-          reason: 'Last remaining items'
-        });
-      }
-    }
-
-    logger.info('Retrieved batch for processing', 'QueueService', {
-      batchSize: batch.length,
-      model: firstItem.model,
-      threshold: firstItem.threshold,
-      priority: firstItem.priority,
-      maxBatchSize: batchLimit,
-      itemIds: batch.map(item => item.id)
-    });
 
     return batch;
   }
@@ -803,7 +848,174 @@ export class QueueService {
   }
 
   /**
-   * Get comprehensive health status of the queue system
+   * Process multiple batches concurrently using Promise.allSettled
+   */
+  async processMultipleBatches(batches: QueueBatch[]): Promise<void> {
+    if (batches.length === 0) {
+      return;
+    }
+
+    logger.info('Starting parallel batch processing', 'QueueService', {
+      batchCount: batches.length,
+      totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0),
+      models: [...new Set(batches.map(batch => batch.model))]
+    });
+
+    // Update processing stats
+    this.processingStats.activeStreams = batches.length;
+    this.processingStats.totalProcessingCapacity = batches.reduce((sum, batch) => sum + batch.items.length, 0);
+
+    // Track active batches
+    const startTime = new Date();
+    batches.forEach(batch => {
+      this.activeBatches.set(batch.id, startTime);
+    });
+
+    // Process batches concurrently
+    const batchPromises = batches.map(batch =>
+      this.processSingleBatch(batch.items).catch(error => {
+        logger.error('Batch processing failed', error instanceof Error ? error : undefined, 'QueueService', {
+          batchId: batch.id,
+          batchSize: batch.items.length,
+          model: batch.model
+        });
+        return error; // Return error instead of throwing to continue with other batches
+      })
+    );
+
+    // Wait for all batches to complete
+    const results = await Promise.allSettled(batchPromises);
+
+    // Clean up tracking
+    batches.forEach(batch => {
+      this.activeBatches.delete(batch.id);
+    });
+
+    // Update processing stats
+    const endTime = new Date();
+    const processingTime = endTime.getTime() - startTime.getTime();
+    this.processingStats.activeStreams = 0;
+    this.processingStats.averageProcessingTime = processingTime;
+    this.processingStats.currentThroughput = this.processingStats.totalProcessingCapacity / (processingTime / 1000);
+
+    // Log results
+    const successCount = results.filter(result => result.status === 'fulfilled').length;
+    const failureCount = results.filter(result => result.status === 'rejected').length;
+
+    logger.info('Parallel batch processing completed', 'QueueService', {
+      batchCount: batches.length,
+      successCount,
+      failureCount,
+      totalProcessingTime: processingTime,
+      throughput: this.processingStats.currentThroughput
+    });
+
+    // Emit parallel processing status update
+    if (this.websocketService) {
+      this.emitParallelProcessingStatus();
+    }
+  }
+
+  /**
+   * Process a single batch (extracted from original processBatch method)
+   */
+  async processSingleBatch(batch: SegmentationQueue[]): Promise<void> {
+    if (batch.length === 0) {
+      return;
+    }
+
+    const firstItem = batch[0];
+    if (!firstItem) {
+      return; // Should never happen due to length check above
+    }
+    const model = firstItem.model;
+    const threshold = firstItem.threshold;
+
+    logger.info('Starting batch processing', 'QueueService', {
+      batchSize: batch.length,
+      model,
+      threshold,
+      itemIds: batch.map(item => item.id)
+    });
+
+    // Call the main processBatch method which contains the full logic
+    return this.processBatch(batch);
+  }
+
+  /**
+   * Legacy method for backward compatibility - get single batch
+   */
+  async getNextBatch(): Promise<SegmentationQueue[]> {
+    const batches = await this.getMultipleBatches(1);
+    return batches.length > 0 ? batches[0].items : [];
+  }
+
+  /**
+   * Estimate processing time based on batch size and model
+   */
+  private estimateProcessingTime(batchSize: number, model: string): number {
+    // Processing time estimates in milliseconds (based on analysis)
+    const modelTimes = {
+      'hrnet': 196, // ~196ms per image
+      'cbam_resunet': 396, // ~396ms per image
+      'unet_spherohq': 1000 // ~1000ms per image
+    };
+
+    const timePerImage = modelTimes[model as keyof typeof modelTimes] || 500;
+    return batchSize * timePerImage;
+  }
+
+  /**
+   * Get parallel processing statistics
+   */
+  async getParallelProcessingStats(): Promise<ParallelProcessingStats> {
+    // Update active streams count
+    this.processingStats.activeStreams = this.activeBatches.size;
+
+    return {
+      ...this.processingStats,
+      // Add real-time metrics
+      activeStreams: this.activeBatches.size,
+      maxConcurrentStreams: this.maxConcurrentBatches
+    };
+  }
+
+  /**
+   * Emit parallel processing status via WebSocket
+   */
+  private emitParallelProcessingStatus(): void {
+    if (!this.websocketService) return;
+
+    const stats = this.processingStats;
+
+    // Emit to all connected users (system-wide status)
+    this.websocketService.broadcastSystemMessage(
+      `Parallel Processing: ${stats.activeStreams}/${stats.maxConcurrentStreams} streams active`,
+      'info'
+    );
+  }
+
+  /**
+   * Emit queue stats for all users/projects affected by a batch
+   */
+  private async emitQueueStatsForBatch(batch: SegmentationQueue[]): Promise<void> {
+    const projectUserPairs = batch.map(item => ({ projectId: item.projectId, userId: item.userId }));
+    const uniquePairs = Array.from(
+      new Map(projectUserPairs.map(pair => [`${pair.projectId}-${pair.userId}`, pair])).values()
+    );
+
+    for (const { projectId, userId } of uniquePairs) {
+      const stats = await this.getQueueStats(projectId, userId);
+      logger.debug('Emitted queue stats after batch completion', 'QueueService', {
+        projectId,
+        userId,
+        stats
+      });
+    }
+  }
+
+  /**
+   * Get comprehensive health status of the queue system including parallel processing metrics
    */
   async getQueueHealthStatus(): Promise<{
     healthy: boolean;
@@ -814,6 +1026,7 @@ export class QueueService {
       failed: number;
       stuck: number; // Processing items older than 10 minutes
     };
+    parallelStats: ParallelProcessingStats;
     oldestQueuedItem?: Date;
     mlServiceHealthy: boolean;
     issues: string[];
@@ -865,6 +1078,9 @@ export class QueueService {
 
       const healthy = issues.length === 0;
 
+      // Get parallel processing stats
+      const parallelStats = await this.getParallelProcessingStats();
+
       return {
         healthy,
         queueStats: {
@@ -874,6 +1090,7 @@ export class QueueService {
           failed,
           stuck
         },
+        parallelStats,
         oldestQueuedItem: oldestQueued?.createdAt,
         mlServiceHealthy,
         issues
@@ -883,6 +1100,13 @@ export class QueueService {
       return {
         healthy: false,
         queueStats: { queued: 0, processing: 0, completed: 0, failed: 0, stuck: 0 },
+        parallelStats: {
+          activeStreams: 0,
+          maxConcurrentStreams: 4,
+          totalProcessingCapacity: 0,
+          currentThroughput: 0,
+          averageProcessingTime: 0
+        },
         mlServiceHealthy: false,
         issues: ['Failed to check queue health']
       };

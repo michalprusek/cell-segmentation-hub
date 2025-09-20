@@ -128,7 +128,9 @@ const ProjectToolbar = ({
               className="h-4 w-4"
             />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none">
-              {t('export.selectAll')}
+              {isAllSelected
+                ? t('export.allSelected', { count: images.length })
+                : t('export.selectAllProject', { count: images.length })}
             </span>
           </label>
         )}

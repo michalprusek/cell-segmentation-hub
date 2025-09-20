@@ -5,6 +5,16 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import { AuthRequest } from '../../types/auth';
 
+// Sanitize filename to remove/replace invalid characters
+function sanitizeFilename(filename: string): string {
+  return filename
+    .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid filename characters
+    .replace(/[\s]+/g, '_') // Replace spaces with underscores
+    .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+    .substring(0, 100); // Limit length to prevent issues
+}
+
 export class ExportController {
   private exportService: ExportService;
 
@@ -23,7 +33,7 @@ export class ExportController {
   async startExport(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { projectId } = req.params;
-      const options = req.body as { options?: ExportOptions };
+      const { options, projectName } = req.body as { options?: ExportOptions; projectName?: string };
       const userId = req.user?.id;
 
       if (!userId) {
@@ -39,7 +49,8 @@ export class ExportController {
       const jobId = await this.exportService.startExportJob(
         projectId,
         userId,
-        options.options || {}
+        options || {},
+        projectName
       );
 
       res.json({
@@ -122,6 +133,13 @@ export class ExportController {
         return;
       }
 
+      // Get export job details for project name
+      const exportJob = await this.exportService.getExportJob(
+        jobId,
+        projectId,
+        userId
+      );
+
       // Validate and sanitize the file path to prevent path traversal
       const exportsBaseDir = path.resolve(process.env.EXPORT_DIR || './exports');
       const resolvedFilePath = path.resolve(filePath);
@@ -145,8 +163,11 @@ export class ExportController {
         return;
       }
 
-      // Get file name for download
-      const fileName = `export_${jobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+      // Generate filename using project name if available
+      const timestamp = new Date().toISOString().slice(0, 10);
+      const fileName = exportJob?.projectName ?
+        `${sanitizeFilename(exportJob.projectName)}_${timestamp}.zip` :
+        `export_${jobId}_${timestamp}.zip`;
       
       // Set proper headers for file download
       res.setHeader('Content-Type', 'application/zip');

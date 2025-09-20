@@ -48,6 +48,14 @@ export interface QueueStatsMessage extends BaseWebSocketMessage {
   userPosition?: number;
   estimatedWaitTime?: number; // in seconds
   averageProcessingTime?: number; // in seconds
+  // Parallel processing fields
+  parallelProcessing?: {
+    totalSlots: number;
+    activeSlots: number;
+    concurrentUsers: number;
+    userSlotId?: number;
+    isEnabled: boolean;
+  };
 }
 
 /**
@@ -96,6 +104,63 @@ export interface ConnectionStatusMessage extends BaseWebSocketMessage {
 }
 
 /**
+ * Parallel processing status message
+ */
+export interface ParallelProcessingStatusMessage extends BaseWebSocketMessage {
+  type: 'parallelProcessingStatus';
+  totalSlots: number;
+  activeSlots: {
+    id: number;
+    userId: string;
+    userName?: string;
+    imageId?: string;
+    startTime: number;
+    estimatedCompletion?: number;
+    progress?: number;
+  }[];
+  waitingUsers: number;
+  avgProcessingTime?: number;
+}
+
+/**
+ * Concurrent user count message
+ */
+export interface ConcurrentUserMessage extends BaseWebSocketMessage {
+  type: 'concurrentUsers';
+  count: number;
+  activeUsers: {
+    userId: string;
+    userName?: string;
+    slotId?: number;
+  }[];
+}
+
+/**
+ * Processing stream update message
+ */
+export interface ProcessingStreamUpdateMessage extends BaseWebSocketMessage {
+  type: 'processingStreamUpdate';
+  slotId: number;
+  userId?: string;
+  status: 'started' | 'progress' | 'completed' | 'failed' | 'idle';
+  imageId?: string;
+  progress?: number; // 0-100
+  estimatedCompletion?: number; // seconds
+}
+
+/**
+ * Queue position update for parallel processing
+ */
+export interface QueuePositionUpdateMessage extends BaseWebSocketMessage {
+  type: 'queuePositionUpdate';
+  userPosition: number;
+  estimatedWaitTime: number; // seconds
+  queueLength: number;
+  activeSlots: number;
+  reason?: 'user_added' | 'user_completed' | 'slot_freed' | 'position_changed';
+}
+
+/**
  * Union type of all possible WebSocket messages
  */
 export type WebSocketMessage =
@@ -104,7 +169,11 @@ export type WebSocketMessage =
   | SegmentationCompletedMessage
   | SegmentationFailedMessage
   | SegmentationProgressMessage
-  | ConnectionStatusMessage;
+  | ConnectionStatusMessage
+  | ParallelProcessingStatusMessage
+  | ConcurrentUserMessage
+  | ProcessingStreamUpdateMessage
+  | QueuePositionUpdateMessage;
 
 /**
  * Type guard functions for message type checking
@@ -133,6 +202,24 @@ export const isConnectionStatusMessage = (
   msg: WebSocketMessage
 ): msg is ConnectionStatusMessage => msg.type === 'connectionStatus';
 
+export const isParallelProcessingStatusMessage = (
+  msg: WebSocketMessage
+): msg is ParallelProcessingStatusMessage =>
+  msg.type === 'parallelProcessingStatus';
+
+export const isConcurrentUserMessage = (
+  msg: WebSocketMessage
+): msg is ConcurrentUserMessage => msg.type === 'concurrentUsers';
+
+export const isProcessingStreamUpdateMessage = (
+  msg: WebSocketMessage
+): msg is ProcessingStreamUpdateMessage =>
+  msg.type === 'processingStreamUpdate';
+
+export const isQueuePositionUpdateMessage = (
+  msg: WebSocketMessage
+): msg is QueuePositionUpdateMessage => msg.type === 'queuePositionUpdate';
+
 /**
  * WebSocket event names mapped to their payload types
  */
@@ -143,6 +230,12 @@ export interface WebSocketEventMap {
   segmentationFailed: SegmentationFailedMessage;
   segmentationProgress: SegmentationProgressMessage;
   connectionStatus: ConnectionStatusMessage;
+  // Parallel processing events
+  parallelProcessingStatus: ParallelProcessingStatusMessage;
+  concurrentUsers: ConcurrentUserMessage;
+  processingStreamUpdate: ProcessingStreamUpdateMessage;
+  queuePositionUpdate: QueuePositionUpdateMessage;
+  // Connection events
   connect: void;
   disconnect: { reason?: string };
   error: Error;
@@ -179,6 +272,18 @@ export interface QueueStats {
   processing: number;
   userPosition?: number;
   estimatedWaitTime?: number;
+  // Extended for parallel processing
+  queued?: number; // For backward compatibility
+  projectId?: string;
+  // Parallel processing fields
+  parallelProcessing?: {
+    totalSlots: number;
+    activeSlots: number;
+    concurrentUsers: number;
+    userSlotId?: number;
+    isEnabled: boolean;
+    avgProcessingTime?: number;
+  };
 }
 
 /**
