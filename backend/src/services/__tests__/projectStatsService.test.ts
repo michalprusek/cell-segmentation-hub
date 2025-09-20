@@ -87,7 +87,7 @@ describe('ProjectStatsService', () => {
   describe('getDashboardMetrics', () => {
     it('should calculate dashboard metrics for a user', async () => {
       const userId = 'test-user-id';
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const _weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
       // Mock Prisma responses
       (prismaMock.project as any).count.mockResolvedValue(5);

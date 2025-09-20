@@ -22,11 +22,11 @@ import {
 import { Slider } from '@/components/ui/slider';
 import { Input } from '@/components/ui/input';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select as _Select,
+  SelectContent as _SelectContent,
+  SelectItem as _SelectItem,
+  SelectTrigger as _SelectTrigger,
+  SelectValue as _SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import {
@@ -37,8 +37,8 @@ import {
   Package,
   Settings,
   Palette,
-  FileText,
-  Archive,
+  FileText as _FileText,
+  Archive as _Archive,
   WifiOff,
   AlertCircle,
   RefreshCw,
@@ -82,7 +82,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         exportStatus,
         isExporting,
         isDownloading,
-        cancelExport,
+        cancelExport: _cancelExport,
         triggerDownload,
         dismissExport,
         completedJobId,
@@ -114,7 +114,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
           await startExport(projectName);
           toast.success(t('toast.exportCompleted'));
           onClose();
-        } catch (error) {
+        } catch (_error) {
           toast.error(t('toast.exportFailed'));
         }
       };

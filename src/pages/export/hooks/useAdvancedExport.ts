@@ -62,7 +62,7 @@ export const useAdvancedExport = (projectId: string, projectName?: string) => {
   const [exportStatus, setExportStatus] = useState('');
   const [isExporting, setIsExporting] = useState(false);
   const [completedJobId, setCompletedJobId] = useState<string | null>(null);
-  const [createdBlobUrls, setCreatedBlobUrls] = useState<string[]>([]);
+  const [_createdBlobUrls, setCreatedBlobUrls] = useState<string[]>([]);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(
     null
   );

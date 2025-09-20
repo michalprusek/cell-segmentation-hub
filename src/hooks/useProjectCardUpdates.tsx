@@ -34,7 +34,7 @@ interface ProjectCardState {
 export const useProjectCardUpdates = ({
   projectId,
   isShared = false,
-  ownerId,
+  ownerId: _ownerId,
 }: UseProjectCardUpdatesProps) => {
   const { manager } = useWebSocket();
   const { user } = useAuth();
