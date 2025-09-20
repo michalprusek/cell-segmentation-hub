@@ -41,7 +41,7 @@ export const useSegmentationQueue = (
   const tRef = useRef(t);
   tRef.current = t;
 
-  // Toast throttling state - only show batch start/end notifications
+  // Toast throttling state - only show batch completion notifications
   const batchStateRef = useRef({
     isProcessingBatch: false,
     batchStartTime: 0,
@@ -50,7 +50,6 @@ export const useSegmentationQueue = (
     failedCount: 0,
     lastToastTime: 0,
     toastThrottleMs: 2000, // Minimum 2 seconds between similar toasts
-    batchToastId: null as string | number | null,
     hasShownStartToast: false,
   });
 
@@ -106,28 +105,15 @@ export const useSegmentationQueue = (
 
         const batchState = batchStateRef.current;
 
-        // Show batch start toast when we detect any operation (even single image)
-        // But only show the toast for operations with more than 10 items
+        // Track batch start for completion detection but don't show toast
         if (batchState.isProcessingBatch && !batchState.hasShownStartToast) {
           const totalItems =
             stats.queued + stats.processing + batchState.processedCount;
           batchState.totalCount = totalItems;
           batchState.hasShownStartToast = true;
 
-          // Only show start toast for bulk operations (>10 items)
-          if (totalItems > 10) {
-            // Dismiss any existing batch toast and show new one
-            if (batchState.batchToastId) {
-              toast.dismiss(batchState.batchToastId);
-            }
-
-            batchState.batchToastId = toast.info(
-              tRef.current('toast.segmentation.batchStarted', {
-                count: totalItems,
-              }) || `Segmentation started for ${totalItems} images`,
-              { duration: 4000 }
-            );
-          }
+          // Batch start tracking without toast notification
+          // (Start toast disabled per user request)
         }
 
         // Detect batch completion: when processing batch and queue becomes empty
@@ -137,11 +123,6 @@ export const useSegmentationQueue = (
           stats.processing === 0 &&
           batchState.processedCount > 0
         ) {
-          // Dismiss start toast if still showing
-          if (batchState.batchToastId) {
-            toast.dismiss(batchState.batchToastId);
-          }
-
           // Show batch completion summary - always show, even for single images
           const totalProcessed =
             batchState.processedCount + batchState.failedCount;
@@ -189,7 +170,6 @@ export const useSegmentationQueue = (
           batchState.failedCount = 0;
           batchState.totalCount = 0;
           batchState.lastToastTime = now;
-          batchState.batchToastId = null;
           batchState.hasShownStartToast = false;
 
           // Notify parent component that batch is complete
