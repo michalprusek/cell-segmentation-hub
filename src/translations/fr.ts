@@ -850,6 +850,11 @@ export default {
     online: 'En ligne',
     offline: 'Hors ligne',
     noPolygons: 'Aucun polygone',
+    parallelProcessing:
+      'Traitement Parallèle : {{active}}/{{max}} workers actifs',
+    concurrentOps: 'Opérations Concurrentes : {{active}}/{{max}} actives',
+    batchProcessing: 'Traitement par Lots : {{size}} images par lot',
+    systemReady: 'Système prêt pour le traitement',
   },
   queue: {
     title: 'File de Segmentation',

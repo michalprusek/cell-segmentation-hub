@@ -93,7 +93,7 @@ export const useParallelProcessingStatus = () => {
               max: maxWorkers,
             }),
             {
-              description: 'System ready for processing',
+              description: t('status.systemReady'),
               duration: 2000,
             }
           );

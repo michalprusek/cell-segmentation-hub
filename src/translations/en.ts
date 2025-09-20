@@ -852,6 +852,7 @@ export default {
       'Parallel Processing: {{active}}/{{max}} workers active',
     concurrentOps: 'Concurrent Operations: {{active}}/{{max}} active',
     batchProcessing: 'Batch Processing: {{size}} images per batch',
+    systemReady: 'System ready for processing',
   },
   queue: {
     title: 'Segmentation Queue',

@@ -847,6 +847,7 @@ export default {
       'Paralelní zpracování: {{active}}/{{max}} aktivních pracovníků',
     concurrentOps: 'Souběžné operace: {{active}}/{{max}} aktivních',
     batchProcessing: 'Dávkové zpracování: {{size}} obrázků na dávku',
+    systemReady: 'Systém připraven ke zpracování',
   },
   queue: {
     title: 'Segmentační fronta',

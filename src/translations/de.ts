@@ -858,6 +858,11 @@ export default {
     online: 'Online',
     offline: 'Offline',
     noPolygons: 'Keine Polygone',
+    parallelProcessing:
+      'Parallele Verarbeitung: {{active}}/{{max}} Arbeiter aktiv',
+    concurrentOps: 'Gleichzeitige Operationen: {{active}}/{{max}} aktiv',
+    batchProcessing: 'Stapelverarbeitung: {{size}} Bilder pro Stapel',
+    systemReady: 'System bereit für Verarbeitung',
   },
   queue: {
     title: 'Segmentierungs-Warteschlange',

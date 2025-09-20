@@ -780,6 +780,10 @@ export default {
     online: '在线',
     offline: '离线',
     noPolygons: '无多边形',
+    parallelProcessing: '并行处理：{{active}}/{{max}} 个工作进程活跃',
+    concurrentOps: '并发操作：{{active}}/{{max}} 个活跃',
+    batchProcessing: '批处理：每批 {{size}} 张图片',
+    systemReady: '系统准备就绪',
   },
   queue: {
     title: '分割队列',

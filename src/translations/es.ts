@@ -847,6 +847,11 @@ export default {
     online: 'En línea',
     offline: 'Fuera de línea',
     noPolygons: 'Sin polígonos',
+    parallelProcessing:
+      'Procesamiento Paralelo: {{active}}/{{max}} trabajadores activos',
+    concurrentOps: 'Operaciones Concurrentes: {{active}}/{{max}} activas',
+    batchProcessing: 'Procesamiento por Lotes: {{size}} imágenes por lote',
+    systemReady: 'Sistema listo para procesamiento',
   },
   queue: {
     title: 'Cola de Segmentación',
