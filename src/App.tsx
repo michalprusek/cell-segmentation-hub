@@ -94,6 +94,12 @@ const queryClient = new QueryClient({
   },
 });
 
+// Component to handle parallel processing status inside WebSocket context
+const ParallelProcessingStatusHandler = () => {
+  useParallelProcessingStatus();
+  return null; // This component doesn't render anything
+};
+
 const App = () => {
   // Initialize export state manager inside React lifecycle
   React.useEffect(() => {
@@ -105,9 +111,6 @@ const App = () => {
     };
   }, []);
 
-  // Enable parallel processing status notifications
-  useParallelProcessingStatus();
-
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
@@ -116,6 +119,7 @@ const App = () => {
         >
           <AuthProvider>
             <WebSocketProvider>
+              <ParallelProcessingStatusHandler />
               <ThemeProvider>
                 <LanguageProvider>
                   <ToastEventProvider>
