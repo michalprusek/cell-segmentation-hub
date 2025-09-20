@@ -116,58 +116,55 @@ export class QueueWorker {
   }
 
   /**
-   * Process the queue using batch processing for better performance
+   * Process the queue using 4-way parallel batch processing for better performance
    */
   private async processQueue(): Promise<void> {
     // Prevent overlapping executions
     if (this.isProcessing) {
       return;
     }
-    
+
     this.isProcessing = true;
-    
+
     try {
-      // Try to get a batch of items for processing
-      const batch = await this.queueService.getNextBatch();
-      
-      if (batch.length === 0) {
+      // Try to get multiple batches for parallel processing
+      const batches = await this.queueService.getMultipleBatches(4);
+
+      if (batches.length === 0) {
         return; // Nothing to process
       }
-      
-      const firstItem = batch[0];
-      if (!firstItem) {
-        logger.warn('Empty batch received', 'QueueWorker');
-        return;
-      }
-      
-      logger.info('Processing segmentation queue batch', 'QueueWorker', {
-        batchSize: batch.length,
-        model: firstItem.model,
-        threshold: firstItem.threshold,
-        itemIds: batch.map(item => item.id)
+
+      logger.info('Processing segmentation queue with parallel batches', 'QueueWorker', {
+        batchCount: batches.length,
+        totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0),
+        models: [...new Set(batches.map(batch => batch.model))],
+        batchDetails: batches.map(batch => ({
+          id: batch.id,
+          size: batch.items.length,
+          model: batch.model,
+          estimatedTime: batch.estimatedProcessingTime
+        }))
       });
-      
-      // Process the batch using QueueService batch processing
+
+      // Process batches in parallel using Promise.allSettled
       try {
-        await this.queueService.processBatch(batch);
-        
-        const firstItem = batch[0];
-        logger.info('Batch processing completed successfully', 'QueueWorker', {
-          batchSize: batch.length,
-          model: firstItem?.model || 'unknown'
+        await this.queueService.processMultipleBatches(batches);
+
+        logger.info('Parallel batch processing completed successfully', 'QueueWorker', {
+          batchCount: batches.length,
+          totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0),
+          models: [...new Set(batches.map(batch => batch.model))]
         });
       } catch (error) {
-        const firstItem = batch[0];
-        logger.error('Failed to process queue batch', error instanceof Error ? error : undefined, 'QueueWorker', {
-          batchSize: batch.length,
-          model: firstItem?.model || 'unknown',
-          itemIds: batch.map(item => item.id)
+        logger.error('Failed to process parallel batches', error instanceof Error ? error : undefined, 'QueueWorker', {
+          batchCount: batches.length,
+          totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0)
         });
-        
-        // Error handling is done within processBatch method
-        // Individual items are marked for retry or failure as appropriate
+
+        // Error handling is done within processMultipleBatches method
+        // Individual batches and items are marked for retry or failure as appropriate
       }
-      
+
     } catch (error) {
       logger.error('Failed to process queue', error instanceof Error ? error : undefined, 'QueueWorker');
     } finally {

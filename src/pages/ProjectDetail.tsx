@@ -107,8 +107,13 @@ const ProjectDetail = () => {
   );
 
   // Queue management - must be declared before using queueStats
-  const { isConnected, queueStats, lastUpdate, requestQueueStats } =
-    useSegmentationQueue(id);
+  const {
+    isConnected,
+    queueStats,
+    lastUpdate,
+    parallelStats,
+    requestQueueStats,
+  } = useSegmentationQueue(id);
 
   // Handle thumbnail updates via WebSocket
   useThumbnailUpdates({
@@ -899,8 +904,9 @@ const ProjectDetail = () => {
   );
 
   const handleSelectAll = useCallback(() => {
-    setSelectedImageIds(new Set(paginatedImages.map(img => img.id)));
-  }, [paginatedImages]);
+    // Select all filtered images in the project, not just current page
+    setSelectedImageIds(new Set(filteredImages.map(img => img.id)));
+  }, [filteredImages]);
 
   const handleDeselectAll = useCallback(() => {
     setSelectedImageIds(new Set());
@@ -908,14 +914,14 @@ const ProjectDetail = () => {
 
   const handleSelectAllToggle = useCallback(() => {
     const allSelected =
-      paginatedImages.length > 0 &&
-      paginatedImages.every(img => selectedImageIds.has(img.id));
+      filteredImages.length > 0 &&
+      filteredImages.every(img => selectedImageIds.has(img.id));
     if (allSelected) {
       handleDeselectAll();
     } else {
       handleSelectAll();
     }
-  }, [paginatedImages, selectedImageIds, handleSelectAll, handleDeselectAll]);
+  }, [filteredImages, selectedImageIds, handleSelectAll, handleDeselectAll]);
 
   const handleBatchDeleteConfirm = async () => {
     if (!id || !user?.id || selectedImageIds.size === 0) {
@@ -973,10 +979,10 @@ const ProjectDetail = () => {
   // Calculate selection state
   const selectedCount = selectedImageIds.size;
   const isAllSelected =
-    paginatedImages.length > 0 &&
-    paginatedImages.every(img => selectedImageIds.has(img.id));
+    filteredImages.length > 0 &&
+    filteredImages.every(img => selectedImageIds.has(img.id));
   const isPartiallySelected =
-    selectedCount > 0 && selectedCount < paginatedImages.length;
+    selectedCount > 0 && selectedCount < filteredImages.length;
 
   // Handle batch segmentation of all images without segmentation + selected images
   const handleSegmentAll = async () => {
@@ -1245,6 +1251,8 @@ const ProjectDetail = () => {
               imagesToSegmentCount={imagesToSegmentCount}
               selectedImageIds={selectedImageIds}
               images={images}
+              parallelStats={parallelStats}
+              currentUserId={user?.id}
             />
 
             {loading ? (

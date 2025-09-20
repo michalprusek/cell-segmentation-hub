@@ -13,6 +13,7 @@ from typing import Dict, Any, List
 # Use relative imports instead of sys.path manipulation
 from .model_loader import ModelManager
 from .postprocessing import PostprocessingService
+from ..ml.inference_executor import get_global_executor, InferenceError, InferenceResourceError
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +23,22 @@ class InferenceService:
     def __init__(self, model_manager: ModelManager):
         self.model_manager = model_manager
         self.postprocessing = PostprocessingService()
-        
+
         # ImageNet normalization (same as training)
         self.normalize = transforms.Normalize(
-            mean=[0.485, 0.456, 0.406], 
+            mean=[0.485, 0.456, 0.406],
             std=[0.229, 0.224, 0.225]
         )
-        
+
         # Target size for models
         self.target_size = (1024, 1024)
+
+        # Get global parallel executor for enhanced performance
+        self.parallel_executor = get_global_executor()
+
+        logger.info(f"InferenceService initialized with parallel processing: "
+                   f"{self.parallel_executor.executor._max_workers} workers, "
+                   f"CUDA streams: {self.parallel_executor.enable_cuda_streams}")
     
     async def segment_image(self, image_data: bytes, model_name: str, 
                           threshold: float = 0.5, detect_holes: bool = True) -> Dict[str, Any]:
@@ -63,9 +71,9 @@ class InferenceService:
             
             logger.info(f"Model {model_name} loaded in {model_load_time:.3f}s")
             
-            # Run inference
+            # Run inference using parallel executor
             inference_start = time.time()
-            mask = self._run_inference(model, image)
+            mask = self._run_inference(model, image, model_name)
             inference_time = time.time() - inference_start
             
             logger.info(f"Inference completed in {inference_time:.3f}s")
@@ -138,33 +146,38 @@ class InferenceService:
             logger.error(f"Failed to preprocess image: {e}")
             raise ValueError(f"Invalid image data: {str(e)}")
     
-    def _run_inference(self, model: torch.nn.Module, image: torch.Tensor) -> np.ndarray:
-        """Run model inference on preprocessed image"""
+    def _run_inference(self, model: torch.nn.Module, image: torch.Tensor, model_name: str) -> np.ndarray:
+        """Run model inference using parallel executor with CUDA streams"""
         try:
-            model.eval()
-            
-            with torch.no_grad():
-                # Forward pass
-                output = model(image)
-                
-                # Handle different output formats
-                if isinstance(output, tuple):
-                    output = output[0]  # Take first output for models that return tuples
-                
-                # Apply sigmoid activation
-                output = torch.sigmoid(output)
-                
-                # Convert to numpy
-                mask = output.squeeze().cpu().numpy()
-                
-                # Ensure mask is 2D
-                if len(mask.shape) > 2:
-                    mask = mask[0]  # Take first channel if multiple channels
-                
-                return mask
-                
+            # Use parallel executor for enhanced performance and concurrent processing
+            output = self.parallel_executor.execute_inference(
+                model=model,
+                input_tensor=image,
+                model_name=model_name,
+                timeout=30.0,  # 30 second timeout for inference
+                image_size=image.shape[-2:]  # For error reporting
+            )
+
+            # Apply sigmoid activation
+            output = torch.sigmoid(output)
+
+            # Convert to numpy
+            mask = output.squeeze().cpu().numpy()
+
+            # Ensure mask is 2D
+            if len(mask.shape) > 2:
+                mask = mask[0]  # Take first channel if multiple channels
+
+            return mask
+
+        except InferenceResourceError as e:
+            logger.error(f"Resource error during inference: {e}")
+            raise RuntimeError(f"Insufficient resources for inference: {str(e)}")
+        except InferenceError as e:
+            logger.error(f"Inference execution error: {e}")
+            raise RuntimeError(f"Model inference failed: {str(e)}")
         except Exception as e:
-            logger.error(f"Inference failed: {e}")
+            logger.error(f"Unexpected inference error: {e}")
             raise RuntimeError(f"Model inference failed: {str(e)}")
     
     def get_supported_formats(self) -> List[str]:
@@ -194,19 +207,23 @@ class InferenceService:
             return False
     
     def get_inference_stats(self) -> Dict[str, Any]:
-        """Get inference statistics and memory usage"""
+        """Get inference statistics and memory usage including parallel processing metrics"""
         stats = {
             "device": str(self.model_manager.device),
             "loaded_models": len(self.model_manager.loaded_models),
             "target_size": self.target_size,
             "supported_formats": self.get_supported_formats()
         }
-        
+
+        # Add parallel executor metrics
+        executor_metrics = self.parallel_executor.get_metrics()
+        stats["parallel_processing"] = executor_metrics
+
         # Add memory stats if CUDA is available
         if self.model_manager.device.type == 'cuda':
             stats.update({
                 "gpu_memory_allocated": torch.cuda.memory_allocated(),
                 "gpu_memory_reserved": torch.cuda.memory_reserved()
             })
-        
+
         return stats

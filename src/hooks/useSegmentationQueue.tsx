@@ -13,9 +13,16 @@ import type {
   SegmentationCompletedMessage,
   SegmentationFailedMessage,
   WebSocketEventMap,
+  ParallelProcessingStatusMessage,
+  ConcurrentUserMessage,
+  ProcessingStreamUpdateMessage,
+  QueuePositionUpdateMessage,
 } from '@/types/websocket';
+import type { ParallelProcessingStats } from '@/components/project/QueueStatsPanel';
+import type { ProcessingSlot } from '@/components/project/ProcessingSlots';
 
 export type { QueueStats, SegmentationUpdate } from '@/types/websocket';
+export type { ParallelProcessingStats } from '@/components/project/QueueStatsPanel';
 
 export const useSegmentationQueue = (projectId?: string) => {
   // Check if this hook should be disabled to avoid conflicts
@@ -33,6 +40,8 @@ export const useSegmentationQueue = (projectId?: string) => {
   const [isConnected, setIsConnected] = useState(false);
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
   const [lastUpdate, setLastUpdate] = useState<SegmentationUpdate | null>(null);
+  const [parallelStats, setParallelStats] =
+    useState<ParallelProcessingStats | null>(null);
 
   // Store t function in ref to avoid dependency issues
   const tRef = useRef(t);
@@ -367,6 +376,7 @@ export const useSegmentationQueue = (projectId?: string) => {
     isConnected,
     queueStats,
     lastUpdate,
+    parallelStats,
     requestQueueStats,
     joinProject,
     leaveProject,
