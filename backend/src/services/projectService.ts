@@ -65,7 +65,7 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       const cached = await cacheService.get(cacheKey, { ttl: CacheService.TTL_PRESETS.SHORT });
       if (cached) {
         logger.debug('Returning cached project list', 'ProjectService', { userId, cacheKey });
-        return cached;
+        return cached as { projects: ProjectWithMeta[]; pagination: { page: number; limit: number; total: number; totalPages: number } };
       }
       
       // Get user for context

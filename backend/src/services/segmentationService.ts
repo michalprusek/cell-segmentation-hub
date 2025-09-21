@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 // import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
+import { cacheService, CacheService } from './cacheService';
 import { PolygonValidator } from '../utils/polygonValidation';
 import { ImageService } from './imageService';
 import { ThumbnailService } from './thumbnailService';
@@ -191,13 +192,13 @@ export class SegmentationService {
         'segmentation.image_id': request.imageId,
         'segmentation.model': request.model || 'hrnet',
         'segmentation.threshold': request.threshold || 0.5,
-        'segmentation.detect_holes': request.detectHoles || false,
+        'segmentation.detect_holes': request.detectHoles ?? true,
         'segmentation.user_id': request.userId,
         'request.id': requestId,
         'operation.name': 'segmentation_request',
     });
     
-    const { imageId, model = 'hrnet', threshold = 0.5, userId, detectHoles } = request;
+    const { imageId, model = 'hrnet', threshold = 0.5, userId, detectHoles = true } = request;
     const startTime = Date.now();
 
     try {
@@ -825,6 +826,18 @@ export class SegmentationService {
   async getSegmentationResults(imageId: string, userId: string): Promise<SegmentationResponse | null> {
     logger.debug('Getting segmentation results', 'SegmentationService', { imageId, userId });
 
+    // Check cache first
+    const cacheKey = `segmentation:${imageId}:${userId}`;
+    const cached = await cacheService.get<SegmentationResponse>(cacheKey, {
+      namespace: 'segmentation',
+      ttl: CacheService.TTL_PRESETS.ML_RESULTS
+    });
+
+    if (cached) {
+      logger.debug('Returning cached segmentation results', 'SegmentationService', { imageId, userId });
+      return cached;
+    }
+
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
@@ -881,6 +894,12 @@ export class SegmentationService {
       polygonCount: polygons.length,
       model: segmentationData.model,
       imageSize: `${segmentationData.imageWidth}x${segmentationData.imageHeight}`
+    });
+
+    // Cache the result
+    await cacheService.set(cacheKey, result, {
+      namespace: 'segmentation',
+      ttl: CacheService.TTL_PRESETS.ML_RESULTS
     });
 
     return result;
@@ -959,8 +978,12 @@ export class SegmentationService {
         );
       });
 
-      logger.info('Segmentation results updated', 'SegmentationService', { 
-        imageId, 
+      // Invalidate cache after update
+      const cacheKey = `segmentation:${imageId}:${userId}`;
+      await cacheService.delete(cacheKey, { namespace: 'segmentation' });
+
+      logger.info('Segmentation results updated and cache invalidated', 'SegmentationService', {
+        imageId,
         userId,
         polygonCount: polygons.length,
         externalCount: externalPolygons.length,

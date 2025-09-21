@@ -1,8 +1,11 @@
 /**
  * @vitest-environment jsdom
+ *
+ * Comprehensive TDD tests for ProjectDetail queue cancellation functionality
+ * Tests written BEFORE implementation to ensure quality and prevent regressions
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import ProjectDetail from '../ProjectDetail';
@@ -656,6 +659,563 @@ describe('ProjectDetail Cancel Functionality', () => {
       });
 
       expect(apiClient.default.get).not.toHaveBeenCalled();
+    });
+  });
+
+  // TDD REQUIREMENT: Test partial cancellation handling (some succeed, some fail)
+  describe('Partial Cancellation Handling - TDD', () => {
+    it('should handle mixed success/failure results properly', async () => {
+      const user = userEvent.setup();
+
+      // Mock partial success scenario
+      vi.mocked(apiClient.default.delete)
+        .mockResolvedValueOnce({ data: { success: true } }) // queue-1 succeeds
+        .mockRejectedValueOnce({ // queue-2 fails with 409
+          response: {
+            status: 409,
+            data: { message: 'Cannot cancel item in processing status' }
+          }
+        });
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        // Should show both success and error messages
+        expect(toast.success).toHaveBeenCalledWith('Cancelled 1 queue items');
+        expect(toast.error).toHaveBeenCalledWith('Failed to cancel 1 item: Cannot cancel item in processing status');
+      });
+    });
+
+    it('should track cancellation progress for large batches', async () => {
+      const user = userEvent.setup();
+
+      // Generate 50 items to test progress tracking
+      const largeQueue = Array.from({ length: 50 }, (_, i) => ({
+        id: `queue-${i}`,
+        userId: 'user-123',
+        status: 'queued',
+        imageId: `img-${i}`,
+      }));
+
+      vi.mocked(apiClient.default.get).mockResolvedValueOnce({
+        data: largeQueue,
+      });
+
+      // Mock progressive success/failure
+      vi.mocked(apiClient.default.delete).mockImplementation((url) => {
+        const queueId = url.split('/').pop();
+        const index = parseInt(queueId?.split('-')[1] || '0');
+
+        if (index < 30) {
+          return Promise.resolve({ data: { success: true } });
+        } else {
+          return Promise.reject({
+            response: {
+              status: 409,
+              data: { message: 'Cannot cancel processing item' }
+            }
+          });
+        }
+      });
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith('Cancelled 30 queue items');
+        expect(toast.error).toHaveBeenCalledWith('Failed to cancel 20 items: Cannot cancel processing item');
+      });
+    });
+
+    it('should not show duplicate success messages from WebSocket and manual cancellation', async () => {
+      const user = userEvent.setup();
+      let websocketCallback: any;
+
+      // Mock WebSocket subscription
+      const mockWebSocket = {
+        on: vi.fn((event, callback) => {
+          if (event === 'queue:cancelled') {
+            websocketCallback = callback;
+          }
+        }),
+        off: vi.fn(),
+        emit: vi.fn()
+      };
+
+      vi.doMock('@/contexts/exports', () => ({
+        useAuth: () => ({
+          user: { id: 'user-123', email: 'test@example.com' },
+        }),
+        useLanguage: () => ({
+          t: (key: string, _params?: any) => key,
+        }),
+        useModel: () => ({
+          selectedModel: 'unet',
+          confidenceThreshold: 0.5,
+          detectHoles: false,
+        }),
+        useWebSocket: () => ({
+          socket: mockWebSocket,
+          isConnected: true,
+        }),
+      }));
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      // Simulate WebSocket event arriving during manual cancellation
+      act(() => {
+        if (websocketCallback) {
+          websocketCallback({
+            projectId: 'project-123',
+            cancelledCount: 2,
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+
+      await waitFor(() => {
+        // Should only show one success message, not duplicate
+        expect(toast.success).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('should provide error details for 409 Conflict responses', async () => {
+      const user = userEvent.setup();
+
+      // Mock 409 responses with specific error messages
+      vi.mocked(apiClient.default.delete).mockRejectedValue({
+        response: {
+          status: 409,
+          data: { message: 'Cannot cancel item in processing status' }
+        }
+      });
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          'Failed to cancel 2 items: Cannot cancel item in processing status'
+        );
+      });
+    });
+
+    it('should handle 500 server errors with generic message', async () => {
+      const user = userEvent.setup();
+
+      // Mock 500 server error
+      vi.mocked(apiClient.default.delete).mockRejectedValue({
+        response: {
+          status: 500,
+          data: { message: 'Internal server error' }
+        }
+      });
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          'Failed to cancel batch operation'
+        );
+      });
+    });
+  });
+
+  // TDD REQUIREMENT: Test race conditions and concurrent operations
+  describe('Race Condition Handling - TDD', () => {
+    it('should handle concurrent cancellation requests from multiple tabs', async () => {
+      const user = userEvent.setup();
+
+      // Mock delayed response to simulate race condition
+      let resolveFirst: any;
+      let _resolveSecond: any;
+
+      vi.mocked(apiClient.default.get)
+        .mockImplementationOnce(() => new Promise(resolve => { resolveFirst = resolve; }))
+        .mockImplementationOnce(() => new Promise(resolve => { _resolveSecond = resolve; }));
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+
+      // Start first cancellation
+      await user.click(cancelButton);
+
+      // Try to start second cancellation while first is in progress
+      await user.click(cancelButton);
+
+      // Resolve first request
+      act(() => {
+        resolveFirst({ data: [
+          { id: 'queue-1', userId: 'user-123', status: 'queued' }
+        ]});
+      });
+
+      await waitFor(() => {
+        expect(apiClient.default.get).toHaveBeenCalledTimes(1);
+      });
+
+      // Second request should be ignored (no duplicate calls)
+      expect(apiClient.default.get).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle item status changes during cancellation', async () => {
+      const user = userEvent.setup();
+
+      // Mock scenario where item becomes processing during cancellation
+      vi.mocked(apiClient.default.delete)
+        .mockRejectedValueOnce({
+          response: {
+            status: 409,
+            data: { message: 'Item status changed to processing during cancellation' }
+          }
+        })
+        .mockResolvedValueOnce({ data: { success: true } });
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith('Cancelled 1 queue items');
+        expect(toast.error).toHaveBeenCalledWith(
+          'Failed to cancel 1 item: Item status changed to processing during cancellation'
+        );
+      });
+    });
+
+    it('should handle network timeouts gracefully', async () => {
+      const user = userEvent.setup();
+
+      // Mock network timeout
+      vi.mocked(apiClient.default.delete).mockRejectedValue({
+        code: 'ECONNABORTED',
+        message: 'timeout of 30000ms exceeded'
+      });
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalledWith(
+          'Cancellation timed out - please refresh and try again'
+        );
+      });
+    });
+  });
+
+  // TDD REQUIREMENT: Test WebSocket synchronization
+  describe('WebSocket Synchronization - TDD', () => {
+    let mockWebSocket: any;
+
+    beforeEach(() => {
+      mockWebSocket = {
+        on: vi.fn(),
+        off: vi.fn(),
+        emit: vi.fn()
+      };
+
+      vi.doMock('@/contexts/exports', () => ({
+        useAuth: () => ({
+          user: { id: 'user-123', email: 'test@example.com' },
+        }),
+        useLanguage: () => ({
+          t: (key: string, _params?: any) => key,
+        }),
+        useModel: () => ({
+          selectedModel: 'unet',
+          confidenceThreshold: 0.5,
+          detectHoles: false,
+        }),
+        useWebSocket: () => ({
+          socket: mockWebSocket,
+          isConnected: true,
+        }),
+      }));
+    });
+
+    it('should subscribe to queue cancellation events on mount', () => {
+      renderComponent();
+
+      expect(mockWebSocket.on).toHaveBeenCalledWith(
+        'queue:cancelled',
+        expect.any(Function)
+      );
+      expect(mockWebSocket.on).toHaveBeenCalledWith(
+        'segmentationUpdate',
+        expect.any(Function)
+      );
+    });
+
+    it('should handle real-time queue cancellation updates', async () => {
+      renderComponent();
+
+      // Get the WebSocket callback
+      const queueCancelledCallback = mockWebSocket.on.mock.calls.find(
+        call => call[0] === 'queue:cancelled'
+      )?.[1];
+
+      expect(queueCancelledCallback).toBeDefined();
+
+      // Simulate WebSocket event
+      act(() => {
+        queueCancelledCallback({
+          projectId: 'project-123',
+          cancelledItems: ['queue-1', 'queue-2'],
+          timestamp: new Date().toISOString()
+        });
+      });
+
+      // Should update UI without showing manual cancellation toast
+      await waitFor(() => {
+        expect(toast.info).toHaveBeenCalledWith(
+          'Queue items cancelled: 2 items removed'
+        );
+      });
+    });
+
+    it('should handle WebSocket connection loss during cancellation', async () => {
+      const user = userEvent.setup();
+
+      // Start with connected WebSocket
+      vi.doMock('@/contexts/exports', () => ({
+        useAuth: () => ({
+          user: { id: 'user-123', email: 'test@example.com' },
+        }),
+        useLanguage: () => ({
+          t: (key: string, _params?: any) => key,
+        }),
+        useModel: () => ({
+          selectedModel: 'unet',
+          confidenceThreshold: 0.5,
+          detectHoles: false,
+        }),
+        useWebSocket: () => ({
+          socket: mockWebSocket,
+          isConnected: false, // Disconnected during cancellation
+        }),
+      }));
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.warning).toHaveBeenCalledWith(
+          'Real-time updates unavailable - refresh page for latest status'
+        );
+      });
+    });
+
+    it('should emit cancellation events to server via WebSocket', async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(mockWebSocket.emit).toHaveBeenCalledWith(
+          'cancelQueue',
+          {
+            projectId: 'project-123',
+            userId: 'user-123',
+            timestamp: expect.any(String)
+          }
+        );
+      });
+    });
+  });
+
+  // TDD REQUIREMENT: Performance tests for bulk cancellation
+  describe('Performance Tests - TDD', () => {
+    it('should handle cancellation of 1000+ items within 30 seconds', async () => {
+      const user = userEvent.setup();
+      const startTime = Date.now();
+
+      // Generate massive queue
+      const massiveQueue = Array.from({ length: 1500 }, (_, i) => ({
+        id: `queue-${i}`,
+        userId: 'user-123',
+        status: 'queued',
+        imageId: `img-${i}`,
+      }));
+
+      vi.mocked(apiClient.default.get).mockResolvedValueOnce({
+        data: massiveQueue,
+      });
+
+      // Mock fast API responses
+      vi.mocked(apiClient.default.delete).mockResolvedValue({
+        data: { success: true }
+      });
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalledWith('Cancelled 1500 queue items');
+      }, { timeout: 30000 });
+
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+
+      // Should complete within 30 seconds
+      expect(duration).toBeLessThan(30000);
+    });
+
+    it('should show progress indicator for large batch operations', async () => {
+      const user = userEvent.setup();
+
+      // Generate large queue
+      const largeQueue = Array.from({ length: 200 }, (_, i) => ({
+        id: `queue-${i}`,
+        userId: 'user-123',
+        status: 'queued',
+        imageId: `img-${i}`,
+      }));
+
+      vi.mocked(apiClient.default.get).mockResolvedValueOnce({
+        data: largeQueue,
+      });
+
+      // Mock delayed responses to test progress
+      vi.mocked(apiClient.default.delete).mockImplementation(() =>
+        new Promise(resolve => setTimeout(() => resolve({ data: { success: true } }), 50))
+      );
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      // Should show progress indicator
+      expect(screen.getByTestId('cancellation-progress')).toBeInTheDocument();
+      expect(screen.getByText(/cancelling.../i)).toBeInTheDocument();
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalled();
+      }, { timeout: 15000 });
+
+      // Progress indicator should be hidden after completion
+      expect(screen.queryByTestId('cancellation-progress')).not.toBeInTheDocument();
+    });
+
+    it('should batch API calls efficiently for large operations', async () => {
+      const user = userEvent.setup();
+
+      // Generate large queue
+      const largeQueue = Array.from({ length: 100 }, (_, i) => ({
+        id: `queue-${i}`,
+        userId: 'user-123',
+        status: 'queued',
+        imageId: `img-${i}`,
+      }));
+
+      vi.mocked(apiClient.default.get).mockResolvedValueOnce({
+        data: largeQueue,
+      });
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        // Should make exactly 100 API calls (one per item)
+        expect(apiClient.default.delete).toHaveBeenCalledTimes(100);
+      });
+
+      // All calls should be made concurrently, not sequentially
+      const callTimes = vi.mocked(apiClient.default.delete).mock.invocationCallOrder;
+      const firstCall = callTimes[0];
+      const lastCall = callTimes[callTimes.length - 1];
+
+      // Time difference should be minimal (concurrent calls)
+      expect(lastCall - firstCall).toBeLessThan(10);
+    });
+  });
+
+  // TDD REQUIREMENT: State cleanup after cancellation
+  describe('State Cleanup - TDD', () => {
+    it('should properly clean up cancellation state after successful operation', async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalled();
+      });
+
+      // Cancellation button should be hidden after completion
+      expect(screen.queryByText('Cancelling...')).not.toBeInTheDocument();
+
+      // Should be able to start new cancellation immediately
+      const newCancelButton = screen.queryByRole('button', { name: /cancel/i });
+      if (newCancelButton) {
+        expect(newCancelButton).not.toBeDisabled();
+      }
+    });
+
+    it('should clean up state after failed cancellation', async () => {
+      const user = userEvent.setup();
+
+      vi.mocked(apiClient.default.get).mockRejectedValueOnce(
+        new Error('Network error')
+      );
+
+      renderComponent();
+
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.error).toHaveBeenCalled();
+      });
+
+      // State should be cleaned up even after error
+      expect(screen.queryByText('Cancelling...')).not.toBeInTheDocument();
+    });
+
+    it('should reset selection state appropriately after cancellation', async () => {
+      const user = userEvent.setup();
+      renderComponent();
+
+      // Select some images first
+      const selectAllCheckbox = screen.getByTestId('select-all-images');
+      await user.click(selectAllCheckbox);
+
+      // Cancel queue
+      const cancelButton = screen.getByRole('button', { name: /cancel/i });
+      await user.click(cancelButton);
+
+      await waitFor(() => {
+        expect(toast.success).toHaveBeenCalled();
+      });
+
+      // Selection should be maintained (user's choice)
+      expect(selectAllCheckbox).toBeChecked();
     });
   });
 });

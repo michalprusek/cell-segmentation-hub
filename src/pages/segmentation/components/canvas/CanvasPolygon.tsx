@@ -16,7 +16,7 @@ interface CanvasPolygonProps {
   hideVertices?: boolean;
   isHovered?: boolean;
   isUndoRedoInProgress?: boolean;
-  onSelectPolygon?: (id: string) => void;
+  onSelectPolygon?: (id: string | null) => void;
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
@@ -42,7 +42,7 @@ const CanvasPolygon = React.memo(
     onDeleteVertex,
     onDuplicateVertex,
   }: CanvasPolygonProps) => {
-    const { id, points, type = 'external' } = polygon;
+    const { id, points, type } = polygon;
 
     // Calculate bounding box for viewport culling (cached)
     const boundingBox = useMemo(() => calculateBoundingBox(points), [points]);
@@ -129,7 +129,10 @@ const CanvasPolygon = React.memo(
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
-        if (onSelectPolygon) {
+        e.preventDefault(); // Prevent any default behavior
+
+        // Only handle the click if this is the direct target
+        if (e.target === e.currentTarget && onSelectPolygon) {
           onSelectPolygon(id);
         }
       },

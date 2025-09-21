@@ -881,6 +881,7 @@ export default {
     cancelling: 'Cancelando...',
     cancelled: 'Cancelados {{count}} elementos de la cola',
     batchCancelled: 'Cancelados {{count}} elementos de la cola',
+    partialCancellation: 'Cancelados {{cancelled}} elementos. {{processing}} elementos aún se están procesando y no pueden ser cancelados.',
     nothingToCancel: 'Nada que cancelar',
     itemsAlreadyProcessing:
       'Las imágenes ya han sido procesadas o están siendo procesadas',

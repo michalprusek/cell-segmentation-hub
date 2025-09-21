@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Test database
   test-database:
@@ -27,47 +25,61 @@ services:
   test-backend:
     build:
       context: .
-      dockerfile: docker/backend.optimized.Dockerfile
+      dockerfile: docker/backend.test.Dockerfile
     environment:
       NODE_ENV: test
       DATABASE_URL: postgresql://testuser:testpass@test-database:5432/spheroseg_test
       REDIS_URL: redis://test-redis:6379
-      JWT_SECRET: test-secret
+      JWT_ACCESS_SECRET: test-jwt-access-secret-for-testing-only
+      JWT_REFRESH_SECRET: test-jwt-refresh-secret-for-testing-only
+      EMAIL_SERVICE: mock
       EMAIL_FROM: test@spheroseg.local
       EMAIL_TIMEOUT: 1000
+      SKIP_EMAIL_SEND: true
       LOG_LEVEL: error
+      DISABLE_RATE_LIMITING: true
+      ENABLE_TEST_ROUTES: true
     ports:
       - "3002:3001"
     depends_on:
       - test-database
       - test-redis
     volumes:
-      - ./backend:/app
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+      - ./backend/jest.config.js:/app/jest.config.js
+      - ./backend/jest.setup.js:/app/jest.setup.js
+      - ./backend/jest.integration.config.js:/app/jest.integration.config.js
+      - ./backend/tsconfig.json:/app/tsconfig.json
+      - ./backend/package.json:/app/package.json
+      - ./backend/uploads/test:/app/uploads
       - /app/node_modules
-    command: npm run test
+    command: ["sleep", "infinity"]  # Keep container running for tests
 
   # ML service test
   test-ml:
     build:
       context: .
-      dockerfile: docker/ml.optimized.Dockerfile
+      dockerfile: docker/ml.test.Dockerfile
     environment:
       ENVIRONMENT: test
       LOG_LEVEL: ERROR
       MODEL_PATH: /tmp/test_models
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
     ports:
       - "8001:8000"
     volumes:
       - ./backend/segmentation:/app
+      - ./backend/segmentation/tests:/app/tests
       - /tmp/test_models:/tmp/test_models
-    command: python -m pytest tests/ -v --tb=short
+    command: ["sleep", "infinity"]  # Keep container running for tests
 
   # Frontend test service
   test-frontend:
     build:
       context: .
-      dockerfile: docker/frontend.optimized.Dockerfile
-      target: test
+      dockerfile: docker/frontend.test.Dockerfile
     environment:
       NODE_ENV: test
       VITE_API_URL: http://test-backend:3001/api
@@ -76,8 +88,16 @@ services:
     volumes:
       - ./src:/app/src
       - ./public:/app/public
+      - ./vite.config.ts:/app/vite.config.ts
+      - ./vitest.config.ts:/app/vitest.config.ts
+      - ./tailwind.config.ts:/app/tailwind.config.ts
+      - ./postcss.config.js:/app/postcss.config.js
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./tsconfig.app.json:/app/tsconfig.app.json
+      - ./package.json:/app/package.json
+      - ./playwright.config.ts:/app/playwright.config.ts
       - /app/node_modules
-    command: npm run test
+    command: ["sleep", "infinity"]  # Keep container running for tests
 
 networks:
   default:

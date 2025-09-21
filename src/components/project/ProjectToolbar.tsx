@@ -66,27 +66,23 @@ const ProjectToolbar = ({
   const _navigate = useNavigate();
   const { id: projectId } = useParams<{ id: string }>();
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isDownloading, setIsDownloading] = useState(false);
 
   // Use the advanced export hook for cancellation functionality
-  const { cancelExport, currentJob: _currentJob } = useAdvancedExport(
-    projectId || ''
-  );
+  // Get isExporting and isDownloading states from the hook, not local state
+  const {
+    cancelExport,
+    currentJob: _currentJob,
+    isExporting,
+    isDownloading
+  } = useAdvancedExport(projectId || '');
 
   // Check for persisted export state on mount
   useEffect(() => {
     if (projectId) {
       const persistedState = ExportStateManager.getExportState(projectId);
       if (persistedState) {
-        if (
-          persistedState.status === 'exporting' ||
-          persistedState.status === 'processing'
-        ) {
-          setIsExporting(true);
-        } else if (persistedState.status === 'downloading') {
-          setIsDownloading(true);
-        }
+        // State is now managed by the hook, no need to set local state
+        // console.log('Persisted export state found:', persistedState.status);
       }
     }
   }, [projectId]);
@@ -98,19 +94,8 @@ const ProjectToolbar = ({
     const unsubscribe = ExportStateManager.subscribeToChanges(
       projectId,
       state => {
-        if (state) {
-          if (state.status === 'exporting' || state.status === 'processing') {
-            setIsExporting(true);
-            setIsDownloading(false);
-          } else if (state.status === 'downloading') {
-            setIsExporting(false);
-            setIsDownloading(true);
-          }
-        } else {
-          // State was cleared
-          setIsExporting(false);
-          setIsDownloading(false);
-        }
+        // State changes are now handled by the hook
+        // console.log('Export state changed:', state?.status || 'cleared');
       }
     );
 
@@ -123,6 +108,7 @@ const ProjectToolbar = ({
 
   const handleCancelExport = async () => {
     try {
+      // Call the cancel function from the hook which manages all state internally
       await cancelExport();
       toast.success(t('export.cancelled'));
     } catch (error) {
@@ -365,8 +351,6 @@ const ProjectToolbar = ({
           projectName={projectName}
           images={images}
           selectedImageIds={selectedImageIds}
-          onExportingChange={setIsExporting}
-          onDownloadingChange={setIsDownloading}
         />
       )}
     </div>

@@ -350,7 +350,7 @@ export class ImageService {
     // Try cache first
     const cached = await cacheService.get(cacheKey, { ttl: CacheService.TTL_PRESETS.SHORT });
     if (cached) {
-      return cached;
+      return cached as PaginatedImages;
     }
     // Get user email for share checking
     const user = await this.prisma.user.findUnique({
@@ -387,7 +387,6 @@ export class ImageService {
       throw ApiError.forbidden('Access denied to this project');
     }
 
-    const { page, limit, status, sortBy, sortOrder } = options;
     const skip = (page - 1) * limit;
 
     // Build where clause

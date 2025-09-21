@@ -258,6 +258,19 @@ export const useAdvancedExport = (projectId: string, projectName?: string) => {
         return;
       }
 
+      // ✅ CRITICAL FIX: Additional check for persistent cancellation state
+      const persistedState = ExportStateManager.getExportState(projectId);
+      if (!persistedState || persistedState.status === 'cancelled') {
+        logger.info(
+          'Export completion ignored - detected cancellation in persistence',
+          {
+            jobId: data.jobId,
+            persistedStatus: persistedState?.status
+          }
+        );
+        return;
+      }
+
       // ✅ CRITICAL FIX: Use synchronous state check with ref to prevent race conditions
       // Create a synchronous cancellation check that happens atomically
       let shouldProceed = true;

@@ -267,6 +267,14 @@ export class ExportService {
     return jobId;
   }
 
+  /**
+   * Helper method to check if a job is cancelled by re-fetching from the map
+   */
+  private isJobCancelled(jobId: string): boolean {
+    const job = this.exportJobs.get(jobId);
+    return job?.status === 'cancelled';
+  }
+
   private async processExportJob(
     jobId: string,
     projectId: string,
@@ -278,7 +286,7 @@ export class ExportService {
 
     try {
       // ✅ CRITICAL: Check cancellation before starting processing
-      if (job.status === 'cancelled') {
+      if (this.isJobCancelled(jobId)) {
         await this.cleanupCancelledJob(jobId);
         return;
       }
@@ -293,7 +301,7 @@ export class ExportService {
       }
 
       // ✅ CRITICAL: Check cancellation after access check
-      if (job.status === 'cancelled') {
+      if (this.isJobCancelled(jobId)) {
         await this.cleanupCancelledJob(jobId);
         return;
       }
@@ -357,7 +365,7 @@ export class ExportService {
       await this.createFolderStructure(exportDir);
 
       // ✅ CRITICAL: Check cancellation after folder creation
-      if (job.status === 'cancelled') {
+      if (this.isJobCancelled(jobId)) {
         await this.cleanupCancelledJob(jobId);
         return;
       }
@@ -446,13 +454,13 @@ export class ExportService {
       await Promise.all(exportTasks);
 
       // ✅ CRITICAL: Check cancellation after parallel tasks complete
-      if (job.status === 'cancelled') {
+      if (this.isJobCancelled(jobId)) {
         await this.cleanupCancelledJob(jobId);
         return;
       }
 
       // ✅ Check cancellation before ZIP creation
-      if (job.status === 'cancelled') {
+      if (this.isJobCancelled(jobId)) {
         await this.cleanupCancelledJob(jobId);
         return;
       }
@@ -466,7 +474,7 @@ export class ExportService {
       );
 
       // ✅ CRITICAL: Final cancellation check before completion
-      if (job.status === 'cancelled') {
+      if (this.isJobCancelled(jobId)) {
         await this.cleanupCancelledJob(jobId);
         return;
       }

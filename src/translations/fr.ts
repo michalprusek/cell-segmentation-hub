@@ -884,6 +884,7 @@ export default {
     cancelling: 'Annulation...',
     cancelled: '{{count}} éléments de file annulés',
     batchCancelled: '{{count}} éléments de file annulés',
+    partialCancellation: '{{cancelled}} éléments annulés. {{processing}} éléments sont encore en cours de traitement et ne peuvent pas être annulés.',
     nothingToCancel: 'Rien à annuler',
     itemsAlreadyProcessing:
       'Les images ont déjà été traitées ou sont en cours de traitement',

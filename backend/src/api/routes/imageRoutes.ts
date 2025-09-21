@@ -47,6 +47,16 @@ router.delete(
 );
 
 /**
+ * Get storage URLs for multiple images in batch
+ * POST /images/batch/urls
+ * Reduces API calls by getting all URLs in one request
+ */
+router.post(
+  '/batch/urls',
+  imageController.getBatchStorageUrls
+);
+
+/**
  * Get project images with optimized thumbnails
  * GET /projects/:id/images-with-thumbnails?lod=low&page=1&limit=50
  */

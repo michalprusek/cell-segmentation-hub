@@ -57,10 +57,14 @@ services:
       - ./public:/app/public
       - ./index.html:/app/index.html
       - ./vite.config.ts:/app/vite.config.ts
+      - ./vitest.config.ts:/app/vitest.config.ts
       - ./tailwind.config.ts:/app/tailwind.config.ts
       - ./postcss.config.js:/app/postcss.config.js
       - ./tsconfig.json:/app/tsconfig.json
       - ./tsconfig.app.json:/app/tsconfig.app.json
+      - ./package.json:/app/package.json
+      # Test configuration files
+      - ./playwright.config.ts:/app/playwright.config.ts
     depends_on:
       - backend
     network_mode: host
@@ -129,6 +133,12 @@ services:
       - ./backend/prisma:/app/prisma
       - ./backend/uploads:/app/uploads
       - backend-db:/app/data
+      # Test directory mounts for development
+      - ./backend/jest.config.js:/app/jest.config.js
+      - ./backend/jest.setup.js:/app/jest.setup.js
+      - ./backend/jest.integration.config.js:/app/jest.integration.config.js
+      - ./backend/tsconfig.json:/app/tsconfig.json
+      - ./backend/package.json:/app/package.json
     depends_on:
       postgres:
         condition: service_healthy
@@ -155,6 +165,8 @@ services:
     volumes:
       - ./backend/segmentation:/app
       - ./backend/segmentation/weights:/app/weights
+      # Mount test directories for ML service
+      - ./backend/segmentation/tests:/app/tests
     environment:
       - PYTHONUNBUFFERED=1
       - PYTHONDONTWRITEBYTECODE=1

@@ -202,7 +202,7 @@ describe('LanguageSwitcher', () => {
     // Change the mock language
     mockLanguage = 'cs';
 
-    const user = userEvent.setup();
+    const _user = userEvent.setup();
     render(<LanguageSwitcher />);
 
     // The component should still render correctly with different current language

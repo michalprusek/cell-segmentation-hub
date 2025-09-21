@@ -11,7 +11,6 @@ import {
   Share,
   CheckCircle,
   AlertCircle,
-  ExternalLink,
   LogIn,
   UserPlus,
   Loader2,
@@ -36,7 +35,7 @@ function ShareAcceptPage() {
   const [shareData, setShareData] = useState<ShareValidationData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
-  const [autoAccepting, setAutoAccepting] = useState(false);
+  const [_autoAccepting, _setAutoAccepting] = useState(false);
 
   const validateToken = useCallback(async () => {
     if (!token) {

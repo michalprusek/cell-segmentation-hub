@@ -202,7 +202,7 @@ export const createMockToast = () => {
       toastHistory.push({ type: 'info', message, options });
     }),
 
-    dismiss: vi.fn().mockImplementation((id?: string) => {
+    dismiss: vi.fn().mockImplementation((_id?: string) => {
       // Remove toast with specific ID or all toasts
     }),
 
@@ -418,7 +418,7 @@ export class ComponentTestUtils {
       mockContexts?: any;
     } = {}
   ) {
-    const { initialRoute = '/', mockContexts = createMockContexts() } = options;
+    const { initialRoute: _initialRoute = '/', mockContexts: _mockContexts = createMockContexts() } = options;
 
     return ({ children }: { children: React.ReactNode }) => {
       // This would typically wrap with Router, context providers, etc.
@@ -593,7 +593,7 @@ export class FrontendPerformanceUtils {
         duration: endTime - startTime,
         success: true,
       };
-    } catch (error) {
+    } catch (_error) {
       const endTime = performance.now();
 
       return {

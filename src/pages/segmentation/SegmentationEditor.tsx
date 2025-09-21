@@ -301,7 +301,7 @@ const SegmentationEditor = () => {
           return {
             id: segPoly.id,
             points: validPoints,
-            type: segPoly.type,
+            type: segPoly.type || 'external', // Ensure type is always defined
             class: segPoly.class,
             confidence: segPoly.confidence,
             area: segPoly.area,
@@ -487,6 +487,11 @@ const SegmentationEditor = () => {
       // Don't allow polygon selection changes when in Slice mode
       // The slice mode handles its own polygon selection logic
       if (editor.editMode === EditMode.Slice) {
+        return;
+      }
+
+      // Prevent redundant selection updates
+      if (editor.selectedPolygonId === polygonId) {
         return;
       }
 
@@ -1156,7 +1161,13 @@ const SegmentationEditor = () => {
                           .filter(
                             polygon =>
                               polygon.points && polygon.points.length >= 3
-                          );
+                          )
+                          // Sort polygons so selected one is rendered last (on top)
+                          .sort((a, b) => {
+                            if (a.id === editor.selectedPolygonId) return 1;
+                            if (b.id === editor.selectedPolygonId) return -1;
+                            return 0;
+                          });
 
                         // Render polygons
                         return (
@@ -1180,9 +1191,7 @@ const SegmentationEditor = () => {
                                 isUndoRedoInProgress={
                                   editor.isUndoRedoInProgress
                                 }
-                                onSelectPolygon={() =>
-                                  handlePolygonSelection(polygon.id)
-                                }
+                                onSelectPolygon={handlePolygonSelection}
                                 onDeletePolygon={
                                   handleDeletePolygonFromContextMenu
                                 }

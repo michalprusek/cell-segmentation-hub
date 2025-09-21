@@ -3,6 +3,7 @@ import { QueueService } from '../../services/queueService';
 import { SegmentationService } from '../../services/segmentationService';
 import { ImageService } from '../../services/imageService';
 import { WebSocketService } from '../../services/websocketService';
+import { CancellationResult } from '../../services/cancellationService';
 import { logger } from '../../utils/logger';
 import { ResponseHelper } from '../../utils/response';
 import { prisma } from '../../db';
@@ -60,7 +61,7 @@ function mapQueueEntryToResponse(entry: Record<string, unknown>): QueueEntryResp
     userId: entry.userId as string,
     model: entry.model as SegmentationModel,
     threshold: entry.threshold as number,
-    detectHoles: (entry.detectHoles as boolean) ?? false,
+    detectHoles: (entry.detectHoles as boolean) ?? true,
     priority: entry.priority as QueuePriority,
     status: entry.status as QueueStatus,
     createdAt: entry.createdAt as Date || new Date(),
@@ -414,54 +415,56 @@ class QueueController {
         return;
       }
 
-      // Get queue item to get imageId and projectId for WebSocket updates
-      const queueItem = await prisma.segmentationQueue.findFirst({
-        where: {
-          id: queueId,
-          userId: userId
-        }
-      });
-
-      if (!queueItem) {
-        ResponseHelper.notFound(res, 'Položka fronty nenalezena');
-        return;
-      }
-
       if (!queueId) {
         ResponseHelper.badRequest(res, 'Queue ID is required');
         return;
       }
 
-      // Pass the queue item to service to avoid race condition
-      await this.queueService.removeFromQueueWithItem(queueId, userId, queueItem);
+      // Use the new cancellation service with proper error handling
+      const result: CancellationResult = await this.queueService.removeFromQueue(queueId, userId);
 
-      // Emit WebSocket updates only if removal was successful
-      const websocketService = WebSocketService.getInstance();
-      const segmentationUpdate: SegmentationUpdateData = {
-        imageId: queueItem.imageId,
-        projectId: queueItem.projectId,
-        status: 'no_segmentation'
-      };
-      websocketService.emitSegmentationUpdate(userId, segmentationUpdate);
+      // Handle different result types with appropriate HTTP status codes
+      if (!result.success) {
+        switch (result.errorType) {
+          case 'NOT_FOUND':
+            ResponseHelper.notFound(res, result.message);
+            return;
+          
+          case 'CANNOT_CANCEL':
+            // Return 409 Conflict for business logic violations (not 500)
+            res.status(409).json({
+              success: false,
+              message: result.message,
+              error: 'CANNOT_CANCEL_PROCESSING_ITEM'
+            });
+            return;
+          
+          case 'INTERNAL_ERROR':
+          default:
+            ResponseHelper.internalError(res, new Error(result.message), result.message);
+            return;
+        }
+      }
 
-      // Emit queue stats update
-      const stats = await this.queueService.getQueueStats(queueItem.projectId, userId);
-      const queueStatsUpdate: QueueStatsData = {
-        projectId: queueItem.projectId,
-        ...stats
-      };
-      websocketService.emitQueueStatsUpdate(queueItem.projectId, queueStatsUpdate);
+      // Success case - the cancellationService already handles WebSocket updates
+      ResponseHelper.success(res, { 
+        cancelledCount: result.cancelledCount || 1 
+      }, result.message);
 
-      ResponseHelper.success(res, undefined, 'Položka odebrána z fronty');
+      logger.info('Queue item removed successfully', 'QueueController', {
+        queueId,
+        userId,
+        cancelledCount: result.cancelledCount
+      });
 
     } catch (error) {
-      logger.error('Failed to remove item from queue', error instanceof Error ? error : undefined, 'QueueController', {
+      logger.error('Unexpected error in removeFromQueue controller', error instanceof Error ? error : undefined, 'QueueController', {
         queueId: req.params.queueId,
         userId: req.user?.id
       });
       
-      const errorMessage = error instanceof Error ? error.message : 'Chyba při odebírání z fronty';
-      ResponseHelper.internalError(res, error as Error, errorMessage);
+      // Return 500 only for truly unexpected errors
+      ResponseHelper.internalError(res, error as Error, 'Unexpected error during cancellation');
     }
   };
 

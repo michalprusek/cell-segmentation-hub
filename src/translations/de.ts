@@ -892,6 +892,7 @@ export default {
     cancelling: 'Abbrechen...',
     cancelled: '{{count}} Warteschlangen-Einträge abgebrochen',
     batchCancelled: '{{count}} Warteschlangen-Einträge abgebrochen',
+    partialCancellation: '{{cancelled}} Einträge abgebrochen. {{processing}} Einträge werden noch verarbeitet und können nicht abgebrochen werden.',
     nothingToCancel: 'Nichts zum Abbrechen',
     itemsAlreadyProcessing:
       'Bilder wurden bereits verarbeitet oder werden verarbeitet',

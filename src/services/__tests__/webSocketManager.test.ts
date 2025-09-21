@@ -411,7 +411,7 @@ describe('WebSocketManager', () => {
       expect(mockSocket.emit).not.toHaveBeenCalled();
 
       // Should emit after connection
-      const connectPromise = wsManager.connect(mockUser);
+      const _connectPromise = wsManager.connect(mockUser);
       mockSocket.connected = true;
       const connectHandler = mockSocket.on.mock.calls.find(
         call => call[0] === 'connect'

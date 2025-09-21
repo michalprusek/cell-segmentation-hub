@@ -221,7 +221,7 @@ export class ReactHookRaceConditionTester<TProps, TResult> {
 
     const startTime = Date.now();
 
-    for (const { delayMs, action, description } of actions) {
+    for (const { delayMs, action, description: _description } of actions) {
       const elapsed = Date.now() - startTime;
       const waitTime = Math.max(0, delayMs - elapsed);
 
@@ -559,7 +559,7 @@ export class AsyncStateTestUtils {
   ): Promise<T[]> {
     const results: T[] = [];
 
-    for (const { action, description, thinkingTimeMs = 100 } of interactions) {
+    for (const { action, description: _description, thinkingTimeMs = 100 } of interactions) {
       // Simulate user thinking time
       if (thinkingTimeMs > 0) {
         await new Promise(resolve => setTimeout(resolve, thinkingTimeMs));

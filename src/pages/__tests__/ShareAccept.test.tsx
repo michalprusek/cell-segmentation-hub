@@ -29,7 +29,7 @@ vi.mock('react-router-dom', async () => {
 
 describe('ShareAccept - Shared Project Access', () => {
   const mockT = vi.fn((key: string) => key);
-  const mockNavigate = vi.fn();
+  const _mockNavigate = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();

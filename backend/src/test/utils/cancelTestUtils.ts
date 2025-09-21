@@ -227,7 +227,7 @@ export class CancelTestDataGenerator {
         createdAt: new Date(Date.now() - (totalItems - i) * 1000), // Spread over time
         updatedAt: new Date(Date.now() - (totalItems - i) * 1000),
         startedAt: status === 'processing' ? new Date() : undefined,
-        completedAt: status === 'completed' || status === 'cancelled' ? new Date() : undefined,
+        completedAt: status === 'completed' ? new Date() : undefined,
         retryCount: status === 'failed' ? Math.floor(Math.random() * 3) : 0
       });
     }

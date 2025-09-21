@@ -28,14 +28,24 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    include: ['xlsx'],
+    include: ['xlsx', 'react-window'],
+    exclude: ['recharts'], // Let recharts be lazy loaded
   },
   build: {
     commonjsOptions: {
       include: [/xlsx/, /node_modules/],
     },
     chunkSizeWarningLimit: 500, // Warn for chunks over 500KB
+    sourcemap: false, // Disable sourcemaps in production for smaller bundles
+    minify: 'terser', // Use terser for better minification
+    terserOptions: {
+      compress: {
+        drop_console: true, // Remove console.log in production
+        drop_debugger: true,
+      },
+    },
     rollupOptions: {
+      treeshake: true, // Enable tree shaking
       output: {
         // Fix for dynamic imports in production - use consistent naming
         chunkFileNames: 'assets/[name]-[hash].js',
@@ -68,8 +78,11 @@ export default defineConfig({
             'tailwind-merge',
           ],
 
-          // Heavy chart libraries
+          // Heavy chart libraries (lazy loaded)
           'chart-vendor': ['recharts'],
+
+          // Virtual scrolling for performance
+          'virtual-vendor': ['react-window'],
 
           // Form handling
           'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
@@ -86,8 +99,11 @@ export default defineConfig({
           // Date and image utilities
           'utils-vendor': ['date-fns', 'uuid', 'socket.io-client'],
 
-          // Image processing
-          'image-vendor': ['react-easy-crop'],
+          // Image processing and TIFF handling
+          'image-vendor': ['react-easy-crop', 'tiff.js', 'utif2'],
+
+          // Internationalization
+          'i18n-vendor': ['i18next', 'react-i18next'],
 
           // Other utilities
           'misc-vendor': ['cmdk', 'sonner', 'vaul', 'input-otp', 'next-themes'],

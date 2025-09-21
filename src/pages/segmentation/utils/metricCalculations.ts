@@ -6,7 +6,7 @@ import {
 import { logger } from '@/lib/logger';
 
 // Type for a 2D vector
-interface Vector2D {
+interface _Vector2D {
   x: number;
   y: number;
 }

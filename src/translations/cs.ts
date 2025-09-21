@@ -882,6 +882,7 @@ export default {
     cancelling: 'Ruším...',
     cancelled: 'Zrušeno {{count}} položek fronty',
     batchCancelled: 'Zrušeno {{count}} položek fronty',
+    partialCancellation: 'Zrušeno {{cancelled}} položek. {{processing}} položek stále zpracováváno a nemohou být zrušeny.',
     nothingToCancel: 'Není co zrušit',
     itemsAlreadyProcessing:
       'Obrázky již byly zpracovány nebo jsou ve zpracování',

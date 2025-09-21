@@ -1,34 +1,46 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios, { type AxiosResponse, type AxiosError } from 'axios';
 
+// Create a comprehensive mock for axios instance with all required methods
+const createMockAxiosInstance = () => ({
+  post: vi.fn(),
+  get: vi.fn(),
+  put: vi.fn(),
+  delete: vi.fn(),
+  request: vi.fn(),
+  interceptors: {
+    request: {
+      use: vi.fn(),
+      eject: vi.fn(),
+      clear: vi.fn(),
+    },
+    response: {
+      use: vi.fn(),
+      eject: vi.fn(),
+      clear: vi.fn(),
+    },
+  },
+  defaults: {
+    headers: {
+      common: {},
+      delete: {},
+      get: {},
+      head: {},
+      post: {},
+      put: {},
+      patch: {},
+    },
+    timeout: 120000,
+    baseURL: 'http://localhost:3001/api',
+  },
+});
+
 // Mock axios completely
 vi.mock('axios', () => ({
   default: {
     create: vi.fn(),
   },
 }));
-const mockAxios = axios as any;
-
-// Mock localStorage and sessionStorage
-const localStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-};
-const sessionStorageMock = {
-  getItem: vi.fn(),
-  setItem: vi.fn(),
-  removeItem: vi.fn(),
-  clear: vi.fn(),
-};
-
-Object.defineProperty(window, 'localStorage', {
-  value: localStorageMock,
-});
-Object.defineProperty(window, 'sessionStorage', {
-  value: sessionStorageMock,
-});
 
 // Mock config
 vi.mock('../config', () => ({
@@ -46,39 +58,73 @@ vi.mock('../logger', () => ({
   },
 }));
 
+// Create global mock storage objects that will be used throughout the tests
+const globalLocalStorageMock = {
+  getItem: vi.fn(() => null),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+
+const globalSessionStorageMock = {
+  getItem: vi.fn(() => null),
+  setItem: vi.fn(),
+  removeItem: vi.fn(),
+  clear: vi.fn(),
+};
+
+// Mock the browser APIs that the API client uses directly
+Object.defineProperty(globalThis, 'localStorage', {
+  value: globalLocalStorageMock,
+  writable: true,
+  configurable: true,
+});
+
+Object.defineProperty(globalThis, 'sessionStorage', {
+  value: globalSessionStorageMock,
+  writable: true,
+  configurable: true,
+});
+
 describe('API Client - Advanced Features', () => {
-  let mockAxiosInstance: any;
+  let mockAxiosInstance: ReturnType<typeof createMockAxiosInstance>;
   let apiClient: any;
+  let localStorageMock: any;
+  let sessionStorageMock: any;
+  let mockAxios: any;
 
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
 
-    mockAxiosInstance = {
-      post: vi.fn(),
-      get: vi.fn(),
-      put: vi.fn(),
-      delete: vi.fn(),
-      interceptors: {
-        request: { use: vi.fn() },
-        response: { use: vi.fn() },
-      },
-    };
+    // Create fresh mocks for each test
+    mockAxiosInstance = createMockAxiosInstance();
+    mockAxios = axios as any;
 
-    if (mockAxios && mockAxios.create) {
-      mockAxios.create.mockReturnValue(mockAxiosInstance);
-    }
+    // Reset the global storage mocks to default behavior
+    globalLocalStorageMock.getItem.mockReturnValue(null);
+    globalLocalStorageMock.setItem.mockClear();
+    globalLocalStorageMock.removeItem.mockClear();
+    globalLocalStorageMock.clear.mockClear();
 
-    // Reset storage mocks
-    localStorageMock.getItem.mockReturnValue(null);
-    sessionStorageMock.getItem.mockReturnValue(null);
+    globalSessionStorageMock.getItem.mockReturnValue(null);
+    globalSessionStorageMock.setItem.mockClear();
+    globalSessionStorageMock.removeItem.mockClear();
+    globalSessionStorageMock.clear.mockClear();
+
+    // For easier access in tests, assign to these variables
+    localStorageMock = globalLocalStorageMock;
+    sessionStorageMock = globalSessionStorageMock;
+
+    // Set up axios mock
+    mockAxios.create.mockReturnValue(mockAxiosInstance);
 
     // Import fresh API client
     vi.resetModules();
     const { apiClient: freshApiClient } = await import('../api');
     apiClient = freshApiClient;
 
-    // Mock the internal instance property directly
+    // Ensure the mock instance is properly connected
     if (apiClient) {
       (apiClient as any).instance = mockAxiosInstance;
     }
@@ -91,7 +137,8 @@ describe('API Client - Advanced Features', () => {
 
   describe('Token Management and Storage', () => {
     test('should load tokens from localStorage on initialization', async () => {
-      localStorageMock.getItem.mockImplementation((key: string) => {
+      // Set up localStorage mock before importing API client
+      globalLocalStorageMock.getItem.mockImplementation((key: string) => {
         if (key === 'accessToken') return 'stored-access-token';
         if (key === 'refreshToken') return 'stored-refresh-token';
         return null;
@@ -99,41 +146,47 @@ describe('API Client - Advanced Features', () => {
 
       // Re-import to trigger constructor with mocked localStorage
       vi.resetModules();
+      mockAxios.create.mockReturnValue(mockAxiosInstance);
       const { apiClient: newApiClient } = await import('../api');
+      (newApiClient as any).instance = mockAxiosInstance;
 
       expect(newApiClient.isAuthenticated()).toBe(true);
       expect(newApiClient.getAccessToken()).toBe('stored-access-token');
     });
 
     test('should prioritize localStorage over sessionStorage', async () => {
-      localStorageMock.getItem.mockImplementation((key: string) => {
+      globalLocalStorageMock.getItem.mockImplementation((key: string) => {
         if (key === 'accessToken') return 'local-token';
         if (key === 'refreshToken') return 'local-refresh';
         return null;
       });
 
-      sessionStorageMock.getItem.mockImplementation((key: string) => {
+      globalSessionStorageMock.getItem.mockImplementation((key: string) => {
         if (key === 'accessToken') return 'session-token';
         if (key === 'refreshToken') return 'session-refresh';
         return null;
       });
 
       vi.resetModules();
+      mockAxios.create.mockReturnValue(mockAxiosInstance);
       const { apiClient: newApiClient } = await import('../api');
+      (newApiClient as any).instance = mockAxiosInstance;
 
       expect(newApiClient.getAccessToken()).toBe('local-token');
     });
 
     test('should fallback to sessionStorage when localStorage is empty', async () => {
-      localStorageMock.getItem.mockReturnValue(null);
-      sessionStorageMock.getItem.mockImplementation((key: string) => {
+      globalLocalStorageMock.getItem.mockReturnValue(null);
+      globalSessionStorageMock.getItem.mockImplementation((key: string) => {
         if (key === 'accessToken') return 'session-token';
         if (key === 'refreshToken') return 'session-refresh';
         return null;
       });
 
       vi.resetModules();
+      mockAxios.create.mockReturnValue(mockAxiosInstance);
       const { apiClient: newApiClient } = await import('../api');
+      (newApiClient as any).instance = mockAxiosInstance;
 
       expect(newApiClient.getAccessToken()).toBe('session-token');
     });
@@ -144,12 +197,10 @@ describe('API Client - Advanced Features', () => {
 
       await apiClient.logout();
 
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-      expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
-      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith(
-        'refreshToken'
-      );
+      expect(globalLocalStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
+      expect(globalLocalStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
+      expect(globalSessionStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
+      expect(globalSessionStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
     });
   });
 
@@ -181,13 +232,24 @@ describe('API Client - Advanced Features', () => {
       };
 
       mockAxiosInstance.post.mockResolvedValueOnce(refreshResponse);
-      mockAxiosInstance
-        .mockImplementationOnce(() => Promise.reject(unauthorizedError))
-        .mockImplementationOnce(() => Promise.resolve(retryResponse));
 
-      // Simulate interceptor behavior
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+      // Mock the axios instance call for retry - first call fails, second succeeds
+      const instanceCallMock = vi.fn()
+        .mockRejectedValueOnce(unauthorizedError)
+        .mockResolvedValueOnce(retryResponse);
+
+      // Replace the instance call function
+      mockAxiosInstance.request = instanceCallMock;
+      Object.assign(mockAxiosInstance, instanceCallMock);
+
+      // Get the interceptor from actual registration
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+      expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+      const responseInterceptor = responseInterceptorCalls[0][1];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       const result = await responseInterceptor(unauthorizedError);
 
@@ -206,8 +268,14 @@ describe('API Client - Advanced Features', () => {
         config: loginRequest,
       };
 
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+      // Get the response interceptor
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+      expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+      const responseInterceptor = responseInterceptorCalls[0][1];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       await expect(responseInterceptor(unauthorizedError)).rejects.toEqual(
         unauthorizedError
@@ -234,8 +302,14 @@ describe('API Client - Advanced Features', () => {
       // Mock failed refresh
       mockAxiosInstance.post.mockRejectedValue(new Error('Refresh failed'));
 
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+      // Get the response interceptor
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+      expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+      const responseInterceptor = responseInterceptorCalls[0][1];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       await expect(responseInterceptor(unauthorizedError)).rejects.toThrow(
         'Refresh failed'
@@ -253,8 +327,14 @@ describe('API Client - Advanced Features', () => {
         config: requestWithRetry,
       };
 
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+      // Get the response interceptor
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+      expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+      const responseInterceptor = responseInterceptorCalls[0][1];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       await expect(responseInterceptor(unauthorizedError)).rejects.toEqual(
         unauthorizedError
@@ -276,12 +356,22 @@ describe('API Client - Advanced Features', () => {
       // Mock successful retry after backoff
       const successResponse = { data: { result: 'success' } };
 
-      mockAxiosInstance
-        .mockImplementationOnce(() => Promise.reject(rateLimitError))
-        .mockImplementationOnce(() => Promise.resolve(successResponse));
+      // Mock the axios instance call for retry
+      const instanceCallMock = vi.fn()
+        .mockRejectedValueOnce(rateLimitError)
+        .mockResolvedValueOnce(successResponse);
 
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+      mockAxiosInstance.request = instanceCallMock;
+      Object.assign(mockAxiosInstance, instanceCallMock);
+
+      // Get the response interceptor
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+      expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+      const responseInterceptor = responseInterceptorCalls[0][1];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       // Start the retry process
       const retryPromise = responseInterceptor(rateLimitError);
@@ -302,12 +392,18 @@ describe('API Client - Advanced Features', () => {
       };
 
       // Always return rate limit error
-      mockAxiosInstance.mockImplementation(() =>
-        Promise.reject(rateLimitError)
-      );
+      const instanceCallMock = vi.fn(() => Promise.reject(rateLimitError));
+      mockAxiosInstance.request = instanceCallMock;
+      Object.assign(mockAxiosInstance, instanceCallMock);
 
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+      // Get the response interceptor
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+      expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+      const responseInterceptor = responseInterceptorCalls[0][1];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       const retryPromise = responseInterceptor(rateLimitError);
 
@@ -327,15 +423,22 @@ describe('API Client - Advanced Features', () => {
         config: originalRequest,
       };
 
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+      // Get the response interceptor
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+      expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+      const responseInterceptor = responseInterceptorCalls[0][1];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       await expect(responseInterceptor(serverError)).rejects.toEqual(
         serverError
       );
 
-      // Should not retry
-      expect(mockAxiosInstance).toHaveBeenCalledTimes(0);
+      // Should not have called any HTTP methods for retry
+      expect(mockAxiosInstance.post).not.toHaveBeenCalled();
+      expect(mockAxiosInstance.get).not.toHaveBeenCalled();
     });
 
     test('should apply jitter to backoff delays', async () => {
@@ -353,12 +456,21 @@ describe('API Client - Advanced Features', () => {
       };
 
       const successResponse = { data: { result: 'success' } };
-      mockAxiosInstance
-        .mockImplementationOnce(() => Promise.reject(rateLimitError))
-        .mockImplementationOnce(() => Promise.resolve(successResponse));
+      const instanceCallMock = vi.fn()
+        .mockRejectedValueOnce(rateLimitError)
+        .mockResolvedValueOnce(successResponse);
 
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+      mockAxiosInstance.request = instanceCallMock;
+      Object.assign(mockAxiosInstance, instanceCallMock);
+
+      // Get the response interceptor
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+      expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+      const responseInterceptor = responseInterceptorCalls[0][1];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       const retryPromise = responseInterceptor(rateLimitError);
 
@@ -378,8 +490,14 @@ describe('API Client - Advanced Features', () => {
       (apiClient as any).accessToken = 'test-access-token';
 
       const requestConfig = { headers: {} };
-      const requestInterceptor =
-        mockAxiosInstance.interceptors.request.use.mock.calls[0][0];
+
+      // Get the request interceptor
+      expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalled();
+      const requestInterceptorCalls = mockAxiosInstance.interceptors.request.use.mock.calls;
+      expect(requestInterceptorCalls.length).toBeGreaterThan(0);
+
+      const requestInterceptor = requestInterceptorCalls[0][0];
+      expect(requestInterceptor).toBeTypeOf('function');
 
       const modifiedConfig = requestInterceptor(requestConfig);
 
@@ -392,8 +510,14 @@ describe('API Client - Advanced Features', () => {
       (apiClient as any).accessToken = null;
 
       const requestConfig = { headers: {} };
-      const requestInterceptor =
-        mockAxiosInstance.interceptors.request.use.mock.calls[0][0];
+
+      // Get the request interceptor
+      expect(mockAxiosInstance.interceptors.request.use).toHaveBeenCalled();
+      const requestInterceptorCalls = mockAxiosInstance.interceptors.request.use.mock.calls;
+      expect(requestInterceptorCalls.length).toBeGreaterThan(0);
+
+      const requestInterceptor = requestInterceptorCalls[0][0];
+      expect(requestInterceptor).toBeTypeOf('function');
 
       const modifiedConfig = requestInterceptor(requestConfig);
 
@@ -402,8 +526,14 @@ describe('API Client - Advanced Features', () => {
 
     test('should pass through successful responses', () => {
       const response = { data: { success: true }, status: 200 };
-      const responseInterceptor =
-        mockAxiosInstance.interceptors.response.use.mock.calls[0][0];
+
+      // Get the response interceptor
+      expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+      const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+      expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+
+      const responseInterceptor = responseInterceptorCalls[0][0];
+      expect(responseInterceptor).toBeTypeOf('function');
 
       const result = responseInterceptor(response);
 
@@ -921,7 +1051,7 @@ describe('API Client - Advanced Features', () => {
         expect.any(String),
         expect.any(FormData),
         expect.objectContaining({
-          timeout: 60000, // 1 minute
+          timeout: 300000, // 5 minutes (updated from the API code)
         })
       );
     });
@@ -931,7 +1061,6 @@ describe('API Client - Advanced Features', () => {
     test('should handle extremely malformed responses', async () => {
       // Skip test if apiClient or method is not available
       if (!apiClient || typeof apiClient.getProjects !== 'function') {
-        //         console.warn('Skipping test: apiClient.getProjects not available');
         return;
       }
 
@@ -977,7 +1106,6 @@ describe('API Client - Advanced Features', () => {
         !apiClient ||
         !mockAxiosInstance.interceptors.response.use.mock?.calls?.length
       ) {
-        //         console.warn('Skipping test: Response interceptor not properly mocked');
         return;
       }
 
@@ -997,8 +1125,14 @@ describe('API Client - Advanced Features', () => {
       mockAxiosInstance.post.mockResolvedValueOnce(refreshResponse);
 
       try {
-        const responseInterceptor =
-          mockAxiosInstance.interceptors.response.use.mock.calls[0][1];
+        // Get the response interceptor
+        expect(mockAxiosInstance.interceptors.response.use).toHaveBeenCalled();
+        const responseInterceptorCalls = mockAxiosInstance.interceptors.response.use.mock.calls;
+        expect(responseInterceptorCalls.length).toBeGreaterThan(0);
+        expect(responseInterceptorCalls[0].length).toBeGreaterThan(1);
+
+        const responseInterceptor = responseInterceptorCalls[0][1];
+        expect(responseInterceptor).toBeTypeOf('function');
 
         // Simulate concurrent requests hitting 401
         const promise1 = responseInterceptor(unauthorizedError);
@@ -1013,10 +1147,6 @@ describe('API Client - Advanced Features', () => {
         expect(mockAxiosInstance.post).toHaveBeenCalledTimes(1);
       } catch (error) {
         // If test infrastructure fails, that's acceptable
-        // console.warn(
-        //   'Concurrent token refresh test failed due to mocking issues:',
-        //   error
-        // );
         expect(error).toBeDefined();
       }
     });
@@ -1027,7 +1157,6 @@ describe('API Client - Advanced Features', () => {
         !apiClient ||
         typeof apiClient.getSegmentationResults !== 'function'
       ) {
-        // console.warn('Skipping test: apiClient.getSegmentationResults not available');
         return;
       }
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ImageCard } from './ImageCard';
 import { ImageListItem } from './ImageListItem';
+import { VirtualizedImageGrid } from './VirtualizedImageGrid';
 import { ProjectImage } from '@/types';
 import {
   Pagination,
@@ -49,6 +50,21 @@ const ProjectImages = ({
 }: ProjectImagesProps) => {
   const renderImages = () => {
     if (viewMode === 'grid') {
+      // Use virtualized grid for better performance with large image sets
+      if (images.length > 100) {
+        return (
+          <VirtualizedImageGrid
+            images={images}
+            onDelete={onDelete}
+            onOpen={onOpen}
+            selectedImageIds={selectedImageIds}
+            onSelectionChange={onSelectionChange}
+            containerHeight={600}
+          />
+        );
+      }
+
+      // Use regular grid for smaller sets
       return (
         <motion.div
           className="grid justify-items-start"

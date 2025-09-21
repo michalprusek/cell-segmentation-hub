@@ -28,7 +28,7 @@ export function toast({ title, description, variant = 'default' }: ToastProps) {
 }
 
 export const useToast = () => {
-  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [_toasts, _setToasts] = useState<Toast[]>([]);
 
   // Vracíme pouze funkci toast, ale zachováváme kompatibilitu s Toaster komponentou
   return {

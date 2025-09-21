@@ -1670,7 +1670,24 @@ class ApiClient {
   }
 
   async removeFromQueue(queueId: string): Promise<void> {
-    await this.instance.delete(`/queue/items/${queueId}`);
+    try {
+      await this.instance.delete(`/queue/items/${queueId}`);
+    } catch (error: any) {
+      // Enhance error context for queue deletions
+      const enhancedError = {
+        ...error,
+        context: {
+          operation: 'removeFromQueue',
+          queueId,
+          status: error.response?.status,
+          serverMessage: error.response?.data?.message,
+          timestamp: new Date().toISOString()
+        }
+      };
+
+      logger.error('Queue item removal failed', enhancedError, 'ApiClient');
+      throw enhancedError;
+    }
   }
 
   // Generic HTTP methods for custom endpoints
@@ -1701,7 +1718,39 @@ class ApiClient {
     url: string,
     config?: AxiosRequestConfig
   ): Promise<AxiosResponse<T>> {
-    return this.instance.delete(url, config);
+    try {
+      return await this.instance.delete(url, config);
+    } catch (error: any) {
+      // Enhance error context for delete operations, especially queue-related ones
+      const isQueueOperation = url.includes('/queue/');
+
+      if (isQueueOperation) {
+        const enhancedError = {
+          ...error,
+          context: {
+            operation: 'delete',
+            url,
+            status: error.response?.status,
+            serverMessage: error.response?.data?.message,
+            errorCode: error.response?.data?.error,
+            timestamp: new Date().toISOString(),
+            isQueueOperation: true
+          }
+        };
+
+        logger.error('Queue delete operation failed', enhancedError, 'ApiClient');
+        throw enhancedError;
+      }
+
+      // For non-queue operations, just rethrow with minimal enhancement
+      logger.error('Delete operation failed', {
+        url,
+        status: error.response?.status,
+        message: error.response?.data?.message
+      }, 'ApiClient');
+
+      throw error;
+    }
   }
 
   // Utility methods

@@ -887,6 +887,7 @@ export default {
     cancelling: 'Cancelling...',
     cancelled: 'Cancelled {{count}} queue items',
     batchCancelled: 'Cancelled {{count}} queue items',
+    partialCancellation: 'Cancelled {{cancelled}} items. {{processing}} items are still processing and cannot be cancelled.',
     nothingToCancel: 'No items to cancel',
     itemsAlreadyProcessing: 'Images are already processed or being processed',
     cancelFailed: 'Failed to cancel batch operation',

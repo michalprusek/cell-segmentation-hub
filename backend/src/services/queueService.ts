@@ -4,6 +4,7 @@ import { SegmentationService, SegmentationResponse } from './segmentationService
 import { ImageService } from './imageService';
 import { WebSocketService } from './websocketService';
 import { ProjectStatsService } from './projectStatsService';
+import { CancellationService, CancellationResult } from './cancellationService';
 import { batchProcessor } from '../utils/batchProcessor';
 import { SegmentationUpdateData, ParallelProcessingStatusData } from '../types/websocket';
 import { QueueStatus } from '../types/queue';
@@ -40,6 +41,7 @@ export class QueueService {
   private websocketService: WebSocketService | null = null;
   private projectStatsService: ProjectStatsService | null = null;
   private queueWorkerInstance: unknown = null; // Reference to QueueWorker for triggering
+  private cancellationService: CancellationService;
 
   constructor(
     private prisma: PrismaClient,
@@ -49,6 +51,7 @@ export class QueueService {
     // WebSocket service will be set after initialization
     this.websocketService = null;
     this.projectStatsService = null;
+    this.cancellationService = new CancellationService(prisma, imageService);
   }
 
   /**
@@ -425,41 +428,29 @@ export class QueueService {
   /**
    * Remove item from queue
    */
-  async removeFromQueue(queueId: string, userId: string): Promise<void> {
+  async removeFromQueue(queueId: string, userId: string): Promise<CancellationResult> {
     try {
-      const queueItem = await this.prisma.segmentationQueue.findFirst({
-        where: {
-          id: queueId,
-          userId,
-          status: { in: ['queued'] } // Only allow removal of queued items
-        }
-      });
+      // Use the centralized cancellation service for atomic operations
+      const result = await this.cancellationService.cancelQueueItem(queueId, userId);
 
-      if (!queueItem) {
-        throw new Error('Queue item not found or cannot be removed');
+      // Emit parallel processing status update if cancellation was successful
+      if (result.success) {
+        await this.getParallelProcessingStatus();
       }
 
-      // Remove from queue
-      await this.prisma.segmentationQueue.delete({
-        where: { id: queueId }
-      });
-
-      // Update image status back to no_segmentation
-      await this.imageService.updateSegmentationStatus(queueItem.imageId, 'no_segmentation', userId);
-
-      logger.info('Item removed from queue', 'QueueService', {
-        queueId,
-        imageId: queueItem.imageId
-      });
-
-      // Emit parallel processing status update
-      await this.getParallelProcessingStatus();
+      return result;
     } catch (error) {
       logger.error('Failed to remove item from queue', error instanceof Error ? error : undefined, 'QueueService', {
         queueId,
         userId
       });
-      throw error;
+      
+      return {
+        success: false,
+        message: 'Internal server error during cancellation',
+        httpStatus: 500,
+        errorType: 'INTERNAL_ERROR'
+      };
     }
   }
 
@@ -467,42 +458,36 @@ export class QueueService {
    * Remove from queue with pre-fetched item to avoid race conditions
    * This method accepts a queue item that was already validated by the controller
    */
-  async removeFromQueueWithItem(queueId: string, userId: string, queueItem: any): Promise<void> {
+  async removeFromQueueWithItem(queueId: string, userId: string, queueItem: any): Promise<CancellationResult> {
     try {
-      // Verify the item still exists and can be removed
-      const currentItem = await this.prisma.segmentationQueue.findFirst({
-        where: {
-          id: queueId,
-          userId,
-          status: { in: ['queued'] } // Only allow removal of queued items
-        }
+      // This method is deprecated in favor of the atomic cancellation service
+      // But we maintain it for backward compatibility
+      logger.warn('Using deprecated removeFromQueueWithItem method', 'QueueService', {
+        queueId,
+        userId
       });
 
-      if (!currentItem) {
-        throw new Error('Queue item no longer exists or cannot be removed');
+      // Delegate to the new cancellation service which handles atomicity properly
+      const result = await this.cancellationService.cancelQueueItem(queueId, userId);
+
+      // Emit parallel processing status update if cancellation was successful
+      if (result.success) {
+        await this.getParallelProcessingStatus();
       }
 
-      // Remove from queue
-      await this.prisma.segmentationQueue.delete({
-        where: { id: queueId }
-      });
-
-      // Update image status back to no_segmentation
-      await this.imageService.updateSegmentationStatus(queueItem.imageId, 'no_segmentation', userId);
-
-      logger.info('Item removed from queue', 'QueueService', {
-        queueId,
-        imageId: queueItem.imageId
-      });
-
-      // Emit parallel processing status update
-      await this.getParallelProcessingStatus();
+      return result;
     } catch (error) {
       logger.error('Failed to remove item from queue', error instanceof Error ? error : undefined, 'QueueService', {
         queueId,
         userId
       });
-      throw error;
+      
+      return {
+        success: false,
+        message: 'Internal server error during cancellation',
+        httpStatus: 500,
+        errorType: 'INTERNAL_ERROR'
+      };
     }
   }
 
@@ -700,7 +685,7 @@ export class QueueService {
           model: model as 'hrnet' | 'resunet_advanced' | 'resunet_small',
           threshold: threshold,
           userId: firstItem.userId,
-          detectHoles: firstItem.detectHoles ?? false
+          detectHoles: firstItem.detectHoles ?? true
         });
         results = [singleResult];
       } else {
@@ -709,7 +694,7 @@ export class QueueService {
           imageData,
           model,
           threshold,
-          firstItem.detectHoles ?? false
+          firstItem.detectHoles ?? true
         );
       }
 

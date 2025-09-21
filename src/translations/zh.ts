@@ -810,6 +810,7 @@ export default {
     cancelling: '正在取消...',
     cancelled: '已取消 {{count}} 个队列项目',
     batchCancelled: '已取消 {{count}} 个队列项目',
+    partialCancellation: '已取消 {{cancelled}} 个项目。{{processing}} 个项目仍在处理中，无法取消。',
     nothingToCancel: '没有可取消的项目',
     itemsAlreadyProcessing: '图像已经被处理或正在处理中',
     cancelFailed: '取消批处理操作失败',

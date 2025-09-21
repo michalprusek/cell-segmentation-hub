@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient, { AuthResponse } from '@/lib/api';
-import { User, Profile, getErrorMessage } from '@/types';
+import { User, Profile } from '@/types';
 import { logger } from '@/lib/logger';
 import { authEventEmitter } from '@/lib/authEvents';
 import { tokenRefreshManager } from '@/lib/tokenRefresh';

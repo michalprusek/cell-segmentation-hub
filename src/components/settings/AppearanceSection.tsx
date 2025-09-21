@@ -22,7 +22,7 @@ import {
 import { Moon, Sun, MonitorSmartphone, Languages } from 'lucide-react';
 
 const AppearanceSection = () => {
-  const { user } = useAuth();
+  const { user: _user } = useAuth();
   const { theme, setTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
 

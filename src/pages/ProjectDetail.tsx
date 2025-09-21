@@ -49,6 +49,7 @@ const ProjectDetail = () => {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
+  const [isManualCancelling, setIsManualCancelling] = useState<boolean>(false);
   const [userHasQueueItems, setUserHasQueueItems] = useState<boolean>(false);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
     new Set()
@@ -404,10 +405,16 @@ const ProjectDetail = () => {
 
         const handleQueueCancelled = (data: any) => {
           if (data.projectId === id) {
-            toast.success(t('queue.cancelled', { count: data.cancelledCount }));
+            // Only show WebSocket toast if not manually cancelling
+            if (!isManualCancelling) {
+              toast.success(t('queue.cancelled', { count: data.cancelledCount }));
+            }
             setBatchSubmitted(false);
             setUserHasQueueItems(false);
-            setIsCancelling(false);
+            // Only reset isCancelling if not in manual cancellation
+            if (!isManualCancelling) {
+              setIsCancelling(false);
+            }
 
             // Refresh queue stats and image data
             if (requestQueueStats) {
@@ -418,12 +425,18 @@ const ProjectDetail = () => {
         };
 
         const handleBatchCancelled = (data: any) => {
-          toast.success(
-            t('queue.batchCancelled', { count: data.cancelledCount })
-          );
+          // Only show WebSocket toast if not manually cancelling
+          if (!isManualCancelling) {
+            toast.success(
+              t('queue.batchCancelled', { count: data.cancelledCount })
+            );
+          }
           setBatchSubmitted(false);
           setUserHasQueueItems(false);
-          setIsCancelling(false);
+          // Only reset isCancelling if not in manual cancellation
+          if (!isManualCancelling) {
+            setIsCancelling(false);
+          }
 
           // Refresh queue stats and image data
           if (requestQueueStats) {
@@ -443,7 +456,7 @@ const ProjectDetail = () => {
         };
       }
     );
-  }, [id, user?.id, t, requestQueueStats, refreshImageSegmentation]);
+  }, [id, user?.id, t, requestQueueStats, refreshImageSegmentation, isManualCancelling]);
 
   // Image operations
   const { handleDeleteImage, handleOpenSegmentationEditor } =
@@ -1271,12 +1284,13 @@ const ProjectDetail = () => {
     }
 
     // Prevent double cancellation
-    if (isCancelling) {
+    if (isCancelling || isManualCancelling) {
       return;
     }
 
     try {
       setIsCancelling(true);
+      setIsManualCancelling(true);
 
       // Get current queue items for this project
       // Use the proper apiClient method that handles extractData
@@ -1295,22 +1309,50 @@ const ProjectDetail = () => {
       if (userQueueItems.length > 0) {
         // Cancel items one by one (following existing API pattern)
         let cancelledCount = 0;
+        let failedCount = 0;
+        let processingCount = 0;
+
         for (const item of userQueueItems) {
           try {
-            await apiClient.delete(`/queue/items/${item.id}`);
-            cancelledCount++;
-          } catch (error) {
-            logger.warn('Failed to cancel queue item', {
-              itemId: item.id,
-              error,
-            });
+            const response = await apiClient.delete(`/queue/items/${item.id}`);
+            // Check for 409 status indicating item is processing
+            if (response.status === 409) {
+              processingCount++;
+            } else {
+              cancelledCount++;
+            }
+          } catch (error: any) {
+            // Handle 409 errors specifically for processing items
+            if (error.response?.status === 409) {
+              processingCount++;
+              logger.info('Cannot cancel processing item', {
+                itemId: item.id,
+                status: item.status
+              });
+            } else {
+              failedCount++;
+              logger.warn('Failed to cancel queue item', {
+                itemId: item.id,
+                error,
+              });
+            }
           }
         }
 
+        // Show appropriate messages based on results
         if (cancelledCount > 0) {
-          toast.success(t('queue.batchCancelled', { count: cancelledCount }));
-        } else {
+          if (processingCount > 0) {
+            toast.success(t('queue.partialCancellation', {
+              cancelled: cancelledCount,
+              processing: processingCount
+            }));
+          } else {
+            toast.success(t('queue.batchCancelled', { count: cancelledCount }));
+          }
+        } else if (processingCount > 0) {
           toast.warning(t('queue.itemsAlreadyProcessing'));
+        } else if (failedCount > 0) {
+          toast.error(t('queue.cancelFailed'));
         }
       } else {
         toast.info(t('queue.nothingToCancel'));
@@ -1341,9 +1383,10 @@ const ProjectDetail = () => {
         })
       );
 
-      logger.info('Batch segmentation cancelled', {
+      logger.info('Batch segmentation cancellation completed', {
         projectId: id,
         userId: user.id,
+        totalUserItems: userQueueItems.length
       });
     } catch (error) {
       logger.error('Failed to cancel batch segmentation', {
@@ -1353,6 +1396,7 @@ const ProjectDetail = () => {
       toast.error(t('queue.cancelFailed'));
     } finally {
       setIsCancelling(false);
+      setIsManualCancelling(false);
     }
   };
 

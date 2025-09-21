@@ -4,9 +4,8 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useAuth } from '@/contexts/useAuth';
-import apiClient, { SegmentationResultData } from '@/lib/api';
+import apiClient from '@/lib/api';
 import {
-  getErrorMessage,
   type SegmentationData,
   type ProjectImage,
 } from '@/types';

@@ -477,6 +477,102 @@ export class ImageController {
   };
 
   /**
+   * Get storage URLs for multiple images in batch
+   * POST /api/images/batch/urls
+   */
+  getBatchStorageUrls = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        ResponseHelper.unauthorized(res, 'Unauthorized access');
+        return;
+      }
+
+      const { imageIds } = req.body;
+
+      if (!Array.isArray(imageIds) || imageIds.length === 0) {
+        ResponseHelper.badRequest(res, 'imageIds array is required');
+        return;
+      }
+
+      if (imageIds.length > 500) {
+        ResponseHelper.badRequest(res, 'Maximum 500 images per batch request');
+        return;
+      }
+
+      logger.debug('Getting batch storage URLs', 'ImageController', {
+        imageCount: imageIds.length,
+        userId
+      });
+
+      // Get storage URLs for all images
+      const storageUrls: Record<string, { url?: string; thumbnail_url?: string; error?: string }> = {};
+
+      const storageProvider = getStorageProvider();
+
+      // Process in smaller chunks to avoid overwhelming the storage provider
+      const chunkSize = 50;
+      for (let i = 0; i < imageIds.length; i += chunkSize) {
+        const chunk = imageIds.slice(i, i + chunkSize);
+
+        await Promise.all(chunk.map(async (imageId: string) => {
+          try {
+            // First verify image ownership
+            const image = await this.imageService.getImageById(imageId, userId);
+            if (!image) {
+              storageUrls[imageId] = { error: 'Image not found or no access' };
+              return;
+            }
+
+            // Generate URLs
+            const urls: { url?: string; thumbnail_url?: string } = {};
+
+            // Main image URL
+            if (image.originalPath) {
+              try {
+                urls.url = await storageProvider.getUrl(image.originalPath);
+              } catch (error) {
+                logger.debug(`Failed to get URL for image ${imageId}`, 'ImageController', { error });
+              }
+            }
+
+            // Thumbnail URL
+            if (image.thumbnailPath) {
+              try {
+                urls.thumbnail_url = await storageProvider.getUrl(image.thumbnailPath);
+              } catch (error) {
+                logger.debug(`Failed to get thumbnail URL for image ${imageId}`, 'ImageController', { error });
+              }
+            }
+
+            storageUrls[imageId] = urls;
+
+          } catch (error) {
+            logger.error(`Failed to get URLs for image ${imageId}`, error instanceof Error ? error : undefined, 'ImageController');
+            storageUrls[imageId] = { error: 'Failed to get URLs' };
+          }
+        }));
+      }
+
+      logger.debug('Batch storage URLs retrieved', 'ImageController', {
+        imageCount: imageIds.length,
+        successCount: Object.values(storageUrls).filter(url => !url.error).length,
+        errorCount: Object.values(storageUrls).filter(url => url.error).length,
+        userId
+      });
+
+      ResponseHelper.success(res, storageUrls, 'Storage URLs retrieved successfully');
+
+    } catch (error) {
+      logger.error('Failed to get batch storage URLs', error instanceof Error ? error : undefined, 'ImageController', {
+        userId: req.user?.id,
+        imageCount: req.body?.imageIds?.length
+      });
+      ResponseHelper.internalError(res, error as Error, 'ImageController');
+    }
+  };
+
+  /**
    * Get single image with optional segmentation data
    * GET /api/images/:imageId
    */

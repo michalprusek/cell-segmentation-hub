@@ -92,7 +92,7 @@ const getStatusInfo = (status: string, t: (key: string) => string) => {
   }
 };
 
-export const ImageCard = ({
+export const ImageCard = React.memo(({
   image,
   onDelete,
   onOpen,
@@ -383,4 +383,16 @@ export const ImageCard = ({
       </div>
     </motion.div>
   );
-};
+}, (prevProps, nextProps) => {
+  // Custom comparison function for React.memo
+  // Only re-render if these specific props change
+  return (
+    prevProps.image.id === nextProps.image.id &&
+    prevProps.image.segmentationStatus === nextProps.image.segmentationStatus &&
+    prevProps.image.segmentationThumbnailUrl === nextProps.image.segmentationThumbnailUrl &&
+    prevProps.image.thumbnail_url === nextProps.image.thumbnail_url &&
+    prevProps.image.updatedAt?.getTime() === nextProps.image.updatedAt?.getTime() &&
+    prevProps.isSelected === nextProps.isSelected &&
+    prevProps.className === nextProps.className
+  );
+});

@@ -190,6 +190,39 @@ test:
 	@echo "🧪 Running unit tests in Docker..."
 	@$(DOCKER_COMPOSE) exec -T frontend npm run test
 
+test-backend:
+	@echo "🧪 Running backend tests in Docker..."
+	@$(DOCKER_COMPOSE) exec -T backend npm run test:docker
+
+test-ml:
+	@echo "🧪 Running ML service tests in Docker..."
+	@$(DOCKER_COMPOSE) exec -T ml-service python -m pytest tests/ -v
+
+test-all:
+	@echo "🧪 Running all tests in Docker..."
+	@$(MAKE) test-backend
+	@$(MAKE) test
+	@$(MAKE) test-ml
+
+# Run tests in test environment
+test-env:
+	@echo "🧪 Starting test environment and running tests..."
+	@$(DOCKER_COMPOSE) -f docker-compose.test.yml up -d
+	@echo "⏳ Waiting for test services to be ready..."
+	@sleep 10
+	@$(DOCKER_COMPOSE) -f docker-compose.test.yml exec -T test-backend npm run test:ci
+	@$(DOCKER_COMPOSE) -f docker-compose.test.yml exec -T test-frontend npm run test
+	@$(DOCKER_COMPOSE) -f docker-compose.test.yml exec -T test-ml python -m pytest tests/ -v
+	@$(DOCKER_COMPOSE) -f docker-compose.test.yml down
+
+test-env-backend:
+	@echo "🧪 Running backend tests in test environment..."
+	@$(DOCKER_COMPOSE) -f docker-compose.test.yml up -d test-database test-redis test-backend
+	@echo "⏳ Waiting for backend test service to be ready..."
+	@sleep 10
+	@$(DOCKER_COMPOSE) -f docker-compose.test.yml exec -T test-backend npm run test:ci
+	@$(DOCKER_COMPOSE) -f docker-compose.test.yml down
+
 # Test email configuration with MailHog
 test-email-mailhog:
 	@echo "📧 Testing email with MailHog..."
@@ -232,6 +265,15 @@ test-e2e-ui:
 test-coverage:
 	@echo "🧪 Running test coverage in Docker..."
 	@$(DOCKER_COMPOSE) exec -T frontend npm run test:coverage
+
+test-coverage-backend:
+	@echo "🧪 Running backend test coverage in Docker..."
+	@$(DOCKER_COMPOSE) exec -T backend npm run test:coverage
+
+test-coverage-all:
+	@echo "🧪 Running test coverage for all services..."
+	@$(MAKE) test-coverage-backend
+	@$(MAKE) test-coverage
 
 # Run linting in Docker
 lint:

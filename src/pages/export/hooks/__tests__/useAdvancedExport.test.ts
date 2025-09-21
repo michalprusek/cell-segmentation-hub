@@ -5,7 +5,6 @@ import {
   beforeEach,
   afterEach,
   vi,
-  MockedFunction,
 } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAdvancedExport } from '../useAdvancedExport';
