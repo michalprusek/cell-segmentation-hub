@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import React from 'react';
 
 import {
@@ -14,7 +14,7 @@ import {
 import {
   uploadScenarios,
   segmentationScenarios,
-  errorScenarios,
+  _errorScenarios,
 } from '@/test-fixtures/cancelScenarios';
 
 // Mock dependencies
@@ -118,7 +118,7 @@ const useOperationManager = (): UseOperationManagerReturn => {
         }
 
         // Call appropriate cancel API based on operation type
-        let apiResult = true;
+        let _apiResult = true;
         try {
           const { default: api } = await import('@/lib/api');
 
@@ -138,7 +138,7 @@ const useOperationManager = (): UseOperationManagerReturn => {
             'API cancel failed, proceeding with local cancellation:',
             apiError
           );
-          apiResult = false;
+          _apiResult = false;
         }
 
         // Emit WebSocket event
@@ -351,21 +351,21 @@ describe('useOperationManager Hook', () => {
       const { result } = renderHook(() => useOperationManager());
 
       act(() => {
-        const uploadId = result.current.registerOperation({
+        const _uploadId = result.current.registerOperation({
           type: 'upload',
           status: 'active',
           progress: 0,
           startTime: Date.now(),
         });
 
-        const segmentationId = result.current.registerOperation({
+        const _segmentationId = result.current.registerOperation({
           type: 'segmentation',
           status: 'active',
           progress: 50,
           startTime: Date.now(),
         });
 
-        const exportId = result.current.registerOperation({
+        const _exportId = result.current.registerOperation({
           type: 'export',
           status: 'active',
           progress: 75,
@@ -520,7 +520,7 @@ describe('useOperationManager Hook', () => {
 
         try {
           await result.current.cancelOperation(id);
-        } catch (error) {
+        } catch (_error) {
           expect(error).toBeInstanceOf(Error);
         }
 
@@ -608,7 +608,7 @@ describe('useOperationManager Hook', () => {
       const { result } = renderHook(() => useOperationManager());
 
       await act(async () => {
-        const ids = [
+        const _ids = [
           result.current.registerOperation({
             type: 'upload',
             status: 'active',
@@ -668,7 +668,7 @@ describe('useOperationManager Hook', () => {
 
         try {
           await result.current.cancelAllOperations();
-        } catch (error) {
+        } catch (_error) {
           // Some operations may fail
         }
 
@@ -903,7 +903,7 @@ describe('useOperationManager Hook', () => {
 
       await act(async () => {
         // Register all operations from scenario
-        const ids = operations.map(op =>
+        const _ids = operations.map(op =>
           result.current.registerOperation({
             type: op.type,
             status: op.status,
@@ -980,7 +980,7 @@ describe('useOperationManager Hook', () => {
 
         try {
           await result.current.cancelOperation(id);
-        } catch (error) {
+        } catch (_error) {
           expect(error).toBe(networkError);
         }
 
@@ -1008,7 +1008,7 @@ describe('useOperationManager Hook', () => {
 
         try {
           await result.current.cancelOperation(id);
-        } catch (error) {
+        } catch (_error) {
           expect(error).toBe(serverError);
         }
 

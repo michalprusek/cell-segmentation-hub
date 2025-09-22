@@ -422,7 +422,7 @@ export const useAdvancedExport = (projectId: string) => {
         setCompletedJobId(null);
         setIsExporting(true);
         setExportProgress(0);
-        setExportStatus('Starting export...');
+        setExportStatus('Preparing export...');
 
         // Store project name for download filename
         setCurrentProjectName(projectName);

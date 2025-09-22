@@ -797,6 +797,25 @@ export default {
     segmentMixed: '分割 {{new}} + 重新分割 {{resegment}} (共 {{total}} 个)',
     segmentTooltip:
       '{{new}} 个新图像将被分割，{{resegment}} 个选中图像将被重新分割',
+    cancelSegmentation: '取消分割',
+    segmentationCancelled: '已取消 {{count}} 个分割任务',
+    cancelFailed: '取消分割失败',
+    // Cancel All functionality
+    cancelAll: '全部取消',
+    cancelAllTooltip: '取消所有 {{count}} 个分割任务',
+    confirmCancelAll: '取消所有分割？',
+    confirmCancelAllDescription:
+      '您即将取消所有项目中的 {{count}} 个分割任务。',
+    processingTasks: '{{count}} 个任务正在处理中',
+    queuedTasks: '{{count}} 个任务正在排队',
+    cancelAllWarning: '此操作无法撤销。已取消的任务需要重新提交。',
+    confirmCancelAllButton: '是的，取消 {{count}} 个任务',
+    cancellingAllSegmentations: '正在取消所有分割...',
+    allSegmentationsCancelled: '成功取消了 {{count}} 个分割',
+    affectedProjects: '影响了 {{count}} 个项目',
+    cancelAllFailed: '取消分割失败',
+    cancelAllError: '取消分割时出错',
+    cancelling: '正在取消...',
   },
   toast: {
     error: '发生错误',
@@ -844,6 +863,10 @@ export default {
     },
     upload: {
       failed: '上传后刷新图像失败',
+      cancelUpload: '取消上传',
+      uploadCancelled: '上传已取消',
+      uploadCancelledSuccess: '上传已成功取消',
+      redirectingToGallery: '正在重定向到图片库...',
     },
     segmentation: {
       saved: '分割保存成功',
@@ -867,6 +890,7 @@ export default {
     selected: '已选择{{count}}张图片',
     selected_other: '已选择{{count}}张图片',
     deleteSelected: '删除选中项',
+    imagesDeleted: '已删除 {{count}} 张图片',
   },
   export: {
     advancedExport: '高级导出',
@@ -882,6 +906,8 @@ export default {
     selectedImages: '已选择图像',
     imagesSelected: '已选择 {{count}} 张图像，共 {{total}} 张',
     selectAll: '全选',
+    allSelected: '已选择所有 {{count}} 张图像',
+    selectAllProject: '选择所有 {{count}} 张图像',
     selectNone: '全不选',
     imageSelection: '图像选择',
     chooseImages: '选择要包含在导出中的图像',
@@ -918,6 +944,11 @@ export default {
       excel: 'Excel格式',
       json: 'JSON格式',
     },
+    // Progress panel specific
+    title: '导出进度',
+    readyToDownload: '导出准备就绪，可下载',
+    fallbackMode: '轮询模式',
+    fallbackMessage: '由于连接问题，使用轮询进行进度更新',
     exportToZip: '导出为ZIP存档',
     generateExcel: '生成Excel指标',
     includeCocoFormat: '包含COCO格式注释',
@@ -928,6 +959,7 @@ export default {
     packaging: '创建包中...',
     completed: '导出完成',
     downloading: '下载中...',
+    cancelling: '取消中...',
     cancelled: '导出已取消',
     connected: '已连接',
     disconnected: '已断开',

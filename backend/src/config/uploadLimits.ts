@@ -51,15 +51,15 @@ const PRODUCTION_LIMITS: UploadLimitsConfig = {
 };
 
 const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
-  MAX_FILES_PER_REQUEST: 50,
+  MAX_FILES_PER_REQUEST: 1000,  // Increased to allow 1000 files per request in development
   MAX_FILE_SIZE_BYTES: 50 * 1024 * 1024,
   MAX_TOTAL_FILES: 1000,
-  MAX_FIELDS: 10,
+  MAX_FIELDS: 1010,  // Increased to support 1000 files + additional form fields
   MAX_FIELD_SIZE_KB: 50,
-  CHUNK_SIZE: 50,
-  NGINX_BODY_LIMIT: '200M',
-  EXPRESS_JSON_LIMIT: '20mb',
-  EXPRESS_URL_ENCODED_LIMIT: '20mb',
+  CHUNK_SIZE: 100,  // Keep chunk size at 100 for better performance
+  NGINX_BODY_LIMIT: '2000M',  // Increased to handle up to 1000 files at ~2MB each
+  EXPRESS_JSON_LIMIT: '200mb',  // Increased for metadata
+  EXPRESS_URL_ENCODED_LIMIT: '200mb',  // Increased for form data
   // Rate limiting properties
   UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
   UPLOAD_MAX_REQUESTS: 1000, // More permissive for development

@@ -48,7 +48,7 @@ class PerformanceProfiler {
   private measurements: Map<string, number[]> = new Map();
   private memoryBaseline: number = 0;
 
-  startMeasurement(testName: string) {
+  startMeasurement(_testName: string) {
     if (typeof performance !== 'undefined' && performance.now) {
       return performance.now();
     }
@@ -183,12 +183,12 @@ class StressTestRunner {
 describe('Cancel Performance Tests', () => {
   let profiler: PerformanceProfiler;
   let stressRunner: StressTestRunner;
-  let mockOperationManager: any;
+  let _mockOperationManager: any;
 
   beforeEach(() => {
     profiler = new PerformanceProfiler();
     stressRunner = new StressTestRunner();
-    mockOperationManager = cancelTestUtils.createMockOperationManager();
+    _mockOperationManager = cancelTestUtils.createMockOperationManager();
 
     profiler.captureMemoryBaseline();
     vi.clearAllMocks();
@@ -668,7 +668,7 @@ describe('Cancel Performance Tests', () => {
             await result.current.cancelOperation(operationId);
             successfulRecoveries++;
           });
-        } catch (error) {
+        } catch {
           // Error recovery test - continue
         }
       }
@@ -741,7 +741,7 @@ describe('Cancel Performance Tests', () => {
 
       await act(async () => {
         // Register large batch
-        const operationIds = operations.slice(0, 100).map(op =>
+        const _operationIds = operations.slice(0, 100).map(op =>
           result.current.registerOperation({
             id: op.id,
             type: op.type,

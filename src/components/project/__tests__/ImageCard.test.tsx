@@ -23,7 +23,7 @@ vi.mock('framer-motion', () => ({
 
 // Mock date-fns
 vi.mock('date-fns', () => ({
-  format: vi.fn(date => '01.01.2023 12:00'),
+  format: vi.fn(_date => '01.01.2023 12:00'),
 }));
 
 describe('ImageCard', () => {
@@ -276,7 +276,7 @@ describe('ImageCard', () => {
   });
 
   it('applies hover effects correctly', async () => {
-    const user = userEvent.setup();
+    const _user = userEvent.setup();
     render(<ImageCard {...defaultProps} />);
 
     const card = document.querySelector('.cursor-pointer');

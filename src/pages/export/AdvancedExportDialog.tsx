@@ -115,7 +115,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
           await startExport(projectName);
           toast.success(t('toast.exportCompleted'));
           onClose();
-        } catch (error) {
+        } catch (_error) {
           toast.error(t('toast.exportFailed'));
         }
       };

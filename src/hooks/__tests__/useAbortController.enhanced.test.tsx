@@ -210,17 +210,20 @@ const useAbortController = (
 
   // Cleanup on unmount
   React.useEffect(() => {
+    const currentTimeoutRef = timeoutRef.current;
+    const currentChildControllers = childControllersRef.current;
+
     return () => {
       if (!controller.signal.aborted) {
         controller.abort('Component unmounted');
       }
 
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+      if (currentTimeoutRef) {
+        clearTimeout(currentTimeoutRef);
       }
 
       // Cleanup all child controllers
-      childControllersRef.current.forEach(childController => {
+      currentChildControllers.forEach(childController => {
         if (!childController.signal.aborted) {
           childController.abort('Parent component unmounted');
         }

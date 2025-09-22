@@ -867,6 +867,28 @@ export default {
     emptyMessage:
       'No hay imágenes en cola. Sube imágenes y añádelas a la cola para segmentación.',
     addingToQueue: 'Añadiendo a la cola...',
+    cancelSegmentation: 'Cancelar Segmentación',
+    segmentationCancelled: '{{count}} segmentación cancelada',
+    segmentationCancelled_other: '{{count}} segmentaciones canceladas',
+    cancelFailed: 'No se pudo cancelar la segmentación',
+    // Cancel All functionality
+    cancelAll: 'Cancelar Todo',
+    cancelAllTooltip: 'Cancelar las {{count}} tarea(s) de segmentación',
+    confirmCancelAll: '¿Cancelar Todas las Segmentaciones?',
+    confirmCancelAllDescription:
+      'Estás a punto de cancelar {{count}} tarea(s) de segmentación en todos tus proyectos.',
+    processingTasks: '{{count}} tarea(s) procesándose actualmente',
+    queuedTasks: '{{count}} tarea(s) en cola',
+    cancelAllWarning:
+      'Esta acción no se puede deshacer. Las tareas canceladas necesitarán ser reenviadas.',
+    confirmCancelAllButton: 'Sí, Cancelar {{count}} Tarea(s)',
+    cancellingAllSegmentations: 'Cancelando todas las segmentaciones...',
+    allSegmentationsCancelled:
+      'Se cancelaron exitosamente {{count}} segmentación(es)',
+    affectedProjects: '{{count}} proyecto(s) afectado(s)',
+    cancelAllFailed: 'Error al cancelar las segmentaciones',
+    cancelAllError: 'Error cancelando las segmentaciones',
+    cancelling: 'Cancelando...',
   },
   toast: {
     error: 'Ha ocurrido un error',
@@ -915,6 +937,10 @@ export default {
     },
     upload: {
       failed: 'Error al actualizar imágenes después de la carga',
+      cancelUpload: 'Cancelar carga',
+      uploadCancelled: 'Carga cancelada',
+      uploadCancelledSuccess: 'Carga cancelada exitosamente',
+      redirectingToGallery: 'Redirigiendo a la galería de imágenes...',
     },
     segmentation: {
       saved: 'Segmentación guardada exitosamente',
@@ -943,6 +969,8 @@ export default {
     selected: '{{count}} imagen seleccionada',
     selected_other: '{{count}} imágenes seleccionadas',
     deleteSelected: 'Eliminar Seleccionadas',
+    imagesDeleted: '{{count}} imagen eliminada',
+    imagesDeleted_other: '{{count}} imágenes eliminadas',
   },
   export: {
     advancedExport: 'Exportación Avanzada',
@@ -960,6 +988,8 @@ export default {
     selectedImages: 'Imágenes Seleccionadas',
     imagesSelected: '{{count}} de {{total}} imágenes seleccionadas',
     selectAll: 'Seleccionar Todo',
+    allSelected: 'Todas las {{count}} imágenes seleccionadas',
+    selectAllProject: 'Seleccionar Todas las {{count}} imágenes',
     selectNone: 'No Seleccionar Ninguna',
     imageSelection: 'Selección de Imágenes',
     chooseImages: 'Elija qué imágenes incluir en la exportación',
@@ -998,6 +1028,12 @@ export default {
       excel: 'Formato Excel',
       json: 'Formato JSON',
     },
+    // Progress panel specific
+    title: 'Progreso de Exportación',
+    readyToDownload: 'Exportación lista para descargar',
+    fallbackMode: 'Modo de sondeo',
+    fallbackMessage:
+      'Usando sondeo para actualizaciones de progreso debido a problemas de conexión',
     exportToZip: 'Exportar a archivo ZIP',
     generateExcel: 'Generar métricas de Excel',
     includeCocoFormat: 'Incluir anotaciones en formato COCO',
@@ -1008,6 +1044,7 @@ export default {
     packaging: 'Creando paquete...',
     completed: 'Exportación completada',
     downloading: 'Descargando...',
+    cancelling: 'Cancelando...',
     cancelled: 'Exportación cancelada',
     connected: 'Conectado',
     disconnected: 'Desconectado',

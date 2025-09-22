@@ -2,8 +2,8 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     // Build Configuration for Backend (Node.js)
-    "target": "ES2022",
-    "module": "ES2022",
+    "target": "ES2020",
+    "module": "ES2020",
     "moduleResolution": "node",
     "lib": ["ES2022"],
     "outDir": "./dist",
@@ -20,6 +20,7 @@
     "sourceMap": true,
     "removeComments": false,
     "importHelpers": true,
+    "downlevelIteration": true,
     
     // MIGRATION STRATEGY: Backend needs significant type fixes
     // Current: Phase 0 (Basic compilation)

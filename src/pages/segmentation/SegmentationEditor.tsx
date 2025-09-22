@@ -20,6 +20,7 @@ import { Polygon } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
+import { generateSafePolygonKey, validatePolygonId, logPolygonIdIssue, ensureValidPolygonId } from '@/lib/polygonIdUtils';
 import {
   handleCancelledError /* , isCancelledError */,
 } from '@/lib/errorUtils';
@@ -296,22 +297,40 @@ const SegmentationEditor = () => {
           })
           .filter((point): point is { x: number; y: number } => point !== null);
 
-        // Only include polygon if it still has at least 3 valid points
+        // CRITICAL: Ensure every polygon has a valid ID before proceeding
+        // Use defensive programming - generate ID instead of dropping polygon
+        const validPolygonId = validatePolygonId(segPoly.id)
+          ? segPoly.id
+          : ensureValidPolygonId(segPoly.id, 'ml_polygon');
+
+        if (validPolygonId !== segPoly.id) {
+          logPolygonIdIssue(segPoly, 'Invalid ID fixed with fallback - preventing data loss');
+          logger.warn('Fixed polygon with invalid ID to prevent data loss', {
+            originalId: segPoly.id,
+            fixedId: validPolygonId,
+            segPolyType: segPoly.type,
+            pointsCount: validPoints.length
+          });
+        }
+
+        // Only include polygon if it has at least 3 valid points
         if (validPoints.length >= 3) {
           return {
-            id: segPoly.id,
+            id: validPolygonId, // Use the fixed valid ID
             points: validPoints,
-            type: segPoly.type,
+            type: segPoly.type || 'external',
             class: segPoly.class,
             confidence: segPoly.confidence,
             area: segPoly.area,
           };
+        } else {
+          logger.warn('Dropping polygon due to insufficient points', {
+            polygonId: segPoly.id,
+            pointsCount: validPoints.length,
+            segPolyType: segPoly.type
+          });
+          return null;
         }
-
-        logger.warn('Dropping polygon due to insufficient valid points', {
-          polygonId: segPoly.id,
-        });
-        return null;
       })
       .filter((polygon): polygon is Polygon => polygon !== null);
 
@@ -480,30 +499,7 @@ const SegmentationEditor = () => {
     // 3. Leaving the editor (unmount autosave)
   });
 
-  // Wrapper for handling polygon selection that automatically switches to EditVertices mode
-  // when selecting a polygon and to View mode when deselecting
-  const handlePolygonSelection = useCallback(
-    (polygonId: string | null) => {
-      // Don't allow polygon selection changes when in Slice mode
-      // The slice mode handles its own polygon selection logic
-      if (editor.editMode === EditMode.Slice) {
-        return;
-      }
-
-      if (polygonId === null) {
-        // If deselecting (setting to null) and we're in Edit Vertices mode, switch to View mode
-        if (editor.editMode === EditMode.EditVertices) {
-          editor.setEditMode(EditMode.View);
-        }
-      } else {
-        // When selecting a polygon, automatically enable EditVertices mode (purple frame)
-        editor.setEditMode(EditMode.EditVertices);
-      }
-
-      editor.setSelectedPolygonId(polygonId);
-    },
-    [editor]
-  );
+  // Centralized polygon selection is now handled inside useEnhancedSegmentationEditor (SSOT)
 
   // Load segmentation data with proper cancellation handling
   useEffect(() => {
@@ -1133,13 +1129,22 @@ const SegmentationEditor = () => {
                         zIndex: 10,
                       }}
                       onClick={e => {
+                        // Only log SVG clicks when debugging selection issues (reduce console spam)
+                        if (process.env.NODE_ENV === 'development' && e.target === e.currentTarget) {
+                          logger.debug('[SegmentationEditor] Empty area click (deselecting)', {
+                            editMode: editor.editMode,
+                          });
+                        }
                         // Unselect polygon when clicking on empty canvas area
                         // BUT skip deselection when in AddPoints mode to allow point placement
                         if (
                           e.target === e.currentTarget &&
                           editor.editMode !== EditMode.AddPoints
                         ) {
-                          handlePolygonSelection(null);
+                          logger.debug(
+                            '[SegmentationEditor] Deselecting due to empty area click'
+                          );
+                          editor.handlePolygonSelection(null);
                         }
                       }}
                       data-transform={JSON.stringify(editor.transform)}
@@ -1162,39 +1167,116 @@ const SegmentationEditor = () => {
                         return (
                           <>
                             {/* Actual polygons */}
-                            {visiblePolygons.map(polygon => (
-                              <CanvasPolygon
-                                key={`${polygon.id}-${editor.isUndoRedoInProgress ? 'undo' : 'normal'}`}
-                                polygon={polygon}
-                                isSelected={
-                                  polygon.id === editor.selectedPolygonId
+                            {(() => {
+                              // DEBUG: Check for duplicate IDs and selection states
+                              const polygonIds = visiblePolygons.map(p => p.id);
+                              const uniqueIds = [...new Set(polygonIds)];
+                              const duplicateIds = polygonIds.filter(
+                                (id, index) => polygonIds.indexOf(id) !== index
+                              );
+
+                              // Enhanced polygon validation stats including ID validation
+                              // Optimized: Single loop to compute all validation stats (prevent multiple array iterations)
+                              const validationStats = visiblePolygons.reduce((stats, p) => {
+                                const hasValidId = validatePolygonId(p.id);
+                                const type = p.type || 'undefined';
+
+                                if (hasValidId) {
+                                  stats.withValidIds++;
+                                } else {
+                                  stats.withInvalidIds++;
+                                  stats.invalidPolygons.push({
+                                    id: p.id,
+                                    type: p.type,
+                                    idType: typeof p.id
+                                  });
                                 }
-                                hoveredVertex={
-                                  editor.hoveredVertex || {
-                                    polygonId: null,
-                                    vertexIndex: null,
-                                  }
+
+                                // Count types
+                                if (p.type === 'external') stats.externalCount++;
+                                else if (p.type === 'internal') stats.internalCount++;
+                                else stats.undefinedTypeCount++;
+
+                                // Only store detailed info if debugging is needed
+                                if (process.env.NODE_ENV === 'development') {
+                                  stats.polygonTypes.push({
+                                    id: p.id,
+                                    type: type,
+                                    hasParentId: !!p.parent_id,
+                                    parent_id: p.parent_id,
+                                  });
                                 }
-                                vertexDragState={editor.vertexDragState}
-                                zoom={editor.transform.zoom}
-                                isUndoRedoInProgress={
-                                  editor.isUndoRedoInProgress
-                                }
-                                onSelectPolygon={() =>
-                                  handlePolygonSelection(polygon.id)
-                                }
-                                onDeletePolygon={
-                                  handleDeletePolygonFromContextMenu
-                                }
-                                onSlicePolygon={
-                                  handleSlicePolygonFromContextMenu
-                                }
-                                onEditPolygon={handleEditPolygonFromContextMenu}
-                                onDeleteVertex={
-                                  handleDeleteVertexFromContextMenu
-                                }
-                              />
-                            ))}
+
+                                return stats;
+                              }, {
+                                visibleCount: visiblePolygons.length,
+                                selectedPolygonId: editor.selectedPolygonId,
+                                polygonIds: polygonIds,
+                                uniqueIdsCount: uniqueIds.length,
+                                hasDuplicates: duplicateIds.length > 0,
+                                duplicateIds: duplicateIds,
+                                withValidIds: 0,
+                                withInvalidIds: 0,
+                                invalidPolygons: [],
+                                externalCount: 0,
+                                internalCount: 0,
+                                undefinedTypeCount: 0,
+                                polygonTypes: []
+                              });
+
+                              // Only log validation stats if there are issues (reduce console spam)
+                              if (validationStats.withInvalidIds > 0 || validationStats.undefinedTypeCount > 0) {
+                                logger.debug('[PolygonValidation] Issues detected during rendering', validationStats);
+                              }
+
+                              // CRITICAL WARNING: Alert if any polygons with invalid IDs made it to rendering
+                              if (validationStats.withInvalidIds > 0) {
+                                logger.error('[PolygonValidation] CRITICAL: Polygons with invalid IDs detected in render!', {
+                                  invalidCount: validationStats.withInvalidIds,
+                                  invalidPolygons: validationStats.invalidPolygons,
+                                  riskOfReactKeyConflicts: true
+                                });
+                              }
+                              return visiblePolygons.map(polygon => {
+                                const isSelected =
+                                  polygon.id === editor.selectedPolygonId;
+                                // Remove per-polygon debug logging to prevent console spam
+                                // Only log when selection actually changes (for debugging purposes)
+                                return (
+                                  <CanvasPolygon
+                                    key={generateSafePolygonKey(polygon, editor.isUndoRedoInProgress)}
+                                    polygon={polygon}
+                                    isSelected={isSelected}
+                                    hoveredVertex={
+                                      editor.hoveredVertex || {
+                                        polygonId: null,
+                                        vertexIndex: null,
+                                      }
+                                    }
+                                    vertexDragState={editor.vertexDragState}
+                                    zoom={editor.transform.zoom}
+                                    isUndoRedoInProgress={
+                                      editor.isUndoRedoInProgress
+                                    }
+                                    onSelectPolygon={
+                                      editor.handlePolygonClick
+                                    }
+                                    onDeletePolygon={
+                                      handleDeletePolygonFromContextMenu
+                                    }
+                                    onSlicePolygon={
+                                      handleSlicePolygonFromContextMenu
+                                    }
+                                    onEditPolygon={
+                                      handleEditPolygonFromContextMenu
+                                    }
+                                    onDeleteVertex={
+                                      handleDeleteVertexFromContextMenu
+                                    }
+                                  />
+                                );
+                              });
+                            })()}
                           </>
                         );
                       })()}
@@ -1230,7 +1312,7 @@ const SegmentationEditor = () => {
                 loading={projectLoading}
                 polygons={editor.polygons}
                 selectedPolygonId={editor.selectedPolygonId}
-                onSelectPolygon={handlePolygonSelection}
+                onSelectPolygon={editor.handlePolygonSelection}
                 hiddenPolygonIds={hiddenPolygonIds}
                 onTogglePolygonVisibility={handleTogglePolygonVisibility}
                 onRenamePolygon={handleRenamePolygon}

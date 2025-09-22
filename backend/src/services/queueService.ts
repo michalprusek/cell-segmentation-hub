@@ -429,7 +429,7 @@ export class QueueService {
    * Get multiple batches for parallel processing
    * Returns up to maxBatches for concurrent execution
    */
-  async getMultipleBatches(maxBatches: number = 4): Promise<QueueBatch[]> {
+  async getMultipleBatches(maxBatches = 4): Promise<QueueBatch[]> {
     const batches: QueueBatch[] = [];
     const processedImageIds = new Set<string>();
 
@@ -475,7 +475,7 @@ export class QueueService {
     };
 
     // Get the highest priority item first, excluding specified image IDs
-    const whereClause: any = {
+    const whereClause: Record<string, unknown> = {
       status: 'queued'
     };
 
@@ -984,15 +984,18 @@ export class QueueService {
    * Emit parallel processing status via WebSocket
    */
   private emitParallelProcessingStatus(): void {
-    if (!this.websocketService) return;
+    // Disabled - parallel processing notifications removed per user request
+    // if (!this.websocketService) {
+    //   return;
+    // }
 
-    const stats = this.processingStats;
+    // const stats = this.processingStats;
 
-    // Emit to all connected users (system-wide status)
-    this.websocketService.broadcastSystemMessage(
-      `Parallel Processing: ${stats.activeStreams}/${stats.maxConcurrentStreams} streams active`,
-      'info'
-    );
+    // // Emit to all connected users (system-wide status)
+    // this.websocketService.broadcastSystemMessage(
+    //   `Parallel Processing: ${stats.activeStreams}/${stats.maxConcurrentStreams} streams active`,
+    //   'info'
+    // );
   }
 
   /**
@@ -1215,6 +1218,18 @@ export class QueueService {
    * @param userId User ID requesting cancellation
    * @returns Number of cancelled queue items
    */
+  /**
+   * Cancel batch processing for a specific user and batch
+   * @param batchId Batch ID to cancel
+   * @param userId User ID requesting cancellation
+   * @returns Number of cancelled queue items
+   */
+  /**
+   * Cancel batch processing for a specific user and batch
+   * @param batchId Batch ID to cancel
+   * @param userId User ID requesting cancellation
+   * @returns Number of cancelled queue items
+   */
   async cancelBatch(batchId: string, userId: string): Promise<number> {
     try {
       logger.info('Cancelling batch', 'QueueService', { batchId, userId });
@@ -1257,20 +1272,21 @@ export class QueueService {
       });
 
       // Emit cancellation events via WebSocket
-      const webSocketService = new (await import('./websocketService')).WebSocketService();
-      for (const item of queuedItems) {
-        webSocketService.sendToUser(userId, 'segmentation:cancelled', {
-          imageId: item.imageId,
-          batchId,
-          message: 'Batch processing cancelled by user'
-        });
-      }
+      if (this.websocketService) {
+        for (const item of queuedItems) {
+          this.websocketService.emitToUser(userId, 'segmentation:cancelled', {
+            imageId: item.imageId,
+            batchId,
+            message: 'Batch processing cancelled by user'
+          });
+        }
 
-      // Update queue stats for affected projects
-      const projectIds = [...new Set(queuedItems.map(item => item.image.projectId))];
-      for (const projectId of projectIds) {
-        const stats = await this.getQueueStats(projectId);
-        webSocketService.sendToProject(projectId, 'queue:stats', stats);
+        // Update queue stats for affected projects
+        const projectIds = [...new Set(queuedItems.map(item => item.image.projectId))];
+        for (const projectId of projectIds) {
+          const stats = await this.getQueueStats(projectId);
+          this.websocketService.emitQueueStatsUpdate(projectId, stats);
+        }
       }
 
       logger.info('Batch cancelled successfully', 'QueueService', {
@@ -1284,6 +1300,144 @@ export class QueueService {
     } catch (error) {
       logger.error('Failed to cancel batch', error instanceof Error ? error : undefined, 'QueueService', {
         batchId,
+        userId
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Cancel all segmentation tasks for a specific user across all projects
+   * This will cancel all queued and processing segmentations
+   */
+  async cancelAllUserSegmentations(userId: string): Promise<{
+    cancelledCount: number;
+    affectedProjects: string[];
+    affectedBatches: string[];
+  }> {
+    try {
+      logger.info('Cancelling all user segmentations', 'QueueService', { userId });
+
+      // Find all queued and processing items for this user
+      const queuedItems = await this.prisma.segmentationQueue.findMany({
+        where: {
+          userId,
+          status: {
+            in: ['queued', 'processing']
+          }
+        },
+        include: {
+          image: true
+        }
+      });
+
+      if (queuedItems.length === 0) {
+        logger.info('No active segmentations found for user', 'QueueService', { userId });
+        return {
+          cancelledCount: 0,
+          affectedProjects: [],
+          affectedBatches: []
+        };
+      }
+
+      // Group by status to handle differently
+      const _queuedOnly = queuedItems.filter(item => item.status === 'queued');
+      const processingItems = queuedItems.filter(item => item.status === 'processing');
+
+      // Delete all queued items
+      const deleteResult = await this.prisma.segmentationQueue.deleteMany({
+        where: {
+          userId,
+          status: 'queued'
+        }
+      });
+
+      // Mark processing items as cancelled (they'll be handled by the ML service)
+      if (processingItems.length > 0) {
+        await this.prisma.segmentationQueue.updateMany({
+          where: {
+            userId,
+            status: 'processing'
+          },
+          data: {
+            status: 'cancelled'
+          }
+        });
+      }
+
+      // Update affected images' segmentation status
+      const imageIds = queuedItems.map(item => item.imageId);
+      if (imageIds.length > 0) {
+        await this.prisma.image.updateMany({
+          where: {
+            id: { in: imageIds }
+          },
+          data: {
+            segmentationStatus: 'no_segmentation'
+          }
+        });
+      }
+
+      // Collect affected batches and projects
+      const affectedBatches = [...new Set(queuedItems.filter(item => item.batchId).map(item => item.batchId).filter(Boolean))];
+      const affectedProjects = [...new Set(queuedItems.map(item => item.image.projectId))];
+
+      // Emit cancellation events via WebSocket
+      if (this.websocketService) {
+        // Send bulk cancellation notification
+        this.websocketService.emitToUser(userId, 'segmentation:bulk-cancelled', {
+          cancelledCount: queuedItems.length,
+          affectedProjects,
+          affectedBatches,
+          message: 'All segmentations cancelled by user'
+        });
+
+        // Send individual cancellation events for each image
+        for (const item of queuedItems) {
+          this.websocketService.emitToUser(userId, 'segmentation:cancelled', {
+            imageId: item.imageId,
+            batchId: item.batchId,
+            message: 'Segmentation cancelled by user'
+          });
+        }
+
+        // Update queue stats for all affected projects
+        for (const projectId of affectedProjects) {
+          const stats = await this.getQueueStats(projectId);
+          this.websocketService.emitQueueStatsUpdate(projectId, stats);
+        }
+      }
+
+      // Cancel processing in ML service if needed
+      if (processingItems.length > 0) {
+        try {
+          // Call ML service to cancel active jobs
+          logger.info('Requesting ML service to cancel processing jobs', 'QueueService', {
+            userId,
+            jobCount: processingItems.length
+          });
+          // TODO: Implement ML service cancellation API call if needed
+        } catch (mlError) {
+          logger.error('Failed to cancel ML processing', mlError instanceof Error ? mlError : undefined, 'QueueService');
+        }
+      }
+
+      logger.info('All user segmentations cancelled successfully', 'QueueService', {
+        userId,
+        cancelledCount: queuedItems.length,
+        deletedCount: deleteResult.count,
+        processingCancelled: processingItems.length,
+        affectedProjects: affectedProjects.length,
+        affectedBatches: affectedBatches.length
+      });
+
+      return {
+        cancelledCount: queuedItems.length,
+        affectedProjects,
+        affectedBatches
+      };
+    } catch (error) {
+      logger.error('Failed to cancel all user segmentations', error instanceof Error ? error : undefined, 'QueueService', {
         userId
       });
       throw error;

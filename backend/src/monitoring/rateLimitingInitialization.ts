@@ -148,7 +148,7 @@ class RateLimitingSystem {
         // Dynamic import for optional dependency
         const { default: RedisStore } = await import('rate-limit-redis');
         options.store = new RedisStore({
-          sendCommand: (...args: string[]) => client.sendCommand(args) as any,
+          sendCommand: (...args: string[]): Promise<any> => client.sendCommand(args),
           prefix: `rate_limit:${tierName}:`,
         });
         logger.info(`Rate limiter '${tierName}' using Redis store`);

@@ -104,7 +104,7 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
       const total = await prisma.project.count({ where });
       const pagination = calculatePagination(page, limit, total);
 
-      // Get projects with image count, latest image, and sharing info
+      // Get projects with comprehensive metadata for project cards
       const projects = await prisma.project.findMany({
         where,
         orderBy,
@@ -124,7 +124,9 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
               name: true,
               thumbnailPath: true,
               originalPath: true,
-              segmentationStatus: true
+              segmentationStatus: true,
+              createdAt: true,
+              updatedAt: true
             }
           },
           user: {
@@ -146,13 +148,77 @@ export async function getUserProjects(userId: string, options: ProjectQueryParam
         }
       });
 
-      // Add metadata to each project
-      const projectsWithMeta = projects.map(project => ({
-        ...project,
-        isOwned: project.userId === userId,
-        isShared: project.userId !== userId && project.shares.length > 0,
-        owner: project.user
-      }));
+      // Get segmentation statistics for all projects in parallel
+      const projectIds = projects.map(p => p.id);
+      const segmentationStats = await prisma.image.groupBy({
+        by: ['projectId', 'segmentationStatus'],
+        where: {
+          projectId: { in: projectIds }
+        },
+        _count: {
+          id: true
+        }
+      });
+
+      // Create a map for quick lookup of segmentation stats
+      const statsMap = new Map<string, Record<string, number>>();
+      segmentationStats.forEach(stat => {
+        if (!statsMap.has(stat.projectId)) {
+          statsMap.set(stat.projectId, {});
+        }
+        const projectStats = statsMap.get(stat.projectId);
+        if (projectStats) {
+          projectStats[stat.segmentationStatus] = stat._count.id;
+        }
+      });
+
+      // Add comprehensive metadata to each project
+      const projectsWithMeta = projects.map(project => {
+        const stats = statsMap.get(project.id) || {};
+        const totalImages = project._count.images;
+        const segmentedImages = stats.completed || 0;
+        const processingImages = stats.processing || 0;
+        const pendingImages = stats.pending || stats.no_segmentation || 0;
+        const failedImages = stats.failed || 0;
+
+        // Calculate completion percentage
+        const completionPercentage = totalImages > 0 ? Math.round((segmentedImages / totalImages) * 100) : 0;
+
+        // Generate proper thumbnail URL
+        const latestImage = project.images[0];
+        let thumbnailUrl = null;
+        if (latestImage?.thumbnailPath) {
+          // Ensure absolute URL for thumbnail
+          thumbnailUrl = latestImage.thumbnailPath.startsWith('http')
+            ? latestImage.thumbnailPath
+            : `/uploads/${latestImage.thumbnailPath}`;
+        } else if (latestImage?.id) {
+          // Fallback to display endpoint
+          thumbnailUrl = `/api/images/${latestImage.id}/display`;
+        }
+
+        return {
+          ...project,
+          isOwned: project.userId === userId,
+          isShared: project.userId !== userId && project.shares.length > 0,
+          owner: project.user,
+          // Enhanced project card metadata
+          imageCount: totalImages,
+          segmentedCount: segmentedImages,
+          processingCount: processingImages,
+          pendingCount: pendingImages,
+          failedCount: failedImages,
+          completionPercentage,
+          thumbnailUrl,
+          lastActivity: latestImage?.updatedAt || project.updatedAt,
+          // Preserve original images array but enhance first image
+          images: latestImage ? [{
+            ...latestImage,
+            thumbnailUrl,
+            displayUrl: `/api/images/${latestImage.id}/display`
+          }] : []
+        };
+      });
 
       logger.info(`Retrieved ${projectsWithMeta.length} projects for user`, 'ProjectService', { 
         userId, 

@@ -10,7 +10,7 @@ import React from 'react';
 import {
   cancelTestUtils,
   type OperationType,
-  type OperationStatus,
+  type OperationStatus as _OperationStatus,
 } from '@/test-utils/cancelTestHelpers';
 import {
   uploadScenarios,

@@ -148,4 +148,15 @@ router.post(
   queueController.cleanupQueue
 );
 
+/**
+ * @route POST /api/queue/cancel-all-user
+ * @description Cancel all segmentation tasks for the current user
+ * @access Private
+ */
+router.post(
+  '/cancel-all-user',
+  handleValidation,
+  queueController.cancelAllUserSegmentations
+);
+
 export { router as queueRoutes };

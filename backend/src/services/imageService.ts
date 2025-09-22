@@ -9,6 +9,9 @@ import sharp from 'sharp';
 import path from 'path';
 import { existsSync, promises as fs } from 'fs';
 import { ApiError } from '../middleware/error';
+import { WebSocketService } from './websocketService';
+import { WebSocketEvent, ProjectUpdateData, DashboardUpdateData } from '../types/websocket';
+import * as UserService from './userService';
 
 export interface UploadImageData {
   originalname: string;
@@ -51,6 +54,119 @@ export interface PaginatedImages {
 
 export class ImageService {
   constructor(private prisma: PrismaClient) {}
+
+  /**
+   * Get WebSocket service instance if available
+   */
+  private getWebSocketService(): WebSocketService | null {
+    try {
+      return WebSocketService.getInstance();
+    } catch {
+      // WebSocket service not initialized yet
+      return null;
+    }
+  }
+
+  /**
+   * Calculate and emit project statistics update via WebSocket
+   */
+  private async emitProjectStatsUpdate(projectId: string, userId: string, operation: 'created' | 'updated' | 'deleted'): Promise<void> {
+    try {
+      const wsService = this.getWebSocketService();
+      if (!wsService) {
+        logger.debug('WebSocket service not available, skipping project stats update', 'ImageService');
+        return;
+      }
+
+      // Calculate current project statistics
+      const [imageCount, segmentedCount] = await Promise.all([
+        this.prisma.image.count({
+          where: { projectId }
+        }),
+        this.prisma.image.count({
+          where: { 
+            projectId,
+            segmentationStatus: 'segmented'
+          }
+        })
+      ]);
+
+      const projectUpdate: ProjectUpdateData = {
+        projectId,
+        userId,
+        operation,
+        updates: {
+          imageCount,
+          segmentedCount
+        },
+        timestamp: new Date()
+      };
+
+      // Emit to user who made the change
+      wsService.emitToUser(userId, WebSocketEvent.PROJECT_UPDATE, projectUpdate);
+
+      // Also emit to project room for other collaborators
+      wsService.broadcastProjectUpdate(projectId, projectUpdate);
+
+      // Emit dashboard metrics update for the user
+      await this.emitDashboardUpdate(userId);
+
+      logger.debug('Project stats update emitted', 'ImageService', {
+        projectId,
+        userId,
+        operation,
+        imageCount,
+        segmentedCount
+      });
+    } catch (error) {
+      logger.error('Failed to emit project stats update', error instanceof Error ? error : undefined, 'ImageService', {
+        projectId,
+        userId,
+        operation
+      });
+    }
+  }
+
+  /**
+   * Calculate and emit dashboard metrics update via WebSocket
+   */
+  private async emitDashboardUpdate(userId: string): Promise<void> {
+    try {
+      const wsService = this.getWebSocketService();
+      if (!wsService) {
+        logger.debug('WebSocket service not available, skipping dashboard update', 'ImageService');
+        return;
+      }
+
+      // Get comprehensive user statistics
+      const userStats = await UserService.getUserStats(userId);
+
+      const dashboardUpdate: DashboardUpdateData = {
+        userId,
+        metrics: {
+          totalProjects: userStats.totalProjects,
+          totalImages: userStats.totalImages,
+          processedImages: userStats.processedImages,
+          imagesUploadedToday: userStats.imagesUploadedToday,
+          storageUsed: userStats.storageUsed,
+          storageUsedBytes: userStats.storageUsedBytes
+        },
+        timestamp: new Date()
+      };
+
+      // Emit dashboard update to the specific user
+      wsService.emitDashboardUpdate(userId, dashboardUpdate);
+
+      logger.debug('Dashboard metrics update emitted', 'ImageService', {
+        userId,
+        metrics: dashboardUpdate.metrics
+      });
+    } catch (error) {
+      logger.error('Failed to emit dashboard update', error instanceof Error ? error : undefined, 'ImageService', {
+        userId
+      });
+    }
+  }
 
   /**
    * Upload multiple images to a project with progress tracking
@@ -201,6 +317,11 @@ export class ImageService {
       successCount: uploadedImages.length,
       failedCount: files.length - uploadedImages.length
     });
+
+    // Emit real-time project stats update for uploaded images
+    if (uploadedImages.length > 0) {
+      await this.emitProjectStatsUpdate(projectId, userId, 'updated');
+    }
 
     return uploadedImages;
   }
@@ -559,6 +680,9 @@ export class ImageService {
         userId
       });
 
+      // Emit real-time project stats update for deleted image
+      await this.emitProjectStatsUpdate(image.projectId, userId, 'updated');
+
     } catch (error) {
       logger.error('Failed to delete image', error instanceof Error ? error : undefined, 'ImageService', {
         imageId,
@@ -699,6 +823,11 @@ export class ImageService {
       userId,
       projectId
     });
+
+    // Emit real-time project stats update for batch deleted images
+    if (deletedCount > 0) {
+      await this.emitProjectStatsUpdate(projectId, userId, 'updated');
+    }
 
     return {
       deletedCount,
@@ -843,6 +972,12 @@ export class ImageService {
       status,
       userId
     });
+
+    // Emit real-time project stats update when segmentation status changes
+    // This is especially important for 'segmented' status changes that affect segmentedCount
+    if (userId && (status === 'segmented' || status === 'failed' || status === 'no_segmentation')) {
+      await this.emitProjectStatsUpdate(image.projectId, userId, 'updated');
+    }
   }
 
   /**

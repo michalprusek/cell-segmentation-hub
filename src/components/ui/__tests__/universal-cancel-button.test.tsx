@@ -3,7 +3,7 @@
  * Tests for the universal cancel button component used across upload, segmentation, and export operations
  */
 
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { UniversalCancelButton } from '../universal-cancel-button';
 

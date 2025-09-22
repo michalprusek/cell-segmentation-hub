@@ -1,12 +1,10 @@
 import React from 'react';
 import { Label } from '@/components/ui/label';
-import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
@@ -39,7 +37,7 @@ const ModelSettingsSection = () => {
     setConfidenceThreshold(value[0] / 100); // Convert from 0-100 to 0-1
   };
 
-  const handleThresholdCommit = (value: number[]) => {
+  const handleThresholdCommit = (_value: number[]) => {
     toast.success(t('settings.modelSettingsSaved'));
   };
 

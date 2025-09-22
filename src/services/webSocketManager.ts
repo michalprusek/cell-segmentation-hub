@@ -3,15 +3,15 @@ import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import { webSocketEventEmitter } from '@/lib/websocketEvents';
 import type {
-  WebSocketEventMap,
+  // WebSocketEventMap,
   SegmentationUpdate,
   QueueStats,
-  SegmentationStatusMessage,
-  QueueStatsMessage,
+  // SegmentationStatusMessage,
+  // QueueStatsMessage,
   SegmentationCompletedMessage,
   SegmentationFailedMessage,
-  WebSocketConnectionOptions,
-  IWebSocketManager,
+  // WebSocketConnectionOptions,
+  // IWebSocketManager,
 } from '@/types/websocket';
 
 // Define internal message types for backward compatibility
