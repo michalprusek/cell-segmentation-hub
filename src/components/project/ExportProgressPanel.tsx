@@ -160,25 +160,14 @@ export const ExportProgressPanel = ({
     }
   };
 
-  // Get progress percentage for display with two-phase system
+  // Get progress percentage for display - use actual server progress
   const getProgressPercentage = () => {
     if (phase === 'completed') return 100;
     if (phase === 'cancelling') return exportProgress; // Keep current progress during cancellation
 
-    // Two-phase progress calculation:
-    // Processing phase: 0-50% of total progress
-    // Downloading phase: 50-100% of total progress
-    if (phase === 'downloading') {
-      // For download phase, map 0-100% download progress to 50-100% total progress
-      return Math.round(50 + exportProgress * 0.5);
-    }
-
-    // For processing phase, map 0-100% export progress to 0-50% total progress
-    if (isExporting && !isDownloading) {
-      return Math.round(exportProgress * 0.5);
-    }
-
-    return Math.round(exportProgress);
+    // Use the actual progress from the server directly
+    // Server handles the export phases internally and provides accurate progress
+    return Math.round(Math.max(0, Math.min(100, exportProgress)));
   };
 
   // Get export status text with immediate feedback for cancelling

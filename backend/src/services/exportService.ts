@@ -92,6 +92,12 @@ export class ExportService {
   private visualizationGenerator: VisualizationGenerator;
   private metricsCalculator: MetricsCalculator;
   private formatConverter: FormatConverter;
+
+  // Helper to check if an export job has been cancelled
+  private isJobCancelled(jobId: string): boolean {
+    const job = this.exportJobs.get(jobId);
+    return job?.status === 'cancelled' || false;
+  }
   private exportJobs: Map<string, ExportJob>;
   private cleanupInterval: NodeJS.Timeout | null = null;
   private readonly JOB_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -273,9 +279,21 @@ export class ExportService {
     const job = this.exportJobs.get(jobId);
     if (!job) {return;}
 
+    // Helper function to check if export was cancelled
+    const checkCancellation = (): void => {
+      const currentJob = this.exportJobs.get(jobId);
+      if (currentJob?.status === 'cancelled') {
+        logger.info('Export cancelled during processing', 'ExportService', { jobId });
+        throw new Error('Export cancelled by user');
+      }
+    };
+
     try {
       job.status = 'processing';
       this.updateJobProgress(jobId, 0);
+
+      // Check cancellation before starting
+      checkCancellation();
 
       // Check if user has access to this project (owner or shared)
       const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
@@ -340,7 +358,7 @@ export class ExportService {
 
       // Create folder structure
       await this.createFolderStructure(exportDir);
-      this.updateJobProgress(jobId, 10);
+      this.updateJobProgress(jobId, 5);
 
       // Parallel export processing - run independent tasks concurrently
       const exportTasks: Promise<void>[] = [];
@@ -352,8 +370,9 @@ export class ExportService {
         options.metricsFormats?.length,
         options.includeDocumentation
       ].filter(Boolean).length;
-      
-      const progressIncrement = totalSteps > 0 ? 80 / totalSteps : 0;
+
+      // Use 90% of progress for processing tasks, leaving 5% for ZIP creation
+      const progressIncrement = totalSteps > 0 ? 90 / totalSteps : 0;
       
       // Copy original images (can run in parallel)
       if (options.includeOriginalImages && project.images) {
@@ -361,40 +380,54 @@ export class ExportService {
         exportTasks.push(
           this.copyOriginalImagesWithProgress(images, exportDir, (current, total) => {
             const taskProgress = Math.floor((current / total) * 100);
-            const baseProgress = 10 + progressStep * progressIncrement;
+            const baseProgress = 5 + progressStep * progressIncrement;
             const currentProgress = baseProgress + (taskProgress * progressIncrement / 100);
             this.updateJobProgress(jobId, currentProgress, 'images', { current, total });
-          }).then(() => {
+          }, jobId).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement, 'images');
+            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement, 'images');
           })
         );
       }
 
       // Generate visualizations (can run in parallel)
       if (options.includeVisualizations && project.images) {
+        const visualizationProgressBase = 5 + progressStep * progressIncrement;
         exportTasks.push(
           this.generateVisualizations(
             project.images as ImageWithSegmentation[],
             exportDir,
-            options.visualizationOptions
+            options.visualizationOptions,
+            jobId,
+            (current, total) => {
+              const taskProgress = Math.floor((current / total) * 100);
+              const currentProgress = visualizationProgressBase + (taskProgress * progressIncrement / 100);
+              this.updateJobProgress(jobId, currentProgress, 'visualizations', { current, total });
+            }
           ).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement, 'visualizations');
           })
         );
       }
 
       // Generate annotations (can run in parallel)
       if (options.annotationFormats?.length && project.images) {
+        const annotationProgressBase = 5 + progressStep * progressIncrement;
         exportTasks.push(
           this.generateAnnotations(
             project.images as ImageWithSegmentation[],
             exportDir,
-            options.annotationFormats
+            options.annotationFormats,
+            jobId,
+            (current, total) => {
+              const taskProgress = Math.floor((current / total) * 100);
+              const currentProgress = annotationProgressBase + (taskProgress * progressIncrement / 100);
+              this.updateJobProgress(jobId, currentProgress, 'annotations', { current, total });
+            }
           ).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement, 'annotations');
           })
         );
       }
@@ -407,10 +440,11 @@ export class ExportService {
             exportDir,
             options.metricsFormats,
             project.title,
-            options
+            options,
+            jobId
           ).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement);
           })
         );
       }
@@ -420,21 +454,33 @@ export class ExportService {
         exportTasks.push(
           this.generateDocumentation(project, exportDir, options).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement);
           })
         );
       }
       
       // Wait for all export tasks to complete in parallel
-      logger.info(`Running ${exportTasks.length} export tasks in parallel`, undefined, 'ExportService');
+      logger.info(`Running ${exportTasks.length} export tasks in parallel`, 'ExportService');
+
+      // Check for cancellation before running tasks
+      checkCancellation();
       await Promise.all(exportTasks);
-      this.updateJobProgress(jobId, 90);
+
+      // Check for cancellation after tasks complete
+      checkCancellation();
+      this.updateJobProgress(jobId, 95, 'compression');
+
+      // Check for cancellation before creating ZIP
+      checkCancellation();
 
       // Create ZIP archive (no compression)
       const zipPath = await this.createZipArchive(
         exportDir,
         project.title
       );
+
+      // Check for cancellation after ZIP creation
+      checkCancellation();
       this.updateJobProgress(jobId, 100);
 
       // Update job with file path
@@ -479,14 +525,15 @@ export class ExportService {
     }
   }
 
-  private async copyOriginalImages(images: ImageWithSegmentation[], exportDir: string): Promise<void> {
-    return this.copyOriginalImagesWithProgress(images, exportDir);
+  private async copyOriginalImages(images: ImageWithSegmentation[], exportDir: string, jobId?: string): Promise<void> {
+    return this.copyOriginalImagesWithProgress(images, exportDir, undefined, jobId);
   }
 
   private async copyOriginalImagesWithProgress(
     images: ImageWithSegmentation[],
     exportDir: string,
-    onProgress?: (current: number, total: number) => void
+    onProgress?: (current: number, total: number) => void,
+    jobId?: string
   ): Promise<void> {
     const imagesDir = path.join(exportDir, 'images');
     const uploadDir = process.env.UPLOAD_DIR || './uploads';
@@ -494,7 +541,7 @@ export class ExportService {
     // Resolve upload directory to prevent path traversal
     const resolvedUploadDir = path.resolve(uploadDir);
     
-    logger.info(`Starting parallel copy of ${images.length} original images`, undefined, 'ExportService');
+    logger.info(`Starting parallel copy of ${images.length} original images`, 'ExportService');
     let copiedCount = 0;
     let skippedCount = 0;
     
@@ -502,6 +549,11 @@ export class ExportService {
     const concurrency = Math.min(16, Math.max(8, Math.floor(images.length / 5)));
     
     const copyImage = async (image: ImageWithSegmentation): Promise<'copied' | 'skipped'> => {
+      // Check if job was cancelled
+      if (jobId && this.isJobCancelled(jobId)) {
+        throw new Error('Export cancelled by user');
+      }
+
       if (!image || !image.originalPath) {
         return 'skipped';
       }
@@ -553,7 +605,7 @@ export class ExportService {
             onProgress(copiedCount + skippedCount, images.length);
           }
 
-          logger.info(`Copy batch ${batchIndex + 1} completed: ${batchCopied} copied, ${batchSkipped} skipped`, undefined, 'ExportService');
+          logger.info(`Copy batch ${batchIndex + 1} completed: ${batchCopied} copied, ${batchSkipped} skipped`, 'ExportService');
         },
         onItemError: (item, error) => {
           logger.error('Image copy failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService');
@@ -562,17 +614,19 @@ export class ExportService {
       }
     );
     
-    logger.info(`Parallel image copy completed: ${copiedCount} copied, ${skippedCount} skipped out of ${images.length} total`, undefined, 'ExportService');
+    logger.info(`Parallel image copy completed: ${copiedCount} copied, ${skippedCount} skipped out of ${images.length} total`, 'ExportService');
   }
 
   private async generateVisualizations(
     images: ImageWithSegmentation[],
     exportDir: string,
-    options?: VisualizationOptions
+    options?: VisualizationOptions,
+    jobId?: string,
+    onProgress?: (current: number, total: number) => void
   ): Promise<void> {
     const vizDir = path.join(exportDir, 'visualizations');
     
-    logger.info(`Starting parallel visualization generation for ${images.length} images`, undefined, 'ExportService');
+    logger.info(`Starting parallel visualization generation for ${images.length} images`, 'ExportService');
     let processedCount = 0;
     let skippedCount = 0;
     
@@ -581,6 +635,11 @@ export class ExportService {
     const concurrency = Math.min(8, Math.max(4, Math.floor(images.length / 10)));
     
     const processImage = async (image: ImageWithSegmentation): Promise<'processed' | 'skipped'> => {
+      // Check if job was cancelled before processing each image
+      if (jobId && this.isJobCancelled(jobId)) {
+        throw new Error('Export cancelled by user');
+      }
+      
       if (!image) {
         logger.warn(`Image is undefined`, 'ExportService');
         return 'skipped';
@@ -652,28 +711,55 @@ export class ExportService {
         batchSize: Math.ceil(images.length / 4), // Process in 4 batches
         concurrency: concurrency,
         onBatchComplete: (batchIndex, batchResults) => {
+          // Check if job was cancelled after each batch
+          if (jobId && this.isJobCancelled(jobId)) {
+            throw new Error('Export cancelled by user');
+          }
+          
           const batchProcessed = batchResults.filter(r => r === 'processed').length;
           const batchSkipped = batchResults.filter(r => r === 'skipped').length;
           processedCount += batchProcessed;
           skippedCount += batchSkipped;
-          logger.info(`Batch ${batchIndex + 1} completed: ${batchProcessed} processed, ${batchSkipped} skipped`, undefined, 'ExportService');
+          
+          // Report progress if callback provided
+          if (onProgress) {
+            onProgress(processedCount + skippedCount, images.length);
+          }
+          
+          logger.info(`Batch ${batchIndex + 1} completed: ${batchProcessed} processed, ${batchSkipped} skipped`, 'ExportService');
         },
         onItemError: (item, error) => {
+          // Check if this is a cancellation error
+          if (error instanceof Error && error.message === 'Export cancelled by user') {
+            throw error; // Re-throw to stop the batch processor
+          }
           logger.error('Image processing failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService');
           skippedCount++;
+          
+          // Report progress even for errors
+          if (onProgress) {
+            onProgress(processedCount + skippedCount, images.length);
+          }
         }
       }
     );
     
-    logger.info(`Parallel visualization generation completed: ${processedCount} processed, ${skippedCount} skipped out of ${images.length} total`, undefined, 'ExportService');
+    logger.info(`Parallel visualization generation completed: ${processedCount} processed, ${skippedCount} skipped out of ${images.length} total`, 'ExportService');
   }
 
   private async generateAnnotations(
     images: ImageWithSegmentation[],
     exportDir: string,
-    formats: string[]
+    formats: string[],
+    jobId?: string,
+    onProgress?: (current: number, total: number) => void
   ): Promise<void> {
     for (const format of formats) {
+      // Check if job was cancelled before processing each format
+      if (jobId && this.isJobCancelled(jobId)) {
+        throw new Error('Export cancelled by user');
+      }
+      
       const formatDir = path.join(exportDir, 'annotations', format);
       
       if (format === 'coco') {
@@ -697,6 +783,11 @@ export class ExportService {
         );
       } else if (format === 'yolo') {
         for (let i = 0; i < images.length; i++) {
+          // Check if job was cancelled inside YOLO loop (most time-consuming)
+          if (jobId && this.isJobCancelled(jobId)) {
+            throw new Error('Export cancelled by user');
+          }
+
           const image = images[i];
           if (image && image.segmentation) {
             const yoloData = await this.formatConverter.convertToYOLO(
@@ -709,6 +800,11 @@ export class ExportService {
               path.join(formatDir, `${imageNameWithoutExt}.txt`),
               yoloData
             );
+          }
+
+          // Report progress for YOLO generation
+          if (onProgress) {
+            onProgress(i + 1, images.length);
           }
         }
       } else if (format === 'json') {
@@ -739,8 +835,14 @@ export class ExportService {
     exportDir: string,
     formats: string[],
     _projectName: string,
-    options?: ExportOptions
+    options?: ExportOptions,
+    jobId?: string
   ): Promise<void> {
+    // Check if job was cancelled before starting metrics calculation
+    if (jobId && this.isJobCancelled(jobId)) {
+      throw new Error('Export cancelled by user');
+    }
+    
     const metricsDir = path.join(exportDir, 'metrics');
     // Convert images to the format expected by metrics calculator
     const metricsImages = images.map(image => ({
@@ -762,7 +864,17 @@ export class ExportService {
       options?.pixelToMicrometerScale
     );
 
+    // Check if job was cancelled after metrics calculation
+    if (jobId && this.isJobCancelled(jobId)) {
+      throw new Error('Export cancelled by user');
+    }
+
     for (const format of formats) {
+      // Check if job was cancelled before each format export
+      if (jobId && this.isJobCancelled(jobId)) {
+        throw new Error('Export cancelled by user');
+      }
+      
       if (format === 'excel') {
         await this.metricsCalculator.exportToExcel(
           allMetrics,
@@ -1501,6 +1613,13 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
 
     const job = this.exportJobs.get(jobId);
     if (job && job.projectId === projectId) {
+      // Check if job is already completed or cancelled
+      if (job.status === 'completed' || job.status === 'cancelled') {
+        logger.info('Export job already completed or cancelled', 'ExportService', { jobId, status: job.status });
+        return;
+      }
+
+      // Mark job as cancelled immediately
       job.status = 'cancelled';
       job.completedAt = new Date();
 
@@ -1518,11 +1637,32 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
       // Send cancellation event to user via WebSocket
       this.sendToUser(userId, 'export:cancelled', cancelData);
 
+      logger.info('Export job cancelled', 'ExportService', {
+        jobId,
+        projectId,
+        userId,
+        progress: job.progress
+      });
+
       // Cancel the Bull queue job if bullJobId exists and queue is available
       if (job.bullJobId && this.exportQueue && typeof (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob === 'function') {
-        const queueJob = await (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob(job.bullJobId);
-        if (queueJob && ['waiting', 'delayed'].includes(await queueJob.getState())) {
-          await queueJob.remove();
+        try {
+          const queueJob = await (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob(job.bullJobId);
+          if (queueJob) {
+            const state = await queueJob.getState();
+            logger.info('Bull queue job state', 'ExportService', { jobId, bullJobId: job.bullJobId, state });
+
+            // Try to remove job regardless of state (except completed)
+            if (state !== 'completed') {
+              await queueJob.remove();
+              logger.info('Bull queue job removed', 'ExportService', { jobId, bullJobId: job.bullJobId });
+            }
+          }
+        } catch (error) {
+          logger.error('Failed to cancel Bull queue job', error instanceof Error ? error : undefined, 'ExportService', {
+            jobId,
+            bullJobId: job.bullJobId
+          });
         }
       }
 

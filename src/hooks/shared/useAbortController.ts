@@ -55,6 +55,7 @@ export function useAbortController(debugKey?: string) {
   /**
    * Abort a specific controller by key
    * Use this when cancelling a specific operation
+   * Note: Keeps the aborted controller in the map to prevent recreation
    */
   const abort = useCallback(
     (controllerKey: string = 'default') => {
@@ -65,7 +66,9 @@ export function useAbortController(debugKey?: string) {
           `🛑 Aborted controller for ${debugContext}:${controllerKey}`
         );
       }
-      controllersRef.current.delete(controllerKey);
+      // IMPORTANT: Don't delete the controller, keep it as aborted
+      // This prevents getSignal from creating a new non-aborted controller
+      // controllersRef.current.delete(controllerKey);
     },
     [debugContext]
   );
@@ -79,11 +82,32 @@ export function useAbortController(debugKey?: string) {
   }, []);
 
   /**
+   * Reset a specific controller (remove it so a fresh one can be created)
+   * Use this when starting a new operation after a previous cancellation
+   */
+  const resetController = useCallback(
+    (controllerKey: string = 'default') => {
+      controllersRef.current.delete(controllerKey);
+      logger.debug(
+        `🔄 Reset controller for ${debugContext}:${controllerKey}`
+      );
+    },
+    [debugContext]
+  );
+
+  /**
    * Get the abort signal for a specific controller key
    * Creates a new controller if none exists
+   * Returns aborted signal if controller was previously aborted
    */
   const getSignal = useCallback(
     (controllerKey: string = 'default') => {
+      const existing = controllersRef.current.get(controllerKey);
+      if (existing) {
+        // Return existing signal even if aborted
+        return existing.signal;
+      }
+      // Create new controller only if none exists
       return getController(controllerKey).signal;
     },
     [getController]
@@ -102,6 +126,7 @@ export function useAbortController(debugKey?: string) {
     abort,
     abortAll,
     isAborted,
+    resetController,
   };
 }
 

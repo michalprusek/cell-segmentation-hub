@@ -1123,6 +1123,69 @@ const SegmentationEditor = () => {
                       />
                     )}
 
+                    {/* WebGL Universal Polygon and Vertex Renderer */}
+                    {/* Positioned inside CanvasContent to inherit proper transforms */}
+                    <WebGLPolygonRenderer
+                      polygons={editor.polygons
+                        .filter(polygon => !hiddenPolygonIds.has(polygon.id))
+                        .filter(
+                          polygon =>
+                            polygon.points && polygon.points.length >= 3
+                        )}
+                      selectedPolygonId={editor.selectedPolygonId}
+                      hoveredVertex={
+                        editor.hoveredVertex || {
+                          polygonId: null,
+                          vertexIndex: null,
+                        }
+                      }
+                      vertexDragState={editor.vertexDragState}
+                      transform={
+                        new DOMMatrix([
+                          1, // Identity - CSS transforms handle zoom
+                          0,
+                          0,
+                          1, // Identity - CSS transforms handle zoom
+                          0, // Identity - CSS transforms handle translation
+                          0, // Identity - CSS transforms handle translation
+                        ])
+                      }
+                      zoom={1}
+                      imageSize={editor.imageSize}
+                      onVertexClick={(polygonId, vertexIndex, event) => {
+                        // Handle vertex click through existing interaction system
+                        const syntheticEvent = {
+                          preventDefault: () => {},
+                          stopPropagation: () => {},
+                          currentTarget: {
+                            dataset: {
+                              polygonId,
+                              vertexIndex: vertexIndex.toString(),
+                            },
+                          },
+                          clientX: event.clientX,
+                          clientY: event.clientY,
+                        } as any;
+
+                        // Call the existing mouse down handler
+                        editor.enhancedHandleMouseDown(syntheticEvent);
+                      }}
+                      onVertexMouseEnter={(polygonId, vertexIndex) => {
+                        editor.setHoveredVertex({ polygonId, vertexIndex });
+                      }}
+                      onVertexMouseLeave={() => {
+                        editor.setHoveredVertex({
+                          polygonId: null,
+                          vertexIndex: null,
+                        });
+                      }}
+                      onPolygonClick={editor.handlePolygonClick}
+                      quality="ultra"
+                      targetFPS={60}
+                      enableAntialiasing={true}
+                      enableAnimations={true}
+                    />
+
                     {/* SVG Overlay for polygon rendering - uses same dimensions as image */}
                     <svg
                       width={imageDimensions?.width || canvasWidth}
@@ -1172,113 +1235,8 @@ const SegmentationEditor = () => {
                       {/* SVG Filters for glow effects */}
                       <CanvasSvgFilters />
 
-                      {/* Render all polygons */}
-                      {(() => {
-                        const visiblePolygons = editor.polygons
-                          .filter(polygon => !hiddenPolygonIds.has(polygon.id))
-                          .filter(
-                            polygon =>
-                              polygon.points && polygon.points.length >= 3
-                          );
-
-                        // Render polygons
-                        return (
-                          <>
-                            {/* Actual polygons */}
-                            {(() => {
-                              // DEBUG: Check for duplicate IDs and selection states
-                              const polygonIds = visiblePolygons.map(p => p.id);
-                              const uniqueIds = [...new Set(polygonIds)];
-                              const duplicateIds = polygonIds.filter(
-                                (id, index) => polygonIds.indexOf(id) !== index
-                              );
-
-                              // Enhanced polygon validation stats including ID validation
-                              // Optimized: Single loop to compute all validation stats (prevent multiple array iterations)
-                              const validationStats = visiblePolygons.reduce(
-                                (stats, p) => {
-                                  const hasValidId = validatePolygonId(p.id);
-                                  const type = p.type || 'undefined';
-
-                                  if (hasValidId) {
-                                    stats.withValidIds++;
-                                  } else {
-                                    stats.withInvalidIds++;
-                                    stats.invalidPolygons.push({
-                                      id: p.id,
-                                      type: p.type,
-                                      idType: typeof p.id,
-                                    });
-                                  }
-
-                                  // Count types
-                                  if (p.type === 'external')
-                                    stats.externalCount++;
-                                  else if (p.type === 'internal')
-                                    stats.internalCount++;
-                                  else stats.undefinedTypeCount++;
-
-                                  // Only store detailed info if debugging is needed
-                                  if (process.env.NODE_ENV === 'development') {
-                                    stats.polygonTypes.push({
-                                      id: p.id,
-                                      type: type,
-                                      hasParentId: !!p.parent_id,
-                                      parent_id: p.parent_id,
-                                    });
-                                  }
-
-                                  return stats;
-                                },
-                                {
-                                  visibleCount: visiblePolygons.length,
-                                  selectedPolygonId: editor.selectedPolygonId,
-                                  polygonIds: polygonIds,
-                                  uniqueIdsCount: uniqueIds.length,
-                                  hasDuplicates: duplicateIds.length > 0,
-                                  duplicateIds: duplicateIds,
-                                  withValidIds: 0,
-                                  withInvalidIds: 0,
-                                  invalidPolygons: [],
-                                  externalCount: 0,
-                                  internalCount: 0,
-                                  undefinedTypeCount: 0,
-                                  polygonTypes: [],
-                                }
-                              );
-
-                              // Only log validation stats if there are issues (reduce console spam)
-                              if (
-                                validationStats.withInvalidIds > 0 ||
-                                validationStats.undefinedTypeCount > 0
-                              ) {
-                                logger.debug(
-                                  '[PolygonValidation] Issues detected during rendering',
-                                  validationStats
-                                );
-                              }
-
-                              // CRITICAL WARNING: Alert if any polygons with invalid IDs made it to rendering
-                              if (validationStats.withInvalidIds > 0) {
-                                logger.error(
-                                  '[PolygonValidation] CRITICAL: Polygons with invalid IDs detected in render!',
-                                  {
-                                    invalidCount:
-                                      validationStats.withInvalidIds,
-                                    invalidPolygons:
-                                      validationStats.invalidPolygons,
-                                    riskOfReactKeyConflicts: true,
-                                  }
-                                );
-                              }
-                              // SVG polygon rendering disabled - now handled by WebGL
-                              return null;
-                            })()}
-                          </>
-                        );
-                      })()}
-
-                      {/* Vertices are now rendered by WebGL outside SVG */}
+                      {/* Polygon rendering now handled by WebGL inside CanvasContent */}
+                      {/* This SVG layer is now only for UI elements and temporary geometry */}
 
                       {/* Temporary geometry (preview lines, temp points, etc.) */}
                       <CanvasTemporaryGeometryLayer
@@ -1293,82 +1251,17 @@ const SegmentationEditor = () => {
                     </svg>
                   </CanvasContent>
 
-                  {/* WebGL Universal Polygon and Vertex Renderer */}
-                  {/* Render outside SVG for better performance and compatibility */}
-                  <WebGLPolygonRenderer
-                    polygons={(() => {
-                      // Use same visible polygons logic as SVG rendering
-                      return editor.polygons
-                        .filter(polygon => !hiddenPolygonIds.has(polygon.id))
-                        .filter(
-                          polygon =>
-                            polygon.points && polygon.points.length >= 3
-                        );
-                    })()}
-                    selectedPolygonId={editor.selectedPolygonId}
-                    hoveredVertex={
-                      editor.hoveredVertex || {
-                        polygonId: null,
-                        vertexIndex: null,
-                      }
-                    }
-                    vertexDragState={editor.vertexDragState}
-                    transform={
-                      new DOMMatrix([
-                        editor.transform.zoom,
-                        0,
-                        0,
-                        editor.transform.zoom,
-                        editor.transform.translateX,
-                        editor.transform.translateY,
-                      ])
-                    }
-                    zoom={editor.transform.zoom}
-                    imageSize={editor.imageSize}
-                    onVertexClick={(polygonId, vertexIndex, event) => {
-                      // Handle vertex click through existing interaction system
-                      // Simulate the expected event structure
-                      const syntheticEvent = {
-                        preventDefault: () => {},
-                        stopPropagation: () => {},
-                        currentTarget: {
-                          dataset: {
-                            polygonId,
-                            vertexIndex: vertexIndex.toString(),
-                          },
-                        },
-                        clientX: event.clientX,
-                        clientY: event.clientY,
-                      } as any;
-
-                      // Call the existing mouse down handler
-                      editor.enhancedHandleMouseDown(syntheticEvent);
-                    }}
-                    onVertexMouseEnter={(polygonId, vertexIndex) => {
-                      editor.setHoveredVertex({ polygonId, vertexIndex });
-                    }}
-                    onVertexMouseLeave={() => {
-                      editor.setHoveredVertex({
-                        polygonId: null,
-                        vertexIndex: null,
-                      });
-                    }}
-                    onPolygonClick={editor.handlePolygonClick}
-                    quality="ultra"
-                    targetFPS={60}
-                    enableAntialiasing={true}
-                    enableAnimations={true}
-                  />
-
-                  {/* Mode Instructions Overlay */}
-                  <ModeInstructions
-                    editMode={editor.editMode}
-                    interactionState={editor.interactionState}
-                    selectedPolygonId={editor.selectedPolygonId}
-                    tempPoints={editor.tempPoints}
-                    isShiftPressed={editor.keyboardState.isShiftPressed()}
-                  />
+                  {/* WebGL Polygon Renderer moved inside CanvasContent for proper transform inheritance */}
                 </CanvasContainer>
+
+                {/* Mode Instructions Overlay - positioned outside CanvasContainer */}
+                <ModeInstructions
+                  editMode={editor.editMode}
+                  interactionState={editor.interactionState}
+                  selectedPolygonId={editor.selectedPolygonId}
+                  tempPoints={editor.tempPoints}
+                  isShiftPressed={editor.keyboardState.isShiftPressed()}
+                />
               </div>
 
               {/* Right: Polygon List Panel */}

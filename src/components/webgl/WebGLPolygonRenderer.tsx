@@ -275,8 +275,10 @@ export const WebGLPolygonRenderer: React.FC<WebGLPolygonRendererProps> = ({
       const canvasY = event.clientY - rect.top;
 
       // Convert to image coordinates
-      const worldX = (canvasX - transform.e) / transform.a;
-      const worldY = (canvasY - transform.f) / transform.d;
+      // Since WebGL canvas inherits CSS transforms from CanvasContent,
+      // canvas coordinates already match image coordinates directly
+      const worldX = canvasX;
+      const worldY = canvasY;
 
       // Hit test vertices
       const hitVertex = rendererRef.current.hitTest(worldX, worldY, vertexData);

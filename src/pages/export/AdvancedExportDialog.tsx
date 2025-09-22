@@ -44,7 +44,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import { useAdvancedExport } from './hooks/useAdvancedExport';
+import { useSharedAdvancedExport } from './hooks/useSharedAdvancedExport';
 import { useLanguage } from '@/contexts/useLanguage';
 import { ProjectImage } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
@@ -89,7 +89,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         completedJobId,
         wsConnected,
         currentJob,
-      } = useAdvancedExport(projectId);
+      } = useSharedAdvancedExport(projectId);
 
       const [activeTab, setActiveTab] = useState('general');
 

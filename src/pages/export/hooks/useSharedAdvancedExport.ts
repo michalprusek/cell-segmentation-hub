@@ -9,6 +9,7 @@ import {
 } from '@/lib/downloadUtils';
 import ExportStateManager from '@/lib/exportStateManager';
 import { useExportContext } from '@/contexts/ExportContext';
+import { useAbortController } from '@/hooks/shared/useAbortController';
 
 // Sanitize filename to remove/replace invalid characters
 const sanitizeFilename = (filename: string): string => {
@@ -79,6 +80,9 @@ export const useSharedAdvancedExport = (projectId: string) => {
   >();
 
   const { socket } = useWebSocket();
+
+  // Initialize AbortController for cancellable downloads
+  const { getSignal, abort, abortAll, resetController, isAborted } = useAbortController('export');
 
   // Get current export state from context
   const exportState = getExportState(projectId);
@@ -435,9 +439,16 @@ export const useSharedAdvancedExport = (projectId: string) => {
 
   // Auto-download when export completes
   useEffect(() => {
-    if (completedJobId) {
+    // Only auto-download if not cancelled and job is complete
+    if (completedJobId && currentJob?.status !== 'cancelled') {
       const autoDownload = async () => {
         try {
+          // Check if export was cancelled before starting download
+          if (currentJob?.status === 'cancelled') {
+            logger.info('Auto-download skipped - export was cancelled');
+            return;
+          }
+
           // Set downloading state
           updateState({ isDownloading: true });
 
@@ -447,14 +458,27 @@ export const useSharedAdvancedExport = (projectId: string) => {
             // Continue with download attempt instead of returning
           }
 
+          const signal = getSignal('download');
+          logger.info('📥 Starting auto-download with signal aborted:', signal.aborted);
+
           const response = await apiClient.get(
             `/projects/${projectId}/export/${completedJobId}/download`,
             {
               responseType: 'blob',
               // Add timeout for large files (5 minutes)
               timeout: 300000,
+              // Add AbortController signal for cancellation support
+              signal: signal,
             }
           );
+
+          logger.info('✅ Download request completed');
+
+          // Double-check cancellation after network request
+          if (currentJob?.status === 'cancelled') {
+            logger.info('Download cancelled after request completion');
+            return;
+          }
 
           // Use centralized download utility with project name
           const timestamp = new Date().toISOString().slice(0, 10);
@@ -480,7 +504,18 @@ export const useSharedAdvancedExport = (projectId: string) => {
           }, 5000);
 
           logger.info('Export auto-downloaded', { jobId: completedJobId });
-        } catch (error) {
+        } catch (error: any) {
+          // Handle abort errors gracefully
+          if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+            logger.info('Download cancelled by user');
+            updateState({
+              exportStatus: 'Download cancelled',
+              isDownloading: false,
+              completedJobId: null,
+            });
+            return;
+          }
+
           logger.error('Failed to auto-download export', error);
           updateState({
             exportStatus:
@@ -494,7 +529,7 @@ export const useSharedAdvancedExport = (projectId: string) => {
       // Small delay to ensure the export file is fully ready
       setTimeout(autoDownload, 1000);
     }
-  }, [completedJobId, projectId, updateState]);
+  }, [completedJobId, projectId, updateState, currentJob, getSignal]);
 
   const updateExportOptions = useCallback((updates: Partial<ExportOptions>) => {
     setExportOptions(prev => ({ ...prev, ...updates }));
@@ -503,6 +538,10 @@ export const useSharedAdvancedExport = (projectId: string) => {
   const startExport = useCallback(
     async (projectName?: string) => {
       try {
+        // Reset abort controllers for fresh start
+        resetController('download');
+        resetController('api');
+
         // Clear any previous completed job when starting new export
         updateState({
           completedJobId: null,
@@ -539,7 +578,7 @@ export const useSharedAdvancedExport = (projectId: string) => {
         throw error;
       }
     },
-    [projectId, exportOptions, updateState]
+    [projectId, exportOptions, updateState, resetController]
   );
 
   const triggerDownload = useCallback(async () => {
@@ -571,14 +610,21 @@ export const useSharedAdvancedExport = (projectId: string) => {
         // Continue with download attempt
       }
 
+      const signal = getSignal('download');
+      logger.info('📥 Starting manual download with signal aborted:', signal.aborted);
+
       const response = await apiClient.get(
         `/projects/${projectId}/export/${completedJobId}/download`,
         {
           responseType: 'blob',
           // Add timeout for large files (5 minutes)
           timeout: 300000,
+          // Add AbortController signal for cancellation support
+          signal: signal,
         }
       );
+
+      logger.info('✅ Manual download request completed');
 
       // Use centralized download utility with project name
       const timestamp = new Date().toISOString().slice(0, 10);
@@ -604,7 +650,18 @@ export const useSharedAdvancedExport = (projectId: string) => {
       }, 5000);
 
       logger.info('Export manually downloaded', { jobId: completedJobId });
-    } catch (error) {
+    } catch (error: any) {
+      // Handle abort errors gracefully
+      if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+        logger.info('Manual download cancelled by user');
+        updateState({
+          exportStatus: 'Download cancelled',
+          isDownloading: false,
+          completedJobId: null,
+        });
+        return;
+      }
+
       logger.error('Failed to download export', { error, completedJobId });
       updateState({
         exportStatus: 'Failed to download export. Please try again.',
@@ -613,15 +670,29 @@ export const useSharedAdvancedExport = (projectId: string) => {
 
       // Don't clear completedJobId on error so user can retry
     }
-  }, [projectId, completedJobId, isDownloading, updateState]);
+  }, [projectId, completedJobId, isDownloading, updateState, getSignal]);
 
   const cancelExport = useCallback(async () => {
     if (!currentJob) return;
 
+    // CRITICAL: Abort any in-progress downloads immediately
+    // This must happen first to stop downloads instantly
+    logger.info('🔴 Calling abort for download and api');
+    abort('download');
+    abort('api');
+
+    // Verify the signal is actually aborted (use isAborted to avoid creating new controller)
+    const downloadAborted = isAborted('download');
+    const apiAborted = isAborted('api');
+    logger.info('🔍 Download signal aborted state:', downloadAborted);
+    logger.info('🔍 API signal aborted state:', apiAborted);
+
     // Set cancelling state immediately for instant feedback
     updateState({
       isCancelling: true,
-      exportStatus: 'Cancelling export...',
+      exportStatus: 'Cancelling...',
+      // Clear download state immediately if downloading
+      isDownloading: false,
     });
 
     try {
@@ -638,20 +709,15 @@ export const useSharedAdvancedExport = (projectId: string) => {
         });
       }
 
-      // Clear persisted state immediately
-      ExportStateManager.clearExportState(projectId);
-
-      // Update state (the cancelled event from server will provide final confirmation)
+      // Update the current job status locally for immediate effect
       updateState({
-        currentJob: null,
-        isExporting: false,
-        isDownloading: false,
-        isCancelling: false,
-        exportStatus: 'Export cancelled',
-        completedJobId: null,
+        currentJob: { ...currentJob, status: 'cancelled' },
       });
 
-      logger.info('Export cancelled', { jobId: currentJob.id });
+      // Don't clear state immediately - wait for WebSocket confirmation
+      // The WebSocket 'export:cancelled' event handler will clean up the rest
+
+      logger.info('Export cancellation requested', { jobId: currentJob.id });
     } catch (error) {
       logger.error('Failed to cancel export', error);
       updateState({
@@ -659,7 +725,7 @@ export const useSharedAdvancedExport = (projectId: string) => {
         exportStatus: 'Failed to cancel export',
       });
     }
-  }, [projectId, currentJob, updateState, socket]);
+  }, [projectId, currentJob, updateState, socket, abort, getSignal]);
 
   const getExportStatus = useCallback(
     async (jobId: string) => {
