@@ -73,9 +73,7 @@ const Navbar = () => {
             size="sm"
             className="text-sm signin-btn-hover"
           >
-            <Link to="/sign-in">
-              {t('auth.signIn')}
-            </Link>
+            <Link to="/sign-in">{t('auth.signIn')}</Link>
           </Button>
           <div className="flex items-center gap-2 ml-2">
             <LanguageSwitcher />
@@ -136,10 +134,7 @@ const Navbar = () => {
               variant="framed"
               className="w-full justify-start signin-btn-hover"
             >
-              <Link
-                to="/sign-in"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
+              <Link to="/sign-in" onClick={() => setIsMobileMenuOpen(false)}>
                 {t('auth.signIn')}
               </Link>
             </Button>

@@ -50,7 +50,9 @@ export const usePolygonSelection = ({
   useEffect(() => {
     if (editMode === EditMode.EditVertices && !currentSelectedPolygonId) {
       // Coupling violation: EditVertices without selection
-      logger.warn('usePolygonSelection: Coupling violation detected - EditVertices mode without selection, returning to View mode');
+      logger.warn(
+        'usePolygonSelection: Coupling violation detected - EditVertices mode without selection, returning to View mode'
+      );
       onModeChange(EditMode.View);
     }
   }, [editMode, currentSelectedPolygonId, onModeChange]);

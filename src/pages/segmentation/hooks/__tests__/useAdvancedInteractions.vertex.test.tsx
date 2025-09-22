@@ -24,7 +24,7 @@ vi.mock('@/lib/polygonGeometry', () => ({
   findClosestVertex: vi.fn(() => null),
   findClosestSegment: vi.fn(() => null),
   calculatePolygonArea: vi.fn(() => 100),
-  createPolygon: vi.fn((points) => ({
+  createPolygon: vi.fn(points => ({
     id: 'new-polygon',
     points,
     confidence: 0.9,
@@ -101,10 +101,15 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
 
   describe('Vertex Target Detection', () => {
     it('correctly identifies vertex targets in right-click events', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
       // Create mock SVG element with vertex data attributes
-      const mockVertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const mockVertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       mockVertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       mockVertexElement.setAttribute('data-vertex-index', '2');
 
@@ -126,7 +131,9 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
     });
 
     it('handles right-click on non-vertex elements correctly', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
       // Create mock non-vertex element
       const mockCanvasElement = document.createElement('div');
@@ -148,15 +155,23 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
     });
 
     it('distinguishes between vertex and polygon elements', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
       // Test vertex element
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', '1');
 
       // Test polygon element (has polygon-id but no vertex-index)
-      const polygonElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      const polygonElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'path'
+      );
       polygonElement.setAttribute('data-polygon-id', 'test-polygon-1');
 
       const vertexEvent = {
@@ -190,11 +205,14 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
   describe('Mode-Specific Vertex Handling', () => {
     it('allows vertex context menu only in EditVertices mode', () => {
       const { result, rerender } = renderHook(
-        (props) => useAdvancedInteractions(props),
+        props => useAdvancedInteractions(props),
         { initialProps: defaultProps }
       );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', '2');
 
@@ -234,8 +252,8 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
     });
 
     it('handles slice mode right-click correctly with non-vertex elements', () => {
-      const { result } = renderHook(
-        () => useAdvancedInteractions({
+      const { result } = renderHook(() =>
+        useAdvancedInteractions({
           ...defaultProps,
           editMode: EditMode.Slice,
           selectedPolygonId: 'test-polygon-1',
@@ -266,13 +284,18 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
       const mockGetPolygons = vi.fn(() => [testPolygon]);
       const mockSetVertexDragState = vi.fn();
 
-      const { result } = renderHook(() => useAdvancedInteractions({
-        ...defaultProps,
-        getPolygons: mockGetPolygons,
-        setVertexDragState: mockSetVertexDragState,
-      }));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions({
+          ...defaultProps,
+          getPolygons: mockGetPolygons,
+          setVertexDragState: mockSetVertexDragState,
+        })
+      );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', '2');
 
@@ -304,13 +327,18 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
       const mockGetPolygons = vi.fn(() => [testPolygon]);
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const { result } = renderHook(() => useAdvancedInteractions({
-        ...defaultProps,
-        getPolygons: mockGetPolygons,
-        setVertexDragState: undefined,
-      }));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions({
+          ...defaultProps,
+          getPolygons: mockGetPolygons,
+          setVertexDragState: undefined,
+        })
+      );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', '1');
 
@@ -330,16 +358,23 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
         });
       }).not.toThrow();
 
-      expect(consoleSpy).toHaveBeenCalledWith('⚠️ setVertexDragState not available');
+      expect(consoleSpy).toHaveBeenCalledWith(
+        '⚠️ setVertexDragState not available'
+      );
       consoleSpy.mockRestore();
     });
   });
 
   describe('Event Propagation Control', () => {
     it('prevents vertex mouse down events from bubbling to polygon handlers', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', '0');
 
@@ -372,7 +407,9 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
     });
 
     it('allows polygon selection when clicking outside vertices', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
       // Mock finding closest vertex to return null (not near any vertex)
       const { findClosestVertex } = require('@/lib/polygonGeometry');
@@ -399,9 +436,14 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
 
   describe('Error Handling and Edge Cases', () => {
     it('handles invalid vertex indices gracefully', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', 'invalid');
 
@@ -425,12 +467,17 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
     it('handles missing polygon gracefully', () => {
       const mockGetPolygons = vi.fn(() => []); // No polygons
 
-      const { result } = renderHook(() => useAdvancedInteractions({
-        ...defaultProps,
-        getPolygons: mockGetPolygons,
-      }));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions({
+          ...defaultProps,
+          getPolygons: mockGetPolygons,
+        })
+      );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'nonexistent-polygon');
       vertexElement.setAttribute('data-vertex-index', '0');
 
@@ -459,9 +506,14 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
     });
 
     it('handles out-of-bounds vertex index', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', '999'); // Out of bounds
 
@@ -485,9 +537,14 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
 
   describe('Integration with Add Points Mode', () => {
     it('switches to AddPoints mode when Shift+clicking vertex', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', '1');
 
@@ -519,9 +576,14 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
 
   describe('Performance Considerations', () => {
     it('handles rapid vertex interactions efficiently', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
-      const vertexElement = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      const vertexElement = document.createElementNS(
+        'http://www.w3.org/2000/svg',
+        'circle'
+      );
       vertexElement.setAttribute('data-polygon-id', 'test-polygon-1');
       vertexElement.setAttribute('data-vertex-index', '2');
 
@@ -546,7 +608,9 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
     });
 
     it('optimizes vertex target detection', () => {
-      const { result } = renderHook(() => useAdvancedInteractions(defaultProps));
+      const { result } = renderHook(() =>
+        useAdvancedInteractions(defaultProps)
+      );
 
       // Test with various element types
       const elements = [
@@ -556,7 +620,7 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
         document.createTextNode('text'),
       ];
 
-      elements.forEach((element) => {
+      elements.forEach(element => {
         const mockEvent = {
           button: 2,
           target: element,

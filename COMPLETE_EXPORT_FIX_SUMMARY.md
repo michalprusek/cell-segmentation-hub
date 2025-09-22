@@ -5,20 +5,24 @@
 ## Issues Fixed
 
 ### 1. AbortController Verification Bug
+
 **Problem:** When verifying abort state, calling `getSignal()` created new controllers
 **Solution:** Use `isAborted()` method instead for side-effect-free verification
 
 ### 2. State Isolation Between Components
+
 **Problem:** AdvancedExportDialog and ProjectDetail used separate hook instances
 **Solution:** Changed both to use `useSharedAdvancedExport` for shared state
 
 ### 3. Missing ExportProvider Context
+
 **Problem:** App crashed with "useExportContext must be used within an ExportProvider"
 **Solution:** Added ExportProvider to the app's provider stack
 
 ## Complete Solution
 
 ### Step 1: Fixed AbortController Verification
+
 ```typescript
 // In useAdvancedExport.ts and useSharedAdvancedExport.ts
 // BEFORE (creates new controller):
@@ -29,6 +33,7 @@ const downloadAborted = isAborted('download');
 ```
 
 ### Step 2: Switched to Shared Hooks
+
 ```typescript
 // AdvancedExportDialog.tsx
 import { useSharedAdvancedExport } from './hooks/useSharedAdvancedExport';
@@ -40,6 +45,7 @@ const exportHook = useSharedAdvancedExport(id || '');
 ```
 
 ### Step 3: Added ExportProvider to App
+
 ```typescript
 // App.tsx
 import { ExportProvider } from '@/contexts/ExportContext';
@@ -113,6 +119,7 @@ import { ExportProvider } from '@/contexts/ExportContext';
 ## User Experience
 
 Now users can:
+
 1. Click "Advanced Export" button in toolbar
 2. Start an export from the dialog
 3. Close the dialog

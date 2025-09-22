@@ -80,7 +80,8 @@ export const useAdvancedExport = (projectId: string) => {
   const [isDownloading, setIsDownloading] = useState(false);
 
   // Initialize AbortController for cancellable downloads
-  const { getSignal, abort, resetController, isAborted } = useAbortController('export');
+  const { getSignal, abort, resetController, isAborted } =
+    useAbortController('export');
   const [currentProjectName, setCurrentProjectName] = useState<
     string | undefined
   >();
@@ -372,7 +373,10 @@ export const useAdvancedExport = (projectId: string) => {
           }
 
           const signal = getSignal('download');
-          logger.info('📥 Starting auto-download with signal aborted:', signal.aborted);
+          logger.info(
+            '📥 Starting auto-download with signal aborted:',
+            signal.aborted
+          );
 
           const response = await apiClient.get(
             `/projects/${projectId}/export/${completedJobId}/download`,
@@ -502,7 +506,10 @@ export const useAdvancedExport = (projectId: string) => {
       }
 
       const signal = getSignal('download');
-      logger.info('📥 Starting manual download with signal aborted:', signal.aborted);
+      logger.info(
+        '📥 Starting manual download with signal aborted:',
+        signal.aborted
+      );
 
       const response = await apiClient.get(
         `/projects/${projectId}/export/${completedJobId}/download`,
@@ -561,7 +568,7 @@ export const useAdvancedExport = (projectId: string) => {
       currentJob,
       isExporting,
       isDownloading,
-      projectId
+      projectId,
     });
 
     if (!currentJob) {

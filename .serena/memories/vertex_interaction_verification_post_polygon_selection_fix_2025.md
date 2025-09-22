@@ -32,7 +32,9 @@ const handleDeleteVertex = useCallback(
     }
 
     // Create new points array without the deleted vertex
-    const updatedPoints = polygon.points.filter((_, index) => index !== vertexIndex);
+    const updatedPoints = polygon.points.filter(
+      (_, index) => index !== vertexIndex
+    );
     const updatedPolygons = polygons.map(p =>
       p.id === polygonId ? { ...p, points: updatedPoints } : p
     );
@@ -49,15 +51,17 @@ const handleDeleteVertex = useCallback(
 **Key Insight**: Vertex events work through event bubbling and data attributes, NOT direct event handlers on CanvasVertex.
 
 **Flow**:
+
 ```
-CanvasVertex (no direct handlers) 
-→ Event bubbles to Canvas 
-→ useAdvancedInteractions.handleMouseDown 
-→ Detects vertex via target.dataset.vertexIndex 
+CanvasVertex (no direct handlers)
+→ Event bubbles to Canvas
+→ useAdvancedInteractions.handleMouseDown
+→ Detects vertex via target.dataset.vertexIndex
 → Initiates drag state
 ```
 
 **CanvasVertex Component**: `/src/pages/segmentation/components/canvas/CanvasVertex.tsx`
+
 - **Correctly designed**: No direct event handlers
 - **Data attributes**: Sets `data-polygon-id` and `data-vertex-index`
 - **Visual feedback**: Proper cursor, hover states, drag offset rendering
@@ -68,12 +72,16 @@ CanvasVertex (no direct handlers)
 **Component**: `/src/pages/segmentation/hooks/useAdvancedInteractions.tsx`
 
 **Drag Lifecycle**:
+
 ```typescript
 // 1. Mouse Down - Detect vertex click
-if (target.dataset.vertexIndex !== undefined && editMode === EditMode.EditVertices) {
+if (
+  target.dataset.vertexIndex !== undefined &&
+  editMode === EditMode.EditVertices
+) {
   const index = parseInt(vertexIndex, 10);
   const originalPosition = polygon.points[index];
-  
+
   // Initialize drag state
   setVertexDragState({
     isDragging: true,
@@ -88,7 +96,7 @@ if (target.dataset.vertexIndex !== undefined && editMode === EditMode.EditVertic
 if (interactionState.isDraggingVertex) {
   const offsetX = imagePoint.x - interactionState.originalVertexPosition.x;
   const offsetY = imagePoint.y - interactionState.originalVertexPosition.y;
-  
+
   setVertexDragState({
     isDragging: true,
     polygonId,
@@ -120,6 +128,7 @@ if (interactionState.isDraggingVertex) {
 **Component**: `/src/pages/segmentation/components/canvas/PolygonVertices.tsx`
 
 **Key Features**:
+
 ```typescript
 // Only show vertices for selected polygons
 const shouldShowVertices = isSelected;
@@ -127,20 +136,20 @@ const shouldShowVertices = isSelected;
 // No decimation - shows all vertices for precision
 const visibleVertices = React.useMemo(() => {
   if (!shouldShowVertices || points.length === 0) return [];
-  
+
   // Use all points directly without decimation
   let verticesWithIndices = points.map((point, index) => ({
     point,
     originalIndex: index,
   }));
-  
+
   // Viewport culling for performance
   if (viewportBounds) {
     verticesWithIndices = verticesWithIndices.filter(({ point }) => {
       return point.x >= viewportBounds.x - buffer && /* ... */;
     });
   }
-  
+
   return verticesWithIndices;
 }, [shouldShowVertices, points, viewportBounds]);
 ```
@@ -169,6 +178,7 @@ const VertexContextMenu = ({ children, onDelete, vertexIndex, polygonId }) => {
 ```
 
 **Integration**: Each vertex in PolygonVertices is wrapped with context menu:
+
 ```typescript
 <VertexContextMenu
   key={`${polygonId}-vertex-${originalIndex}`}
@@ -185,13 +195,19 @@ const VertexContextMenu = ({ children, onDelete, vertexIndex, polygonId }) => {
 ### 6. EditVertices Mode Integration - WORKING ✅
 
 **Mode Detection**: Vertex interactions only work in EditVertices mode:
+
 ```typescript
-if (polygonId && vertexIndex !== undefined && editMode === EditMode.EditVertices) {
+if (
+  polygonId &&
+  vertexIndex !== undefined &&
+  editMode === EditMode.EditVertices
+) {
   // Vertex click detected - start drag
 }
 ```
 
 **Mode Switching**: Proper integration with new polygon selection:
+
 - **View Mode** → Click polygon → Auto-switch to EditVertices (shows vertices)
 - **EditVertices Mode** → Click vertex → Start drag
 - **Other Modes** → Vertex clicks ignored (no interference)
@@ -201,12 +217,14 @@ if (polygonId && vertexIndex !== undefined && editMode === EditMode.EditVertices
 ### 7. Event Propagation Architecture - WORKING ✅
 
 **Proper Event Flow**:
+
 1. CanvasVertex renders with data attributes (no stopPropagation)
 2. Events bubble to Canvas div
 3. useAdvancedInteractions.handleMouseDown detects vertex via dataset
 4. Initiates appropriate action (drag, add points, etc.)
 
-**Previous Issues Fixed**: 
+**Previous Issues Fixed**:
+
 - ❌ Old: stopPropagation() prevented canvas detection
 - ✅ New: Clean event bubbling architecture
 
@@ -215,6 +233,7 @@ if (polygonId && vertexIndex !== undefined && editMode === EditMode.EditVertices
 ### 8. Integration with New Polygon Selection System - WORKING ✅
 
 **Centralized Selection**: Uses usePolygonSelection hook:
+
 ```typescript
 const { handlePolygonSelection, handlePolygonClick } = usePolygonSelection({
   editMode: editor.editMode,
@@ -227,6 +246,7 @@ const { handlePolygonSelection, handlePolygonClick } = usePolygonSelection({
 ```
 
 **Mode-Aware Behavior**:
+
 - **View Mode**: Polygon click → Select + Switch to EditVertices → Vertices appear
 - **EditVertices Mode**: Polygon click → Select (vertices already visible)
 - **Delete Mode**: Polygon click → Delete polygon (no vertex interaction)
@@ -237,22 +257,26 @@ const { handlePolygonSelection, handlePolygonClick } = usePolygonSelection({
 ## 🎯 Key Success Indicators
 
 ### 1. No Event Conflicts
+
 - ✅ Vertex drag doesn't interfere with polygon selection
 - ✅ Polygon selection doesn't interfere with vertex interactions
 - ✅ Mode changes work correctly
 
 ### 2. Proper Visual Feedback
+
 - ✅ Vertices only show for selected polygons
 - ✅ Hover states work correctly
 - ✅ Drag offset rendering provides real-time feedback
 - ✅ Context menus appear on right-click
 
 ### 3. Performance Optimized
+
 - ✅ React.memo optimizations in CanvasVertex
 - ✅ Viewport culling in PolygonVertices
 - ✅ Efficient drag state management (offset-based, not point updates)
 
 ### 4. Robust Error Handling
+
 - ✅ Minimum vertex validation (can't delete below 3 vertices)
 - ✅ Polygon existence validation
 - ✅ Mode-aware interaction prevention
@@ -260,11 +284,12 @@ const { handlePolygonSelection, handlePolygonClick } = usePolygonSelection({
 ## 🔧 Technical Architecture Summary
 
 ### Vertex Interaction Stack:
+
 ```
 User Action (click/drag vertex)
 ↓
 CanvasVertex (visual element with data attributes)
-↓ 
+↓
 Event bubbles to Canvas
 ↓
 useAdvancedInteractions.handleMouseDown (detects via dataset)
@@ -279,6 +304,7 @@ Polygon Update (updatePolygons call)
 ```
 
 ### Integration Points:
+
 - **Selection**: usePolygonSelection hook (centralized)
 - **Mode Management**: EditMode enum (mode-aware behavior)
 - **State Management**: useEnhancedSegmentationEditor (SSOT)

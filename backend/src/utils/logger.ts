@@ -62,22 +62,22 @@ class Logger {
     switch (entry.level) {
       case LogLevel.ERROR:
         // Error logging to console
-        // eslint-disable-next-line no-console
+         
         console.error(message);
         break;
       case LogLevel.WARN:
         // Warning logging to console
-        // eslint-disable-next-line no-console
+         
         console.warn(message);
         break;
       case LogLevel.INFO:
         // Info logging to console
-        // eslint-disable-next-line no-console
+         
         console.info(message);
         break;
       case LogLevel.DEBUG:
         // Debug logging to console
-        // eslint-disable-next-line no-console
+         
         console.debug(message);
         break;
     }

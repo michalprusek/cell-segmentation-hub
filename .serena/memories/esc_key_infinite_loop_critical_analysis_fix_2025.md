@@ -6,6 +6,7 @@
 Translation: "When pressing escape, I want to switch from edit vertices mode to view mode"
 
 **Actual Behavior**: ESC key press causes infinite loop with repeated console output:
+
 ```
 [useEnhancedSegmentationEditor] setEditMode called with: edit-vertices
 [useEnhancedSegmentationEditor] Current mode before change: edit-vertices
@@ -19,6 +20,7 @@ Translation: "When pressing escape, I want to switch from edit vertices mode to 
 **Lines**: 722-747
 
 **Current handleEscape Logic**:
+
 ```typescript
 const handleEscape = useCallback(() => {
   // Reset all temporary state
@@ -38,6 +40,7 @@ const handleEscape = useCallback(() => {
 ```
 
 **Problem**: When user is in EditVertices mode with a selected polygon and presses ESC:
+
 1. handleEscape executes
 2. selectedPolygonId exists, so it calls `setEditMode(EditMode.EditVertices)`
 3. Mode is already EditVertices, but this triggers React state update
@@ -47,10 +50,11 @@ const handleEscape = useCallback(() => {
 ### 2. SECONDARY ISSUE: Circular State Dependency
 
 **Circular Dependency Chain**:
+
 ```
-handleEscape depends on [selectedPolygonId] 
+handleEscape depends on [selectedPolygonId]
 → selectedPolygonId changes trigger handleEscape recreation
-→ handleEscape calls setEditMode(EditVertices) 
+→ handleEscape calls setEditMode(EditVertices)
 → Mode switching logic in usePolygonSelection may affect selectedPolygonId
 → Triggers handleEscape recreation again
 ```
@@ -61,6 +65,7 @@ handleEscape depends on [selectedPolygonId]
 
 1. **Key Press**: User presses ESC key
 2. **useKeyboardShortcuts**: Captures ESC keydown event (line 211-219)
+
    ```typescript
    case 'escape':
      event.preventDefault();
@@ -77,17 +82,24 @@ handleEscape depends on [selectedPolygonId]
    - **CRITICAL FLAW**: Sets mode to EditVertices when already in EditVertices
 
 4. **setEditMode Wrapper**: (lines 89-109)
+
    ```typescript
    const setEditMode = useCallback((newMode: EditMode) => {
-     console.log('[useEnhancedSegmentationEditor] setEditMode called with:', newMode);
+     console.log(
+       '[useEnhancedSegmentationEditor] setEditMode called with:',
+       newMode
+     );
      setEditModeRaw(currentMode => {
-       console.log('[useEnhancedSegmentationEditor] Current mode before change:', currentMode);
+       console.log(
+         '[useEnhancedSegmentationEditor] Current mode before change:',
+         currentMode
+       );
        // ... rest of logic
      });
    }, []);
    ```
 
-5. **React State Update**: 
+5. **React State Update**:
    - Even setting the same mode triggers React's update cycle
    - This can cause useCallback recreation if dependencies change
    - Leads to infinite re-execution
@@ -97,6 +109,7 @@ handleEscape depends on [selectedPolygonId]
 ### 1. Contradictory Design Intent
 
 **Current handleEscape comment**:
+
 > "If we have a selected polygon, go to EditVertices mode instead of View mode. This keeps the polygon selected when exiting other modes"
 
 **User Expectation**: ESC should ALWAYS go to View mode as an "escape" mechanism
@@ -114,15 +127,17 @@ The codebase has extensive stale closure fixes using useRef patterns, but handle
 ### 3. Inconsistent ESC Behavior
 
 **useKeyboardShortcuts default behavior** (line 217):
+
 ```typescript
 // Default escape behavior - return to view mode
 setEditMode(EditMode.View);
 ```
 
 **handleEscape custom behavior** (line 743):
+
 ```typescript
 if (selectedPolygonId) {
-  setEditMode(EditMode.EditVertices);  // ← Contradicts default
+  setEditMode(EditMode.EditVertices); // ← Contradicts default
 }
 ```
 
@@ -131,6 +146,7 @@ if (selectedPolygonId) {
 ### APPROACH 1: Fix Logic to Match User Expectations (RECOMMENDED)
 
 **Change handleEscape to always go to View mode**:
+
 ```typescript
 const handleEscape = useCallback(() => {
   // Reset all temporary state
@@ -152,13 +168,14 @@ const handleEscape = useCallback(() => {
   // FIXED: Always go to View mode on ESC (user expectation)
   // ESC should be a "cancel/escape" action, not mode preservation
   setEditMode(EditMode.View);
-  
+
   // Optionally clear selection too for complete "escape"
   // setSelectedPolygonId(null);
 }, []); // ← Remove selectedPolygonId dependency to prevent recreation cycles
 ```
 
 **Benefits**:
+
 - ✅ Matches user expectation: ESC = escape to View mode
 - ✅ Eliminates infinite loop (no circular dependencies)
 - ✅ Consistent with keyboard shortcuts default behavior
@@ -175,7 +192,7 @@ const handleEscape = useCallback(() => {
 
   // Use ref to get current mode to avoid stale closures
   const currentMode = editModeRef.current;
-  
+
   // Smart mode switching logic
   switch (currentMode) {
     case EditMode.EditVertices:
@@ -206,7 +223,7 @@ Simply remove the custom `onEscape: handleEscape` and let useKeyboardShortcuts h
 // The default behavior will execute:
 case 'escape':
   event.preventDefault();
-  // Default escape behavior - return to view mode  
+  // Default escape behavior - return to view mode
   setEditMode(EditMode.View);
 ```
 
@@ -223,9 +240,11 @@ case 'escape':
 ## IMPLEMENTATION
 
 ### File to Modify:
+
 `src/pages/segmentation/hooks/useEnhancedSegmentationEditor.tsx`
 
 ### Change Required:
+
 Replace lines 722-747 with:
 
 ```typescript
@@ -256,18 +275,21 @@ const handleEscape = useCallback(() => {
 ## TESTING VERIFICATION
 
 ### Test Cases:
+
 1. **EditVertices Mode + Selected Polygon + ESC**: Should go to View mode
-2. **Slice Mode + ESC**: Should go to View mode  
+2. **Slice Mode + ESC**: Should go to View mode
 3. **Delete Mode + ESC**: Should go to View mode
 4. **View Mode + ESC**: Should stay in View mode (no-op)
 
 ### Expected Console Output After Fix:
+
 ```
 [useEnhancedSegmentationEditor] setEditMode called with: view
 [useEnhancedSegmentationEditor] Current mode before change: edit-vertices
 ```
 
 ### Should NOT See:
+
 ```
 [useEnhancedSegmentationEditor] setEditMode called with: edit-vertices
 [useEnhancedSegmentationEditor] Current mode before change: edit-vertices
@@ -277,14 +299,17 @@ const handleEscape = useCallback(() => {
 ## ARCHITECTURAL IMPROVEMENTS
 
 ### 1. Consistent ESC Behavior Pattern
+
 All ESC handlers should follow the same principle: ESC = escape to base state (View mode)
 
 ### 2. Dependency Management
+
 - Avoid state dependencies in useCallback when possible
 - Use refs for immediate state access
 - Be cautious of circular dependency chains
 
 ### 3. User Experience
+
 - ESC should be predictable escape mechanism
 - Don't override user expectations for "smart" behavior
 - Consistency across the application is key
@@ -292,11 +317,13 @@ All ESC handlers should follow the same principle: ESC = escape to base state (V
 ## RELATED FILES CHECKED
 
 ### No Changes Needed:
+
 - `src/pages/segmentation/hooks/useKeyboardShortcuts.tsx` - Default ESC behavior is correct
-- `src/pages/segmentation/hooks/usePolygonSelection.ts` - No ESC handling here  
+- `src/pages/segmentation/hooks/usePolygonSelection.ts` - No ESC handling here
 - `src/pages/segmentation/hooks/useAdvancedInteractions.tsx` - No ESC handling here
 
 ### Verification Points:
+
 - ✅ No competing ESC handlers found
 - ✅ No circular dependencies in polygon selection logic
 - ✅ useKeyboardShortcuts provides correct fallback behavior
@@ -305,6 +332,7 @@ All ESC handlers should follow the same principle: ESC = escape to base state (V
 ## CONCLUSION
 
 The ESC key infinite loop is caused by:
+
 1. **Logic contradiction**: handleEscape tries to maintain EditVertices mode when user expects View mode
 2. **Circular dependency**: selectedPolygonId dependency causes useCallback recreation cycles
 3. **State update cycles**: Setting the same mode repeatedly triggers React update loops
@@ -314,6 +342,7 @@ The fix is simple: Change handleEscape to always set View mode and remove the se
 ## PREVENTION STRATEGIES
 
 ### Code Review Checklist:
+
 - [ ] ESC handlers should always "escape" to base state
 - [ ] Avoid circular dependencies in useCallback
 - [ ] Test rapid state changes that might trigger update cycles
@@ -321,6 +350,7 @@ The fix is simple: Change handleEscape to always set View mode and remove the se
 - [ ] Check for competing event handlers
 
 ### User Testing:
+
 - Test ESC behavior from all modes
 - Verify no console spam during normal operation
 - Check that ESC feels "predictable" to users

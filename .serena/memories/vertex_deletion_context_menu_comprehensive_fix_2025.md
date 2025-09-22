@@ -1,9 +1,11 @@
 # Comprehensive Vertex Deletion Context Menu Fix
 
 ## Problem Summary
+
 The vertex deletion context menu was not working properly. Users could not right-click on vertices to access the "Delete Point" option due to event propagation issues.
 
 ## Root Cause Analysis
+
 1. **Canvas-level right-click interception**: The `useAdvancedInteractions.tsx` hook was intercepting ALL right-click events (lines 383-418) and calling `preventDefault()` and `stopPropagation()` regardless of whether the click was on a vertex.
 2. **Missing event propagation control**: The basic `CanvasVertex.tsx` component had no event handlers to control event bubbling.
 3. **Component architecture**: An improved version `CanvasVertex.improved.tsx` existed with proper event handling but wasn't being used.
@@ -11,9 +13,11 @@ The vertex deletion context menu was not working properly. Users could not right
 ## Solution Implemented
 
 ### 1. Fixed Event Propagation in useAdvancedInteractions.tsx
+
 **File**: `/src/pages/segmentation/hooks/useAdvancedInteractions.tsx`
 
 **Key Changes**:
+
 - Added `isVertexTarget()` utility function to detect vertex elements by checking for `data-polygon-id` and `data-vertex-index` attributes
 - Modified right-click handler to allow context menu events on vertices:
   ```typescript
@@ -21,25 +25,28 @@ The vertex deletion context menu was not working properly. Users could not right
   if (e.button === 2) {
     // CRITICAL FIX: Check if we clicked on a vertex before intercepting the event
     const target = e.target as SVGElement;
-    
+
     // If this is a vertex, allow the context menu to proceed
     if (isVertexTarget(target)) {
       // Don't prevent default or stop propagation for vertex right-clicks
       // This allows the VertexContextMenu to work properly
       return;
     }
-    
+
     // Not a vertex - proceed with existing step-by-step undo logic
     // ... existing logic for slice mode, etc.
   }
   ```
 
 ### 2. Switched to Improved CanvasVertex Component
-**Files**: 
+
+**Files**:
+
 - `/src/pages/segmentation/components/canvas/PolygonVertices.tsx`
 - `/src/pages/segmentation/components/EnhancedSegmentationEditor.tsx`
 
 **Changes**:
+
 - Updated imports from `CanvasVertex` to `CanvasVertex.improved`
 - The improved component includes proper event handlers:
   ```typescript
@@ -51,10 +58,13 @@ The vertex deletion context menu was not working properly. Users could not right
   ```
 
 ### 3. Enhanced VertexContextMenu Event Isolation
+
 **File**: `/src/pages/segmentation/components/context-menu/VertexContextMenu.tsx`
 
 **Changes**:
+
 - Added event isolation to prevent context menu interactions from bubbling:
+
   ```typescript
   const handleDelete = React.useCallback((e: React.MouseEvent) => {
     // Stop propagation to prevent polygon deselection
@@ -71,7 +81,9 @@ The vertex deletion context menu was not working properly. Users could not right
   ```
 
 ### 4. SSOT Consolidation
+
 **Cleanup**:
+
 - Removed basic `/src/pages/segmentation/components/canvas/CanvasVertex.tsx`
 - Renamed `CanvasVertex.improved.tsx` to `CanvasVertex.tsx` (canonical name)
 - Updated all imports to use the canonical component
@@ -82,7 +94,7 @@ The vertex deletion context menu was not working properly. Users could not right
 ✅ **Right-click on vertex** → Context menu appears and stays open  
 ✅ **Click "Delete Point"** → Vertex gets deleted without polygon deselection  
 ✅ **Right-click on polygon (non-vertex)** → Existing slice mode undo functionality still works  
-✅ **Polygon selection** → Remains stable during vertex operations  
+✅ **Polygon selection** → Remains stable during vertex operations
 
 ## Integration Points Verified
 

@@ -5,9 +5,5 @@
     "no-empty-source": null,
     "comment-empty-line-before": null
   },
-  "ignoreFiles": [
-    "node_modules/**/*",
-    "dist/**/*",
-    "build/**/*"
-  ]
+  "ignoreFiles": ["node_modules/**/*", "dist/**/*", "build/**/*"]
 }

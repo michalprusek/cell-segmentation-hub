@@ -113,7 +113,7 @@ class PrismaPool {
     if (this.config.enablePoolLogging) {
       clientConfig.log = ['query', 'info', 'warn', 'error'];
     }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const client = new PrismaClient(clientConfig as any);
 
     try {

@@ -11,8 +11,8 @@ import type {
   SegmentationResultData as _SegmentationResultData,
   QueueItem as _QueueItem,
   QueueStats as _QueueStats,
-  AddToQueueResponse,
-  BatchQueueResponse,
+  AddToQueueResponse as _AddToQueueResponse,
+  BatchQueueResponse as _BatchQueueResponse,
 } from '../api';
 
 // Mock axios completely

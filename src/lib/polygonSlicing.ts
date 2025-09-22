@@ -359,9 +359,10 @@ export function validateSliceLine(
   const lineLength = Math.sqrt(dx * dx + dy * dy);
 
   if (lineLength < 1) {
-    return { 
-      isValid: false, 
-      reason: 'Slice line is too short - draw points further apart (minimum 1 pixel distance)' 
+    return {
+      isValid: false,
+      reason:
+        'Slice line is too short - draw points further apart (minimum 1 pixel distance)',
     };
   }
 
@@ -428,11 +429,13 @@ export function validateSliceLine(
 
   // Provide detailed feedback about why the slice failed
   let detailedReason = '';
-  
+
   if (intersectionCount === 0 && rayIntersectionCount === 0) {
-    detailedReason = 'Slice line does not intersect the polygon. Try drawing the line across the polygon edges.';
+    detailedReason =
+      'Slice line does not intersect the polygon. Try drawing the line across the polygon edges.';
   } else if (intersectionCount === 1 && rayIntersectionCount === 1) {
-    detailedReason = 'Slice line only touches the polygon at one point. Draw the line completely across the polygon.';
+    detailedReason =
+      'Slice line only touches the polygon at one point. Draw the line completely across the polygon.';
   } else if (intersectionCount > 2 || rayIntersectionCount > 2) {
     detailedReason = `Slice line intersects too many polygon edges (${Math.max(intersectionCount, rayIntersectionCount)} intersections). Try a simpler cut across the polygon.`;
   } else {

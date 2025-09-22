@@ -64,17 +64,13 @@ export const MODE_BEHAVIOR_CONFIG = {
    * Read-only modes that only allow viewing without modification.
    * These modes should have minimal UI interference.
    */
-  READ_ONLY_MODES: [
-    EditMode.View,
-  ] as const,
+  READ_ONLY_MODES: [EditMode.View] as const,
 
   /**
    * Destructive modes that remove or delete elements.
    * These modes should have confirmation dialogs or undo support.
    */
-  DESTRUCTIVE_MODES: [
-    EditMode.DeletePolygon,
-  ] as const,
+  DESTRUCTIVE_MODES: [EditMode.DeletePolygon] as const,
 } as const;
 
 /**
@@ -130,7 +126,9 @@ export const isGeometryModifyingMode = (mode: EditMode): boolean => {
  * @returns true if the mode involves point placement workflows
  */
 export const isInteractivePointPlacementMode = (mode: EditMode): boolean => {
-  return MODE_BEHAVIOR_CONFIG.INTERACTIVE_POINT_PLACEMENT_MODES.includes(mode as any);
+  return MODE_BEHAVIOR_CONFIG.INTERACTIVE_POINT_PLACEMENT_MODES.includes(
+    mode as any
+  );
 };
 
 /**
@@ -159,12 +157,18 @@ export const isDestructiveMode = (mode: EditMode): boolean => {
  * Type-safe helper to get all modes in a specific category.
  * Useful for TypeScript type guards and comprehensive checks.
  */
-export type PreventCanvasDeselectionMode = typeof MODE_BEHAVIOR_CONFIG.PREVENT_CANVAS_DESELECTION[number];
-export type RequiresPolygonSelectionMode = typeof MODE_BEHAVIOR_CONFIG.REQUIRES_POLYGON_SELECTION[number];
-export type GeometryModifyingMode = typeof MODE_BEHAVIOR_CONFIG.GEOMETRY_MODIFYING_MODES[number];
-export type InteractivePointPlacementMode = typeof MODE_BEHAVIOR_CONFIG.INTERACTIVE_POINT_PLACEMENT_MODES[number];
-export type ReadOnlyMode = typeof MODE_BEHAVIOR_CONFIG.READ_ONLY_MODES[number];
-export type DestructiveMode = typeof MODE_BEHAVIOR_CONFIG.DESTRUCTIVE_MODES[number];
+export type PreventCanvasDeselectionMode =
+  (typeof MODE_BEHAVIOR_CONFIG.PREVENT_CANVAS_DESELECTION)[number];
+export type RequiresPolygonSelectionMode =
+  (typeof MODE_BEHAVIOR_CONFIG.REQUIRES_POLYGON_SELECTION)[number];
+export type GeometryModifyingMode =
+  (typeof MODE_BEHAVIOR_CONFIG.GEOMETRY_MODIFYING_MODES)[number];
+export type InteractivePointPlacementMode =
+  (typeof MODE_BEHAVIOR_CONFIG.INTERACTIVE_POINT_PLACEMENT_MODES)[number];
+export type ReadOnlyMode =
+  (typeof MODE_BEHAVIOR_CONFIG.READ_ONLY_MODES)[number];
+export type DestructiveMode =
+  (typeof MODE_BEHAVIOR_CONFIG.DESTRUCTIVE_MODES)[number];
 
 /**
  * Validation function to ensure mode configuration consistency.
@@ -188,13 +192,13 @@ export const validateModeConfiguration = (): void => {
   if (unconfiguredModes.length > 0) {
     console.warn(
       `WARNING: Modes not configured in modeConfig.ts: ${unconfiguredModes.join(', ')}. ` +
-      'Consider adding them to appropriate behavior categories.'
+        'Consider adding them to appropriate behavior categories.'
     );
   }
 
   // Verify no contradictions (e.g., read-only mode that modifies geometry)
-  const readOnlyButModifying = MODE_BEHAVIOR_CONFIG.READ_ONLY_MODES.filter(mode =>
-    MODE_BEHAVIOR_CONFIG.GEOMETRY_MODIFYING_MODES.includes(mode as any)
+  const readOnlyButModifying = MODE_BEHAVIOR_CONFIG.READ_ONLY_MODES.filter(
+    mode => MODE_BEHAVIOR_CONFIG.GEOMETRY_MODIFYING_MODES.includes(mode as any)
   );
 
   if (readOnlyButModifying.length > 0) {

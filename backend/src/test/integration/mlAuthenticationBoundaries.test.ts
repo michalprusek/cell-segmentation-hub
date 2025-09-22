@@ -657,18 +657,16 @@ describe('ML Authentication Boundaries Integration Tests', () => {
 
       for (const endpoint of protectedEndpoints) {
         // Test without auth - should fail
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const unauthorizedResponse = await (request(app) as any)
-          [endpoint.method](endpoint.path)
+         
+        const unauthorizedResponse = await (request(app) as any)[endpoint.method](endpoint.path)
           .expect(401);
 
         expect(unauthorizedResponse.body.success).toBe(false);
         expect(unauthorizedResponse.body.source).toBe('Auth');
 
         // Test with valid auth - should succeed
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const authorizedResponse = await (request(app) as any)
-          [endpoint.method](endpoint.path)
+         
+        const authorizedResponse = await (request(app) as any)[endpoint.method](endpoint.path)
           .set('Authorization', `Bearer ${testTokens.accessToken}`)
           .expect(200);
 

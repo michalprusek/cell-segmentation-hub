@@ -3,21 +3,25 @@
 ## What Was Fixed
 
 ### 1. Duplicate Downloads Issue
+
 **Problem:** When exporting, the ZIP file was downloading twice - once as "test.zip" and once with a complex filename.
 
 **Root Cause:** The component was remounting multiple times and clearing the download tracking, allowing duplicate auto-downloads.
 
 **Solution:**
+
 - Implemented persistent download tracking using localStorage that survives component remounts
 - Added `exportDownloaded_${projectId}` key to track which jobs have been downloaded
 - Download tracking now persists across page navigation and component lifecycle
 
 ### 2. Auto-Dismissing Export Panel
+
 **Problem:** The export panel was automatically disappearing after 3 seconds without user interaction.
 
 **Root Cause:** A hardcoded 3-second timeout was dismissing the export status after successful download.
 
 **Solution:**
+
 - Removed all auto-dismiss timeouts
 - Export panel now stays visible until user clicks "Dismiss" button
 - User has full control over when to dismiss the export status
@@ -27,6 +31,7 @@
 ### Manual Testing Steps
 
 1. **Clear Browser State**
+
    ```javascript
    // Open browser console and run:
    Object.keys(localStorage).forEach(key => {
@@ -68,6 +73,7 @@
 ## Expected Console Logs
 
 When export completes, you should see:
+
 ```
 Starting auto-download for jobId: xxx
 📥 Starting auto-download with signal aborted: false
@@ -76,6 +82,7 @@ Export auto-downloaded successfully
 ```
 
 You should NOT see:
+
 - Multiple "Starting auto-download" entries
 - "Export status auto-dismissed" messages
 - "Reset download tracking flags on mount" multiple times
@@ -83,12 +90,14 @@ You should NOT see:
 ## Automated Test
 
 Run the verification script:
+
 ```bash
 cd /home/cvat/cell-segmentation-hub
 node test-export-fix-verification.mjs
 ```
 
 This will:
+
 - Automatically test the export flow
 - Count downloads
 - Verify panel persistence
@@ -108,12 +117,14 @@ This will:
 If you still see issues:
 
 1. **Check localStorage**
+
    ```javascript
    // In browser console:
    console.log(Object.keys(localStorage).filter(k => k.includes('export')));
    ```
 
 2. **Clear all export state**
+
    ```javascript
    // Nuclear option - clear everything:
    localStorage.clear();

@@ -16,18 +16,18 @@ const colors = {
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
-  cyan: '\x1b[36m'
+  cyan: '\x1b[36m',
 };
 
 function log(message, type = 'info') {
   const timestamp = new Date().toISOString().substring(11, 19);
   const typeColors = {
-    'info': colors.blue,
-    'success': colors.green,
-    'warning': colors.yellow,
-    'error': colors.red,
-    'debug': colors.magenta,
-    'important': colors.cyan
+    info: colors.blue,
+    success: colors.green,
+    warning: colors.yellow,
+    error: colors.red,
+    debug: colors.magenta,
+    important: colors.cyan,
   };
   const color = typeColors[type] || colors.reset;
   console.log(`${color}[${timestamp}] ${message}${colors.reset}`);
@@ -44,7 +44,7 @@ async function testExportCancellation() {
     // Launch browser
     browser = await chromium.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 
     context = await browser.newContext({
@@ -53,8 +53,8 @@ async function testExportCancellation() {
       // Set up to capture all console logs
       recordVideo: {
         dir: './videos/',
-        size: { width: 1920, height: 1080 }
-      }
+        size: { width: 1920, height: 1080 },
+      },
     });
 
     // Add authentication headers if needed
@@ -72,9 +72,16 @@ async function testExportCancellation() {
       consoleLogs.push({ type, text, timestamp: new Date().toISOString() });
 
       // Log important messages
-      if (text.includes('abort') || text.includes('cancel') || text.includes('signal') ||
-          text.includes('🔴') || text.includes('📥') || text.includes('🔍') ||
-          text.includes('Download') || text.includes('Export')) {
+      if (
+        text.includes('abort') ||
+        text.includes('cancel') ||
+        text.includes('signal') ||
+        text.includes('🔴') ||
+        text.includes('📥') ||
+        text.includes('🔍') ||
+        text.includes('Download') ||
+        text.includes('Export')
+      ) {
         log(`Console [${type}]: ${text}`, 'important');
       }
     });
@@ -88,7 +95,7 @@ async function testExportCancellation() {
           type: 'request',
           method: request.method(),
           url,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
         log(`→ ${request.method()} ${url}`, 'debug');
       }
@@ -101,7 +108,7 @@ async function testExportCancellation() {
           type: 'response',
           status: response.status(),
           url,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         });
         log(`← ${response.status()} ${url}`, 'debug');
       }
@@ -143,7 +150,10 @@ async function testExportCancellation() {
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(2000);
     } else {
-      log('⚠️ No projects found, will try to test from current page', 'warning');
+      log(
+        '⚠️ No projects found, will try to test from current page',
+        'warning'
+      );
     }
 
     // Step 4: Inject test for AbortController directly
@@ -171,13 +181,16 @@ async function testExportCancellation() {
         startExport: typeof window.startExport === 'function',
         cancelExport: typeof window.cancelExport === 'function',
         hasReactApp: !!window.React || !!window._react,
-        hasExportContext: !!window.__EXPORT_CONTEXT__
+        hasExportContext: !!window.__EXPORT_CONTEXT__,
       };
 
       return { testResults, hasExportFunctions };
     });
 
-    log(`AbortController test results: ${JSON.stringify(abortTest, null, 2)}`, 'debug');
+    log(
+      `AbortController test results: ${JSON.stringify(abortTest, null, 2)}`,
+      'debug'
+    );
 
     // Step 5: Try to find and trigger export through the UI
     log('🔍 Step 5: Looking for export UI elements...', 'info');
@@ -203,7 +216,7 @@ async function testExportCancellation() {
       { selector: 'button:has(svg[class*="download"])', name: 'Download icon' },
       { selector: 'button:has(svg[class*="archive"])', name: 'Archive icon' },
       { selector: '.toolbar button', name: 'Toolbar button' },
-      { selector: '[data-testid*="export"]', name: 'Export testid' }
+      { selector: '[data-testid*="export"]', name: 'Export testid' },
     ];
 
     let exportFound = false;
@@ -221,7 +234,9 @@ async function testExportCancellation() {
           // Now look for cancel button
           log('🔴 Looking for cancel button...', 'info');
 
-          const cancelBtn = await page.locator('button:has-text("Cancel")').first();
+          const cancelBtn = await page
+            .locator('button:has-text("Cancel")')
+            .first();
           if (await cancelBtn.isVisible({ timeout: 2000 })) {
             log('✅ Found cancel button, clicking...', 'success');
 
@@ -230,15 +245,19 @@ async function testExportCancellation() {
             await page.waitForTimeout(3000);
 
             // Check console logs for abort activity
-            const abortLogs = consoleLogs.filter(l =>
-              l.text.includes('abort') ||
-              l.text.includes('signal') ||
-              l.text.includes('🔴') ||
-              l.text.includes('cancelled')
+            const abortLogs = consoleLogs.filter(
+              l =>
+                l.text.includes('abort') ||
+                l.text.includes('signal') ||
+                l.text.includes('🔴') ||
+                l.text.includes('cancelled')
             );
 
             if (abortLogs.length > 0) {
-              log(`✅ Cancellation detected! Found ${abortLogs.length} abort-related logs:`, 'success');
+              log(
+                `✅ Cancellation detected! Found ${abortLogs.length} abort-related logs:`,
+                'success'
+              );
               abortLogs.forEach(l => {
                 log(`  ${l.timestamp}: ${l.text}`, 'success');
               });
@@ -260,7 +279,10 @@ async function testExportCancellation() {
       log('❌ Could not find any export trigger', 'error');
 
       // Take screenshot of current state
-      await page.screenshot({ path: 'screenshots/final-state.png', fullPage: true });
+      await page.screenshot({
+        path: 'screenshots/final-state.png',
+        fullPage: true,
+      });
 
       // Log page title and URL for debugging
       const title = await page.title();
@@ -276,20 +298,33 @@ async function testExportCancellation() {
     // Console log analysis
     const errorLogs = consoleLogs.filter(l => l.type === 'error');
     const warningLogs = consoleLogs.filter(l => l.type === 'warning');
-    const abortLogs = consoleLogs.filter(l => l.text.toLowerCase().includes('abort'));
-    const cancelLogs = consoleLogs.filter(l => l.text.toLowerCase().includes('cancel'));
-    const signalLogs = consoleLogs.filter(l => l.text.toLowerCase().includes('signal'));
+    const abortLogs = consoleLogs.filter(l =>
+      l.text.toLowerCase().includes('abort')
+    );
+    const cancelLogs = consoleLogs.filter(l =>
+      l.text.toLowerCase().includes('cancel')
+    );
+    const signalLogs = consoleLogs.filter(l =>
+      l.text.toLowerCase().includes('signal')
+    );
 
     log(`Total console logs: ${consoleLogs.length}`, 'info');
-    log(`  • Errors: ${errorLogs.length}`, errorLogs.length > 0 ? 'error' : 'info');
+    log(
+      `  • Errors: ${errorLogs.length}`,
+      errorLogs.length > 0 ? 'error' : 'info'
+    );
     log(`  • Warnings: ${warningLogs.length}`, 'info');
     log(`  • Abort-related: ${abortLogs.length}`, 'info');
     log(`  • Cancel-related: ${cancelLogs.length}`, 'info');
     log(`  • Signal-related: ${signalLogs.length}`, 'info');
 
     // Network analysis
-    const exportRequests = networkLogs.filter(l => l.type === 'request' && l.url.includes('/export'));
-    const cancelRequests = networkLogs.filter(l => l.type === 'request' && l.url.includes('/cancel'));
+    const exportRequests = networkLogs.filter(
+      l => l.type === 'request' && l.url.includes('/export')
+    );
+    const cancelRequests = networkLogs.filter(
+      l => l.type === 'request' && l.url.includes('/cancel')
+    );
 
     log(`Network activity:`, 'info');
     log(`  • Export requests: ${exportRequests.length}`, 'info');
@@ -301,11 +336,20 @@ async function testExportCancellation() {
       log('✅ EXPORT CANCELLATION IS WORKING!', 'success');
       log('The AbortController is properly aborting requests.', 'success');
     } else if (exportFound) {
-      log('⚠️ PARTIAL SUCCESS: Export found but cancellation unclear', 'warning');
-      log('The export UI was found but abort signals were not detected in console.', 'warning');
+      log(
+        '⚠️ PARTIAL SUCCESS: Export found but cancellation unclear',
+        'warning'
+      );
+      log(
+        'The export UI was found but abort signals were not detected in console.',
+        'warning'
+      );
     } else {
       log('❌ TEST INCOMPLETE: Could not find export functionality', 'error');
-      log('The test could not locate the export button to test cancellation.', 'error');
+      log(
+        'The test could not locate the export button to test cancellation.',
+        'error'
+      );
     }
 
     // Save all logs to file for analysis
@@ -320,8 +364,8 @@ async function testExportCancellation() {
         abortLogs: abortLogs.length,
         cancelLogs: cancelLogs.length,
         exportRequests: exportRequests.length,
-        cancelRequests: cancelRequests.length
-      }
+        cancelRequests: cancelRequests.length,
+      },
     };
 
     await fs.promises.writeFile(
@@ -329,7 +373,6 @@ async function testExportCancellation() {
       JSON.stringify(logData, null, 2)
     );
     log('📝 Test results saved to export-test-results.json', 'info');
-
   } catch (error) {
     log(`❌ Test failed with error: ${error.message}`, 'error');
     console.error(error);

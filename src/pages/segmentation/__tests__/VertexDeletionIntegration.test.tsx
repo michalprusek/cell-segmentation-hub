@@ -281,7 +281,9 @@ describe('Vertex Deletion Integration Tests', () => {
         throw new Error('Cannot delete vertex: minimum 3 vertices required');
       });
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
 
       render(
         <AllProviders>
@@ -468,7 +470,9 @@ describe('Vertex Deletion Integration Tests', () => {
         // Remove vertex at specified index
         currentPolygon = {
           ...currentPolygon,
-          points: currentPolygon.points.filter((_, index) => index !== vertexIndex),
+          points: currentPolygon.points.filter(
+            (_, index) => index !== vertexIndex
+          ),
         };
         mockSetPolygons([currentPolygon]);
       });
@@ -535,7 +539,9 @@ describe('Vertex Deletion Integration Tests', () => {
         throw new Error('Network error during deletion');
       });
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
 
       render(
         <AllProviders>
@@ -633,7 +639,7 @@ describe('Vertex Deletion Integration Tests', () => {
       const manyVerticesPolygon: Polygon = {
         id: 'polygon-many',
         points: Array.from({ length: 50 }, (_, i) => ({
-          x: 10 + (i * 5) % 200,
+          x: 10 + ((i * 5) % 200),
           y: 10 + Math.floor(i / 40) * 20,
         })),
         confidence: 0.9,

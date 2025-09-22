@@ -300,7 +300,9 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
             (process.env.NODE_ENV === 'development' && isPolygonHovered)
           ) {
             return (
-              <g key={`svg-vertices-${ensureValidPolygonId(polygon.id, 'svg-vertex-group')}`}>
+              <g
+                key={`svg-vertices-${ensureValidPolygonId(polygon.id, 'svg-vertex-group')}`}
+              >
                 {polygon.points.map((point, index) => {
                   const isVertexHovered =
                     hoveredVertex?.polygonId === polygon.id &&

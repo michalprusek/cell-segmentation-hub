@@ -15,18 +15,18 @@ const colors = {
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
-  cyan: '\x1b[36m'
+  cyan: '\x1b[36m',
 };
 
 function log(message, type = 'info') {
   const timestamp = new Date().toISOString().substring(11, 19);
   const typeColors = {
-    'info': colors.blue,
-    'success': colors.green,
-    'warning': colors.yellow,
-    'error': colors.red,
-    'debug': colors.magenta,
-    'important': colors.cyan
+    info: colors.blue,
+    success: colors.green,
+    warning: colors.yellow,
+    error: colors.red,
+    debug: colors.magenta,
+    important: colors.cyan,
   };
   const color = typeColors[type] || colors.reset;
   console.log(`${color}[${timestamp}] ${message}${colors.reset}`);
@@ -43,12 +43,12 @@ async function testInlineCancelButton() {
     // Launch browser
     browser = await chromium.launch({
       headless: true, // Run headless
-      slowMo: 50
+      slowMo: 50,
     });
 
     context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
-      ignoreHTTPSErrors: true
+      ignoreHTTPSErrors: true,
     });
 
     page = await context.newPage();
@@ -61,9 +61,16 @@ async function testInlineCancelButton() {
       consoleLogs.push({ type, text, timestamp: new Date().toISOString() });
 
       // Log important messages
-      if (text.includes('abort') || text.includes('cancel') || text.includes('signal') ||
-          text.includes('🔴') || text.includes('🔍') || text.includes('Download') ||
-          text.includes('Export') || text.includes('Created new controller')) {
+      if (
+        text.includes('abort') ||
+        text.includes('cancel') ||
+        text.includes('signal') ||
+        text.includes('🔴') ||
+        text.includes('🔍') ||
+        text.includes('Download') ||
+        text.includes('Export') ||
+        text.includes('Created new controller')
+      ) {
         log(`Console [${type}]: ${text}`, 'important');
       }
     });
@@ -86,8 +93,14 @@ async function testInlineCancelButton() {
     }
 
     // Step 2: Navigate to specific project
-    log('📂 Step 2: Navigating to project 755ddc19-47a3-4ff2-8af3-1127caaad4f0...', 'info');
-    await page.goto(`${BASE_URL}/project/755ddc19-47a3-4ff2-8af3-1127caaad4f0`, { waitUntil: 'networkidle' });
+    log(
+      '📂 Step 2: Navigating to project 755ddc19-47a3-4ff2-8af3-1127caaad4f0...',
+      'info'
+    );
+    await page.goto(
+      `${BASE_URL}/project/755ddc19-47a3-4ff2-8af3-1127caaad4f0`,
+      { waitUntil: 'networkidle' }
+    );
     await page.waitForTimeout(3000);
 
     // Check if we got redirected to login
@@ -101,7 +114,10 @@ async function testInlineCancelButton() {
       await page.waitForTimeout(2000);
 
       // Navigate again after login
-      await page.goto(`${BASE_URL}/project/755ddc19-47a3-4ff2-8af3-1127caaad4f0`, { waitUntil: 'networkidle' });
+      await page.goto(
+        `${BASE_URL}/project/755ddc19-47a3-4ff2-8af3-1127caaad4f0`,
+        { waitUntil: 'networkidle' }
+      );
       await page.waitForTimeout(2000);
     }
 
@@ -128,7 +144,7 @@ async function testInlineCancelButton() {
       'button[aria-label*="export"]',
       'button:has-text("Export")',
       '.project-toolbar button:has(svg)',
-      '[data-testid*="export"]'
+      '[data-testid*="export"]',
     ];
 
     for (const selector of exportSelectors) {
@@ -145,7 +161,9 @@ async function testInlineCancelButton() {
       await page.waitForTimeout(2000);
 
       // Handle export dialog
-      const startExportBtn = await page.locator('button:has-text("Start Export")').last();
+      const startExportBtn = await page
+        .locator('button:has-text("Start Export")')
+        .last();
       if (await startExportBtn.isVisible()) {
         log('📤 Starting export...', 'info');
         await startExportBtn.click();
@@ -157,11 +175,16 @@ async function testInlineCancelButton() {
     }
 
     // Step 4: Test inline cancel button
-    log('🔴 Step 4: Testing inline cancel button next to progress bar...', 'info');
+    log(
+      '🔴 Step 4: Testing inline cancel button next to progress bar...',
+      'info'
+    );
     await page.waitForTimeout(2000);
 
     // Look for the inline cancel button (next to progress bar, not in dialog)
-    const inlineCancelBtn = await page.locator('.export-progress-panel button:has-text("Cancel")').first();
+    const inlineCancelBtn = await page
+      .locator('.export-progress-panel button:has-text("Cancel")')
+      .first();
 
     if (await inlineCancelBtn.isVisible()) {
       log('✅ Found inline cancel button, clicking...', 'success');
@@ -176,10 +199,11 @@ async function testInlineCancelButton() {
       await page.waitForTimeout(3000);
 
       // Analyze console logs
-      const abortLogs = consoleLogs.filter(l =>
-        l.text.includes('abort') ||
-        l.text.includes('🔴') ||
-        l.text.includes('🔍')
+      const abortLogs = consoleLogs.filter(
+        l =>
+          l.text.includes('abort') ||
+          l.text.includes('🔴') ||
+          l.text.includes('🔍')
       );
 
       const newControllerLogs = consoleLogs.filter(l =>
@@ -188,7 +212,10 @@ async function testInlineCancelButton() {
 
       log('📊 Analysis:', 'info');
       log(`  • Abort-related logs: ${abortLogs.length}`, 'info');
-      log(`  • New controller creation logs: ${newControllerLogs.length}`, 'info');
+      log(
+        `  • New controller creation logs: ${newControllerLogs.length}`,
+        'info'
+      );
 
       if (newControllerLogs.length > 0) {
         log('❌ BUG DETECTED: New controller created after abort!', 'error');
@@ -202,20 +229,21 @@ async function testInlineCancelButton() {
       }
 
       // Check for download prevention
-      const downloadLogs = consoleLogs.filter(l =>
-        l.text.includes('Download cancelled') ||
-        l.text.includes('aborted')
+      const downloadLogs = consoleLogs.filter(
+        l => l.text.includes('Download cancelled') || l.text.includes('aborted')
       );
 
       if (downloadLogs.length > 0) {
         log('✅ Download successfully prevented', 'success');
       }
-
     } else {
       log('❌ Inline cancel button not found', 'error');
 
       // Take screenshot for debugging
-      await page.screenshot({ path: 'inline-cancel-not-found.png', fullPage: true });
+      await page.screenshot({
+        path: 'inline-cancel-not-found.png',
+        fullPage: true,
+      });
       log('📸 Screenshot saved to inline-cancel-not-found.png', 'info');
     }
 
@@ -223,12 +251,14 @@ async function testInlineCancelButton() {
     log('═══════════════════════════════════════', 'info');
     log('📊 Test Complete', 'info');
 
-    const hasNewControllerBug = consoleLogs.some(l =>
-      l.text.includes('Created new controller') &&
-      consoleLogs.some(other =>
-        other.text.includes('Calling abort') &&
-        other.timestamp < l.timestamp
-      )
+    const hasNewControllerBug = consoleLogs.some(
+      l =>
+        l.text.includes('Created new controller') &&
+        consoleLogs.some(
+          other =>
+            other.text.includes('Calling abort') &&
+            other.timestamp < l.timestamp
+        )
     );
 
     if (hasNewControllerBug) {
@@ -239,7 +269,6 @@ async function testInlineCancelButton() {
 
     // Keep browser open for 5 seconds to observe
     await page.waitForTimeout(5000);
-
   } catch (error) {
     log(`❌ Test failed with error: ${error.message}`, 'error');
     console.error(error);

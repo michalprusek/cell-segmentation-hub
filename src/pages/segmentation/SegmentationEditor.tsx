@@ -307,10 +307,15 @@ const SegmentationEditor = () => {
         if (validPoints.length >= 3) {
           // CRITICAL: Validate and ensure polygon has a valid ID
           if (!validatePolygonId(segPoly.id)) {
-            logPolygonIdIssue(segPoly, 'Invalid or missing polygon ID from ML service');
+            logPolygonIdIssue(
+              segPoly,
+              'Invalid or missing polygon ID from ML service'
+            );
             // Generate fallback ID for polygons from ML service
             const fallbackId = ensureValidPolygonId(segPoly.id, 'ml_polygon');
-            logger.warn(`Generated fallback ID: ${fallbackId} for polygon with invalid ID: ${segPoly.id}`);
+            logger.warn(
+              `Generated fallback ID: ${fallbackId} for polygon with invalid ID: ${segPoly.id}`
+            );
 
             return {
               id: fallbackId,
@@ -1168,7 +1173,10 @@ const SegmentationEditor = () => {
                             {/* Actual polygons */}
                             {visiblePolygons.map(polygon => (
                               <CanvasPolygon
-                                key={generateSafePolygonKey(polygon, editor.isUndoRedoInProgress)}
+                                key={generateSafePolygonKey(
+                                  polygon,
+                                  editor.isUndoRedoInProgress
+                                )}
                                 polygon={polygon}
                                 isSelected={
                                   polygon.id === editor.selectedPolygonId

@@ -243,14 +243,21 @@ export const ExportProgressPanel = ({
                 <Button
                   onClick={() => {
                     if (!completedJobId) {
-                      logger.warn('Download button clicked but no completedJobId available');
+                      logger.warn(
+                        'Download button clicked but no completedJobId available'
+                      );
                       return;
                     }
                     if (isDownloading) {
-                      logger.warn('Download button clicked but already downloading');
+                      logger.warn(
+                        'Download button clicked but already downloading'
+                      );
                       return;
                     }
-                    logger.debug('🔄 Download button clicked', { completedJobId, isDownloading });
+                    logger.debug('🔄 Download button clicked', {
+                      completedJobId,
+                      isDownloading,
+                    });
                     onTriggerDownload();
                   }}
                   disabled={isDownloading || !completedJobId}
@@ -274,10 +281,14 @@ export const ExportProgressPanel = ({
                 <Button
                   onClick={() => {
                     if (!completedJobId) {
-                      logger.warn('Dismiss button clicked but no completedJobId available');
+                      logger.warn(
+                        'Dismiss button clicked but no completedJobId available'
+                      );
                       return;
                     }
-                    logger.debug('✖️ Dismiss button clicked', { completedJobId });
+                    logger.debug('✖️ Dismiss button clicked', {
+                      completedJobId,
+                    });
                     onDismissExport();
                   }}
                   variant="outline"
