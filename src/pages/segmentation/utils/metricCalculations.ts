@@ -285,13 +285,16 @@ export const calculateMetrics = (
   // Naturally ≤ 1, clamped to handle discretization artifacts
   const circularity =
     perimeterWithHoles > 0
-      ? Math.min(1.0, (4 * Math.PI * area) / (perimeterWithHoles * perimeterWithHoles))
+      ? Math.min(
+          1.0,
+          (4 * Math.PI * area) / (perimeterWithHoles * perimeterWithHoles)
+        )
       : 0;
 
   // Calculate compactness: P²/(4πA) - reciprocal of circularity
   // Using perimeter WITH holes, following ImageJ standard
   // Values equal 1 for perfect circle, increase for complex shapes
-  const compactness = 
+  const compactness =
     area > 0
       ? (perimeterWithHoles * perimeterWithHoles) / (4 * Math.PI * area)
       : 0;
@@ -314,7 +317,8 @@ export const calculateMetrics = (
   // Convexity = perimeter of convex hull / perimeter of polygon
   // Using perimeter WITH holes for boundary smoothness measure
   // Values in (0,1], equals 1 for convex shapes
-  const convexity = perimeterWithHoles > 0 ? convexPerimeter / perimeterWithHoles : 0;
+  const convexity =
+    perimeterWithHoles > 0 ? convexPerimeter / perimeterWithHoles : 0;
 
   // Solidity = area of polygon / area of convex hull
   // Measures how "solid" or filled the shape is
@@ -347,7 +351,7 @@ export const calculateMetrics = (
     Convexity: convexity,
     Solidity: solidity,
   };
-};;
+};
 
 // Format number for display
 export const formatNumber = (value: number): string => {

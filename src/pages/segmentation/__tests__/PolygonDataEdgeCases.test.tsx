@@ -32,7 +32,11 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
   default: ({ polygonId, points, onVertexClick }: any) => (
     <g data-testid={`vertices-${polygonId}`}>
       {points?.map((point: any, index: number) => {
-        if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') {
+        if (
+          !point ||
+          typeof point.x !== 'number' ||
+          typeof point.y !== 'number'
+        ) {
           return null;
         }
         return (
@@ -65,12 +69,13 @@ vi.mock('@/lib/polygonGeometry', () => ({
       return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
     }
 
-    const validPoints = points.filter(p =>
-      p &&
-      typeof p.x === 'number' &&
-      typeof p.y === 'number' &&
-      !isNaN(p.x) &&
-      !isNaN(p.y)
+    const validPoints = points.filter(
+      p =>
+        p &&
+        typeof p.x === 'number' &&
+        typeof p.y === 'number' &&
+        !isNaN(p.x) &&
+        !isNaN(p.y)
     );
 
     if (validPoints.length === 0) {
@@ -319,7 +324,10 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
         points: [
           { x: Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER },
           { x: Number.MAX_SAFE_INTEGER - 1000, y: Number.MAX_SAFE_INTEGER },
-          { x: Number.MAX_SAFE_INTEGER - 1000, y: Number.MAX_SAFE_INTEGER - 1000 },
+          {
+            x: Number.MAX_SAFE_INTEGER - 1000,
+            y: Number.MAX_SAFE_INTEGER - 1000,
+          },
           { x: Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER - 1000 },
         ],
         type: 'external',
@@ -337,7 +345,10 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
         points: [
           { x: Number.MIN_SAFE_INTEGER, y: Number.MIN_SAFE_INTEGER },
           { x: Number.MIN_SAFE_INTEGER + 1000, y: Number.MIN_SAFE_INTEGER },
-          { x: Number.MIN_SAFE_INTEGER + 1000, y: Number.MIN_SAFE_INTEGER + 1000 },
+          {
+            x: Number.MIN_SAFE_INTEGER + 1000,
+            y: Number.MIN_SAFE_INTEGER + 1000,
+          },
           { x: Number.MIN_SAFE_INTEGER, y: Number.MIN_SAFE_INTEGER + 1000 },
         ],
         type: 'external',
@@ -580,7 +591,9 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
         type: 'external',
       };
 
-      const { container } = renderPolygonSafely(invalidVerticesPolygon, { isSelected: true });
+      const { container } = renderPolygonSafely(invalidVerticesPolygon, {
+        isSelected: true,
+      });
 
       if (container) {
         // Try to interact with vertices
@@ -669,7 +682,7 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
     });
 
     it('should handle gradual data corruption gracefully', () => {
-      let polygon = createMockPolygon({
+      const polygon = createMockPolygon({
         id: 'gradual-corruption',
         points: [
           { x: 10, y: 10 },
@@ -729,7 +742,12 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
         // Valid polygon
         createMockPolygon({
           id: 'valid-1',
-          points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+          points: [
+            { x: 0, y: 0 },
+            { x: 50, y: 0 },
+            { x: 50, y: 50 },
+            { x: 0, y: 50 },
+          ],
         }),
         // Invalid points
         {
@@ -740,12 +758,22 @@ describe('Polygon Data Edge Cases and Invalid Data Handling', () => {
         // Valid polygon
         createMockPolygon({
           id: 'valid-2',
-          points: [{ x: 100, y: 0 }, { x: 150, y: 0 }, { x: 150, y: 50 }, { x: 100, y: 50 }],
+          points: [
+            { x: 100, y: 0 },
+            { x: 150, y: 0 },
+            { x: 150, y: 50 },
+            { x: 100, y: 50 },
+          ],
         }),
         // Invalid ID
         {
           id: null as any,
-          points: [{ x: 200, y: 0 }, { x: 250, y: 0 }, { x: 250, y: 50 }, { x: 200, y: 50 }],
+          points: [
+            { x: 200, y: 0 },
+            { x: 250, y: 0 },
+            { x: 250, y: 50 },
+            { x: 200, y: 50 },
+          ],
           type: 'external' as const,
         },
       ];

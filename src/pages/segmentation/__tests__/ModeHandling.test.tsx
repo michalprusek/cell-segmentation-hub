@@ -80,7 +80,7 @@ const MockSegmentationEditor = ({
 
       {/* Polygons */}
       <svg width="800" height="600" viewBox="0 0 800 600">
-        {polygons.map((polygon) => (
+        {polygons.map(polygon => (
           <g
             key={polygon.id}
             data-testid={`polygon-${polygon.id}`}
@@ -90,7 +90,10 @@ const MockSegmentationEditor = ({
               d={`M ${polygon.points.map(p => `${p.x},${p.y}`).join(' L ')} Z`}
               onClick={() => handlePolygonSelection(polygon.id)}
               style={{
-                fill: polygon.type === 'internal' ? 'rgba(14, 165, 233, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                fill:
+                  polygon.type === 'internal'
+                    ? 'rgba(14, 165, 233, 0.1)'
+                    : 'rgba(239, 68, 68, 0.1)',
                 stroke: polygon.type === 'internal' ? '#0ea5e9' : '#ef4444',
                 strokeWidth: selectedPolygonId === polygon.id ? 2 : 1,
               }}
@@ -103,7 +106,9 @@ const MockSegmentationEditor = ({
       <div data-testid="mode-instructions">
         {editMode === EditMode.View && 'Click polygon to edit'}
         {editMode === EditMode.DeletePolygon && 'Click polygon to delete'}
-        {editMode === EditMode.Slice && selectedPolygonId ? 'Place slice points' : 'Select polygon to slice'}
+        {editMode === EditMode.Slice && selectedPolygonId
+          ? 'Place slice points'
+          : 'Select polygon to slice'}
         {editMode === EditMode.EditVertices && 'Edit polygon vertices'}
       </div>
     </div>
@@ -185,8 +190,12 @@ describe('Mode Switching and Interaction Handling', () => {
       renderEditor(EditMode.DeletePolygon);
 
       // Verify initial state
-      expect(screen.getByTestId('current-mode')).toHaveTextContent('DeletePolygon');
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Click polygon to delete');
+      expect(screen.getByTestId('current-mode')).toHaveTextContent(
+        'DeletePolygon'
+      );
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Click polygon to delete'
+      );
 
       // Click on polygon in delete mode
       const polygon = screen.getByTestId('polygon-poly-1');
@@ -199,28 +208,38 @@ describe('Mode Switching and Interaction Handling', () => {
       expect(mockOnModeChange).not.toHaveBeenCalled();
 
       // Mode should still be delete
-      expect(screen.getByTestId('current-mode')).toHaveTextContent('DeletePolygon');
+      expect(screen.getByTestId('current-mode')).toHaveTextContent(
+        'DeletePolygon'
+      );
     });
 
     it('should delete multiple polygons while staying in delete mode', async () => {
       renderEditor(EditMode.DeletePolygon);
 
       // Delete first polygon
-      fireEvent.click(screen.getByTestId('polygon-poly-1').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-1').querySelector('path')!
+      );
       expect(mockOnPolygonDelete).toHaveBeenCalledWith('poly-1');
 
       // Delete second polygon
-      fireEvent.click(screen.getByTestId('polygon-poly-2').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-2').querySelector('path')!
+      );
       expect(mockOnPolygonDelete).toHaveBeenCalledWith('poly-2');
 
       // Delete third polygon
-      fireEvent.click(screen.getByTestId('polygon-poly-3').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-3').querySelector('path')!
+      );
       expect(mockOnPolygonDelete).toHaveBeenCalledWith('poly-3');
 
       // Should have called delete 3 times, no mode changes
       expect(mockOnPolygonDelete).toHaveBeenCalledTimes(3);
       expect(mockOnModeChange).not.toHaveBeenCalled();
-      expect(screen.getByTestId('current-mode')).toHaveTextContent('DeletePolygon');
+      expect(screen.getByTestId('current-mode')).toHaveTextContent(
+        'DeletePolygon'
+      );
     });
 
     it('should allow manual mode change from delete mode', async () => {
@@ -239,7 +258,9 @@ describe('Mode Switching and Interaction Handling', () => {
 
       // Verify initial state
       expect(screen.getByTestId('current-mode')).toHaveTextContent('Slice');
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Select polygon to slice');
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Select polygon to slice'
+      );
 
       // Click on polygon in slice mode
       const polygon = screen.getByTestId('polygon-poly-1');
@@ -259,10 +280,14 @@ describe('Mode Switching and Interaction Handling', () => {
       const { rerender } = renderEditor(EditMode.Slice);
 
       // Initial instructions
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Select polygon to slice');
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Select polygon to slice'
+      );
 
       // Click polygon
-      fireEvent.click(screen.getByTestId('polygon-poly-1').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-1').querySelector('path')!
+      );
       expect(mockOnPolygonSelect).toHaveBeenCalledWith('poly-1');
 
       // Re-render with selected polygon
@@ -279,15 +304,21 @@ describe('Mode Switching and Interaction Handling', () => {
       );
 
       // Instructions should update to slice placement
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Place slice points');
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('poly-1');
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Place slice points'
+      );
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'poly-1'
+      );
     });
 
     it('should allow switching selected polygon in slice mode', async () => {
       const { rerender } = renderEditor(EditMode.Slice, 'poly-1');
 
       // Click different polygon
-      fireEvent.click(screen.getByTestId('polygon-poly-2').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-2').querySelector('path')!
+      );
       expect(mockOnPolygonSelect).toHaveBeenCalledWith('poly-2');
 
       // Mode should remain slice
@@ -322,7 +353,9 @@ describe('Mode Switching and Interaction Handling', () => {
       renderEditor(EditMode.View);
 
       // Click first polygon
-      fireEvent.click(screen.getByTestId('polygon-poly-1').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-1').querySelector('path')!
+      );
       expect(mockOnPolygonSelect).toHaveBeenCalledWith('poly-1');
       expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.EditVertices);
 
@@ -331,7 +364,9 @@ describe('Mode Switching and Interaction Handling', () => {
       mockOnModeChange.mockClear();
 
       // Click second polygon
-      fireEvent.click(screen.getByTestId('polygon-poly-2').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-2').querySelector('path')!
+      );
       expect(mockOnPolygonSelect).toHaveBeenCalledWith('poly-2');
       expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.EditVertices);
     });
@@ -342,7 +377,9 @@ describe('Mode Switching and Interaction Handling', () => {
       renderEditor(EditMode.EditVertices, 'poly-1');
 
       // Click different polygon
-      fireEvent.click(screen.getByTestId('polygon-poly-2').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-2').querySelector('path')!
+      );
 
       // Should select the new polygon and stay in edit mode
       expect(mockOnPolygonSelect).toHaveBeenCalledWith('poly-2');
@@ -353,8 +390,12 @@ describe('Mode Switching and Interaction Handling', () => {
       renderEditor(EditMode.EditVertices, 'poly-1');
 
       // Verify current state
-      expect(screen.getByTestId('current-mode')).toHaveTextContent('EditVertices');
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('poly-1');
+      expect(screen.getByTestId('current-mode')).toHaveTextContent(
+        'EditVertices'
+      );
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'poly-1'
+      );
     });
   });
 
@@ -377,7 +418,9 @@ describe('Mode Switching and Interaction Handling', () => {
       renderEditor(EditMode.View);
 
       // Click polygon to enter edit mode
-      fireEvent.click(screen.getByTestId('polygon-poly-1').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-1').querySelector('path')!
+      );
       expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.EditVertices);
 
       // Immediately switch to delete mode
@@ -385,7 +428,9 @@ describe('Mode Switching and Interaction Handling', () => {
       expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.DeletePolygon);
 
       // Click polygon in delete mode
-      fireEvent.click(screen.getByTestId('polygon-poly-2').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-2').querySelector('path')!
+      );
       expect(mockOnPolygonDelete).toHaveBeenCalledWith('poly-2');
     });
 
@@ -402,7 +447,9 @@ describe('Mode Switching and Interaction Handling', () => {
       expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.DeletePolygon);
 
       // Click polygon should delete, not change mode
-      fireEvent.click(screen.getByTestId('polygon-poly-1').querySelector('path')!);
+      fireEvent.click(
+        screen.getByTestId('polygon-poly-1').querySelector('path')!
+      );
       expect(mockOnPolygonDelete).toHaveBeenCalledWith('poly-1');
     });
   });
@@ -411,7 +458,9 @@ describe('Mode Switching and Interaction Handling', () => {
     it('should display correct instructions for each mode', () => {
       // View mode
       const { rerender } = renderEditor(EditMode.View);
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Click polygon to edit');
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Click polygon to edit'
+      );
 
       // Delete mode
       rerender(
@@ -425,7 +474,9 @@ describe('Mode Switching and Interaction Handling', () => {
           onPolygonSlice={mockOnPolygonSlice}
         />
       );
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Click polygon to delete');
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Click polygon to delete'
+      );
 
       // Slice mode without selection
       rerender(
@@ -439,7 +490,9 @@ describe('Mode Switching and Interaction Handling', () => {
           onPolygonSlice={mockOnPolygonSlice}
         />
       );
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Select polygon to slice');
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Select polygon to slice'
+      );
 
       // Slice mode with selection
       rerender(
@@ -453,7 +506,9 @@ describe('Mode Switching and Interaction Handling', () => {
           onPolygonSlice={mockOnPolygonSlice}
         />
       );
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Place slice points');
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Place slice points'
+      );
 
       // Edit vertices mode
       rerender(
@@ -467,7 +522,9 @@ describe('Mode Switching and Interaction Handling', () => {
           onPolygonSlice={mockOnPolygonSlice}
         />
       );
-      expect(screen.getByTestId('mode-instructions')).toHaveTextContent('Edit polygon vertices');
+      expect(screen.getByTestId('mode-instructions')).toHaveTextContent(
+        'Edit polygon vertices'
+      );
     });
   });
 
@@ -488,7 +545,9 @@ describe('Mode Switching and Interaction Handling', () => {
         />
       );
 
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('poly-2');
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'poly-2'
+      );
       expect(screen.getByTestId('polygon-poly-2')).toHaveClass('selected');
     });
 

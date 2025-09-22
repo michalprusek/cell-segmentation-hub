@@ -378,7 +378,10 @@ export class PolygonShapeTestFactory {
       points: [
         { x: Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER },
         { x: Number.MAX_SAFE_INTEGER - 1000, y: Number.MAX_SAFE_INTEGER },
-        { x: Number.MAX_SAFE_INTEGER - 1000, y: Number.MAX_SAFE_INTEGER - 1000 },
+        {
+          x: Number.MAX_SAFE_INTEGER - 1000,
+          y: Number.MAX_SAFE_INTEGER - 1000,
+        },
         { x: Number.MAX_SAFE_INTEGER, y: Number.MAX_SAFE_INTEGER - 1000 },
       ],
       type: 'external',
@@ -388,7 +391,11 @@ export class PolygonShapeTestFactory {
   /**
    * Create a star-shaped polygon
    */
-  static createStarPolygon(points: number = 5, outerRadius: number = 100, innerRadius: number = 50): Polygon {
+  static createStarPolygon(
+    points: number = 5,
+    outerRadius: number = 100,
+    innerRadius: number = 50
+  ): Polygon {
     const starPoints: Point[] = [];
     const centerX = 300;
     const centerY = 300;
@@ -513,7 +520,10 @@ export class PolygonPerformanceTestFactory {
       () => PolygonIdTestFactory.createUndefinedIdPolygon(),
       () => PolygonPointTestFactory.createNaNPointsPolygon(),
       () => PolygonShapeTestFactory.createThinPolygon(),
-      () => PolygonPointTestFactory.createManyPointsPolygon(Math.floor(Math.random() * 500) + 100),
+      () =>
+        PolygonPointTestFactory.createManyPointsPolygon(
+          Math.floor(Math.random() * 500) + 100
+        ),
     ];
 
     for (let i = 0; i < count; i++) {
@@ -536,15 +546,17 @@ export class PolygonPerformanceTestFactory {
         polygons.push(polygon);
       } catch (_error) {
         // Even factory failures should be handled gracefully
-        polygons.push(PolygonIdTestFactory.createMLPolygon({
-          id: `fallback-${i}`,
-          points: [
-            { x: i * 20, y: 0 },
-            { x: i * 20 + 15, y: 0 },
-            { x: i * 20 + 15, y: 15 },
-            { x: i * 20, y: 15 },
-          ],
-        }));
+        polygons.push(
+          PolygonIdTestFactory.createMLPolygon({
+            id: `fallback-${i}`,
+            points: [
+              { x: i * 20, y: 0 },
+              { x: i * 20 + 15, y: 0 },
+              { x: i * 20 + 15, y: 15 },
+              { x: i * 20, y: 15 },
+            ],
+          })
+        );
       }
     }
 
@@ -564,10 +576,7 @@ export class PolygonTestScenarios {
       name: 'React Key Validation',
       description: 'Tests React key generation with mixed ID validity',
       polygons: PolygonIdTestFactory.createMixedIdValidityPolygons(20),
-      expectedWarnings: [
-        'Invalid polygon ID',
-        'Empty polygon ID',
-      ],
+      expectedWarnings: ['Invalid polygon ID', 'Empty polygon ID'],
       shouldRender: true,
       performanceThreshold: 200,
     };
@@ -650,7 +659,10 @@ export class PolygonTestUtils {
   /**
    * Create a polygon with specific ID pattern for testing
    */
-  static createPolygonWithIdPattern(pattern: 'valid' | 'undefined' | 'empty' | 'whitespace' | 'null', index: number = 0): Polygon {
+  static createPolygonWithIdPattern(
+    pattern: 'valid' | 'undefined' | 'empty' | 'whitespace' | 'null',
+    index: number = 0
+  ): Polygon {
     const basePolygon = {
       points: [
         { x: index * 100, y: 0 },
@@ -689,7 +701,11 @@ export class PolygonTestUtils {
       return { isValid: false, issues };
     }
 
-    if (!polygon.id || typeof polygon.id !== 'string' || polygon.id.trim() === '') {
+    if (
+      !polygon.id ||
+      typeof polygon.id !== 'string' ||
+      polygon.id.trim() === ''
+    ) {
       issues.push('Invalid or missing ID');
     }
 
@@ -699,7 +715,11 @@ export class PolygonTestUtils {
       issues.push('Insufficient points for polygon');
     } else {
       polygon.points.forEach((point: any, index: number) => {
-        if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') {
+        if (
+          !point ||
+          typeof point.x !== 'number' ||
+          typeof point.y !== 'number'
+        ) {
           issues.push(`Invalid point at index ${index}`);
         } else if (isNaN(point.x) || isNaN(point.y)) {
           issues.push(`NaN coordinates at index ${index}`);
@@ -729,7 +749,12 @@ export class PolygonTestUtils {
   /**
    * Create a grid of polygons for layout testing
    */
-  static createPolygonGrid(rows: number, cols: number, cellSize: number = 60, spacing: number = 10): Polygon[] {
+  static createPolygonGrid(
+    rows: number,
+    cols: number,
+    cellSize: number = 60,
+    spacing: number = 10
+  ): Polygon[] {
     const polygons: Polygon[] = [];
 
     for (let row = 0; row < rows; row++) {

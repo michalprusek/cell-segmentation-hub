@@ -357,10 +357,16 @@ export class ExportService {
       
       // Copy original images (can run in parallel)
       if (options.includeOriginalImages && project.images) {
+        const images = project.images as ImageWithSegmentation[];
         exportTasks.push(
-          this.copyOriginalImages(project.images as ImageWithSegmentation[], exportDir).then(() => {
+          this.copyOriginalImagesWithProgress(images, exportDir, (current, total) => {
+            const taskProgress = Math.floor((current / total) * 100);
+            const baseProgress = 10 + progressStep * progressIncrement;
+            const currentProgress = baseProgress + (taskProgress * progressIncrement / 100);
+            this.updateJobProgress(jobId, currentProgress, 'images', { current, total });
+          }).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement);
+            this.updateJobProgress(jobId, 10 + progressStep * progressIncrement, 'images');
           })
         );
       }
@@ -474,6 +480,14 @@ export class ExportService {
   }
 
   private async copyOriginalImages(images: ImageWithSegmentation[], exportDir: string): Promise<void> {
+    return this.copyOriginalImagesWithProgress(images, exportDir);
+  }
+
+  private async copyOriginalImagesWithProgress(
+    images: ImageWithSegmentation[],
+    exportDir: string,
+    onProgress?: (current: number, total: number) => void
+  ): Promise<void> {
     const imagesDir = path.join(exportDir, 'images');
     const uploadDir = process.env.UPLOAD_DIR || './uploads';
     
@@ -533,6 +547,12 @@ export class ExportService {
           const batchSkipped = batchResults.filter(r => r === 'skipped').length;
           copiedCount += batchCopied;
           skippedCount += batchSkipped;
+
+          // Report progress
+          if (onProgress) {
+            onProgress(copiedCount + skippedCount, images.length);
+          }
+
           logger.info(`Copy batch ${batchIndex + 1} completed: ${batchCopied} copied, ${batchSkipped} skipped`, undefined, 'ExportService');
         },
         onItemError: (item, error) => {
@@ -1317,13 +1337,70 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
   }
 
 
-  private updateJobProgress(jobId: string, progress: number): void {
+  private updateJobProgress(
+    jobId: string,
+    progress: number,
+    stage?: 'images' | 'visualizations' | 'annotations' | 'metrics' | 'compression',
+    stageProgress?: { current: number; total: number; currentItem?: string }
+  ): void {
     const job = this.exportJobs.get(jobId);
     if (job) {
       job.progress = progress;
-      // Send progress update via WebSocket
-      this.sendToUser(job.userId, 'export:progress', { jobId, progress });
+
+      // Determine phase based on progress
+      const phase = progress < 90 ? 'processing' : 'downloading';
+
+      // Generate contextual message
+      const message = this.getProgressMessage(progress, stage, stageProgress);
+
+      // Enhanced progress data for WebSocket
+      const progressData = {
+        jobId,
+        progress,
+        phase,
+        stage,
+        message,
+        stageProgress,
+        timestamp: new Date(),
+      };
+
+      // Send to user via WebSocket
+      this.sendToUser(job.userId, 'export:progress', progressData);
     }
+  }
+
+  private getProgressMessage(
+    progress: number,
+    stage?: 'images' | 'visualizations' | 'annotations' | 'metrics' | 'compression',
+    stageProgress?: { current: number; total: number; currentItem?: string }
+  ): string {
+    if (stage && stageProgress) {
+      const { current, total, currentItem } = stageProgress;
+      switch (stage) {
+        case 'images':
+          return `Copying original images (${current}/${total})${currentItem ? `: ${currentItem}` : ''}... ${progress}%`;
+        case 'visualizations':
+          return `Generating visualizations (${current}/${total})${currentItem ? `: ${currentItem}` : ''}... ${progress}%`;
+        case 'annotations':
+          return `Creating annotation files (${current}/${total})${currentItem ? `: ${currentItem}` : ''}... ${progress}%`;
+        case 'metrics':
+          return `Calculating metrics (${current}/${total})${currentItem ? `: ${currentItem}` : ''}... ${progress}%`;
+        case 'compression':
+          return `Creating archive... ${progress}%`;
+        default:
+          return `Processing ${stage} (${current}/${total})... ${progress}%`;
+      }
+    } else if (stage) {
+      switch (stage) {
+        case 'images': return `Copying original images... ${progress}%`;
+        case 'visualizations': return `Generating visualizations... ${progress}%`;
+        case 'annotations': return `Creating annotation files... ${progress}%`;
+        case 'metrics': return `Calculating metrics... ${progress}%`;
+        case 'compression': return `Creating archive... ${progress}%`;
+        default: return `Processing ${stage}... ${progress}%`;
+      }
+    }
+    return `Processing... ${progress}%`;
   }
 
   private setupJobCleanup(): void {
@@ -1425,6 +1502,22 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     const job = this.exportJobs.get(jobId);
     if (job && job.projectId === projectId) {
       job.status = 'cancelled';
+      job.completedAt = new Date();
+
+      // Emit WebSocket cancellation event
+      const cancelData = {
+        jobId,
+        projectId,
+        cancelledBy: 'user' as const,
+        progress: job.progress,
+        cleanupCompleted: true,
+        message: 'Export cancelled by user',
+        timestamp: new Date(),
+      };
+
+      // Send cancellation event to user via WebSocket
+      this.sendToUser(userId, 'export:cancelled', cancelData);
+
       // Cancel the Bull queue job if bullJobId exists and queue is available
       if (job.bullJobId && this.exportQueue && typeof (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob === 'function') {
         const queueJob = await (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob(job.bullJobId);
@@ -1432,6 +1525,8 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
           await queueJob.remove();
         }
       }
+
+      // Cleanup is handled automatically when job is removed
     }
   }
 
@@ -1462,6 +1557,7 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     // Invalid characters: < > : " | ? * \ / and control characters
     let sanitized = filename
       .replace(/[<>:"|?*\\/]/g, '_')
+      // eslint-disable-next-line no-control-regex
       .replace(/[\u0000-\u001f\u0080-\u009f]/g, '_')
       .trim();
 

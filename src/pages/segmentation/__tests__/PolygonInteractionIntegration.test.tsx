@@ -5,7 +5,13 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditMode } from '../types';
 import {
@@ -37,7 +43,9 @@ const MockSegmentationWorkflow = ({
     switch (currentMode) {
       case EditMode.DeletePolygon:
         if (polygonId) {
-          const filteredPolygons = workflowPolygons.filter(p => p.id !== polygonId);
+          const filteredPolygons = workflowPolygons.filter(
+            p => p.id !== polygonId
+          );
           setWorkflowPolygons(filteredPolygons);
           onPolygonsChange(filteredPolygons);
         }
@@ -109,14 +117,14 @@ const MockSegmentationWorkflow = ({
         height="600"
         viewBox="0 0 800 600"
         data-testid="workflow-canvas"
-        onClick={(e) => {
+        onClick={e => {
           if (e.target === e.currentTarget) {
             // Clicked empty area
             handlePolygonSelection(null);
           }
         }}
       >
-        {workflowPolygons.map((polygon) => (
+        {workflowPolygons.map(polygon => (
           <g
             key={polygon.id}
             data-testid={`workflow-polygon-${polygon.id}`}
@@ -124,34 +132,38 @@ const MockSegmentationWorkflow = ({
           >
             <path
               d={`M ${polygon.points.map(p => `${p.x},${p.y}`).join(' L ')} Z`}
-              onClick={(e) => {
+              onClick={e => {
                 e.stopPropagation();
                 handlePolygonSelection(polygon.id);
               }}
               style={{
-                fill: polygon.type === 'internal' ? 'rgba(14, 165, 233, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                fill:
+                  polygon.type === 'internal'
+                    ? 'rgba(14, 165, 233, 0.2)'
+                    : 'rgba(239, 68, 68, 0.2)',
                 stroke: polygon.type === 'internal' ? '#0ea5e9' : '#ef4444',
                 strokeWidth: selectedId === polygon.id ? 3 : 1,
               }}
             />
             {/* Render vertices for selected polygon in edit mode */}
-            {selectedId === polygon.id && currentMode === EditMode.EditVertices && (
-              <g data-testid={`vertices-${polygon.id}`}>
-                {polygon.points.map((point, index) => (
-                  <circle
-                    key={index}
-                    data-testid={`vertex-${polygon.id}-${index}`}
-                    cx={point.x}
-                    cy={point.y}
-                    r="4"
-                    fill="#4ade80"
-                    stroke="#16a34a"
-                    strokeWidth="2"
-                    onMouseDown={(e) => e.stopPropagation()}
-                  />
-                ))}
-              </g>
-            )}
+            {selectedId === polygon.id &&
+              currentMode === EditMode.EditVertices && (
+                <g data-testid={`vertices-${polygon.id}`}>
+                  {polygon.points.map((point, index) => (
+                    <circle
+                      key={index}
+                      data-testid={`vertex-${polygon.id}-${index}`}
+                      cx={point.x}
+                      cy={point.y}
+                      r="4"
+                      fill="#4ade80"
+                      stroke="#16a34a"
+                      strokeWidth="2"
+                      onMouseDown={e => e.stopPropagation()}
+                    />
+                  ))}
+                </g>
+              )}
           </g>
         ))}
       </svg>
@@ -228,7 +240,9 @@ describe('Polygon Interaction Integration Tests', () => {
       await user.click(polygon1);
 
       expect(mockOnModeChange).toHaveBeenCalledWith(EditMode.EditVertices);
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('poly-1');
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'poly-1'
+      );
 
       // 3. Verify vertices are visible in edit mode
       await waitFor(() => {
@@ -271,7 +285,9 @@ describe('Polygon Interaction Integration Tests', () => {
       });
 
       // 4. Verify deleted polygon is no longer in DOM
-      expect(screen.queryByTestId('workflow-polygon-poly-2')).not.toBeInTheDocument();
+      expect(
+        screen.queryByTestId('workflow-polygon-poly-2')
+      ).not.toBeInTheDocument();
     });
 
     it('should complete a slice preparation workflow', async () => {
@@ -294,7 +310,9 @@ describe('Polygon Interaction Integration Tests', () => {
       await user.click(polygon3);
 
       // 3. Verify polygon is selected for slicing
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('poly-3');
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'poly-3'
+      );
       expect(screen.getByTestId('current-mode')).toHaveTextContent('Slice');
     });
 
@@ -313,7 +331,9 @@ describe('Polygon Interaction Integration Tests', () => {
       const polygon1 = screen.getByTestId('workflow-polygon-poly-1');
       await user.click(polygon1);
 
-      expect(screen.getByTestId('current-mode')).toHaveTextContent('EditVertices');
+      expect(screen.getByTestId('current-mode')).toHaveTextContent(
+        'EditVertices'
+      );
 
       // 2. Switch to delete mode while polygon is selected
       await user.click(screen.getByTestId('delete-mode'));
@@ -357,7 +377,9 @@ describe('Polygon Interaction Integration Tests', () => {
       await user.click(polygon3);
 
       // Should end up in edit mode with polygon-3 selected
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('poly-3');
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'poly-3'
+      );
     });
   });
 
@@ -527,12 +549,18 @@ describe('Polygon Interaction Integration Tests', () => {
       );
 
       // Should render polygons without errors
-      expect(screen.getByTestId('workflow-polygon-minimal-1')).toBeInTheDocument();
-      expect(screen.getByTestId('workflow-polygon-minimal-2')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('workflow-polygon-minimal-1')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('workflow-polygon-minimal-2')
+      ).toBeInTheDocument();
 
       // Should handle clicks on minimal polygons
       await user.click(screen.getByTestId('workflow-polygon-minimal-1'));
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('minimal-1');
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'minimal-1'
+      );
     });
 
     it('should handle concurrent polygon operations', async () => {
@@ -558,7 +586,9 @@ describe('Polygon Interaction Integration Tests', () => {
 
       await waitFor(() => {
         // Should handle the sequence gracefully
-        expect(screen.getByTestId('current-mode')).toHaveTextContent('DeletePolygon');
+        expect(screen.getByTestId('current-mode')).toHaveTextContent(
+          'DeletePolygon'
+        );
       });
 
       // Polygon count should change (poly-3 was deleted)
@@ -581,7 +611,9 @@ describe('Polygon Interaction Integration Tests', () => {
 
       // Select a polygon
       await user.click(screen.getByTestId('workflow-polygon-poly-1'));
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('poly-1');
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'poly-1'
+      );
 
       // Force re-render with different props
       rerender(
@@ -627,7 +659,9 @@ describe('Polygon Interaction Integration Tests', () => {
       await user.keyboard('{Enter}');
 
       // Should trigger selection
-      expect(screen.getByTestId('selected-polygon')).toHaveTextContent('poly-1');
+      expect(screen.getByTestId('selected-polygon')).toHaveTextContent(
+        'poly-1'
+      );
     });
 
     it('should provide proper ARIA attributes during interactions', async () => {
@@ -677,7 +711,9 @@ describe('Polygon Interaction Integration Tests', () => {
       // Should render without issues in high contrast mode
       expect(screen.getByTestId('workflow-canvas')).toBeInTheDocument();
       testPolygons.forEach(polygon => {
-        expect(screen.getByTestId(`workflow-polygon-${polygon.id}`)).toBeInTheDocument();
+        expect(
+          screen.getByTestId(`workflow-polygon-${polygon.id}`)
+        ).toBeInTheDocument();
       });
     });
   });

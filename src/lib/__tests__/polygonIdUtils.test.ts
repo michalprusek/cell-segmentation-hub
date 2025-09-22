@@ -7,7 +7,7 @@ import {
   validatePolygonId,
   ensureValidPolygonId,
   generateSafePolygonKey,
-  logPolygonIdIssue
+  logPolygonIdIssue,
 } from '../polygonIdUtils';
 
 describe('polygonIdUtils', () => {
@@ -96,8 +96,13 @@ describe('polygonIdUtils', () => {
   });
 
   describe('logPolygonIdIssue', () => {
-    it('should log polygon validation issues', () => {
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    it('should log polygon validation issues in development mode', () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'development';
+
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
 
       const polygon = { id: undefined, type: 'external', points: [] };
 
@@ -112,12 +117,31 @@ describe('polygonIdUtils', () => {
           polygonData: expect.objectContaining({
             hasId: false,
             idType: 'undefined',
-            pointsCount: 0
-          })
+            pointsCount: 0,
+          }),
         })
       );
 
       consoleWarnSpy.mockRestore();
+      process.env.NODE_ENV = originalEnv;
+    });
+
+    it('should not log polygon validation issues in production mode', () => {
+      const originalEnv = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {});
+
+      const polygon = { id: undefined, type: 'external', points: [] };
+
+      logPolygonIdIssue(polygon, 'Test reason');
+
+      expect(consoleWarnSpy).not.toHaveBeenCalled();
+
+      consoleWarnSpy.mockRestore();
+      process.env.NODE_ENV = originalEnv;
     });
   });
 });

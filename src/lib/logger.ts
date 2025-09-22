@@ -64,7 +64,7 @@ class Logger {
 
   debug(message: string, data?: unknown): void {
     if (this.shouldLog('debug')) {
-      // eslint-disable-next-line no-console
+       
       console.log(
         this.formatMessage('debug', message),
         data !== undefined ? data : ''
@@ -102,14 +102,14 @@ class Logger {
   // Group related logs together
   group(label: string): void {
     if (this.isDevelopment) {
-      // eslint-disable-next-line no-console
+       
       console.group(label);
     }
   }
 
   groupEnd(): void {
     if (this.isDevelopment) {
-      // eslint-disable-next-line no-console
+       
       console.groupEnd();
     }
   }
@@ -117,14 +117,14 @@ class Logger {
   // Performance timing
   time(label: string): void {
     if (this.isDevelopment) {
-      // eslint-disable-next-line no-console
+       
       console.time(label);
     }
   }
 
   timeEnd(label: string): void {
     if (this.isDevelopment) {
-      // eslint-disable-next-line no-console
+       
       console.timeEnd(label);
     }
   }

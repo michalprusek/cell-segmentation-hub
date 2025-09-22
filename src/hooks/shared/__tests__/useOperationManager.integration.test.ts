@@ -5,7 +5,10 @@
 
 import { renderHook, act, waitFor as _waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { useOperationManager, OperationType as _OperationType } from '../useOperationManager';
+import {
+  useOperationManager,
+  OperationType as _OperationType,
+} from '../useOperationManager';
 
 // Mock WebSocket context
 const mockSocket = {

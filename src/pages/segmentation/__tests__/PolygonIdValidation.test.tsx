@@ -127,8 +127,12 @@ describe('Polygon ID Validation and React Keys', () => {
       expect(screen.getByTestId('ml_polygon_12345')).toBeInTheDocument();
 
       // Verify vertices use polygon ID in their keys
-      expect(screen.getByTestId('polygon-vertices-ml_polygon_12345')).toBeInTheDocument();
-      expect(screen.getByTestId('vertex-ml_polygon_12345-0')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('polygon-vertices-ml_polygon_12345')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('vertex-ml_polygon_12345-0')
+      ).toBeInTheDocument();
 
       // No warnings should be generated for valid IDs
       expect(mockConsole.warn).not.toHaveBeenCalled();
@@ -148,8 +152,12 @@ describe('Polygon ID Validation and React Keys', () => {
 
       renderPolygon(userPolygon);
 
-      expect(screen.getByTestId('polygon_1234567890_abc123def')).toBeInTheDocument();
-      expect(screen.getByTestId('polygon-vertices-polygon_1234567890_abc123def')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('polygon_1234567890_abc123def')
+      ).toBeInTheDocument();
+      expect(
+        screen.getByTestId('polygon-vertices-polygon_1234567890_abc123def')
+      ).toBeInTheDocument();
     });
 
     it('should handle complex polygon IDs with special characters', () => {
@@ -165,7 +173,9 @@ describe('Polygon ID Validation and React Keys', () => {
 
       renderPolygon(complexPolygon);
 
-      expect(screen.getByTestId('polygon-test_123-abc.def')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('polygon-test_123-abc.def')
+      ).toBeInTheDocument();
     });
   });
 
@@ -253,21 +263,36 @@ describe('Polygon ID Validation and React Keys', () => {
       const polygons = [
         createMockPolygon({
           id: 'polygon-1',
-          points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+          points: [
+            { x: 0, y: 0 },
+            { x: 50, y: 0 },
+            { x: 50, y: 50 },
+            { x: 0, y: 50 },
+          ],
         }),
         createMockPolygon({
           id: 'polygon-2',
-          points: [{ x: 100, y: 0 }, { x: 150, y: 0 }, { x: 150, y: 50 }, { x: 100, y: 50 }],
+          points: [
+            { x: 100, y: 0 },
+            { x: 150, y: 0 },
+            { x: 150, y: 50 },
+            { x: 100, y: 50 },
+          ],
         }),
         createMockPolygon({
           id: 'polygon-3',
-          points: [{ x: 200, y: 0 }, { x: 250, y: 0 }, { x: 250, y: 50 }, { x: 200, y: 50 }],
+          points: [
+            { x: 200, y: 0 },
+            { x: 250, y: 0 },
+            { x: 250, y: 50 },
+            { x: 200, y: 50 },
+          ],
         }),
       ];
 
       render(
         <svg width="800" height="600" viewBox="0 0 800 600">
-          {polygons.map((polygon) => (
+          {polygons.map(polygon => (
             <CanvasPolygon
               key={polygon.id}
               polygon={polygon}
@@ -291,7 +316,9 @@ describe('Polygon ID Validation and React Keys', () => {
 
       // No duplicate key warnings should be generated
       expect(mockConsole.error).not.toHaveBeenCalledWith(
-        expect.stringContaining('Warning: Encountered two children with the same key')
+        expect.stringContaining(
+          'Warning: Encountered two children with the same key'
+        )
       );
     });
 
@@ -299,17 +326,32 @@ describe('Polygon ID Validation and React Keys', () => {
       const mixedPolygons: Polygon[] = [
         {
           id: 'valid-polygon',
-          points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+          points: [
+            { x: 0, y: 0 },
+            { x: 50, y: 0 },
+            { x: 50, y: 50 },
+            { x: 0, y: 50 },
+          ],
           type: 'external',
         },
         {
           id: undefined as any,
-          points: [{ x: 100, y: 0 }, { x: 150, y: 0 }, { x: 150, y: 50 }, { x: 100, y: 50 }],
+          points: [
+            { x: 100, y: 0 },
+            { x: 150, y: 0 },
+            { x: 150, y: 50 },
+            { x: 100, y: 50 },
+          ],
           type: 'external',
         },
         {
           id: '',
-          points: [{ x: 200, y: 0 }, { x: 250, y: 0 }, { x: 250, y: 50 }, { x: 200, y: 50 }],
+          points: [
+            { x: 200, y: 0 },
+            { x: 250, y: 0 },
+            { x: 250, y: 50 },
+            { x: 200, y: 50 },
+          ],
           type: 'external',
         },
       ];
@@ -518,7 +560,9 @@ describe('Polygon ID Validation and React Keys', () => {
       expect(renderTime).toBeLessThan(500); // 500ms threshold
 
       // Should have rendered some valid polygons
-      expect(container.querySelectorAll('g[data-testid^="valid-polygon"]')).not.toHaveLength(0);
+      expect(
+        container.querySelectorAll('g[data-testid^="valid-polygon"]')
+      ).not.toHaveLength(0);
 
       // All polygons should have rendered despite ID validity issues
       // Each polygon creates multiple g elements (group + context menu)
@@ -609,7 +653,15 @@ describe('Polygon ID Validation and React Keys', () => {
         { id: 'valid', points: [], type: 'external' },
         { points: [{ x: 0, y: 0 }], type: 'external' }, // Missing ID
         { id: 'valid-2', type: 'external' }, // Missing points
-        { id: 'valid-3', points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }], type: 'external' },
+        {
+          id: 'valid-3',
+          points: [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 10 },
+          ],
+          type: 'external',
+        },
       ];
 
       const { container } = render(
@@ -642,16 +694,19 @@ describe('Polygon ID Validation and React Keys', () => {
     });
 
     it('should maintain application stability despite ID validation failures', () => {
-      const problematicPolygons: Polygon[] = Array.from({ length: 20 }, (_, i) => ({
-        id: i % 5 === 0 ? undefined as any : `polygon-${i}`,
-        points: [
-          { x: i * 20, y: 0 },
-          { x: i * 20 + 15, y: 0 },
-          { x: i * 20 + 15, y: 15 },
-          { x: i * 20, y: 15 },
-        ],
-        type: 'external',
-      }));
+      const problematicPolygons: Polygon[] = Array.from(
+        { length: 20 },
+        (_, i) => ({
+          id: i % 5 === 0 ? (undefined as any) : `polygon-${i}`,
+          points: [
+            { x: i * 20, y: 0 },
+            { x: i * 20 + 15, y: 0 },
+            { x: i * 20 + 15, y: 15 },
+            { x: i * 20, y: 15 },
+          ],
+          type: 'external',
+        })
+      );
 
       const { container } = render(
         <svg width="2000" height="600" viewBox="0 0 2000 600">

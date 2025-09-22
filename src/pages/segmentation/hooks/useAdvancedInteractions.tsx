@@ -440,6 +440,14 @@ export const useAdvancedInteractions = ({
 
         // Check if we clicked on a vertex element directly
         const target = e.target as SVGElement;
+        console.log('🔘 Canvas mouseDown:', {
+          target: target.tagName,
+          dataset: target?.dataset,
+          editMode,
+          hasPolygonId: !!target?.dataset?.polygonId,
+          hasVertexIndex: target?.dataset?.vertexIndex !== undefined,
+        });
+
         if (target && target.dataset) {
           const polygonId = target.dataset.polygonId;
           const vertexIndex = target.dataset.vertexIndex;
@@ -481,6 +489,13 @@ export const useAdvancedInteractions = ({
               }
 
               // Start dragging this vertex
+              console.log('🔘 Starting vertex drag:', {
+                polygonId,
+                vertexIndex: index,
+                originalPosition,
+                editMode,
+              });
+
               setInteractionState({
                 ...interactionState,
                 isDraggingVertex: true,
@@ -502,6 +517,9 @@ export const useAdvancedInteractions = ({
                   originalPosition: { ...originalPosition },
                   dragOffset: { x: 0, y: 0 },
                 });
+                console.log('✅ Vertex drag state initialized');
+              } else {
+                console.warn('⚠️ setVertexDragState not available');
               }
               return;
             }
@@ -610,6 +628,14 @@ export const useAdvancedInteractions = ({
             vertexIndex,
             originalPosition: interactionState.originalVertexPosition,
             dragOffset: { x: offsetX, y: offsetY },
+          });
+
+          console.log('🔘 Vertex drag offset updated:', {
+            polygonId,
+            vertexIndex,
+            offset: { x: offsetX, y: offsetY },
+            imagePoint,
+            originalPosition: interactionState.originalVertexPosition,
           });
         }
         return;

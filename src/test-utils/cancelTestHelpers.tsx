@@ -175,11 +175,15 @@ export const createTestOperationBatch = (
  */
 export const createCancelWebSocketEvents = () => {
   return {
-    uploadCancelled: vi.fn((_data: { uploadId: string; reason?: string }) => {}),
+    uploadCancelled: vi.fn(
+      (_data: { uploadId: string; reason?: string }) => {}
+    ),
     segmentationCancelled: vi.fn(
       (_data: { batchId: string; imageIds: string[]; reason?: string }) => {}
     ),
-    exportCancelled: vi.fn((_data: { exportId: string; reason?: string }) => {}),
+    exportCancelled: vi.fn(
+      (_data: { exportId: string; reason?: string }) => {}
+    ),
     operationCancelled: vi.fn(
       (_data: {
         operationId: string;

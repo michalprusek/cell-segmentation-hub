@@ -1,10 +1,11 @@
 # Polygon Interaction Debug - Comprehensive Analysis & Fixes
 
 ## Problem Summary
+
 Debug and fix three critical polygon interaction issues in the segmentation editor:
 
 1. **Mass Selection Bug**: Clicking single polygon selects ALL polygons
-2. **Hole Rendering Bug**: Polygon holes not rendering blue, classified as external polygons  
+2. **Hole Rendering Bug**: Polygon holes not rendering blue, classified as external polygons
 3. **Mode Switch Bug**: Slice/delete mode switches to edit mode when clicking polygons
 
 ## Root Cause Analysis
@@ -14,6 +15,7 @@ Debug and fix three critical polygon interaction issues in the segmentation edit
 **Root Cause**: Logic flaw in `handlePolygonSelection` function in `/src/pages/segmentation/SegmentationEditor.tsx`
 
 **Problem Code (Lines 532-534)**:
+
 ```typescript
 switch (editor.editMode) {
   case EditMode.DeletePolygon:
@@ -32,6 +34,7 @@ switch (editor.editMode) {
 **Issue**: The `default` case was executing for slice/delete modes and forcibly switching to EditVertices mode.
 
 **Fix Applied**:
+
 ```typescript
 switch (editor.editMode) {
   case EditMode.DeletePolygon:
@@ -61,12 +64,14 @@ switch (editor.editMode) {
 **Previous Investigation**: The stable function reference fix was implemented in memory files but issue persists.
 
 **Enhanced Debugging Added**:
+
 1. **Call Stack Tracking**: Added stack trace logging to identify call sources
 2. **Duplicate Call Detection**: Prevents rapid duplicate calls with timestamp checking
 3. **State Comparison**: Logs selection state changes to detect anomalies
 4. **Timing Analysis**: Tracks call timestamps to identify race conditions
 
 **New Debug Code**:
+
 ```typescript
 // Wrapper function with enhanced debugging
 const handleCanvasPolygonSelection = useCallback(
@@ -76,13 +81,15 @@ const handleCanvasPolygonSelection = useCallback(
       currentSelected: editor.selectedPolygonId,
       allPolygonIds: editor.polygons.map(p => p.id),
       timestamp: Date.now(),
-      callStack: new Error().stack?.split('\n').slice(1, 5).join('\n')
+      callStack: new Error().stack?.split('\n').slice(1, 5).join('\n'),
     });
 
     // Duplicate call detection
     const callKey = `${polygonId}-${Date.now()}`;
     if (window.__lastPolygonSelectionCall === callKey) {
-      logger.warn('[SegmentationEditor] Duplicate polygon selection call detected!');
+      logger.warn(
+        '[SegmentationEditor] Duplicate polygon selection call detected!'
+      );
       return;
     }
     window.__lastPolygonSelectionCall = callKey;
@@ -94,6 +101,7 @@ const handleCanvasPolygonSelection = useCallback(
 ```
 
 **Potential Root Causes**:
+
 - React render cycles causing stale closures
 - Event handler conflicts between canvas and component levels
 - Race conditions in state updates
@@ -102,10 +110,12 @@ const handleCanvasPolygonSelection = useCallback(
 ### 3. Hole Rendering Bug 🔍 VALIDATION ADDED
 
 **Backend Status**: ✅ CONFIRMED WORKING
+
 - ML service logs show: "Polygon X: Y vertices, type: internal"
 - Backend correctly detects holes with `parent_id` relationships
 
 **Frontend Validation Added**:
+
 ```typescript
 // Enhanced polygon type debugging
 polygonTypes: visiblePolygons.map(p => ({
@@ -120,6 +130,7 @@ undefinedTypeCount: visiblePolygons.filter(p => !p.type).length,
 ```
 
 **Color Logic Verification** (CanvasPolygon.tsx lines 118-126):
+
 ```typescript
 const getPathColor = () => {
   if (type === 'internal') {
@@ -131,6 +142,7 @@ const getPathColor = () => {
 ```
 
 **Potential Issues**:
+
 - API response parsing not preserving `type` field
 - Data transformation losing polygon metadata
 - CSS conflicts overriding computed colors
@@ -139,15 +151,18 @@ const getPathColor = () => {
 ## Event Flow Architecture
 
 ### Current Event Delegation
+
 1. **CanvasPolygon onClick** → `handleCanvasPolygonSelection(polygonId)`
 2. **handleCanvasPolygonSelection** → `handlePolygonSelection(polygonId)`
 3. **handlePolygonSelection** → Mode-specific behavior (now fixed)
 
-### Canvas-Level Events  
+### Canvas-Level Events
+
 - **SVG onClick** → Deselection (only if `e.target === e.currentTarget`)
 - **Advanced Interactions** → Pan, zoom, vertex manipulation
 
 ### Event Conflicts Prevention
+
 - CanvasPolygon uses `e.stopPropagation()` to prevent canvas-level handling
 - Canvas-level handlers only execute for empty space clicks
 - Vertex interactions use separate event handlers with propagation control
@@ -157,26 +172,30 @@ const getPathColor = () => {
 ### `/src/pages/segmentation/SegmentationEditor.tsx`
 
 **Changes Made**:
+
 1. **Fixed mode switching logic** (lines 512-556): Explicit handling for each mode
 2. **Enhanced polygon selection debugging** (lines 485-510): Mass selection detection
-3. **Added call stack tracing** (lines 575-600): Duplicate call prevention  
+3. **Added call stack tracing** (lines 575-600): Duplicate call prevention
 4. **Added polygon type debugging** (lines 1288-1313): Hole rendering validation
 
 ## Expected Behavior After Fixes
 
 ### Mode Switching ✅
+
 - **Slice Mode**: Click polygon → stays in slice mode, selects polygon for slicing
 - **Delete Mode**: Click polygon → immediately deletes polygon, stays in delete mode
 - **EditVertices Mode**: Click polygon → selects polygon, shows vertices
 - **View Mode**: Click polygon → selects polygon, switches to EditVertices automatically
 
 ### Mass Selection 🔍
+
 - **Single Click**: Only clicked polygon should be selected
 - **Mode Changes**: Selection should persist across mode switches
 - **Rapid Clicks**: Duplicate calls should be prevented
 - **Debug Logs**: Mass selection attempts should be logged as warnings
 
-### Hole Rendering 🔍  
+### Hole Rendering 🔍
+
 - **Internal Polygons**: Should render with blue stroke/fill (`#0ea5e9`)
 - **External Polygons**: Should render with red stroke/fill (`#ef4444`)
 - **Selection States**: Colors should intensify when selected
@@ -185,14 +204,16 @@ const getPathColor = () => {
 ## Testing Strategy
 
 ### Mode Switching Verification
+
 ```
 1. Enter Slice mode → Click polygon → Should remain in Slice mode
-2. Enter Delete mode → Click polygon → Should delete immediately  
+2. Enter Delete mode → Click polygon → Should delete immediately
 3. Enter EditVertices → Click polygon → Should select and show vertices
 4. Enter View mode → Click polygon → Should switch to EditVertices automatically
 ```
 
 ### Mass Selection Testing
+
 ```
 1. Click single polygon → Check console for warnings
 2. Rapid clicking → Should not trigger mass selection
@@ -201,26 +222,30 @@ const getPathColor = () => {
 ```
 
 ### Hole Rendering Testing
+
 ```
 1. Load image with holes → Check console for polygon type counts
 2. Internal polygons → Should display as blue
-3. External polygons → Should display as red  
+3. External polygons → Should display as red
 4. API response → Check network tab for type preservation
 ```
 
 ## Debug Commands
 
 ### Frontend Logs
+
 ```bash
 cd /home/cvat/cell-segmentation-hub && make logs-fe | grep -E "(SegmentationEditor|Polygon|selection|type)"
 ```
 
-### Backend Logs  
+### Backend Logs
+
 ```bash
 cd /home/cvat/cell-segmentation-hub && make logs | grep -E "(internal|hole|parent_id|type.*internal)"
 ```
 
 ### Browser Console
+
 - Monitor for mass selection warnings
 - Check polygon type counts in render logs
 - Verify call stack traces for debugging

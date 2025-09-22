@@ -1,5 +1,8 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import axios, { type AxiosResponse as _AxiosResponse, type AxiosError as _AxiosError } from 'axios';
+import axios, {
+  type AxiosResponse as _AxiosResponse,
+  type AxiosError as _AxiosError,
+} from 'axios';
 
 // Mock axios completely
 vi.mock('axios', () => ({

@@ -29,18 +29,25 @@ const defaultExportState: ExportState = {
 
 const ExportContext = createContext<ExportContextType | null>(null);
 
-export const ExportProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [exportStates, setExportStates] = useState<Record<string, ExportState>>({});
+export const ExportProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [exportStates, setExportStates] = useState<Record<string, ExportState>>(
+    {}
+  );
 
-  const updateExportState = useCallback((projectId: string, updates: Partial<ExportState>) => {
-    setExportStates(prev => ({
-      ...prev,
-      [projectId]: {
-        ...prev[projectId] || { ...defaultExportState, projectId },
-        ...updates,
-      },
-    }));
-  }, []);
+  const updateExportState = useCallback(
+    (projectId: string, updates: Partial<ExportState>) => {
+      setExportStates(prev => ({
+        ...prev,
+        [projectId]: {
+          ...(prev[projectId] || { ...defaultExportState, projectId }),
+          ...updates,
+        },
+      }));
+    },
+    []
+  );
 
   const clearExportState = useCallback((projectId: string) => {
     setExportStates(prev => {
@@ -50,17 +57,22 @@ export const ExportProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   }, []);
 
-  const getExportState = useCallback((projectId: string): ExportState | null => {
-    return exportStates[projectId] || null;
-  }, [exportStates]);
+  const getExportState = useCallback(
+    (projectId: string): ExportState | null => {
+      return exportStates[projectId] || null;
+    },
+    [exportStates]
+  );
 
   return (
-    <ExportContext.Provider value={{
-      exportStates,
-      updateExportState,
-      clearExportState,
-      getExportState,
-    }}>
+    <ExportContext.Provider
+      value={{
+        exportStates,
+        updateExportState,
+        clearExportState,
+        getExportState,
+      }}
+    >
       {children}
     </ExportContext.Provider>
   );

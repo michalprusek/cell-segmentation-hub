@@ -22,7 +22,10 @@ export const validatePolygonId = (id: any): id is string => {
 /**
  * Ensures a polygon has a valid ID, generating one if necessary
  */
-export const ensureValidPolygonId = (id: any, fallbackPrefix: string = 'fallback'): string => {
+export const ensureValidPolygonId = (
+  id: any,
+  fallbackPrefix: string = 'fallback'
+): string => {
   if (validatePolygonId(id)) {
     return id;
   }
@@ -32,7 +35,10 @@ export const ensureValidPolygonId = (id: any, fallbackPrefix: string = 'fallback
 /**
  * Generates a safe React key for polygon rendering with fallback for undefined IDs
  */
-export const generateSafePolygonKey = (polygon: any, isUndoRedo: boolean): string => {
+export const generateSafePolygonKey = (
+  polygon: any,
+  isUndoRedo: boolean
+): string => {
   const safeId = ensureValidPolygonId(polygon.id, 'polygon');
   return `${safeId}-${isUndoRedo ? 'undo' : 'normal'}`;
 };
@@ -51,7 +57,7 @@ export const logPolygonIdIssue = (polygon: any, reason: string): void => {
         hasId: polygon.id !== undefined,
         idType: typeof polygon.id,
         pointsCount: polygon.points?.length || 0,
-      }
+      },
     });
   }
 };

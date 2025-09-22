@@ -138,7 +138,10 @@ const ProjectDetail = () => {
                 page,
               });
 
-              if (!imagesResponse.images || !Array.isArray(imagesResponse.images)) {
+              if (
+                !imagesResponse.images ||
+                !Array.isArray(imagesResponse.images)
+              ) {
                 break;
               }
 
@@ -150,7 +153,8 @@ const ProjectDetail = () => {
             }
 
             const formattedImages = (allImages || []).map(img => {
-              let segmentationStatus = img.segmentationStatus || img.segmentation_status;
+              let segmentationStatus =
+                img.segmentationStatus || img.segmentation_status;
               if (segmentationStatus === 'segmented') {
                 segmentationStatus = 'completed';
               }
@@ -223,7 +227,11 @@ const ProjectDetail = () => {
     lastUpdate,
     parallelStats,
     requestQueueStats,
-  } = useSegmentationQueue(id, handleSegmentationCancelled, handleBulkSegmentationCancelled);
+  } = useSegmentationQueue(
+    id,
+    handleSegmentationCancelled,
+    handleBulkSegmentationCancelled
+  );
 
   // Global queue stats for Cancel All button
   const { queueStats: globalQueueStats } = useSegmentationQueue(undefined);
@@ -244,15 +252,24 @@ const ProjectDetail = () => {
   const displayExportState = {
     isExporting: exportHook.isExporting || localExportState.isExporting,
     isDownloading: exportHook.isDownloading || localExportState.isDownloading,
-    exportProgress: localExportState.isExporting ? localExportState.exportProgress : exportHook.exportProgress,
-    exportStatus: localExportState.isExporting ? localExportState.exportStatus : exportHook.exportStatus,
-    completedJobId: exportHook.completedJobId || localExportState.completedJobId,
+    exportProgress: localExportState.isExporting
+      ? localExportState.exportProgress
+      : exportHook.exportProgress,
+    exportStatus: localExportState.isExporting
+      ? localExportState.exportStatus
+      : exportHook.exportStatus,
+    completedJobId:
+      exportHook.completedJobId || localExportState.completedJobId,
     wsConnected: exportHook.wsConnected,
   };
 
   // Sync with export hook when it updates
   useEffect(() => {
-    if (exportHook.isExporting || exportHook.isDownloading || exportHook.completedJobId) {
+    if (
+      exportHook.isExporting ||
+      exportHook.isDownloading ||
+      exportHook.completedJobId
+    ) {
       setLocalExportState({
         isExporting: exportHook.isExporting,
         isDownloading: exportHook.isDownloading,
@@ -281,7 +298,10 @@ const ProjectDetail = () => {
   }, []);
 
   const handleDownloadingChange = useCallback((isDownloading: boolean) => {
-    logger.debug('📥 Export dialog state change - isDownloading:', isDownloading);
+    logger.debug(
+      '📥 Export dialog state change - isDownloading:',
+      isDownloading
+    );
     setLocalExportState(prev => ({
       ...prev,
       isDownloading,
@@ -584,7 +604,8 @@ const ProjectDetail = () => {
       }
 
       const formattedImages = (allImages || []).map(img => {
-        let segmentationStatus = img.segmentationStatus || img.segmentation_status;
+        let segmentationStatus =
+          img.segmentationStatus || img.segmentation_status;
         if (segmentationStatus === 'segmented') {
           segmentationStatus = 'completed';
         }

@@ -30,7 +30,7 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
           cy={point.y}
           r="5"
           onClick={() => onVertexClick?.(index)}
-          onMouseDown={(e) => {
+          onMouseDown={e => {
             e.stopPropagation(); // Prevent event bubbling to polygon
             onVertexMouseDown?.(index);
           }}
@@ -115,16 +115,17 @@ describe('Event Handling Conflict Resolution', () => {
   });
 
   // Helper to create a complex test polygon with vertices
-  const createTestPolygon = (): Polygon => createMockPolygon({
-    id: 'test-polygon',
-    points: [
-      { x: 100, y: 100 },
-      { x: 200, y: 100 },
-      { x: 200, y: 200 },
-      { x: 100, y: 200 },
-    ],
-    type: 'external',
-  });
+  const createTestPolygon = (): Polygon =>
+    createMockPolygon({
+      id: 'test-polygon',
+      points: [
+        { x: 100, y: 100 },
+        { x: 200, y: 100 },
+        { x: 200, y: 200 },
+        { x: 100, y: 200 },
+      ],
+      type: 'external',
+    });
 
   // Helper to render polygon with canvas container
   const renderPolygonWithCanvas = (
@@ -243,8 +244,9 @@ describe('Event Handling Conflict Resolution', () => {
       const polygon = createTestPolygon();
       const { container } = renderPolygonWithCanvas(polygon, false);
 
-      const canvasContainer = container.querySelector('[data-testid="canvas-container"]') ||
-                             container.firstChild as HTMLElement;
+      const canvasContainer =
+        container.querySelector('[data-testid="canvas-container"]') ||
+        (container.firstChild as HTMLElement);
 
       fireEvent.mouseDown(canvasContainer, { clientX: 50, clientY: 50 });
 
@@ -263,7 +265,9 @@ describe('Event Handling Conflict Resolution', () => {
       fireEvent.contextMenu(polygonElement);
 
       await waitFor(() => {
-        expect(screen.getByTestId('context-menu-test-polygon')).toBeInTheDocument();
+        expect(
+          screen.getByTestId('context-menu-test-polygon')
+        ).toBeInTheDocument();
       });
 
       // Context menu should not trigger selection
@@ -278,7 +282,9 @@ describe('Event Handling Conflict Resolution', () => {
       fireEvent.contextMenu(polygonElement);
 
       await waitFor(() => {
-        expect(screen.getByTestId('context-menu-test-polygon')).toBeInTheDocument();
+        expect(
+          screen.getByTestId('context-menu-test-polygon')
+        ).toBeInTheDocument();
       });
 
       // Click delete in context menu
@@ -297,7 +303,9 @@ describe('Event Handling Conflict Resolution', () => {
       fireEvent.contextMenu(polygonElement);
 
       await waitFor(() => {
-        expect(screen.getByTestId('context-menu-test-polygon')).toBeInTheDocument();
+        expect(
+          screen.getByTestId('context-menu-test-polygon')
+        ).toBeInTheDocument();
       });
 
       // Click slice in context menu
@@ -352,7 +360,9 @@ describe('Event Handling Conflict Resolution', () => {
       const polygon = createTestPolygon();
       renderPolygonWithCanvas(polygon, true);
 
-      const polygonPath = screen.getByTestId('test-polygon').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('test-polygon')
+        .querySelector('path')!;
       const vertex = screen.getByTestId('vertex-test-polygon-0');
 
       // Rapid sequence: polygon click, then vertex click
@@ -429,15 +439,18 @@ describe('Event Handling Conflict Resolution', () => {
       const user = userEvent.setup();
 
       // Focus on canvas container
-      const canvasContainer = container.querySelector('[data-testid="canvas-container"]') ||
-                             container.firstChild as HTMLElement;
+      const canvasContainer =
+        container.querySelector('[data-testid="canvas-container"]') ||
+        (container.firstChild as HTMLElement);
       canvasContainer.focus();
 
       // Press a key while hovering over polygon
       await user.keyboard('d'); // Delete key
 
       // Then click polygon
-      const polygonPath = screen.getByTestId('test-polygon').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('test-polygon')
+        .querySelector('path')!;
       fireEvent.click(polygonPath);
 
       // Polygon selection should still work normally
@@ -450,7 +463,9 @@ describe('Event Handling Conflict Resolution', () => {
       const polygon = createTestPolygon();
       renderPolygonWithCanvas(polygon, false);
 
-      const polygonPath = screen.getByTestId('test-polygon').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('test-polygon')
+        .querySelector('path')!;
 
       // Simulate drag-like sequence on polygon
       fireEvent.mouseDown(polygonPath, { clientX: 150, clientY: 150 });
@@ -465,7 +480,9 @@ describe('Event Handling Conflict Resolution', () => {
       const polygon = createTestPolygon();
       renderPolygonWithCanvas(polygon, false);
 
-      const polygonPath = screen.getByTestId('test-polygon').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('test-polygon')
+        .querySelector('path')!;
 
       // Quick click sequence
       fireEvent.mouseDown(polygonPath, { clientX: 150, clientY: 150 });
@@ -480,7 +497,9 @@ describe('Event Handling Conflict Resolution', () => {
       const polygon = createTestPolygon();
       renderPolygonWithCanvas(polygon, false);
 
-      const polygonPath = screen.getByTestId('test-polygon').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('test-polygon')
+        .querySelector('path')!;
       fireEvent.doubleClick(polygonPath);
 
       // Double-click should trigger edit, not selection
@@ -526,7 +545,9 @@ describe('Event Handling Conflict Resolution', () => {
         </svg>
       );
 
-      const polygonPath = screen.getByTestId('test-polygon').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('test-polygon')
+        .querySelector('path')!;
 
       // Should not throw error when callbacks are undefined
       expect(() => {
@@ -540,7 +561,9 @@ describe('Event Handling Conflict Resolution', () => {
       const polygon = createTestPolygon();
       const { unmount } = renderPolygonWithCanvas(polygon, false);
 
-      const polygonPath = screen.getByTestId('test-polygon').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('test-polygon')
+        .querySelector('path')!;
 
       // Start an interaction
       fireEvent.mouseDown(polygonPath);

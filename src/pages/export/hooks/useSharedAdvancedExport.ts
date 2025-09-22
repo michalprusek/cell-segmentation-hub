@@ -90,9 +90,12 @@ export const useSharedAdvancedExport = (projectId: string) => {
   const currentJob = exportState?.currentJob || null;
 
   // Update context when local state changes
-  const updateState = useCallback((updates: any) => {
-    updateExportState(projectId, updates);
-  }, [projectId, updateExportState]);
+  const updateState = useCallback(
+    (updates: any) => {
+      updateExportState(projectId, updates);
+    },
+    [projectId, updateExportState]
+  );
 
   // Check resumed export status from server - defined early to avoid dependency issues
   const checkResumedExportStatus = useCallback(
@@ -105,7 +108,9 @@ export const useSharedAdvancedExport = (projectId: string) => {
 
         if (status.status === 'completed') {
           updateState({
-            currentJob: currentJob ? { ...currentJob, status: 'completed' } : null,
+            currentJob: currentJob
+              ? { ...currentJob, status: 'completed' }
+              : null,
             exportStatus: 'Export completed! Starting download...',
             isExporting: false,
             completedJobId: jobId,
@@ -116,7 +121,11 @@ export const useSharedAdvancedExport = (projectId: string) => {
         ) {
           updateState({
             currentJob: currentJob
-              ? { ...currentJob, status: status.status, message: status.message }
+              ? {
+                  ...currentJob,
+                  status: status.status,
+                  message: status.message,
+                }
               : null,
             exportStatus: `Export ${status.status}: ${status.message || 'Unknown error'}`,
             isExporting: false,
@@ -260,11 +269,29 @@ export const useSharedAdvancedExport = (projectId: string) => {
   useEffect(() => {
     if (!socket || !currentJob) return;
 
-    const handleProgress = (data: { jobId: string; progress: number }) => {
+    const handleProgress = (data: {
+      jobId: string;
+      progress: number;
+      phase?: 'processing' | 'downloading';
+      stage?: string;
+      message?: string;
+      stageProgress?: { current: number; total: number; currentItem?: string };
+    }) => {
       if (data.jobId === currentJob.id) {
+        // Use server-provided message or construct one from stage progress
+        let statusMessage = data.message;
+        if (!statusMessage && data.stageProgress) {
+          const { current, total, currentItem } = data.stageProgress;
+          statusMessage = `Processing ${current} of ${total}${currentItem ? `: ${currentItem}` : ''}... ${Math.round(data.progress)}%`;
+        } else if (!statusMessage) {
+          statusMessage = `${data.phase === 'downloading' ? 'Downloading' : 'Processing'}... ${Math.round(data.progress)}%`;
+        }
+
         updateState({
           exportProgress: data.progress,
-          exportStatus: `Processing... ${Math.round(data.progress)}%`,
+          exportStatus: statusMessage,
+          // Update downloading state based on phase
+          isDownloading: data.phase === 'downloading',
         });
       }
     };
@@ -272,7 +299,9 @@ export const useSharedAdvancedExport = (projectId: string) => {
     const handleCompleted = (data: { jobId: string }) => {
       if (data.jobId === currentJob.id) {
         updateState({
-          currentJob: currentJob ? { ...currentJob, status: 'completed' } : null,
+          currentJob: currentJob
+            ? { ...currentJob, status: 'completed' }
+            : null,
           exportStatus: 'Export completed! Starting download...',
           isExporting: false,
           completedJobId: data.jobId,
@@ -294,14 +323,31 @@ export const useSharedAdvancedExport = (projectId: string) => {
       }
     };
 
+    // Listen for export cancellation acknowledgment
+    const handleCancelled = (data: { jobId: string; message?: string }) => {
+      if (data.jobId === currentJob.id) {
+        updateState({
+          currentJob: null,
+          exportStatus: data.message || 'Export cancelled',
+          isExporting: false,
+          isCancelling: false,
+          completedJobId: null,
+        });
+        // Clear persisted state on cancellation
+        ExportStateManager.clearExportState(projectId);
+      }
+    };
+
     socket.on('export:progress', handleProgress);
     socket.on('export:completed', handleCompleted);
     socket.on('export:failed', handleFailed);
+    socket.on('export:cancelled', handleCancelled);
 
     return () => {
       socket.off('export:progress', handleProgress);
       socket.off('export:completed', handleCompleted);
       socket.off('export:failed', handleFailed);
+      socket.off('export:cancelled', handleCancelled);
     };
   }, [socket, currentJob, projectId, updateState]);
 
@@ -327,7 +373,9 @@ export const useSharedAdvancedExport = (projectId: string) => {
 
             if (status.status === 'completed') {
               updateState({
-                currentJob: currentJob ? { ...currentJob, status: 'completed' } : null,
+                currentJob: currentJob
+                  ? { ...currentJob, status: 'completed' }
+                  : null,
                 exportStatus: 'Export completed! Starting download...',
                 isExporting: false,
                 completedJobId: currentJob.id,
@@ -372,10 +420,18 @@ export const useSharedAdvancedExport = (projectId: string) => {
     return () => {
       if (pollingInterval) {
         clearInterval(pollingInterval);
-        setPollingInterval(null);
+        // Don't set state during cleanup to prevent infinite loop
+        // The state will be cleaned up when component unmounts
       }
     };
-  }, [currentJob, isExporting, wsConnected, pollingInterval, projectId, updateState]);
+  }, [
+    currentJob,
+    isExporting,
+    wsConnected,
+    pollingInterval,
+    projectId,
+    updateState,
+  ]);
 
   // Auto-download when export completes
   useEffect(() => {
@@ -409,7 +465,8 @@ export const useSharedAdvancedExport = (projectId: string) => {
 
           // Show downloading status briefly, then auto-dismiss after a reasonable time
           updateState({
-            exportStatus: 'Download initiated. The file should appear in your downloads folder.',
+            exportStatus:
+              'Download initiated. The file should appear in your downloads folder.',
           });
 
           // Auto-dismiss after 5 seconds (reasonable time for download to start)
@@ -426,7 +483,8 @@ export const useSharedAdvancedExport = (projectId: string) => {
         } catch (error) {
           logger.error('Failed to auto-download export', error);
           updateState({
-            exportStatus: "Export completed! Click below to download if it didn't start automatically.",
+            exportStatus:
+              "Export completed! Click below to download if it didn't start automatically.",
             isDownloading: false,
           });
           // Keep completedJobId available for manual download
@@ -531,7 +589,8 @@ export const useSharedAdvancedExport = (projectId: string) => {
 
       // Show downloading status briefly, then auto-dismiss
       updateState({
-        exportStatus: 'Download initiated. The file should appear in your downloads folder.',
+        exportStatus:
+          'Download initiated. The file should appear in your downloads folder.',
       });
 
       // Auto-dismiss after 5 seconds
@@ -559,20 +618,48 @@ export const useSharedAdvancedExport = (projectId: string) => {
   const cancelExport = useCallback(async () => {
     if (!currentJob) return;
 
+    // Set cancelling state immediately for instant feedback
+    updateState({
+      isCancelling: true,
+      exportStatus: 'Cancelling export...',
+    });
+
     try {
+      // Send cancel request via HTTP API
       await apiClient.post(
         `/projects/${projectId}/export/${currentJob.id}/cancel`
       );
+
+      // Also emit cancel event via WebSocket for immediate processing
+      if (socket && socket.connected) {
+        socket.emit('export:cancel', {
+          jobId: currentJob.id,
+          projectId,
+        });
+      }
+
+      // Clear persisted state immediately
+      ExportStateManager.clearExportState(projectId);
+
+      // Update state (the cancelled event from server will provide final confirmation)
       updateState({
-        currentJob: currentJob ? { ...currentJob, status: 'cancelled' } : null,
+        currentJob: null,
         isExporting: false,
+        isDownloading: false,
+        isCancelling: false,
         exportStatus: 'Export cancelled',
+        completedJobId: null,
       });
+
       logger.info('Export cancelled', { jobId: currentJob.id });
     } catch (error) {
       logger.error('Failed to cancel export', error);
+      updateState({
+        isCancelling: false,
+        exportStatus: 'Failed to cancel export',
+      });
     }
-  }, [projectId, currentJob, updateState]);
+  }, [projectId, currentJob, updateState, socket]);
 
   const getExportStatus = useCallback(
     async (jobId: string) => {
