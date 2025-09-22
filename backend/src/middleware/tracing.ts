@@ -1,5 +1,6 @@
 // Placeholder tracing middleware for development setup
 // This provides minimal implementations to prevent import errors
+import { logger } from '../utils/logger';
 
 export function addSpanAttributes(_attributes: Record<string, unknown>): void {
   // Placeholder implementation - just log the attributes in development
@@ -15,8 +16,8 @@ export function markSpanError(error: Error | string): void {
   // Placeholder implementation - just log the error in development
   if (process.env.NODE_ENV === 'development') {
     // Development mode only
-     
-    console.error('Span error (dev mode):', error);
+    const errorObj = typeof error === 'string' ? new Error(error) : error;
+    logger.error('Span error (dev mode):', errorObj);
   }
 }
 

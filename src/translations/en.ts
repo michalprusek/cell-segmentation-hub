@@ -870,6 +870,27 @@ export default {
       'No images in queue. Upload images and add them to the queue for segmentation.',
     addingToQueue: 'Adding to queue...',
     cancelSegmentation: 'Cancel Segmentation',
+    segmentationCancelled: '{{count}} segmentation cancelled',
+    segmentationCancelled_other: '{{count}} segmentations cancelled',
+    cancelFailed: 'Failed to cancel segmentation',
+    // Cancel All functionality
+    cancelAll: 'Cancel All',
+    cancelAllTooltip: 'Cancel all {{count}} segmentation task(s)',
+    confirmCancelAll: 'Cancel All Segmentations?',
+    confirmCancelAllDescription:
+      'You are about to cancel {{count}} segmentation task(s) across all your projects.',
+    processingTasks: '{{count}} task(s) currently processing',
+    queuedTasks: '{{count}} task(s) queued',
+    cancelAllWarning:
+      'This action cannot be undone. Cancelled tasks will need to be resubmitted.',
+    confirmCancelAllButton: 'Yes, Cancel {{count}} Task(s)',
+    cancellingAllSegmentations: 'Cancelling all segmentations...',
+    allSegmentationsCancelled:
+      'Successfully cancelled {{count}} segmentation(s)',
+    affectedProjects: 'Affected {{count}} project(s)',
+    cancelAllFailed: 'Failed to cancel segmentations',
+    cancelAllError: 'Error cancelling segmentations',
+    cancelling: 'Cancelling...',
     // Parallel processing
     processingSlots: 'Processing Slots',
     parallel: 'parallel',
@@ -928,6 +949,8 @@ export default {
       failed: 'Failed to refresh images after upload',
       cancelUpload: 'Cancel Upload',
       uploadCancelled: 'Upload cancelled',
+      uploadCancelledSuccess: 'Upload cancelled successfully',
+      redirectingToGallery: 'Redirecting to image gallery...',
     },
     // Segmentation actions
     segmentation: {
@@ -972,6 +995,8 @@ export default {
     selected: '{{count}} image selected',
     selected_other: '{{count}} images selected',
     deleteSelected: 'Delete Selected',
+    imagesDeleted: '{{count}} image deleted',
+    imagesDeleted_other: '{{count}} images deleted',
   },
   export: {
     // Dialog headers
@@ -1043,6 +1068,7 @@ export default {
     packaging: 'Creating package...',
     completed: 'Export completed',
     downloading: 'Downloading...',
+    cancelling: 'Cancelling...',
     cancelled: 'Export cancelled',
     cancelExport: 'Cancel Export',
     // Connection status
@@ -1074,6 +1100,12 @@ export default {
       excel: 'Excel Format',
       json: 'JSON Format',
     },
+    // Progress panel specific
+    title: 'Export Progress',
+    readyToDownload: 'Export ready for download',
+    fallbackMode: 'Polling mode',
+    fallbackMessage:
+      'Using polling for progress updates due to connection issues',
   },
   // Export dialog
   // Standalone image action messages (used without prefix)

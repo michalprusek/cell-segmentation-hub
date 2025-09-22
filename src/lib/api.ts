@@ -1020,7 +1020,8 @@ class ApiClient {
     projectId: string,
     files: File[],
     onProgress?: (progressPercent: number) => void,
-    onChunkProgress?: (progress: ChunkProgress) => void
+    onChunkProgress?: (progress: ChunkProgress) => void,
+    signal?: AbortSignal
   ): Promise<ChunkedUploadResult<ProjectImage[]>> {
     logger.info(
       `Starting chunked upload of ${files.length} files to project ${projectId}`
@@ -1093,6 +1094,11 @@ class ApiClient {
     const result = await processChunksWithConcurrency(
       chunks,
       async (chunk: File[], chunkIndex: number) => {
+        // Check if upload was cancelled
+        if (signal?.aborted) {
+          throw new Error('Upload cancelled by user');
+        }
+
         logger.debug(
           `Processing chunk ${chunkIndex + 1}/${chunks.length} with ${chunk.length} files`
         );
@@ -1110,6 +1116,7 @@ class ApiClient {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
+            signal: signal, // Add abort signal support
             timeout: 300000, // 5 minutes timeout for chunk uploads (100 files)
             onUploadProgress: progressEvent => {
               if (progressEvent.total) {
@@ -1632,6 +1639,21 @@ class ApiClient {
 
   async removeFromQueue(queueId: string): Promise<void> {
     await this.instance.delete(`/queue/items/${queueId}`);
+  }
+
+  async cancelAllUserSegmentations(): Promise<{
+    success: boolean;
+    cancelledCount: number;
+    affectedProjects: string[];
+    affectedBatches: string[];
+  }> {
+    const response = await this.instance.post('/queue/cancel-all-user');
+    return this.extractData<{
+      success: boolean;
+      cancelledCount: number;
+      affectedProjects: string[];
+      affectedBatches: string[];
+    }>(response);
   }
 
   // Generic HTTP methods for custom endpoints

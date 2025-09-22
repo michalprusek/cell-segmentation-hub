@@ -8,23 +8,27 @@ import WebSocketManager from '@/services/webSocketManager';
 import type {
   QueueStats,
   SegmentationUpdate,
-  SegmentationStatusMessage,
-  QueueStatsMessage,
-  SegmentationCompletedMessage,
-  SegmentationFailedMessage,
-  WebSocketEventMap,
-  ParallelProcessingStatusMessage,
-  ConcurrentUserMessage,
-  ProcessingStreamUpdateMessage,
-  QueuePositionUpdateMessage,
+  SegmentationStatusMessage as _SegmentationStatusMessage,
+  QueueStatsMessage as _QueueStatsMessage,
+  SegmentationCompletedMessage as _SegmentationCompletedMessage,
+  SegmentationFailedMessage as _SegmentationFailedMessage,
+  WebSocketEventMap as _WebSocketEventMap,
+  ParallelProcessingStatusMessage as _ParallelProcessingStatusMessage,
+  ConcurrentUserMessage as _ConcurrentUserMessage,
+  ProcessingStreamUpdateMessage as _ProcessingStreamUpdateMessage,
+  QueuePositionUpdateMessage as _QueuePositionUpdateMessage,
 } from '@/types/websocket';
 import type { ParallelProcessingStats } from '@/components/project/QueueStatsPanel';
-import type { ProcessingSlot } from '@/components/project/ProcessingSlots';
+import type { ProcessingSlot as _ProcessingSlot } from '@/components/project/ProcessingSlots';
 
 export type { QueueStats, SegmentationUpdate } from '@/types/websocket';
 export type { ParallelProcessingStats } from '@/components/project/QueueStatsPanel';
 
-export const useSegmentationQueue = (projectId?: string) => {
+export const useSegmentationQueue = (
+  projectId?: string,
+  onSegmentationCancelled?: (data: any) => void,
+  onBulkSegmentationCancelled?: (data: any) => void
+) => {
   // Check if this hook should be disabled to avoid conflicts
   const isDisabled = projectId === 'DISABLE_GLOBAL';
 
@@ -36,11 +40,11 @@ export const useSegmentationQueue = (projectId?: string) => {
   const currentProjectRef = useRef<string | undefined>(
     isDisabled ? undefined : projectId
   );
-  const isInitializedRef = useRef(false);
+  const _isInitializedRef = useRef(false);
   const [isConnected, setIsConnected] = useState(false);
   const [queueStats, setQueueStats] = useState<QueueStats | null>(null);
   const [lastUpdate, setLastUpdate] = useState<SegmentationUpdate | null>(null);
-  const [parallelStats, setParallelStats] =
+  const [_parallelStats, _setParallelStats] =
     useState<ParallelProcessingStats | null>(null);
 
   // Store t function in ref to avoid dependency issues
@@ -253,7 +257,8 @@ export const useSegmentationQueue = (projectId?: string) => {
       return;
     }
 
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development' && projectId) {
+      // Only log for project-specific instances, not global ones
       logger.debug('useSegmentationQueue - setting up event listeners');
     }
 
@@ -269,6 +274,15 @@ export const useSegmentationQueue = (projectId?: string) => {
         manager.off('queue-stats-update', handleQueueStatsUpdate);
         manager.off('notification', handleNotification);
         manager.off('system-message', handleSystemMessage);
+
+        // Also cleanup cancellation handlers
+        if (onSegmentationCancelled) {
+          manager.off('segmentation:cancelled', onSegmentationCancelled);
+        }
+        if (onBulkSegmentationCancelled) {
+          manager.off('segmentation:bulk-cancelled', onBulkSegmentationCancelled);
+        }
+
         wsManagerRef.current = null;
       }
       return;
@@ -284,7 +298,16 @@ export const useSegmentationQueue = (projectId?: string) => {
     manager.on('notification', handleNotification);
     manager.on('system-message', handleSystemMessage);
 
-    if (process.env.NODE_ENV === 'development') {
+    // Register cancellation event handlers if provided
+    if (onSegmentationCancelled) {
+      manager.on('segmentation:cancelled', onSegmentationCancelled);
+    }
+    if (onBulkSegmentationCancelled) {
+      manager.on('segmentation:bulk-cancelled', onBulkSegmentationCancelled);
+    }
+
+    if (process.env.NODE_ENV === 'development' && projectId) {
+      // Only log for project-specific instances, not global ones
       logger.debug('useSegmentationQueue - event listeners registered');
     }
 
@@ -299,6 +322,14 @@ export const useSegmentationQueue = (projectId?: string) => {
         manager.off('queue-stats-update', handleQueueStatsUpdate);
         manager.off('notification', handleNotification);
         manager.off('system-message', handleSystemMessage);
+
+        // Cleanup cancellation event handlers if provided
+        if (onSegmentationCancelled) {
+          manager.off('segmentation:cancelled', onSegmentationCancelled);
+        }
+        if (onBulkSegmentationCancelled) {
+          manager.off('segmentation:bulk-cancelled', onBulkSegmentationCancelled);
+        }
       }
     };
   }, [
@@ -310,6 +341,8 @@ export const useSegmentationQueue = (projectId?: string) => {
     handleQueueStatsUpdate,
     handleNotification,
     handleSystemMessage,
+    onSegmentationCancelled,
+    onBulkSegmentationCancelled,
   ]);
 
   // Join project room when projectId changes and connection is ready
@@ -319,7 +352,10 @@ export const useSegmentationQueue = (projectId?: string) => {
     }
 
     if (process.env.NODE_ENV === 'development') {
-      logger.debug('Joining project room:', projectId);
+      // Log with context to distinguish between multiple instances
+      logger.debug(
+        `Joining project room${!projectId ? ' (global)' : ''}: ${projectId || 'N/A'}`
+      );
     }
     wsManagerRef.current.joinProject(projectId);
 
@@ -376,7 +412,7 @@ export const useSegmentationQueue = (projectId?: string) => {
     isConnected,
     queueStats,
     lastUpdate,
-    parallelStats,
+    parallelStats: _parallelStats,
     requestQueueStats,
     joinProject,
     leaveProject,

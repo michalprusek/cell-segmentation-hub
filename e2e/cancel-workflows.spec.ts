@@ -885,7 +885,7 @@ test.describe('Cancel Workflows E2E Tests', () => {
 
   test.describe('Browser Compatibility', () => {
     test('should work across different browsers', async ({
-      page,
+      page: _page,
       browserName,
     }) => {
       const _projectId = await helpers.createTestProject(

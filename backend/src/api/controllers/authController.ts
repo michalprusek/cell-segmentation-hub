@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { promises as fs } from 'fs';
 import * as AuthService from '../../services/authService';
+import * as UserService from '../../services/userService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import { prisma } from '../../db';
 import { logger } from '../../utils/logger';
@@ -540,40 +541,28 @@ export const resendVerificationEmail = asyncHandler(async (req: Request, res: Re
 });
 
 /**
- * Get current user profile
+ * Get current user profile with comprehensive statistics
  */
 export const getProfile = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) {
     return ResponseHelper.unauthorized(res, 'User not authenticated');
   }
-  
-  const user = req.user;
-  
-  // Transform to frontend Profile format
-  const profile = {
-    id: user.id,
-    email: user.email,
-    username: user.profile?.username || null,
-    organization: user.profile?.organization || null,
-    bio: user.profile?.bio || null,
-    avatarUrl: user.profile?.avatarUrl || null,
-    location: user.profile?.location || null,
-    title: user.profile?.title || null,
-    publicProfile: user.profile?.publicProfile || false,
-    preferredModel: user.profile?.preferredModel || 'hrnet',
-    modelThreshold: user.profile?.modelThreshold || 0.5,
-    preferredLang: user.profile?.preferredLang || 'cs',
-    preferredTheme: user.profile?.preferredTheme || 'light',
-    emailNotifications: user.profile?.emailNotifications || true,
-    consentToMLTraining: user.profile?.consentToMLTraining || false,
-    consentToAlgorithmImprovement: user.profile?.consentToAlgorithmImprovement || false,
-    consentToFeatureDevelopment: user.profile?.consentToFeatureDevelopment || false,
-    consentUpdatedAt: user.profile?.consentUpdatedAt?.toISOString() || null,
-    createdAt: user.profile?.createdAt?.toISOString() || new Date().toISOString(),
-    updatedAt: user.profile?.updatedAt?.toISOString() || new Date().toISOString(),
-  };
-  
-  return ResponseHelper.success(res, profile, 'Profil uživatele');
+
+  try {
+    // Use comprehensive UserService that includes statistics and database data
+    const profile = await UserService.getUserProfile(req.user.id);
+
+    if (!profile) {
+      return ResponseHelper.notFound(res, 'Profil uživatele nebyl nalezen');
+    }
+
+    return ResponseHelper.success(res, profile, 'Profil uživatele úspěšně načten');
+  } catch (error) {
+    logger.error('Failed to get user profile:', error as Error, 'AuthController', {
+      userId: req.user.id
+    });
+    return ResponseHelper.internalError(res, error as Error, 'Nepodařilo se načíst profil uživatele');
+  }
 });
 
 /**

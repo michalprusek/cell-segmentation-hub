@@ -863,6 +863,27 @@ export default {
     emptyMessage:
       'Ve frontě nejsou žádné obrázky. Nahrajte obrázky a přidejte je do fronty pro segmentaci.',
     addingToQueue: 'Přidáváno do fronty...',
+    cancelSegmentation: 'Zrušit segmentaci',
+    segmentationCancelled: '{{count}} segmentace zrušena',
+    segmentationCancelled_other: '{{count}} segmentace zrušeny',
+    cancelFailed: 'Nepodařilo se zrušit segmentaci',
+    // Cancel All functionality
+    cancelAll: 'Zrušit vše',
+    cancelAllTooltip: 'Zrušit všech {{count}} segmentačních úkolů',
+    confirmCancelAll: 'Zrušit všechny segmentace?',
+    confirmCancelAllDescription:
+      'Chystáte se zrušit {{count}} segmentačních úkolů ve všech vašich projektech.',
+    processingTasks: '{{count}} úkolů se právě zpracovává',
+    queuedTasks: '{{count}} úkolů ve frontě',
+    cancelAllWarning:
+      'Tuto akci nelze vrátit zpět. Zrušené úkoly bude nutné znovu odeslat.',
+    confirmCancelAllButton: 'Ano, zrušit {{count}} úkolů',
+    cancellingAllSegmentations: 'Ruším všechny segmentace...',
+    allSegmentationsCancelled: 'Úspěšně zrušeno {{count}} segmentací',
+    affectedProjects: 'Ovlivněno {{count}} projektů',
+    cancelAllFailed: 'Nepodařilo se zrušit segmentace',
+    cancelAllError: 'Chyba při rušení segmentací',
+    cancelling: 'Ruším...',
   },
   toast: {
     error: 'Došlo k chybě',
@@ -930,6 +951,10 @@ export default {
     },
     upload: {
       failed: 'Nepodařilo se obnovit obrázky po nahrání',
+      cancelUpload: 'Zrušit nahrávání',
+      uploadCancelled: 'Nahrávání zrušeno',
+      uploadCancelledSuccess: 'Nahrávání úspěšně zrušeno',
+      redirectingToGallery: 'Přesměrování do galerie obrázků...',
     },
   },
   imageDeleted: 'Obrázek byl úspěšně smazán',
@@ -952,6 +977,8 @@ export default {
     selected: '{{count}} obrázek vybrán',
     selected_other: '{{count}} obrázky vybrány',
     deleteSelected: 'Smazat vybrané',
+    imagesDeleted: '{{count}} obrázek smazán',
+    imagesDeleted_other: '{{count}} obrázky smazány',
   },
   export: {
     advancedExport: 'Pokročilý export',
@@ -969,6 +996,8 @@ export default {
     selectedImages: 'Vybrané obrázky',
     imagesSelected: '{{count}} z {{total}} obrázků vybráno',
     selectAll: 'Vybrat vše',
+    allSelected: 'Všech {{count}} obrázků vybráno',
+    selectAllProject: 'Vybrat všech {{count}} obrázků',
     selectNone: 'Nevybrat žádný',
     imageSelection: 'Výběr obrázků',
     chooseImages: 'Vyberte obrázky k zahrnutí do exportu',
@@ -1006,6 +1035,12 @@ export default {
       excel: 'Excel Formát',
       json: 'JSON Formát',
     },
+    // Progress panel specific
+    title: 'Průběh exportu',
+    readyToDownload: 'Export připraven ke stažení',
+    fallbackMode: 'Režim dotazování',
+    fallbackMessage:
+      'Používáme dotazování pro aktualizace průběhu kvůli problémům s připojením',
     exportFormatsLabel: 'Formáty exportu',
     exportToZip: 'Exportovat do ZIP archívu',
     generateExcel: 'Generovat Excel metriky',
@@ -1017,6 +1052,7 @@ export default {
     packaging: 'Vytváření balíčku...',
     completed: 'Export dokončen',
     downloading: 'Stahování...',
+    cancelling: 'Ruší se...',
     cancelled: 'Export zrušen',
     connected: 'Připojeno',
     disconnected: 'Odpojeno',

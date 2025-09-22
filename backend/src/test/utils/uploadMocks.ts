@@ -1,13 +1,22 @@
-import { vi } from 'vitest';
+// Mock utilities for testing uploads
+const vi = {
+  fn: (impl?: any) => jest.fn(impl)
+};
 
 /**
- * Mock file data generator for upload testing
+ * Helper to get format from MIME type
  */
-export class UploadMockGenerator {
-  /**
-   * Generate a mock image file buffer with specified size
-   */
-  static createMockImageBuffer(size = 1024, format: 'JPEG' | 'PNG' | 'TIFF' = 'JPEG'): Buffer {
+function getMimeTypeFormat(mimeType: string): 'JPEG' | 'PNG' | 'TIFF' {
+  if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {return 'JPEG';}
+  if (mimeType.includes('png')) {return 'PNG';}
+  if (mimeType.includes('tiff') || mimeType.includes('tif')) {return 'TIFF';}
+  return 'JPEG'; // default
+}
+
+/**
+ * Generate a mock image file buffer with specified size
+ */
+export function createMockImageBuffer(size = 1024, format: 'JPEG' | 'PNG' | 'TIFF' = 'JPEG'): Buffer {
     const buffer = Buffer.alloc(size);
     
     // Add basic file headers to make it look like a real image
@@ -47,10 +56,10 @@ export class UploadMockGenerator {
     return buffer;
   }
 
-  /**
-   * Create mock Multer file objects
-   */
-  static createMockFiles(
+/**
+ * Create mock Multer file objects
+ */
+export function createMockFiles(
     count: number,
     options: {
       fileSize?: number;
@@ -71,19 +80,19 @@ export class UploadMockGenerator {
       originalname: `${namePrefix}-${i + 1}.${extension}`,
       encoding: '7bit',
       mimetype: mimeType,
-      buffer: this.createMockImageBuffer(fileSize, this.getMimeTypeFormat(mimeType)),
+      buffer: createMockImageBuffer(fileSize, getMimeTypeFormat(mimeType)),
       size: fileSize,
-      stream: {} as any,
+      stream: {} as never,
       destination: '',
       filename: '',
       path: '',
     }));
   }
 
-  /**
-   * Create mock FormData for testing
-   */
-  static createMockFormData(files: Express.Multer.File[]): FormData {
+/**
+ * Create mock FormData for testing
+ */
+export function createMockFormData(files: Express.Multer.File[]): FormData {
     const formData = new FormData();
     
     files.forEach(file => {
@@ -94,10 +103,10 @@ export class UploadMockGenerator {
     return formData;
   }
 
-  /**
-   * Create mock files with various sizes for stress testing
-   */
-  static createVariedSizeFiles(count: number): Express.Multer.File[] {
+/**
+ * Create mock files with various sizes for stress testing
+ */
+export function createVariedSizeFiles(count: number): Express.Multer.File[] {
     const sizes = [
       1024 * 10,    // 10KB
       1024 * 100,   // 100KB
@@ -118,9 +127,9 @@ export class UploadMockGenerator {
         originalname: `varied-image-${i + 1}.${ext}`,
         encoding: '7bit',
         mimetype: mimeType,
-        buffer: this.createMockImageBuffer(size, format as any),
+        buffer: createMockImageBuffer(size, format as 'JPEG' | 'PNG' | 'TIFF'),
         size,
-        stream: {} as any,
+        stream: {} as never,
         destination: '',
         filename: '',
         path: '',
@@ -128,10 +137,10 @@ export class UploadMockGenerator {
     });
   }
 
-  /**
-   * Create invalid mock files for error testing
-   */
-  static createInvalidFiles(): Express.Multer.File[] {
+/**
+ * Create invalid mock files for error testing
+ */
+export function createInvalidFiles(): Express.Multer.File[] {
     return [
       // File with no buffer
       {
@@ -139,9 +148,9 @@ export class UploadMockGenerator {
         originalname: 'no-buffer.jpg',
         encoding: '7bit',
         mimetype: 'image/jpeg',
-        buffer: null as any,
+        buffer: null as never,
         size: 0,
-        stream: {} as any,
+        stream: {} as never,
         destination: '',
         filename: '',
         path: '',
@@ -154,7 +163,7 @@ export class UploadMockGenerator {
         mimetype: 'text/plain',
         buffer: Buffer.from('not an image'),
         size: 13,
-        stream: {} as any,
+        stream: {} as never,
         destination: '',
         filename: '',
         path: '',
@@ -165,9 +174,9 @@ export class UploadMockGenerator {
         originalname: 'oversized.jpg',
         encoding: '7bit',
         mimetype: 'image/jpeg',
-        buffer: this.createMockImageBuffer(50 * 1024 * 1024), // 50MB
+        buffer: createMockImageBuffer(50 * 1024 * 1024), // 50MB
         size: 50 * 1024 * 1024,
-        stream: {} as any,
+        stream: {} as never,
         destination: '',
         filename: '',
         path: '',
@@ -178,9 +187,9 @@ export class UploadMockGenerator {
         originalname: 'malicious.jpg.exe',
         encoding: '7bit',
         mimetype: 'image/jpeg',
-        buffer: this.createMockImageBuffer(1024),
+        buffer: createMockImageBuffer(1024),
         size: 1024,
-        stream: {} as any,
+        stream: {} as never,
         destination: '',
         filename: '',
         path: '',
@@ -188,20 +197,20 @@ export class UploadMockGenerator {
     ];
   }
 
-  /**
-   * Create performance test files for large batch uploads
-   */
-  static createPerformanceTestFiles(count: number): Express.Multer.File[] {
-    return this.createMockFiles(count, {
+/**
+ * Create performance test files for large batch uploads
+ */
+export function createPerformanceTestFiles(count: number): Express.Multer.File[] {
+    return createMockFiles(count, {
       fileSize: 1024 * 512, // 512KB each - reasonable size for testing
       namePrefix: 'perf-test'
     });
   }
 
-  /**
-   * Mock WebSocket connection for progress tracking
-   */
-  static createMockWebSocket() {
+/**
+ * Mock WebSocket connection for progress tracking
+ */
+export function createMockWebSocket() {
     const mockSocket = {
       emit: vi.fn(),
       on: vi.fn(),
@@ -223,10 +232,10 @@ export class UploadMockGenerator {
     return { mockSocket, mockIo };
   }
 
-  /**
-   * Create mock progress callback for testing
-   */
-  static createMockProgressCallback() {
+/**
+ * Create mock progress callback for testing
+ */
+export function createMockProgressCallback() {
     const progressEvents: number[] = [];
     const callback = vi.fn((progress: number) => {
       progressEvents.push(progress);
@@ -235,17 +244,17 @@ export class UploadMockGenerator {
     return { callback, progressEvents };
   }
 
-  /**
-   * Simulate network delays for testing timeout scenarios
-   */
-  static async simulateNetworkDelay(ms: number): Promise<void> {
+/**
+ * Simulate network delays for testing timeout scenarios
+ */
+export async function simulateNetworkDelay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  /**
-   * Create mock database responses for batch operations
-   */
-  static createMockDatabaseResponses(imageCount: number) {
+/**
+ * Create mock database responses for batch operations
+ */
+export function createMockDatabaseResponses(imageCount: number) {
     const mockImages = Array.from({ length: imageCount }, (_, i) => ({
       id: `image-${i + 1}`,
       name: `test-image-${i + 1}.jpg`,
@@ -271,10 +280,10 @@ export class UploadMockGenerator {
     };
   }
 
-  /**
-   * Create memory usage tracking utilities
-   */
-  static createMemoryTracker() {
+/**
+ * Create memory usage tracking utilities
+ */
+export function createMemoryTracker() {
     const initialMemory = process.memoryUsage();
     
     return {
@@ -300,17 +309,6 @@ export class UploadMockGenerator {
       },
     };
   }
-
-  /**
-   * Helper to get format from MIME type
-   */
-  private static getMimeTypeFormat(mimeType: string): 'JPEG' | 'PNG' | 'TIFF' {
-    if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {return 'JPEG';}
-    if (mimeType.includes('png')) {return 'PNG';}
-    if (mimeType.includes('tiff') || mimeType.includes('tif')) {return 'TIFF';}
-    return 'JPEG'; // default
-  }
-}
 
 /**
  * Mock rate limiter for testing concurrent uploads
@@ -375,22 +373,26 @@ export class PerformanceMetrics {
   }
 
   getDuration(): number {
-    if (!this.endTime) {this.end();}
-    return this.endTime! - this.startTime;
+    if (!this.endTime) {
+      this.end();
+    }
+    return (this.endTime || 0) - this.startTime;
   }
 
   getMemoryUsage(): { initial: NodeJS.MemoryUsage; final: NodeJS.MemoryUsage; increase: NodeJS.MemoryUsage } {
-    if (!this.memoryEnd) {this.end();}
+    if (!this.memoryEnd) {
+      this.end();
+    }
     
     return {
       initial: this.memoryStart,
-      final: this.memoryEnd!,
+      final: this.memoryEnd || this.memoryStart,
       increase: {
-        rss: this.memoryEnd!.rss - this.memoryStart.rss,
-        heapTotal: this.memoryEnd!.heapTotal - this.memoryStart.heapTotal,
-        heapUsed: this.memoryEnd!.heapUsed - this.memoryStart.heapUsed,
-        external: this.memoryEnd!.external - this.memoryStart.external,
-        arrayBuffers: this.memoryEnd!.arrayBuffers - this.memoryStart.arrayBuffers,
+        rss: (this.memoryEnd?.rss || 0) - this.memoryStart.rss,
+        heapTotal: (this.memoryEnd?.heapTotal || 0) - this.memoryStart.heapTotal,
+        heapUsed: (this.memoryEnd?.heapUsed || 0) - this.memoryStart.heapUsed,
+        external: (this.memoryEnd?.external || 0) - this.memoryStart.external,
+        arrayBuffers: (this.memoryEnd?.arrayBuffers || 0) - this.memoryStart.arrayBuffers,
       },
     };
   }

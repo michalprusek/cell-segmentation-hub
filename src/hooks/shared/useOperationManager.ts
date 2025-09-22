@@ -53,40 +53,6 @@ export function useOperationManager(): OperationManager {
     operationsRef.current = new Map(activeOperations);
   }, [activeOperations]);
 
-  // Listen for universal cancel events from WebSocket
-  useEffect(() => {
-    if (!socket) return;
-
-    const handleOperationCancelled = (data: {
-      operationId: string;
-      operationType: OperationType;
-      message?: string;
-    }) => {
-      logger.info('Operation cancelled via WebSocket', data);
-      completeOperation(
-        data.operationId,
-        false,
-        data.message || 'Operation cancelled'
-      );
-    };
-
-    const handleOperationProgress = (data: {
-      operationId: string;
-      progress: number;
-      message?: string;
-    }) => {
-      updateOperationProgress(data.operationId, data.progress, data.message);
-    };
-
-    socket.on('operation:cancelled', handleOperationCancelled);
-    socket.on('operation:progress', handleOperationProgress);
-
-    return () => {
-      socket.off('operation:cancelled', handleOperationCancelled);
-      socket.off('operation:progress', handleOperationProgress);
-    };
-  }, [socket, completeOperation, updateOperationProgress]);
-
   const startOperation = useCallback((id: string, type: OperationType) => {
     const operation: OperationState = {
       id,
@@ -240,6 +206,40 @@ export function useOperationManager(): OperationManager {
       return newMap;
     });
   }, []);
+
+  // Listen for universal cancel events from WebSocket
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleOperationCancelled = (data: {
+      operationId: string;
+      operationType: OperationType;
+      message?: string;
+    }) => {
+      logger.info('Operation cancelled via WebSocket', data);
+      completeOperation(
+        data.operationId,
+        false,
+        data.message || 'Operation cancelled'
+      );
+    };
+
+    const handleOperationProgress = (data: {
+      operationId: string;
+      progress: number;
+      message?: string;
+    }) => {
+      updateOperationProgress(data.operationId, data.progress, data.message);
+    };
+
+    socket.on('operation:cancelled', handleOperationCancelled);
+    socket.on('operation:progress', handleOperationProgress);
+
+    return () => {
+      socket.off('operation:cancelled', handleOperationCancelled);
+      socket.off('operation:progress', handleOperationProgress);
+    };
+  }, [socket, completeOperation, updateOperationProgress]);
 
   // Cleanup on unmount
   useEffect(() => {

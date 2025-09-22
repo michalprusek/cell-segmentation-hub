@@ -36,6 +36,9 @@ interface ProjectToolbarProps {
   onSelectAllToggle?: () => void;
   onBatchDelete?: () => void;
   showSelectAll?: boolean;
+  // Export state callbacks
+  onExportingChange?: (isExporting: boolean) => void;
+  onDownloadingChange?: (isDownloading: boolean) => void;
 }
 
 const ProjectToolbar = ({
@@ -59,6 +62,8 @@ const ProjectToolbar = ({
   onSelectAllToggle,
   onBatchDelete,
   showSelectAll = false,
+  onExportingChange,
+  onDownloadingChange,
 }: ProjectToolbarProps) => {
   const { t } = useLanguage();
   const _navigate = useNavigate();
@@ -349,8 +354,8 @@ const ProjectToolbar = ({
           projectName={projectName}
           images={images}
           selectedImageIds={selectedImageIds}
-          onExportingChange={setIsExporting}
-          onDownloadingChange={setIsDownloading}
+          onExportingChange={onExportingChange || setIsExporting}
+          onDownloadingChange={onDownloadingChange || setIsDownloading}
         />
       )}
     </div>

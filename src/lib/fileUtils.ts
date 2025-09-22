@@ -2,8 +2,7 @@
  * Shared file handling utilities
  */
 
-import { File as FileIcon, Image as ImageIcon } from 'lucide-react';
-import { LucideIcon } from 'lucide-react';
+import { File as FileIcon, Image as ImageIcon, LucideIcon } from 'lucide-react';
 
 export interface FileWithPreview extends File {
   preview?: string;
@@ -74,18 +73,17 @@ export const getFileTypeIcon = (mimeType: string): LucideIcon => {
  * @returns FileWithPreview object
  */
 export const createFileWithPreview = (file: File): FileWithPreview => {
-  // Use spread operator to avoid mutating the original File object
-  return {
-    ...file,
-    preview: URL.createObjectURL(file),
-    uploadProgress: 0,
-    status: 'pending' as const,
-    // Preserve all File properties without mutation
-    name: file.name,
-    size: file.size,
-    type: file.type,
-    lastModified: file.lastModified,
-  };
+  // Important: We must preserve the actual File object to maintain its prototype
+  // Using spread operator or Object.assign on File objects loses the File prototype
+  // and causes FormData.append() to fail
+  const fileWithPreview = file as FileWithPreview;
+
+  // Add additional properties without losing the File prototype
+  fileWithPreview.preview = URL.createObjectURL(file);
+  fileWithPreview.uploadProgress = 0;
+  fileWithPreview.status = 'pending' as const;
+
+  return fileWithPreview;
 };
 
 /**

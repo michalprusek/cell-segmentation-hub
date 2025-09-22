@@ -6,10 +6,10 @@ import {
 import { logger } from '@/lib/logger';
 
 // Type for a 2D vector
-interface Vector2D {
-  x: number;
-  y: number;
-}
+// interface Vector2D {
+//   x: number;
+//   y: number;
+// }
 
 /**
  * Calculate convex hull using Graham scan algorithm
@@ -188,18 +188,19 @@ function rotatingCalipers(hull: Point[]): {
 export interface PolygonMetrics {
   Area: number;
   Perimeter: number;
+  PerimeterWithHoles: number; // Total perimeter including hole boundaries
   EquivalentDiameter: number;
   Circularity: number;
+  Compactness: number; // P²/(4πA) - reciprocal of circularity
   FeretDiameterMax: number;
   FeretDiameterOrthogonal: number; // Perpendicular to max Feret
   FeretDiameterMin: number;
   FeretAspectRatio: number;
   BoundingBoxWidth: number; // Axis-aligned bounding box width
   BoundingBoxHeight: number; // Axis-aligned bounding box height
-  Extent: number; // Renamed from Compactness - area/bbox_area
+  Extent: number; // Area/bbox_area
   Convexity: number;
   Solidity: number;
-  // Sphericity removed - it's a 3D metric
 }
 
 // Validate polygon points
@@ -244,8 +245,10 @@ export const calculateMetrics = (
     return {
       Area: 0,
       Perimeter: 0,
+      PerimeterWithHoles: 0,
       EquivalentDiameter: 0,
       Circularity: 0,
+      Compactness: 0,
       FeretDiameterMax: 0,
       FeretDiameterOrthogonal: 0,
       FeretDiameterMin: 0,
@@ -267,14 +270,30 @@ export const calculateMetrics = (
   const area = Math.max(0, mainArea - holesArea);
 
   // Calculate perimeter (only outer boundary, excluding holes)
-  // Perimeter is calculated only from the external contour
+  // Following ImageJ convention: external contour only
   const perimeter = calculatePerimeter(polygon.points);
 
+  // Calculate perimeter with holes (external + all hole perimeters)
+  // Following ImageJ/scikit-image convention for total boundary complexity
+  const holePerimeters = holes
+    .filter(hole => validatePolygonPoints(hole.points))
+    .reduce((sum, hole) => sum + calculatePerimeter(hole.points), 0);
+  const perimeterWithHoles = perimeter + holePerimeters;
+
   // Calculate circularity: 4π × area / perimeter²
+  // Using perimeter WITH holes for more accurate shape complexity measure
   // Naturally ≤ 1, clamped to handle discretization artifacts
   const circularity =
-    perimeter > 0
-      ? Math.min(1.0, (4 * Math.PI * area) / (perimeter * perimeter))
+    perimeterWithHoles > 0
+      ? Math.min(1.0, (4 * Math.PI * area) / (perimeterWithHoles * perimeterWithHoles))
+      : 0;
+
+  // Calculate compactness: P²/(4πA) - reciprocal of circularity
+  // Using perimeter WITH holes, following ImageJ standard
+  // Values equal 1 for perfect circle, increase for complex shapes
+  const compactness = 
+    area > 0
+      ? (perimeterWithHoles * perimeterWithHoles) / (4 * Math.PI * area)
       : 0;
 
   // Calculate bounding box for extent calculation
@@ -283,7 +302,7 @@ export const calculateMetrics = (
   const height = bbox.maxY - bbox.minY;
   const boundingBoxArea = width * height;
 
-  // Extent (formerly misnamed as Compactness): area / bounding box area
+  // Extent: area / bounding box area
   // Measures how much of the bounding box is filled by the shape [0,1]
   const extent = boundingBoxArea > 0 ? area / boundingBoxArea : 0;
 
@@ -293,8 +312,9 @@ export const calculateMetrics = (
   const convexPerimeter = calculatePerimeter(convexHull);
 
   // Convexity = perimeter of convex hull / perimeter of polygon
+  // Using perimeter WITH holes for boundary smoothness measure
   // Values in (0,1], equals 1 for convex shapes
-  const convexity = perimeter > 0 ? convexPerimeter / perimeter : 0;
+  const convexity = perimeterWithHoles > 0 ? convexPerimeter / perimeterWithHoles : 0;
 
   // Solidity = area of polygon / area of convex hull
   // Measures how "solid" or filled the shape is
@@ -313,8 +333,10 @@ export const calculateMetrics = (
   return {
     Area: area,
     Perimeter: perimeter,
+    PerimeterWithHoles: perimeterWithHoles,
     EquivalentDiameter: equivalentDiameter,
     Circularity: circularity,
+    Compactness: compactness,
     FeretDiameterMax: feretDiameters.max,
     FeretDiameterOrthogonal: feretDiameters.orthogonal,
     FeretDiameterMin: feretDiameters.min,
@@ -325,7 +347,7 @@ export const calculateMetrics = (
     Convexity: convexity,
     Solidity: solidity,
   };
-};
+};;
 
 // Format number for display
 export const formatNumber = (value: number): string => {

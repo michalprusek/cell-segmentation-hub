@@ -43,6 +43,9 @@ export enum WebSocketEvent {
   // Project events
   PROJECT_UPDATE = 'projectUpdate',
   PROJECT_DELETED = 'projectDeleted',
+
+  // Dashboard events
+  DASHBOARD_UPDATE = 'dashboardUpdate',
   
   // Sharing events
   SHARE_RECEIVED = 'shareReceived',
@@ -291,6 +294,26 @@ export interface ProjectDeletedData {
   deletedAt: Date;
   imageCount: number;
   segmentationCount: number;
+}
+
+// ============================================================================
+// Dashboard Events
+// ============================================================================
+
+/**
+ * Dashboard metrics update event
+ */
+export interface DashboardUpdateData {
+  userId: string;
+  metrics: {
+    totalProjects: number;
+    totalImages: number;
+    processedImages: number;
+    imagesUploadedToday: number;
+    storageUsed: string;
+    storageUsedBytes: number;
+  };
+  timestamp: Date;
 }
 
 // ============================================================================

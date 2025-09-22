@@ -86,6 +86,43 @@ router.get('/status',
   }
 );
 
+// Public health endpoint - no authentication required for monitoring/status checks
+router.get('/health',
+  apiLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      logger.info('🏥 ML: Health check requested');
+
+      // Placeholder health check
+      const health = {
+        status: 'healthy',
+        uptime: process.uptime(),
+        models: {
+          loaded: 3,
+          failed: 0
+        },
+        memory: {
+          used: '256MB',
+          available: '1.2GB'
+        },
+        gpu: {
+          available: false,
+          utilization: '0%'
+        }
+      };
+
+      res.json({
+        success: true,
+        data: health,
+        message: 'ML service health check completed'
+      });
+    } catch (error) {
+      logger.error('❌ ML: Health check failed:', error);
+      next(error);
+    }
+  }
+);
+
 // Protected endpoints
 router.use(authenticate);
 
@@ -94,7 +131,7 @@ router.get('/queue',
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       logger.info('📋 ML: Fetching queue status');
-      
+
       // Placeholder queue status
       const queueStatus = {
         totalItems: 0,
@@ -124,7 +161,7 @@ router.post('/models/:modelId/warm-up',
     try {
       const { modelId } = req.params;
       logger.info(`🔥 ML: Warming up model: ${modelId}`);
-      
+
       // Placeholder model warm-up
       res.json({
         success: true,
@@ -133,42 +170,6 @@ router.post('/models/:modelId/warm-up',
       });
     } catch (error) {
       logger.error('❌ ML: Error warming up model:', error);
-      next(error);
-    }
-  }
-);
-
-router.get('/health',
-  apiLimiter,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      logger.info('🏥 ML: Health check requested');
-      
-      // Placeholder health check
-      const health = {
-        status: 'healthy',
-        uptime: process.uptime(),
-        models: {
-          loaded: 3,
-          failed: 0
-        },
-        memory: {
-          used: '256MB',
-          available: '1.2GB'
-        },
-        gpu: {
-          available: false,
-          utilization: '0%'
-        }
-      };
-
-      res.json({
-        success: true,
-        data: health,
-        message: 'ML service health check completed'
-      });
-    } catch (error) {
-      logger.error('❌ ML: Health check failed:', error);
       next(error);
     }
   }

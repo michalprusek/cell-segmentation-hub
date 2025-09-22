@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios from 'axios';
 import type {
-  SegmentationResultData,
+  SegmentationResultData as _SegmentationResultData,
   SegmentationPolygon,
   QueueStats,
   AddToQueueResponse,

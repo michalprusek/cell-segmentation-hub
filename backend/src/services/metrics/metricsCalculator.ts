@@ -15,6 +15,7 @@ export interface PolygonMetrics {
   type: 'external' | 'internal';
   area: number;
   perimeter: number;
+  perimeterWithHoles: number;
   equivalentDiameter: number;
   circularity: number;
   feretDiameterMax: number;
@@ -23,6 +24,9 @@ export interface PolygonMetrics {
   feretAspectRatio: number;
   lengthMajorDiameterThroughCentroid: number;
   lengthMinorDiameterThroughCentroid: number;
+  boundingBoxWidth: number;
+  boundingBoxHeight: number;
+  extent: number;
   compactness: number;
   convexity: number;
   solidity: number;
@@ -285,10 +289,10 @@ export class MetricsCalculator {
 
       // Validate response data has all required metric keys
       const requiredKeys = [
-        'Area', 'Perimeter', 'EquivalentDiameter', 'Circularity',
+        'Area', 'Perimeter', 'PerimeterWithHoles', 'EquivalentDiameter', 'Circularity',
         'FeretDiameterMax', 'FeretDiameterMaxOrthogonalDistance', 'FeretDiameterMin',
         'FeretAspectRatio', 'LengthMajorDiameterThroughCentroid', 'LengthMinorDiameterThroughCentroid',
-        'Compactness', 'Convexity', 'Solidity', 'Sphericity'
+        'BoundingBoxWidth', 'BoundingBoxHeight', 'Extent', 'Compactness', 'Convexity', 'Solidity', 'Sphericity'
       ];
       
       const missingKeys = requiredKeys.filter(key => !(key in response.data));
@@ -299,6 +303,7 @@ export class MetricsCalculator {
       return {
         area: response.data.Area,
         perimeter: response.data.Perimeter,
+        perimeterWithHoles: response.data.PerimeterWithHoles,
         equivalentDiameter: response.data.EquivalentDiameter,
         circularity: response.data.Circularity,
         feretDiameterMax: response.data.FeretDiameterMax,
@@ -307,6 +312,9 @@ export class MetricsCalculator {
         feretAspectRatio: response.data.FeretAspectRatio,
         lengthMajorDiameterThroughCentroid: response.data.LengthMajorDiameterThroughCentroid,
         lengthMinorDiameterThroughCentroid: response.data.LengthMinorDiameterThroughCentroid,
+        boundingBoxWidth: response.data.BoundingBoxWidth,
+        boundingBoxHeight: response.data.BoundingBoxHeight,
+        extent: response.data.Extent,
         compactness: response.data.Compactness,
         convexity: response.data.Convexity,
         solidity: response.data.Solidity,
@@ -334,9 +342,9 @@ export class MetricsCalculator {
       throw new Error('Polygon points are undefined or empty');
     }
 
-    // Calculate main polygon area
+    // Calculate main polygon area using Shoelace formula
     const mainArea = this.calculatePolygonArea(polygon.points);
-    
+
     // Subtract hole areas
     const holesArea = holes.reduce(
       (sum, hole) => {
@@ -347,45 +355,85 @@ export class MetricsCalculator {
       },
       0
     );
-    let area = mainArea - holesArea;
+    let area = Math.max(0, mainArea - holesArea);
 
-    // Calculate perimeter (only outer boundary, excluding holes)
-    let perimeter = this.calculatePerimeter(polygon.points);
+    // Calculate perimeter of external boundary only
+    const externalPerimeter = this.calculatePerimeter(polygon.points);
+
+    // Calculate perimeter with holes (external + all hole perimeters)
+    const holesPerimeter = holes.reduce(
+      (sum, hole) => {
+        if (!hole?.points || hole.points.length === 0) {
+          return sum; // Skip invalid holes
+        }
+        return sum + this.calculatePerimeter(hole.points);
+      },
+      0
+    );
+    const perimeterWithHoles = externalPerimeter + holesPerimeter;
 
     // Add geometric value guards - clamp to safe ranges
     area = Math.max(0, area);
-    perimeter = Math.max(perimeter, Number.EPSILON);
+    const perimeter = Math.max(externalPerimeter, Number.EPSILON);
 
-    // Calculate basic metrics with clamped values
-    const circularity = (4 * Math.PI * area) / (perimeter * perimeter);
+    // Calculate bounding box for extent calculation
+    const boundingBox = this.calculateBoundingBox(polygon.points);
+    const boundingBoxArea = boundingBox.width * boundingBox.height;
+
+    // Calculate circularity: 4*pi * area / perimeter^2 (clamped to [0,1])
+    const circularity = perimeter > 0
+      ? Math.min(1.0, (4 * Math.PI * area) / (perimeter * perimeter))
+      : 0;
+
+    // Calculate compactness: P^2/(4*pi*A) - reciprocal of circularity
+    const compactness = area > 0
+      ? (perimeter * perimeter) / (4 * Math.PI * area)
+      : 0;
+
+    // Calculate extent: Area/(BBox.width * BBox.height)
+    const extent = boundingBoxArea > 0 ? area / boundingBoxArea : 0;
+
+    // Calculate equivalent diameter: diameter of circle with same area
     const equivalentDiameter = Math.sqrt((4 * area) / Math.PI);
 
-    // Estimate other metrics (these would be more accurate with OpenCV)
-    const boundingBox = this.calculateBoundingBox(polygon.points);
-    const feretDiameterMax = Math.sqrt(
-      Math.pow(boundingBox.width, 2) + Math.pow(boundingBox.height, 2)
-    );
-    let feretDiameterMin = Math.min(boundingBox.width, boundingBox.height);
-    feretDiameterMin = Math.max(feretDiameterMin, Number.EPSILON);
-    
+    // Calculate convex hull for convexity, solidity, and proper Feret diameters
+    const convexHull = this.calculateConvexHull(polygon.points);
+    const convexArea = this.calculatePolygonArea(convexHull);
+    const convexPerimeter = this.calculatePerimeter(convexHull);
+
+    // Convexity: perimeter of convex hull / perimeter of polygon
+    const convexity = perimeter > 0 ? convexPerimeter / perimeter : 0;
+
+    // Solidity: area of polygon / area of convex hull
+    const solidity = convexArea > 0 ? area / convexArea : 0;
+
+    // Calculate proper Feret diameters using rotating calipers
+    const feretDiameters = this.rotatingCalipers(convexHull);
+
     // Ensure safe division for aspect ratio
-    const feretAspectRatio = feretDiameterMin > 0 ? feretDiameterMax / feretDiameterMin : 1;
+    const feretAspectRatio = feretDiameters.min > 0
+      ? feretDiameters.max / feretDiameters.min
+      : 0;
 
     return {
       area,
       perimeter,
+      perimeterWithHoles,
       equivalentDiameter,
       circularity,
-      feretDiameterMax,
-      feretDiameterMaxOrthogonalDistance: feretDiameterMin,
-      feretDiameterMin,
-      feretAspectRatio: isFinite(feretAspectRatio) ? feretAspectRatio : 1,
-      lengthMajorDiameterThroughCentroid: feretDiameterMax,
-      lengthMinorDiameterThroughCentroid: feretDiameterMin,
-      compactness: circularity,
-      convexity: 0.9, // Estimate
-      solidity: 0.95, // Estimate
-      sphericity: circularity * 0.8, // Estimate
+      feretDiameterMax: feretDiameters.max,
+      feretDiameterMaxOrthogonalDistance: feretDiameters.orthogonal,
+      feretDiameterMin: feretDiameters.min,
+      feretAspectRatio: isFinite(feretAspectRatio) ? feretAspectRatio : 0,
+      lengthMajorDiameterThroughCentroid: feretDiameters.max,
+      lengthMinorDiameterThroughCentroid: feretDiameters.min,
+      boundingBoxWidth: boundingBox.width,
+      boundingBoxHeight: boundingBox.height,
+      extent,
+      compactness,
+      convexity,
+      solidity,
+      sphericity: circularity * 0.8, // Estimate for 3D-like sphericity
     };
   }
 
@@ -402,8 +450,8 @@ export class MetricsCalculator {
 
     // Determine units based on scale
     const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
-    const areaUnit = isScaled ? 'µm²' : 'px²';
-    const lengthUnit = isScaled ? 'µm' : 'px';
+    const areaUnit = isScaled ? 'um^2' : 'px^2';
+    const lengthUnit = isScaled ? 'um' : 'px';
 
     // Add headers
     worksheet.columns = [
@@ -413,13 +461,18 @@ export class MetricsCalculator {
       { header: 'Type', key: 'type', width: 10 },
       { header: `Area (${areaUnit})`, key: 'area', width: 12 },
       { header: `Perimeter (${lengthUnit})`, key: 'perimeter', width: 12 },
+      { header: `Perimeter with Holes (${lengthUnit})`, key: 'perimeterWithHoles', width: 20 },
       { header: `Equivalent Diameter (${lengthUnit})`, key: 'equivalentDiameter', width: 18 },
       { header: 'Circularity', key: 'circularity', width: 10 },
       { header: `Feret Diameter Max (${lengthUnit})`, key: 'feretDiameterMax', width: 18 },
       { header: `Feret Diameter Min (${lengthUnit})`, key: 'feretDiameterMin', width: 18 },
+      { header: `Feret Diameter Orthogonal (${lengthUnit})`, key: 'feretDiameterOrthogonal', width: 22 },
       { header: 'Feret Aspect Ratio', key: 'feretAspectRatio', width: 15 },
       { header: `Major Axis Length (${lengthUnit})`, key: 'lengthMajorDiameter', width: 18 },
       { header: `Minor Axis Length (${lengthUnit})`, key: 'lengthMinorDiameter', width: 18 },
+      { header: `Bounding Box Width (${lengthUnit})`, key: 'boundingBoxWidth', width: 20 },
+      { header: `Bounding Box Height (${lengthUnit})`, key: 'boundingBoxHeight', width: 20 },
+      { header: 'Extent', key: 'extent', width: 10 },
       { header: 'Compactness', key: 'compactness', width: 12 },
       { header: 'Convexity', key: 'convexity', width: 10 },
       { header: 'Solidity', key: 'solidity', width: 10 },
@@ -443,13 +496,18 @@ export class MetricsCalculator {
         type: m.type,
         area: safeValue(m.area, 2),
         perimeter: safeValue(m.perimeter, 2),
+        perimeterWithHoles: safeValue(m.perimeterWithHoles, 2),
         equivalentDiameter: safeValue(m.equivalentDiameter, 2),
         circularity: safeValue(m.circularity, 4),
         feretDiameterMax: safeValue(m.feretDiameterMax, 2),
         feretDiameterMin: safeValue(m.feretDiameterMin, 2),
+        feretDiameterOrthogonal: safeValue(m.feretDiameterMaxOrthogonalDistance, 2),
         feretAspectRatio: safeValue(m.feretAspectRatio, 2),
         lengthMajorDiameter: safeValue(m.lengthMajorDiameterThroughCentroid, 2),
         lengthMinorDiameter: safeValue(m.lengthMinorDiameterThroughCentroid, 2),
+        boundingBoxWidth: safeValue(m.boundingBoxWidth, 2),
+        boundingBoxHeight: safeValue(m.boundingBoxHeight, 2),
+        extent: safeValue(m.extent, 4),
         compactness: safeValue(m.compactness, 4),
         convexity: safeValue(m.convexity, 4),
         solidity: safeValue(m.solidity, 4),
@@ -507,8 +565,8 @@ export class MetricsCalculator {
   ): Promise<void> {
     // Determine units based on scale
     const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
-    const areaUnit = isScaled ? 'µm²' : 'px²';
-    const lengthUnit = isScaled ? 'µm' : 'px';
+    const areaUnit = isScaled ? 'um^2' : 'px^2';
+    const lengthUnit = isScaled ? 'um' : 'px';
 
     const csvStringifier = createObjectCsvStringifier({
       header: [
@@ -518,11 +576,18 @@ export class MetricsCalculator {
         { id: 'type', title: 'Type' },
         { id: 'area', title: `Area (${areaUnit})` },
         { id: 'perimeter', title: `Perimeter (${lengthUnit})` },
+        { id: 'perimeterWithHoles', title: `Perimeter with Holes (${lengthUnit})` },
         { id: 'equivalentDiameter', title: `Equivalent Diameter (${lengthUnit})` },
         { id: 'circularity', title: 'Circularity' },
         { id: 'feretDiameterMax', title: `Feret Diameter Max (${lengthUnit})` },
         { id: 'feretDiameterMin', title: `Feret Diameter Min (${lengthUnit})` },
+        { id: 'feretDiameterMaxOrthogonalDistance', title: `Feret Diameter Orthogonal (${lengthUnit})` },
         { id: 'feretAspectRatio', title: 'Feret Aspect Ratio' },
+        { id: 'lengthMajorDiameterThroughCentroid', title: `Major Axis Length (${lengthUnit})` },
+        { id: 'lengthMinorDiameterThroughCentroid', title: `Minor Axis Length (${lengthUnit})` },
+        { id: 'boundingBoxWidth', title: `Bounding Box Width (${lengthUnit})` },
+        { id: 'boundingBoxHeight', title: `Bounding Box Height (${lengthUnit})` },
+        { id: 'extent', title: 'Extent' },
         { id: 'compactness', title: 'Compactness' },
         { id: 'convexity', title: 'Convexity' },
         { id: 'solidity', title: 'Solidity' },
@@ -558,13 +623,16 @@ export class MetricsCalculator {
       maxArea: Math.max(...externalMetrics.map(m => m.area)),
       avgPerimeter: this.average(externalMetrics.map(m => m.perimeter)),
       avgCircularity: this.average(externalMetrics.map(m => m.circularity)),
+      avgCompactness: this.average(externalMetrics.map(m => m.compactness)),
+      avgExtent: this.average(externalMetrics.map(m => m.extent)),
+      avgSolidity: this.average(externalMetrics.map(m => m.solidity)),
       avgSphericity: this.average(externalMetrics.map(m => m.sphericity)),
     };
 
     // Determine units based on scale
     const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
-    const areaUnit = isScaled ? 'µm²' : 'px²';
-    const lengthUnit = isScaled ? 'µm' : 'px';
+    const areaUnit = isScaled ? 'um^2' : 'px^2';
+    const lengthUnit = isScaled ? 'um' : 'px';
 
     return [
       ['Summary Statistics'],
@@ -576,6 +644,9 @@ export class MetricsCalculator {
       [`Maximum Area (${areaUnit})`, stats.maxArea.toFixed(2)],
       [`Average Perimeter (${lengthUnit})`, stats.avgPerimeter.toFixed(2)],
       ['Average Circularity', stats.avgCircularity.toFixed(4)],
+      ['Average Compactness', stats.avgCompactness.toFixed(4)],
+      ['Average Extent', stats.avgExtent.toFixed(4)],
+      ['Average Solidity', stats.avgSolidity.toFixed(4)],
       ['Average Sphericity', stats.avgSphericity.toFixed(4)],
     ];
   }
@@ -659,6 +730,180 @@ export class MetricsCalculator {
     return {
       width: maxX - minX,
       height: maxY - minY,
+    };
+  }
+
+  /**
+   * Calculate convex hull using Graham scan algorithm
+   */
+  private calculateConvexHull(points: Point[]): Point[] {
+    if (points.length < 3) return points;
+
+    // Sort points by x-coordinate, then by y-coordinate
+    const sortedPoints = [...points].sort((a, b) => {
+      if (a.x === b.x) return a.y - b.y;
+      return a.x - b.x;
+    });
+
+    // Build lower hull
+    const lower: Point[] = [];
+    for (const point of sortedPoints) {
+      while (
+        lower.length >= 2 &&
+        this.cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0
+      ) {
+        lower.pop();
+      }
+      lower.push(point);
+    }
+
+    // Build upper hull
+    const upper: Point[] = [];
+    for (let i = sortedPoints.length - 1; i >= 0; i--) {
+      const point = sortedPoints[i];
+      while (
+        upper.length >= 2 &&
+        this.cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0
+      ) {
+        upper.pop();
+      }
+      upper.push(point);
+    }
+
+    // Remove last point of each half because it's repeated
+    lower.pop();
+    upper.pop();
+
+    return lower.concat(upper);
+  }
+
+  /**
+   * Calculate cross product for convex hull algorithm
+   */
+  private cross(o: Point, a: Point, b: Point): number {
+    return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  }
+
+  /**
+   * Calculate distance between two points
+   */
+  private distance(p1: Point, p2: Point): number {
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
+   * Calculate the distance from a point to a line defined by two points
+   */
+  private pointToLineDistance(
+    point: Point,
+    lineStart: Point,
+    lineEnd: Point
+  ): number {
+    const A = point.x - lineStart.x;
+    const B = point.y - lineStart.y;
+    const C = lineEnd.x - lineStart.x;
+    const D = lineEnd.y - lineStart.y;
+
+    const dot = A * C + B * D;
+    const lenSq = C * C + D * D;
+
+    if (lenSq === 0) return this.distance(point, lineStart);
+
+    const param = dot / lenSq;
+
+    let xx: number, yy: number;
+
+    if (param < 0) {
+      xx = lineStart.x;
+      yy = lineStart.y;
+    } else if (param > 1) {
+      xx = lineEnd.x;
+      yy = lineEnd.y;
+    } else {
+      xx = lineStart.x + param * C;
+      yy = lineStart.y + param * D;
+    }
+
+    const dx = point.x - xx;
+    const dy = point.y - yy;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  /**
+   * Rotating calipers algorithm to find Feret diameters
+   * Returns max, min, and orthogonal Feret diameters
+   */
+  private rotatingCalipers(hull: Point[]): {
+    max: number;
+    min: number;
+    orthogonal: number;
+  } {
+    if (hull.length < 3) {
+      return { max: 0, min: 0, orthogonal: 0 };
+    }
+
+    let maxDist = 0;
+    let minDist = Infinity;
+    let orthogonalDist = 0;
+    let maxPair: [Point, Point] | null = null;
+
+    // Find maximum Feret diameter (max distance between any two hull points)
+    for (let i = 0; i < hull.length; i++) {
+      for (let j = i + 1; j < hull.length; j++) {
+        const dist = this.distance(hull[i], hull[j]);
+        if (dist > maxDist) {
+          maxDist = dist;
+          maxPair = [hull[i], hull[j]];
+        }
+      }
+    }
+
+    // Find minimum Feret diameter (min caliper width)
+    // For each edge of the hull, find the furthest point from that edge
+    for (let i = 0; i < hull.length; i++) {
+      const j = (i + 1) % hull.length;
+      let maxDistFromEdge = 0;
+
+      // Find the furthest point from this edge
+      for (let k = 0; k < hull.length; k++) {
+        if (k === i || k === j) continue;
+        const dist = this.pointToLineDistance(hull[k], hull[i], hull[j]);
+        maxDistFromEdge = Math.max(maxDistFromEdge, dist);
+      }
+
+      // The caliper width for this orientation is the distance to the furthest point
+      if (maxDistFromEdge > 0 && maxDistFromEdge < minDist) {
+        minDist = maxDistFromEdge;
+      }
+    }
+
+    // Find orthogonal Feret diameter
+    // This is the width perpendicular to the maximum Feret diameter
+    if (maxPair) {
+      const [p1, p2] = maxPair;
+      let maxOrthDist = 0;
+
+      // Find the maximum perpendicular distance from the max Feret line
+      for (const point of hull) {
+        const dist = this.pointToLineDistance(point, p1, p2);
+        maxOrthDist = Math.max(maxOrthDist, dist);
+      }
+
+      orthogonalDist = maxOrthDist * 2; // Width is twice the max distance from centerline
+    }
+
+    // Handle edge cases
+    if (minDist === Infinity) {
+      // Fallback for degenerate cases
+      minDist = maxDist;
+    }
+
+    return {
+      max: maxDist,
+      min: minDist,
+      orthogonal: orthogonalDist,
     };
   }
 
@@ -766,34 +1011,38 @@ export class MetricsCalculator {
       
       // Log additional context for debugging
       this.logger.info(
-        `Scale conversion will proceed with ${scale} µm/pixel. ` +
-        `This will convert: 1 pixel = ${scale.toFixed(4)} µm, ` +
-        `100x100 px area = ${(10000 * scale * scale).toFixed(2)} µm²`,
+        `Scale conversion will proceed with ${scale} um/pixel. ` +
+        `This will convert: 1 pixel = ${scale.toFixed(4)} um, ` +
+        `100x100 px area = ${(10000 * scale * scale).toFixed(2)} um^2`,
         'MetricsCalculator'
       );
     } else {
       // Log normal scale application for valid common values
       this.logger.info(
-        `Applying scale conversion: ${scale} µm/pixel (1 pixel = ${scale.toFixed(4)} µm)`,
+        `Applying scale conversion: ${scale} um/pixel (1 pixel = ${scale.toFixed(4)} um)`,
         'MetricsCalculator'
       );
     }
     
     return metrics.map(metric => ({
       ...metric,
-      // Convert area from px² to µm² (multiply by scale²)
+      // Convert area from px^2 to um^2 (multiply by scale^2)
       area: metric.area * (scale * scale),
-      // Convert linear measurements from px to µm (multiply by scale)
+      // Convert linear measurements from px to um (multiply by scale)
       perimeter: metric.perimeter * scale,
+      perimeterWithHoles: metric.perimeterWithHoles * scale,
       equivalentDiameter: metric.equivalentDiameter * scale,
       feretDiameterMax: metric.feretDiameterMax * scale,
       feretDiameterMaxOrthogonalDistance: metric.feretDiameterMaxOrthogonalDistance * scale,
       feretDiameterMin: metric.feretDiameterMin * scale,
       lengthMajorDiameterThroughCentroid: metric.lengthMajorDiameterThroughCentroid * scale,
       lengthMinorDiameterThroughCentroid: metric.lengthMinorDiameterThroughCentroid * scale,
+      boundingBoxWidth: metric.boundingBoxWidth * scale,
+      boundingBoxHeight: metric.boundingBoxHeight * scale,
       // Dimensionless ratios remain unchanged
       circularity: metric.circularity,
       feretAspectRatio: metric.feretAspectRatio,
+      extent: metric.extent,
       compactness: metric.compactness,
       convexity: metric.convexity,
       solidity: metric.solidity,

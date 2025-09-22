@@ -27,9 +27,7 @@ const UploadFileGrid: React.FC<UploadFileGridProps> = ({
 }) => {
   const { t } = useLanguage();
 
-  if (files.length === 0) return null;
-
-  // Memoize status counts for performance
+  // Memoize status counts for performance - must be before any conditional returns
   const statusCounts = useMemo(() => {
     return files.reduce(
       (acc, file) => {
@@ -40,6 +38,9 @@ const UploadFileGrid: React.FC<UploadFileGridProps> = ({
       {} as Record<string, number>
     );
   }, [files]);
+
+  // Early return after hooks to avoid conditional hook calls
+  if (files.length === 0) return null;
 
   return (
     <div className="space-y-4 bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">

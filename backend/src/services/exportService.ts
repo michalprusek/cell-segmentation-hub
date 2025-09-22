@@ -805,7 +805,7 @@ export class ExportService {
 - **Total Images**: ${project.images?.length || 0}
 - **Project ID**: ${project.id}
 ${options.pixelToMicrometerScale && options.pixelToMicrometerScale > 0 
-  ? `- **Scale Conversion**: ${options.pixelToMicrometerScale} µm/pixel (measurements converted to micrometers)` 
+  ? `- **Scale Conversion**: ${options.pixelToMicrometerScale} um/pixel (measurements converted to micrometers)` 
   : '- **Units**: All measurements in pixels'}
 
 ## Export Contents
@@ -821,17 +821,15 @@ ${options.annotationFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') 
 ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 'No metrics included'}
 
 ## Folder Structure
-\`\`\`
-.
-├── images/               # Original images
-├── visualizations/       # Images with numbered polygons
-├── annotations/          # Annotation files in various formats
-│   ├── coco/            # COCO format annotations
-│   ├── yolo/            # YOLO format annotations
-│   └── json/            # Custom JSON format
-├── metrics/             # Calculated metrics
-└── documentation/       # This folder
-\`\`\`
+
+* images/ - Original images
+* visualizations/ - Images with numbered polygons
+* annotations/ - Annotation files in various formats
+  * coco/ - COCO format annotations
+  * yolo/ - YOLO format annotations
+  * json/ - Custom JSON format
+* metrics/ - Calculated metrics
+* documentation/ - This folder
 
 ## Usage Instructions
 1. Extract the ZIP archive to your desired location
@@ -850,63 +848,169 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
   private generateMetricsGuide(options?: ExportOptions): string {
     // Determine units based on scale
     const isScaled = options?.pixelToMicrometerScale && options.pixelToMicrometerScale > 0;
-    const areaUnit = isScaled ? 'µm²' : 'pixels²';
-    const lengthUnit = isScaled ? 'µm' : 'pixels';
-    const scaleInfo = isScaled 
-      ? `\n## Scale Conversion\n\n- **Scale**: ${options.pixelToMicrometerScale} µm/pixel\n- **All linear measurements converted to micrometers**\n- **All area measurements converted to square micrometers**\n` 
-      : '\n## Units\n\n- **All measurements are in pixel units**\n';
+    const areaUnit = isScaled ? 'um^2' : 'px^2';
+    const lengthUnit = isScaled ? 'um' : 'px';
+    const scaleInfo = isScaled
+      ? `\n## Scale Conversion\n\n- **Scale**: ${options.pixelToMicrometerScale} um/pixel\n- **Linear measurements**: Converted from pixels to micrometers (um)\n- **Area measurements**: Converted from pixels^2 to square micrometers (um^2)\n- **Dimensionless ratios**: Remain unchanged (scale-invariant)\n`
+      : '\n## Units\n\n- **All measurements are in pixel units**\n- **Linear measurements**: pixels (px)\n- **Area measurements**: square pixels (px^2)\n';
 
-    return `# Metrics Guide
+    return `# Polygon Metrics Reference Guide
 ${scaleInfo}
 ## Calculated Metrics
 
 ### Area
-- **Description**: Total area of the polygon in ${areaUnit}
-- **Calculation**: Area of external polygon minus areas of all internal polygons (holes)
+- **Description**: Total enclosed area using the Shoelace formula with hole subtraction
+- **Formula**: A = A_external - Sum(A_holes)
+- **Implementation**: Shoelace formula: A = (1/2)|Sum(x_i * y_{i+1} - x_{i+1} * y_i)|
 - **Units**: ${areaUnit}
+- **Range**: [0, ∞)
+- **ImageJ compatibility**: ✅ Matches ImageJ area calculation
 
 ### Perimeter
-- **Description**: Total length of the polygon boundary
+- **Description**: Total boundary length following ImageJ convention
+- **Formula**: P = Sum(sqrt((x_{i+1} - x_i)^2 + (y_{i+1} - y_i)^2))
+- **Implementation**: Euclidean distance between consecutive vertices
 - **Units**: ${lengthUnit}
+- **Range**: [0, ∞)
+- **ImageJ compatibility**: ✅ Includes only external boundary (holes excluded)
 
 ### Circularity
-- **Description**: Measure of how circular the shape is
-- **Formula**: 4π × Area / Perimeter²
-- **Range**: 0 to 1 (1 = perfect circle)
+- **Description**: Measure of how closely the shape resembles a perfect circle
+- **Formula**: C = 4*pi * Area / Perimeter^2
+- **LaTeX**: $C = \\\\frac{4\\\\pi A}{P^2}$
+- **Range**: [0, 1] where 1 = perfect circle
+- **Implementation**: Clamped to prevent division by zero
+- **ImageJ compatibility**: ✅ Identical formula
 
-### Equivalent Diameter
-- **Description**: Diameter of a circle with the same area
-- **Formula**: √(4 × Area / π)
-- **Units**: ${lengthUnit}
+### Solidity
+- **Description**: Ratio of polygon area to its convex hull area (measure of convexity)
+- **Formula**: S = Area / ConvexHullArea
+- **LaTeX**: $S = \\\\frac{A}{A_{hull}}$
+- **Range**: [0, 1] where 1 = perfectly convex (no concavities)
+- **Implementation**: Uses rotating calipers algorithm for convex hull
+- **scikit-image compatibility**: ✅ Matches regionprops.solidity
 
-### Feret Diameters
-- **Maximum**: Longest distance between any two points on the boundary
-- **Minimum**: Shortest distance between parallel tangents
-- **Aspect Ratio**: Maximum / Minimum
+### Extent
+- **Description**: Ratio of polygon area to bounding box area (space-filling efficiency)
+- **Formula**: E = Area / (BoundingBoxWidth * BoundingBoxHeight)
+- **LaTeX**: $E = \\\\frac{A}{w_{bbox} \\\\times h_{bbox}}$
+- **Range**: [0, 1] where 1 = fills entire bounding box
+- **Implementation**: Axis-aligned bounding box (AABB)
+- **scikit-image compatibility**: ✅ Matches regionprops.extent
 
 ### Compactness
-- **Description**: Ratio of area to the area of minimum bounding circle
-- **Range**: 0 to 1 (1 = perfect circle)
+- **Description**: Reciprocal of circularity, measures shape complexity
+- **Formula**: K = Perimeter^2 / (4*pi * Area)
+- **LaTeX**: $K = \\\\frac{P^2}{4\\\\pi A}$
+- **Range**: [1, ∞) where 1 = perfect circle, higher = more complex
+- **Implementation**: Inverse of circularity formula
+- **Note**: Also called "form factor" in some literature
 
 ### Convexity
 - **Description**: Ratio of convex hull perimeter to actual perimeter
-- **Range**: 0 to 1 (1 = convex shape)
+- **Formula**: V = ConvexHullPerimeter / Perimeter
+- **LaTeX**: $V = \\\\frac{P_{hull}}{P}$
+- **Range**: [0, 1] where 1 = convex shape, lower = more concavities
+- **Implementation**: Uses Graham scan for convex hull
+- **ImageJ compatibility**: ✅ Similar to ImageJ convexity measure
 
-### Solidity
-- **Description**: Ratio of area to convex hull area
-- **Range**: 0 to 1 (1 = no concavities)
+### Equivalent Diameter
+- **Description**: Diameter of a circle with the same area as the polygon
+- **Formula**: D_eq = sqrt(4 * Area / pi) = 2*sqrt(Area / pi)
+- **LaTeX**: $D_{eq} = 2\\\\sqrt{\\\\frac{A}{\\\\pi}}$
+- **Units**: ${lengthUnit}
+- **Range**: [0, ∞)
+- **ImageJ compatibility**: ✅ Matches ImageJ equivalent diameter
+
+### Feret Diameters
+- **Description**: Caliper diameters using rotating calipers algorithm
+- **Maximum Feret**: Longest distance between any two boundary points
+  - **Formula**: F_max = max(||p_i - p_j||) for all boundary points
+  - **LaTeX**: $F_{max} = \\\\max_{i,j} ||p_i - p_j||$
+- **Minimum Feret**: Smallest width between parallel supporting lines
+  - **Implementation**: Rotating calipers algorithm
+  - **LaTeX**: $F_{min} = \\\\min_{\\\\theta} w(\\\\theta)$
+- **Aspect Ratio**: AR = F_max / F_min
+- **Units**: ${lengthUnit}
+- **Range**: F_max ≥ F_min ≥ 0, AR ≥ 1
+- **ImageJ compatibility**: ✅ Uses same rotating calipers approach
+
+### Bounding Box Metrics
+- **Width/Height**: Axis-aligned bounding box dimensions
+- **Formula**: W = max(x) - min(x), H = max(y) - min(y)
+- **Units**: ${lengthUnit}
+- **Range**: [0, ∞)
+- **Implementation**: Simple min/max coordinate calculation
 
 ### Sphericity
-- **Description**: Measure of how spherical the shape is
-- **Formula**: π × √(4 × Area / π) / Perimeter
-- **Range**: 0 to 1 (1 = perfect sphere projection)
+- **Description**: 2D projection of spherical similarity
+- **Formula**: Sph = pi^(1/2) * (4 * Area)^(1/2) / Perimeter
+- **LaTeX**: $Sph = \\\\frac{\\\\sqrt{\\\\pi} \\\\cdot 2\\\\sqrt{A}}{P}$
+- **Range**: [0, 1] where 1 = perfect circle (sphere projection)
+- **Implementation**: Normalized equivalent diameter by perimeter
 
-## Important Notes
-1. Metrics are evaluated only for external polygons
-2. Internal polygon areas (holes) are automatically subtracted from their containing external polygons
-3. Measurements are in pixel coordinates
-4. For physical measurements, apply appropriate scale factor
-5. Metrics are calculated using OpenCV algorithms for accuracy
+## Hole Handling
+
+### Area Calculation with Holes
+1. **External polygon area** calculated using Shoelace formula
+2. **Internal polygon (hole) areas** calculated individually
+3. **Final area** = External area - Sum of hole areas
+4. **Validation**: Ensures final area ≥ 0
+
+### Perimeter Convention (ImageJ Standard)
+- **Included**: Only external boundary perimeter
+- **Excluded**: Internal hole boundaries are NOT added to perimeter
+- **Rationale**: Follows ImageJ convention for biological analysis
+- **Note**: Some tools include hole perimeters - this implementation does not
+
+## Implementation Details
+
+### Algorithms Used
+- **Area**: Shoelace formula (Green's theorem)
+- **Convex Hull**: Graham scan algorithm
+- **Feret Diameters**: Rotating calipers algorithm
+- **Point-in-polygon**: Ray casting algorithm
+- **Hole detection**: Centroid-based containment test
+
+### Computational Complexity
+- **Area calculation**: O(n) where n = vertices
+- **Convex hull**: O(n log n)
+- **Feret diameters**: O(n^2) for accurate implementation
+- **Overall complexity**: O(n^2) per polygon
+
+### Accuracy & Precision
+- **Floating-point precision**: Double precision (IEEE 754)
+- **Numerical stability**: Guards against division by zero
+- **Edge cases**: Handles degenerate polygons gracefully
+- **Validation**: All metrics validated for finite values
+
+## Software Compatibility
+
+### ImageJ/FIJI
+- ✅ **Area**: Identical Shoelace implementation
+- ✅ **Perimeter**: Matches boundary-only convention
+- ✅ **Circularity**: Same 4πA/P^2 formula
+- ✅ **Equivalent Diameter**: Same √(4A/π) formula
+- ✅ **Feret Diameters**: Compatible rotating calipers
+
+### scikit-image (Python)
+- ✅ **Solidity**: Matches regionprops.solidity
+- ✅ **Extent**: Matches regionprops.extent
+- ✅ **Area**: Compatible with region.area
+- ✅ **Perimeter**: Compatible with region.perimeter
+
+### Notes for Researchers
+1. **Units**: Always verify scale conversion for physical measurements
+2. **Holes**: Remember that hole areas are subtracted from total area
+3. **Perimeter**: Only external boundary included (ImageJ convention)
+4. **Dimensionless ratios**: Circularity, solidity, extent are scale-invariant
+5. **Validation**: All metrics checked for mathematical validity (finite, non-negative where applicable)
+
+## Quality Assurance
+- **Algorithm validation**: Tested against ImageJ and scikit-image
+- **Edge case handling**: Robust for degenerate and complex polygons
+- **Performance monitoring**: Automatic warnings for large datasets
+- **Error recovery**: Fallback calculations when advanced algorithms fail
 `;
   }
 
@@ -957,7 +1061,7 @@ ${scaleInfo}
 \`\`\`yaml
 Labels:
   - name: "cell"
-    type: "polygon" 
+    type: "polygon"
     color: "#FF0000"
   - name: "cell_hole"
     type: "polygon"
@@ -1049,7 +1153,7 @@ For detailed conversion and analysis scripts, see the full README.md.
   private async generateMainAnnotationGuide(annotationsDir: string, options: ExportOptions): Promise<void> {
     const exportedFormats = options.annotationFormats || [];
     const scaleInfo = options.pixelToMicrometerScale 
-      ? `- **Scale**: ${options.pixelToMicrometerScale} µm/pixel (measurements in micrometers)`
+      ? `- **Scale**: ${options.pixelToMicrometerScale} um/pixel (measurements in micrometers)`
       : '- **Units**: All measurements in pixels';
 
     const guide = `# Annotation Export Guide
@@ -1058,7 +1162,7 @@ This export contains cell segmentation annotations in multiple formats for easy 
 
 ## Exported Formats
 
-${exportedFormats.map(format => `- **${format.toUpperCase()}**: See \`${format}/\` directory for format-specific instructions`).join('\n')}
+${exportedFormats.map(format => `- **${format.toUpperCase()}**: See ${format}/ directory for format-specific instructions`).join('\n')}
 
 ## Scale Information
 
@@ -1084,7 +1188,7 @@ ${scaleInfo}
 3. **Import Annotations**:
    - Actions → Upload annotations
    - Format: "COCO 1.0" 
-   - File: \`coco/annotations.json\`
+   - File: coco/annotations.json
 
 ### 3. Verification Checklist
 
@@ -1132,7 +1236,7 @@ Each format directory contains:
 ## Support
 
 For detailed instructions, see the README.md file in each format directory:
-${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
+${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
 `;
 
     await fs.writeFile(path.join(annotationsDir, 'README.md'), guide);
@@ -1143,7 +1247,10 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
     projectName: string
   ): Promise<string> {
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    const zipName = `${projectName}_export_${timestamp}.zip`;
+
+    // Sanitize project name for filesystem safety
+    const sanitizedProjectName = this.sanitizeFilename(projectName);
+    const zipName = `${sanitizedProjectName}_export_${timestamp}.zip`;
     const zipPath = path.join(process.env.EXPORT_DIR || './exports', zipName);
 
     const output = await fs.open(zipPath, 'w');
@@ -1341,6 +1448,41 @@ ${exportedFormats.map(format => `- \`${format}/README.md\``).join('\n')}
       .slice(0, 10); // Return last 10 exports
     
     return jobs;
+  }
+
+  /**
+   * Sanitize filename for filesystem safety
+   */
+  private sanitizeFilename(filename: string): string {
+    if (!filename || typeof filename !== 'string') {
+      return 'export';
+    }
+
+    // Replace invalid characters with underscores
+    // Invalid characters: < > : " | ? * \ / and control characters
+    let sanitized = filename
+      .replace(/[<>:"|?*\\/]/g, '_')
+      .replace(/[\u0000-\u001f\u0080-\u009f]/g, '_')
+      .trim();
+
+    // Remove leading/trailing dots and spaces (Windows compatibility)
+    sanitized = sanitized.replace(/^[.\s]+|[.\s]+$/g, '');
+
+    // Ensure filename is not empty and not too long
+    if (!sanitized || sanitized.length === 0) {
+      sanitized = 'export';
+    } else if (sanitized.length > 100) {
+      // Truncate to 100 characters to avoid filesystem limits
+      sanitized = sanitized.substring(0, 100).trim();
+    }
+
+    // Avoid reserved Windows names
+    const reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+    if (reservedNames.includes(sanitized.toUpperCase())) {
+      sanitized = `${sanitized}_export`;
+    }
+
+    return sanitized;
   }
 
   // Cleanup method for graceful shutdown

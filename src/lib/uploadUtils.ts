@@ -2,6 +2,8 @@
  * Upload utilities for handling large file batches with chunking
  */
 
+import UPLOAD_CONFIG from './uploadConfig';
+
 export interface ChunkingConfig {
   chunkSize: number;
   maxConcurrentChunks: number;
@@ -30,13 +32,13 @@ export interface ChunkedUploadResult<T> {
 }
 
 /**
- * Default chunking configuration
+ * Default chunking configuration from centralized config
  */
 export const DEFAULT_CHUNKING_CONFIG: ChunkingConfig = {
-  chunkSize: 100, // Files per chunk - matches backend MAX_FILES_PER_REQUEST in production
-  maxConcurrentChunks: 2, // Parallel chunk uploads - reduced to avoid overwhelming server
-  retryAttempts: 3, // Retry failed chunks
-  retryDelayMs: 2000, // Delay between retries
+  chunkSize: UPLOAD_CONFIG.FILES_PER_CHUNK, // Files per chunk - matches backend MAX_FILES_PER_REQUEST
+  maxConcurrentChunks: UPLOAD_CONFIG.MAX_CONCURRENT_CHUNKS, // Parallel chunk uploads
+  retryAttempts: UPLOAD_CONFIG.RETRY_ATTEMPTS, // Retry failed chunks
+  retryDelayMs: UPLOAD_CONFIG.RETRY_DELAY_MS, // Delay between retries
 };
 
 /**
@@ -198,23 +200,18 @@ export function estimateUploadTime(
 
 /**
  * Validate files before upload
+ * Updated to validate per chunk instead of total size
  */
 export function validateFiles(
   files: File[],
-  maxFileSize: number = 50 * 1024 * 1024, // 50MB default
-  maxTotalSize: number = 500 * 1024 * 1024, // 500MB default
-  supportedTypes: string[] = [
-    'image/jpeg',
-    'image/png',
-    'image/tiff',
-    'image/bmp',
-  ]
+  maxFileSize: number = UPLOAD_CONFIG.MAX_FILE_SIZE_BYTES, // From centralized config
+  maxTotalSizePerChunk: number = UPLOAD_CONFIG.MAX_SIZE_PER_CHUNK_BYTES, // From centralized config
+  supportedTypes: string[] = UPLOAD_CONFIG.SUPPORTED_FILE_TYPES // From centralized config
 ): { valid: File[]; invalid: Array<{ file: File; reason: string }> } {
   const valid: File[] = [];
   const invalid: Array<{ file: File; reason: string }> = [];
 
-  let totalSize = 0;
-
+  // First pass: validate individual files
   files.forEach(file => {
     // Check file size
     if (file.size > maxFileSize) {
@@ -234,17 +231,29 @@ export function validateFiles(
       return;
     }
 
-    // Check total size
-    if (totalSize + file.size > maxTotalSize) {
-      invalid.push({
-        file,
-        reason: `Total upload size would exceed limit of ${maxTotalSize / (1024 * 1024)}MB`,
-      });
-      return;
-    }
-
     valid.push(file);
-    totalSize += file.size;
+  });
+
+  // Second pass: validate chunk sizes (100 files per chunk)
+  const chunkSize = DEFAULT_CHUNKING_CONFIG.chunkSize; // 100 files
+  const chunks = chunkFiles(valid, chunkSize);
+
+  chunks.forEach((chunk, chunkIndex) => {
+    const chunkTotalSize = chunk.reduce((sum, file) => sum + file.size, 0);
+
+    if (chunkTotalSize > maxTotalSizePerChunk) {
+      // Mark all files in this chunk as invalid
+      chunk.forEach(file => {
+        const validIndex = valid.indexOf(file);
+        if (validIndex !== -1) {
+          valid.splice(validIndex, 1);
+          invalid.push({
+            file,
+            reason: `Chunk ${chunkIndex + 1} total size (${(chunkTotalSize / (1024 * 1024)).toFixed(1)}MB) exceeds limit of ${maxTotalSizePerChunk / (1024 * 1024)}MB per chunk`,
+          });
+        }
+      });
+    }
   });
 
   return { valid, invalid };

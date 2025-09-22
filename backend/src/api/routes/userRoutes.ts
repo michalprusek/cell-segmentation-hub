@@ -4,6 +4,7 @@ import { authenticate } from '../../middleware/auth';
 import { apiLimiter, authLimiter } from '../../middleware/rateLimiter';
 import { validateBody } from '../../middleware/validation';
 import { z } from 'zod';
+import * as UserService from '../../services/userService';
 
 const router = Router();
 
@@ -42,35 +43,18 @@ router.get('/profile',
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as Request & { userId: string }).userId;
+      const userId = (req as Request & { user: { id: string } }).user.id;
       logger.info(`👤 User: Fetching profile for user ${userId}`);
-      
-      // Placeholder user profile
-      const profile = {
-        id: userId,
-        email: 'user@example.com',
-        firstName: 'John',
-        lastName: 'Doe',
-        isEmailVerified: true,
-        language: 'en',
-        theme: 'light',
-        createdAt: new Date().toISOString(),
-        lastLoginAt: new Date().toISOString(),
-        settings: {
-          notifications: {
-            email: true,
-            push: false,
-            segmentationComplete: true,
-            projectShared: true
-          }
-        },
-        stats: {
-          totalProjects: 5,
-          totalImages: 23,
-          totalSegmentations: 18,
-          storageUsed: '45.2MB'
-        }
-      };
+
+      const profile = await UserService.getUserProfile(userId);
+
+      if (!profile) {
+        return res.status(404).json({
+          success: false,
+          error: 'User profile not found',
+          code: 'USER_NOT_FOUND'
+        });
+      }
 
       res.json({
         success: true,
@@ -89,15 +73,16 @@ router.put('/profile',
   validateBody(updateProfileSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as Request & { userId: string }).userId;
+      const userId = (req as Request & { user: { id: string } }).user.id;
       const updates = req.body;
-      
+
       logger.info(`✏️ User: Updating profile for user ${userId}`, 'UserRoutes', { updates });
-      
-      // Placeholder profile update
+
+      const result = await UserService.updateUserProfile(userId, updates);
+
       res.json({
         success: true,
-        data: { userId, updates },
+        data: result,
         message: 'Profile updated successfully'
       });
     } catch (error) {
@@ -112,10 +97,10 @@ router.post('/change-password',
   validateBody(changePasswordSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as Request & { userId: string }).userId;
+      const userId = (req as Request & { user: { id: string } }).user.id;
       logger.info(`🔐 User: Password change requested for user ${userId}`);
-      
-      // Placeholder password change
+
+      // TODO: Implement actual password change
       res.json({
         success: true,
         message: 'Password changed successfully'
@@ -131,19 +116,23 @@ router.get('/settings',
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as Request & { userId: string }).userId;
+      const userId = (req as Request & { user: { id: string } }).user.id;
       logger.info(`⚙️ User: Fetching settings for user ${userId}`);
-      
-      // Placeholder user settings
+
+      const profile = await UserService.getUserProfile(userId);
+
+      if (!profile) {
+        return res.status(404).json({
+          success: false,
+          error: 'User profile not found',
+          code: 'USER_NOT_FOUND'
+        });
+      }
+
       const settings = {
-        language: 'en',
-        theme: 'light',
-        notifications: {
-          email: true,
-          push: false,
-          segmentationComplete: true,
-          projectShared: true
-        },
+        language: profile.language,
+        theme: profile.theme,
+        notifications: profile.settings.notifications,
         privacy: {
           showProfile: false,
           allowProjectSharing: true
@@ -171,22 +160,10 @@ router.get('/storage-stats',
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as Request & { userId: string }).userId;
+      const userId = (req as Request & { user: { id: string } }).user.id;
       logger.info(`💾 User: Fetching storage stats for user ${userId}`);
-      
-      // Placeholder storage statistics
-      const storageStats = {
-        totalUsed: '45.2MB',
-        totalUsedBytes: 47394816,
-        breakdown: {
-          images: '38.1MB',
-          thumbnails: '5.8MB',
-          exports: '1.3MB'
-        },
-        quota: '1GB',
-        quotaBytes: 1073741824,
-        usagePercentage: 4.4
-      };
+
+      const storageStats = await UserService.calculateUserStorage(userId);
 
       res.json({
         success: true,
@@ -204,40 +181,16 @@ router.get('/activity',
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as Request & { userId: string }).userId;
+      const userId = (req as Request & { user: { id: string } }).user.id;
       const { limit = '10', offset = '0' } = req.query;
-      
+
       logger.info(`📊 User: Fetching activity for user ${userId}`);
-      
-      // Placeholder user activity
-      const activity = {
-        items: [
-          {
-            id: 1,
-            type: 'project_created',
-            description: 'Created project "Cell Analysis Study"',
-            timestamp: new Date().toISOString()
-          },
-          {
-            id: 2,
-            type: 'image_uploaded',
-            description: 'Uploaded 3 images to project "Cell Study"',
-            timestamp: new Date(Date.now() - 3600000).toISOString()
-          },
-          {
-            id: 3,
-            type: 'segmentation_completed',
-            description: 'Completed segmentation with HRNetV2 model',
-            timestamp: new Date(Date.now() - 7200000).toISOString()
-          }
-        ],
-        pagination: {
-          total: 25,
-          limit: parseInt(limit as string),
-          offset: parseInt(offset as string),
-          hasMore: true
-        }
-      };
+
+      const activity = await UserService.getUserActivity(
+        userId,
+        parseInt(limit as string),
+        parseInt(offset as string)
+      );
 
       res.json({
         success: true,
@@ -255,10 +208,10 @@ router.delete('/account',
   authLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const userId = (req as Request & { userId: string }).userId;
+      const userId = (req as Request & { user: { id: string } }).user.id;
       logger.warn(`🗑️ User: Account deletion requested for user ${userId}`);
-      
-      // Placeholder account deletion (should be implemented with proper safeguards)
+
+      // TODO: Implement proper account deletion with safeguards
       res.json({
         success: true,
         message: 'Account deletion initiated. You will receive a confirmation email.'

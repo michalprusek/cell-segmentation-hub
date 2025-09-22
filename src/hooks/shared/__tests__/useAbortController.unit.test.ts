@@ -173,7 +173,7 @@ describe('AbortController Race Condition Fix - Unit Tests', () => {
         isAutosaveInProgress = false;
       };
 
-      const cancelAutosave = () => {
+      const _cancelAutosave = () => {
         if (autosaveController && !autosaveController.signal.aborted) {
           autosaveController.abort();
           isAutosaveInProgress = false;

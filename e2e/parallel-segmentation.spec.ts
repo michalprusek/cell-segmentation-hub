@@ -13,7 +13,7 @@
  */
 
 import { test, expect, Page, BrowserContext } from '@playwright/test';
-import { faker } from '@faker-js/faker';
+// import { faker } from '@faker-js/faker';
 
 // Test configuration
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
@@ -378,7 +378,7 @@ test.describe('Parallel Segmentation Processing E2E', () => {
                   data: data,
                   timestamp: Date.now(),
                 });
-              } catch (e) {
+              } catch (_e) {
                 // Ignore non-JSON WebSocket messages
               }
             });
@@ -545,23 +545,12 @@ test.describe('Parallel Segmentation Processing E2E', () => {
         );
         expect(totalSegmentationResults).toBeGreaterThan(0); // Should have some segmentation results
 
-        // Log detailed results for analysis
-        console.log('Parallel Processing Results:', {
-          totalProcessingTime: `${totalProcessingTime}ms`,
-          averageUserTime: `${averageUserTime}ms`,
-          parallelEfficiency: `${((averageUserTime / totalProcessingTime) * 100).toFixed(1)}%`,
-          successfulUsers: successfulUsers.length,
-          totalImagesProcessed,
-          totalSegmentationResults,
-          userDetails: processingResults.map(r => ({
-            user: r.user,
-            time: `${r.totalTime}ms`,
-            processed: r.imagesProcessed,
-            results: r.segmentationResults,
-            updates: r.websocketUpdates,
-            errors: r.errors.length,
-          })),
-        });
+        // Parallel processing test completed - results validated in assertions
+        expect(totalProcessingTime).toBeLessThan(300000); // 5 minutes max
+        expect(averageUserTime).toBeLessThan(120000); // 2 minutes average
+        expect(successfulUsers.length).toBe(4);
+        expect(totalImagesProcessed).toBeGreaterThan(0);
+        expect(totalSegmentationResults).toBeGreaterThan(0);
 
         // Close contexts
         for (const { context } of userContexts) {
@@ -637,7 +626,7 @@ test.describe('Parallel Segmentation Processing E2E', () => {
               } else if (data.type === 'error') {
                 tracking.errors++;
               }
-            } catch (e) {
+            } catch (_e) {
               // Ignore non-JSON messages
             }
           });
@@ -696,18 +685,11 @@ test.describe('Parallel Segmentation Processing E2E', () => {
           expect(averageLatency).toBeLessThan(1000); // Average latency should be < 1 second
           expect(maxLatency).toBeLessThan(5000); // Max latency should be < 5 seconds
 
-          console.log('WebSocket Performance Metrics:', {
-            queueUpdates: tracking.queueUpdates,
-            segmentationUpdates: tracking.segmentationUpdates,
-            completionNotifications: tracking.completionNotifications,
-            errors: tracking.errors,
-            averageLatency: `${averageLatency.toFixed(0)}ms`,
-            maxLatency: `${maxLatency}ms`,
-            totalMessages:
-              tracking.queueUpdates +
-              tracking.segmentationUpdates +
-              tracking.completionNotifications,
-          });
+          // WebSocket performance test completed - metrics validated in assertions
+          expect(tracking.queueUpdates).toBeGreaterThan(0);
+          expect(tracking.segmentationUpdates).toBeGreaterThan(0);
+          expect(tracking.completionNotifications).toBeGreaterThan(0);
+          expect(tracking.errors).toBe(0);
         }
 
         // Clean up
@@ -725,7 +707,7 @@ test.describe('Parallel Segmentation Processing E2E', () => {
 
   test.describe('Database Consistency Verification', () => {
     test('should maintain database consistency during parallel operations', async ({
-      browser,
+      browser: _browser,
       request,
     }) => {
       // This test verifies database state through API calls during concurrent operations
@@ -879,22 +861,16 @@ test.describe('Parallel Segmentation Processing E2E', () => {
         expect(imagesData.images.length).toBe(user.images.length); // All images should be present
       }
 
-      console.log('Database Consistency Results:', {
-        totalUsers: operationResults.length,
-        totalImagesProcessed,
-        allQueuesEmptied: operationResults.every(r => r.queueEmptied),
-        userResults: operationResults.map(r => ({
-          user: r.user,
-          processed: `${r.processedImages}/${r.totalImages}`,
-          queueEmptied: r.queueEmptied,
-        })),
-      });
+      // Database consistency test completed - results validated in assertions
+      expect(operationResults.length).toBe(4);
+      expect(totalImagesProcessed).toBeGreaterThan(0);
+      expect(operationResults.every(r => r.queueEmptied)).toBe(true);
     });
   });
 
   test.describe('Resource Allocation Fairness', () => {
     test('should allocate resources fairly among 4 concurrent users', async ({
-      browser,
+      browser: _browser,
       request,
     }) => {
       const fairnessMetrics: Record<
@@ -1092,28 +1068,18 @@ test.describe('Parallel Segmentation Processing E2E', () => {
         expect(share).toBeLessThan(expectedShare * 2.0); // At most 200% of fair share
       }
 
-      console.log('Resource Allocation Fairness Results:', {
-        totalTime: `${totalTime}ms`,
-        averageProcessingTime: `${avgProcessingTime.toFixed(0)}ms`,
-        averageQueueWaitTime: `${avgQueueWaitTime.toFixed(0)}ms`,
-        averageThroughput: `${avgThroughput.toFixed(2)} img/s`,
-        fairnessCoefficient: fairnessCoefficient.toFixed(3),
-        userDetails: Object.entries(fairnessMetrics).map(
-          ([email, metrics]) => ({
-            user: email,
-            processingTime: `${metrics.processingTime}ms`,
-            queueWaitTime: `${metrics.queueWaitTime}ms`,
-            throughput: `${metrics.imagesPerSecond.toFixed(2)} img/s`,
-            resourceShare: `${(metrics.resourceShare * 100).toFixed(1)}%`,
-          })
-        ),
-      });
+      // Resource allocation fairness test completed - results validated in assertions
+      expect(totalTime).toBeLessThan(300000); // Should complete within 5 minutes
+      expect(avgProcessingTime).toBeLessThan(120000); // Average under 2 minutes
+      expect(avgQueueWaitTime).toBeLessThan(60000); // Average wait under 1 minute
+      expect(avgThroughput).toBeGreaterThan(0); // Should have positive throughput
+      expect(fairnessCoefficient).toBeGreaterThan(0.8); // High fairness coefficient
     });
   });
 
   test.describe('Error Recovery and Resilience', () => {
     test('should recover gracefully from partial failures in concurrent processing', async ({
-      browser,
+      browser: _browser,
       request,
     }) => {
       // This test simulates failures and verifies recovery mechanisms
@@ -1278,26 +1244,14 @@ test.describe('Parallel Segmentation Processing E2E', () => {
       );
       expect(successfulUsers.length).toBeGreaterThan(0);
 
-      console.log('Error Recovery Results:', {
-        totalUsers: recoveryResults.length,
-        successfulRecoveries: recoveryResults.filter(r => r.recoverySuccessful)
-          .length,
-        totalRetryAttempts: recoveryResults.reduce(
-          (sum, r) => sum + r.retryAttempts,
-          0
-        ),
-        finalProcessedImages: recoveryResults.reduce(
-          (sum, r) => sum + r.finalProcessedImages,
-          0
-        ),
-        userDetails: recoveryResults.map(r => ({
-          user: r.user,
-          initialSubmission: r.initialSubmission,
-          recoverySuccessful: r.recoverySuccessful,
-          finalProcessedImages: r.finalProcessedImages,
-          retryAttempts: r.retryAttempts,
-        })),
-      });
+      // Error recovery test completed - results validated in assertions
+      expect(recoveryResults.length).toBe(4);
+      expect(
+        recoveryResults.filter(r => r.recoverySuccessful).length
+      ).toBeGreaterThanOrEqual(3); // At least 75% success
+      expect(
+        recoveryResults.reduce((sum, r) => sum + r.finalProcessedImages, 0)
+      ).toBeGreaterThan(0); // Some images processed
     });
   });
 });

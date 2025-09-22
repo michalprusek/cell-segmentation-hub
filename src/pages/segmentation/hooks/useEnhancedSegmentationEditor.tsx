@@ -18,6 +18,7 @@ import {
 import { useAdvancedInteractions } from './useAdvancedInteractions';
 import { usePolygonSlicing } from './usePolygonSlicing';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { usePolygonSelection } from './usePolygonSelection';
 import {
   calculateCenteringTransform,
   calculateFixedPointZoom,
@@ -43,6 +44,7 @@ interface UseEnhancedSegmentationEditorProps {
   onPolygonsChange?: (polygons: Polygon[]) => void;
   imageId?: string; // Add imageId to detect image changes
   isFromGallery?: boolean; // Add flag to trigger auto-reset
+  // onPolygonSelection is now handled internally via usePolygonSelection for SSOT
 }
 
 /**
@@ -59,6 +61,7 @@ export const useEnhancedSegmentationEditor = ({
   onPolygonsChange,
   imageId,
   isFromGallery = false,
+  // onPolygonSelection is now handled internally
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
 
@@ -69,9 +72,18 @@ export const useEnhancedSegmentationEditor = ({
 
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
-  const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(
-    null
-  );
+  const [selectedPolygonId, setSelectedPolygonIdInternal] = useState<
+    string | null
+  >(null);
+
+  // Wrapped setSelectedPolygonId - fixed to not depend on selectedPolygonId
+  const setSelectedPolygonId = useCallback((id: string | null) => {
+    setSelectedPolygonIdInternal(id);
+  }, []);
+
+  // Initialize centralized polygon selection system (SSOT)
+  // We'll create this after handleDeletePolygon is defined
+  let polygonSelection: ReturnType<typeof usePolygonSelection> | null = null;
   const [editMode, setEditMode] = useState<EditMode>(EditMode.View);
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   const [hoveredVertex, setHoveredVertex] = useState<{
@@ -545,7 +557,7 @@ export const useEnhancedSegmentationEditor = ({
   const handleZoomIn = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
-      transform,
+      transformRef.current, // Use ref to avoid transform dependency
       center,
       EDITING_CONSTANTS.ZOOM_FACTOR,
       EDITING_CONSTANTS.MIN_ZOOM,
@@ -561,12 +573,12 @@ export const useEnhancedSegmentationEditor = ({
       canvasHeight
     );
     setTransform(constrainedTransform);
-  }, [transform, canvasWidth, canvasHeight, imageWidth, imageHeight]);
+  }, [canvasWidth, canvasHeight, imageWidth, imageHeight]); // Removed transform dependency
 
   const handleZoomOut = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
-      transform,
+      transformRef.current, // Use ref to avoid transform dependency
       center,
       1 / EDITING_CONSTANTS.ZOOM_FACTOR,
       EDITING_CONSTANTS.MIN_ZOOM,
@@ -582,7 +594,7 @@ export const useEnhancedSegmentationEditor = ({
       canvasHeight
     );
     setTransform(constrainedTransform);
-  }, [transform, canvasWidth, canvasHeight, imageWidth, imageHeight]);
+  }, [canvasWidth, canvasHeight, imageWidth, imageHeight]); // Removed transform dependency
 
   const handleResetView = useCallback(() => {
     const newTransform = calculateCenteringTransform(
@@ -611,6 +623,16 @@ export const useEnhancedSegmentationEditor = ({
     },
     [polygons, selectedPolygonId, updatePolygons, t]
   );
+
+  // Now initialize centralized polygon selection system (SSOT) after handleDeletePolygon is defined
+  polygonSelection = usePolygonSelection({
+    editMode,
+    currentSelectedPolygonId: selectedPolygonId,
+    onModeChange: setEditMode,
+    onSelectionChange: setSelectedPolygonId,
+    onDeletePolygon: handleDeletePolygon,
+    polygons,
+  });
 
   // Vertex operations
   const handleDeleteVertex = useCallback(
@@ -750,11 +772,10 @@ export const useEnhancedSegmentationEditor = ({
     setInteractionState,
   ]);
 
-  // Enhanced wheel handler with non-passive event listener
+  // Enhanced wheel handler with throttling for performance
   useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-
+    // Create throttled zoom handler using RAF for smooth 60fps updates
+    const throttledZoom = rafThrottle((e: WheelEvent) => {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
 
@@ -788,6 +809,11 @@ export const useEnhancedSegmentationEditor = ({
           canvasHeight
         )
       );
+    }, 16); // ~60fps throttle
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      throttledZoom.fn(e);
     };
 
     const element = canvasRef.current;
@@ -797,6 +823,7 @@ export const useEnhancedSegmentationEditor = ({
 
       return () => {
         element.removeEventListener('wheel', handleWheel);
+        throttledZoom.cancel();
       };
     }
   }, [imageWidth, imageHeight, canvasWidth, canvasHeight]); // Removed transform from dependencies
@@ -836,6 +863,7 @@ export const useEnhancedSegmentationEditor = ({
     isShiftPressed: keyboardShortcuts.isShiftPressed,
     isSpacePressed: keyboardShortcuts.isSpacePressed,
     setSelectedPolygonId,
+    onPolygonSelection: polygonSelection.handlePolygonSelection, // Pass centralized selection handler
     setEditMode,
     setInteractionState,
     setTempPoints,
@@ -980,6 +1008,10 @@ export const useEnhancedSegmentationEditor = ({
 
     // Polygon operations
     handleDeletePolygon,
+
+    // Centralized selection handlers (SSOT)
+    handlePolygonSelection: polygonSelection.handlePolygonSelection,
+    handlePolygonClick: polygonSelection.handlePolygonClick,
 
     // Vertex operations
     handleDeleteVertex,

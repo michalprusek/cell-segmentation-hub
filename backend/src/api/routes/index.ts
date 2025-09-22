@@ -312,6 +312,13 @@ function registerKnownRoutes(): void {
   });
 
   registerRoute({
+    path: '/api/ml/health',
+    method: 'GET',
+    description: 'Zdravotní kontrola ML služby',
+    authenticated: false
+  });
+
+  registerRoute({
     path: '/api/ml/queue',
     method: 'GET',
     description: 'Stav fronty ML zpracování',

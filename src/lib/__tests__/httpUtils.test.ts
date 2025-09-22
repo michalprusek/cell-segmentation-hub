@@ -145,7 +145,7 @@ describe('HTTP Utils', () => {
             delay: 100, // 100ms base delay
           }
         );
-      } catch (e) {
+      } catch (_e) {
         // Expected to fail
       }
 
@@ -173,7 +173,7 @@ describe('HTTP Utils', () => {
             backoff: 2.0,
           }
         );
-      } catch (e) {
+      } catch (_e) {
         // Expected to fail
       }
 
@@ -198,7 +198,7 @@ describe('HTTP Utils', () => {
             backoff: 3.0, // High backoff multiplier
           }
         );
-      } catch (e) {
+      } catch (_e) {
         // Expected to fail
       }
 
@@ -364,7 +364,7 @@ describe('HTTP Utils', () => {
             backoff: 0.5, // Fractional backoff should decrease wait time
           }
         );
-      } catch (e) {
+      } catch (_e) {
         // Expected to fail
       }
 
@@ -390,7 +390,7 @@ describe('HTTP Utils', () => {
             delay: 0,
           }
         );
-      } catch (e) {
+      } catch (_e) {
         // Expected to fail
       }
 

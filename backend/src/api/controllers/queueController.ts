@@ -671,6 +671,50 @@ class QueueController {
       ResponseHelper.internalError(res, error as Error, errorMessage);
     }
   };
+
+  /**
+   * Cancel all segmentation operations for the current user across all projects
+   * POST /api/segmentation/cancel-all-user
+   */
+  cancelAllUserSegmentations = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const userId = this.validateUser(req, res);
+      if (!userId) {
+        return;
+      }
+
+      logger.info('All user segmentations cancellation requested', `User: ${userId}`);
+
+      // Cancel all segmentation jobs for this user
+      const result = await this.queueService.cancelAllUserSegmentations(userId);
+
+      // Emit WebSocket cancel event
+      const wsService = WebSocketService.getInstance();
+      wsService.emitToUser(userId, 'operation:cancelled', {
+        operationId: `user_${userId}_all_segmentations`,
+        operationType: 'segmentation',
+        message: `All segmentations cancelled - ${result.cancelledCount} jobs stopped`,
+        affectedProjects: result.affectedProjects,
+        affectedBatches: result.affectedBatches,
+        timestamp: new Date().toISOString(),
+      });
+
+      ResponseHelper.success(res, {
+        success: true,
+        cancelledCount: result.cancelledCount,
+        affectedProjects: result.affectedProjects,
+        affectedBatches: result.affectedBatches,
+      }, 'All user segmentations cancelled successfully');
+
+    } catch (error) {
+      logger.error('Failed to cancel all user segmentations', error instanceof Error ? error : undefined, 'QueueController', {
+        userId: req.user?.id
+      });
+
+      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel all user segmentations';
+      ResponseHelper.internalError(res, error as Error, errorMessage);
+    }
+  };
 }
 
 export const queueController = new QueueController();

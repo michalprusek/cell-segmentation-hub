@@ -4,7 +4,7 @@
  */
 
 import { vi } from 'vitest';
-import { render, RenderOptions, waitFor } from '@testing-library/react';
+import { render, RenderOptions } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 
@@ -175,13 +175,13 @@ export const createTestOperationBatch = (
  */
 export const createCancelWebSocketEvents = () => {
   return {
-    uploadCancelled: vi.fn((data: { uploadId: string; reason?: string }) => {}),
+    uploadCancelled: vi.fn((_data: { uploadId: string; reason?: string }) => {}),
     segmentationCancelled: vi.fn(
-      (data: { batchId: string; imageIds: string[]; reason?: string }) => {}
+      (_data: { batchId: string; imageIds: string[]; reason?: string }) => {}
     ),
-    exportCancelled: vi.fn((data: { exportId: string; reason?: string }) => {}),
+    exportCancelled: vi.fn((_data: { exportId: string; reason?: string }) => {}),
     operationCancelled: vi.fn(
-      (data: {
+      (_data: {
         operationId: string;
         type: OperationType;
         reason?: string;
@@ -343,7 +343,7 @@ export const createMemoryLeakDetector = () => {
       listeners.forEach(listener => {
         try {
           listener();
-        } catch (error) {
+        } catch (_error) {
           // Ignore cleanup errors
         }
       });

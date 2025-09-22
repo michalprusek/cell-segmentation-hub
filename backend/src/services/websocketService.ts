@@ -14,6 +14,8 @@ import {
   // SegmentationFailedData,
   // SegmentationProgressData,
   QueueStatsData,
+  ProjectUpdateData,
+  DashboardUpdateData,
   // QueuePositionData,
   // ConnectionStatusData,
   // AuthenticationErrorData,
@@ -532,6 +534,27 @@ export class WebSocketService {
   }
 
   /**
+   * Broadcast project update to project room
+   */
+  public broadcastProjectUpdate(projectId: string, projectUpdate: ProjectUpdateData): void {
+    try {
+      this.io.to(`project:${projectId}`).emit(WebSocketEvent.PROJECT_UPDATE, projectUpdate);
+      
+      logger.debug('Project update broadcasted to project room', 'WebSocketService', {
+        projectId,
+        operation: projectUpdate.operation,
+        imageCount: projectUpdate.updates?.imageCount,
+        segmentedCount: projectUpdate.updates?.segmentedCount
+      });
+    } catch (error) {
+      logger.error('Error broadcasting project update', error instanceof Error ? error : undefined, 'WebSocketService', {
+        projectId,
+        operation: projectUpdate.operation
+      });
+    }
+  }
+
+  /**
    * Emit custom event to specific user
    */
   public emitToUser(userId: string, event: string, data: WebSocketEventData): void {
@@ -733,6 +756,24 @@ export class WebSocketService {
       });
     } catch (error) {
       logger.error('Error broadcasting system message', error instanceof Error ? error : undefined, 'WebSocketService');
+    }
+  }
+
+  /**
+   * Emit dashboard metrics update to a specific user
+   */
+  public emitDashboardUpdate(userId: string, dashboardUpdate: DashboardUpdateData): void {
+    try {
+      this.emitToUser(userId, WebSocketEvent.DASHBOARD_UPDATE, dashboardUpdate);
+
+      logger.debug('Dashboard update emitted to user', 'WebSocketService', {
+        userId,
+        metrics: dashboardUpdate.metrics
+      });
+    } catch (error) {
+      logger.error('Failed to emit dashboard update:', error as Error, 'WebSocketService', {
+        userId
+      });
     }
   }
 

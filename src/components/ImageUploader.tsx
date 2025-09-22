@@ -43,6 +43,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   const { getSignal, abort } = useAbortController('upload');
   const operationManager = useOperationManager();
   const currentProjectId = params.id;
+  const uploadCancelledRef = React.useRef(false);
 
   useEffect(() => {
     if (currentProjectId) {
@@ -58,6 +59,38 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   useEffect(() => {
     if (!socket || !isUploading) return;
 
+    // Batch state updates to prevent excessive re-renders with large file counts
+    let updateQueue: Array<{
+      filename: string;
+      fileSize: number;
+      progress: number;
+      status: 'uploading' | 'complete' | 'error';
+    }> = [];
+    let updateTimer: NodeJS.Timeout | null = null;
+
+    const flushUpdates = () => {
+      if (updateQueue.length === 0) return;
+
+      const updates = [...updateQueue];
+      updateQueue = [];
+
+      setFiles(prev =>
+        prev.map(f => {
+          const update = updates.find(u =>
+            filesMatch(f, { filename: u.filename, fileSize: u.fileSize })
+          );
+          if (update) {
+            return {
+              ...f,
+              uploadProgress: update.progress,
+              status: update.status,
+            };
+          }
+          return f;
+        })
+      );
+    };
+
     const handleUploadProgress = (data: {
       filename: string;
       fileSize: number;
@@ -69,29 +102,34 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
     }) => {
       logger.debug('Received upload progress event:', data);
 
-      // Update individual file progress using improved file matching
-      setFiles(prev =>
-        prev.map(f => {
-          if (
-            filesMatch(f, { filename: data.filename, fileSize: data.fileSize })
-          ) {
-            return {
-              ...f,
-              uploadProgress: data.progress,
-              status:
-                data.currentFileStatus === 'completed'
-                  ? 'complete'
-                  : data.currentFileStatus === 'failed'
-                    ? 'error'
-                    : 'uploading',
-            };
-          }
-          return f;
-        })
-      );
+      // Queue the update instead of applying immediately
+      updateQueue.push({
+        filename: data.filename,
+        fileSize: data.fileSize,
+        progress: data.progress,
+        status:
+          data.currentFileStatus === 'completed'
+            ? 'complete'
+            : data.currentFileStatus === 'failed'
+              ? 'error'
+              : 'uploading',
+      });
 
-      // Update overall progress - only if it's higher to prevent jumps
-      setUploadProgress(prev => Math.max(prev, data.percentComplete));
+      // Clear existing timer and set a new one to batch updates
+      if (updateTimer) clearTimeout(updateTimer);
+      updateTimer = setTimeout(flushUpdates, 50); // Batch updates every 50ms
+
+      // Throttle overall progress updates for large batches
+      // Only update if the change is significant (at least 1% or at key points)
+      setUploadProgress(prev => {
+        const newProgress = data.percentComplete;
+        const shouldUpdate =
+          newProgress === 100 || // Always update when complete
+          newProgress === 0 || // Always update at start
+          Math.abs(newProgress - prev) >= 1; // Update for 1% changes
+
+        return shouldUpdate ? Math.max(prev, newProgress) : prev;
+      });
 
       // Update operation message
       if (data.currentFileStatus === 'uploading') {
@@ -125,6 +163,11 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
     return () => {
       socket.off('uploadProgress', handleUploadProgress);
       socket.off('uploadCompleted', handleUploadCompleted);
+      // Clean up any pending updates
+      if (updateTimer) {
+        clearTimeout(updateTimer);
+        flushUpdates();
+      }
     };
   }, [socket, isUploading]);
 
@@ -135,6 +178,7 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
       }
 
       const uploadId = `upload_${Date.now()}`;
+      uploadCancelledRef.current = false; // Reset the cancelled flag
       setIsUploading(true);
       setUploadProgress(0);
       setIsCancelling(false);
@@ -173,7 +217,6 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
           const result = await apiClient.uploadImagesChunked(
             selectedProjectId,
             filesToUpload,
-            getSignal(), // Add abort signal
             progressPercent => {
               // For smooth updates, only update if the new progress is higher
               setUploadProgress(prev => Math.max(prev, progressPercent));
@@ -246,7 +289,8 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
                   return f;
                 })
               );
-            }
+            },
+            getSignal() // Pass the abort signal
           );
 
           // Flatten successful uploads from chunks
@@ -317,6 +361,12 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
         setCurrentOperation('Upload completed successfully!');
         setChunkProgress(null);
 
+        // Check if upload was cancelled - don't proceed with completion if cancelled
+        if (uploadCancelledRef.current) {
+          logger.info('Upload was cancelled, skipping completion callback');
+          return;
+        }
+
         // Show success message
         toast.success(
           `${t('images.imagesUploaded')}: ${uploadedImages.length}`
@@ -343,7 +393,11 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
 
         // Check if it was cancelled
         const wasCancelled =
-          error?.name === 'AbortError' || error?.message?.includes('abort');
+          error?.name === 'AbortError' ||
+          error?.message?.toLowerCase().includes('abort') ||
+          error?.message?.toLowerCase().includes('cancelled') ||
+          error?.code === 'ERR_CANCELED';
+
         if (wasCancelled) {
           operationManager.completeOperation(
             uploadId,
@@ -351,25 +405,31 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
             t('toast.upload.uploadCancelled')
           );
           toast.info(t('toast.upload.uploadCancelled'));
+
+          // Remove cancelled files from the list
+          const fileIdentifiers = filesToUpload.map(f => getFileIdentifier(f));
+          setFiles(prev =>
+            prev.filter(f => !fileIdentifiers.includes(getFileIdentifier(f)))
+          );
         } else {
           operationManager.completeOperation(uploadId, false, 'Upload failed');
-        }
 
-        // Mark all files as error
-        const fileIdentifiers = filesToUpload.map(f => getFileIdentifier(f));
-        setFiles(prev =>
-          prev.map(f => {
-            const fileId = getFileIdentifier(f);
-            if (fileIdentifiers.includes(fileId)) {
-              return {
-                ...f,
-                status: 'error' as const,
-                uploadProgress: 0,
-              };
-            }
-            return f;
-          })
-        );
+          // Mark all files as error
+          const fileIdentifiers = filesToUpload.map(f => getFileIdentifier(f));
+          setFiles(prev =>
+            prev.map(f => {
+              const fileId = getFileIdentifier(f);
+              if (fileIdentifiers.includes(fileId)) {
+                return {
+                  ...f,
+                  status: 'error' as const,
+                  uploadProgress: 0,
+                };
+              }
+              return f;
+            })
+          );
+        }
 
         setUploadProgress(0);
         setCurrentOperation('');
@@ -390,7 +450,14 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
   const handleCancelUpload = useCallback(async () => {
     if (!isUploading) return;
 
+    logger.info('=== CANCEL UPLOAD STARTED ===');
+    logger.info('Current projectId:', projectId);
+    logger.info('Current currentProjectId:', currentProjectId);
+    logger.info('Has onUploadComplete callback:', !!onUploadComplete);
+
     setIsCancelling(true);
+    uploadCancelledRef.current = true; // Set the cancelled flag
+
     try {
       // Abort the current upload
       abort();
@@ -404,11 +471,69 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
       }
 
       logger.info('Upload cancelled by user');
+
+      // Immediately clean up state
+      setIsUploading(false);
+      setIsCancelling(false);
+      setUploadProgress(0);
+      setCurrentOperation('');
+      setChunkProgress(null);
+
+      // Clear all uploading files from the list
+      setFiles(prev => prev.filter(f => f.status === 'complete'));
+
+      // Show cancellation confirmation toast
+      toast.success(t('toast.upload.uploadCancelledSuccess'), {
+        description: t('toast.upload.redirectingToGallery'),
+        duration: 3000,
+      });
+
+      // Handle navigation/callback
+      const targetProjectId = projectId || currentProjectId;
+      logger.info('Target project ID for navigation:', targetProjectId);
+
+      setTimeout(() => {
+        logger.info('=== EXECUTING CANCEL NAVIGATION/CALLBACK ===');
+
+        if (onUploadComplete) {
+          // When embedded in ProjectDetail, call the callback to close uploader and refresh gallery
+          logger.info(
+            '✅ Calling onUploadComplete to close uploader and return to gallery'
+          );
+          try {
+            onUploadComplete();
+            logger.info('✅ onUploadComplete called successfully');
+          } catch (error) {
+            logger.error('❌ Error calling onUploadComplete:', error);
+          }
+          // The callback will handle closing the uploader which returns us to the gallery view
+        } else if (targetProjectId) {
+          // When standalone (no callback), navigate to the project page
+          logger.info(
+            `✅ Navigating to project gallery: /project/${targetProjectId}`
+          );
+          navigate(`/project/${targetProjectId}`, { replace: true });
+        } else {
+          // Fallback - just log the issue
+          logger.warn(
+            '❌ No project ID or callback available for navigation after cancel'
+          );
+        }
+      }, 500);
     } catch (error) {
       logger.error('Failed to cancel upload:', error);
       setIsCancelling(false);
     }
-  }, [isUploading, abort, socket, projectId]);
+  }, [
+    isUploading,
+    abort,
+    socket,
+    projectId,
+    currentProjectId,
+    navigate,
+    t,
+    onUploadComplete,
+  ]);
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -422,8 +547,12 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
 
       setFiles(prev => [...prev, ...newFiles]);
 
+      // Delay upload to next tick to avoid infinite loop with large batches
+      // This prevents rapid state updates that can exceed React's update depth
       if (projectId) {
-        handleUpload(newFiles, projectId);
+        setTimeout(() => {
+          handleUpload(newFiles, projectId);
+        }, 0);
       }
     },
     [handleUpload, projectId, t]

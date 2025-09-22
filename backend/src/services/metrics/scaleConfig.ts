@@ -3,22 +3,22 @@
  */
 
 export const SCALE_CONFIG = {
-  // Valid range for scale values (µm/pixel)
+  // Valid range for scale values (um/pixel)
   MIN_SCALE: 0.001,  // Very high magnification
   MAX_SCALE: 1000,   // Very low magnification
-  
-  // Warning thresholds (µm/pixel)
-  HIGH_SCALE_WARNING: 1,    // Above 1 µm/pixel (very low magnification)
-  LOW_SCALE_WARNING: 0.01,  // Below 0.01 µm/pixel (very high magnification)
-  
-  // Common microscopy scales for reference (µm/pixel)
+
+  // Warning thresholds (um/pixel)
+  HIGH_SCALE_WARNING: 1,    // Above 1 um/pixel (very low magnification)
+  LOW_SCALE_WARNING: 0.01,  // Below 0.01 um/pixel (very high magnification)
+
+  // Common microscopy scales for reference (um/pixel)
   TYPICAL_SCALES: {
-    '4x_objective': 0.625,  // ~0.625 µm/pixel (1/1.6)
-    '10x_objective': 0.25,  // ~0.25 µm/pixel (1/4.0) 
-    '20x_objective': 0.125, // ~0.125 µm/pixel (1/8.0)
-    '40x_objective': 0.0625,// ~0.0625 µm/pixel (1/16.0)
-    '60x_objective': 0.042, // ~0.042 µm/pixel (1/24.0)
-    '100x_objective': 0.025,// ~0.025 µm/pixel (1/40.0)
+    '4x_objective': 0.625,  // ~0.625 um/pixel (1/1.6)
+    '10x_objective': 0.25,  // ~0.25 um/pixel (1/4.0)
+    '20x_objective': 0.125, // ~0.125 um/pixel (1/8.0)
+    '40x_objective': 0.0625,// ~0.0625 um/pixel (1/16.0)
+    '60x_objective': 0.042, // ~0.042 um/pixel (1/24.0)
+    '100x_objective': 0.025,// ~0.025 um/pixel (1/40.0)
   },
   
   // Precision for rounding
@@ -31,7 +31,7 @@ export const SCALE_CONFIG = {
  */
 export function getScaleValidationMessage(scale: number): string {
   if (!scale || scale === 0) {
-    return `Invalid scale value (${scale}). Scale must be a positive number representing micrometers per pixel. Common values range from 0.01 to 2 µm/pixel depending on microscope magnification.`;
+    return `Invalid scale value (${scale}). Scale must be a positive number representing micrometers per pixel. Common values range from 0.01 to 2 um/pixel depending on microscope magnification.`;
   }
   
   if (scale < 0) {
@@ -43,11 +43,11 @@ export function getScaleValidationMessage(scale: number): string {
   }
   
   if (scale > SCALE_CONFIG.MAX_SCALE) {
-    return `Scale value ${scale} µm/pixel exceeds maximum allowed value (${SCALE_CONFIG.MAX_SCALE}). This is unusually high for microscopy. Please verify your calibration.`;
+    return `Scale value ${scale} um/pixel exceeds maximum allowed value (${SCALE_CONFIG.MAX_SCALE}). This is unusually high for microscopy. Please verify your calibration.`;
   }
   
   if (scale < SCALE_CONFIG.MIN_SCALE) {
-    return `Scale value ${scale} µm/pixel is below minimum allowed value (${SCALE_CONFIG.MIN_SCALE}). This is unusually low for microscopy. Please verify your calibration.`;
+    return `Scale value ${scale} um/pixel is below minimum allowed value (${SCALE_CONFIG.MIN_SCALE}). This is unusually low for microscopy. Please verify your calibration.`;
   }
   
   return '';
@@ -59,17 +59,17 @@ export function getScaleValidationMessage(scale: number): string {
 export function getScaleWarningMessage(scale: number): string {
   if (scale > SCALE_CONFIG.HIGH_SCALE_WARNING) {
     const _closestObjective = findClosestTypicalScale(scale);
-    return `High scale value detected: ${scale} µm/pixel. This is higher than typical microscopy scales. ` +
+    return `High scale value detected: ${scale} um/pixel. This is higher than typical microscopy scales. ` +
            `Common scales range from ${SCALE_CONFIG.TYPICAL_SCALES['100x_objective']} (100x objective) to ` +
-           `${SCALE_CONFIG.TYPICAL_SCALES['4x_objective']} (4x objective) µm/pixel. ` +
+           `${SCALE_CONFIG.TYPICAL_SCALES['4x_objective']} (4x objective) um/pixel. ` +
            `Your value might correspond to very low magnification or a calibration error. Please verify.`;
   }
   
   if (scale < SCALE_CONFIG.LOW_SCALE_WARNING) {
-    return `Low scale value detected: ${scale} µm/pixel. This is lower than typical microscopy scales. ` +
+    return `Low scale value detected: ${scale} um/pixel. This is lower than typical microscopy scales. ` +
            `This might indicate very high magnification or small pixel size. ` +
            `Common scales range from ${SCALE_CONFIG.TYPICAL_SCALES['100x_objective']} to ` +
-           `${SCALE_CONFIG.TYPICAL_SCALES['4x_objective']} µm/pixel. Please verify your calibration.`;
+           `${SCALE_CONFIG.TYPICAL_SCALES['4x_objective']} um/pixel. Please verify your calibration.`;
   }
   
   return '';

@@ -14,10 +14,10 @@
  */
 
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act, cleanup, waitFor } from '@testing-library/react';
+import { renderHook, act, cleanup } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
-  WebSocketContext,
+  // WebSocketContext,
   WebSocketProvider,
 } from '@/contexts/WebSocketContext';
 import { AuthContext } from '@/contexts/AuthContext';
@@ -192,10 +192,10 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
     mockUsers = createMockUsers();
 
     // Import mock after setup
-    const { default: api } = require('@/lib/api');
-    Object.assign(api, mockApi);
+    const api = await import('@/lib/api');
+    Object.assign(api.default, mockApi);
 
-    const { io } = require('socket.io-client');
+    const { io } = await import('socket.io-client');
     io.mockReturnValue(mockSocket);
   });
 
@@ -264,7 +264,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
       }
 
       // Setup state monitoring for all hooks
-      hookInstances.forEach((instance, index) => {
+      hookInstances.forEach((instance, _index) => {
         const snapshots = stateSnapshots[index];
 
         // Capture initial state
@@ -453,7 +453,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
       });
 
       // Verify hooks processed their respective messages
-      hookInstances.forEach((instance, index) => {
+      hookInstances.forEach((instance, _index) => {
         const { user } = instance;
         const userMessages = receivedMessages[index].messages;
 
@@ -519,7 +519,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
           .fill(null)
           .map(() => []);
 
-        hookInstances.forEach((instance, index) => {
+        hookInstances.forEach((instance, _index) => {
           const originalState = instance.result.current;
 
           // Mock state update monitoring
@@ -632,7 +632,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
         const messageGenerationTime = Date.now() - messageGenerationStart;
 
         // Calculate performance metrics
-        finalMetrics.forEach((metrics, index) => {
+        finalMetrics.forEach((metrics, _index) => {
           const updateTimestamps = stateUpdateTimestamps[index];
 
           if (updateTimestamps.length > 1) {
@@ -655,7 +655,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
         expect(totalMessages).toBeGreaterThanOrEqual(expectedMessages * 0.9); // Allow 10% message loss
 
         // UI responsiveness check
-        finalMetrics.forEach((metrics, index) => {
+        finalMetrics.forEach((metrics, _index) => {
           expect(metrics.uiResponsiveness).toBeGreaterThan(0); // Should have some state updates
           expect(metrics.averageUpdateLatency).toBeLessThan(1000); // Updates should be < 1 second apart
 
@@ -670,19 +670,12 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
         const avgResponseTime = messageGenerationTime / totalMessages;
         expect(avgResponseTime).toBeLessThan(100); // Average < 100ms per message
 
-        console.log(
-          `High-Throughput Test Results (${userCount} users, ${imagesPerUser} images/user):`
-        );
-        console.log(
-          `Total messages: ${totalMessages}, Processing time: ${messageGenerationTime}ms`
-        );
-        console.log(
-          `Average response time: ${avgResponseTime.toFixed(1)}ms per message`
-        );
-        finalMetrics.forEach((metrics, index) => {
-          console.log(
-            `User ${index + 1}: ${metrics.websocketMessages} messages, ${metrics.uiResponsiveness.toFixed(1)} updates/s`
-          );
+        // High-throughput test results validated in assertions above
+        expect(totalMessages).toBeGreaterThanOrEqual(expectedMessages * 0.9);
+        expect(avgResponseTime).toBeLessThan(100);
+        finalMetrics.forEach((metrics, _index) => {
+          expect(metrics.uiResponsiveness).toBeGreaterThan(0);
+          expect(metrics.websocketMessages).toBeGreaterThan(0);
         });
       }
     );
@@ -780,11 +773,11 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
       expect(typeof result.current.addToQueue).toBe('function');
       expect(typeof result.current.removeFromQueue).toBe('function');
 
-      console.log(`Message Flood Test Results:`);
-      console.log(`Messages sent: ${performanceMetrics.messagesSent}`);
-      console.log(`State updates: ${performanceMetrics.stateUpdatesReceived}`);
-      console.log(`Max update delay: ${performanceMetrics.maxUpdateDelay}ms`);
-      console.log(`Average update delay: ${avgUpdateDelay.toFixed(1)}ms`);
+      // Test performance logging
+      expect(performanceMetrics.messagesSent).toBeGreaterThan(0);
+      expect(performanceMetrics.stateUpdatesReceived).toBeGreaterThan(0);
+      expect(performanceMetrics.maxUpdateDelay).toBeLessThan(500);
+      expect(avgUpdateDelay).toBeLessThan(100);
     });
   });
 
@@ -804,7 +797,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
       }
 
       // Start concurrent operations
-      const operationPromises = hookInstances.map(async (instance, index) => {
+      const operationPromises = hookInstances.map(async (instance, _index) => {
         const { user } = instance;
 
         // Start some queue operations
@@ -908,7 +901,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
       });
 
       // Attempt concurrent operations with retry logic
-      const recoveryPromises = hookInstances.map(async (instance, index) => {
+      const recoveryPromises = hookInstances.map(async (instance, _index) => {
         const { user } = instance;
         let attempts = 0;
         const maxRetries = 5;
@@ -924,7 +917,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
             });
 
             return { userId: user.id, success: true, attempts: attempts + 1 };
-          } catch (error) {
+          } catch (_error) {
             attempts++;
             if (attempts < maxRetries) {
               await new Promise(resolve => setTimeout(resolve, 100 * attempts)); // Exponential backoff
@@ -950,7 +943,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
         expect(typeof instance.result.current.addToQueue).toBe('function');
       });
 
-      console.log('API Recovery Test Results:', recoveryMetrics);
+      // API recovery test completed - metrics validated in assertions above
     });
 
     test('should handle mixed success/failure scenarios in concurrent operations', async () => {
@@ -994,7 +987,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
 
       // Execute concurrent operations with mixed outcomes
       const mixedOperationPromises = hookInstances.map(
-        async (instance, index) => {
+        async (instance, _index) => {
           const { user } = instance;
 
           try {
@@ -1008,7 +1001,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
 
             scenarioResults.push({ success: true, userId: user.id });
             return { userId: user.id, outcome: 'success' };
-          } catch (error) {
+          } catch (_error) {
             scenarioResults.push({
               success: false,
               error: error instanceof Error ? error.message : 'Unknown error',
@@ -1023,7 +1016,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
         }
       );
 
-      const mixedResults = await Promise.all(mixedOperationPromises);
+      const _mixedResults = await Promise.all(mixedOperationPromises);
 
       // Analyze mixed scenario results
       const successfulUsers = scenarioResults.filter(r => r.success);
@@ -1034,7 +1027,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
       expect(failedUsers.length).toBe(2); // Users 2 and 4 should fail
 
       // Verify successful hooks maintain functionality
-      hookInstances.forEach((instance, index) => {
+      hookInstances.forEach((instance, _index) => {
         const isExpectedToSucceed =
           !instance.user.id.includes('user_2') &&
           !instance.user.id.includes('user_4');
@@ -1056,13 +1049,9 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
         expect(user3Hook.result.current.error).toBeNull();
       }
 
-      console.log('Mixed Scenario Results:');
-      console.log(
-        `Successful: ${successfulUsers.length}, Failed: ${failedUsers.length}`
-      );
-      mixedResults.forEach(result => {
-        console.log(`${result.userId}: ${result.outcome}`);
-      });
+      // Mixed scenario test results validated in assertions above
+      expect(successfulUsers.length).toBe(2);
+      expect(failedUsers.length).toBe(2);
     });
   });
 
@@ -1122,7 +1111,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
       hookRenders.forEach(({ unmount }) => {
         try {
           unmount();
-        } catch (e) {
+        } catch (_e) {
           // Already unmounted
         }
       });
@@ -1136,9 +1125,7 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
         .length;
       expect(activeListeners).toBeLessThan(50); // Should not accumulate excessive listeners
 
-      console.log(
-        `Memory Management Test: ${renderCount} renders, ${activeListeners} active listeners`
-      );
+      // Memory management test completed - metrics validated in assertions above
     });
 
     test('should maintain performance with high-frequency state updates', async () => {
@@ -1231,14 +1218,11 @@ describe('useSegmentationQueue Parallel Processing Tests', () => {
       expect(result.current.error).toBeNull();
       expect(typeof result.current.addToQueue).toBe('function');
 
-      console.log(`Performance Test Results:`);
-      console.log(
-        `Updates: ${performanceMetrics.updateCount}, Total time: ${totalTime}ms`
-      );
-      console.log(`Average update time: ${averageUpdateTime.toFixed(2)}ms`);
-      console.log(
-        `Max update time: ${performanceMetrics.maxUpdateTime.toFixed(2)}ms`
-      );
+      // Performance test results validated in assertions above
+      expect(performanceMetrics.updateCount).toBe(updateCount);
+      expect(totalTime).toBeLessThan(10000);
+      expect(averageUpdateTime).toBeLessThan(50);
+      expect(performanceMetrics.maxUpdateTime).toBeLessThan(200);
     });
   });
 });

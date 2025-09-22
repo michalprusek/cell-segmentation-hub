@@ -595,7 +595,7 @@ describe('ThumbnailCache', () => {
     });
 
     test('should handle non-Error exceptions', async () => {
-      const mockGetRequest = new MockIDBRequest();
+      const _mockGetRequest = new MockIDBRequest();
       mockObjectStore.get.mockImplementation(() => {
         throw 'String error';
       });

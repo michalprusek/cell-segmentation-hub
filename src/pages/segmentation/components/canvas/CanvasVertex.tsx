@@ -29,12 +29,12 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
     isStartPoint = false,
     isUndoRedoInProgress = false,
   }) => {
-    // Simple radius calculation
-    const baseRadius = 4;
-    const radius = baseRadius / zoom;
-    const hoverScale = isHovered ? 1.3 : 1;
-    const startPointScale = isStartPoint ? 1.1 : 1;
-    const finalRadius = radius * hoverScale * startPointScale;
+    // Simple radius calculation - increased for better clickability
+    const baseRadius = 6; // Increased from 4
+    const radius = baseRadius / Math.sqrt(zoom); // Use sqrt for better scaling
+    const hoverScale = isHovered ? 1.5 : 1;
+    const startPointScale = isStartPoint ? 1.2 : 1;
+    const finalRadius = Math.max(radius * hoverScale * startPointScale, 3); // Minimum size
 
     // Simple color scheme
     const fillColor =
@@ -58,6 +58,13 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
     const actualX = isDragging && dragOffset ? point.x + dragOffset.x : point.x;
     const actualY = isDragging && dragOffset ? point.y + dragOffset.y : point.y;
 
+    // Event handlers to ensure events are captured
+    const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
+      // Stop propagation to prevent polygon selection
+      e.stopPropagation();
+      // Let the event bubble up with data attributes intact
+    }, []);
+
     return (
       <circle
         cx={actualX}
@@ -69,6 +76,7 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
         opacity={opacity}
         data-polygon-id={polygonId}
         data-vertex-index={vertexIndex}
+        onMouseDown={handleMouseDown}
         style={{
           cursor: isDragging ? 'grabbing' : 'grab',
           transition:
