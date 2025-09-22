@@ -64,7 +64,6 @@ class Logger {
 
   debug(message: string, data?: unknown): void {
     if (this.shouldLog('debug')) {
-       
       console.log(
         this.formatMessage('debug', message),
         data !== undefined ? data : ''
@@ -102,14 +101,12 @@ class Logger {
   // Group related logs together
   group(label: string): void {
     if (this.isDevelopment) {
-       
       console.group(label);
     }
   }
 
   groupEnd(): void {
     if (this.isDevelopment) {
-       
       console.groupEnd();
     }
   }
@@ -117,14 +114,12 @@ class Logger {
   // Performance timing
   time(label: string): void {
     if (this.isDevelopment) {
-       
       console.time(label);
     }
   }
 
   timeEnd(label: string): void {
     if (this.isDevelopment) {
-       
       console.timeEnd(label);
     }
   }

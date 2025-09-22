@@ -185,7 +185,6 @@ export function clearOptimizationCaches(): void {
  */
 export function debugLog(message: string, data?: any): void {
   if (process.env.NODE_ENV === 'development') {
-     
     console.log(`[VertexOptimization] ${message}`, data);
   }
 }

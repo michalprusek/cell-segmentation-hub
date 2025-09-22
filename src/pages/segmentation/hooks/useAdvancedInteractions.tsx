@@ -394,7 +394,7 @@ export const useAdvancedInteractions = ({
       if (e.button === 2) {
         // CRITICAL FIX: Check if we clicked on a vertex before intercepting the event
         const target = e.target as SVGElement;
-        
+
         // If this is a vertex, allow the context menu to proceed
         if (isVertexTarget(target)) {
           // Don't prevent default or stop propagation for vertex right-clicks
@@ -832,7 +832,7 @@ export const useAdvancedInteractions = ({
     handleMouseMove,
     handleMouseUp,
   };
-};;
+};
 
 /**
  * Helper function to insert points between vertices using normalized path logic

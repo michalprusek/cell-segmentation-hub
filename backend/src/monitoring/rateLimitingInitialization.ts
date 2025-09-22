@@ -153,7 +153,7 @@ class RateLimitingSystem {
         // Dynamic import for optional dependency
         const { default: RedisStore } = await import('rate-limit-redis');
         options.store = new RedisStore({
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+           
           sendCommand: (...args: string[]): Promise<any> =>
             client.sendCommand(args),
           prefix: `rate_limit:${tierName}:`,

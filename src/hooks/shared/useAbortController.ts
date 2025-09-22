@@ -88,9 +88,7 @@ export function useAbortController(debugKey?: string) {
   const resetController = useCallback(
     (controllerKey: string = 'default') => {
       controllersRef.current.delete(controllerKey);
-      logger.debug(
-        `🔄 Reset controller for ${debugContext}:${controllerKey}`
-      );
+      logger.debug(`🔄 Reset controller for ${debugContext}:${controllerKey}`);
     },
     [debugContext]
   );

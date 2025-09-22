@@ -15,18 +15,18 @@ const colors = {
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
-  cyan: '\x1b[36m'
+  cyan: '\x1b[36m',
 };
 
 function log(message, type = 'info') {
   const timestamp = new Date().toISOString().substring(11, 19);
   const typeColors = {
-    'info': colors.blue,
-    'success': colors.green,
-    'warning': colors.yellow,
-    'error': colors.red,
-    'debug': colors.magenta,
-    'important': colors.cyan
+    info: colors.blue,
+    success: colors.green,
+    warning: colors.yellow,
+    error: colors.red,
+    debug: colors.magenta,
+    important: colors.cyan,
   };
   const color = typeColors[type] || colors.reset;
   console.log(`${color}[${timestamp}] ${message}${colors.reset}`);
@@ -39,17 +39,20 @@ async function testSharedExportState() {
 
   try {
     log('🚀 Starting Shared Export State Test', 'info');
-    log('This test verifies that the inline cancel button works when export is started from dialog', 'info');
+    log(
+      'This test verifies that the inline cancel button works when export is started from dialog',
+      'info'
+    );
 
     // Launch browser
     browser = await chromium.launch({
       headless: true,
-      slowMo: 100
+      slowMo: 100,
     });
 
     context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
-      ignoreHTTPSErrors: true
+      ignoreHTTPSErrors: true,
     });
 
     page = await context.newPage();
@@ -62,11 +65,13 @@ async function testSharedExportState() {
       consoleLogs.push({ type, text, timestamp: new Date().toISOString() });
 
       // Log important messages
-      if (text.includes('cancelExport called') ||
-          text.includes('currentJob') ||
-          text.includes('Cannot cancel') ||
-          text.includes('🔴') ||
-          text.includes('⚠️')) {
+      if (
+        text.includes('cancelExport called') ||
+        text.includes('currentJob') ||
+        text.includes('Cannot cancel') ||
+        text.includes('🔴') ||
+        text.includes('⚠️')
+      ) {
         log(`Console: ${text}`, 'important');
       }
     });
@@ -87,7 +92,10 @@ async function testSharedExportState() {
 
     // Step 2: Navigate to project
     log('📂 Step 2: Navigating to project...', 'info');
-    await page.goto(`${BASE_URL}/project/755ddc19-47a3-4ff2-8af3-1127caaad4f0`, { waitUntil: 'networkidle' });
+    await page.goto(
+      `${BASE_URL}/project/755ddc19-47a3-4ff2-8af3-1127caaad4f0`,
+      { waitUntil: 'networkidle' }
+    );
     await page.waitForTimeout(3000);
 
     // Check if redirected to login
@@ -99,7 +107,10 @@ async function testSharedExportState() {
       await page.click('button[type="submit"]');
       await page.waitForLoadState('networkidle');
       await page.waitForTimeout(2000);
-      await page.goto(`${BASE_URL}/project/755ddc19-47a3-4ff2-8af3-1127caaad4f0`, { waitUntil: 'networkidle' });
+      await page.goto(
+        `${BASE_URL}/project/755ddc19-47a3-4ff2-8af3-1127caaad4f0`,
+        { waitUntil: 'networkidle' }
+      );
       await page.waitForTimeout(2000);
     }
 
@@ -114,7 +125,7 @@ async function testSharedExportState() {
       'button[title*="Export"]',
       'button:has(svg[class*="archive"])',
       'button:has(svg[class*="download"])',
-      '[data-testid*="export"]'
+      '[data-testid*="export"]',
     ];
 
     for (const selector of exportSelectors) {
@@ -132,7 +143,7 @@ async function testSharedExportState() {
       log(`Found ${buttons.length} buttons on page`, 'debug');
       for (let i = 0; i < Math.min(15, buttons.length); i++) {
         const text = await buttons[i].textContent();
-        if (text && await buttons[i].isVisible()) {
+        if (text && (await buttons[i].isVisible())) {
           log(`  Button ${i}: "${text.trim()}"`, 'debug');
         }
       }
@@ -148,7 +159,9 @@ async function testSharedExportState() {
     log('📤 Step 4: Starting export from dialog...', 'info');
 
     // Find and click "Start Export" button in dialog
-    const startExportBtn = await page.locator('button:has-text("Start Export")').first();
+    const startExportBtn = await page
+      .locator('button:has-text("Start Export")')
+      .first();
     if (await startExportBtn.isVisible()) {
       await startExportBtn.click();
       log('✅ Started export from dialog', 'success');
@@ -170,7 +183,7 @@ async function testSharedExportState() {
 
     // Check if dialog is still visible
     const dialogContent = await page.locator('[role="dialog"]').first();
-    if (!await dialogContent.isVisible({ timeout: 1000 })) {
+    if (!(await dialogContent.isVisible({ timeout: 1000 }))) {
       dialogClosed = true;
       log('✅ Dialog closed with Escape', 'success');
     } else {
@@ -193,11 +206,17 @@ async function testSharedExportState() {
     await page.waitForTimeout(2000);
 
     // Look for inline cancel button in ExportProgressPanel
-    const inlineCancelBtn = await page.locator('.export-progress-panel button:has-text("Cancel"), [class*="export"] button:has-text("Cancel")').first();
+    const inlineCancelBtn = await page
+      .locator(
+        '.export-progress-panel button:has-text("Cancel"), [class*="export"] button:has-text("Cancel")'
+      )
+      .first();
 
-    if (!await inlineCancelBtn.isVisible({ timeout: 3000 })) {
+    if (!(await inlineCancelBtn.isVisible({ timeout: 3000 }))) {
       // Try broader selector
-      const anyCancelBtn = await page.locator('button:has-text("Cancel")').first();
+      const anyCancelBtn = await page
+        .locator('button:has-text("Cancel")')
+        .first();
       if (await anyCancelBtn.isVisible()) {
         log('✅ Found cancel button (generic selector)', 'success');
 
@@ -224,16 +243,22 @@ async function testSharedExportState() {
         log(`  • No currentJob warnings: ${noJobLogs.length}`, 'info');
 
         if (noJobLogs.length > 0) {
-          log('❌ FAILED: currentJob was null - state not shared properly!', 'error');
+          log(
+            '❌ FAILED: currentJob was null - state not shared properly!',
+            'error'
+          );
           noJobLogs.forEach(l => log(`    ${l.text}`, 'error'));
         } else if (cancelLogs.length > 0) {
           // Check if currentJob was present
-          const jobPresentLogs = cancelLogs.filter(l =>
-            l.text.includes('currentJob') && !l.text.includes('null')
+          const jobPresentLogs = cancelLogs.filter(
+            l => l.text.includes('currentJob') && !l.text.includes('null')
           );
 
           if (jobPresentLogs.length > 0) {
-            log('✅ SUCCESS: currentJob was present - state is shared!', 'success');
+            log(
+              '✅ SUCCESS: currentJob was present - state is shared!',
+              'success'
+            );
           } else {
             log('⚠️ Could not verify currentJob presence', 'warning');
           }
@@ -259,7 +284,10 @@ async function testSharedExportState() {
       );
 
       if (noJobLogs.length > 0) {
-        log('❌ FAILED: State not shared between dialog and inline panel!', 'error');
+        log(
+          '❌ FAILED: State not shared between dialog and inline panel!',
+          'error'
+        );
       } else {
         log('✅ SUCCESS: Export state is properly shared!', 'success');
       }
@@ -274,13 +302,21 @@ async function testSharedExportState() {
     );
 
     if (hasStateSharing) {
-      log('✅ PASSED: Export state is shared between dialog and inline panel!', 'success');
-      log('The inline cancel button can now cancel exports started from the dialog.', 'success');
+      log(
+        '✅ PASSED: Export state is shared between dialog and inline panel!',
+        'success'
+      );
+      log(
+        'The inline cancel button can now cancel exports started from the dialog.',
+        'success'
+      );
     } else {
       log('❌ FAILED: Export state is NOT shared properly', 'error');
-      log('The inline panel cannot access the export job started from the dialog.', 'error');
+      log(
+        'The inline panel cannot access the export job started from the dialog.',
+        'error'
+      );
     }
-
   } catch (error) {
     log(`❌ Test failed with error: ${error.message}`, 'error');
     console.error(error);

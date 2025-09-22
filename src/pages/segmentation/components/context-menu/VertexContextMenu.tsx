@@ -24,20 +24,23 @@ const VertexContextMenu = ({
 }: VertexContextMenuProps) => {
   const { t } = useLanguage();
 
-  const handleDelete = React.useCallback((e: React.MouseEvent) => {
-    // Stop propagation to prevent polygon deselection
-    e.stopPropagation();
-    onDelete();
-  }, [onDelete]);
+  const handleDelete = React.useCallback(
+    (e: React.MouseEvent) => {
+      // Stop propagation to prevent polygon deselection
+      e.stopPropagation();
+      onDelete();
+    },
+    [onDelete]
+  );
 
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
       <ContextMenuContent
         className="w-64"
-        onMouseDown={(e) => e.stopPropagation()}
-        onMouseUp={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
+        onMouseDown={e => e.stopPropagation()}
+        onMouseUp={e => e.stopPropagation()}
+        onClick={e => e.stopPropagation()}
       >
         <ContextMenuItem
           onClick={handleDelete}

@@ -110,27 +110,12 @@ model Segmentation {
   imageHeight            Int?
   imageWidth             Int?
   image                  Image                   @relation(fields: [imageId], references: [id], onDelete: Cascade)
-  segmentationThumbnails SegmentationThumbnail[]
+  // Removed segmentationThumbnails - using unified image thumbnail approach
 
   @@map("segmentations")
 }
 
-model SegmentationThumbnail {
-  id              String        @id @default(uuid())
-  segmentationId  String
-  levelOfDetail   String        // 'low', 'medium', 'high'
-  simplifiedData  String        // JSON string of simplified polygons
-  polygonCount    Int
-  pointCount      Int
-  compressionRatio Float        // Original points / simplified points
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  segmentation    Segmentation  @relation(fields: [segmentationId], references: [id], onDelete: Cascade)
-
-  @@unique([segmentationId, levelOfDetail])
-  @@index([segmentationId, levelOfDetail], map: "idx_thumbnail_segmentation_lod")
-  @@map("segmentation_thumbnails")
-}
+// SegmentationThumbnail model removed - using unified image thumbnail approach
 
 model SegmentationQueue {
   id          String    @id @default(uuid())

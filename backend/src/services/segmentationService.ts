@@ -10,7 +10,7 @@ import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { PolygonValidator } from '../utils/polygonValidation';
 import { ImageService } from './imageService';
-import { ThumbnailService } from './thumbnailService';
+// Removed ThumbnailService - using unified approach with SegmentationThumbnailService only
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
@@ -102,7 +102,7 @@ export interface ImageForSegmentation {
 export class SegmentationService {
   private httpClient: AxiosInstance;
   private pythonServiceUrl: string;
-  private thumbnailService: ThumbnailService;
+  // Removed thumbnailService - using unified approach
   private segmentationThumbnailService: SegmentationThumbnailService;
   private thumbnailManager: ThumbnailManager;
   private concurrentRequestsPool: Map<string, Promise<SegmentationResponse>> =
@@ -113,7 +113,7 @@ export class SegmentationService {
     private prisma: PrismaClient,
     private imageService: ImageService
   ) {
-    this.thumbnailService = new ThumbnailService(prisma);
+    // Unified thumbnail approach - no polygon service needed
     this.segmentationThumbnailService = new SegmentationThumbnailService(
       prisma
     );

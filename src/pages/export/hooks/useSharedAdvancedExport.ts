@@ -49,7 +49,10 @@ interface ExportJob {
   filePath?: string;
 }
 
-export const useSharedAdvancedExport = (projectId: string, projectName?: string) => {
+export const useSharedAdvancedExport = (
+  projectId: string,
+  projectName?: string
+) => {
   const { updateExportState, getExportState } = useExportContext();
 
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
@@ -84,7 +87,8 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
   const { socket } = useWebSocket();
 
   // Initialize AbortController for cancellable downloads
-  const { getSignal, abort, abortAll, resetController, isAborted } = useAbortController('export');
+  const { getSignal, abort, abortAll, resetController, isAborted } =
+    useAbortController('export');
 
   // Get current export state from context
   const exportState = getExportState(projectId);
@@ -116,12 +120,18 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
     return new Set();
   }, [projectId]);
 
-  const markJobAsDownloaded = useCallback((jobId: string) => {
-    const downloaded = getDownloadedJobs();
-    downloaded.add(jobId);
-    localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(downloaded)));
-    downloadedJobIds.current.add(jobId);
-  }, [projectId, getDownloadedJobs]);
+  const markJobAsDownloaded = useCallback(
+    (jobId: string) => {
+      const downloaded = getDownloadedJobs();
+      downloaded.add(jobId);
+      localStorage.setItem(
+        `exportDownloaded_${projectId}`,
+        JSON.stringify(Array.from(downloaded))
+      );
+      downloadedJobIds.current.add(jobId);
+    },
+    [projectId, getDownloadedJobs]
+  );
 
   const clearDownloadedJobs = useCallback(() => {
     localStorage.removeItem(`exportDownloaded_${projectId}`);
@@ -201,7 +211,7 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
     // Load downloaded jobs from localStorage
     const persistedDownloaded = getDownloadedJobs();
     downloadedJobIds.current = persistedDownloaded;
-    
+
     // Reset in-progress flag but keep downloaded jobs tracking
     downloadInProgress.current = false;
     logger.debug('Initialized download tracking from localStorage', {
@@ -259,7 +269,7 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
       } else if (persistedState.status === 'completed') {
         // Check if this job was already downloaded
         const wasDownloaded = persistedDownloaded.has(persistedState.jobId);
-        
+
         if (!wasDownloaded) {
           // Restore completed state properly
           const restoredJob = {
@@ -529,7 +539,7 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
 
     // Load persistent downloaded jobs
     const persistedDownloaded = getDownloadedJobs();
-    
+
     // Debug logging for troubleshooting
     logger.debug('Auto-download useEffect triggered', {
       completedJobId,
@@ -584,7 +594,10 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
         }
 
         const signal = getSignal('download');
-        logger.info('📥 Starting auto-download with signal aborted:', signal.aborted);
+        logger.info(
+          '📥 Starting auto-download with signal aborted:',
+          signal.aborted
+        );
 
         const response = await apiClient.get(
           `/projects/${projectId}/export/${currentJobId}/download`,
@@ -611,7 +624,10 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
           : `export_${currentJobId}.zip`;
 
         await downloadFromResponse(response, filename);
-        logger.info('Export auto-downloaded successfully', { jobId: currentJobId, filename });
+        logger.info('Export auto-downloaded successfully', {
+          jobId: currentJobId,
+          filename,
+        });
 
         // SUCCESS: Clear flags and state but keep in downloaded list
         downloadInProgress.current = false;
@@ -625,7 +641,6 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
         ExportStateManager.clearExportState(projectId);
 
         // DO NOT AUTO-DISMISS - let user dismiss manually
-
       } catch (error: any) {
         // ERROR HANDLING: Reset flags and allow retry
         downloadInProgress.current = false;
@@ -645,11 +660,15 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
         // Remove from downloaded set to allow manual retry
         const downloaded = getDownloadedJobs();
         downloaded.delete(currentJobId);
-        localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(downloaded)));
+        localStorage.setItem(
+          `exportDownloaded_${projectId}`,
+          JSON.stringify(Array.from(downloaded))
+        );
         downloadedJobIds.current.delete(currentJobId);
-        
+
         updateState({
-          exportStatus: "Export completed! Click below to download if it didn't start automatically.",
+          exportStatus:
+            "Export completed! Click below to download if it didn't start automatically.",
           isDownloading: false,
         });
         // Keep completedJobId for manual download
@@ -663,7 +682,17 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [completedJobId, projectId, updateState, currentJob, getSignal, currentProjectName, isDownloading, markJobAsDownloaded, getDownloadedJobs]);
+  }, [
+    completedJobId,
+    projectId,
+    updateState,
+    currentJob,
+    getSignal,
+    currentProjectName,
+    isDownloading,
+    markJobAsDownloaded,
+    getDownloadedJobs,
+  ]);
 
   const updateExportOptions = useCallback((updates: Partial<ExportOptions>) => {
     setExportOptions(prev => ({ ...prev, ...updates }));
@@ -716,7 +745,13 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
         throw error;
       }
     },
-    [projectId, exportOptions, updateState, resetController, clearDownloadedJobs]
+    [
+      projectId,
+      exportOptions,
+      updateState,
+      resetController,
+      clearDownloadedJobs,
+    ]
   );
 
   const triggerDownload = useCallback(async () => {
@@ -724,8 +759,10 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
       completedJobId,
       isDownloading,
       downloadInProgress: downloadInProgress.current,
-      alreadyDownloaded: completedJobId ? getDownloadedJobs().has(completedJobId) : false,
-      currentProjectName
+      alreadyDownloaded: completedJobId
+        ? getDownloadedJobs().has(completedJobId)
+        : false,
+      currentProjectName,
     });
 
     // VALIDATION: Check if download is possible
@@ -753,10 +790,15 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
     // Check if already downloaded (but always allow retry for manual downloads)
     const persistedDownloaded = getDownloadedJobs();
     if (persistedDownloaded.has(completedJobId)) {
-      logger.info('Manual download requested for already downloaded job - allowing retry');
+      logger.info(
+        'Manual download requested for already downloaded job - allowing retry'
+      );
       // Remove from set to allow retry
       persistedDownloaded.delete(completedJobId);
-      localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(persistedDownloaded)));
+      localStorage.setItem(
+        `exportDownloaded_${projectId}`,
+        JSON.stringify(Array.from(persistedDownloaded))
+      );
       downloadedJobIds.current.delete(completedJobId);
     }
 
@@ -776,7 +818,10 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
       }
 
       const signal = getSignal('download');
-      logger.info('📥 Starting manual download with signal aborted:', signal.aborted);
+      logger.info(
+        '📥 Starting manual download with signal aborted:',
+        signal.aborted
+      );
 
       const response = await apiClient.get(
         `/projects/${projectId}/export/${completedJobId}/download`,
@@ -795,7 +840,10 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
         : `export_${completedJobId}.zip`;
 
       await downloadFromResponse(response, filename);
-      logger.info('Export manually downloaded successfully', { jobId: completedJobId, filename });
+      logger.info('Export manually downloaded successfully', {
+        jobId: completedJobId,
+        filename,
+      });
 
       // SUCCESS: Clear flags
       downloadInProgress.current = false;
@@ -808,7 +856,6 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
       ExportStateManager.clearExportState(projectId);
 
       // DO NOT AUTO-DISMISS - let user control when to dismiss
-
     } catch (error: any) {
       // ERROR HANDLING: Reset flags
       downloadInProgress.current = false;
@@ -828,16 +875,28 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
       // Remove from downloaded set to allow retry
       const downloaded = getDownloadedJobs();
       downloaded.delete(completedJobId);
-      localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(downloaded)));
+      localStorage.setItem(
+        `exportDownloaded_${projectId}`,
+        JSON.stringify(Array.from(downloaded))
+      );
       downloadedJobIds.current.delete(completedJobId);
-      
+
       updateState({
         exportStatus: 'Failed to download export. Please try again.',
         isDownloading: false,
       });
       // Keep completedJobId for retry
     }
-  }, [projectId, completedJobId, isDownloading, updateState, getSignal, currentProjectName, markJobAsDownloaded, getDownloadedJobs]);
+  }, [
+    projectId,
+    completedJobId,
+    isDownloading,
+    updateState,
+    getSignal,
+    currentProjectName,
+    markJobAsDownloaded,
+    getDownloadedJobs,
+  ]);
 
   const cancelExport = useCallback(async () => {
     if (!currentJob) return;
@@ -926,7 +985,7 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
     logger.info('Export dismiss requested', {
       completedJobId,
       isDownloading,
-      downloadInProgress: downloadInProgress.current
+      downloadInProgress: downloadInProgress.current,
     });
 
     // Clear all download tracking
@@ -934,7 +993,10 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
       // Keep the job in downloaded list so it won't auto-download again
       const downloaded = getDownloadedJobs();
       downloaded.add(completedJobId);
-      localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(downloaded)));
+      localStorage.setItem(
+        `exportDownloaded_${projectId}`,
+        JSON.stringify(Array.from(downloaded))
+      );
     }
     downloadInProgress.current = false;
 
@@ -950,7 +1012,13 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
     ExportStateManager.clearExportState(projectId);
 
     logger.info('Export dismissed successfully');
-  }, [updateState, projectId, completedJobId, isDownloading, getDownloadedJobs]);
+  }, [
+    updateState,
+    projectId,
+    completedJobId,
+    isDownloading,
+    getDownloadedJobs,
+  ]);
 
   return {
     exportOptions,
@@ -969,4 +1037,4 @@ export const useSharedAdvancedExport = (projectId: string, projectName?: string)
     completedJobId,
     wsConnected,
   };
-};;
+};

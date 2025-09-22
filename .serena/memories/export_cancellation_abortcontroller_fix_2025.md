@@ -1,7 +1,9 @@
 # Export Cancellation AbortController Fix - Complete Solution
 
 ## Problem Statement
+
 Users clicking the cancel button during export processing and downloading phases experienced:
+
 1. Cancel button showing "cancelling..." for 1 second but not stopping the export
 2. Export continuing to complete despite cancellation attempts
 3. ZIP file downloading anyway after multiple cancel clicks
@@ -10,7 +12,9 @@ Users clicking the cancel button during export processing and downloading phases
 ## Root Cause Analysis
 
 ### Primary Issue: Missing AbortController
+
 Download requests lacked AbortController integration, preventing cancellation once downloads started:
+
 ```typescript
 // BEFORE - No cancellation support
 const response = await apiClient.get(downloadUrl, {
@@ -21,6 +25,7 @@ const response = await apiClient.get(downloadUrl, {
 ```
 
 ### Secondary Issues
+
 1. **Race Condition**: Auto-download triggers 1 second after export completion
 2. **No Download Phase Protection**: Cancel only affected processing, not downloads
 3. **State Management Gap**: Current job status not checked before auto-download
@@ -28,18 +33,22 @@ const response = await apiClient.get(downloadUrl, {
 ## Complete Solution Implementation
 
 ### 1. Added AbortController Hook Import
+
 **File**: `/src/pages/export/hooks/useSharedAdvancedExport.ts`
+
 ```typescript
 import { useAbortController } from '@/hooks/shared/useAbortController';
 ```
 
 ### 2. Initialize AbortController in Hook
+
 ```typescript
 // Inside useSharedAdvancedExport function
 const { getSignal, abort, abortAll } = useAbortController('export');
 ```
 
 ### 3. Enhanced Auto-Download with Cancellation Protection
+
 ```typescript
 useEffect(() => {
   // Only auto-download if not cancelled and job is complete
@@ -70,7 +79,6 @@ useEffect(() => {
         }
 
         await downloadFromResponse(response, filename);
-        
       } catch (error: any) {
         // Handle abort errors gracefully
         if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
@@ -85,28 +93,30 @@ useEffect(() => {
         // Handle other errors...
       }
     };
-    
+
     setTimeout(autoDownload, 1000);
   }
 }, [completedJobId, projectId, updateState, currentJob, getSignal]);
 ```
 
 ### 4. Updated Manual Download with AbortController
+
 ```typescript
 const triggerDownload = useCallback(async () => {
   // ... validation code ...
-  
+
   const response = await apiClient.get(downloadUrl, {
     responseType: 'blob',
     timeout: 300000,
     signal: getSignal('download'), // ✅ Cancellable
   });
-  
+
   // ... rest of implementation with abort error handling ...
 }, [projectId, completedJobId, isDownloading, updateState, getSignal]);
 ```
 
 ### 5. Critical cancelExport Enhancement
+
 ```typescript
 const cancelExport = useCallback(async () => {
   if (!currentJob) return;
@@ -152,13 +162,16 @@ const cancelExport = useCallback(async () => {
 ## Key Technical Details
 
 ### AbortController Pattern
+
 Using the existing `useAbortController` hook from `/src/hooks/shared/useAbortController.ts`:
+
 - Creates named abort controllers (`'download'`, `'api'`)
 - Provides `getSignal()` for axios requests
 - Enables immediate request cancellation via `abort()`
 - Prevents memory leaks with proper cleanup
 
 ### Error Handling for Aborted Requests
+
 ```typescript
 if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
   logger.info('Download cancelled by user');
@@ -168,6 +181,7 @@ if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
 ```
 
 ### Race Condition Prevention
+
 1. Check `currentJob?.status` before starting download
 2. Double-check after network request completes
 3. Update job status locally for immediate UI feedback
@@ -176,21 +190,25 @@ if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
 ## Testing Scenarios
 
 ### Scenario 1: Cancel During Processing
+
 - User clicks cancel 1-2 seconds after export starts
 - Expected: Export stops, no download occurs
 - Implementation: Backend cancellation + job status check
 
 ### Scenario 2: Cancel During Fast Export
+
 - Export completes in 4 seconds (race condition)
 - Expected: Download prevented despite completion
 - Implementation: `currentJob?.status !== 'cancelled'` check
 
 ### Scenario 3: Cancel During Download
+
 - User clicks cancel while download in progress
 - Expected: Download stops immediately
 - Implementation: `abort('download')` stops HTTP request
 
 ### Scenario 4: Multiple Cancel Clicks
+
 - User rapidly clicks cancel multiple times
 - Expected: First click stops everything, subsequent clicks ignored
 - Implementation: AbortController handles duplicate abort() calls gracefully
@@ -205,6 +223,7 @@ if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
 ## Integration with Existing Patterns
 
 This solution follows the same AbortController pattern used successfully in:
+
 - Segmentation operations (`/src/pages/segmentation/SegmentationEditor.tsx`)
 - Image uploads (`/src/components/ImageUploader.tsx`)
 - Other async operations throughout the codebase

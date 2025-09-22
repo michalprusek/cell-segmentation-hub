@@ -28,7 +28,7 @@ Object.defineProperty(window, 'ResizeObserver', {
 
 Object.defineProperty(window, 'requestIdleCallback', {
   writable: true,
-  value: vi.fn((cb) => setTimeout(cb, 1)),
+  value: vi.fn(cb => setTimeout(cb, 1)),
 });
 
 Object.defineProperty(window, 'cancelIdleCallback', {
@@ -39,7 +39,7 @@ Object.defineProperty(window, 'cancelIdleCallback', {
 // Mock WebGL context
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   writable: true,
-  value: vi.fn().mockImplementation((contextType) => {
+  value: vi.fn().mockImplementation(contextType => {
     if (contextType === 'webgl' || contextType === 'experimental-webgl') {
       return {
         canvas: document.createElement('canvas'),
@@ -128,7 +128,8 @@ describe('Vertex Context Menu E2E Tests', () => {
   };
 
   const defaultProps = {
-    imageUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+    imageUrl:
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
     initialPolygons: [testPolygon],
     onPolygonsChange: vi.fn(),
     onSave: vi.fn(),
@@ -158,12 +159,17 @@ describe('Vertex Context Menu E2E Tests', () => {
       );
 
       // Wait for editor to load
-      await waitFor(() => {
-        expect(screen.getByTestId('segmentation-editor')).toBeInTheDocument();
-      }, { timeout: 5000 });
+      await waitFor(
+        () => {
+          expect(screen.getByTestId('segmentation-editor')).toBeInTheDocument();
+        },
+        { timeout: 5000 }
+      );
 
       // Step 1: Select the polygon by clicking on it
-      const polygonElement = screen.getByTestId('canvas-polygon-test-polygon-1');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-test-polygon-1'
+      );
       expect(polygonElement).toBeInTheDocument();
 
       fireEvent.click(polygonElement);
@@ -173,11 +179,15 @@ describe('Vertex Context Menu E2E Tests', () => {
       });
 
       // Step 2: Switch to Edit Vertices mode
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       await waitFor(() => {
-        expect(screen.getByTestId('mode-legend')).toHaveTextContent(/edit.*vertices/i);
+        expect(screen.getByTestId('mode-legend')).toHaveTextContent(
+          /edit.*vertices/i
+        );
       });
 
       // Step 3: Verify vertices are visible
@@ -196,7 +206,9 @@ describe('Vertex Context Menu E2E Tests', () => {
         expect(screen.getByRole('menu')).toBeInTheDocument();
       });
 
-      const deleteMenuItem = screen.getByRole('menuitem', { name: /delete.*vertex/i });
+      const deleteMenuItem = screen.getByRole('menuitem', {
+        name: /delete.*vertex/i,
+      });
       expect(deleteMenuItem).toBeInTheDocument();
       expect(deleteMenuItem).toHaveClass('text-red-600'); // Destructive styling
 
@@ -222,13 +234,17 @@ describe('Vertex Context Menu E2E Tests', () => {
 
       // Step 8: Verify polygon remains selected after deletion
       await waitFor(() => {
-        const updatedPolygon = screen.getByTestId('canvas-polygon-test-polygon-1');
+        const updatedPolygon = screen.getByTestId(
+          'canvas-polygon-test-polygon-1'
+        );
         expect(updatedPolygon).toHaveClass('selected');
       });
 
       // Step 9: Verify vertex count decreased
       await waitFor(() => {
-        const remainingVertices = screen.getAllByTestId(/vertex-.*-test-polygon-1/);
+        const remainingVertices = screen.getAllByTestId(
+          /vertex-.*-test-polygon-1/
+        );
         expect(remainingVertices).toHaveLength(4);
       });
     });
@@ -258,7 +274,9 @@ describe('Vertex Context Menu E2E Tests', () => {
       const polygonElement = screen.getByTestId('canvas-polygon-min-polygon-1');
       fireEvent.click(polygonElement);
 
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       await waitFor(() => {
@@ -274,18 +292,24 @@ describe('Vertex Context Menu E2E Tests', () => {
         expect(screen.getByRole('menu')).toBeInTheDocument();
       });
 
-      const deleteMenuItem = screen.getByRole('menuitem', { name: /delete.*vertex/i });
+      const deleteMenuItem = screen.getByRole('menuitem', {
+        name: /delete.*vertex/i,
+      });
       fireEvent.click(deleteMenuItem);
 
       // Should show error message and not delete
       await waitFor(() => {
-        expect(screen.getByRole('alert')).toHaveTextContent(/minimum.*3.*vertices/i);
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          /minimum.*3.*vertices/i
+        );
       });
 
       // Polygon should still have 3 vertices
       expect(onPolygonsChange).not.toHaveBeenCalled();
 
-      const remainingVertices = screen.getAllByTestId(/vertex-.*-min-polygon-1/);
+      const remainingVertices = screen.getAllByTestId(
+        /vertex-.*-min-polygon-1/
+      );
       expect(remainingVertices).toHaveLength(3);
     });
 
@@ -303,18 +327,25 @@ describe('Vertex Context Menu E2E Tests', () => {
       });
 
       // In View mode, right-click on polygon should not show vertex context menu
-      const polygonElement = screen.getByTestId('canvas-polygon-test-polygon-1');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-test-polygon-1'
+      );
       fireEvent.contextMenu(polygonElement);
 
       // Should not show vertex context menu
-      await waitFor(() => {
-        expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-      }, { timeout: 1000 });
+      await waitFor(
+        () => {
+          expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+        },
+        { timeout: 1000 }
+      );
 
       // Now select polygon and switch to edit mode
       fireEvent.click(polygonElement);
 
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       await waitFor(() => {
@@ -347,10 +378,14 @@ describe('Vertex Context Menu E2E Tests', () => {
       });
 
       // Select polygon and enter edit mode
-      const polygonElement = screen.getByTestId('canvas-polygon-test-polygon-1');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-test-polygon-1'
+      );
       fireEvent.click(polygonElement);
 
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       await waitFor(() => {
@@ -393,7 +428,9 @@ describe('Vertex Context Menu E2E Tests', () => {
       });
 
       // Select polygon
-      const polygonElement = screen.getByTestId('canvas-polygon-test-polygon-1');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-test-polygon-1'
+      );
       fireEvent.click(polygonElement);
 
       // Switch to slice mode
@@ -438,10 +475,14 @@ describe('Vertex Context Menu E2E Tests', () => {
       });
 
       // Setup: Select polygon and enter edit mode
-      const polygonElement = screen.getByTestId('canvas-polygon-test-polygon-1');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-test-polygon-1'
+      );
       fireEvent.click(polygonElement);
 
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       // First deletion
@@ -457,7 +498,9 @@ describe('Vertex Context Menu E2E Tests', () => {
         expect(screen.getByRole('menu')).toBeInTheDocument();
       });
 
-      let deleteMenuItem = screen.getByRole('menuitem', { name: /delete.*vertex/i });
+      let deleteMenuItem = screen.getByRole('menuitem', {
+        name: /delete.*vertex/i,
+      });
       fireEvent.click(deleteMenuItem);
 
       await waitFor(() => {
@@ -476,7 +519,9 @@ describe('Vertex Context Menu E2E Tests', () => {
         expect(screen.getByRole('menu')).toBeInTheDocument();
       });
 
-      deleteMenuItem = screen.getByRole('menuitem', { name: /delete.*vertex/i });
+      deleteMenuItem = screen.getByRole('menuitem', {
+        name: /delete.*vertex/i,
+      });
       fireEvent.click(deleteMenuItem);
 
       // Should now have 3 vertices (minimum)
@@ -492,12 +537,16 @@ describe('Vertex Context Menu E2E Tests', () => {
         expect(screen.getByRole('menu')).toBeInTheDocument();
       });
 
-      deleteMenuItem = screen.getByRole('menuitem', { name: /delete.*vertex/i });
+      deleteMenuItem = screen.getByRole('menuitem', {
+        name: /delete.*vertex/i,
+      });
       fireEvent.click(deleteMenuItem);
 
       // Should show error and maintain 3 vertices
       await waitFor(() => {
-        expect(screen.getByRole('alert')).toHaveTextContent(/minimum.*3.*vertices/i);
+        expect(screen.getByRole('alert')).toHaveTextContent(
+          /minimum.*3.*vertices/i
+        );
       });
 
       vertices = screen.getAllByTestId(/vertex-.*-test-polygon-1/);
@@ -520,10 +569,14 @@ describe('Vertex Context Menu E2E Tests', () => {
       });
 
       // Setup
-      const polygonElement = screen.getByTestId('canvas-polygon-test-polygon-1');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-test-polygon-1'
+      );
       fireEvent.click(polygonElement);
 
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       // Open context menu
@@ -534,7 +587,9 @@ describe('Vertex Context Menu E2E Tests', () => {
         expect(screen.getByRole('menu')).toBeInTheDocument();
       });
 
-      const deleteMenuItem = screen.getByRole('menuitem', { name: /delete.*vertex/i });
+      const deleteMenuItem = screen.getByRole('menuitem', {
+        name: /delete.*vertex/i,
+      });
 
       // Should be focusable
       deleteMenuItem.focus();
@@ -567,10 +622,14 @@ describe('Vertex Context Menu E2E Tests', () => {
       });
 
       // Setup
-      const polygonElement = screen.getByTestId('canvas-polygon-test-polygon-1');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-test-polygon-1'
+      );
       fireEvent.click(polygonElement);
 
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       // Open context menu
@@ -586,7 +645,9 @@ describe('Vertex Context Menu E2E Tests', () => {
       expect(menu).toHaveAttribute('aria-label', 'Vertex options');
 
       // Delete item should have proper content
-      const deleteMenuItem = screen.getByRole('menuitem', { name: /delete.*vertex/i });
+      const deleteMenuItem = screen.getByRole('menuitem', {
+        name: /delete.*vertex/i,
+      });
       expect(deleteMenuItem).toHaveTextContent('Delete Vertex');
 
       // Should have destructive styling for screen readers
@@ -628,10 +689,14 @@ describe('Vertex Context Menu E2E Tests', () => {
       expect(renderTime).toBeLessThan(1000); // Should render quickly
 
       // Setup
-      const polygonElement = screen.getByTestId('canvas-polygon-complex-polygon');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-complex-polygon'
+      );
       fireEvent.click(polygonElement);
 
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       // Should render all vertices efficiently
@@ -648,11 +713,15 @@ describe('Vertex Context Menu E2E Tests', () => {
         expect(screen.getByRole('menu')).toBeInTheDocument();
       });
 
-      const deleteMenuItem = screen.getByRole('menuitem', { name: /delete.*vertex/i });
+      const deleteMenuItem = screen.getByRole('menuitem', {
+        name: /delete.*vertex/i,
+      });
       fireEvent.click(deleteMenuItem);
 
       await waitFor(() => {
-        const remainingVertices = screen.getAllByTestId(/vertex-.*-complex-polygon/);
+        const remainingVertices = screen.getAllByTestId(
+          /vertex-.*-complex-polygon/
+        );
         expect(remainingVertices).toHaveLength(19);
       });
     });
@@ -673,10 +742,14 @@ describe('Vertex Context Menu E2E Tests', () => {
       });
 
       // Setup
-      const polygonElement = screen.getByTestId('canvas-polygon-test-polygon-1');
+      const polygonElement = screen.getByTestId(
+        'canvas-polygon-test-polygon-1'
+      );
       fireEvent.click(polygonElement);
 
-      const editVerticesButton = screen.getByRole('button', { name: /edit.*vertices/i });
+      const editVerticesButton = screen.getByRole('button', {
+        name: /edit.*vertices/i,
+      });
       fireEvent.click(editVerticesButton);
 
       // Test different coordinate systems (simulate browser differences)

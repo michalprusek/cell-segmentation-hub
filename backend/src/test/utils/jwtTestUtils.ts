@@ -278,12 +278,12 @@ export function createMockAuthMiddleware(
     res: Record<string, unknown>,
     next: () => void
   ) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const response = res as any;
     if (!scenario.shouldSucceed) {
       return response.status(scenario.expectedStatus).json({
         success: false,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         message: (scenario as any).expectedMessage,
         source: 'Auth',
       });

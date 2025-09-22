@@ -1,6 +1,7 @@
 # Batch Completion Gallery Refresh Implementation 2025
 
 ## Problem Solved
+
 User requested: "chci jen na konci refreshnout image gallery, aby se aktualizovaly status obrázků a thumbnails" (I want to refresh image gallery at the end to update image statuses and thumbnails)
 
 ## Implementation Summary
@@ -22,7 +23,9 @@ User requested: "chci jen na konci refreshnout image gallery, aby se aktualizova
 ### Architecture Details
 
 #### Batch Completion Detection Logic
+
 The batch completion is detected in `useSegmentationQueue` using this condition:
+
 ```typescript
 if (
   batchState.isProcessingBatch &&
@@ -38,6 +41,7 @@ if (
 ```
 
 #### Gallery Refresh Implementation
+
 ```typescript
 const handleBatchCompleted = useCallback(async () => {
   // Fetch updated images with pagination support
@@ -94,6 +98,7 @@ const handleBatchCompleted = useCallback(async () => {
 ### Usage Notes
 
 The implementation automatically detects when batch processing completes and refreshes the gallery. No user interaction required. The refresh includes:
+
 - Updated segmentation statuses (no_segmentation → processing → completed)
 - Fresh thumbnail URLs
 - Updated metadata (creation/modification times)

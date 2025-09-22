@@ -4,12 +4,7 @@
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import {
-  render,
-  screen,
-  fireEvent,
-  waitFor,
-} from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import VertexContextMenu from '../VertexContextMenu';
 // Mock the context menu components from shadcn/ui
 vi.mock('@/components/ui/context-menu', () => ({
@@ -102,19 +97,20 @@ describe('VertexContextMenu', () => {
       expect(screen.getByTestId('vertex-element')).toBeInTheDocument();
     });
     it('renders children correctly as trigger', () => {
-      const customChild = <button data-testid="custom-vertex">Custom Vertex</button>;
+      const customChild = (
+        <button data-testid="custom-vertex">Custom Vertex</button>
+      );
       render(
-          <VertexContextMenu {...defaultProps}>
-            {customChild}
-          </VertexContextMenu>
+        <VertexContextMenu {...defaultProps}>{customChild}</VertexContextMenu>
       );
       expect(screen.getByTestId('custom-vertex')).toBeInTheDocument();
-      expect(screen.getByTestId('context-menu-trigger')).toHaveAttribute('data-as-child', 'true');
+      expect(screen.getByTestId('context-menu-trigger')).toHaveAttribute(
+        'data-as-child',
+        'true'
+      );
     });
     it('renders delete menu item with correct props', () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       const menuContent = screen.getByTestId('context-menu-content');
       expect(menuContent).toHaveClass('w-64');
       expect(menuContent).toHaveAttribute('role', 'menu');
@@ -124,19 +120,19 @@ describe('VertexContextMenu', () => {
       expect(deleteItem).toHaveAttribute('tabIndex', '0');
     });
     it('renders trash icon and delete text', () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       expect(screen.getByTestId('trash-icon')).toBeInTheDocument();
-      expect(screen.getByTestId('trash-icon')).toHaveClass('mr-2', 'h-4', 'w-4');
+      expect(screen.getByTestId('trash-icon')).toHaveClass(
+        'mr-2',
+        'h-4',
+        'w-4'
+      );
       expect(screen.getByText('contextMenu.deleteVertex')).toBeInTheDocument();
     });
   });
   describe('Event Handling', () => {
     it('calls onDelete when delete menu item is clicked', async () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       const deleteItem = screen.getByTestId('context-menu-item');
       fireEvent.click(deleteItem);
       await waitFor(() => {
@@ -144,9 +140,7 @@ describe('VertexContextMenu', () => {
       });
     });
     it('calls onDelete when delete menu item is activated with keyboard', async () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       const deleteItem = screen.getByTestId('context-menu-item');
       // Focus and press Enter
       deleteItem.focus();
@@ -160,7 +154,7 @@ describe('VertexContextMenu', () => {
       const parentClickHandler = vi.fn();
       render(
         <div onClick={parentClickHandler}>
-            <VertexContextMenu {...defaultProps} />
+          <VertexContextMenu {...defaultProps} />
         </div>
       );
       const deleteItem = screen.getByTestId('context-menu-item');
@@ -172,9 +166,7 @@ describe('VertexContextMenu', () => {
       expect(parentClickHandler).not.toHaveBeenCalled();
     });
     it('handles multiple rapid clicks gracefully', async () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       const deleteItem = screen.getByTestId('context-menu-item');
       // Rapid clicks
       fireEvent.click(deleteItem);
@@ -192,18 +184,16 @@ describe('VertexContextMenu', () => {
         vertexIndex: 5,
         polygonId: 'custom-polygon-456',
       };
-      render(
-          <VertexContextMenu {...customProps} />
-      );
+      render(<VertexContextMenu {...customProps} />);
       // The component should render without errors with different props
       expect(screen.getByTestId('context-menu')).toBeInTheDocument();
       expect(screen.getByTestId('vertex-element')).toBeInTheDocument();
     });
     it('handles edge case vertex indices', () => {
       const edgeCases = [0, -1, 999, NaN];
-      edgeCases.forEach((vertexIndex) => {
+      edgeCases.forEach(vertexIndex => {
         const { unmount } = render(
-            <VertexContextMenu {...defaultProps} vertexIndex={vertexIndex} />
+          <VertexContextMenu {...defaultProps} vertexIndex={vertexIndex} />
         );
         expect(screen.getByTestId('context-menu')).toBeInTheDocument();
         unmount();
@@ -211,9 +201,9 @@ describe('VertexContextMenu', () => {
     });
     it('handles empty and invalid polygon IDs', () => {
       const invalidIds = ['', '   ', 'special-chars-!@#$%', '很长的中文字符串'];
-      invalidIds.forEach((polygonId) => {
+      invalidIds.forEach(polygonId => {
         const { unmount } = render(
-            <VertexContextMenu {...defaultProps} polygonId={polygonId} />
+          <VertexContextMenu {...defaultProps} polygonId={polygonId} />
         );
         expect(screen.getByTestId('context-menu')).toBeInTheDocument();
         unmount();
@@ -222,9 +212,7 @@ describe('VertexContextMenu', () => {
   });
   describe('Accessibility', () => {
     it('has proper ARIA attributes', () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       const menuContent = screen.getByTestId('context-menu-content');
       expect(menuContent).toHaveAttribute('role', 'menu');
       expect(menuContent).toHaveAttribute('aria-label', 'Vertex options');
@@ -233,18 +221,14 @@ describe('VertexContextMenu', () => {
       expect(menuItem).toHaveAttribute('tabIndex', '0');
     });
     it('is keyboard navigable', () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       const menuItem = screen.getByTestId('context-menu-item');
       // Should be focusable
       menuItem.focus();
       expect(document.activeElement).toBe(menuItem);
     });
     it('has proper visual styling for interactive elements', () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       const menuItem = screen.getByTestId('context-menu-item');
       expect(menuItem).toHaveClass('cursor-pointer');
       expect(menuItem).toHaveClass('text-red-600'); // Indicates destructive action
@@ -252,9 +236,7 @@ describe('VertexContextMenu', () => {
   });
   describe('Context Menu Integration', () => {
     it('integrates properly with shadcn/ui context menu structure', () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       // Verify the hierarchical structure
       const contextMenu = screen.getByTestId('context-menu');
       const trigger = screen.getByTestId('context-menu-trigger');
@@ -264,26 +246,24 @@ describe('VertexContextMenu', () => {
       expect(trigger).toContainElement(screen.getByTestId('vertex-element'));
     });
     it('applies correct CSS classes for context menu content', () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       const content = screen.getByTestId('context-menu-content');
       expect(content).toHaveClass('w-64'); // Fixed width as specified in component
     });
   });
   describe('Internationalization', () => {
     it('displays translated text for delete vertex', () => {
-      render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      render(<VertexContextMenu {...defaultProps} />);
       // The mock language provider should provide the translation key
       expect(screen.getByText('contextMenu.deleteVertex')).toBeInTheDocument();
     });
     it('handles different language contexts', () => {
       // Test with different language mock if needed
-      const customLanguageProvider = ({ children }: { children: React.ReactNode }) => (
-        <div data-language="cs">{children}</div>
-      );
+      const customLanguageProvider = ({
+        children,
+      }: {
+        children: React.ReactNode;
+      }) => <div data-language="cs">{children}</div>;
       render(
         <customLanguageProvider>
           <VertexContextMenu {...defaultProps} />
@@ -297,32 +277,28 @@ describe('VertexContextMenu', () => {
   });
   describe('Performance', () => {
     it('handles rapid re-renders efficiently', () => {
-      const { rerender } = render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      const { rerender } = render(<VertexContextMenu {...defaultProps} />);
       const startTime = performance.now();
       // Simulate rapid prop changes
       for (let i = 0; i < 10; i++) {
         rerender(
-            <VertexContextMenu
-              {...defaultProps}
-              vertexIndex={i}
-              polygonId={`polygon-${i}`}
-            />
+          <VertexContextMenu
+            {...defaultProps}
+            vertexIndex={i}
+            polygonId={`polygon-${i}`}
+          />
         );
       }
       const totalTime = performance.now() - startTime;
       expect(totalTime).toBeLessThan(50); // Should be fast
     });
     it('does not cause memory leaks with callback changes', () => {
-      const { rerender } = render(
-          <VertexContextMenu {...defaultProps} />
-      );
+      const { rerender } = render(<VertexContextMenu {...defaultProps} />);
       // Change callback references multiple times
       for (let i = 0; i < 5; i++) {
         const newOnDelete = vi.fn();
         rerender(
-            <VertexContextMenu {...defaultProps} onDelete={newOnDelete} />
+          <VertexContextMenu {...defaultProps} onDelete={newOnDelete} />
         );
       }
       expect(screen.getByTestId('context-menu')).toBeInTheDocument();
@@ -334,10 +310,10 @@ describe('VertexContextMenu', () => {
       // Should not crash even if onDelete is undefined
       expect(() => {
         render(
-            <VertexContextMenu
-              {...propsWithoutCallback}
-              onDelete={undefined as any}
-            />
+          <VertexContextMenu
+            {...propsWithoutCallback}
+            onDelete={undefined as any}
+          />
         );
       }).not.toThrow();
     });
@@ -351,10 +327,10 @@ describe('VertexContextMenu', () => {
           console.error('Deletion failed:', error);
         }
       });
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      render(
-          <VertexContextMenu {...defaultProps} onDelete={faultyOnDelete} />
-      );
+      const consoleSpy = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      render(<VertexContextMenu {...defaultProps} onDelete={faultyOnDelete} />);
       const deleteItem = screen.getByTestId('context-menu-item');
       // Should not crash the component
       expect(() => {

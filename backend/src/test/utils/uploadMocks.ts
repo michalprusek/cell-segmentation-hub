@@ -1,6 +1,6 @@
 // Mock utilities for testing uploads
 const vi = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+   
   fn: (impl?: any) => jest.fn(impl),
 };
 

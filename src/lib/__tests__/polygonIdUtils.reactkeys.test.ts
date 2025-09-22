@@ -162,7 +162,7 @@ describe('React Key Generation Fixes', () => {
   describe('Performance Impact', () => {
     test('key generation is fast for large numbers of polygons', () => {
       const polygons = Array.from({ length: 1000 }, (_, i) => ({
-        id: i % 3 === 0 ? undefined : `polygon_${i}`
+        id: i % 3 === 0 ? undefined : `polygon_${i}`,
       }));
 
       const startTime = performance.now();

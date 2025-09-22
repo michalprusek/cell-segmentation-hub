@@ -19,8 +19,8 @@ async function testBackendExport() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: 'admin@example.com',
-        password: 'admin123'
-      })
+        password: 'admin123',
+      }),
     });
 
     const { token } = await loginRes.json();
@@ -28,7 +28,7 @@ async function testBackendExport() {
 
     // Get projects
     const projectsRes = await fetch(`${API_URL}/projects`, {
-      headers: { 'Authorization': `Bearer ${token}` }
+      headers: { Authorization: `Bearer ${token}` },
     });
 
     const projects = await projectsRes.json();
@@ -39,46 +39,59 @@ async function testBackendExport() {
       return;
     }
 
-    console.log(`✅ Found project: ${testProject.name} (ID: ${testProject.id})`);
+    console.log(
+      `✅ Found project: ${testProject.name} (ID: ${testProject.id})`
+    );
 
     // Start export
-    const exportRes = await fetch(`${API_URL}/projects/${testProject.id}/export`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        includeImages: true,
-        includeAnnotations: true,
-        includeVisualizations: false,
-        includeMetrics: true,
-        imageIds: []
-      })
-    });
+    const exportRes = await fetch(
+      `${API_URL}/projects/${testProject.id}/export`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          includeImages: true,
+          includeAnnotations: true,
+          includeVisualizations: false,
+          includeMetrics: true,
+          imageIds: [],
+        }),
+      }
+    );
 
     const { jobId } = await exportRes.json();
     console.log(`✅ Export started with job ID: ${jobId}`);
 
     // Check status
-    const statusRes = await fetch(`${API_URL}/projects/${testProject.id}/export/${jobId}/status`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const statusRes = await fetch(
+      `${API_URL}/projects/${testProject.id}/export/${jobId}/status`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
 
     const status = await statusRes.json();
     console.log(`✅ Export status: ${status.state}`);
 
     // Test filename
-    const downloadRes = await fetch(`${API_URL}/projects/${testProject.id}/export/${jobId}/download`, {
-      method: 'HEAD',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const downloadRes = await fetch(
+      `${API_URL}/projects/${testProject.id}/export/${jobId}/download`,
+      {
+        method: 'HEAD',
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
 
     const contentDisposition = downloadRes.headers.get('content-disposition');
     console.log(`✅ Content-Disposition header: ${contentDisposition}`);
 
     if (contentDisposition.includes('inline')) {
-      console.log('✅ Backend correctly uses inline disposition (prevents auto-download)');
+      console.log(
+        '✅ Backend correctly uses inline disposition (prevents auto-download)'
+      );
     } else {
       console.log('❌ Backend still using attachment disposition');
     }
@@ -95,7 +108,6 @@ async function testBackendExport() {
         console.log(`❌ Filename is complex: ${filename}`);
       }
     }
-
   } catch (error) {
     console.error('❌ Backend test failed:', error.message);
   }
@@ -126,19 +138,21 @@ async function testFrontendButtons() {
     console.log('✅ Navigated to project detail');
 
     // Check for export panel
-    const exportPanel = await page.locator('[data-testid="export-progress-panel"]').count();
+    const exportPanel = await page
+      .locator('[data-testid="export-progress-panel"]')
+      .count();
     console.log(`Export panel visible: ${exportPanel > 0}`);
 
     // Check button states
     const downloadBtn = await page.locator('button:has-text("Download")');
     const dismissBtn = await page.locator('button:has-text("Dismiss")');
 
-    if (await downloadBtn.count() > 0) {
+    if ((await downloadBtn.count()) > 0) {
       const isDownloadDisabled = await downloadBtn.isDisabled();
       console.log(`Download button disabled: ${isDownloadDisabled}`);
     }
 
-    if (await dismissBtn.count() > 0) {
+    if ((await dismissBtn.count()) > 0) {
       const isDismissDisabled = await dismissBtn.isDisabled();
       console.log(`Dismiss button disabled: ${isDismissDisabled}`);
 
@@ -148,13 +162,14 @@ async function testFrontendButtons() {
         console.log('✅ Dismiss button clicked successfully');
 
         // Check if panel is hidden
-        const panelAfterDismiss = await page.locator('[data-testid="export-progress-panel"]').count();
+        const panelAfterDismiss = await page
+          .locator('[data-testid="export-progress-panel"]')
+          .count();
         if (panelAfterDismiss === 0) {
           console.log('✅ Export panel correctly hidden after dismiss');
         }
       }
     }
-
   } catch (error) {
     console.error('❌ Frontend test failed:', error.message);
   } finally {
@@ -174,7 +189,8 @@ async function testExportHooks() {
       { encoding: 'utf8' }
     );
 
-    const hookCount = (projectDetail.match(/use(Shared)?AdvancedExport/g) || []).length;
+    const hookCount = (projectDetail.match(/use(Shared)?AdvancedExport/g) || [])
+      .length;
 
     if (hookCount === 1) {
       console.log('✅ Only one export hook used in ProjectDetail');
@@ -191,9 +207,10 @@ async function testExportHooks() {
     if (advancedExportUsage === '0') {
       console.log('✅ No usage of deprecated useAdvancedExport hook');
     } else {
-      console.log(`⚠️ Found ${advancedExportUsage} uses of deprecated useAdvancedExport hook`);
+      console.log(
+        `⚠️ Found ${advancedExportUsage} uses of deprecated useAdvancedExport hook`
+      );
     }
-
   } catch (error) {
     // grep returns non-zero if no matches
     console.log('✅ No duplicate hooks found');

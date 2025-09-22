@@ -20,7 +20,9 @@ describe('Mode Configuration SSOT', () => {
   describe('Configuration Consistency', () => {
     it('should have no modes in both read-only and geometry-modifying categories', () => {
       const readOnlyModes = new Set(MODE_BEHAVIOR_CONFIG.READ_ONLY_MODES);
-      const geometryModifyingModes = new Set(MODE_BEHAVIOR_CONFIG.GEOMETRY_MODIFYING_MODES);
+      const geometryModifyingModes = new Set(
+        MODE_BEHAVIOR_CONFIG.GEOMETRY_MODIFYING_MODES
+      );
 
       const conflicts = MODE_BEHAVIOR_CONFIG.READ_ONLY_MODES.filter(mode =>
         geometryModifyingModes.has(mode)
@@ -44,11 +46,15 @@ describe('Mode Configuration SSOT', () => {
         ...MODE_BEHAVIOR_CONFIG.DESTRUCTIVE_MODES,
       ]);
 
-      const unconfiguredModes = allModes.filter(mode => !configuredModes.has(mode));
+      const unconfiguredModes = allModes.filter(
+        mode => !configuredModes.has(mode)
+      );
 
       // Log warning for manual review but don't fail the test
       if (unconfiguredModes.length > 0) {
-        console.warn(`Unconfigured modes (manual review needed): ${unconfiguredModes.join(', ')}`);
+        console.warn(
+          `Unconfigured modes (manual review needed): ${unconfiguredModes.join(', ')}`
+        );
       }
 
       // Ensure critical modes are configured
@@ -61,7 +67,9 @@ describe('Mode Configuration SSOT', () => {
         EditMode.DeletePolygon,
       ];
 
-      const unconfiguredCriticalModes = criticalModes.filter(mode => !configuredModes.has(mode));
+      const unconfiguredCriticalModes = criticalModes.filter(
+        mode => !configuredModes.has(mode)
+      );
       expect(unconfiguredCriticalModes).toEqual([]);
     });
   });
@@ -76,7 +84,9 @@ describe('Mode Configuration SSOT', () => {
     it('should allow canvas deselection for view and non-interactive modes', () => {
       expect(shouldPreventCanvasDeselection(EditMode.View)).toBe(false);
       expect(shouldPreventCanvasDeselection(EditMode.EditVertices)).toBe(false);
-      expect(shouldPreventCanvasDeselection(EditMode.DeletePolygon)).toBe(false);
+      expect(shouldPreventCanvasDeselection(EditMode.DeletePolygon)).toBe(
+        false
+      );
     });
 
     it('should have consistent behavior between configuration and utility function', () => {
@@ -86,7 +96,9 @@ describe('Mode Configuration SSOT', () => {
 
       // Test that modes NOT in the configuration return false
       const allModes = Object.values(EditMode);
-      const preventDeselectionModes = new Set(MODE_BEHAVIOR_CONFIG.PREVENT_CANVAS_DESELECTION);
+      const preventDeselectionModes = new Set(
+        MODE_BEHAVIOR_CONFIG.PREVENT_CANVAS_DESELECTION
+      );
 
       for (const mode of allModes) {
         if (!preventDeselectionModes.has(mode)) {
@@ -125,14 +137,18 @@ describe('Mode Configuration SSOT', () => {
 
   describe('Interactive Point Placement Detection', () => {
     it('should identify interactive point placement modes', () => {
-      expect(isInteractivePointPlacementMode(EditMode.CreatePolygon)).toBe(true);
+      expect(isInteractivePointPlacementMode(EditMode.CreatePolygon)).toBe(
+        true
+      );
       expect(isInteractivePointPlacementMode(EditMode.AddPoints)).toBe(true);
       expect(isInteractivePointPlacementMode(EditMode.Slice)).toBe(true);
     });
 
     it('should not identify non-interactive modes as point placement', () => {
       expect(isInteractivePointPlacementMode(EditMode.View)).toBe(false);
-      expect(isInteractivePointPlacementMode(EditMode.EditVertices)).toBe(false);
+      expect(isInteractivePointPlacementMode(EditMode.EditVertices)).toBe(
+        false
+      );
     });
   });
 
@@ -168,8 +184,10 @@ describe('Mode Configuration SSOT', () => {
     });
 
     it('should maintain consistent behavior across all point placement modes', () => {
-      const pointPlacementModes = MODE_BEHAVIOR_CONFIG.INTERACTIVE_POINT_PLACEMENT_MODES;
-      const canvasDeselectionPrevented = MODE_BEHAVIOR_CONFIG.PREVENT_CANVAS_DESELECTION;
+      const pointPlacementModes =
+        MODE_BEHAVIOR_CONFIG.INTERACTIVE_POINT_PLACEMENT_MODES;
+      const canvasDeselectionPrevented =
+        MODE_BEHAVIOR_CONFIG.PREVENT_CANVAS_DESELECTION;
 
       // All point placement modes should prevent canvas deselection
       for (const mode of pointPlacementModes) {
@@ -238,7 +256,9 @@ describe('Integration with Production Code', () => {
     expect(simulateCanvasClick(EditMode.AddPoints, true)).toBe('no-action');
     expect(simulateCanvasClick(EditMode.CreatePolygon, true)).toBe('no-action');
     expect(simulateCanvasClick(EditMode.View, true)).toBe('deselect-polygon');
-    expect(simulateCanvasClick(EditMode.EditVertices, true)).toBe('deselect-polygon');
+    expect(simulateCanvasClick(EditMode.EditVertices, true)).toBe(
+      'deselect-polygon'
+    );
   });
 
   it('should maintain backward compatibility with existing hardcoded exclusions', () => {

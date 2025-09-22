@@ -3,15 +3,18 @@
 ## Date: 2025-09-22
 
 ## Problem Statement
+
 The inline cancel button in the ExportProgressPanel (located below the segmentation queue indicator, above the image gallery) was not working. Users had to open the Advanced Export dialog to cancel exports.
 
 ## Root Causes Identified
 
 ### 1. AbortController Verification Bug (Fixed Earlier)
+
 - When verifying abort state, `getSignal()` was creating new controllers
 - Fixed by using `isAborted()` method instead
 
 ### 2. State Sharing Issue (Main Problem)
+
 - **AdvancedExportDialog** was using `useAdvancedExport` hook
 - **ProjectDetail** (with inline panel) was using `useAdvancedExport` hook
 - These created **TWO SEPARATE INSTANCES** with isolated state
@@ -23,6 +26,7 @@ The inline cancel button in the ExportProgressPanel (located below the segmentat
 ### Changed Both Components to Use Shared Hook
 
 1. **AdvancedExportDialog.tsx** (lines 47, 92)
+
    ```typescript
    // BEFORE:
    import { useAdvancedExport } from './hooks/useAdvancedExport';
@@ -34,6 +38,7 @@ The inline cancel button in the ExportProgressPanel (located below the segmentat
    ```
 
 2. **ProjectDetail.tsx** (lines 19, 240)
+
    ```typescript
    // BEFORE:
    import { useAdvancedExport } from '@/pages/export/hooks/useAdvancedExport';
@@ -47,9 +52,14 @@ The inline cancel button in the ExportProgressPanel (located below the segmentat
 ### Enhanced Error Handling in useAdvancedExport
 
 Added logging and graceful handling when `currentJob` is null:
+
 ```typescript
 const cancelExport = useCallback(async () => {
-  logger.info('🔴 cancelExport called', { currentJob, isExporting, isDownloading });
+  logger.info('🔴 cancelExport called', {
+    currentJob,
+    isExporting,
+    isDownloading,
+  });
 
   if (!currentJob) {
     logger.warn('⚠️ Cannot cancel - no currentJob found');
@@ -101,12 +111,14 @@ AdvancedExportDialog    ProjectDetail
 ## Key Differences Between Hooks
 
 ### useAdvancedExport
+
 - Standalone hook with local state
 - Each instance maintains its own `currentJob`
 - Good for isolated export operations
 - Not suitable when state needs to be shared
 
 ### useSharedAdvancedExport
+
 - Uses ExportContext for state management
 - All instances share the same state
 - Perfect for coordinated export operations
@@ -129,6 +141,7 @@ AdvancedExportDialog    ProjectDetail
 ✅ **The inline cancel button now works correctly!**
 
 When you:
+
 1. Start an export from the Advanced Export dialog
 2. Close the dialog
 3. Click the cancel button in the inline ExportProgressPanel

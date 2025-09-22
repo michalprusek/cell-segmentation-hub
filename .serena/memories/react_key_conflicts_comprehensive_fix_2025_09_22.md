@@ -5,6 +5,7 @@
 ## Root Cause Analysis
 
 ### **Primary Issue**: Unsafe React Key Generation
+
 - **Location**: SegmentationEditor.tsx line 1167
 - **Problem**: `key={polygon.id}-${editor.isUndoRedoInProgress ? 'undo' : 'normal'}`
 - **Impact**: When ML service returned polygons with `undefined` IDs, React generated duplicate keys like `"undefined-normal"`, causing:
@@ -14,6 +15,7 @@
   - Component identity conflicts
 
 ### **Secondary Issues Found**
+
 1. **PolygonListPanel.tsx** (line 151): `key={polygon.id}` → `key={undefined}`
 2. **RegionPanel.tsx** (line 141): Same direct ID usage
 3. **CanvasPolygonLayer.tsx** (line 302): SVG group keys using unsafe IDs
@@ -24,6 +26,7 @@
 ### **1. Enhanced SegmentationEditor.tsx** ⚡ CRITICAL FIX
 
 **Import Added:**
+
 ```typescript
 import {
   generateSafePolygonKey,
@@ -34,6 +37,7 @@ import {
 ```
 
 **React Key Fix (Line 1167):**
+
 ```typescript
 // Before: UNSAFE - creates "undefined-normal"
 key={`${polygon.id}-${editor.isUndoRedoInProgress ? 'undo' : 'normal'}`}
@@ -43,13 +47,16 @@ key={generateSafePolygonKey(polygon, editor.isUndoRedoInProgress)}
 ```
 
 **Enhanced Polygon Validation (Lines 300-329):**
+
 ```typescript
 // CRITICAL: Validate and ensure polygon has a valid ID
 if (!validatePolygonId(segPoly.id)) {
   logPolygonIdIssue(segPoly, 'Invalid or missing polygon ID from ML service');
   // Generate fallback ID for polygons from ML service
   const fallbackId = ensureValidPolygonId(segPoly.id, 'ml_polygon');
-  logger.warn(`Generated fallback ID: ${fallbackId} for polygon with invalid ID: ${segPoly.id}`);
+  logger.warn(
+    `Generated fallback ID: ${fallbackId} for polygon with invalid ID: ${segPoly.id}`
+  );
 
   return {
     id: fallbackId, // Now guaranteed to be valid
@@ -105,12 +112,14 @@ key={ensureValidPolygonId(polygon.id, `enhanced-${index}`)}
 ## Data Flow Analysis
 
 ### **Undefined ID Source**: ML Service
+
 - **Entry Point**: `setSegmentationPolygons` via `onPolygonsLoaded`
 - **Processing**: Lines 300-329 in SegmentationEditor.tsx
 - **Issue**: Direct assignment `id: segPoly.id` without validation
 - **Solution**: Added validation and fallback ID generation
 
 ### **Polygon ID Types Generated**:
+
 - **User-created**: `polygon_1234567890_abc123def` (always valid)
 - **ML-generated (valid)**: `ml_polygon_12345` (when ML service provides ID)
 - **ML-generated (fallback)**: `ml_polygon_1234567890_xyz789abc` (when undefined)
@@ -118,18 +127,20 @@ key={ensureValidPolygonId(polygon.id, `enhanced-${index}`)}
 ## React Key Safety Implementation
 
 ### **Safe Key Patterns**:
+
 ```typescript
 // Always unique and safe:
-"polygon_1234567890_abc123def-normal"
-"polygon_1234567890_xyz789abc-undo"
-"polygon-list-5_1234567890_def456ghi"
-"region-3_1234567890_jkl789mno"
-"svg-vertex-group_1234567890_pqr123stu"
+'polygon_1234567890_abc123def-normal';
+'polygon_1234567890_xyz789abc-undo';
+'polygon-list-5_1234567890_def456ghi';
+'region-3_1234567890_jkl789mno';
+'svg-vertex-group_1234567890_pqr123stu';
 
 // NEVER: "undefined-normal" ❌
 ```
 
 ### **Performance Characteristics**:
+
 - ✅ ID generation: < 1ms per polygon
 - ✅ 1000 polygon test: < 50ms total
 - ✅ Zero React reconciliation issues
@@ -138,6 +149,7 @@ key={ensureValidPolygonId(polygon.id, `enhanced-${index}`)}
 ## Testing Coverage
 
 ### **Comprehensive Test Suite**: `/src/lib/__tests__/polygonIdUtils.reactkeys.test.ts`
+
 - ✅ **15/15 tests passing**
 - ✅ Safe key generation for undefined IDs
 - ✅ Unique key generation across calls
@@ -146,6 +158,7 @@ key={ensureValidPolygonId(polygon.id, `enhanced-${index}`)}
 - ✅ Development logging validation
 
 ### **Build Verification**:
+
 - ✅ TypeScript compilation: Clean (0 errors)
 - ✅ Frontend build: Successful
 - ✅ Docker containers: All healthy
@@ -154,7 +167,9 @@ key={ensureValidPolygonId(polygon.id, `enhanced-${index}`)}
 ## Additional Fix Required
 
 ### **App.tsx Provider Hierarchy**:
+
 Fixed mismatched Provider closing order that was causing syntax errors:
+
 ```typescript
 // Fixed closing order to match opening order
 </ModelProvider>
@@ -169,6 +184,7 @@ Fixed mismatched Provider closing order that was causing syntax errors:
 ## Expected Behavior Changes
 
 ### **Before Fix** ❌:
+
 - React console: 189+ warnings about duplicate keys `"undefined-normal"`
 - Clicking one polygon selected ALL polygons
 - Vertex interactions completely broken on ML polygons
@@ -176,6 +192,7 @@ Fixed mismatched Provider closing order that was causing syntax errors:
 - Performance degradation from React reconciliation issues
 
 ### **After Fix** ✅:
+
 - React console: Zero key warnings
 - Click selects ONLY the clicked polygon
 - Vertex interactions work smoothly on all polygons
@@ -185,6 +202,7 @@ Fixed mismatched Provider closing order that was causing syntax errors:
 ## Architecture Preserved
 
 The existing polygon selection system was **architecturally sound**:
+
 - ✅ `usePolygonSelection` hook provides proper SSOT
 - ✅ Centralized event handling with proper propagation
 - ✅ Mode-aware selection behavior
@@ -195,6 +213,7 @@ The existing polygon selection system was **architecturally sound**:
 ## Code Patterns for Reuse
 
 ### **Defensive React Key Pattern**:
+
 ```typescript
 // PATTERN: Always validate before generating React keys
 import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
@@ -204,6 +223,7 @@ key={ensureValidPolygonId(item.id, 'context-specific-prefix')}
 ```
 
 ### **Early Validation Pattern**:
+
 ```typescript
 // PATTERN: Validate and filter early in data pipeline
 .map(item => {

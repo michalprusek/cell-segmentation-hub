@@ -3,9 +3,11 @@
 ## Date: 2025-09-22
 
 ## User Requirement
+
 All export ZIP files should be named simply as `{projectName}.zip` regardless of whether exporting the full project or a partial selection of images.
 
 ## Implementation Summary
+
 Removed timestamps and additional suffixes from export filenames across the entire application to provide consistent, predictable export naming.
 
 ## Changes Made
@@ -70,6 +72,7 @@ Removed timestamps and additional suffixes from export filenames across the enti
 - Fallback naming still exists when project name is unavailable: `export_{jobId}.zip`
 
 ## Files Modified
+
 - `/backend/src/services/exportService.ts`
 - `/backend/src/api/controllers/exportController.ts`
 - `/src/pages/export/hooks/useAdvancedExport.ts` (2 locations)

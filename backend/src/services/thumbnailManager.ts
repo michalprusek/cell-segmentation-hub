@@ -4,14 +4,14 @@ import { ConcurrencyManager } from '../utils/concurrencyManager';
 import { BatchProcessor } from '../utils/batchProcessor';
 import { logger } from '../utils/logger';
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
-import { ThumbnailService } from './thumbnailService';
+// Removed ThumbnailService - using only SegmentationThumbnailService for unified approach
 
 export class ThumbnailManager {
   private retryService: RetryService;
   private concurrencyManager: ConcurrencyManager;
   private batchProcessor: BatchProcessor;
   private segmentationThumbnailService: SegmentationThumbnailService;
-  private thumbnailService: ThumbnailService;
+  // Polygon thumbnail service removed - unified approach
 
   constructor(private prisma: PrismaClient) {
     this.retryService = new RetryService();
@@ -20,15 +20,12 @@ export class ThumbnailManager {
     this.segmentationThumbnailService = new SegmentationThumbnailService(
       prisma
     );
-    this.thumbnailService = new ThumbnailService(prisma);
+    // Unified thumbnail approach - no polygon service needed
   }
 
   async generateAllThumbnails(segmentationId: string): Promise<void> {
-    // Generate both types of thumbnails with retry
-    await Promise.all([
-      this.generateImageThumbnailWithRetry(segmentationId),
-      this.generatePolygonThumbnailWithRetry(segmentationId),
-    ]);
+    // Generate only image thumbnails (unified approach)
+    await this.generateImageThumbnailWithRetry(segmentationId);
   }
 
   async generateImageThumbnailWithRetry(
@@ -54,21 +51,7 @@ export class ThumbnailManager {
     );
   }
 
-  async generatePolygonThumbnailWithRetry(
-    segmentationId: string
-  ): Promise<void> {
-    return this.retryService.executeWithRetry(
-      () => this.thumbnailService.generateThumbnails(segmentationId),
-      {
-        maxRetries: 3,
-        initialDelay: 1000,
-        maxDelay: 10000,
-        backoffFactor: 2,
-        operationName: `Polygon thumbnail generation for ${segmentationId}`,
-      },
-      RetryService.isCommonRetriableError
-    );
-  }
+  // Polygon thumbnail generation removed - unified approach uses only image thumbnails
 
   async generateBatchThumbnails(segmentationIds: string[]): Promise<void> {
     await this.batchProcessor.processBatch(

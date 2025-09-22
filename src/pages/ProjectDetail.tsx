@@ -20,7 +20,7 @@ import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
-import { useThumbnailUpdates } from '@/hooks/useThumbnailUpdates';
+// Removed useThumbnailUpdates - unified thumbnail system doesn't need it
 import { logger } from '@/lib/logger';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { usePagination } from '@/hooks/usePagination';
@@ -218,9 +218,12 @@ const ProjectDetail = () => {
   const handleBatchCompleted = useCallback(async () => {
     if (!id || !user?.id) return;
 
-    logger.info('🔄 Batch segmentation completed, refreshing image gallery...', {
-      projectId: id,
-    });
+    logger.info(
+      '🔄 Batch segmentation completed, refreshing image gallery...',
+      {
+        projectId: id,
+      }
+    );
 
     try {
       // Fetch updated images to refresh statuses and thumbnails
@@ -235,10 +238,7 @@ const ProjectDetail = () => {
           page,
         });
 
-        if (
-          !imagesResponse.images ||
-          !Array.isArray(imagesResponse.images)
-        ) {
+        if (!imagesResponse.images || !Array.isArray(imagesResponse.images)) {
           break;
         }
 
@@ -274,10 +274,15 @@ const ProjectDetail = () => {
 
       logger.info('✅ Gallery refreshed successfully after batch completion', {
         imageCount: formattedImages.length,
-        completedCount: formattedImages.filter(img => img.segmentationStatus === 'completed').length,
+        completedCount: formattedImages.filter(
+          img => img.segmentationStatus === 'completed'
+        ).length,
       });
     } catch (error) {
-      logger.error('❌ Failed to refresh gallery after batch completion:', error);
+      logger.error(
+        '❌ Failed to refresh gallery after batch completion:',
+        error
+      );
     }
   }, [id, user?.id, updateImages]);
 
@@ -301,46 +306,7 @@ const ProjectDetail = () => {
   // Export progress tracking - use ONLY shared hook for SSOT
   const exportHook = useSharedAdvancedExport(id || '', projectTitle);
 
-  // Handle thumbnail updates via WebSocket
-  useThumbnailUpdates({
-    projectId: id,
-    enabled: true,
-    onThumbnailUpdate: useCallback(
-      update => {
-        logger.debug('Thumbnail update received', 'ProjectDetail', {
-          imageId: update.imageId,
-          levelOfDetail: update.thumbnailData.levelOfDetail,
-        });
-
-        // Fetch updated image with new thumbnail URL
-        (async () => {
-          try {
-            const img = await apiClient.getImage(id, update.imageId);
-            if (img?.thumbnail_url) {
-              updateImagesRef.current(prevImages =>
-                prevImages.map(prevImg => {
-                  if (prevImg.id === update.imageId) {
-                    return {
-                      ...prevImg,
-                      thumbnail_url: `${img.thumbnail_url}?t=${Date.now()}`,
-                    };
-                  }
-                  return prevImg;
-                })
-              );
-            }
-          } catch (_error) {
-            logger.error(
-              'Failed to fetch updated image after thumbnail update',
-              error,
-              'ProjectDetail'
-            );
-          }
-        })();
-      },
-      [id]
-    ),
-  });
+  // Thumbnail updates removed - unified system uses server-generated thumbnails only
 
   // Filtering and sorting with memoization
   const {
@@ -937,13 +903,7 @@ const ProjectDetail = () => {
         reconcileRef.current = timeoutId;
       }
     },
-    [
-      id,
-      queueStats,
-      batchSubmitted,
-      navigate,
-      images,
-    ]
+    [id, queueStats, batchSubmitted, navigate, images]
   );
 
   // Real-time image status updates - debounced handler

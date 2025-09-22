@@ -12,17 +12,18 @@ const colors = {
   green: '\x1b[32m',
   red: '\x1b[31m',
   blue: '\x1b[34m',
-  yellow: '\x1b[33m'
+  yellow: '\x1b[33m',
 };
 
 function log(message, type = 'info') {
   const timestamp = new Date().toISOString().substring(11, 19);
-  const color = {
-    'info': colors.blue,
-    'success': colors.green,
-    'error': colors.red,
-    'warning': colors.yellow
-  }[type] || colors.reset;
+  const color =
+    {
+      info: colors.blue,
+      success: colors.green,
+      error: colors.red,
+      warning: colors.yellow,
+    }[type] || colors.reset;
   console.log(`${color}[${timestamp}] ${message}${colors.reset}`);
 }
 
@@ -34,7 +35,7 @@ async function testExportFinal() {
 
     browser = await chromium.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
     });
 
     const context = await browser.newContext();
@@ -75,8 +76,10 @@ async function testExportFinal() {
 
     log('═══════════════════════════════════════', 'info');
     log('✅ TEST PASSED: ExportProvider is properly configured!', 'success');
-    log('The app now has shared export state between dialog and inline panel.', 'success');
-
+    log(
+      'The app now has shared export state between dialog and inline panel.',
+      'success'
+    );
   } catch (error) {
     log(`❌ Test failed: ${error.message}`, 'error');
   } finally {

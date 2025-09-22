@@ -107,112 +107,115 @@ export const useSegmentationQueue = (
     }
   }, []); // No dependencies
 
-  const handleQueueStatsUpdate = useCallback((stats: QueueStats) => {
-    if (
-      !currentProjectRef.current ||
-      stats.projectId === currentProjectRef.current
-    ) {
-      setQueueStats(stats);
-
-      const batchState = batchStateRef.current;
-
-      // Show batch start toast when we detect any operation (even single image)
-      // But only show the toast for operations with more than 10 items
-      if (batchState.isProcessingBatch && !batchState.hasShownStartToast) {
-        const totalItems =
-          stats.queued + stats.processing + batchState.processedCount;
-        batchState.totalCount = totalItems;
-        batchState.hasShownStartToast = true;
-
-        // Only show start toast for bulk operations (>10 items)
-        if (totalItems > 10) {
-          // Dismiss any existing batch toast and show new one
-          if (batchState.batchToastId) {
-            toast.dismiss(batchState.batchToastId);
-          }
-
-          batchState.batchToastId = toast.info(
-            tRef.current('toast.segmentation.batchStarted', {
-              count: totalItems,
-            }) || `Segmentation started for ${totalItems} images`,
-            { duration: 4000 }
-          );
-        }
-      }
-
-      // Detect batch completion: when processing batch and queue becomes empty
+  const handleQueueStatsUpdate = useCallback(
+    (stats: QueueStats) => {
       if (
-        batchState.isProcessingBatch &&
-        stats.queued === 0 &&
-        stats.processing === 0 &&
-        batchState.processedCount > 0
+        !currentProjectRef.current ||
+        stats.projectId === currentProjectRef.current
       ) {
-        // Dismiss start toast if still showing
-        if (batchState.batchToastId) {
-          toast.dismiss(batchState.batchToastId);
-        }
+        setQueueStats(stats);
 
-        // Show batch completion summary - always show, even for single images
-        const totalProcessed =
-          batchState.processedCount + batchState.failedCount;
-        const now = Date.now();
-        const duration = Math.round((now - batchState.batchStartTime) / 1000);
+        const batchState = batchStateRef.current;
 
-        // Only show completion toast if we actually processed something
-        if (totalProcessed > 0) {
-          if (batchState.failedCount === 0) {
-            // For single image, show simpler message
-            if (batchState.processedCount === 1) {
-              toast.success(
-                tRef.current('toast.segmentation.completed') ||
-                  `✅ Segmentation completed`,
-                { duration: 4000 }
-              );
-            } else {
-              // For multiple images, show detailed message
-              toast.success(
-                tRef.current('toast.segmentation.batchCompleted', {
-                  count: batchState.processedCount,
-                  duration: duration,
-                }) ||
-                  `✅ ${batchState.processedCount} images segmented successfully (${duration}s)`,
-                { duration: 6000 }
-              );
+        // Show batch start toast when we detect any operation (even single image)
+        // But only show the toast for operations with more than 10 items
+        if (batchState.isProcessingBatch && !batchState.hasShownStartToast) {
+          const totalItems =
+            stats.queued + stats.processing + batchState.processedCount;
+          batchState.totalCount = totalItems;
+          batchState.hasShownStartToast = true;
+
+          // Only show start toast for bulk operations (>10 items)
+          if (totalItems > 10) {
+            // Dismiss any existing batch toast and show new one
+            if (batchState.batchToastId) {
+              toast.dismiss(batchState.batchToastId);
             }
-          } else {
-            // Show warning if there were any failures
-            toast.warning(
-              tRef.current('toast.segmentation.batchCompletedWithErrors', {
-                successful: batchState.processedCount,
-                failed: batchState.failedCount,
-                duration: duration,
-              }) ||
-                `⚠️ Batch completed: ${batchState.processedCount} successful, ${batchState.failedCount} failed (${duration}s)`,
-              { duration: 8000 }
+
+            batchState.batchToastId = toast.info(
+              tRef.current('toast.segmentation.batchStarted', {
+                count: totalItems,
+              }) || `Segmentation started for ${totalItems} images`,
+              { duration: 4000 }
             );
           }
         }
 
-        // *** NEW: Call batch completion callback to refresh gallery ***
-        if (onBatchCompleted) {
-          try {
-            onBatchCompleted();
-          } catch (error) {
-            logger.error('Error in batch completion callback:', error);
+        // Detect batch completion: when processing batch and queue becomes empty
+        if (
+          batchState.isProcessingBatch &&
+          stats.queued === 0 &&
+          stats.processing === 0 &&
+          batchState.processedCount > 0
+        ) {
+          // Dismiss start toast if still showing
+          if (batchState.batchToastId) {
+            toast.dismiss(batchState.batchToastId);
           }
-        }
 
-        // Reset batch state
-        batchState.isProcessingBatch = false;
-        batchState.processedCount = 0;
-        batchState.failedCount = 0;
-        batchState.totalCount = 0;
-        batchState.lastToastTime = now;
-        batchState.batchToastId = null;
-        batchState.hasShownStartToast = false;
+          // Show batch completion summary - always show, even for single images
+          const totalProcessed =
+            batchState.processedCount + batchState.failedCount;
+          const now = Date.now();
+          const duration = Math.round((now - batchState.batchStartTime) / 1000);
+
+          // Only show completion toast if we actually processed something
+          if (totalProcessed > 0) {
+            if (batchState.failedCount === 0) {
+              // For single image, show simpler message
+              if (batchState.processedCount === 1) {
+                toast.success(
+                  tRef.current('toast.segmentation.completed') ||
+                    `✅ Segmentation completed`,
+                  { duration: 4000 }
+                );
+              } else {
+                // For multiple images, show detailed message
+                toast.success(
+                  tRef.current('toast.segmentation.batchCompleted', {
+                    count: batchState.processedCount,
+                    duration: duration,
+                  }) ||
+                    `✅ ${batchState.processedCount} images segmented successfully (${duration}s)`,
+                  { duration: 6000 }
+                );
+              }
+            } else {
+              // Show warning if there were any failures
+              toast.warning(
+                tRef.current('toast.segmentation.batchCompletedWithErrors', {
+                  successful: batchState.processedCount,
+                  failed: batchState.failedCount,
+                  duration: duration,
+                }) ||
+                  `⚠️ Batch completed: ${batchState.processedCount} successful, ${batchState.failedCount} failed (${duration}s)`,
+                { duration: 8000 }
+              );
+            }
+          }
+
+          // *** NEW: Call batch completion callback to refresh gallery ***
+          if (onBatchCompleted) {
+            try {
+              onBatchCompleted();
+            } catch (error) {
+              logger.error('Error in batch completion callback:', error);
+            }
+          }
+
+          // Reset batch state
+          batchState.isProcessingBatch = false;
+          batchState.processedCount = 0;
+          batchState.failedCount = 0;
+          batchState.totalCount = 0;
+          batchState.lastToastTime = now;
+          batchState.batchToastId = null;
+          batchState.hasShownStartToast = false;
+        }
       }
-    }
-  }, [onBatchCompleted]);
+    },
+    [onBatchCompleted]
+  );
 
   const handleNotification = useCallback((notification: Notification) => {
     // Individual segmentation-complete notifications are suppressed
@@ -433,4 +436,4 @@ export const useSegmentationQueue = (
     joinProject,
     leaveProject,
   };
-};;
+};

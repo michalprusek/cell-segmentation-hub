@@ -141,13 +141,17 @@ export class PolygonVisibilityManager {
     if (polygons.length < 10) {
       visiblePolygons = polygons.slice();
       if (process.env.NODE_ENV === 'development') {
-        console.debug(`[PolygonVisibility] Rendering all ${polygons.length} polygons (small count fallback)`);
+        console.debug(
+          `[PolygonVisibility] Rendering all ${polygons.length} polygons (small count fallback)`
+        );
       }
     } else if (polygons.length <= threshold && renderingLevel !== 'minimal') {
       // Small number of polygons - render all (create copy to avoid mutation)
       visiblePolygons = polygons.slice();
       if (process.env.NODE_ENV === 'development') {
-        console.debug(`[PolygonVisibility] Rendering all ${polygons.length} polygons (below threshold: ${threshold})`);
+        console.debug(
+          `[PolygonVisibility] Rendering all ${polygons.length} polygons (below threshold: ${threshold})`
+        );
       }
     } else {
       // Large number of polygons - apply frustum culling
@@ -159,7 +163,10 @@ export class PolygonVisibilityManager {
       visiblePolygons = visibilityData.visible;
       culledCount = visibilityData.culled;
       if (process.env.NODE_ENV === 'development') {
-        console.debug(`[PolygonVisibility] Frustum culling: ${visiblePolygons.length}/${polygons.length} visible, viewport:`, viewport);
+        console.debug(
+          `[PolygonVisibility] Frustum culling: ${visiblePolygons.length}/${polygons.length} visible, viewport:`,
+          viewport
+        );
       }
     }
 

@@ -13,7 +13,6 @@ declare global {
 // Initialize Prisma client (legacy compatibility)
 const createPrismaClient = (): PrismaClient => {
   const config = getPrismaConfig();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return config ? new PrismaClient(config as any) : new PrismaClient();
 };
 

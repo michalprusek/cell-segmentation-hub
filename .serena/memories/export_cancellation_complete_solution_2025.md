@@ -1,10 +1,13 @@
 # Export Cancellation Complete Solution - 2025
 
 ## Problem Description
+
 Users reported that clicking the cancel button during export had no effect. The export would complete and download despite multiple cancel button clicks. The progress bar also jumped from 0% to 100% instead of showing gradual updates.
 
 ## Root Cause Analysis
+
 The primary issue was in the `useAbortController` hook implementation. When `abort()` was called, it would:
+
 1. Abort the controller correctly
 2. **Delete the controller from the map** (this was the bug!)
 3. When `getSignal()` was called later, it would create a **new, non-aborted controller**
@@ -21,7 +24,9 @@ const abort = useCallback(
     const controller = controllersRef.current.get(controllerKey);
     if (controller && !controller.signal.aborted) {
       controller.abort();
-      logger.debug(`🛑 Aborted controller for ${debugContext}:${controllerKey}`);
+      logger.debug(
+        `🛑 Aborted controller for ${debugContext}:${controllerKey}`
+      );
     }
     // IMPORTANT: Don't delete the controller, keep it as aborted
     // This prevents getSignal from creating a new non-aborted controller
@@ -144,7 +149,10 @@ useEffect(() => {
         }
 
         const signal = getSignal('download');
-        logger.info('📥 Starting auto-download with signal aborted:', signal.aborted);
+        logger.info(
+          '📥 Starting auto-download with signal aborted:',
+          signal.aborted
+        );
 
         const response = await apiClient.get(
           `/projects/${projectId}/export/${completedJobId}/download`,
@@ -247,13 +255,16 @@ async cancelJob(jobId: string, projectId: string, userId: string) {
 ## Test Results
 
 ### Playwright E2E Test Verification
+
 Created comprehensive Playwright tests that verified:
+
 1. ✅ AbortController properly transitions from non-aborted to aborted state
 2. ✅ Console logs show abort signal state changes
 3. ✅ Network requests include abort signals
 4. ✅ Cancel requests are sent to backend
 
 ### Test Output
+
 ```
 [13:27:18] 🧪 Step 4: Testing AbortController directly...
 Console [log]: 🔍 Initial signal state: false

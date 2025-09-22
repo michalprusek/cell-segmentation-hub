@@ -2,7 +2,7 @@
 
 **Date**: 2025-09-22  
 **Issue**: Critical slice mode workflow bug where selecting polygon and clicking canvas deselects polygon instead of placing slice point  
-**Status**: ROOT CAUSE IDENTIFIED - Single line fix required  
+**Status**: ROOT CAUSE IDENTIFIED - Single line fix required
 
 ## User Report (Czech)
 
@@ -39,7 +39,7 @@ onClick={e => {
 if (
   e.target === e.currentTarget &&
   editor.editMode !== EditMode.AddPoints &&
-  editor.editMode !== EditMode.Slice      // ← ADD THIS LINE
+  editor.editMode !== EditMode.Slice // ← ADD THIS LINE
 ) {
   editor.handlePolygonSelection(null);
 }
@@ -56,7 +56,7 @@ if (
    - Instructions: "Select polygon to slice"
    - State: `selectedPolygonId = null`, `tempPoints = []`
 
-2. **Step 2 - Polygon Selection** 
+2. **Step 2 - Polygon Selection**
    - User clicks polygon → Polygon selected, stays in slice mode
    - Instructions: "Click to place first slice point"
    - State: `selectedPolygonId = 'polygon_id'`, `tempPoints = []`
@@ -74,7 +74,7 @@ if (
 
 ```
 ✅ Step 1: Enter slice mode
-✅ Step 2: Select polygon  
+✅ Step 2: Select polygon
 ❌ Step 3: Click canvas → DESELECTS polygon → Returns to Step 2
 ❌ User must re-select polygon repeatedly
 ❌ Never reaches slice point placement
@@ -89,11 +89,11 @@ User clicks canvas in slice mode with selected polygon
 ↓
 1. SVG onClick handler fires FIRST (SegmentationEditor.tsx:1138)
    → Checks: e.target === e.currentTarget ✅ (empty canvas)
-   → Checks: editMode !== AddPoints ✅ (is Slice mode)  
+   → Checks: editMode !== AddPoints ✅ (is Slice mode)
    → MISSING: editMode !== Slice check ❌
    → Executes: editor.handlePolygonSelection(null) ❌ DESELECTS POLYGON
 ↓
-2. useAdvancedInteractions.handleMouseDown fires SECOND  
+2. useAdvancedInteractions.handleMouseDown fires SECOND
    → Calls: handleSliceClick(imagePoint)
    → Checks: selectedPolygonId → null ❌ (was deselected in step 1)
    → Returns early: "No polygon selected"
@@ -107,7 +107,7 @@ User clicks canvas in slice mode with selected polygon
 ↓
 1. SVG onClick handler fires FIRST
    → Checks: e.target === e.currentTarget ✅
-   → Checks: editMode !== AddPoints ✅  
+   → Checks: editMode !== AddPoints ✅
    → Checks: editMode !== Slice ✅ (NEW CHECK - prevents deselection)
    → Skips deselection ✅
 ↓
@@ -123,6 +123,7 @@ User clicks canvas in slice mode with selected polygon
 ### Slice Mode State Management
 
 #### Step Tracking Logic (ModeInstructions.tsx:46-71)
+
 ```typescript
 case EditMode.Slice:
   if (!selectedPolygonId) {
@@ -132,19 +133,20 @@ case EditMode.Slice:
     // Step 2: Polygon selected, no points
     instructions: ["Click to place first slice point", "Right-click to cancel"]
   } else {
-    // Step 3: First point placed  
+    // Step 3: First point placed
     instructions: ["Click to place second slice point", "Right-click to cancel"]
   }
 ```
 
 #### Slice Point Placement (useAdvancedInteractions.tsx:317-356)
+
 ```typescript
 const handleSliceClick = (imagePoint: Point) => {
   // Step verification
   if (!selectedPolygonId) {
     return; // Early return - no polygon selected
   }
-  
+
   if (tempPoints.length === 0) {
     // Place first slice point
     setTempPoints([imagePoint]);
@@ -158,6 +160,7 @@ const handleSliceClick = (imagePoint: Point) => {
 ```
 
 #### Selection Management (usePolygonSelection.ts:131-142)
+
 ```typescript
 case EditMode.Slice:
   logger.debug('Slice mode - selecting polygon for slicing:', polygonId);
@@ -171,27 +174,33 @@ case EditMode.Slice:
 ## FILES INVOLVED
 
 ### Critical Issue File
+
 - **`/src/pages/segmentation/SegmentationEditor.tsx`** (lines 1141-1146)
   - Canvas onClick deselection logic missing slice exclusion
 
-### Supporting Files (Working Correctly)  
+### Supporting Files (Working Correctly)
+
 - **`/src/pages/segmentation/hooks/useAdvancedInteractions.tsx`** (lines 317-356)
   - Slice point placement logic
 - **`/src/pages/segmentation/hooks/usePolygonSelection.ts`** (lines 131-142)
-  - Slice mode selection handling  
+  - Slice mode selection handling
 - **`/src/pages/segmentation/components/canvas/ModeInstructions.tsx`** (lines 46-71)
   - Step-by-step instructions
 
 ## HISTORICAL CONTEXT
 
 ### Previous Fix Applied
+
 Based on memory analysis, this exact fix was previously implemented:
+
 - **Memory**: `segmentation_editor_slice_mode_canvas_deselection_fix_2025`
 - **Fix Applied**: Added `editor.editMode !== EditMode.Slice` to line 1143
 - **Status**: Fix was somehow reverted in recent changes
 
 ### Why This Bug Returned
+
 The fix was likely lost during:
+
 1. Code refactoring or merge conflicts
 2. Reverting commits that accidentally removed the fix
 3. File restoration from backup without the fix
@@ -201,6 +210,7 @@ The fix was likely lost during:
 ### Test Cases for Fix Validation
 
 1. **Basic Slice Workflow**
+
    ```
    1. Press 'S' → Should enter slice mode ✅
    2. Click polygon → Should select polygon, stay in slice mode ✅
@@ -208,7 +218,8 @@ The fix was likely lost during:
    4. Click canvas again → Should complete slice operation ✅
    ```
 
-2. **Mode Preservation Test**  
+2. **Mode Preservation Test**
+
    ```
    - After polygon selection in slice mode → editMode should remain EditMode.Slice
    - After first point placement → editMode should remain EditMode.Slice
@@ -218,7 +229,7 @@ The fix was likely lost during:
 3. **Other Mode Verification**
    ```
    - View mode: Canvas click should still deselect polygons ✅
-   - EditVertices mode: Canvas click should still deselect polygons ✅  
+   - EditVertices mode: Canvas click should still deselect polygons ✅
    - AddPoints mode: Canvas click should NOT deselect (existing) ✅
    - Slice mode: Canvas click should NOT deselect (fix) ✅
    ```
@@ -226,6 +237,7 @@ The fix was likely lost during:
 ## SOLUTION IMPLEMENTATION
 
 ### Immediate Fix (Single Line)
+
 ```typescript
 // File: /src/pages/segmentation/SegmentationEditor.tsx
 // Line: 1143-1144 (add after existing AddPoints check)
@@ -233,13 +245,14 @@ The fix was likely lost during:
 if (
   e.target === e.currentTarget &&
   editor.editMode !== EditMode.AddPoints &&
-  editor.editMode !== EditMode.Slice      // ← ADD THIS LINE
+  editor.editMode !== EditMode.Slice // ← ADD THIS LINE
 ) {
   editor.handlePolygonSelection(null);
 }
 ```
 
 ### Alternative Centralized Solution
+
 For better maintainability, create mode configuration:
 
 ```typescript
@@ -261,7 +274,7 @@ if (
 ## SUCCESS METRICS
 
 - ✅ Slice mode workflow completes without interruption
-- ✅ Polygon selection persists through slice point placement  
+- ✅ Polygon selection persists through slice point placement
 - ✅ Step-by-step instructions work correctly
 - ✅ Other editing modes unaffected
 - ✅ Canvas deselection works in View/EditVertices modes

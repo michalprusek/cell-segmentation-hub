@@ -7,10 +7,11 @@
 **PROBLEM**: The `cancelJob()` method in `exportService.ts` (lines 1495-1531) does NOT emit a WebSocket event when called via HTTP API.
 
 **Current Implementation**:
+
 ```typescript
 async cancelJob(jobId: string, projectId: string, userId: string): Promise<void> {
   // ... access checks ...
-  
+
   const job = this.exportJobs.get(jobId);
   if (job && job.projectId === projectId) {
     job.status = 'cancelled';
@@ -40,6 +41,7 @@ async cancelJob(jobId: string, projectId: string, userId: string): Promise<void>
 **PROBLEM**: Progress updates in `updateJobProgress()` (lines 1340-1370) are called at fixed intervals rather than granular updates.
 
 **Current Progress Points**:
+
 - Line 343: `updateJobProgress(jobId, 10)` - After folder creation
 - Line 369: `updateJobProgress(jobId, 10 + progressStep * progressIncrement)` - After each major task
 - Line 431: `updateJobProgress(jobId, 90)` - After all tasks complete
@@ -52,6 +54,7 @@ async cancelJob(jobId: string, projectId: string, userId: string): Promise<void>
 **PROBLEM**: `websocketService.ts` handles `operation:cancel` events (lines 272-355) but NOT specific `export:cancel` events.
 
 **Current Handler**:
+
 ```typescript
 // ✅ Has generic operation:cancel handler
 socket.on('operation:cancel', async (data: {
@@ -78,13 +81,16 @@ socket.on('operation:cancel', async (data: {
 **PROBLEM**: `useSharedAdvancedExport.ts` cancelExport function (lines 618-662) has race condition potential.
 
 **Current Implementation**:
+
 ```typescript
 const cancelExport = useCallback(async () => {
   // ... immediate state update ...
-  
+
   try {
     // ✅ HTTP API call
-    await apiClient.post(`/projects/${projectId}/export/${currentJob.id}/cancel`);
+    await apiClient.post(
+      `/projects/${projectId}/export/${currentJob.id}/cancel`
+    );
 
     // ✅ WebSocket emit
     if (socket && socket.connected) {
@@ -93,7 +99,7 @@ const cancelExport = useCallback(async () => {
         projectId,
       });
     }
-    
+
     // ❌ RACE CONDITION: Immediate state clear before server confirmation
     updateState({
       currentJob: null,
@@ -107,6 +113,7 @@ const cancelExport = useCallback(async () => {
 ```
 
 **ISSUES**:
+
 1. State cleared immediately instead of waiting for server confirmation
 2. WebSocket `export:cancel` event not handled by server
 3. Export might complete before cancellation takes effect
@@ -116,19 +123,20 @@ const cancelExport = useCallback(async () => {
 **PROBLEM**: `ExportProgressPanel.tsx` implements confusing two-phase progress (lines 164-182).
 
 **Current Logic**:
+
 ```typescript
 const getProgressPercentage = () => {
   // ...
-  
+
   // Two-phase progress: Processing (0-50%) + Downloading (50-100%)
   if (phase === 'downloading') {
     return Math.round(50 + exportProgress * 0.5);
   }
-  
+
   if (isExporting && !isDownloading) {
     return Math.round(exportProgress * 0.5);
   }
-  
+
   return Math.round(exportProgress);
 };
 ```
@@ -140,12 +148,14 @@ const getProgressPercentage = () => {
 ### Missing WebSocket Event Chain
 
 **Expected Flow**:
+
 1. User clicks cancel → HTTP API call + WebSocket emit
 2. Server receives HTTP request → exportService.cancelJob()
 3. exportService.cancelJob() → Emits WebSocket event
 4. Frontend receives WebSocket event → Updates UI
 
 **Actual Flow**:
+
 1. User clicks cancel → HTTP API call + WebSocket emit ✅
 2. Server receives HTTP request → exportService.cancelJob() ✅
 3. exportService.cancelJob() → ❌ NO WebSocket event emitted
@@ -166,6 +176,7 @@ const getProgressPercentage = () => {
 ## IMMEDIATE FIXES REQUIRED
 
 1. **Add WebSocket emission to cancelJob()**:
+
    ```typescript
    // In exportService.ts cancelJob method, add:
    this.sendToUser(userId, 'export:cancelled', cancelData);

@@ -18,6 +18,7 @@ The polygons in the segmentation editor were not properly aligning with the imag
 The core problem was **architectural positioning** - the WebGLPolygonRenderer was placed outside the CanvasContent transform container:
 
 **Before Fix Structure:**
+
 ```jsx
 <CanvasContent transform={editor.transform}>
   <CanvasImage /> {/* Image gets proper transforms */}
@@ -27,6 +28,7 @@ The core problem was **architectural positioning** - the WebGLPolygonRenderer wa
 ```
 
 **Problems with this architecture:**
+
 1. **WebGLPolygonRenderer outside CanvasContent** - doesn't inherit CSS transforms
 2. **Manual transform calculations** via DOMMatrix - prone to synchronization issues
 3. **Disabled SVG rendering** without proper replacement inside transform container
@@ -52,6 +54,7 @@ zoom={editor.transform.zoom}      // Manual zoom prop
 ```
 
 This approach failed because:
+
 - **CSS transforms vs manual calculations** have different timing
 - **Browser rendering optimizations** for CSS transforms weren't applied
 - **Floating-point precision** differences between manual and CSS calculations
@@ -62,6 +65,7 @@ This approach failed because:
 ### Fix: Move WebGLPolygonRenderer Inside CanvasContent
 
 **After Fix Structure:**
+
 ```jsx
 <CanvasContent transform={editor.transform}>
   <CanvasImage /> {/* Image gets proper transforms */}
@@ -94,12 +98,13 @@ This approach failed because:
 #### 2. Simplified Transform Props
 
 **Before (Manual Calculations):**
+
 ```typescript
 transform={
   new DOMMatrix([
     editor.transform.zoom,        // Manual zoom calculation
     0,
-    0, 
+    0,
     editor.transform.zoom,        // Manual zoom calculation
     editor.transform.translateX,  // Manual translation
     editor.transform.translateY,  // Manual translation
@@ -109,13 +114,14 @@ zoom={editor.transform.zoom}      // Manual zoom prop
 ```
 
 **After (Inherit CSS Transforms):**
+
 ```typescript
 transform={
   new DOMMatrix([
     1, // zoom removed - handled by CanvasContent transform
     0,
     0,
-    1, // zoom removed - handled by CanvasContent transform  
+    1, // zoom removed - handled by CanvasContent transform
     0, // translateX removed - handled by CanvasContent transform
     0, // translateY removed - handled by CanvasContent transform
   ])
@@ -130,13 +136,18 @@ zoom={1} // zoom handled by CanvasContent
 **After**: Clean comment explaining that polygon rendering is handled by WebGL
 
 ```jsx
-{/* Polygon rendering now handled by WebGL inside CanvasContent */}
-{/* This SVG layer is now only for UI elements and temporary geometry */}
+{
+  /* Polygon rendering now handled by WebGL inside CanvasContent */
+}
+{
+  /* This SVG layer is now only for UI elements and temporary geometry */
+}
 ```
 
 #### 4. Removed Duplicate WebGLPolygonRenderer
 
 **Before**: WebGLPolygonRenderer existed in two places:
+
 1. Disabled SVG section (returning null)
 2. Outside CanvasContent (with manual transforms)
 
@@ -204,6 +215,7 @@ With this fix, users should experience:
 ### Why Keep SVG Layer?
 
 The SVG layer is still needed for:
+
 - **Temporary geometry** (preview lines, temp points)
 - **UI overlays** (mode instructions, indicators)
 - **Interactive elements** that need SVG event handling
@@ -259,7 +271,7 @@ make logs-f
 This fix is **backward compatible** and **low-risk**:
 
 - **No data structure changes** - all polygon data unchanged
-- **No API changes** - all endpoints and responses identical  
+- **No API changes** - all endpoints and responses identical
 - **No state changes** - selection and editing logic preserved
 - **Rollback simple** - can revert to previous positioning if needed
 

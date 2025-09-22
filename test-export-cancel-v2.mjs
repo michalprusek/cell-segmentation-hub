@@ -15,17 +15,17 @@ const colors = {
   yellow: '\x1b[33m',
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
-  cyan: '\x1b[36m'
+  cyan: '\x1b[36m',
 };
 
 function log(message, type = 'info') {
   const timestamp = new Date().toISOString().substring(11, 19);
   const typeColors = {
-    'info': colors.blue,
-    'success': colors.green,
-    'warning': colors.yellow,
-    'error': colors.red,
-    'debug': colors.magenta
+    info: colors.blue,
+    success: colors.green,
+    warning: colors.yellow,
+    error: colors.red,
+    debug: colors.magenta,
   };
   const color = typeColors[type] || colors.reset;
   console.log(`${color}[${timestamp}] ${message}${colors.reset}`);
@@ -42,12 +42,12 @@ async function testExportCancellation() {
     // Launch browser
     browser = await chromium.launch({
       headless: true,
-      slowMo: 50
+      slowMo: 50,
     });
 
     context = await browser.newContext({
       viewport: { width: 1920, height: 1080 },
-      ignoreHTTPSErrors: true
+      ignoreHTTPSErrors: true,
     });
 
     page = await context.newPage();
@@ -59,8 +59,14 @@ async function testExportCancellation() {
       consoleLogs.push({ type: msg.type(), text, timestamp: new Date() });
 
       // Log specific debug messages
-      if (text.includes('export') || text.includes('cancel') || text.includes('abort') ||
-          text.includes('🔴') || text.includes('📥') || text.includes('signal')) {
+      if (
+        text.includes('export') ||
+        text.includes('cancel') ||
+        text.includes('abort') ||
+        text.includes('🔴') ||
+        text.includes('📥') ||
+        text.includes('signal')
+      ) {
         log(`Browser Console: ${text}`, 'debug');
       }
     });
@@ -107,7 +113,9 @@ async function testExportCancellation() {
     await page.screenshot({ path: 'screenshots/04-dashboard.png' });
 
     // Find or create a project
-    const projectCards = await page.locator('[class*="card"], [class*="project"], a[href*="/projects/"]').all();
+    const projectCards = await page
+      .locator('[class*="card"], [class*="project"], a[href*="/projects/"]')
+      .all();
     log(`Found ${projectCards.length} project cards`, 'debug');
 
     if (projectCards.length > 0) {
@@ -117,7 +125,9 @@ async function testExportCancellation() {
     } else {
       // Try to create a project
       log('Creating new project...', 'info');
-      const createBtn = await page.locator('button:has-text("Create"), button:has-text("New")').first();
+      const createBtn = await page
+        .locator('button:has-text("Create"), button:has-text("New")')
+        .first();
       if (await createBtn.isVisible()) {
         await createBtn.click();
         await page.fill('input[name="name"]', 'Test Export Project');
@@ -143,7 +153,7 @@ async function testExportCancellation() {
       '.export-button',
       'button svg[class*="download"]',
       'button:has(svg[class*="archive"])',
-      'text=/export/i'
+      'text=/export/i',
     ];
 
     let exportBtn = null;
@@ -170,7 +180,10 @@ async function testExportCancellation() {
         log(`Button ${i}: "${text?.trim()}"`, 'debug');
       }
 
-      await page.screenshot({ path: 'screenshots/06-no-export-button.png', fullPage: true });
+      await page.screenshot({
+        path: 'screenshots/06-no-export-button.png',
+        fullPage: true,
+      });
       log('❌ Could not find export button', 'error');
       return;
     }
@@ -186,7 +199,7 @@ async function testExportCancellation() {
       '[role="dialog"]',
       '[class*="modal"]',
       '[class*="dialog"]',
-      '.export-dialog'
+      '.export-dialog',
     ];
 
     let dialogFound = false;
@@ -198,9 +211,11 @@ async function testExportCancellation() {
         await page.screenshot({ path: 'screenshots/08-export-dialog.png' });
 
         // Start the export
-        const startBtn = await page.locator(
-          'button:has-text("Start"), button:has-text("Export"), button:has-text("Download")'
-        ).last();
+        const startBtn = await page
+          .locator(
+            'button:has-text("Start"), button:has-text("Export"), button:has-text("Download")'
+          )
+          .last();
 
         if (await startBtn.isVisible()) {
           await startBtn.click();
@@ -222,7 +237,7 @@ async function testExportCancellation() {
       'button[aria-label*="cancel"]',
       '[data-testid*="cancel"]',
       'button[title*="cancel"]',
-      '.cancel-button'
+      '.cancel-button',
     ];
 
     let cancelBtn = null;
@@ -256,20 +271,22 @@ async function testExportCancellation() {
       await page.screenshot({ path: 'screenshots/10-after-cancel.png' });
 
       // Check console logs after cancel
-      const newLogs = consoleLogs.filter(l =>
-        l.timestamp > new Date(Date.now() - 3000)
+      const newLogs = consoleLogs.filter(
+        l => l.timestamp > new Date(Date.now() - 3000)
       );
 
       if (newLogs.length > 0) {
         log('📊 Console logs after cancel:', 'debug');
-        newLogs.forEach(l => console.log(`  ${colors.cyan}${l.text}${colors.reset}`));
+        newLogs.forEach(l =>
+          console.log(`  ${colors.cyan}${l.text}${colors.reset}`)
+        );
       }
 
       // Look for cancellation confirmation
       const cancelMessages = [
         'text=/cancelled/i',
         'text=/abort/i',
-        'text=/cancel/i'
+        'text=/cancel/i',
       ];
 
       let cancelConfirmed = false;
@@ -288,11 +305,12 @@ async function testExportCancellation() {
       }
 
       // Check for abort controller logs
-      const abortLogs = consoleLogs.filter(l =>
-        l.text.includes('abort') ||
-        l.text.includes('signal') ||
-        l.text.includes('🔴') ||
-        l.text.includes('Download cancelled')
+      const abortLogs = consoleLogs.filter(
+        l =>
+          l.text.includes('abort') ||
+          l.text.includes('signal') ||
+          l.text.includes('🔴') ||
+          l.text.includes('Download cancelled')
       );
 
       if (abortLogs.length > 0) {
@@ -305,7 +323,10 @@ async function testExportCancellation() {
       }
     } else {
       log('❌ Cancel button not found', 'error');
-      await page.screenshot({ path: 'screenshots/11-no-cancel.png', fullPage: true });
+      await page.screenshot({
+        path: 'screenshots/11-no-cancel.png',
+        fullPage: true,
+      });
     }
 
     // Test Summary
@@ -320,20 +341,23 @@ async function testExportCancellation() {
       log('  ✅ No errors in console', 'success');
     }
 
-    const abortRelatedLogs = consoleLogs.filter(l =>
-      l.text.toLowerCase().includes('abort') ||
-      l.text.toLowerCase().includes('cancel')
+    const abortRelatedLogs = consoleLogs.filter(
+      l =>
+        l.text.toLowerCase().includes('abort') ||
+        l.text.toLowerCase().includes('cancel')
     );
     log(`  Cancel/Abort logs: ${abortRelatedLogs.length}`, 'info');
 
     log('✅ Test completed', 'success');
-
   } catch (error) {
     log(`❌ Test failed: ${error.message}`, 'error');
     console.error(error);
 
     if (page) {
-      await page.screenshot({ path: 'screenshots/error-state.png', fullPage: true });
+      await page.screenshot({
+        path: 'screenshots/error-state.png',
+        fullPage: true,
+      });
     }
   } finally {
     if (browser) {

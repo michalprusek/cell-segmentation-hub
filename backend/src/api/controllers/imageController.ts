@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { ImageService } from '../../services/imageService';
-import { ThumbnailService } from '../../services/thumbnailService';
+// Removed ThumbnailService - using unified approach with SegmentationThumbnailService only
 import { SegmentationThumbnailService } from '../../services/segmentationThumbnailService';
 import { WebSocketService } from '../../services/websocketService';
 import {
@@ -17,12 +17,12 @@ import * as SharingService from '../../services/sharingService';
 
 export class ImageController {
   private imageService: ImageService;
-  private thumbnailService: ThumbnailService;
+  // Removed thumbnailService - using unified approach
   private segmentationThumbnailService: SegmentationThumbnailService;
 
   constructor() {
     this.imageService = new ImageService(prisma);
-    this.thumbnailService = new ThumbnailService(prisma);
+    // Unified thumbnail approach - no polygon service needed
     this.segmentationThumbnailService = new SegmentationThumbnailService(
       prisma
     );

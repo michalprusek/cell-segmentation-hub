@@ -110,192 +110,196 @@ const App = () => (
                 <LanguageProvider>
                   <ToastEventProvider>
                     <ModelProvider>
-                    <Sonner
-                      position="bottom-right"
-                      closeButton
-                      toastOptions={{
-                        className: 'animate-slide-in-right',
-                      }}
-                    />
-                    <div className="app-container animate-fade-in">
-                      <ErrorBoundary>
-                        <Routes>
-                          <Route
-                            path="/"
-                            element={
-                              <Suspense fallback={<PageLoadingFallback />}>
-                                <Index />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/sign-in"
-                            element={
-                              <Suspense
-                                fallback={<PageLoadingFallback type="form" />}
-                              >
-                                <SignIn />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/sign-up"
-                            element={
-                              <Suspense
-                                fallback={<PageLoadingFallback type="form" />}
-                              >
-                                <SignUp />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/forgot-password"
-                            element={
-                              <Suspense
-                                fallback={<PageLoadingFallback type="form" />}
-                              >
-                                <ForgotPassword />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/reset-password"
-                            element={
-                              <Suspense
-                                fallback={<PageLoadingFallback type="form" />}
-                              >
-                                <ResetPassword />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/documentation"
-                            element={
-                              <Suspense fallback={<PageLoadingFallback />}>
-                                <Documentation />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/terms-of-service"
-                            element={
-                              <Suspense fallback={<PageLoadingFallback />}>
-                                <TermsOfService />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/privacy-policy"
-                            element={
-                              <Suspense fallback={<PageLoadingFallback />}>
-                                <PrivacyPolicy />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/share/accept/:token"
-                            element={
-                              <Suspense fallback={<PageLoadingFallback />}>
-                                <ShareAccept />
-                              </Suspense>
-                            }
-                          />
-                          <Route
-                            path="/dashboard"
-                            element={
-                              <ProtectedRoute>
-                                <Suspense
-                                  fallback={
-                                    <PageLoadingFallback type="dashboard" />
-                                  }
-                                >
-                                  <Dashboard />
-                                </Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="/project/:id"
-                            element={
-                              <ProtectedRoute>
-                                <Suspense
-                                  fallback={
-                                    <PageLoadingFallback type="dashboard" />
-                                  }
-                                >
-                                  <ProjectDetail />
-                                </Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="/segmentation/:projectId/:imageId"
-                            element={
-                              <ProtectedRoute>
-                                <Suspense
-                                  fallback={
-                                    <PageLoadingFallback type="editor" />
-                                  }
-                                >
-                                  <SegmentationEditor />
-                                </Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="/project/:id/export"
-                            element={
-                              <ProtectedRoute>
+                      <Sonner
+                        position="bottom-right"
+                        closeButton
+                        toastOptions={{
+                          className: 'animate-slide-in-right',
+                        }}
+                      />
+                      <div className="app-container animate-fade-in">
+                        <ErrorBoundary>
+                          <Routes>
+                            <Route
+                              path="/"
+                              element={
                                 <Suspense fallback={<PageLoadingFallback />}>
-                                  <ProjectExport />
+                                  <Index />
                                 </Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="/settings"
-                            element={
-                              <ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/sign-in"
+                              element={
                                 <Suspense
                                   fallback={<PageLoadingFallback type="form" />}
                                 >
-                                  <Settings />
+                                  <SignIn />
                                 </Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
-                          <Route
-                            path="/profile"
-                            element={
-                              <ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/sign-up"
+                              element={
                                 <Suspense
                                   fallback={<PageLoadingFallback type="form" />}
                                 >
-                                  <Profile />
+                                  <SignUp />
                                 </Suspense>
-                              </ProtectedRoute>
-                            }
-                          />
+                              }
+                            />
+                            <Route
+                              path="/forgot-password"
+                              element={
+                                <Suspense
+                                  fallback={<PageLoadingFallback type="form" />}
+                                >
+                                  <ForgotPassword />
+                                </Suspense>
+                              }
+                            />
+                            <Route
+                              path="/reset-password"
+                              element={
+                                <Suspense
+                                  fallback={<PageLoadingFallback type="form" />}
+                                >
+                                  <ResetPassword />
+                                </Suspense>
+                              }
+                            />
+                            <Route
+                              path="/documentation"
+                              element={
+                                <Suspense fallback={<PageLoadingFallback />}>
+                                  <Documentation />
+                                </Suspense>
+                              }
+                            />
+                            <Route
+                              path="/terms-of-service"
+                              element={
+                                <Suspense fallback={<PageLoadingFallback />}>
+                                  <TermsOfService />
+                                </Suspense>
+                              }
+                            />
+                            <Route
+                              path="/privacy-policy"
+                              element={
+                                <Suspense fallback={<PageLoadingFallback />}>
+                                  <PrivacyPolicy />
+                                </Suspense>
+                              }
+                            />
+                            <Route
+                              path="/share/accept/:token"
+                              element={
+                                <Suspense fallback={<PageLoadingFallback />}>
+                                  <ShareAccept />
+                                </Suspense>
+                              }
+                            />
+                            <Route
+                              path="/dashboard"
+                              element={
+                                <ProtectedRoute>
+                                  <Suspense
+                                    fallback={
+                                      <PageLoadingFallback type="dashboard" />
+                                    }
+                                  >
+                                    <Dashboard />
+                                  </Suspense>
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/project/:id"
+                              element={
+                                <ProtectedRoute>
+                                  <Suspense
+                                    fallback={
+                                      <PageLoadingFallback type="dashboard" />
+                                    }
+                                  >
+                                    <ProjectDetail />
+                                  </Suspense>
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/segmentation/:projectId/:imageId"
+                              element={
+                                <ProtectedRoute>
+                                  <Suspense
+                                    fallback={
+                                      <PageLoadingFallback type="editor" />
+                                    }
+                                  >
+                                    <SegmentationEditor />
+                                  </Suspense>
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/project/:id/export"
+                              element={
+                                <ProtectedRoute>
+                                  <Suspense fallback={<PageLoadingFallback />}>
+                                    <ProjectExport />
+                                  </Suspense>
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/settings"
+                              element={
+                                <ProtectedRoute>
+                                  <Suspense
+                                    fallback={
+                                      <PageLoadingFallback type="form" />
+                                    }
+                                  >
+                                    <Settings />
+                                  </Suspense>
+                                </ProtectedRoute>
+                              }
+                            />
+                            <Route
+                              path="/profile"
+                              element={
+                                <ProtectedRoute>
+                                  <Suspense
+                                    fallback={
+                                      <PageLoadingFallback type="form" />
+                                    }
+                                  >
+                                    <Profile />
+                                  </Suspense>
+                                </ProtectedRoute>
+                              }
+                            />
 
-                          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-                          <Route
-                            path="*"
-                            element={
-                              <Suspense fallback={<PageLoadingFallback />}>
-                                <NotFound />
-                              </Suspense>
-                            }
-                          />
-                        </Routes>
-                      </ErrorBoundary>
-                    </div>
-                  </ModelProvider>
-                </ToastEventProvider>
-              </LanguageProvider>
-            </ThemeProvider>
-          </ExportProvider>
-        </WebSocketProvider>
-      </AuthProvider>
+                            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                            <Route
+                              path="*"
+                              element={
+                                <Suspense fallback={<PageLoadingFallback />}>
+                                  <NotFound />
+                                </Suspense>
+                              }
+                            />
+                          </Routes>
+                        </ErrorBoundary>
+                      </div>
+                    </ModelProvider>
+                  </ToastEventProvider>
+                </LanguageProvider>
+              </ThemeProvider>
+            </ExportProvider>
+          </WebSocketProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
