@@ -137,9 +137,18 @@ export class PolygonVisibilityManager {
     let visiblePolygons: Polygon[];
     let culledCount = 0;
 
-    if (polygons.length <= threshold && renderingLevel !== 'minimal') {
+    // Fallback: Always render all polygons when count is very low (< 10) to prevent false negatives
+    if (polygons.length < 10) {
+      visiblePolygons = polygons.slice();
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`[PolygonVisibility] Rendering all ${polygons.length} polygons (small count fallback)`);
+      }
+    } else if (polygons.length <= threshold && renderingLevel !== 'minimal') {
       // Small number of polygons - render all (create copy to avoid mutation)
       visiblePolygons = polygons.slice();
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`[PolygonVisibility] Rendering all ${polygons.length} polygons (below threshold: ${threshold})`);
+      }
     } else {
       // Large number of polygons - apply frustum culling
       const visibilityData = this.performFrustumCulling(
@@ -149,6 +158,9 @@ export class PolygonVisibilityManager {
       );
       visiblePolygons = visibilityData.visible;
       culledCount = visibilityData.culled;
+      if (process.env.NODE_ENV === 'development') {
+        console.debug(`[PolygonVisibility] Frustum culling: ${visiblePolygons.length}/${polygons.length} visible, viewport:`, viewport);
+      }
     }
 
     // Ensure selected polygon is always visible
@@ -192,9 +204,10 @@ export class PolygonVisibilityManager {
   private calculateViewport(context: VisibilityContext): ViewportBounds {
     const { zoom, offset, containerWidth, containerHeight } = context;
 
+    // Fix: Divide offset by zoom to get correct viewport coordinates in image space
     return {
-      x: -offset.x,
-      y: -offset.y,
+      x: -offset.x / zoom,
+      y: -offset.y / zoom,
       width: containerWidth / zoom,
       height: containerHeight / zoom,
     };

@@ -354,6 +354,55 @@ export class WebSocketService {
         }
       });
 
+      // Handle direct export cancellation via WebSocket
+      socket.on('export:cancel', async (data: {
+        jobId: string;
+        projectId: string;
+      }) => {
+        try {
+          if (!socket.userId) {
+            logger.warn('Unauthenticated socket attempted to cancel export', 'WebSocketService', {
+              socketId: socket.id,
+              jobId: data.jobId
+            });
+            return;
+          }
+
+          logger.info('Export cancellation requested via direct WebSocket event', 'WebSocketService', {
+            userId: socket.userId,
+            jobId: data.jobId,
+            projectId: data.projectId
+          });
+
+          // Import export service dynamically to avoid circular dependencies
+          const { ExportService } = await import('./exportService');
+          const exportService = ExportService.getInstance();
+
+          // Call the export service cancelJob method directly
+          await exportService.cancelJob(data.jobId, data.projectId, socket.userId);
+
+          logger.info('Export successfully cancelled via WebSocket', 'WebSocketService', {
+            userId: socket.userId,
+            jobId: data.jobId,
+            projectId: data.projectId
+          });
+
+        } catch (error) {
+          logger.error('Error handling export cancellation via WebSocket', error instanceof Error ? error : undefined, 'WebSocketService', {
+            userId: socket.userId,
+            jobId: data.jobId,
+            projectId: data.projectId
+          });
+
+          // Send error back to client
+          socket.emit('export:cancel-error', {
+            jobId: data.jobId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+            timestamp: new Date().toISOString()
+          });
+        }
+      });
+
       // Handle disconnection
       socket.on('disconnect', (reason: string) => {
         logger.info('User disconnected from WebSocket', 'WebSocketService', {

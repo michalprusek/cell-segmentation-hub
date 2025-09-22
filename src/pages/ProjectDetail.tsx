@@ -16,7 +16,7 @@ import ProjectImages from '@/components/project/ProjectImages';
 import ProjectUploaderSection from '@/components/project/ProjectUploaderSection';
 import { QueueStatsPanel } from '@/components/project/QueueStatsPanel';
 import { ExportProgressPanel } from '@/components/project/ExportProgressPanel';
-import { useAdvancedExport } from '@/pages/export/hooks/useAdvancedExport';
+import { useSharedAdvancedExport } from '@/pages/export/hooks/useSharedAdvancedExport';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';

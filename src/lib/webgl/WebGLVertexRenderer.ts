@@ -491,24 +491,19 @@ export class WebGLVertexRenderer {
     gl.useProgram(program);
 
     // Set uniforms
+    // Use identity transform when canvas inherits CSS transforms from CanvasContent
     const transformMatrix = new Float32Array([
-      transform.a,
-      transform.c,
-      transform.e,
-      transform.b,
-      transform.d,
-      transform.f,
-      0,
-      0,
-      1,
+      1, 0, 0,  // Scale X, Skew X, Translate X
+      0, 1, 0,  // Skew Y, Scale Y, Translate Y
+      0, 0, 1,  // Homogeneous coordinates
     ]);
 
     gl.uniformMatrix3fv(uniforms.transform, false, transformMatrix);
     gl.uniform2f(uniforms.resolution, width, height);
-    gl.uniform1f(uniforms.zoom, zoom);
+    gl.uniform1f(uniforms.zoom, 1); // CSS handles zoom
     gl.uniform1f(uniforms.pixelRatio, window.devicePixelRatio);
     gl.uniform1f(uniforms.time, (Date.now() - this.startTime) / 1000);
-    gl.uniform1f(uniforms.antialias, 2.0 / zoom); // Zoom-adaptive anti-aliasing
+    gl.uniform1f(uniforms.antialias, 2.0); // Fixed anti-aliasing since CSS handles zoom
 
     // Render instances
     gl.bindVertexArray(vao);
