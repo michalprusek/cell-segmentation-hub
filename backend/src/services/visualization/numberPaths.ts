@@ -20,8 +20,15 @@ export const NUMBER_PATH_CONFIG = {
 } as const;
 
 // Type-safe canvas operation interface
-type CanvasMethodName = 'beginPath' | 'moveTo' | 'lineTo' | 'quadraticCurveTo' | 
-                        'stroke' | 'arc' | 'fill' | 'closePath';
+type CanvasMethodName =
+  | 'beginPath'
+  | 'moveTo'
+  | 'lineTo'
+  | 'quadraticCurveTo'
+  | 'stroke'
+  | 'arc'
+  | 'fill'
+  | 'closePath';
 
 interface CanvasOperation {
   type: CanvasMethodName;
@@ -56,20 +63,30 @@ class NumberPathCache {
   get(number: number, size: number): CanvasOperation[] | null {
     const key = this.getCacheKey(number, size);
     const cached = this.cache.get(key);
-    
+
     if (cached) {
       cached.lastAccessed = Date.now();
       this.cacheHits++;
-      
+
       // Log cache performance periodically
-      if ((this.cacheHits + this.cacheMisses) % NUMBER_PATH_CONFIG.CACHE_LOG_INTERVAL === 0) {
-        const hitRate = (this.cacheHits / (this.cacheHits + this.cacheMisses) * 100).toFixed(1);
-        logger.debug(`Number path cache hit rate: ${hitRate}% (${this.cacheHits} hits, ${this.cacheMisses} misses)`, 'NumberPathCache');
+      if (
+        (this.cacheHits + this.cacheMisses) %
+          NUMBER_PATH_CONFIG.CACHE_LOG_INTERVAL ===
+        0
+      ) {
+        const hitRate = (
+          (this.cacheHits / (this.cacheHits + this.cacheMisses)) *
+          100
+        ).toFixed(1);
+        logger.debug(
+          `Number path cache hit rate: ${hitRate}% (${this.cacheHits} hits, ${this.cacheMisses} misses)`,
+          'NumberPathCache'
+        );
       }
-      
+
       return cached.operations;
     }
-    
+
     this.cacheMisses++;
     return null;
   }
@@ -79,21 +96,21 @@ class NumberPathCache {
    */
   set(number: number, size: number, operations: CanvasOperation[]): void {
     const key = this.getCacheKey(number, size);
-    
+
     // Implement LRU eviction if cache is full
     if (this.cache.size >= this.maxCacheSize) {
       this.evictLeastRecentlyUsed();
     }
-    
+
     this.cache.set(key, {
       operations: operations,
-      lastAccessed: Date.now()
+      lastAccessed: Date.now(),
     });
-    
+
     // Schedule periodic cleanup if not already scheduled
     this.scheduleCleanup();
   }
-  
+
   /**
    * Schedule periodic cache cleanup to remove stale entries
    */
@@ -101,30 +118,36 @@ class NumberPathCache {
     if (this.cleanupTimer) {
       return; // Already scheduled
     }
-    
+
     // Clean up cache every 5 minutes
-    this.cleanupTimer = setTimeout(() => {
-      this.cleanupStaleEntries();
-      this.cleanupTimer = null;
-    }, 5 * 60 * 1000);
+    this.cleanupTimer = setTimeout(
+      () => {
+        this.cleanupStaleEntries();
+        this.cleanupTimer = null;
+      },
+      5 * 60 * 1000
+    );
   }
-  
+
   /**
    * Remove entries that haven't been accessed in the last hour
    */
   private cleanupStaleEntries(): void {
-    const staleThreshold = Date.now() - (60 * 60 * 1000); // 1 hour
+    const staleThreshold = Date.now() - 60 * 60 * 1000; // 1 hour
     let removedCount = 0;
-    
+
     for (const [key, value] of this.cache.entries()) {
       if (value.lastAccessed < staleThreshold) {
         this.cache.delete(key);
         removedCount++;
       }
     }
-    
+
     if (removedCount > 0) {
-      logger.debug(`Cleaned up ${removedCount} stale cache entries`, 'NumberPathCache');
+      logger.debug(
+        `Cleaned up ${removedCount} stale cache entries`,
+        'NumberPathCache'
+      );
     }
   }
 
@@ -134,14 +157,14 @@ class NumberPathCache {
   private evictLeastRecentlyUsed(): void {
     let oldestKey: string | null = null;
     let oldestTime = Date.now();
-    
+
     for (const [key, value] of this.cache.entries()) {
       if (value.lastAccessed < oldestTime) {
         oldestTime = value.lastAccessed;
         oldestKey = key;
       }
     }
-    
+
     if (oldestKey) {
       this.cache.delete(oldestKey);
     }
@@ -170,7 +193,7 @@ class NumberPathCache {
       hits: this.cacheHits,
       misses: this.cacheMisses,
       size: this.cache.size,
-      hitRate: total > 0 ? this.cacheHits / total : 0
+      hitRate: total > 0 ? this.cacheHits / total : 0,
     };
   }
 }
@@ -204,8 +227,17 @@ class OperationRecorder {
     this.operations.push({ type: 'stroke', args: [] });
   }
 
-  arc(x: number, y: number, radius: number, startAngle: number, endAngle: number): void {
-    this.operations.push({ type: 'arc', args: [x, y, radius, startAngle, endAngle] });
+  arc(
+    x: number,
+    y: number,
+    radius: number,
+    startAngle: number,
+    endAngle: number
+  ): void {
+    this.operations.push({
+      type: 'arc',
+      args: [x, y, radius, startAngle, endAngle],
+    });
   }
 
   fill(): void {
@@ -221,36 +253,52 @@ class OperationRecorder {
         this.executeOperation(ctx, op);
       }
     } catch (error) {
-      logger.warn(`Failed to replay canvas operations: ${error}`, 'OperationRecorder');
+      logger.warn(
+        `Failed to replay canvas operations: ${error}`,
+        'OperationRecorder'
+      );
       // Fallback: try simple rendering
       this.fallbackRender(ctx);
     }
   }
-  
+
   /**
    * Execute a single canvas operation with type safety
    */
-  private executeOperation(ctx: CanvasRenderingContext2D, op: CanvasOperation): void {
+  private executeOperation(
+    ctx: CanvasRenderingContext2D,
+    op: CanvasOperation
+  ): void {
     switch (op.type) {
       case 'beginPath':
         ctx.beginPath();
         break;
       case 'moveTo':
-        if (op.args.length >= 2 && op.args[0] !== undefined && op.args[1] !== undefined) {
+        if (
+          op.args.length >= 2 &&
+          op.args[0] !== undefined &&
+          op.args[1] !== undefined
+        ) {
           ctx.moveTo(op.args[0], op.args[1]);
         }
         break;
       case 'lineTo':
-        if (op.args.length >= 2 && op.args[0] !== undefined && op.args[1] !== undefined) {
+        if (
+          op.args.length >= 2 &&
+          op.args[0] !== undefined &&
+          op.args[1] !== undefined
+        ) {
           ctx.lineTo(op.args[0], op.args[1]);
         }
         break;
       case 'quadraticCurveTo':
-        if (op.args.length >= 4 && 
-            op.args[0] !== undefined && 
-            op.args[1] !== undefined && 
-            op.args[2] !== undefined && 
-            op.args[3] !== undefined) {
+        if (
+          op.args.length >= 4 &&
+          op.args[0] !== undefined &&
+          op.args[1] !== undefined &&
+          op.args[2] !== undefined &&
+          op.args[3] !== undefined
+        ) {
           ctx.quadraticCurveTo(op.args[0], op.args[1], op.args[2], op.args[3]);
         }
         break;
@@ -258,12 +306,14 @@ class OperationRecorder {
         ctx.stroke();
         break;
       case 'arc':
-        if (op.args.length >= 5 && 
-            op.args[0] !== undefined && 
-            op.args[1] !== undefined && 
-            op.args[2] !== undefined && 
-            op.args[3] !== undefined && 
-            op.args[4] !== undefined) {
+        if (
+          op.args.length >= 5 &&
+          op.args[0] !== undefined &&
+          op.args[1] !== undefined &&
+          op.args[2] !== undefined &&
+          op.args[3] !== undefined &&
+          op.args[4] !== undefined
+        ) {
           ctx.arc(op.args[0], op.args[1], op.args[2], op.args[3], op.args[4]);
         }
         break;
@@ -275,7 +325,7 @@ class OperationRecorder {
         break;
     }
   }
-  
+
   /**
    * Fallback rendering if replay fails
    */
@@ -291,12 +341,18 @@ export const NUMBER_PATHS = {
   /**
    * Draw a single digit with caching support
    */
-  drawDigit: (ctx: CanvasRenderingContext2D, digit: number, centerX: number, centerY: number, size: number): void => {
+  drawDigit: (
+    ctx: CanvasRenderingContext2D,
+    digit: number,
+    centerX: number,
+    centerY: number,
+    size: number
+  ): void => {
     // Guard against null/undefined context
     if (!ctx) {
       throw new Error('Canvas context is required for drawing');
     }
-    
+
     // Check cache first
     const cachedOps = pathCache.get(digit, size);
     if (cachedOps) {
@@ -309,21 +365,24 @@ export const NUMBER_PATHS = {
 
     // Record operations for caching
     const recorder = new OperationRecorder();
-    
+
     const width = size * NUMBER_PATH_CONFIG.DIGIT_WIDTH_RATIO;
     const height = size;
-    const strokeWidth = Math.max(2, size * NUMBER_PATH_CONFIG.STROKE_WIDTH_RATIO);
-    
+    const strokeWidth = Math.max(
+      2,
+      size * NUMBER_PATH_CONFIG.STROKE_WIDTH_RATIO
+    );
+
     ctx.lineWidth = strokeWidth;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    
+
     const left = centerX - width / 2;
     const right = centerX + width / 2;
     const top = centerY - height / 2;
     const bottom = centerY + height / 2;
     const middle = centerY;
-    
+
     switch (digit) {
       case 0:
         recorder.beginPath();
@@ -334,7 +393,7 @@ export const NUMBER_PATHS = {
         recorder.quadraticCurveTo(left, top, centerX, top);
         recorder.stroke();
         break;
-        
+
       case 1: {
         // Adjust position for number 1 to be properly centered
         const oneOffset = width * 0.1; // Slight offset to center the "1" better visually
@@ -346,28 +405,43 @@ export const NUMBER_PATHS = {
         recorder.stroke();
         break;
       }
-        
+
       case 2:
         recorder.beginPath();
         recorder.moveTo(left, top + height * 0.25);
         recorder.quadraticCurveTo(centerX, top, right, top + height * 0.25);
-        recorder.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
+        recorder.quadraticCurveTo(
+          right,
+          middle - height * 0.1,
+          centerX,
+          middle
+        );
         recorder.lineTo(left, bottom - height * 0.1);
         recorder.lineTo(right, bottom);
         recorder.stroke();
         break;
-        
+
       case 3:
         recorder.beginPath();
         recorder.moveTo(left, top + height * 0.2);
         recorder.quadraticCurveTo(centerX, top, right, top + height * 0.25);
-        recorder.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
+        recorder.quadraticCurveTo(
+          right,
+          middle - height * 0.1,
+          centerX,
+          middle
+        );
         recorder.moveTo(centerX, middle);
-        recorder.quadraticCurveTo(right, middle + height * 0.1, right, bottom - height * 0.25);
+        recorder.quadraticCurveTo(
+          right,
+          middle + height * 0.1,
+          right,
+          bottom - height * 0.25
+        );
         recorder.quadraticCurveTo(centerX, bottom, left, bottom - height * 0.2);
         recorder.stroke();
         break;
-        
+
       case 4:
         recorder.beginPath();
         recorder.moveTo(left + width * 0.2, top);
@@ -377,29 +451,44 @@ export const NUMBER_PATHS = {
         recorder.lineTo(right - width * 0.2, bottom);
         recorder.stroke();
         break;
-        
+
       case 5:
         recorder.beginPath();
         recorder.moveTo(right, top);
         recorder.lineTo(left, top);
         recorder.lineTo(left, middle - height * 0.1);
-        recorder.quadraticCurveTo(centerX, middle - height * 0.1, right, middle + height * 0.1);
-        recorder.quadraticCurveTo(right, bottom - height * 0.1, centerX, bottom);
+        recorder.quadraticCurveTo(
+          centerX,
+          middle - height * 0.1,
+          right,
+          middle + height * 0.1
+        );
+        recorder.quadraticCurveTo(
+          right,
+          bottom - height * 0.1,
+          centerX,
+          bottom
+        );
         recorder.lineTo(left, bottom - height * 0.2);
         recorder.stroke();
         break;
-        
+
       case 6:
         recorder.beginPath();
         recorder.moveTo(right - width * 0.2, top);
         recorder.quadraticCurveTo(left, top, left, middle);
         recorder.quadraticCurveTo(left, bottom, centerX, bottom);
         recorder.quadraticCurveTo(right, bottom, right, middle + height * 0.1);
-        recorder.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
+        recorder.quadraticCurveTo(
+          right,
+          middle - height * 0.1,
+          centerX,
+          middle
+        );
         recorder.lineTo(left, middle);
         recorder.stroke();
         break;
-        
+
       case 7:
         recorder.beginPath();
         recorder.moveTo(left, top);
@@ -407,26 +496,46 @@ export const NUMBER_PATHS = {
         recorder.lineTo(centerX, bottom);
         recorder.stroke();
         break;
-        
+
       case 8:
         recorder.beginPath();
         // Top circle
         recorder.moveTo(left, top + height * 0.2);
         recorder.quadraticCurveTo(centerX, top, right, top + height * 0.2);
-        recorder.quadraticCurveTo(right, middle - height * 0.1, centerX, middle);
-        recorder.quadraticCurveTo(left, middle - height * 0.1, left, top + height * 0.2);
+        recorder.quadraticCurveTo(
+          right,
+          middle - height * 0.1,
+          centerX,
+          middle
+        );
+        recorder.quadraticCurveTo(
+          left,
+          middle - height * 0.1,
+          left,
+          top + height * 0.2
+        );
         // Bottom circle
         recorder.moveTo(left, middle + height * 0.1);
         recorder.quadraticCurveTo(left, bottom, centerX, bottom);
         recorder.quadraticCurveTo(right, bottom, right, middle + height * 0.1);
-        recorder.quadraticCurveTo(right, middle + height * 0.1, centerX, middle);
+        recorder.quadraticCurveTo(
+          right,
+          middle + height * 0.1,
+          centerX,
+          middle
+        );
         recorder.stroke();
         break;
-        
+
       case 9:
         recorder.beginPath();
         recorder.moveTo(centerX, middle);
-        recorder.quadraticCurveTo(right, middle - height * 0.1, right, top + height * 0.2);
+        recorder.quadraticCurveTo(
+          right,
+          middle - height * 0.1,
+          right,
+          top + height * 0.2
+        );
         recorder.quadraticCurveTo(right, top, centerX, top);
         recorder.quadraticCurveTo(left, top, left, middle - height * 0.1);
         recorder.quadraticCurveTo(left, middle + height * 0.1, centerX, middle);
@@ -435,23 +544,29 @@ export const NUMBER_PATHS = {
         recorder.stroke();
         break;
     }
-    
+
     // Cache the operations
     pathCache.set(digit, size, recorder.operations);
-    
+
     // Apply the operations to the actual context
     recorder.replay(ctx);
   },
-  
+
   /**
    * Draw numbers > 9 using dot pattern or multi-digit rendering
    */
-  drawLargeNumber: (ctx: CanvasRenderingContext2D, number: number, centerX: number, centerY: number, size: number): void => {
+  drawLargeNumber: (
+    ctx: CanvasRenderingContext2D,
+    number: number,
+    centerX: number,
+    centerY: number,
+    size: number
+  ): void => {
     if (number <= 9) {
       NUMBER_PATHS.drawDigit(ctx, number, centerX, centerY, size);
       return;
     }
-    
+
     // Check cache for large numbers too
     const cachedOps = pathCache.get(number, size);
     if (cachedOps) {
@@ -461,38 +576,41 @@ export const NUMBER_PATHS = {
       tempRecorder.replay(ctx);
       return;
     }
-    
+
     const recorder = new OperationRecorder();
-    
+
     if (number <= 99) {
       // Draw two digits side by side with scaling applied once
       ctx.save();
       ctx.translate(centerX, centerY);
-      ctx.scale(NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE, NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE);
-      
+      ctx.scale(
+        NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE,
+        NUMBER_PATH_CONFIG.MULTI_DIGIT_SCALE
+      );
+
       const digitWidth = size * 0.4;
       const leftDigit = Math.floor(number / 10);
       const rightDigit = number % 10;
-      
+
       NUMBER_PATHS.drawDigit(ctx, leftDigit, -digitWidth * 0.6, 0, size);
       NUMBER_PATHS.drawDigit(ctx, rightDigit, digitWidth * 0.6, 0, size);
-      
+
       ctx.restore();
     } else if (number <= 999) {
       // Draw three digits with scaling applied once
       ctx.save();
       ctx.translate(centerX, centerY);
-      ctx.scale(0.5, 0.5);  // Scale down for three digits
-      
+      ctx.scale(0.5, 0.5); // Scale down for three digits
+
       const digitWidth = size * 0.3;
       const hundreds = Math.floor(number / 100);
       const tens = Math.floor((number % 100) / 10);
       const ones = number % 10;
-      
+
       NUMBER_PATHS.drawDigit(ctx, hundreds, -digitWidth, 0, size);
       NUMBER_PATHS.drawDigit(ctx, tens, 0, 0, size);
       NUMBER_PATHS.drawDigit(ctx, ones, digitWidth, 0, size);
-      
+
       ctx.restore();
     } else {
       // For very large numbers, use dot pattern
@@ -500,18 +618,18 @@ export const NUMBER_PATHS = {
       const dots = Math.min(Math.floor(Math.log10(number)) + 1, 12); // Number of digits, max 12
       const angleStep = (Math.PI * 2) / dots;
       const dotRadius = size * NUMBER_PATH_CONFIG.DOT_RADIUS_RATIO;
-      
+
       ctx.fillStyle = 'rgba(0, 0, 0, 1.0)';
       for (let i = 0; i < dots; i++) {
         const angle = i * angleStep - Math.PI / 2;
         const dotX = centerX + Math.cos(angle) * dotRadius;
         const dotY = centerY + Math.sin(angle) * dotRadius;
-        
+
         recorder.beginPath();
         recorder.arc(dotX, dotY, dotSize, 0, Math.PI * 2);
         recorder.fill();
       }
-      
+
       // Optionally draw abbreviated number in center if fonts are available
       // Fall back to dot pattern only if fonts are unavailable
       if (size > 30) {
@@ -521,7 +639,7 @@ export const NUMBER_PATHS = {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-          
+
           let displayText = '';
           if (number >= 1000000) {
             displayText = `${Math.floor(number / 1000000)}M`;
@@ -530,7 +648,7 @@ export const NUMBER_PATHS = {
           } else {
             displayText = String(number);
           }
-          
+
           // Check if font is available by testing text measurement
           const metrics = ctx.measureText(displayText);
           if (metrics && metrics.width > 0) {
@@ -542,16 +660,16 @@ export const NUMBER_PATHS = {
           ctx.restore();
         }
       }
-      
+
       // Cache operations for large numbers if they're common (e.g., 1000, 2000, etc.)
       if (number % 100 === 0 || number % 1000 === 0) {
         pathCache.set(number, size, recorder.operations);
       }
-      
+
       recorder.replay(ctx);
     }
   },
-  
+
   /**
    * Get cache statistics for monitoring
    */
@@ -560,5 +678,5 @@ export const NUMBER_PATHS = {
   /**
    * Clear the cache (useful for testing)
    */
-  clearCache: (): void => pathCache.clear()
+  clearCache: (): void => pathCache.clear(),
 };

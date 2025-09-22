@@ -296,8 +296,8 @@ const ImageUploader = ({ onUploadComplete }: ImageUploaderProps) => {
           // Flatten successful uploads from chunks
           uploadedImages = result.success.flat();
 
-          // Handle any failed chunks
-          if (result.failed.length > 0) {
+          // Handle any failed chunks - but don't show warning if user cancelled
+          if (result.failed.length > 0 && !uploadCancelledRef.current) {
             const failedFileCount = result.failed.reduce(
               (sum, failure) => sum + failure.files.length,
               0

@@ -388,10 +388,10 @@ export const useAdvancedExport = (projectId: string) => {
           logger.info('✅ Download request completed');
 
           // Use centralized download utility with project name
-          const timestamp = new Date().toISOString().slice(0, 10);
+          // Use simple project name for download (as requested by user)
           const filename = currentProjectName
-            ? `${sanitizeFilename(currentProjectName)}_${timestamp}.zip`
-            : `export_${completedJobId}_${timestamp}.zip`;
+            ? `${sanitizeFilename(currentProjectName)}.zip`
+            : `export_${completedJobId}.zip`;
           await downloadFromResponse(response, filename);
 
           // Show downloading status briefly, then auto-dismiss after a reasonable time
@@ -518,10 +518,10 @@ export const useAdvancedExport = (projectId: string) => {
       logger.info('✅ Manual download request completed');
 
       // Use centralized download utility with project name
-      const timestamp = new Date().toISOString().slice(0, 10);
+      // Use simple project name for download (as requested by user)
       const filename = currentProjectName
-        ? `${sanitizeFilename(currentProjectName)}_${timestamp}.zip`
-        : `export_${completedJobId}_${timestamp}.zip`;
+        ? `${sanitizeFilename(currentProjectName)}.zip`
+        : `export_${completedJobId}.zip`;
       await downloadFromResponse(response, filename);
 
       // Show downloading status briefly, then auto-dismiss

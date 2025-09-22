@@ -14,6 +14,7 @@ import {
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { EditMode } from '../types';
+import { shouldPreventCanvasDeselection } from '../config/modeConfig';
 import {
   createMockPolygon,
   createMockPolygons,
@@ -118,8 +119,11 @@ const MockSegmentationWorkflow = ({
         viewBox="0 0 800 600"
         data-testid="workflow-canvas"
         onClick={e => {
-          if (e.target === e.currentTarget) {
-            // Clicked empty area
+          if (
+            e.target === e.currentTarget &&
+            !shouldPreventCanvasDeselection(currentMode)
+          ) {
+            // Clicked empty area - only deselect if mode allows it (SSOT compliance)
             handlePolygonSelection(null);
           }
         }}

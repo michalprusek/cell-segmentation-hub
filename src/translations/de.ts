@@ -4,6 +4,7 @@ export default {
     loading: 'Laden...',
     save: 'Speichern',
     cancel: 'Abbrechen',
+    dismiss: 'Schließen',
     delete: 'Löschen',
     edit: 'Bearbeiten',
     create: 'Erstellen',

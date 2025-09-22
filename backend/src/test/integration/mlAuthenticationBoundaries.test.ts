@@ -1,6 +1,14 @@
 import request from 'supertest';
 import express from 'express';
-import { describe, it, expect, beforeEach, jest, beforeAll, afterAll } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  jest,
+  beforeAll,
+  afterAll,
+} from '@jest/globals';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db';
 import { generateTokenPair } from '../../auth/jwt';
@@ -15,7 +23,7 @@ import {
   // securityTestVectors,
   // performanceTestUtils,
   TestUser,
-  TestTokens
+  TestTokens,
 } from '../utils/jwtTestUtils';
 
 /**
@@ -32,7 +40,7 @@ import {
 
 // Mock rate limiter for cleaner test output
 jest.mock('../../middleware/rateLimiter', () => ({
-  apiLimiter: jest.fn((req, res, next) => next())
+  apiLimiter: jest.fn((req, res, next) => next()),
 }));
 
 // Mock logger to prevent console noise during tests
@@ -41,8 +49,8 @@ jest.mock('../../utils/logger', () => ({
     info: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),
-    debug: jest.fn()
-  }
+    debug: jest.fn(),
+  },
 }));
 
 describe('ML Authentication Boundaries Integration Tests', () => {
@@ -60,7 +68,7 @@ describe('ML Authentication Boundaries Integration Tests', () => {
     // Create test user in database
     testUser = createTestUser({
       id: 'integration-test-user-id',
-      email: 'integration.test@spheroseg.com'
+      email: 'integration.test@spheroseg.com',
     });
 
     const hashedPassword = await hashPassword('testpassword123');
@@ -68,15 +76,15 @@ describe('ML Authentication Boundaries Integration Tests', () => {
     try {
       // Clean up any existing test data
       await prisma.session.deleteMany({
-        where: { userId: testUser.id }
+        where: { userId: testUser.id },
       });
 
       await prisma.profile.deleteMany({
-        where: { userId: testUser.id }
+        where: { userId: testUser.id },
       });
 
       await prisma.user.deleteMany({
-        where: { id: testUser.id }
+        where: { id: testUser.id },
       });
 
       // Create fresh test user
@@ -101,20 +109,25 @@ describe('ML Authentication Boundaries Integration Tests', () => {
               preferredTheme: testUser.profile!.preferredTheme,
               emailNotifications: testUser.profile!.emailNotifications,
               consentToMLTraining: testUser.profile!.consentToMLTraining,
-              consentToAlgorithmImprovement: testUser.profile!.consentToAlgorithmImprovement,
-              consentToFeatureDevelopment: testUser.profile!.consentToFeatureDevelopment,
-              consentUpdatedAt: testUser.profile!.consentUpdatedAt
-            }
-          }
-        }
+              consentToAlgorithmImprovement:
+                testUser.profile!.consentToAlgorithmImprovement,
+              consentToFeatureDevelopment:
+                testUser.profile!.consentToFeatureDevelopment,
+              consentUpdatedAt: testUser.profile!.consentUpdatedAt,
+            },
+          },
+        },
       });
 
       // Generate real tokens for the test user
-      testTokens = generateTokenPair({
-        userId: testUser.id,
-        email: testUser.email,
-        emailVerified: testUser.emailVerified
-      }, false);
+      testTokens = generateTokenPair(
+        {
+          userId: testUser.id,
+          email: testUser.email,
+          emailVerified: testUser.emailVerified,
+        },
+        false
+      );
 
       // Create session in database
       _testSession = await prisma.session.create({
@@ -123,10 +136,9 @@ describe('ML Authentication Boundaries Integration Tests', () => {
           refreshToken: testTokens.refreshToken,
           isValid: true,
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
-          rememberMe: false
-        }
+          rememberMe: false,
+        },
       });
-
     } catch (error) {
       console.error('Failed to setup integration test data:', error);
       throw error;
@@ -137,15 +149,15 @@ describe('ML Authentication Boundaries Integration Tests', () => {
     try {
       // Clean up test data
       await prisma.session.deleteMany({
-        where: { userId: testUser.id }
+        where: { userId: testUser.id },
       });
 
       await prisma.profile.deleteMany({
-        where: { userId: testUser.id }
+        where: { userId: testUser.id },
       });
 
       await prisma.user.deleteMany({
-        where: { id: testUser.id }
+        where: { id: testUser.id },
       });
     } catch (error) {
       console.error('Failed to cleanup integration test data:', error);
@@ -173,9 +185,9 @@ describe('ML Authentication Boundaries Integration Tests', () => {
           completed: 0,
           failed: 0,
           averageWaitTime: '2.3s',
-          estimatedProcessingTime: '0s'
+          estimatedProcessingTime: '0s',
         },
-        message: 'ML queue status retrieved successfully'
+        message: 'ML queue status retrieved successfully',
       });
     });
 
@@ -188,7 +200,7 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       expect(response.body).toEqual({
         success: true,
         data: { modelId: 'hrnetv2', status: 'warming-up' },
-        message: 'Model hrnetv2 warm-up initiated'
+        message: 'Model hrnetv2 warm-up initiated',
       });
     });
 
@@ -220,11 +232,14 @@ describe('ML Authentication Boundaries Integration Tests', () => {
   describe('Authentication Failure Scenarios', () => {
     it('should fail authentication with non-existent user', async () => {
       // Create a token for a user that doesn't exist in the database
-      const fakeTokens = generateTokenPair({
-        userId: 'non-existent-user-id',
-        email: 'fake@example.com',
-        emailVerified: true
-      }, false);
+      const fakeTokens = generateTokenPair(
+        {
+          userId: 'non-existent-user-id',
+          email: 'fake@example.com',
+          emailVerified: true,
+        },
+        false
+      );
 
       const response = await request(app)
         .get('/api/ml/queue')
@@ -234,7 +249,7 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       expect(response.body).toEqual({
         success: false,
         message: 'Uživatel nenalezen',
-        source: 'Auth'
+        source: 'Auth',
       });
     });
 
@@ -243,7 +258,10 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       // For now, we'll test with a clearly invalid token that represents an expired token
       const response = await request(app)
         .get('/api/ml/queue')
-        .set('Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0IiwiZXhwIjoxfQ.invalid')
+        .set(
+          'Authorization',
+          'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0IiwiZXhwIjoxfQ.invalid'
+        )
         .expect(401);
 
       expect(response.body.success).toBe(false);
@@ -270,14 +288,12 @@ describe('ML Authentication Boundaries Integration Tests', () => {
     });
 
     it('should handle missing authorization header', async () => {
-      const response = await request(app)
-        .get('/api/ml/queue')
-        .expect(401);
+      const response = await request(app).get('/api/ml/queue').expect(401);
 
       expect(response.body).toEqual({
         success: false,
         message: 'Chybí autentizační token',
-        source: 'Auth'
+        source: 'Auth',
       });
     });
   });
@@ -285,7 +301,11 @@ describe('ML Authentication Boundaries Integration Tests', () => {
   describe('Security Boundary Tests', () => {
     it('should prevent access to protected endpoints with tampered tokens', async () => {
       // Take a valid token and modify its signature
-      const tamperedToken = testTokens.accessToken.substring(0, testTokens.accessToken.lastIndexOf('.')) + '.tampered-signature';
+      const tamperedToken =
+        testTokens.accessToken.substring(
+          0,
+          testTokens.accessToken.lastIndexOf('.')
+        ) + '.tampered-signature';
 
       const response = await request(app)
         .get('/api/ml/queue')
@@ -338,7 +358,7 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       const unverifiedTestUser = createTestUser({
         id: 'unverified-user-id',
         email: 'unverified@spheroseg.com',
-        emailVerified: false
+        emailVerified: false,
       });
 
       const hashedPassword = await hashPassword('testpassword123');
@@ -361,27 +381,30 @@ describe('ML Authentication Boundaries Integration Tests', () => {
               consentToMLTraining: false,
               consentToAlgorithmImprovement: false,
               consentToFeatureDevelopment: false,
-              publicProfile: false
-            }
-          }
-        }
+              publicProfile: false,
+            },
+          },
+        },
       });
 
-      unverifiedTokens = generateTokenPair({
-        userId: unverifiedUser.id,
-        email: unverifiedUser.email,
-        emailVerified: false
-      }, false);
+      unverifiedTokens = generateTokenPair(
+        {
+          userId: unverifiedUser.id,
+          email: unverifiedUser.email,
+          emailVerified: false,
+        },
+        false
+      );
     });
 
     afterAll(async () => {
       // Clean up unverified user
       try {
         await prisma.profile.deleteMany({
-          where: { userId: unverifiedUser.id }
+          where: { userId: unverifiedUser.id },
         });
         await prisma.user.deleteMany({
-          where: { id: unverifiedUser.id }
+          where: { id: unverifiedUser.id },
         });
       } catch (error) {
         console.error('Failed to cleanup unverified user:', error);
@@ -441,11 +464,13 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       );
 
       const publicPromises = Array.from({ length: 5 }, () =>
-        request(app)
-          .get('/api/ml/health')
+        request(app).get('/api/ml/health')
       );
 
-      const allResponses = await Promise.all([...authenticatedPromises, ...publicPromises]);
+      const allResponses = await Promise.all([
+        ...authenticatedPromises,
+        ...publicPromises,
+      ]);
 
       // All requests should succeed
       allResponses.forEach(response => {
@@ -468,15 +493,15 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       );
 
       const noAuthPromises = Array.from({ length: 2 }, () =>
-        request(app)
-          .get('/api/ml/queue')
+        request(app).get('/api/ml/queue')
       );
 
-      const [validResponses, invalidResponses, noAuthResponses] = await Promise.all([
-        Promise.all(validAuthPromises),
-        Promise.all(invalidAuthPromises),
-        Promise.all(noAuthPromises)
-      ]);
+      const [validResponses, invalidResponses, noAuthResponses] =
+        await Promise.all([
+          Promise.all(validAuthPromises),
+          Promise.all(invalidAuthPromises),
+          Promise.all(noAuthPromises),
+        ]);
 
       // Valid auth should succeed
       validResponses.forEach(response => {
@@ -503,9 +528,9 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       // Mock database to simulate connection failure
       const originalFindUnique = prisma.user.findUnique;
 
-      (prisma.user.findUnique as jest.Mock) = jest.fn().mockRejectedValue(
-        new Error('Database connection failed')
-      );
+      (prisma.user.findUnique as jest.Mock) = jest
+        .fn()
+        .mockRejectedValue(new Error('Database connection failed'));
 
       const response = await request(app)
         .get('/api/ml/queue')
@@ -523,11 +548,14 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       // Mock database to simulate timeout
       const originalFindUnique = prisma.user.findUnique;
 
-      (prisma.user.findUnique as jest.Mock) = jest.fn().mockImplementation(() =>
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Database timeout')), 100)
-        )
-      );
+      (prisma.user.findUnique as jest.Mock) = jest
+        .fn()
+        .mockImplementation(
+          () =>
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error('Database timeout')), 100)
+            )
+        );
 
       const response = await request(app)
         .get('/api/ml/queue')
@@ -566,7 +594,9 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       // Performance should be reasonable (less than 5 seconds for 50 requests)
       expect(totalTime).toBeLessThan(5000);
 
-      logger.debug(`Authentication load test completed: ${responses.length} requests in ${totalTime}ms`);
+      logger.debug(
+        `Authentication load test completed: ${responses.length} requests in ${totalTime}ms`
+      );
     });
 
     it('should handle authentication errors efficiently', async () => {
@@ -592,7 +622,9 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       // Error handling should be fast (less than 2 seconds for 50 requests)
       expect(totalTime).toBeLessThan(2000);
 
-      logger.debug(`Authentication error test completed: ${responses.length} failed requests in ${totalTime}ms`);
+      logger.debug(
+        `Authentication error test completed: ${responses.length} failed requests in ${totalTime}ms`
+      );
     });
   });
 
@@ -602,47 +634,41 @@ describe('ML Authentication Boundaries Integration Tests', () => {
       // and protected routes come after
 
       // Health endpoint should be accessible
-      await request(app)
-        .get('/api/ml/health')
-        .expect(200);
+      await request(app).get('/api/ml/health').expect(200);
 
       // Status endpoint should be accessible
-      await request(app)
-        .get('/api/ml/status')
-        .expect(200);
+      await request(app).get('/api/ml/status').expect(200);
 
       // Models endpoint should be accessible
-      await request(app)
-        .get('/api/ml/models')
-        .expect(200);
+      await request(app).get('/api/ml/models').expect(200);
 
       // Queue endpoint should require authentication
-      await request(app)
-        .get('/api/ml/queue')
-        .expect(401);
+      await request(app).get('/api/ml/queue').expect(401);
 
       // Warm-up endpoint should require authentication
-      await request(app)
-        .post('/api/ml/models/test/warm-up')
-        .expect(401);
+      await request(app).post('/api/ml/models/test/warm-up').expect(401);
     });
 
     it('should ensure consistent authentication requirements across all protected endpoints', async () => {
       const protectedEndpoints = [
         { method: 'get', path: '/api/ml/queue' },
-        { method: 'post', path: '/api/ml/models/test/warm-up' }
+        { method: 'post', path: '/api/ml/models/test/warm-up' },
       ];
 
       for (const endpoint of protectedEndpoints) {
         // Test without auth - should fail
-        const unauthorizedResponse = await request(app)[endpoint.method](endpoint.path)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const unauthorizedResponse = await (request(app) as any)
+          [endpoint.method](endpoint.path)
           .expect(401);
 
         expect(unauthorizedResponse.body.success).toBe(false);
         expect(unauthorizedResponse.body.source).toBe('Auth');
 
         // Test with valid auth - should succeed
-        const authorizedResponse = await request(app)[endpoint.method](endpoint.path)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const authorizedResponse = await (request(app) as any)
+          [endpoint.method](endpoint.path)
           .set('Authorization', `Bearer ${testTokens.accessToken}`)
           .expect(200);
 

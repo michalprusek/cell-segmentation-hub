@@ -1,22 +1,39 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { segmentationController } from '../controllers/segmentationController';
 import { authenticate } from '../../middleware/auth';
-import { validationResult, body, param, ValidationError } from 'express-validator';
+import {
+  validationResult,
+  body,
+  param,
+  ValidationError,
+} from 'express-validator';
 import { ResponseHelper } from '../../utils/response';
 
 // Middleware to handle express-validator results
-const handleValidation = (req: Request, res: Response, next: NextFunction): void => {
+const handleValidation = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const errorMap = errors.array().reduce((acc, error) => {
-      const validationError = error as ValidationError & { path?: string; param?: string; msg: string };
-      const field = validationError.path || validationError.param || 'unknown';
-      if (!acc[field]) {
-        acc[field] = [];
-      }
-      acc[field].push(validationError.msg);
-      return acc;
-    }, {} as Record<string, string[]>);
+    const errorMap = errors.array().reduce(
+      (acc, error) => {
+        const validationError = error as ValidationError & {
+          path?: string;
+          param?: string;
+          msg: string;
+        };
+        const field =
+          validationError.path || validationError.param || 'unknown';
+        if (!acc[field]) {
+          acc[field] = [];
+        }
+        acc[field].push(validationError.msg);
+        return acc;
+      },
+      {} as Record<string, string[]>
+    );
     ResponseHelper.validationError(res, errorMap);
     return;
   }
@@ -35,9 +52,7 @@ router.use(authenticate);
  */
 router.get(
   '/images/:imageId/results',
-  [
-    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID')
-  ],
+  [param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID')],
   handleValidation,
   segmentationController.getSegmentationResults
 );
@@ -52,11 +67,23 @@ router.put(
   [
     param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID'),
     body('polygons').isArray().withMessage('Polygony musí být pole'),
-    body('polygons.*.id').isString().withMessage('ID polygonu musí být řetězec'),
-    body('polygons.*.points').isArray().withMessage('Body polygonu musí být pole'),
-    body('polygons.*.type').isIn(['external', 'internal']).withMessage('Typ polygonu musí být external nebo internal'),
-    body('imageWidth').optional().isInt({ min: 1 }).withMessage('Šířka obrázku musí být kladné číslo'),
-    body('imageHeight').optional().isInt({ min: 1 }).withMessage('Výška obrázku musí být kladné číslo')
+    body('polygons.*.id')
+      .isString()
+      .withMessage('ID polygonu musí být řetězec'),
+    body('polygons.*.points')
+      .isArray()
+      .withMessage('Body polygonu musí být pole'),
+    body('polygons.*.type')
+      .isIn(['external', 'internal'])
+      .withMessage('Typ polygonu musí být external nebo internal'),
+    body('imageWidth')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('Šířka obrázku musí být kladné číslo'),
+    body('imageHeight')
+      .optional()
+      .isInt({ min: 1 })
+      .withMessage('Výška obrázku musí být kladné číslo'),
   ],
   handleValidation,
   segmentationController.updateSegmentationResults
@@ -69,9 +96,7 @@ router.put(
  */
 router.delete(
   '/images/:imageId/results',
-  [
-    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID')
-  ],
+  [param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID')],
   handleValidation,
   segmentationController.deleteSegmentationResults
 );
@@ -87,8 +112,11 @@ router.post(
     body('imageIds')
       .isArray({ min: 1, max: 50 })
       .withMessage('Musíte zadat 1-50 obrázků')
-      .custom((imageIds) => {
-        if (Array.isArray(imageIds) && new Set(imageIds).size !== imageIds.length) {
+      .custom(imageIds => {
+        if (
+          Array.isArray(imageIds) &&
+          new Set(imageIds).size !== imageIds.length
+        ) {
           throw new Error('Duplicitní ID obrázků nejsou povoleny');
         }
         return true;
@@ -107,7 +135,7 @@ router.post(
     body('detectHoles')
       .optional()
       .isBoolean()
-      .withMessage('Detect holes musí být boolean hodnota')
+      .withMessage('Detect holes musí být boolean hodnota'),
   ],
   handleValidation,
   segmentationController.batchSegment
@@ -124,15 +152,18 @@ router.post(
     body('imageIds')
       .isArray({ min: 1, max: 1000 })
       .withMessage('Must provide 1-1000 image IDs')
-      .custom((imageIds) => {
-        if (Array.isArray(imageIds) && new Set(imageIds).size !== imageIds.length) {
+      .custom(imageIds => {
+        if (
+          Array.isArray(imageIds) &&
+          new Set(imageIds).size !== imageIds.length
+        ) {
           throw new Error('Duplicate image IDs are not allowed');
         }
         return true;
       }),
     body('imageIds.*')
       .isUUID()
-      .withMessage('All image IDs must be valid UUIDs')
+      .withMessage('All image IDs must be valid UUIDs'),
   ],
   handleValidation,
   segmentationController.batchGetSegmentationResults

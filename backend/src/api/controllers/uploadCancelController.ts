@@ -29,7 +29,10 @@ export class UploadCancelController {
         return;
       }
 
-      logger.info('Upload cancellation requested', `Upload: ${uploadId}, User: ${userId}`);
+      logger.info(
+        'Upload cancellation requested',
+        `Upload: ${uploadId}, User: ${userId}`
+      );
 
       // TODO: Implement actual upload cancellation logic
       // For now, we'll just emit the cancel event
@@ -48,7 +51,11 @@ export class UploadCancelController {
         uploadId,
       });
     } catch (error) {
-      logger.error('Failed to cancel upload', error instanceof Error ? error : new Error(String(error)), 'UploadCancelController');
+      logger.error(
+        'Failed to cancel upload',
+        error instanceof Error ? error : new Error(String(error)),
+        'UploadCancelController'
+      );
       res.status(500).json({ error: 'Failed to cancel upload' });
     }
   }
@@ -72,7 +79,10 @@ export class UploadCancelController {
         return;
       }
 
-      logger.info('All uploads cancellation requested', `Project: ${projectId}, User: ${userId}`);
+      logger.info(
+        'All uploads cancellation requested',
+        `Project: ${projectId}, User: ${userId}`
+      );
 
       // Emit WebSocket cancel event to all clients for this user
       WebSocketService.getInstance().emitToUser(userId, 'operation:cancelled', {
@@ -89,7 +99,11 @@ export class UploadCancelController {
         projectId,
       });
     } catch (error) {
-      logger.error('Failed to cancel all uploads', error instanceof Error ? error : new Error(String(error)), 'UploadCancelController');
+      logger.error(
+        'Failed to cancel all uploads',
+        error instanceof Error ? error : new Error(String(error)),
+        'UploadCancelController'
+      );
       res.status(500).json({ error: 'Failed to cancel all uploads' });
     }
   }

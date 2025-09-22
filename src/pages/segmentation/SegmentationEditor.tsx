@@ -16,19 +16,20 @@ import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { useCoordinatedAbortController } from '@/hooks/shared/useAbortController';
 import useDebounce from '@/hooks/useDebounce';
 import { EditMode } from './types';
+import { shouldPreventCanvasDeselection } from './config/modeConfig';
 import { Polygon } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import {
-  generateSafePolygonKey,
-  validatePolygonId,
-  logPolygonIdIssue,
-  ensureValidPolygonId,
-} from '@/lib/polygonIdUtils';
-import {
   handleCancelledError /* , isCancelledError */,
 } from '@/lib/errorUtils';
+import {
+  generateSafePolygonKey,
+  validatePolygonId,
+  ensureValidPolygonId,
+  logPolygonIdIssue,
+} from '@/lib/polygonIdUtils';
 
 // New layout components
 import VerticalToolbar from './components/VerticalToolbar';
@@ -41,8 +42,7 @@ import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 import CanvasContainer from './components/canvas/CanvasContainer';
 import CanvasContent from './components/canvas/CanvasContent';
 import CanvasImage from './components/canvas/CanvasImage';
-// WebGL Universal Renderer - replaces all SVG/Canvas polygon rendering
-import WebGLPolygonRenderer from '@/components/webgl/WebGLPolygonRenderer';
+import CanvasPolygon from './components/canvas/CanvasPolygon';
 import CanvasSvgFilters from './components/canvas/CanvasSvgFilters';
 import ModeInstructions from './components/canvas/ModeInstructions';
 import CanvasTemporaryGeometryLayer from './components/canvas/CanvasTemporaryGeometryLayer';
@@ -303,43 +303,39 @@ const SegmentationEditor = () => {
           })
           .filter((point): point is { x: number; y: number } => point !== null);
 
-        // CRITICAL: Ensure every polygon has a valid ID before proceeding
-        // Use defensive programming - generate ID instead of dropping polygon
-        const validPolygonId = validatePolygonId(segPoly.id)
-          ? segPoly.id
-          : ensureValidPolygonId(segPoly.id, 'ml_polygon');
-
-        if (validPolygonId !== segPoly.id) {
-          logPolygonIdIssue(
-            segPoly,
-            'Invalid ID fixed with fallback - preventing data loss'
-          );
-          logger.warn('Fixed polygon with invalid ID to prevent data loss', {
-            originalId: segPoly.id,
-            fixedId: validPolygonId,
-            segPolyType: segPoly.type,
-            pointsCount: validPoints.length,
-          });
-        }
-
-        // Only include polygon if it has at least 3 valid points
+        // Only include polygon if it still has at least 3 valid points
         if (validPoints.length >= 3) {
+          // CRITICAL: Validate and ensure polygon has a valid ID
+          if (!validatePolygonId(segPoly.id)) {
+            logPolygonIdIssue(segPoly, 'Invalid or missing polygon ID from ML service');
+            // Generate fallback ID for polygons from ML service
+            const fallbackId = ensureValidPolygonId(segPoly.id, 'ml_polygon');
+            logger.warn(`Generated fallback ID: ${fallbackId} for polygon with invalid ID: ${segPoly.id}`);
+
+            return {
+              id: fallbackId,
+              points: validPoints,
+              type: segPoly.type,
+              class: segPoly.class,
+              confidence: segPoly.confidence,
+              area: segPoly.area,
+            };
+          }
+
           return {
-            id: validPolygonId, // Use the fixed valid ID
+            id: segPoly.id, // Now guaranteed to be valid
             points: validPoints,
-            type: segPoly.type || 'external',
+            type: segPoly.type,
             class: segPoly.class,
             confidence: segPoly.confidence,
             area: segPoly.area,
           };
-        } else {
-          logger.warn('Dropping polygon due to insufficient points', {
-            polygonId: segPoly.id,
-            pointsCount: validPoints.length,
-            segPolyType: segPoly.type,
-          });
-          return null;
         }
+
+        logger.warn('Dropping polygon due to insufficient valid points', {
+          polygonId: segPoly.id,
+        });
+        return null;
       })
       .filter((polygon): polygon is Polygon => polygon !== null);
 
@@ -508,7 +504,10 @@ const SegmentationEditor = () => {
     // 3. Leaving the editor (unmount autosave)
   });
 
-  // Centralized polygon selection is now handled inside useEnhancedSegmentationEditor (SSOT)
+  // REMOVED: Duplicate usePolygonSelection instance - now using editor.handlePolygonSelection and editor.handlePolygonClick
+  // These handlers are provided by useEnhancedSegmentationEditor which has the centralized polygon selection logic
+
+  // REMOVED: Old problematic handlePolygonSelection that forced EditVertices mode
 
   // Load segmentation data with proper cancellation handling
   useEffect(() => {
@@ -1123,69 +1122,6 @@ const SegmentationEditor = () => {
                       />
                     )}
 
-                    {/* WebGL Universal Polygon and Vertex Renderer */}
-                    {/* Positioned inside CanvasContent to inherit proper transforms */}
-                    <WebGLPolygonRenderer
-                      polygons={editor.polygons
-                        .filter(polygon => !hiddenPolygonIds.has(polygon.id))
-                        .filter(
-                          polygon =>
-                            polygon.points && polygon.points.length >= 3
-                        )}
-                      selectedPolygonId={editor.selectedPolygonId}
-                      hoveredVertex={
-                        editor.hoveredVertex || {
-                          polygonId: null,
-                          vertexIndex: null,
-                        }
-                      }
-                      vertexDragState={editor.vertexDragState}
-                      transform={
-                        new DOMMatrix([
-                          1, // Identity - CSS transforms handle zoom
-                          0,
-                          0,
-                          1, // Identity - CSS transforms handle zoom
-                          0, // Identity - CSS transforms handle translation
-                          0, // Identity - CSS transforms handle translation
-                        ])
-                      }
-                      zoom={1}
-                      imageSize={editor.imageSize}
-                      onVertexClick={(polygonId, vertexIndex, event) => {
-                        // Handle vertex click through existing interaction system
-                        const syntheticEvent = {
-                          preventDefault: () => {},
-                          stopPropagation: () => {},
-                          currentTarget: {
-                            dataset: {
-                              polygonId,
-                              vertexIndex: vertexIndex.toString(),
-                            },
-                          },
-                          clientX: event.clientX,
-                          clientY: event.clientY,
-                        } as any;
-
-                        // Call the existing mouse down handler
-                        editor.enhancedHandleMouseDown(syntheticEvent);
-                      }}
-                      onVertexMouseEnter={(polygonId, vertexIndex) => {
-                        editor.setHoveredVertex({ polygonId, vertexIndex });
-                      }}
-                      onVertexMouseLeave={() => {
-                        editor.setHoveredVertex({
-                          polygonId: null,
-                          vertexIndex: null,
-                        });
-                      }}
-                      onPolygonClick={editor.handlePolygonClick}
-                      quality="ultra"
-                      targetFPS={60}
-                      enableAntialiasing={true}
-                      enableAnimations={true}
-                    />
-
                     {/* SVG Overlay for polygon rendering - uses same dimensions as image */}
                     <svg
                       width={imageDimensions?.width || canvasWidth}
@@ -1201,30 +1137,12 @@ const SegmentationEditor = () => {
                         zIndex: 10,
                       }}
                       onClick={e => {
-                        // Only log SVG clicks when debugging selection issues (reduce console spam)
-                        if (
-                          process.env.NODE_ENV === 'development' &&
-                          e.target === e.currentTarget
-                        ) {
-                          logger.debug(
-                            '[SegmentationEditor] Empty area click (deselecting)',
-                            {
-                              editMode: editor.editMode,
-                            }
-                          );
-                        }
                         // Unselect polygon when clicking on empty canvas area
-                        // BUT skip deselection when in AddPoints mode to allow point placement
-                        // AND skip deselection when in Slice mode to allow slice point placement
-                        // Force HMR update 10:36 - Fixed stale closure
+                        // BUT skip deselection when in modes that require point placement (centralized SSOT config)
                         if (
                           e.target === e.currentTarget &&
-                          editor.editMode !== EditMode.AddPoints &&
-                          editor.editMode !== EditMode.Slice
+                          !shouldPreventCanvasDeselection(editor.editMode)
                         ) {
-                          logger.debug(
-                            '[SegmentationEditor] Deselecting due to empty area click'
-                          );
                           editor.handlePolygonSelection(null);
                         }
                       }}
@@ -1235,8 +1153,55 @@ const SegmentationEditor = () => {
                       {/* SVG Filters for glow effects */}
                       <CanvasSvgFilters />
 
-                      {/* Polygon rendering now handled by WebGL inside CanvasContent */}
-                      {/* This SVG layer is now only for UI elements and temporary geometry */}
+                      {/* Render all polygons */}
+                      {(() => {
+                        const visiblePolygons = editor.polygons
+                          .filter(polygon => !hiddenPolygonIds.has(polygon.id))
+                          .filter(
+                            polygon =>
+                              polygon.points && polygon.points.length >= 3
+                          );
+
+                        // Render polygons
+                        return (
+                          <>
+                            {/* Actual polygons */}
+                            {visiblePolygons.map(polygon => (
+                              <CanvasPolygon
+                                key={generateSafePolygonKey(polygon, editor.isUndoRedoInProgress)}
+                                polygon={polygon}
+                                isSelected={
+                                  polygon.id === editor.selectedPolygonId
+                                }
+                                hoveredVertex={
+                                  editor.hoveredVertex || {
+                                    polygonId: null,
+                                    vertexIndex: null,
+                                  }
+                                }
+                                vertexDragState={editor.vertexDragState}
+                                zoom={editor.transform.zoom}
+                                isUndoRedoInProgress={
+                                  editor.isUndoRedoInProgress
+                                }
+                                onSelectPolygon={editor.handlePolygonClick}
+                                onDeletePolygon={
+                                  handleDeletePolygonFromContextMenu
+                                }
+                                onSlicePolygon={
+                                  handleSlicePolygonFromContextMenu
+                                }
+                                onEditPolygon={handleEditPolygonFromContextMenu}
+                                onDeleteVertex={
+                                  handleDeleteVertexFromContextMenu
+                                }
+                              />
+                            ))}
+                          </>
+                        );
+                      })()}
+
+                      {/* Vertices are now rendered inside CanvasPolygon component */}
 
                       {/* Temporary geometry (preview lines, temp points, etc.) */}
                       <CanvasTemporaryGeometryLayer
@@ -1251,17 +1216,15 @@ const SegmentationEditor = () => {
                     </svg>
                   </CanvasContent>
 
-                  {/* WebGL Polygon Renderer moved inside CanvasContent for proper transform inheritance */}
+                  {/* Mode Instructions Overlay */}
+                  <ModeInstructions
+                    editMode={editor.editMode}
+                    interactionState={editor.interactionState}
+                    selectedPolygonId={editor.selectedPolygonId}
+                    tempPoints={editor.tempPoints}
+                    isShiftPressed={editor.keyboardState.isShiftPressed()}
+                  />
                 </CanvasContainer>
-
-                {/* Mode Instructions Overlay - positioned outside CanvasContainer */}
-                <ModeInstructions
-                  editMode={editor.editMode}
-                  interactionState={editor.interactionState}
-                  selectedPolygonId={editor.selectedPolygonId}
-                  tempPoints={editor.tempPoints}
-                  isShiftPressed={editor.keyboardState.isShiftPressed()}
-                />
               </div>
 
               {/* Right: Polygon List Panel */}

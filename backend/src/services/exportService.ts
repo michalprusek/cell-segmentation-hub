@@ -129,26 +129,53 @@ export class ExportService {
     logger.info('WebSocketService connected to ExportService');
   }
 
-  private sendToUser(userId: string, event: string, data: Record<string, unknown>): void {
+  private sendToUser(
+    userId: string,
+    event: string,
+    data: Record<string, unknown>
+  ): void {
     if (this.wsService) {
       try {
         // Use the WebSocketService emitToUser method for all export events
         this.wsService.emitToUser(userId, event, data);
-        
+
         if (event === 'export:started') {
-          logger.debug('Export started notification sent', 'ExportService', { userId, jobId: data.jobId });
+          logger.debug('Export started notification sent', 'ExportService', {
+            userId,
+            jobId: data.jobId,
+          });
         } else if (event === 'export:progress') {
-          logger.debug('Export progress update sent', 'ExportService', { userId, progress: data.progress });
+          logger.debug('Export progress update sent', 'ExportService', {
+            userId,
+            progress: data.progress,
+          });
         } else if (event === 'export:completed') {
-          logger.info('Export completed notification sent', 'ExportService', { userId, jobId: data.jobId });
+          logger.info('Export completed notification sent', 'ExportService', {
+            userId,
+            jobId: data.jobId,
+          });
         } else if (event === 'export:failed') {
-          logger.error('Export failed notification sent', new Error(String(data.error)), 'ExportService', { userId, jobId: data.jobId });
+          logger.error(
+            'Export failed notification sent',
+            new Error(String(data.error)),
+            'ExportService',
+            { userId, jobId: data.jobId }
+          );
         }
       } catch (error) {
-        logger.error('Failed to send WebSocket message', error instanceof Error ? error : new Error(String(error)), 'ExportService', { userId, event, data });
+        logger.error(
+          'Failed to send WebSocket message',
+          error instanceof Error ? error : new Error(String(error)),
+          'ExportService',
+          { userId, event, data }
+        );
       }
     } else {
-      logger.warn('WebSocketService not available for export notification', 'ExportService', { userId, event });
+      logger.warn(
+        'WebSocketService not available for export notification',
+        'ExportService',
+        { userId, event }
+      );
     }
   }
 
@@ -197,9 +224,14 @@ export class ExportService {
     projectName?: string
   ): Promise<string> {
     // Check if user has access to this project (owner or shared)
-    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    const accessCheck = await SharingService.hasProjectAccess(
+      projectId,
+      userId
+    );
     if (!accessCheck.hasAccess) {
-      throw new Error('Access denied: You do not have permission to export this project');
+      throw new Error(
+        'Access denied: You do not have permission to export this project'
+      );
     }
 
     const jobId = uuidv4();
@@ -210,11 +242,15 @@ export class ExportService {
       try {
         const project = await prisma.project.findUnique({
           where: { id: projectId },
-          select: { title: true }
+          select: { title: true },
         });
         finalProjectName = project?.title;
       } catch (error) {
-        logger.warn('Failed to fetch project name for export', error instanceof Error ? error.message : String(error), 'ExportService');
+        logger.warn(
+          'Failed to fetch project name for export',
+          error instanceof Error ? error.message : String(error),
+          'ExportService'
+        );
       }
     }
 
@@ -239,27 +275,33 @@ export class ExportService {
     //   userId,
     //   options,
     // });
-    
+
     // Process export directly without queue
     this.processExportJob(jobId, projectId, userId, options).catch(err => {
-      logger.error('Export job failed with unhandled error', err instanceof Error ? err : new Error(String(err)), 'ExportService', {
-        jobId,
-        projectId,
-        userId,
-        options
-      });
-      
+      logger.error(
+        'Export job failed with unhandled error',
+        err instanceof Error ? err : new Error(String(err)),
+        'ExportService',
+        {
+          jobId,
+          projectId,
+          userId,
+          options,
+        }
+      );
+
       // Mark job as failed if it exists
       const job = this.exportJobs.get(jobId);
       if (job) {
         job.status = 'failed';
-        job.message = err instanceof Error ? err.message : 'Unknown error occurred';
+        job.message =
+          err instanceof Error ? err.message : 'Unknown error occurred';
         job.completedAt = new Date();
-        
+
         // Notify user of failure
         this.sendToUser(userId, 'export:failed', {
           jobId,
-          error: job.message
+          error: job.message,
         });
       }
     });
@@ -277,13 +319,17 @@ export class ExportService {
     options: ExportOptions
   ): Promise<void> {
     const job = this.exportJobs.get(jobId);
-    if (!job) {return;}
+    if (!job) {
+      return;
+    }
 
     // Helper function to check if export was cancelled
     const checkCancellation = (): void => {
       const currentJob = this.exportJobs.get(jobId);
       if (currentJob?.status === 'cancelled') {
-        logger.info('Export cancelled during processing', 'ExportService', { jobId });
+        logger.info('Export cancelled during processing', 'ExportService', {
+          jobId,
+        });
         throw new Error('Export cancelled by user');
       }
     };
@@ -296,9 +342,14 @@ export class ExportService {
       checkCancellation();
 
       // Check if user has access to this project (owner or shared)
-      const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+      const accessCheck = await SharingService.hasProjectAccess(
+        projectId,
+        userId
+      );
       if (!accessCheck.hasAccess) {
-        throw new Error('Access denied: You do not have permission to export this project');
+        throw new Error(
+          'Access denied: You do not have permission to export this project'
+        );
       }
 
       // Get project data with optimized query - only select needed fields
@@ -337,9 +388,9 @@ export class ExportService {
                   confidence: true,
                   processingTime: true,
                   imageHeight: true,
-                  imageWidth: true
-                }
-              }
+                  imageWidth: true,
+                },
+              },
             },
           },
         },
@@ -350,10 +401,7 @@ export class ExportService {
       }
 
       // Create temporary export directory
-      const exportDir = path.join(
-        process.env.EXPORT_DIR || './exports',
-        jobId
-      );
+      const exportDir = path.join(process.env.EXPORT_DIR || './exports', jobId);
       await fs.mkdir(exportDir, { recursive: true });
 
       // Create folder structure
@@ -368,24 +416,37 @@ export class ExportService {
         options.includeVisualizations,
         options.annotationFormats?.length,
         options.metricsFormats?.length,
-        options.includeDocumentation
+        options.includeDocumentation,
       ].filter(Boolean).length;
 
       // Use 90% of progress for processing tasks, leaving 5% for ZIP creation
       const progressIncrement = totalSteps > 0 ? 90 / totalSteps : 0;
-      
+
       // Copy original images (can run in parallel)
       if (options.includeOriginalImages && project.images) {
         const images = project.images as ImageWithSegmentation[];
         exportTasks.push(
-          this.copyOriginalImagesWithProgress(images, exportDir, (current, total) => {
-            const taskProgress = Math.floor((current / total) * 100);
-            const baseProgress = 5 + progressStep * progressIncrement;
-            const currentProgress = baseProgress + (taskProgress * progressIncrement / 100);
-            this.updateJobProgress(jobId, currentProgress, 'images', { current, total });
-          }, jobId).then(() => {
+          this.copyOriginalImagesWithProgress(
+            images,
+            exportDir,
+            (current, total) => {
+              const taskProgress = Math.floor((current / total) * 100);
+              const baseProgress = 5 + progressStep * progressIncrement;
+              const currentProgress =
+                baseProgress + (taskProgress * progressIncrement) / 100;
+              this.updateJobProgress(jobId, currentProgress, 'images', {
+                current,
+                total,
+              });
+            },
+            jobId
+          ).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement, 'images');
+            this.updateJobProgress(
+              jobId,
+              5 + progressStep * progressIncrement,
+              'images'
+            );
           })
         );
       }
@@ -401,12 +462,21 @@ export class ExportService {
             jobId,
             (current, total) => {
               const taskProgress = Math.floor((current / total) * 100);
-              const currentProgress = visualizationProgressBase + (taskProgress * progressIncrement / 100);
-              this.updateJobProgress(jobId, currentProgress, 'visualizations', { current, total });
+              const currentProgress =
+                visualizationProgressBase +
+                (taskProgress * progressIncrement) / 100;
+              this.updateJobProgress(jobId, currentProgress, 'visualizations', {
+                current,
+                total,
+              });
             }
           ).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement, 'visualizations');
+            this.updateJobProgress(
+              jobId,
+              5 + progressStep * progressIncrement,
+              'visualizations'
+            );
           })
         );
       }
@@ -422,12 +492,21 @@ export class ExportService {
             jobId,
             (current, total) => {
               const taskProgress = Math.floor((current / total) * 100);
-              const currentProgress = annotationProgressBase + (taskProgress * progressIncrement / 100);
-              this.updateJobProgress(jobId, currentProgress, 'annotations', { current, total });
+              const currentProgress =
+                annotationProgressBase +
+                (taskProgress * progressIncrement) / 100;
+              this.updateJobProgress(jobId, currentProgress, 'annotations', {
+                current,
+                total,
+              });
             }
           ).then(() => {
             progressStep++;
-            this.updateJobProgress(jobId, 5 + progressStep * progressIncrement, 'annotations');
+            this.updateJobProgress(
+              jobId,
+              5 + progressStep * progressIncrement,
+              'annotations'
+            );
           })
         );
       }
@@ -458,9 +537,12 @@ export class ExportService {
           })
         );
       }
-      
+
       // Wait for all export tasks to complete in parallel
-      logger.info(`Running ${exportTasks.length} export tasks in parallel`, 'ExportService');
+      logger.info(
+        `Running ${exportTasks.length} export tasks in parallel`,
+        'ExportService'
+      );
 
       // Check for cancellation before running tasks
       checkCancellation();
@@ -474,10 +556,7 @@ export class ExportService {
       checkCancellation();
 
       // Create ZIP archive (no compression)
-      const zipPath = await this.createZipArchive(
-        exportDir,
-        project.title
-      );
+      const zipPath = await this.createZipArchive(exportDir, project.title);
 
       // Check for cancellation after ZIP creation
       checkCancellation();
@@ -493,18 +572,20 @@ export class ExportService {
 
       // Clean up temporary directory
       await fs.rm(exportDir, { recursive: true, force: true });
-
     } catch (error) {
-      logger.error(`Export job ${jobId} failed:`, error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        `Export job ${jobId} failed:`,
+        error instanceof Error ? error : new Error(String(error))
+      );
       job.status = 'failed';
       job.message = error instanceof Error ? error.message : 'Unknown error';
-      
+
       // Notify failure via WebSocket
-      this.sendToUser(userId, 'export:failed', { 
-        jobId, 
-        error: error instanceof Error ? error.message : 'Unknown error'
+      this.sendToUser(userId, 'export:failed', {
+        jobId,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
-      
+
       throw error;
     }
   }
@@ -525,8 +606,17 @@ export class ExportService {
     }
   }
 
-  private async copyOriginalImages(images: ImageWithSegmentation[], exportDir: string, jobId?: string): Promise<void> {
-    return this.copyOriginalImagesWithProgress(images, exportDir, undefined, jobId);
+  private async copyOriginalImages(
+    images: ImageWithSegmentation[],
+    exportDir: string,
+    jobId?: string
+  ): Promise<void> {
+    return this.copyOriginalImagesWithProgress(
+      images,
+      exportDir,
+      undefined,
+      jobId
+    );
   }
 
   private async copyOriginalImagesWithProgress(
@@ -537,18 +627,26 @@ export class ExportService {
   ): Promise<void> {
     const imagesDir = path.join(exportDir, 'images');
     const uploadDir = process.env.UPLOAD_DIR || './uploads';
-    
+
     // Resolve upload directory to prevent path traversal
     const resolvedUploadDir = path.resolve(uploadDir);
-    
-    logger.info(`Starting parallel copy of ${images.length} original images`, 'ExportService');
+
+    logger.info(
+      `Starting parallel copy of ${images.length} original images`,
+      'ExportService'
+    );
     let copiedCount = 0;
     let skippedCount = 0;
-    
+
     // Use higher concurrency for file copying (I/O bound operation)
-    const concurrency = Math.min(16, Math.max(8, Math.floor(images.length / 5)));
-    
-    const copyImage = async (image: ImageWithSegmentation): Promise<'copied' | 'skipped'> => {
+    const concurrency = Math.min(
+      16,
+      Math.max(8, Math.floor(images.length / 5))
+    );
+
+    const copyImage = async (
+      image: ImageWithSegmentation
+    ): Promise<'copied' | 'skipped'> => {
       // Check if job was cancelled
       if (jobId && this.isJobCancelled(jobId)) {
         throw new Error('Export cancelled by user');
@@ -557,64 +655,74 @@ export class ExportService {
       if (!image || !image.originalPath) {
         return 'skipped';
       }
-      
+
       const candidateSourcePath = path.join(uploadDir, image.originalPath);
       const resolvedSourcePath = path.resolve(candidateSourcePath);
-      
+
       // Security check: ensure resolved path starts with upload directory
       if (!resolvedSourcePath.startsWith(resolvedUploadDir)) {
-        logger.warn(`Path traversal attempt detected for image ${image.id}`, 'ExportService', {
-          imageId: image.id,
-          imagePath: image.originalPath,
-          resolvedPath: resolvedSourcePath,
-          uploadDir: resolvedUploadDir
-        });
+        logger.warn(
+          `Path traversal attempt detected for image ${image.id}`,
+          'ExportService',
+          {
+            imageId: image.id,
+            imagePath: image.originalPath,
+            resolvedPath: resolvedSourcePath,
+            uploadDir: resolvedUploadDir,
+          }
+        );
         return 'skipped';
       }
-      
+
       const destPath = path.join(imagesDir, image.name);
-      
+
       try {
         await fs.copyFile(resolvedSourcePath, destPath);
         return 'copied';
       } catch (error) {
-        logger.warn(`Failed to copy image ${image.id}:`, 'ExportService', { 
+        logger.warn(`Failed to copy image ${image.id}:`, 'ExportService', {
           error: error instanceof Error ? error.message : String(error),
           imageId: image.id,
-          sourcePath: resolvedSourcePath
+          sourcePath: resolvedSourcePath,
         });
         return 'skipped';
       }
     };
-    
+
     // Process images in parallel batches
-    await batchProcessor.processBatch(
-      images,
-      copyImage,
-      {
-        batchSize: Math.ceil(images.length / 2), // Process in 2 batches for faster copying
-        concurrency: concurrency,
-        onBatchComplete: (batchIndex, batchResults) => {
-          const batchCopied = batchResults.filter(r => r === 'copied').length;
-          const batchSkipped = batchResults.filter(r => r === 'skipped').length;
-          copiedCount += batchCopied;
-          skippedCount += batchSkipped;
+    await batchProcessor.processBatch(images, copyImage, {
+      batchSize: Math.ceil(images.length / 2), // Process in 2 batches for faster copying
+      concurrency: concurrency,
+      onBatchComplete: (batchIndex, batchResults) => {
+        const batchCopied = batchResults.filter(r => r === 'copied').length;
+        const batchSkipped = batchResults.filter(r => r === 'skipped').length;
+        copiedCount += batchCopied;
+        skippedCount += batchSkipped;
 
-          // Report progress
-          if (onProgress) {
-            onProgress(copiedCount + skippedCount, images.length);
-          }
-
-          logger.info(`Copy batch ${batchIndex + 1} completed: ${batchCopied} copied, ${batchSkipped} skipped`, 'ExportService');
-        },
-        onItemError: (item, error) => {
-          logger.error('Image copy failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService');
-          skippedCount++;
+        // Report progress
+        if (onProgress) {
+          onProgress(copiedCount + skippedCount, images.length);
         }
-      }
+
+        logger.info(
+          `Copy batch ${batchIndex + 1} completed: ${batchCopied} copied, ${batchSkipped} skipped`,
+          'ExportService'
+        );
+      },
+      onItemError: (item, error) => {
+        logger.error(
+          'Image copy failed:',
+          error instanceof Error ? error : new Error(String(error)),
+          'ExportService'
+        );
+        skippedCount++;
+      },
+    });
+
+    logger.info(
+      `Parallel image copy completed: ${copiedCount} copied, ${skippedCount} skipped out of ${images.length} total`,
+      'ExportService'
     );
-    
-    logger.info(`Parallel image copy completed: ${copiedCount} copied, ${skippedCount} skipped out of ${images.length} total`, 'ExportService');
   }
 
   private async generateVisualizations(
@@ -625,126 +733,171 @@ export class ExportService {
     onProgress?: (current: number, total: number) => void
   ): Promise<void> {
     const vizDir = path.join(exportDir, 'visualizations');
-    
-    logger.info(`Starting parallel visualization generation for ${images.length} images`, 'ExportService');
+
+    logger.info(
+      `Starting parallel visualization generation for ${images.length} images`,
+      'ExportService'
+    );
     let processedCount = 0;
     let skippedCount = 0;
-    
+
     // Use optimal concurrency based on system resources
     // Typically 4-8 concurrent operations work well for I/O bound tasks
-    const concurrency = Math.min(8, Math.max(4, Math.floor(images.length / 10)));
-    
-    const processImage = async (image: ImageWithSegmentation): Promise<'processed' | 'skipped'> => {
+    const concurrency = Math.min(
+      8,
+      Math.max(4, Math.floor(images.length / 10))
+    );
+
+    const processImage = async (
+      image: ImageWithSegmentation
+    ): Promise<'processed' | 'skipped'> => {
       // Check if job was cancelled before processing each image
       if (jobId && this.isJobCancelled(jobId)) {
         throw new Error('Export cancelled by user');
       }
-      
+
       if (!image) {
         logger.warn(`Image is undefined`, 'ExportService');
         return 'skipped';
       }
-      
+
       if (!image.segmentation) {
-        logger.warn(`Image ${image.name} (${image.id}) has no segmentation results`, 'ExportService');
+        logger.warn(
+          `Image ${image.name} (${image.id}) has no segmentation results`,
+          'ExportService'
+        );
         return 'skipped';
       }
-      
+
       const result = image.segmentation;
       if (!result.polygons) {
-        logger.warn(`Image ${image.name} (${image.id}) has segmentation but no polygons`, 'ExportService');
+        logger.warn(
+          `Image ${image.name} (${image.id}) has segmentation but no polygons`,
+          'ExportService'
+        );
         return 'skipped';
       }
-      
+
       const imageNameWithoutExt = path.parse(image.name).name;
       const vizPath = path.join(vizDir, `${imageNameWithoutExt}_viz.png`);
-      
+
       let polygons;
       try {
         polygons = JSON.parse(result.polygons);
       } catch (error) {
-        logger.error('Failed to parse polygons for visualization:', error instanceof Error ? error : new Error(String(error)), 'ExportService', { 
-          imageId: image.id,
-          imageName: image.name
-        });
+        logger.error(
+          'Failed to parse polygons for visualization:',
+          error instanceof Error ? error : new Error(String(error)),
+          'ExportService',
+          {
+            imageId: image.id,
+            imageName: image.name,
+          }
+        );
         return 'skipped';
       }
-      
+
       try {
         // Validate originalPath before joining
         if (typeof image.originalPath !== 'string' || !image.originalPath) {
-          logger.error('Invalid or empty originalPath for image', new Error(`Invalid originalPath for image ${image.id}: ${image.originalPath}`));
+          logger.error(
+            'Invalid or empty originalPath for image',
+            new Error(
+              `Invalid originalPath for image ${image.id}: ${image.originalPath}`
+            )
+          );
           return 'skipped';
         }
-        
+
         // Construct full path to the image
         const uploadDir = process.env.UPLOAD_DIR || './uploads';
-        const fullImagePath = path.resolve(path.join(uploadDir, image.originalPath));
-        
+        const fullImagePath = path.resolve(
+          path.join(uploadDir, image.originalPath)
+        );
+
         const result = await this.visualizationGenerator.generateVisualization(
           fullImagePath,
           polygons,
           vizPath,
           options
         );
-        
+
         if (result === 'success') {
           return 'processed';
         } else {
-          logger.warn(`Visualization generation returned ${result} for image ${image.name}`, 'ExportService');
+          logger.warn(
+            `Visualization generation returned ${result} for image ${image.name}`,
+            'ExportService'
+          );
           return 'skipped';
         }
       } catch (error) {
-        logger.error('Visualization generation failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService', {
-          imageId: image.id,
-          imagePath: image.originalPath
-        });
+        logger.error(
+          'Visualization generation failed:',
+          error instanceof Error ? error : new Error(String(error)),
+          'ExportService',
+          {
+            imageId: image.id,
+            imagePath: image.originalPath,
+          }
+        );
         return 'skipped';
       }
     };
-    
+
     // Process images in parallel batches
-    const _results = await batchProcessor.processBatch(
-      images,
-      processImage,
-      {
-        batchSize: Math.ceil(images.length / 4), // Process in 4 batches
-        concurrency: concurrency,
-        onBatchComplete: (batchIndex, batchResults) => {
-          // Check if job was cancelled after each batch
-          if (jobId && this.isJobCancelled(jobId)) {
-            throw new Error('Export cancelled by user');
-          }
-          
-          const batchProcessed = batchResults.filter(r => r === 'processed').length;
-          const batchSkipped = batchResults.filter(r => r === 'skipped').length;
-          processedCount += batchProcessed;
-          skippedCount += batchSkipped;
-          
-          // Report progress if callback provided
-          if (onProgress) {
-            onProgress(processedCount + skippedCount, images.length);
-          }
-          
-          logger.info(`Batch ${batchIndex + 1} completed: ${batchProcessed} processed, ${batchSkipped} skipped`, 'ExportService');
-        },
-        onItemError: (item, error) => {
-          // Check if this is a cancellation error
-          if (error instanceof Error && error.message === 'Export cancelled by user') {
-            throw error; // Re-throw to stop the batch processor
-          }
-          logger.error('Image processing failed:', error instanceof Error ? error : new Error(String(error)), 'ExportService');
-          skippedCount++;
-          
-          // Report progress even for errors
-          if (onProgress) {
-            onProgress(processedCount + skippedCount, images.length);
-          }
+    const _results = await batchProcessor.processBatch(images, processImage, {
+      batchSize: Math.ceil(images.length / 4), // Process in 4 batches
+      concurrency: concurrency,
+      onBatchComplete: (batchIndex, batchResults) => {
+        // Check if job was cancelled after each batch
+        if (jobId && this.isJobCancelled(jobId)) {
+          throw new Error('Export cancelled by user');
         }
-      }
+
+        const batchProcessed = batchResults.filter(
+          r => r === 'processed'
+        ).length;
+        const batchSkipped = batchResults.filter(r => r === 'skipped').length;
+        processedCount += batchProcessed;
+        skippedCount += batchSkipped;
+
+        // Report progress if callback provided
+        if (onProgress) {
+          onProgress(processedCount + skippedCount, images.length);
+        }
+
+        logger.info(
+          `Batch ${batchIndex + 1} completed: ${batchProcessed} processed, ${batchSkipped} skipped`,
+          'ExportService'
+        );
+      },
+      onItemError: (item, error) => {
+        // Check if this is a cancellation error
+        if (
+          error instanceof Error &&
+          error.message === 'Export cancelled by user'
+        ) {
+          throw error; // Re-throw to stop the batch processor
+        }
+        logger.error(
+          'Image processing failed:',
+          error instanceof Error ? error : new Error(String(error)),
+          'ExportService'
+        );
+        skippedCount++;
+
+        // Report progress even for errors
+        if (onProgress) {
+          onProgress(processedCount + skippedCount, images.length);
+        }
+      },
+    });
+
+    logger.info(
+      `Parallel visualization generation completed: ${processedCount} processed, ${skippedCount} skipped out of ${images.length} total`,
+      'ExportService'
     );
-    
-    logger.info(`Parallel visualization generation completed: ${processedCount} processed, ${skippedCount} skipped out of ${images.length} total`, 'ExportService');
   }
 
   private async generateAnnotations(
@@ -759,24 +912,29 @@ export class ExportService {
       if (jobId && this.isJobCancelled(jobId)) {
         throw new Error('Export cancelled by user');
       }
-      
+
       const formatDir = path.join(exportDir, 'annotations', format);
-      
+
       if (format === 'coco') {
         // Convert ImageWithSegmentation[] to ImageData[]
-        const imageDataArray = images.map((image) => ({
+        const imageDataArray = images.map(image => ({
           id: image.id,
           filename: image.name,
           width: image.width || 0,
           height: image.height || 0,
-          segmentationResults: image.segmentation ? [{
-            polygons: image.segmentation.polygons,
-            cellCount: 0,
-            timestamp: new Date()
-          }] : []
+          segmentationResults: image.segmentation
+            ? [
+                {
+                  polygons: image.segmentation.polygons,
+                  cellCount: 0,
+                  timestamp: new Date(),
+                },
+              ]
+            : [],
         }));
-        
-        const cocoData = await this.formatConverter.convertToCOCO(imageDataArray);
+
+        const cocoData =
+          await this.formatConverter.convertToCOCO(imageDataArray);
         await fs.writeFile(
           path.join(formatDir, 'annotations.json'),
           JSON.stringify(cocoData, null, 2)
@@ -809,19 +967,24 @@ export class ExportService {
         }
       } else if (format === 'json') {
         // Convert ImageWithSegmentation[] to ImageData[]
-        const imageDataArray = images.map((image) => ({
+        const imageDataArray = images.map(image => ({
           id: image.id,
           filename: image.name,
           width: image.width || 0,
           height: image.height || 0,
-          segmentationResults: image.segmentation ? [{
-            polygons: image.segmentation.polygons,
-            cellCount: 0,
-            timestamp: new Date()
-          }] : []
+          segmentationResults: image.segmentation
+            ? [
+                {
+                  polygons: image.segmentation.polygons,
+                  cellCount: 0,
+                  timestamp: new Date(),
+                },
+              ]
+            : [],
         }));
-        
-        const jsonData = await this.formatConverter.convertToJSON(imageDataArray);
+
+        const jsonData =
+          await this.formatConverter.convertToJSON(imageDataArray);
         await fs.writeFile(
           path.join(formatDir, 'segmentation_data.json'),
           JSON.stringify(jsonData, null, 2)
@@ -842,7 +1005,7 @@ export class ExportService {
     if (jobId && this.isJobCancelled(jobId)) {
       throw new Error('Export cancelled by user');
     }
-    
+
     const metricsDir = path.join(exportDir, 'metrics');
     // Convert images to the format expected by metrics calculator
     const metricsImages = images.map(image => ({
@@ -850,17 +1013,21 @@ export class ExportService {
       name: image.name,
       width: image.width || undefined,
       height: image.height || undefined,
-      segmentation: image.segmentation ? {
-        polygons: image.segmentation.polygons,
-        model: image.segmentation.model,
-        threshold: image.segmentation.threshold,
-        confidence: image.segmentation.confidence || undefined,
-        processingTime: image.segmentation.processingTime || undefined
-      } : undefined
+      segmentation: image.segmentation
+        ? {
+            polygons: image.segmentation.polygons,
+            model: image.segmentation.model,
+            threshold: image.segmentation.threshold,
+            confidence: image.segmentation.confidence || undefined,
+            processingTime: image.segmentation.processingTime || undefined,
+          }
+        : undefined,
     }));
-    
+
     const allMetrics = await this.metricsCalculator.calculateAllMetrics(
-      metricsImages as Parameters<typeof this.metricsCalculator.calculateAllMetrics>[0],
+      metricsImages as Parameters<
+        typeof this.metricsCalculator.calculateAllMetrics
+      >[0],
       options?.pixelToMicrometerScale
     );
 
@@ -874,7 +1041,7 @@ export class ExportService {
       if (jobId && this.isJobCancelled(jobId)) {
         throw new Error('Export cancelled by user');
       }
-      
+
       if (format === 'excel') {
         await this.metricsCalculator.exportToExcel(
           allMetrics,
@@ -929,16 +1096,21 @@ export class ExportService {
     await fs.writeFile(path.join(docDir, 'metrics_guide.md'), metricsGuide);
   }
 
-  private generateReadme(project: ProjectWithImages, options: ExportOptions): string {
+  private generateReadme(
+    project: ProjectWithImages,
+    options: ExportOptions
+  ): string {
     return `# Export - ${project.title}
 
 ## Export Information
 - **Date**: ${new Date().toISOString()}
 - **Total Images**: ${project.images?.length || 0}
 - **Project ID**: ${project.id}
-${options.pixelToMicrometerScale && options.pixelToMicrometerScale > 0 
-  ? `- **Scale Conversion**: ${options.pixelToMicrometerScale} um/pixel (measurements converted to micrometers)` 
-  : '- **Units**: All measurements in pixels'}
+${
+  options.pixelToMicrometerScale && options.pixelToMicrometerScale > 0
+    ? `- **Scale Conversion**: ${options.pixelToMicrometerScale} um/pixel (measurements converted to micrometers)`
+    : '- **Units**: All measurements in pixels'
+}
 
 ## Export Contents
 
@@ -979,7 +1151,8 @@ ${options.metricsFormats?.map(f => `- ${f.toUpperCase()} format`).join('\n') || 
 
   private generateMetricsGuide(options?: ExportOptions): string {
     // Determine units based on scale
-    const isScaled = options?.pixelToMicrometerScale && options.pixelToMicrometerScale > 0;
+    const isScaled =
+      options?.pixelToMicrometerScale && options.pixelToMicrometerScale > 0;
     const areaUnit = isScaled ? 'um^2' : 'px^2';
     const lengthUnit = isScaled ? 'um' : 'px';
     const scaleInfo = isScaled
@@ -1146,18 +1319,21 @@ ${scaleInfo}
 `;
   }
 
-  private async generateAnnotationGuides(exportDir: string, options: ExportOptions): Promise<void> {
+  private async generateAnnotationGuides(
+    exportDir: string,
+    options: ExportOptions
+  ): Promise<void> {
     const annotationsDir = path.join(exportDir, 'annotations');
 
     // Only generate guides for formats that are being exported
     if (options.annotationFormats?.includes('coco')) {
       await this.generateCocoGuide(path.join(annotationsDir, 'coco'));
     }
-    
+
     if (options.annotationFormats?.includes('yolo')) {
       await this.generateYoloGuide(path.join(annotationsDir, 'yolo'));
     }
-    
+
     if (options.annotationFormats?.includes('json')) {
       await this.generateJsonGuide(path.join(annotationsDir, 'json'));
     }
@@ -1282,9 +1458,12 @@ For detailed conversion and analysis scripts, see the full README.md.
     await fs.writeFile(path.join(jsonDir, 'QUICK_SETUP.md'), guide);
   }
 
-  private async generateMainAnnotationGuide(annotationsDir: string, options: ExportOptions): Promise<void> {
+  private async generateMainAnnotationGuide(
+    annotationsDir: string,
+    options: ExportOptions
+  ): Promise<void> {
     const exportedFormats = options.annotationFormats || [];
-    const scaleInfo = options.pixelToMicrometerScale 
+    const scaleInfo = options.pixelToMicrometerScale
       ? `- **Scale**: ${options.pixelToMicrometerScale} um/pixel (measurements in micrometers)`
       : '- **Units**: All measurements in pixels';
 
@@ -1378,11 +1557,10 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     exportDir: string,
     projectName: string
   ): Promise<string> {
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-
     // Sanitize project name for filesystem safety
     const sanitizedProjectName = this.sanitizeFilename(projectName);
-    const zipName = `${sanitizedProjectName}_export_${timestamp}.zip`;
+    // Use simple project name for export file (as requested by user)
+    const zipName = `${sanitizedProjectName}.zip`;
     const zipPath = path.join(process.env.EXPORT_DIR || './exports', zipName);
 
     const output = await fs.open(zipPath, 'w');
@@ -1393,53 +1571,59 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
 
     return new Promise((resolve, reject) => {
       let cleanupCalled = false;
-      
+
       const cleanup = async (): Promise<void> => {
-        if (cleanupCalled) {return;}
+        if (cleanupCalled) {
+          return;
+        }
         cleanupCalled = true;
-        
+
         try {
           // Destroy archive first
           if (archive.readable || archive.writable) {
             archive.destroy();
           }
         } catch (error) {
-          logger.warn('Failed to destroy archive:', 'ExportService', { error: error instanceof Error ? error.message : String(error) });
+          logger.warn('Failed to destroy archive:', 'ExportService', {
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
-        
+
         try {
           // Close file handle
           await output.close();
         } catch (error) {
-          logger.warn('Failed to close file handle:', 'ExportService', { error: error instanceof Error ? error.message : String(error) });
+          logger.warn('Failed to close file handle:', 'ExportService', {
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
-        
+
         // Remove event listeners to prevent memory leaks
         writeStream.removeAllListeners();
         archive.removeAllListeners();
       };
 
       const writeStream = output.createWriteStream();
-      
+
       // Add error handler for writeStream
-      writeStream.on('error', (error) => {
+      writeStream.on('error', error => {
         cleanup().finally(() => reject(error));
       });
-      
+
       writeStream.on('close', () => {
         cleanup().finally(() => resolve(zipPath));
       });
-      
-      archive.on('error', (error) => {
+
+      archive.on('error', error => {
         cleanup().finally(() => reject(error));
       });
 
       archive.pipe(writeStream);
       archive.directory(exportDir, false);
-      
+
       // Wrap finalize in try/catch and handle its promise rejection
       try {
-        archive.finalize().catch((error) => {
+        archive.finalize().catch(error => {
           cleanup().finally(() => reject(error));
         });
       } catch (error) {
@@ -1448,11 +1632,15 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     });
   }
 
-
   private updateJobProgress(
     jobId: string,
     progress: number,
-    stage?: 'images' | 'visualizations' | 'annotations' | 'metrics' | 'compression',
+    stage?:
+      | 'images'
+      | 'visualizations'
+      | 'annotations'
+      | 'metrics'
+      | 'compression',
     stageProgress?: { current: number; total: number; currentItem?: string }
   ): void {
     const job = this.exportJobs.get(jobId);
@@ -1483,7 +1671,12 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
 
   private getProgressMessage(
     progress: number,
-    stage?: 'images' | 'visualizations' | 'annotations' | 'metrics' | 'compression',
+    stage?:
+      | 'images'
+      | 'visualizations'
+      | 'annotations'
+      | 'metrics'
+      | 'compression',
     stageProgress?: { current: number; total: number; currentItem?: string }
   ): string {
     if (stage && stageProgress) {
@@ -1504,12 +1697,18 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
       }
     } else if (stage) {
       switch (stage) {
-        case 'images': return `Copying original images... ${progress}%`;
-        case 'visualizations': return `Generating visualizations... ${progress}%`;
-        case 'annotations': return `Creating annotation files... ${progress}%`;
-        case 'metrics': return `Calculating metrics... ${progress}%`;
-        case 'compression': return `Creating archive... ${progress}%`;
-        default: return `Processing ${stage}... ${progress}%`;
+        case 'images':
+          return `Copying original images... ${progress}%`;
+        case 'visualizations':
+          return `Generating visualizations... ${progress}%`;
+        case 'annotations':
+          return `Creating annotation files... ${progress}%`;
+        case 'metrics':
+          return `Calculating metrics... ${progress}%`;
+        case 'compression':
+          return `Creating archive... ${progress}%`;
+        default:
+          return `Processing ${stage}... ${progress}%`;
       }
     }
     return `Processing... ${progress}%`;
@@ -1517,54 +1716,69 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
 
   private setupJobCleanup(): void {
     // Run cleanup every hour
-    this.cleanupInterval = setInterval(() => {
-      this.cleanupOldJobs();
-    }, 60 * 60 * 1000);
-    
+    this.cleanupInterval = setInterval(
+      () => {
+        this.cleanupOldJobs();
+      },
+      60 * 60 * 1000
+    );
+
     logger.info('Export job cleanup interval started', 'ExportService', {
       intervalMs: 60 * 60 * 1000,
       jobTtlMs: this.JOB_TTL_MS,
-      maxJobs: this.MAX_JOBS
+      maxJobs: this.MAX_JOBS,
     });
   }
 
   private cleanupOldJobs(): void {
     const now = Date.now();
     const jobsToDelete: string[] = [];
-    
+
     // Find jobs older than TTL or mark excess jobs for deletion
-    const sortedJobs = Array.from(this.exportJobs.entries())
-      .sort(([, a], [, b]) => b.createdAt.getTime() - a.createdAt.getTime());
-    
+    const sortedJobs = Array.from(this.exportJobs.entries()).sort(
+      ([, a], [, b]) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
+
     let deletedCount = 0;
-    
+
     for (const [jobId, job] of sortedJobs) {
       const jobAge = now - job.createdAt.getTime();
-      
+
       // Delete if older than TTL or if we have too many jobs
       if (jobAge > this.JOB_TTL_MS || sortedJobs.length > this.MAX_JOBS) {
         jobsToDelete.push(jobId);
         deletedCount++;
       }
     }
-    
+
     // Remove old jobs
     for (const jobId of jobsToDelete) {
       this.exportJobs.delete(jobId);
     }
-    
+
     if (deletedCount > 0) {
-      logger.info(`Cleaned up ${deletedCount} old export jobs`, 'ExportService', {
-        deletedCount,
-        remainingJobs: this.exportJobs.size,
-        totalProcessed: sortedJobs.length
-      });
+      logger.info(
+        `Cleaned up ${deletedCount} old export jobs`,
+        'ExportService',
+        {
+          deletedCount,
+          remainingJobs: this.exportJobs.size,
+          totalProcessed: sortedJobs.length,
+        }
+      );
     }
   }
 
-  async getJobStatus(jobId: string, projectId: string, userId: string): Promise<ExportJob | null> {
+  async getJobStatus(
+    jobId: string,
+    projectId: string,
+    userId: string
+  ): Promise<ExportJob | null> {
     // Check if user has access to this project (owner or shared)
-    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    const accessCheck = await SharingService.hasProjectAccess(
+      projectId,
+      userId
+    );
     if (!accessCheck.hasAccess) {
       return null;
     }
@@ -1576,9 +1790,16 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     return null;
   }
 
-  async getExportFilePath(jobId: string, projectId: string, userId: string): Promise<string | null> {
+  async getExportFilePath(
+    jobId: string,
+    projectId: string,
+    userId: string
+  ): Promise<string | null> {
     // Check if user has access to this project (owner or shared)
-    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    const accessCheck = await SharingService.hasProjectAccess(
+      projectId,
+      userId
+    );
     if (!accessCheck.hasAccess) {
       return null;
     }
@@ -1590,9 +1811,16 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     return null;
   }
 
-  async getExportJob(jobId: string, projectId: string, userId: string): Promise<ExportJob | null> {
+  async getExportJob(
+    jobId: string,
+    projectId: string,
+    userId: string
+  ): Promise<ExportJob | null> {
     // Check if user has access to this project (owner or shared)
-    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    const accessCheck = await SharingService.hasProjectAccess(
+      projectId,
+      userId
+    );
     if (!accessCheck.hasAccess) {
       return null;
     }
@@ -1604,9 +1832,16 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     return null;
   }
 
-  async cancelJob(jobId: string, projectId: string, userId: string): Promise<void> {
+  async cancelJob(
+    jobId: string,
+    projectId: string,
+    userId: string
+  ): Promise<void> {
     // Check if user has access to this project (owner or shared)
-    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    const accessCheck = await SharingService.hasProjectAccess(
+      projectId,
+      userId
+    );
     if (!accessCheck.hasAccess) {
       return; // Silently return if no access
     }
@@ -1615,7 +1850,11 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     if (job && job.projectId === projectId) {
       // Check if job is already completed or cancelled
       if (job.status === 'completed' || job.status === 'cancelled') {
-        logger.info('Export job already completed or cancelled', 'ExportService', { jobId, status: job.status });
+        logger.info(
+          'Export job already completed or cancelled',
+          'ExportService',
+          { jobId, status: job.status }
+        );
         return;
       }
 
@@ -1641,28 +1880,58 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
         jobId,
         projectId,
         userId,
-        progress: job.progress
+        progress: job.progress,
       });
 
       // Cancel the Bull queue job if bullJobId exists and queue is available
-      if (job.bullJobId && this.exportQueue && typeof (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob === 'function') {
+      if (
+        job.bullJobId &&
+        this.exportQueue &&
+        typeof (
+          this.exportQueue as {
+            getJob: (id: string) => Promise<{
+              getState: () => Promise<string>;
+              remove: () => Promise<void>;
+            } | null>;
+          }
+        ).getJob === 'function'
+      ) {
         try {
-          const queueJob = await (this.exportQueue as { getJob: (id: string) => Promise<{ getState: () => Promise<string>; remove: () => Promise<void> } | null> }).getJob(job.bullJobId);
+          const queueJob = await (
+            this.exportQueue as {
+              getJob: (id: string) => Promise<{
+                getState: () => Promise<string>;
+                remove: () => Promise<void>;
+              } | null>;
+            }
+          ).getJob(job.bullJobId);
           if (queueJob) {
             const state = await queueJob.getState();
-            logger.info('Bull queue job state', 'ExportService', { jobId, bullJobId: job.bullJobId, state });
+            logger.info('Bull queue job state', 'ExportService', {
+              jobId,
+              bullJobId: job.bullJobId,
+              state,
+            });
 
             // Try to remove job regardless of state (except completed)
             if (state !== 'completed') {
               await queueJob.remove();
-              logger.info('Bull queue job removed', 'ExportService', { jobId, bullJobId: job.bullJobId });
+              logger.info('Bull queue job removed', 'ExportService', {
+                jobId,
+                bullJobId: job.bullJobId,
+              });
             }
           }
         } catch (error) {
-          logger.error('Failed to cancel Bull queue job', error instanceof Error ? error : undefined, 'ExportService', {
-            jobId,
-            bullJobId: job.bullJobId
-          });
+          logger.error(
+            'Failed to cancel Bull queue job',
+            error instanceof Error ? error : undefined,
+            'ExportService',
+            {
+              jobId,
+              bullJobId: job.bullJobId,
+            }
+          );
         }
       }
 
@@ -1670,9 +1939,15 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     }
   }
 
-  async getExportHistory(projectId: string, userId: string): Promise<ExportJob[]> {
+  async getExportHistory(
+    projectId: string,
+    userId: string
+  ): Promise<ExportJob[]> {
     // Check if user has access to this project (owner or shared)
-    const accessCheck = await SharingService.hasProjectAccess(projectId, userId);
+    const accessCheck = await SharingService.hasProjectAccess(
+      projectId,
+      userId
+    );
     if (!accessCheck.hasAccess) {
       return [];
     }
@@ -1681,7 +1956,7 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
       .filter(job => job.projectId === projectId)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, 10); // Return last 10 exports
-    
+
     return jobs;
   }
 
@@ -1713,7 +1988,30 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
     }
 
     // Avoid reserved Windows names
-    const reservedNames = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+    const reservedNames = [
+      'CON',
+      'PRN',
+      'AUX',
+      'NUL',
+      'COM1',
+      'COM2',
+      'COM3',
+      'COM4',
+      'COM5',
+      'COM6',
+      'COM7',
+      'COM8',
+      'COM9',
+      'LPT1',
+      'LPT2',
+      'LPT3',
+      'LPT4',
+      'LPT5',
+      'LPT6',
+      'LPT7',
+      'LPT8',
+      'LPT9',
+    ];
     if (reservedNames.includes(sanitized.toUpperCase())) {
       sanitized = `${sanitized}_export`;
     }

@@ -128,22 +128,7 @@ const CanvasPolygon = React.memo(
     // Memoized click handlers
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
-        // Check if the click target is a vertex element
-        const target = e.target as SVGElement;
-        const isVertexClick =
-          target &&
-          (target.dataset.polygonId ||
-            target.tagName === 'circle' ||
-            target.closest('circle'));
-
-        // Don't handle polygon selection if clicking on a vertex
-        if (isVertexClick) {
-          console.log('🔘 Ignoring polygon click - vertex detected');
-          return;
-        }
-
         e.stopPropagation();
-        console.log('🔘 Polygon click:', { id, target: e.target });
         if (onSelectPolygon) {
           onSelectPolygon(id);
         }

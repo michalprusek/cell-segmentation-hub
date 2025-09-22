@@ -27,7 +27,8 @@ export type { ParallelProcessingStats } from '@/components/project/QueueStatsPan
 export const useSegmentationQueue = (
   projectId?: string,
   onSegmentationCancelled?: (data: any) => void,
-  onBulkSegmentationCancelled?: (data: any) => void
+  onBulkSegmentationCancelled?: (data: any) => void,
+  onBatchCompleted?: () => void
 ) => {
   // Check if this hook should be disabled to avoid conflicts
   const isDisabled = projectId === 'DISABLE_GLOBAL';
@@ -192,6 +193,15 @@ export const useSegmentationQueue = (
           }
         }
 
+        // *** NEW: Call batch completion callback to refresh gallery ***
+        if (onBatchCompleted) {
+          try {
+            onBatchCompleted();
+          } catch (error) {
+            logger.error('Error in batch completion callback:', error);
+          }
+        }
+
         // Reset batch state
         batchState.isProcessingBatch = false;
         batchState.processedCount = 0;
@@ -202,7 +212,7 @@ export const useSegmentationQueue = (
         batchState.hasShownStartToast = false;
       }
     }
-  }, []);
+  }, [onBatchCompleted]);
 
   const handleNotification = useCallback((notification: Notification) => {
     // Individual segmentation-complete notifications are suppressed
@@ -423,4 +433,4 @@ export const useSegmentationQueue = (
     joinProject,
     leaveProject,
   };
-};
+};;

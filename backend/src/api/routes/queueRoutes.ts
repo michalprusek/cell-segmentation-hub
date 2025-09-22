@@ -3,24 +3,42 @@ import { queueController } from '../controllers/queueController';
 import { authenticate } from '../../middleware/auth';
 import { validateBody } from '../../middleware/validation';
 // validateParams unused - available for future use
-import { addImageToQueueSchema, batchQueueSchema } from '../../types/validation';
+import {
+  addImageToQueueSchema,
+  batchQueueSchema,
+} from '../../types/validation';
 // resetStuckItemsSchema, cleanupQueueSchema unused - available for future use
-import { validationResult, ValidationError, body, param } from 'express-validator';
+import {
+  validationResult,
+  ValidationError,
+  body,
+  param,
+} from 'express-validator';
 import { ResponseHelper } from '../../utils/response';
 
 // Middleware to handle express-validator results
-const handleValidation = (req: Request, res: Response, next: NextFunction): void => {
+const handleValidation = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    const errorMap = errors.array().reduce((acc, error) => {
-      const validationError = error as ValidationError & { param?: string; msg: string };
-      const field = validationError.param || 'unknown';
-      if (!acc[field]) {
-        acc[field] = [];
-      }
-      acc[field].push(validationError.msg);
-      return acc;
-    }, {} as Record<string, string[]>);
+    const errorMap = errors.array().reduce(
+      (acc, error) => {
+        const validationError = error as ValidationError & {
+          param?: string;
+          msg: string;
+        };
+        const field = validationError.param || 'unknown';
+        if (!acc[field]) {
+          acc[field] = [];
+        }
+        acc[field].push(validationError.msg);
+        return acc;
+      },
+      {} as Record<string, string[]>
+    );
     ResponseHelper.validationError(res, errorMap);
     return;
   }
@@ -39,9 +57,7 @@ router.use(authenticate);
  */
 router.post(
   '/images/:imageId',
-  [
-    param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID')
-  ],
+  [param('imageId').isUUID().withMessage('ID obrázku musí být platné UUID')],
   handleValidation,
   validateBody(addImageToQueueSchema),
   queueController.addImageToQueue
@@ -65,9 +81,7 @@ router.post(
  */
 router.get(
   '/projects/:projectId/stats',
-  [
-    param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')
-  ],
+  [param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')],
   handleValidation,
   queueController.getQueueStats
 );
@@ -79,9 +93,7 @@ router.get(
  */
 router.get(
   '/projects/:projectId/items',
-  [
-    param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')
-  ],
+  [param('projectId').isUUID().withMessage('ID projektu musí být platné UUID')],
   handleValidation,
   queueController.getQueueItems
 );
@@ -93,9 +105,7 @@ router.get(
  */
 router.delete(
   '/items/:queueId',
-  [
-    param('queueId').isUUID().withMessage('ID fronty musí být platné UUID')
-  ],
+  [param('queueId').isUUID().withMessage('ID fronty musí být platné UUID')],
   handleValidation,
   queueController.removeFromQueue
 );
@@ -125,7 +135,7 @@ router.post(
     body('maxProcessingMinutes')
       .optional()
       .isInt({ min: 1, max: 60 })
-      .withMessage('Maximální čas zpracování musí být mezi 1 a 60 minutami')
+      .withMessage('Maximální čas zpracování musí být mezi 1 a 60 minutami'),
   ],
   handleValidation,
   queueController.resetStuckItems
@@ -142,7 +152,7 @@ router.post(
     body('daysOld')
       .optional()
       .isInt({ min: 1, max: 30 })
-      .withMessage('Počet dní musí být mezi 1 a 30')
+      .withMessage('Počet dní musí být mezi 1 a 30'),
   ],
   handleValidation,
   queueController.cleanupQueue

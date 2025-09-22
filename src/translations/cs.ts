@@ -4,6 +4,7 @@ export default {
     loading: 'Načítání...',
     save: 'Uložit',
     cancel: 'Zrušit',
+    dismiss: 'Zavřít',
     delete: 'Smazat',
     edit: 'Upravit',
     create: 'Vytvořit',

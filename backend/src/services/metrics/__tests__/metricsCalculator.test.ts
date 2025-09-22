@@ -1,16 +1,20 @@
-import { MetricsCalculator, PolygonMetrics, ImageWithSegmentation } from '../metricsCalculator';
+import {
+  MetricsCalculator,
+  PolygonMetrics,
+  ImageWithSegmentation,
+} from '../metricsCalculator';
 
 // Mock ExcelJS
 const mockWorksheet = {
   columns: [],
-  addRow: jest.fn()
+  addRow: jest.fn(),
 };
 
 const mockWorkbook = {
   addWorksheet: jest.fn(() => mockWorksheet),
   xlsx: {
-    writeFile: jest.fn()
-  }
+    writeFile: jest.fn(),
+  },
 };
 
 // Create spy functions for the test
@@ -23,10 +27,10 @@ jest.mock('exceljs', () => {
       Workbook: jest.fn().mockImplementation(() => ({
         addWorksheet: mockAddWorksheet,
         xlsx: {
-          writeFile: mockWriteFile
-        }
-      }))
-    }
+          writeFile: mockWriteFile,
+        },
+      })),
+    },
   };
 });
 
@@ -49,15 +53,15 @@ jest.mock('axios', () => {
         convexity: 1.0, // Square is convex
         solidity: 1.0, // Square has no holes
         sphericity: 0.886, // Approx for a square
-      }
-    })
+      },
+    }),
   }));
-  
+
   return {
     default: {
-      create: mockCreate
+      create: mockCreate,
     },
-    create: mockCreate
+    create: mockCreate,
   };
 });
 
@@ -68,14 +72,14 @@ jest.mock('../../../utils/logger', () => ({
     warn: jest.fn(),
     error: jest.fn(),
     debug: jest.fn(),
-  }
+  },
 }));
 
 // Mock config
 jest.mock('../../../utils/config', () => ({
   config: {
-    SEGMENTATION_SERVICE_URL: 'http://ml-service:8000'
-  }
+    SEGMENTATION_SERVICE_URL: 'http://ml-service:8000',
+  },
 }));
 
 describe('MetricsCalculator', () => {
@@ -98,13 +102,13 @@ describe('MetricsCalculator', () => {
               { x: 0, y: 0 },
               { x: 100, y: 0 },
               { x: 100, y: 100 },
-              { x: 0, y: 100 }
-            ]
-          }
+              { x: 0, y: 100 },
+            ],
+          },
         ]),
         model: 'test',
-        threshold: 0.5
-      }
+        threshold: 0.5,
+      },
     };
 
     it('should apply scale conversion correctly for valid scale', async () => {
@@ -134,7 +138,10 @@ describe('MetricsCalculator', () => {
     });
 
     it('should handle scale = undefined correctly', async () => {
-      const metrics = await calculator.calculateAllMetrics([mockImage], undefined);
+      const metrics = await calculator.calculateAllMetrics(
+        [mockImage],
+        undefined
+      );
 
       expect(metrics).toHaveLength(1);
       const metric = metrics[0];
@@ -184,7 +191,10 @@ describe('MetricsCalculator', () => {
     });
 
     it('should handle Infinity scale correctly', async () => {
-      const metrics = await calculator.calculateAllMetrics([mockImage], Infinity);
+      const metrics = await calculator.calculateAllMetrics(
+        [mockImage],
+        Infinity
+      );
 
       expect(metrics).toHaveLength(1);
       const metric = metrics[0];
@@ -198,7 +208,7 @@ describe('MetricsCalculator', () => {
     it('should warn for unusually high scale values', async () => {
       const { logger } = await import('../../../utils/logger');
       const scale = 150; // Very high scale
-      
+
       await calculator.calculateAllMetrics([mockImage], scale);
 
       expect(logger.warn).toHaveBeenCalledWith(
@@ -210,7 +220,7 @@ describe('MetricsCalculator', () => {
     it('should warn for unusually low scale values', async () => {
       const { logger } = await import('../../../utils/logger');
       const scale = 0.005; // Very low scale
-      
+
       await calculator.calculateAllMetrics([mockImage], scale);
 
       expect(logger.warn).toHaveBeenCalledWith(
@@ -240,40 +250,42 @@ describe('MetricsCalculator', () => {
     afterEach(() => {
       jest.clearAllMocks();
     });
-    
+
     it.skip('should generate correct units in Excel export', async () => {
       // Setup worksheet mock
       mockAddWorksheet.mockClear();
       mockWorksheet.addRow.mockClear();
-      
-      const mockMetrics: PolygonMetrics[] = [{
-        imageId: 'test-1',
-        imageName: 'test.jpg',
-        polygonId: 1,
-        type: 'external',
-        area: 1000,
-        perimeter: 120,
-        equivalentDiameter: 35.68,
-        circularity: 0.873,
-        feretDiameterMax: 40,
-        feretDiameterMaxOrthogonalDistance: 30,
-        feretDiameterMin: 25,
-        feretAspectRatio: 1.6,
-        lengthMajorDiameterThroughCentroid: 38,
-        lengthMinorDiameterThroughCentroid: 28,
-        compactness: 0.85,
-        convexity: 0.95,
-        solidity: 0.92,
-        sphericity: 0.88,
-      }];
+
+      const mockMetrics: PolygonMetrics[] = [
+        {
+          imageId: 'test-1',
+          imageName: 'test.jpg',
+          polygonId: 1,
+          type: 'external',
+          area: 1000,
+          perimeter: 120,
+          equivalentDiameter: 35.68,
+          circularity: 0.873,
+          feretDiameterMax: 40,
+          feretDiameterMaxOrthogonalDistance: 30,
+          feretDiameterMin: 25,
+          feretAspectRatio: 1.6,
+          lengthMajorDiameterThroughCentroid: 38,
+          lengthMinorDiameterThroughCentroid: 28,
+          compactness: 0.85,
+          convexity: 0.95,
+          solidity: 0.92,
+          sphericity: 0.88,
+        },
+      ];
 
       // Test with scale
       const outputPath = '/tmp/test-with-scale.xlsx';
       await calculator.exportToExcel(mockMetrics, outputPath, 2.0);
-      
+
       // Verify workbook was created and worksheet added
       expect(mockAddWorksheet).toHaveBeenCalledWith('Polygon Metrics');
-      
+
       // Verify headers were set with µm units when scale is provided
       expect(mockWorksheet.columns).toBeDefined();
       const headers = mockWorksheet.columns.map((col: any) => col.header);
@@ -282,35 +294,37 @@ describe('MetricsCalculator', () => {
       expect(headers).toContain('Equivalent Diameter (µm)');
       expect(headers).toContain('Feret Diameter Max (µm)');
       expect(headers).toContain('Major Axis Length (µm)');
-      
+
       // Verify data row was added
       expect(mockWorksheet.addRow).toHaveBeenCalledTimes(1);
-      
+
       // Verify file write was called
       expect(mockWorkbook.xlsx.writeFile).toHaveBeenCalledWith(outputPath);
     });
 
     it('should generate correct units in CSV export', async () => {
-      const mockMetrics: PolygonMetrics[] = [{
-        imageId: 'test-1',
-        imageName: 'test.jpg',
-        polygonId: 1,
-        type: 'external',
-        area: 1000,
-        perimeter: 120,
-        equivalentDiameter: 35.68,
-        circularity: 0.873,
-        feretDiameterMax: 40,
-        feretDiameterMaxOrthogonalDistance: 30,
-        feretDiameterMin: 25,
-        feretAspectRatio: 1.6,
-        lengthMajorDiameterThroughCentroid: 38,
-        lengthMinorDiameterThroughCentroid: 28,
-        compactness: 0.85,
-        convexity: 0.95,
-        solidity: 0.92,
-        sphericity: 0.88,
-      }];
+      const mockMetrics: PolygonMetrics[] = [
+        {
+          imageId: 'test-1',
+          imageName: 'test.jpg',
+          polygonId: 1,
+          type: 'external',
+          area: 1000,
+          perimeter: 120,
+          equivalentDiameter: 35.68,
+          circularity: 0.873,
+          feretDiameterMax: 40,
+          feretDiameterMaxOrthogonalDistance: 30,
+          feretDiameterMin: 25,
+          feretAspectRatio: 1.6,
+          lengthMajorDiameterThroughCentroid: 38,
+          lengthMinorDiameterThroughCentroid: 28,
+          compactness: 0.85,
+          convexity: 0.95,
+          solidity: 0.92,
+          sphericity: 0.88,
+        },
+      ];
 
       // Mock the exportToCSV method
       calculator.exportToCSV = jest.fn(async (metrics, path, scale) => {
@@ -331,7 +345,7 @@ describe('MetricsCalculator', () => {
 
       // Read and verify the CSV headers
       const fs = await import('fs').then(m => m.promises);
-      
+
       try {
         // Read pixels CSV header
         const pixelsContent = await fs.readFile(outputPathPixels, 'utf-8');
@@ -339,14 +353,17 @@ describe('MetricsCalculator', () => {
         expect(pixelsHeader).toContain('px');
         expect(pixelsHeader).toMatch(/area.*\(px/i);
         expect(pixelsHeader).toMatch(/perimeter.*\(px/i);
-        
+
         // Read micrometers CSV header
-        const micrometersContent = await fs.readFile(outputPathMicrometers, 'utf-8');
+        const micrometersContent = await fs.readFile(
+          outputPathMicrometers,
+          'utf-8'
+        );
         const micrometersHeader = micrometersContent.split('\n')[0];
         expect(micrometersHeader).toContain('µm');
         expect(micrometersHeader).toMatch(/area.*\(µm/i);
         expect(micrometersHeader).toMatch(/perimeter.*\(µm/i);
-        
+
         // Clean up temp files
         await fs.unlink(outputPathPixels);
         await fs.unlink(outputPathMicrometers);

@@ -5,22 +5,12 @@ import * as path from 'path';
 import { promises as fs } from 'fs';
 import { AuthRequest } from '../../types/auth';
 
-// Sanitize filename to remove/replace invalid characters
-function sanitizeFilename(filename: string): string {
-  return filename
-    .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid filename characters
-    .replace(/[\s]+/g, '_') // Replace spaces with underscores
-    .replace(/_{2,}/g, '_') // Replace multiple underscores with single
-    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
-    .substring(0, 100); // Limit length to prevent issues
-}
-
 export class ExportController {
   private exportService: ExportService;
 
   constructor() {
     this.exportService = ExportService.getInstance();
-    
+
     // Bind all methods
     this.startExport = this.startExport.bind(this);
     this.getExportStatus = this.getExportStatus.bind(this);
@@ -33,7 +23,10 @@ export class ExportController {
   async startExport(req: AuthRequest, res: Response): Promise<void> {
     try {
       const { projectId } = req.params;
-      const { options, projectName } = req.body as { options?: ExportOptions; projectName?: string };
+      const { options, projectName } = req.body as {
+        options?: ExportOptions;
+        projectName?: string;
+      };
       const userId = req.user?.id;
 
       if (!userId) {
@@ -59,7 +52,11 @@ export class ExportController {
         message: 'Export job started successfully',
       });
     } catch (error) {
-      logger.error('Export start failed:', error instanceof Error ? error : new Error(String(error)), 'ExportController');
+      logger.error(
+        'Export start failed:',
+        error instanceof Error ? error : new Error(String(error)),
+        'ExportController'
+      );
       res.status(500).json({ error: 'Failed to start export' });
     }
   }
@@ -97,7 +94,11 @@ export class ExportController {
 
       res.json(status);
     } catch (error) {
-      logger.error('Failed to get export status:', error instanceof Error ? error : new Error(String(error)), 'ExportController');
+      logger.error(
+        'Failed to get export status:',
+        error instanceof Error ? error : new Error(String(error)),
+        'ExportController'
+      );
       res.status(500).json({ error: 'Failed to get export status' });
     }
   }
@@ -133,17 +134,12 @@ export class ExportController {
         return;
       }
 
-      // Get export job details for project name
-      const exportJob = await this.exportService.getExportJob(
-        jobId,
-        projectId,
-        userId
-      );
-
       // Validate and sanitize the file path to prevent path traversal
-      const exportsBaseDir = path.resolve(process.env.EXPORT_DIR || './exports');
+      const exportsBaseDir = path.resolve(
+        process.env.EXPORT_DIR || './exports'
+      );
       const resolvedFilePath = path.resolve(filePath);
-      
+
       // Verify the resolved path is within the exports directory
       const rel = path.relative(exportsBaseDir, resolvedFilePath);
       if (rel.startsWith('..') || path.isAbsolute(rel)) {
@@ -159,33 +155,36 @@ export class ExportController {
           return;
         }
       } catch (err) {
-        logger.error('File not found:', err instanceof Error ? err : new Error(String(err)), 'ExportController');
+        logger.error(
+          'File not found:',
+          err instanceof Error ? err : new Error(String(err)),
+          'ExportController'
+        );
         res.status(404).json({ error: 'File not found' });
         return;
       }
 
-      // Generate filename using project name if available
-      const timestamp = new Date().toISOString().slice(0, 10);
-      const fileName = exportJob?.projectName ?
-        `${sanitizeFilename(exportJob.projectName)}_${timestamp}.zip` :
-        `export_${jobId}_${timestamp}.zip`;
-      
       // Set proper headers for file download
+      // Use 'inline' to prevent automatic browser download - let frontend handle it
       res.setHeader('Content-Type', 'application/zip');
-      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.setHeader('Content-Disposition', 'inline');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
-      
-      // Use res.download with callback for error handling
-      res.download(resolvedFilePath, fileName, (err) => {
+
+      // Send file without forcing download - frontend will handle the download
+      res.sendFile(resolvedFilePath, err => {
         if (err) {
-          logger.error('Download stream error:', err, 'ExportController');
+          logger.error('Send file error:', err, 'ExportController');
           // Response might be already sent, so we just log the error
         }
       });
     } catch (error) {
-      logger.error('Download export failed:', error instanceof Error ? error : new Error(String(error)), 'ExportController');
+      logger.error(
+        'Download export failed:',
+        error instanceof Error ? error : new Error(String(error)),
+        'ExportController'
+      );
       res.status(500).json({ error: 'Failed to download export' });
     }
   }
@@ -217,7 +216,11 @@ export class ExportController {
         message: 'Export job cancelled successfully',
       });
     } catch (error) {
-      logger.error('Cancel export failed:', error instanceof Error ? error : new Error(String(error)), 'ExportController');
+      logger.error(
+        'Cancel export failed:',
+        error instanceof Error ? error : new Error(String(error)),
+        'ExportController'
+      );
       res.status(500).json({ error: 'Failed to cancel export' });
     }
   }
@@ -244,7 +247,11 @@ export class ExportController {
 
       res.json(history);
     } catch (error) {
-      logger.error('Failed to get export history:', error instanceof Error ? error : new Error(String(error)), 'ExportController');
+      logger.error(
+        'Failed to get export history:',
+        error instanceof Error ? error : new Error(String(error)),
+        'ExportController'
+      );
       res.status(500).json({ error: 'Failed to get export history' });
     }
   }
@@ -253,20 +260,40 @@ export class ExportController {
     try {
       const formats = {
         annotations: [
-          { id: 'coco', name: 'COCO', description: 'Common Objects in Context format' },
-          { id: 'yolo', name: 'YOLO', description: 'You Only Look Once format' },
+          {
+            id: 'coco',
+            name: 'COCO',
+            description: 'Common Objects in Context format',
+          },
+          {
+            id: 'yolo',
+            name: 'YOLO',
+            description: 'You Only Look Once format',
+          },
           { id: 'json', name: 'JSON', description: 'Custom JSON format' },
         ],
         metrics: [
-          { id: 'excel', name: 'Excel', description: 'Microsoft Excel format (.xlsx)' },
+          {
+            id: 'excel',
+            name: 'Excel',
+            description: 'Microsoft Excel format (.xlsx)',
+          },
           { id: 'csv', name: 'CSV', description: 'Comma-separated values' },
-          { id: 'json', name: 'JSON', description: 'JavaScript Object Notation' },
+          {
+            id: 'json',
+            name: 'JSON',
+            description: 'JavaScript Object Notation',
+          },
         ],
       };
 
       res.json(formats);
     } catch (error) {
-      logger.error('Failed to get export formats:', error instanceof Error ? error : new Error(String(error)), 'ExportController');
+      logger.error(
+        'Failed to get export formats:',
+        error instanceof Error ? error : new Error(String(error)),
+        'ExportController'
+      );
       res.status(500).json({ error: 'Failed to get export formats' });
     }
   }

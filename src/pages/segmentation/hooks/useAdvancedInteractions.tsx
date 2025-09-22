@@ -364,6 +364,17 @@ export const useAdvancedInteractions = ({
   }, []);
 
   /**
+   * Check if the event target is a vertex element
+   */
+  const isVertexTarget = useCallback((target: EventTarget | null): boolean => {
+    if (!target || !(target instanceof SVGElement)) return false;
+    return (
+      target.dataset?.polygonId !== undefined &&
+      target.dataset?.vertexIndex !== undefined
+    );
+  }, []);
+
+  /**
    * Handle mouse down events with mode-specific logic
    */
   const handleMouseDown = useCallback(
@@ -379,8 +390,19 @@ export const useAdvancedInteractions = ({
         return;
       }
 
-      // Right-click - handle step-by-step undo
+      // Right-click - handle step-by-step undo OR allow vertex context menu
       if (e.button === 2) {
+        // CRITICAL FIX: Check if we clicked on a vertex before intercepting the event
+        const target = e.target as SVGElement;
+        
+        // If this is a vertex, allow the context menu to proceed
+        if (isVertexTarget(target)) {
+          // Don't prevent default or stop propagation for vertex right-clicks
+          // This allows the VertexContextMenu to work properly
+          return;
+        }
+
+        // Not a vertex - proceed with existing step-by-step undo logic
         // Special handling for slice mode - step-by-step undo
         if (editMode === EditMode.Slice) {
           if (tempPoints.length > 0) {
@@ -440,13 +462,7 @@ export const useAdvancedInteractions = ({
 
         // Check if we clicked on a vertex element directly
         const target = e.target as SVGElement;
-        console.log('🔘 Canvas mouseDown:', {
-          target: target.tagName,
-          dataset: target?.dataset,
-          editMode,
-          hasPolygonId: !!target?.dataset?.polygonId,
-          hasVertexIndex: target?.dataset?.vertexIndex !== undefined,
-        });
+        // Canvas mouseDown event
 
         if (target && target.dataset) {
           const polygonId = target.dataset.polygonId;
@@ -489,12 +505,7 @@ export const useAdvancedInteractions = ({
               }
 
               // Start dragging this vertex
-              console.log('🔘 Starting vertex drag:', {
-                polygonId,
-                vertexIndex: index,
-                originalPosition,
-                editMode,
-              });
+              // Starting vertex drag
 
               setInteractionState({
                 ...interactionState,
@@ -517,9 +528,9 @@ export const useAdvancedInteractions = ({
                   originalPosition: { ...originalPosition },
                   dragOffset: { x: 0, y: 0 },
                 });
-                console.log('✅ Vertex drag state initialized');
+                // Vertex drag state initialized
               } else {
-                console.warn('⚠️ setVertexDragState not available');
+                // setVertexDragState not available
               }
               return;
             }
@@ -568,6 +579,8 @@ export const useAdvancedInteractions = ({
       handleViewModeClick,
       setSelectedPolygonId,
       isSpacePressedCallback,
+      isVertexTarget,
+      onPolygonSelection,
     ]
   );
 
@@ -630,13 +643,7 @@ export const useAdvancedInteractions = ({
             dragOffset: { x: offsetX, y: offsetY },
           });
 
-          console.log('🔘 Vertex drag offset updated:', {
-            polygonId,
-            vertexIndex,
-            offset: { x: offsetX, y: offsetY },
-            imagePoint,
-            originalPosition: interactionState.originalVertexPosition,
-          });
+          // Vertex drag offset updated
         }
         return;
       }
@@ -825,7 +832,7 @@ export const useAdvancedInteractions = ({
     handleMouseMove,
     handleMouseUp,
   };
-};
+};;
 
 /**
  * Helper function to insert points between vertices using normalized path logic

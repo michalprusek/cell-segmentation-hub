@@ -262,6 +262,7 @@ export interface SegmentationUpdate {
   polygonCount?: number;
   error?: string;
   queuePosition?: number;
+  projectId?: string; // Added to match backend SegmentationUpdateData
 }
 
 /**

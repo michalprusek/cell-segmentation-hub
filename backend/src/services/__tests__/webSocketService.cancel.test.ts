@@ -10,7 +10,11 @@ import Client from 'socket.io-client';
 
 import { createWebSocketTestEnvironment as _createWebSocketTestEnvironment } from '@/test-utils/webSocketTestUtils';
 import { cancelTestUtils } from '@/test-utils/cancelTestHelpers';
-import { uploadScenarios, segmentationScenarios, exportScenarios } from '@/test-fixtures/cancelScenarios';
+import {
+  uploadScenarios,
+  segmentationScenarios,
+  exportScenarios,
+} from '@/test-fixtures/cancelScenarios';
 
 // Mock dependencies
 vi.mock('@/db', () => ({
@@ -61,30 +65,36 @@ class WebSocketService {
   }
 
   private setupEventHandlers() {
-    this.io.on('connection', (socket) => {
+    this.io.on('connection', socket => {
       console.info(`Client connected: ${socket.id}`);
 
-      socket.on('authenticate', async (data: { userId: string; token: string }) => {
-        try {
-          // Mock authentication
-          if (data.token === 'valid-token') {
-            socket.data.userId = data.userId;
-            socket.join(`user:${data.userId}`);
+      socket.on(
+        'authenticate',
+        async (data: { userId: string; token: string }) => {
+          try {
+            // Mock authentication
+            if (data.token === 'valid-token') {
+              socket.data.userId = data.userId;
+              socket.join(`user:${data.userId}`);
 
-            // Track user rooms
-            if (!this.userRooms.has(data.userId)) {
-              this.userRooms.set(data.userId, new Set());
+              // Track user rooms
+              if (!this.userRooms.has(data.userId)) {
+                this.userRooms.set(data.userId, new Set());
+              }
+              this.userRooms.get(data.userId)!.add(socket.id);
+
+              socket.emit('authenticated', {
+                success: true,
+                userId: data.userId,
+              });
+            } else {
+              socket.emit('authError', { error: 'Invalid token' });
             }
-            this.userRooms.get(data.userId)!.add(socket.id);
-
-            socket.emit('authenticated', { success: true, userId: data.userId });
-          } else {
-            socket.emit('authError', { error: 'Invalid token' });
+          } catch (_error) {
+            socket.emit('authError', { error: 'Authentication failed' });
           }
-        } catch (_error) {
-          socket.emit('authError', { error: 'Authentication failed' });
         }
-      });
+      );
 
       socket.on('joinProject', (data: { projectId: string }) => {
         const roomName = `project:${data.projectId}`;
@@ -149,7 +159,10 @@ class WebSocketService {
     }
   }
 
-  emitSegmentationCancelled(userId: string, data: CancelEvent & { batchId?: string; imageIds?: string[] }) {
+  emitSegmentationCancelled(
+    userId: string,
+    data: CancelEvent & { batchId?: string; imageIds?: string[] }
+  ) {
     this.io.to(`user:${userId}`).emit('segmentationCancelled', data);
     if (data.projectId) {
       this.io.to(`project:${data.projectId}`).emit('batchCancelled', data);
@@ -181,7 +194,10 @@ class WebSocketService {
   }
 
   // Error notifications
-  emitCancelError(userId: string, data: { operationId: string; error: string; timestamp: string }) {
+  emitCancelError(
+    userId: string,
+    data: { operationId: string; error: string; timestamp: string }
+  ) {
     this.io.to(`user:${userId}`).emit('cancelError', data);
   }
 
@@ -219,7 +235,7 @@ describe('WebSocket Service Cancel Integration', () => {
     });
 
     // Start server
-    await new Promise<void>((resolve) => {
+    await new Promise<void>(resolve => {
       server.listen(() => {
         const port = (server.address() as any).port;
         serverAddress = `http://localhost:${port}`;
@@ -245,7 +261,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Connection and Authentication', () => {
-    it('should handle client connection and authentication', (done) => {
+    it('should handle client connection and authentication', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -262,7 +278,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle authentication errors', (done) => {
+    it('should handle authentication errors', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -278,7 +294,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle project room joining', (done) => {
+    it('should handle project room joining', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -300,7 +316,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Upload Cancel Events', () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       clientSocket.connect();
       clientSocket.on('connect', () => {
         clientSocket.emit('authenticate', {
@@ -318,7 +334,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit upload cancelled events', (done) => {
+    it('should emit upload cancelled events', done => {
       const { operation } = uploadScenarios.singleFileUpload;
 
       clientSocket.on('uploadCancelled', (data: CancelEvent) => {
@@ -338,7 +354,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit upload cancelled events to project room', (done) => {
+    it('should emit upload cancelled events to project room', done => {
       const { operation } = uploadScenarios.multipleFileUpload.operations[0];
 
       clientSocket.on('uploadCancelled', (data: CancelEvent) => {
@@ -361,7 +377,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle large file upload cancellation events', (done) => {
+    it('should handle large file upload cancellation events', done => {
       const { operation } = uploadScenarios.largeFileUpload;
 
       clientSocket.on('uploadCancelled', (data: CancelEvent) => {
@@ -383,7 +399,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Segmentation Cancel Events', () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       clientSocket.connect();
       clientSocket.on('connect', () => {
         clientSocket.emit('authenticate', {
@@ -401,7 +417,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit segmentation cancelled events', (done) => {
+    it('should emit segmentation cancelled events', done => {
       const { operation } = segmentationScenarios.singleImageSegmentation;
 
       clientSocket.on('segmentationCancelled', (data: any) => {
@@ -420,8 +436,9 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit batch cancellation events', (done) => {
-      const { operations, queueStats: _queueStats } = segmentationScenarios.batchSegmentation;
+    it('should emit batch cancellation events', done => {
+      const { operations, queueStats: _queueStats } =
+        segmentationScenarios.batchSegmentation;
 
       clientSocket.on('batchCancelled', (data: any) => {
         expect(data.operationType).toBe('segmentation');
@@ -441,7 +458,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit queue statistics updates after cancellation', (done) => {
+    it('should emit queue statistics updates after cancellation', done => {
       const { queueStats } = segmentationScenarios.batchSegmentation;
 
       clientSocket.on('queueStats', (data: any) => {
@@ -461,8 +478,9 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle high volume batch cancellation events', (done) => {
-      const { totalImages, batchId } = segmentationScenarios.highVolumeSegmentation;
+    it('should handle high volume batch cancellation events', done => {
+      const { totalImages, batchId } =
+        segmentationScenarios.highVolumeSegmentation;
 
       clientSocket.on('batchCancelled', (data: any) => {
         expect(data.batchId).toBe(batchId);
@@ -483,7 +501,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Export Cancel Events', () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       clientSocket.connect();
       clientSocket.on('connect', () => {
         clientSocket.emit('authenticate', {
@@ -501,7 +519,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit export cancelled events', (done) => {
+    it('should emit export cancelled events', done => {
       const { operation } = exportScenarios.cocoExport;
 
       clientSocket.on('exportCancelled', (data: CancelEvent) => {
@@ -521,7 +539,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit large export cancellation events', (done) => {
+    it('should emit large export cancellation events', done => {
       const { operation } = exportScenarios.largeExport;
 
       clientSocket.on('exportCancelled', (data: CancelEvent) => {
@@ -541,7 +559,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle parallel export cancellations', (done) => {
+    it('should handle parallel export cancellations', done => {
       const { operations } = exportScenarios.parallelExports;
       let receivedEvents = 0;
 
@@ -555,7 +573,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
 
       // Emit cancellation for each parallel export
-      operations.forEach((operation) => {
+      operations.forEach(operation => {
         wsService.emitExportCancelled('user-789', {
           operationId: operation.id,
           operationType: 'export',
@@ -569,7 +587,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Universal Operation Cancel Events', () => {
-    beforeEach((done) => {
+    beforeEach(done => {
       clientSocket.connect();
       clientSocket.on('connect', () => {
         clientSocket.emit('authenticate', {
@@ -587,8 +605,10 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit universal operation cancelled events', (done) => {
-      const operation = cancelTestUtils.createTestDataFactories().uploadOperation();
+    it('should emit universal operation cancelled events', done => {
+      const operation = cancelTestUtils
+        .createTestDataFactories()
+        .uploadOperation();
 
       clientSocket.on('operationCancelled', (data: CancelEvent) => {
         expect(data.operationId).toBe(operation.id);
@@ -606,8 +626,10 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit progress updates during cancellation', (done) => {
-      const operation = cancelTestUtils.createTestDataFactories().segmentationOperation();
+    it('should emit progress updates during cancellation', done => {
+      const operation = cancelTestUtils
+        .createTestDataFactories()
+        .segmentationOperation();
 
       clientSocket.on('progressUpdate', (data: any) => {
         expect(data.operationId).toBe(operation.id);
@@ -624,8 +646,10 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should emit cancel error events', (done) => {
-      const operation = cancelTestUtils.createTestDataFactories().exportOperation();
+    it('should emit cancel error events', done => {
+      const operation = cancelTestUtils
+        .createTestDataFactories()
+        .exportOperation();
 
       clientSocket.on('cancelError', (data: any) => {
         expect(data.operationId).toBe(operation.id);
@@ -642,7 +666,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Connection Management', () => {
-    it('should track user connections', (done) => {
+    it('should track user connections', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -659,7 +683,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should track project room connections', (done) => {
+    it('should track project room connections', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -680,7 +704,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle client disconnection cleanup', (done) => {
+    it('should handle client disconnection cleanup', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -699,7 +723,8 @@ describe('WebSocket Service Cancel Integration', () => {
 
         setTimeout(() => {
           const userConnections = wsService.getUserConnections('user-789');
-          const projectConnections = wsService.getProjectConnections('project-456');
+          const projectConnections =
+            wsService.getProjectConnections('project-456');
 
           expect(userConnections).toBe(0);
           expect(projectConnections).toBe(0);
@@ -710,7 +735,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Error Handling and Resilience', () => {
-    it('should handle connection errors gracefully', (done) => {
+    it('should handle connection errors gracefully', done => {
       clientSocket.connect();
 
       clientSocket.on('connect_error', (error: any) => {
@@ -727,7 +752,7 @@ describe('WebSocket Service Cancel Integration', () => {
       wrongClient.connect();
     });
 
-    it('should handle malformed event data', (done) => {
+    it('should handle malformed event data', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -750,7 +775,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle rapid connection/disconnection cycles', (done) => {
+    it('should handle rapid connection/disconnection cycles', done => {
       const clients: any[] = [];
       const connectionCount = 10;
       let completedConnections = 0;
@@ -789,7 +814,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Performance and Scalability', () => {
-    it('should handle multiple concurrent cancel events efficiently', (done) => {
+    it('should handle multiple concurrent cancel events efficiently', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -827,7 +852,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle large event payloads', (done) => {
+    it('should handle large event payloads', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -845,9 +870,15 @@ describe('WebSocket Service Cancel Integration', () => {
         });
 
         // Create large payload
-        const largeImageIds = Array.from({ length: 1000 }, (_, i) => `img-${i}`);
+        const largeImageIds = Array.from(
+          { length: 1000 },
+          (_, i) => `img-${i}`
+        );
         const largeMetadata = {
-          largeData: Array.from({ length: 1000 }, (_, i) => ({ id: i, data: `data-${i}` })),
+          largeData: Array.from({ length: 1000 }, (_, i) => ({
+            id: i,
+            data: `data-${i}`,
+          })),
         };
 
         wsService.emitSegmentationCancelled('user-789', {
@@ -865,7 +896,7 @@ describe('WebSocket Service Cancel Integration', () => {
   });
 
   describe('Event Sequencing and Timing', () => {
-    it('should maintain event order for sequential cancellations', (done) => {
+    it('should maintain event order for sequential cancellations', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {
@@ -905,7 +936,7 @@ describe('WebSocket Service Cancel Integration', () => {
       });
     });
 
-    it('should handle event timing with delays', (done) => {
+    it('should handle event timing with delays', done => {
       clientSocket.connect();
 
       clientSocket.on('connect', () => {

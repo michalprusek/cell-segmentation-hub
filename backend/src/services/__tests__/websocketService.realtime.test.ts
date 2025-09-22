@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  jest,
+} from '@jest/globals';
 import { Server as HTTPServer, createServer } from 'http';
 // import { Server as SocketIOServer } from 'socket.io';
 import Client from 'socket.io-client';
@@ -54,8 +61,8 @@ jest.mock('../../utils/logger', () => ({
 jest.mock('jsonwebtoken', () => ({
   verify: jest.fn(),
   default: {
-    verify: jest.fn()
-  }
+    verify: jest.fn(),
+  },
 }));
 
 // Import after mocking
@@ -66,7 +73,7 @@ import {
   ProjectUpdateData,
   // QueueStatsData,
   getUserRoom,
-  getProjectRoom
+  getProjectRoom,
 } from '../../types/websocket';
 import jwt from 'jsonwebtoken';
 
@@ -76,7 +83,7 @@ describe('WebSocket Real-time Updates', () => {
   let clientSocket: any;
   let port: number;
 
-  beforeEach((done) => {
+  beforeEach(done => {
     httpServer = createServer();
     wsService = new WebSocketService(httpServer, prismaMock as any);
 
@@ -91,7 +98,7 @@ describe('WebSocket Real-time Updates', () => {
     });
   });
 
-  afterEach((done) => {
+  afterEach(done => {
     if (clientSocket) {
       clientSocket.disconnect();
     }
@@ -99,7 +106,7 @@ describe('WebSocket Real-time Updates', () => {
   });
 
   describe('PROJECT_UPDATE Events', () => {
-    it('should emit PROJECT_UPDATE events on image operations', (done) => {
+    it('should emit PROJECT_UPDATE events on image operations', done => {
       const testUserId = 'test-user-id';
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
@@ -107,29 +114,32 @@ describe('WebSocket Real-time Updates', () => {
       // Mock JWT verification
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       // Mock user exists
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
         // Listen for PROJECT_UPDATE events
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          expect(data.projectId).toBe(testProjectId);
-          expect(data.userId).toBe(testUserId);
-          expect(data.operation).toBe('updated');
-          expect(data.updates).toBeDefined();
-          expect(data.timestamp).toBeDefined();
-          done();
-        });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            expect(data.projectId).toBe(testProjectId);
+            expect(data.userId).toBe(testUserId);
+            expect(data.operation).toBe('updated');
+            expect(data.updates).toBeDefined();
+            expect(data.timestamp).toBeDefined();
+            done();
+          }
+        );
 
         // Simulate image upload completion that should trigger PROJECT_UPDATE
         const updateData: ProjectUpdateData = {
@@ -138,42 +148,45 @@ describe('WebSocket Real-time Updates', () => {
           operation: 'updated',
           updates: {
             imageCount: 15,
-            segmentedCount: 12
+            segmentedCount: 12,
           },
-          timestamp: new Date()
+          timestamp: new Date(),
         };
 
         wsService.broadcastProjectUpdate(updateData);
       });
     });
 
-    it('should emit PROJECT_UPDATE with correct statistics after image deletion', (done) => {
+    it('should emit PROJECT_UPDATE with correct statistics after image deletion', done => {
       const testUserId = 'test-user-id';
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          expect(data.projectId).toBe(testProjectId);
-          expect(data.operation).toBe('updated');
-          expect(data.updates?.imageCount).toBe(10); // Decreased after deletion
-          expect(data.updates?.segmentedCount).toBe(8); // Also decreased
-          done();
-        });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            expect(data.projectId).toBe(testProjectId);
+            expect(data.operation).toBe('updated');
+            expect(data.updates?.imageCount).toBe(10); // Decreased after deletion
+            expect(data.updates?.segmentedCount).toBe(8); // Also decreased
+            done();
+          }
+        );
 
         // Simulate image deletion that updates project stats
         const updateData: ProjectUpdateData = {
@@ -182,42 +195,45 @@ describe('WebSocket Real-time Updates', () => {
           operation: 'updated',
           updates: {
             imageCount: 10, // After deletion
-            segmentedCount: 8 // After deletion
+            segmentedCount: 8, // After deletion
           },
-          timestamp: new Date()
+          timestamp: new Date(),
         };
 
         wsService.broadcastProjectUpdate(updateData);
       });
     });
 
-    it('should emit PROJECT_UPDATE with segmentation completion statistics', (done) => {
+    it('should emit PROJECT_UPDATE with segmentation completion statistics', done => {
       const testUserId = 'test-user-id';
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          expect(data.projectId).toBe(testProjectId);
-          expect(data.operation).toBe('updated');
-          expect(data.updates?.segmentedCount).toBe(13); // Increased after segmentation
-          expect(data.timestamp).toBeDefined();
-          done();
-        });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            expect(data.projectId).toBe(testProjectId);
+            expect(data.operation).toBe('updated');
+            expect(data.updates?.segmentedCount).toBe(13); // Increased after segmentation
+            expect(data.timestamp).toBeDefined();
+            done();
+          }
+        );
 
         // Simulate segmentation completion
         const updateData: ProjectUpdateData = {
@@ -226,9 +242,9 @@ describe('WebSocket Real-time Updates', () => {
           operation: 'updated',
           updates: {
             imageCount: 15, // Same
-            segmentedCount: 13 // Increased
+            segmentedCount: 13, // Increased
           },
-          timestamp: new Date()
+          timestamp: new Date(),
         };
 
         wsService.broadcastProjectUpdate(updateData);
@@ -237,34 +253,37 @@ describe('WebSocket Real-time Updates', () => {
   });
 
   describe('broadcastProjectUpdate method', () => {
-    it('should broadcast to correct project room', (done) => {
+    it('should broadcast to correct project room', done => {
       const testUserId = 'test-user-id';
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
         // Join the project room
         clientSocket.emit('join', getProjectRoom(testProjectId));
 
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          expect(data.projectId).toBe(testProjectId);
-          expect(data.userId).toBe(testUserId);
-          done();
-        });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            expect(data.projectId).toBe(testProjectId);
+            expect(data.userId).toBe(testUserId);
+            done();
+          }
+        );
 
         // Broadcast to project room
         const updateData: ProjectUpdateData = {
@@ -273,16 +292,16 @@ describe('WebSocket Real-time Updates', () => {
           operation: 'updated',
           updates: {
             imageCount: 20,
-            segmentedCount: 15
+            segmentedCount: 15,
           },
-          timestamp: new Date()
+          timestamp: new Date(),
         };
 
         wsService.broadcastProjectUpdate(updateData);
       });
     });
 
-    it('should handle shared project notifications', (done) => {
+    it('should handle shared project notifications', done => {
       const ownerId = 'owner-user-id';
       const sharedUserId = 'shared-user-id';
       const testProjectId = 'shared-project-id';
@@ -290,16 +309,16 @@ describe('WebSocket Real-time Updates', () => {
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: sharedUserId,
-        email: 'shared@example.com'
+        email: 'shared@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: sharedUserId,
-        email: 'shared@example.com'
+        email: 'shared@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
@@ -307,12 +326,15 @@ describe('WebSocket Real-time Updates', () => {
         clientSocket.emit('join', getUserRoom(sharedUserId));
         clientSocket.emit('join', getProjectRoom(testProjectId));
 
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          expect(data.projectId).toBe(testProjectId);
-          expect(data.userId).toBe(ownerId); // Owner made the change
-          expect(data.operation).toBe('updated');
-          done();
-        });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            expect(data.projectId).toBe(testProjectId);
+            expect(data.userId).toBe(ownerId); // Owner made the change
+            expect(data.operation).toBe('updated');
+            done();
+          }
+        );
 
         // Owner updates shared project
         const updateData: ProjectUpdateData = {
@@ -321,9 +343,9 @@ describe('WebSocket Real-time Updates', () => {
           operation: 'updated',
           updates: {
             imageCount: 25,
-            segmentedCount: 18
+            segmentedCount: 18,
           },
-          timestamp: new Date()
+          timestamp: new Date(),
         };
 
         wsService.broadcastProjectUpdate(updateData);
@@ -332,44 +354,49 @@ describe('WebSocket Real-time Updates', () => {
   });
 
   describe('Real-time Update Event Payloads', () => {
-    it('should include correct data structure in PROJECT_UPDATE events', (done) => {
+    it('should include correct data structure in PROJECT_UPDATE events', done => {
       const testUserId = 'test-user-id';
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          // Verify complete data structure
-          expect(data).toEqual({
-            projectId: expect.any(String),
-            userId: expect.any(String),
-            operation: expect.any(String),
-            updates: expect.objectContaining({
-              imageCount: expect.any(Number),
-              segmentedCount: expect.any(Number),
-              title: expect.any(String),
-              description: expect.any(String)
-            }),
-            timestamp: expect.any(Date)
-          });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            // Verify complete data structure
+            expect(data).toEqual({
+              projectId: expect.any(String),
+              userId: expect.any(String),
+              operation: expect.any(String),
+              updates: expect.objectContaining({
+                imageCount: expect.any(Number),
+                segmentedCount: expect.any(Number),
+                title: expect.any(String),
+                description: expect.any(String),
+              }),
+              timestamp: expect.any(Date),
+            });
 
-          expect(data.operation).toMatch(/^(created|updated|deleted|shared)$/);
-          done();
-        });
+            expect(data.operation).toMatch(
+              /^(created|updated|deleted|shared)$/
+            );
+            done();
+          }
+        );
 
         const updateData: ProjectUpdateData = {
           projectId: testProjectId,
@@ -379,16 +406,16 @@ describe('WebSocket Real-time Updates', () => {
             title: 'Updated Project Title',
             description: 'Updated description',
             imageCount: 30,
-            segmentedCount: 22
+            segmentedCount: 22,
           },
-          timestamp: new Date()
+          timestamp: new Date(),
         };
 
         wsService.broadcastProjectUpdate(updateData);
       });
     });
 
-    it('should emit SEGMENTATION_STATUS events with correct data', (done) => {
+    it('should emit SEGMENTATION_STATUS events with correct data', done => {
       const testUserId = 'test-user-id';
       const testImageId = 'test-image-id';
       const testProjectId = 'test-project-id';
@@ -396,69 +423,75 @@ describe('WebSocket Real-time Updates', () => {
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
-        clientSocket.on(WebSocketEvent.SEGMENTATION_STATUS, (data: SegmentationUpdateData) => {
-          expect(data.imageId).toBe(testImageId);
-          expect(data.projectId).toBe(testProjectId);
-          expect(data.status).toBe('completed');
-          expect(data.progress).toBe(100);
-          done();
-        });
+        clientSocket.on(
+          WebSocketEvent.SEGMENTATION_STATUS,
+          (data: SegmentationUpdateData) => {
+            expect(data.imageId).toBe(testImageId);
+            expect(data.projectId).toBe(testProjectId);
+            expect(data.status).toBe('completed');
+            expect(data.progress).toBe(100);
+            done();
+          }
+        );
 
         // Simulate segmentation completion
         wsService.emitSegmentationUpdate({
           imageId: testImageId,
           projectId: testProjectId,
           status: 'completed',
-          progress: 100
+          progress: 100,
         });
       });
     });
   });
 
   describe('WebSocket Integration with Operations', () => {
-    it('should integrate with image upload operations', (done) => {
+    it('should integrate with image upload operations', done => {
       const testUserId = 'test-user-id';
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
         let eventsReceived = 0;
         const expectedEvents = 2; // PROJECT_UPDATE and UPLOAD_COMPLETED
 
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          expect(data.projectId).toBe(testProjectId);
-          expect(data.operation).toBe('updated');
-          expect(data.updates?.imageCount).toBeGreaterThan(0);
-          eventsReceived++;
-          if (eventsReceived === expectedEvents) done();
-        });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            expect(data.projectId).toBe(testProjectId);
+            expect(data.operation).toBe('updated');
+            expect(data.updates?.imageCount).toBeGreaterThan(0);
+            eventsReceived++;
+            if (eventsReceived === expectedEvents) done();
+          }
+        );
 
         clientSocket.on(WebSocketEvent.UPLOAD_COMPLETED, (data: any) => {
           expect(data.projectId).toBe(testProjectId);
@@ -473,7 +506,7 @@ describe('WebSocket Real-time Updates', () => {
           userId: testUserId,
           operation: 'updated',
           updates: { imageCount: 5, segmentedCount: 0 },
-          timestamp: new Date()
+          timestamp: new Date(),
         });
 
         wsService.emitUploadCompleted({
@@ -482,45 +515,63 @@ describe('WebSocket Real-time Updates', () => {
           summary: {
             totalFiles: 3,
             successCount: 3,
-            failedCount: 0
+            failedCount: 0,
           },
           uploadedImages: [
-            { id: 'img1', name: 'test1.jpg', originalUrl: '/img1', thumbnailUrl: '/thumb1' },
-            { id: 'img2', name: 'test2.jpg', originalUrl: '/img2', thumbnailUrl: '/thumb2' },
-            { id: 'img3', name: 'test3.jpg', originalUrl: '/img3', thumbnailUrl: '/thumb3' }
+            {
+              id: 'img1',
+              name: 'test1.jpg',
+              originalUrl: '/img1',
+              thumbnailUrl: '/thumb1',
+            },
+            {
+              id: 'img2',
+              name: 'test2.jpg',
+              originalUrl: '/img2',
+              thumbnailUrl: '/thumb2',
+            },
+            {
+              id: 'img3',
+              name: 'test3.jpg',
+              originalUrl: '/img3',
+              thumbnailUrl: '/thumb3',
+            },
           ],
-          timestamp: new Date()
+          timestamp: new Date(),
         });
       });
     });
 
-    it('should integrate with image deletion operations', (done) => {
+    it('should integrate with image deletion operations', done => {
       const testUserId = 'test-user-id';
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          expect(data.projectId).toBe(testProjectId);
-          expect(data.operation).toBe('updated');
-          expect(data.updates?.imageCount).toBe(2); // Decreased after deletion
-          expect(data.updates?.segmentedCount).toBe(1); // Also decreased
-          done();
-        });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            expect(data.projectId).toBe(testProjectId);
+            expect(data.operation).toBe('updated');
+            expect(data.updates?.imageCount).toBe(2); // Decreased after deletion
+            expect(data.updates?.segmentedCount).toBe(1); // Also decreased
+            done();
+          }
+        );
 
         // Simulate image deletion that updates project stats
         wsService.broadcastProjectUpdate({
@@ -529,16 +580,16 @@ describe('WebSocket Real-time Updates', () => {
           operation: 'updated',
           updates: {
             imageCount: 2, // After deletion
-            segmentedCount: 1 // After deletion
+            segmentedCount: 1, // After deletion
           },
-          timestamp: new Date()
+          timestamp: new Date(),
         });
       });
     });
   });
 
   describe('Authentication and Authorization', () => {
-    it('should require valid JWT token for WebSocket connection', (done) => {
+    it('should require valid JWT token for WebSocket connection', done => {
       const invalidToken = 'invalid-jwt-token';
 
       (jwt.verify as jest.Mock).mockImplementation(() => {
@@ -546,7 +597,7 @@ describe('WebSocket Real-time Updates', () => {
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: invalidToken }
+        auth: { token: invalidToken },
       });
 
       clientSocket.on('connect_error', (error: any) => {
@@ -560,7 +611,7 @@ describe('WebSocket Real-time Updates', () => {
       });
     });
 
-    it('should only send PROJECT_UPDATE events to authorized users', (done) => {
+    it('should only send PROJECT_UPDATE events to authorized users', done => {
       const authorizedUserId = 'authorized-user-id';
       const _unauthorizedUserId = 'unauthorized-user-id';
       const testProjectId = 'private-project-id';
@@ -568,16 +619,16 @@ describe('WebSocket Real-time Updates', () => {
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: authorizedUserId,
-        email: 'authorized@example.com'
+        email: 'authorized@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: authorizedUserId,
-        email: 'authorized@example.com'
+        email: 'authorized@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {
@@ -585,10 +636,13 @@ describe('WebSocket Real-time Updates', () => {
         clientSocket.emit('join', getProjectRoom(testProjectId));
 
         let eventReceived = false;
-        clientSocket.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-          eventReceived = true;
-          expect(data.projectId).toBe(testProjectId);
-        });
+        clientSocket.on(
+          WebSocketEvent.PROJECT_UPDATE,
+          (data: ProjectUpdateData) => {
+            eventReceived = true;
+            expect(data.projectId).toBe(testProjectId);
+          }
+        );
 
         // Broadcast update
         wsService.broadcastProjectUpdate({
@@ -596,7 +650,7 @@ describe('WebSocket Real-time Updates', () => {
           userId: authorizedUserId,
           operation: 'updated',
           updates: { imageCount: 10, segmentedCount: 8 },
-          timestamp: new Date()
+          timestamp: new Date(),
         });
 
         // Wait a bit and verify event was received
@@ -609,7 +663,7 @@ describe('WebSocket Real-time Updates', () => {
   });
 
   describe('Performance and Reliability', () => {
-    it('should handle multiple concurrent WebSocket connections', (done) => {
+    it('should handle multiple concurrent WebSocket connections', done => {
       const testUserId = 'test-user-id';
       const testProjectId = 'test-project-id';
       const mockToken = 'valid-jwt-token';
@@ -619,12 +673,12 @@ describe('WebSocket Real-time Updates', () => {
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       const clients: any[] = [];
@@ -632,23 +686,26 @@ describe('WebSocket Real-time Updates', () => {
       // Create multiple clients
       for (let i = 0; i < connectionCount; i++) {
         const client = Client(`http://localhost:${port}`, {
-          auth: { token: mockToken }
+          auth: { token: mockToken },
         });
 
         client.on('connect', () => {
           connectedClients++;
           client.emit('join', getProjectRoom(testProjectId));
 
-          client.on(WebSocketEvent.PROJECT_UPDATE, (data: ProjectUpdateData) => {
-            eventsReceived++;
-            expect(data.projectId).toBe(testProjectId);
+          client.on(
+            WebSocketEvent.PROJECT_UPDATE,
+            (data: ProjectUpdateData) => {
+              eventsReceived++;
+              expect(data.projectId).toBe(testProjectId);
 
-            if (eventsReceived === connectionCount) {
-              // All clients received the event
-              clients.forEach(c => c.disconnect());
-              done();
+              if (eventsReceived === connectionCount) {
+                // All clients received the event
+                clients.forEach(c => c.disconnect());
+                done();
+              }
             }
-          });
+          );
 
           // When all clients are connected, broadcast an update
           if (connectedClients === connectionCount) {
@@ -657,7 +714,7 @@ describe('WebSocket Real-time Updates', () => {
               userId: testUserId,
               operation: 'updated',
               updates: { imageCount: 15, segmentedCount: 12 },
-              timestamp: new Date()
+              timestamp: new Date(),
             });
           }
         });
@@ -666,22 +723,22 @@ describe('WebSocket Real-time Updates', () => {
       }
     });
 
-    it('should handle WebSocket connection drops gracefully', (done) => {
+    it('should handle WebSocket connection drops gracefully', done => {
       const testUserId = 'test-user-id';
       const mockToken = 'valid-jwt-token';
 
       (jwt.verify as jest.Mock).mockReturnValue({
         userId: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       prismaMock.user.findUnique.mockResolvedValue({
         id: testUserId,
-        email: 'test@example.com'
+        email: 'test@example.com',
       });
 
       clientSocket = Client(`http://localhost:${port}`, {
-        auth: { token: mockToken }
+        auth: { token: mockToken },
       });
 
       clientSocket.on('connect', () => {

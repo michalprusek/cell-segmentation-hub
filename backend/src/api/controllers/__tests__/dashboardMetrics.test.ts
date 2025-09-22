@@ -70,80 +70,95 @@ const app = express();
 app.use(express.json());
 
 // Mock dashboard API routes
-app.get('/api/dashboard/metrics', mockAuthMiddleware, async (req: any, res: any) => {
-  try {
-    const userId = req.user.id;
-    const stats = await getUserStats(userId);
-    res.json({
-      success: true,
-      data: {
-        totalProjects: stats.totalProjects,
-        totalImages: stats.totalImages,
-        totalSegmentations: stats.totalSegmentations,
-        storageUsed: stats.storageUsed,
-        storageUsedBytes: stats.storageUsedBytes,
-        imagesUploadedToday: stats.imagesUploadedToday,
-        processedImages: stats.processedImages,
-        efficiency: stats.totalImages > 0 ? Math.round((stats.processedImages / stats.totalImages) * 100) : 0,
-        lastUpdated: new Date().toISOString(),
+app.get(
+  '/api/dashboard/metrics',
+  mockAuthMiddleware,
+  async (req: any, res: any) => {
+    try {
+      const userId = req.user.id;
+      const stats = await getUserStats(userId);
+      res.json({
+        success: true,
+        data: {
+          totalProjects: stats.totalProjects,
+          totalImages: stats.totalImages,
+          totalSegmentations: stats.totalSegmentations,
+          storageUsed: stats.storageUsed,
+          storageUsedBytes: stats.storageUsedBytes,
+          imagesUploadedToday: stats.imagesUploadedToday,
+          processedImages: stats.processedImages,
+          efficiency:
+            stats.totalImages > 0
+              ? Math.round((stats.processedImages / stats.totalImages) * 100)
+              : 0,
+          lastUpdated: new Date().toISOString(),
+        },
+      });
+    } catch (_error) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch dashboard metrics',
+      });
+    }
+  }
+);
+
+app.get(
+  '/api/dashboard/profile',
+  mockAuthMiddleware,
+  async (req: any, res: any) => {
+    try {
+      const userId = req.user.id;
+      const profile = await getUserProfile(userId);
+
+      if (!profile) {
+        return res.status(404).json({
+          success: false,
+          error: 'User profile not found',
+        });
       }
-    });
-  } catch (_error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch dashboard metrics'
-    });
-  }
-});
 
-app.get('/api/dashboard/profile', mockAuthMiddleware, async (req: any, res: any) => {
-  try {
-    const userId = req.user.id;
-    const profile = await getUserProfile(userId);
-
-    if (!profile) {
-      return res.status(404).json({
+      res.json({
+        success: true,
+        data: profile,
+      });
+    } catch (_error) {
+      res.status(500).json({
         success: false,
-        error: 'User profile not found'
+        error: 'Failed to fetch user profile',
       });
     }
-
-    res.json({
-      success: true,
-      data: profile
-    });
-  } catch (_error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch user profile'
-    });
   }
-});
+);
 
-app.get('/api/projects/:projectId/stats', mockAuthMiddleware, async (req: any, res: any) => {
-  try {
-    const userId = req.user.id;
-    const projectId = req.params.projectId;
-    const stats = await getProjectStats(projectId, userId);
+app.get(
+  '/api/projects/:projectId/stats',
+  mockAuthMiddleware,
+  async (req: any, res: any) => {
+    try {
+      const userId = req.user.id;
+      const projectId = req.params.projectId;
+      const stats = await getProjectStats(projectId, userId);
 
-    if (!stats) {
-      return res.status(404).json({
+      if (!stats) {
+        return res.status(404).json({
+          success: false,
+          error: 'Project not found or access denied',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: stats,
+      });
+    } catch (_error) {
+      res.status(500).json({
         success: false,
-        error: 'Project not found or access denied'
+        error: 'Failed to fetch project statistics',
       });
     }
-
-    res.json({
-      success: true,
-      data: stats
-    });
-  } catch (_error) {
-    res.status(500).json({
-      success: false,
-      error: 'Failed to fetch project statistics'
-    });
   }
-});
+);
 
 describe('Dashboard Metrics API Endpoints', () => {
   const testUserId = 'test-user-id';
@@ -163,7 +178,7 @@ describe('Dashboard Metrics API Endpoints', () => {
         storageUsed: '125 MB',
         storageUsedBytes: 131072000,
         imagesUploadedToday: 12,
-        processedImages: 180
+        processedImages: 180,
       };
 
       // Set up database mocks
@@ -172,9 +187,11 @@ describe('Dashboard Metrics API Endpoints', () => {
         .mockResolvedValueOnce(mockStats.totalImages)
         .mockResolvedValueOnce(mockStats.processedImages)
         .mockResolvedValueOnce(mockStats.imagesUploadedToday);
-      prismaMock.segmentation.count.mockResolvedValueOnce(mockStats.totalSegmentations);
+      prismaMock.segmentation.count.mockResolvedValueOnce(
+        mockStats.totalSegmentations
+      );
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: mockStats.storageUsedBytes }
+        _sum: { fileSize: mockStats.storageUsedBytes },
       });
 
       const response = await request(app)
@@ -182,20 +199,24 @@ describe('Dashboard Metrics API Endpoints', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(expect.objectContaining({
-        totalProjects: mockStats.totalProjects,
-        totalImages: mockStats.totalImages,
-        totalSegmentations: mockStats.totalSegmentations,
-        storageUsed: expect.any(String),
-        storageUsedBytes: expect.any(Number),
-        imagesUploadedToday: mockStats.imagesUploadedToday,
-        processedImages: mockStats.processedImages,
-        efficiency: expect.any(Number),
-        lastUpdated: expect.any(String)
-      }));
+      expect(response.body.data).toEqual(
+        expect.objectContaining({
+          totalProjects: mockStats.totalProjects,
+          totalImages: mockStats.totalImages,
+          totalSegmentations: mockStats.totalSegmentations,
+          storageUsed: expect.any(String),
+          storageUsedBytes: expect.any(Number),
+          imagesUploadedToday: mockStats.imagesUploadedToday,
+          processedImages: mockStats.processedImages,
+          efficiency: expect.any(Number),
+          lastUpdated: expect.any(String),
+        })
+      );
 
       // Verify efficiency calculation
-      const expectedEfficiency = Math.round((mockStats.processedImages / mockStats.totalImages) * 100);
+      const expectedEfficiency = Math.round(
+        (mockStats.processedImages / mockStats.totalImages) * 100
+      );
       expect(response.body.data.efficiency).toBe(expectedEfficiency);
     });
 
@@ -208,7 +229,7 @@ describe('Dashboard Metrics API Endpoints', () => {
         .mockResolvedValueOnce(0);
       prismaMock.segmentation.count.mockResolvedValueOnce(0);
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: null }
+        _sum: { fileSize: null },
       });
 
       const response = await request(app)
@@ -216,18 +237,22 @@ describe('Dashboard Metrics API Endpoints', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(expect.objectContaining({
-        totalProjects: 0,
-        totalImages: 0,
-        totalSegmentations: 0,
-        imagesUploadedToday: 0,
-        processedImages: 0,
-        efficiency: 0 // Should handle division by zero
-      }));
+      expect(response.body.data).toEqual(
+        expect.objectContaining({
+          totalProjects: 0,
+          totalImages: 0,
+          totalSegmentations: 0,
+          imagesUploadedToday: 0,
+          processedImages: 0,
+          efficiency: 0, // Should handle division by zero
+        })
+      );
     });
 
     it('should handle database errors gracefully', async () => {
-      prismaMock.project.count.mockRejectedValueOnce(new Error('Database connection failed'));
+      prismaMock.project.count.mockRejectedValueOnce(
+        new Error('Database connection failed')
+      );
 
       const response = await request(app)
         .get('/api/dashboard/metrics')
@@ -265,9 +290,9 @@ describe('Dashboard Metrics API Endpoints', () => {
           title: 'John Doe',
           preferredLang: 'en',
           preferredTheme: 'dark',
-          emailNotifications: true
+          emailNotifications: true,
         },
-        _count: { projects: 5 }
+        _count: { projects: 5 },
       };
 
       const mockStats = {
@@ -277,7 +302,7 @@ describe('Dashboard Metrics API Endpoints', () => {
         storageUsed: '45 MB',
         storageUsedBytes: 47185920,
         imagesUploadedToday: 3,
-        processedImages: 65
+        processedImages: 65,
       };
 
       prismaMock.user.findUnique.mockResolvedValueOnce(mockUser);
@@ -286,9 +311,11 @@ describe('Dashboard Metrics API Endpoints', () => {
         .mockResolvedValueOnce(mockStats.totalImages)
         .mockResolvedValueOnce(mockStats.processedImages)
         .mockResolvedValueOnce(mockStats.imagesUploadedToday);
-      prismaMock.segmentation.count.mockResolvedValueOnce(mockStats.totalSegmentations);
+      prismaMock.segmentation.count.mockResolvedValueOnce(
+        mockStats.totalSegmentations
+      );
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: mockStats.storageUsedBytes }
+        _sum: { fileSize: mockStats.storageUsedBytes },
       });
 
       const response = await request(app)
@@ -296,20 +323,22 @@ describe('Dashboard Metrics API Endpoints', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(expect.objectContaining({
-        id: testUserId,
-        email: 'test@example.com',
-        firstName: 'John',
-        lastName: 'Doe',
-        isEmailVerified: true,
-        language: 'en',
-        theme: 'dark',
-        stats: expect.objectContaining({
-          totalProjects: mockStats.totalProjects,
-          totalImages: mockStats.totalImages,
-          totalSegmentations: mockStats.totalSegmentations
+      expect(response.body.data).toEqual(
+        expect.objectContaining({
+          id: testUserId,
+          email: 'test@example.com',
+          firstName: 'John',
+          lastName: 'Doe',
+          isEmailVerified: true,
+          language: 'en',
+          theme: 'dark',
+          stats: expect.objectContaining({
+            totalProjects: mockStats.totalProjects,
+            totalImages: mockStats.totalImages,
+            totalSegmentations: mockStats.totalSegmentations,
+          }),
         })
-      }));
+      );
     });
 
     it('should handle non-existent user', async () => {
@@ -330,14 +359,14 @@ describe('Dashboard Metrics API Endpoints', () => {
         id: testProjectId,
         title: 'Test Project',
         createdAt: new Date(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       const mockImageStats = [
         { segmentationStatus: 'completed', _count: { id: 15 } },
         { segmentationStatus: 'pending', _count: { id: 8 } },
         { segmentationStatus: 'processing', _count: { id: 2 } },
-        { segmentationStatus: 'failed', _count: { id: 1 } }
+        { segmentationStatus: 'failed', _count: { id: 1 } },
       ];
 
       const totalImages = 26;
@@ -346,14 +375,14 @@ describe('Dashboard Metrics API Endpoints', () => {
 
       // Mock sharing service to allow access
       jest.doMock('../../services/sharingService', () => ({
-        hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: true })
+        hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: true }),
       }));
 
       prismaMock.project.findUnique.mockResolvedValueOnce(mockProject);
       prismaMock.image.groupBy.mockResolvedValueOnce(mockImageStats);
       prismaMock.image.count.mockResolvedValueOnce(totalImages);
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: totalFileSize }
+        _sum: { fileSize: totalFileSize },
       });
       prismaMock.segmentation.count.mockResolvedValueOnce(totalSegmentations);
 
@@ -362,40 +391,44 @@ describe('Dashboard Metrics API Endpoints', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toEqual(expect.objectContaining({
-        project: expect.objectContaining({
-          id: testProjectId,
-          title: 'Test Project'
-        }),
-        images: expect.objectContaining({
-          total: totalImages,
-          byStatus: expect.objectContaining({
-            completed: 15,
-            pending: 8,
-            processing: 2,
-            failed: 1
+      expect(response.body.data).toEqual(
+        expect.objectContaining({
+          project: expect.objectContaining({
+            id: testProjectId,
+            title: 'Test Project',
           }),
-          totalFileSize: totalFileSize
-        }),
-        segmentations: expect.objectContaining({
-          total: totalSegmentations
-        }),
-        progress: expect.objectContaining({
-          completionPercentage: expect.any(Number),
-          completedImages: 15,
-          remainingImages: expect.any(Number)
+          images: expect.objectContaining({
+            total: totalImages,
+            byStatus: expect.objectContaining({
+              completed: 15,
+              pending: 8,
+              processing: 2,
+              failed: 1,
+            }),
+            totalFileSize: totalFileSize,
+          }),
+          segmentations: expect.objectContaining({
+            total: totalSegmentations,
+          }),
+          progress: expect.objectContaining({
+            completionPercentage: expect.any(Number),
+            completedImages: 15,
+            remainingImages: expect.any(Number),
+          }),
         })
-      }));
+      );
 
       // Verify completion percentage calculation
       const expectedPercentage = Math.round((15 / totalImages) * 100);
-      expect(response.body.data.progress.completionPercentage).toBe(expectedPercentage);
+      expect(response.body.data.progress.completionPercentage).toBe(
+        expectedPercentage
+      );
     });
 
     it('should handle project not found or access denied', async () => {
       // Mock sharing service to deny access
       jest.doMock('../../services/sharingService', () => ({
-        hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: false })
+        hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: false }),
       }));
 
       const response = await request(app)
@@ -414,13 +447,13 @@ describe('Dashboard Metrics API Endpoints', () => {
       prismaMock.image.count.mockResolvedValue(500);
       prismaMock.segmentation.count.mockResolvedValue(400);
       prismaMock.image.aggregate.mockResolvedValue({
-        _sum: { fileSize: 500 * 1024 * 1024 }
+        _sum: { fileSize: 500 * 1024 * 1024 },
       });
 
       // Make multiple concurrent requests
-      const promises = Array(10).fill(null).map(() =>
-        request(app).get('/api/dashboard/metrics')
-      );
+      const promises = Array(10)
+        .fill(null)
+        .map(() => request(app).get('/api/dashboard/metrics'));
 
       const startTime = Date.now();
       const responses = await Promise.all(promises);
@@ -443,7 +476,7 @@ describe('Dashboard Metrics API Endpoints', () => {
         totalSegmentations: 134,
         storageUsedBytes: 89 * 1024 * 1024,
         imagesUploadedToday: 4,
-        processedImages: 123
+        processedImages: 123,
       };
 
       // Set up consistent mock responses
@@ -452,18 +485,26 @@ describe('Dashboard Metrics API Endpoints', () => {
         .mockResolvedValue(consistentStats.totalImages)
         .mockResolvedValue(consistentStats.processedImages)
         .mockResolvedValue(consistentStats.imagesUploadedToday);
-      prismaMock.segmentation.count.mockResolvedValue(consistentStats.totalSegmentations);
+      prismaMock.segmentation.count.mockResolvedValue(
+        consistentStats.totalSegmentations
+      );
       prismaMock.image.aggregate.mockResolvedValue({
-        _sum: { fileSize: consistentStats.storageUsedBytes }
+        _sum: { fileSize: consistentStats.storageUsedBytes },
       });
 
       // Make multiple requests and verify consistency
       const response1 = await request(app).get('/api/dashboard/metrics');
       const response2 = await request(app).get('/api/dashboard/metrics');
 
-      expect(response1.body.data.totalProjects).toBe(response2.body.data.totalProjects);
-      expect(response1.body.data.totalImages).toBe(response2.body.data.totalImages);
-      expect(response1.body.data.efficiency).toBe(response2.body.data.efficiency);
+      expect(response1.body.data.totalProjects).toBe(
+        response2.body.data.totalProjects
+      );
+      expect(response1.body.data.totalImages).toBe(
+        response2.body.data.totalImages
+      );
+      expect(response1.body.data.efficiency).toBe(
+        response2.body.data.efficiency
+      );
     });
   });
 });

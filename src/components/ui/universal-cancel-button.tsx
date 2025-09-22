@@ -61,7 +61,7 @@ export const UniversalCancelButton: React.FC<UniversalCancelButtonProps> = ({
   const getDefaultCancelText = () => {
     switch (operationType) {
       case 'upload':
-        return t('upload.cancelUpload');
+        return t('toast.upload.cancelUpload');
       case 'segmentation':
         return t('queue.cancelSegmentation');
       case 'export':

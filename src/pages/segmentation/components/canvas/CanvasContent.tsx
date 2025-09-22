@@ -37,8 +37,6 @@ const CanvasContent = ({
           transformOrigin: '0 0',
           willChange: isZooming ? 'transform' : 'auto',
           position: 'relative',
-          width: '100%',
-          height: '100%',
           backfaceVisibility: 'hidden',
           perspective: 1000,
         }}

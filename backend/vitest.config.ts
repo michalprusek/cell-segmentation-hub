@@ -6,11 +6,11 @@ export default defineConfig({
     environment: 'node',
     include: ['src/**/*.test.ts', 'src/**/__tests__/**/*.ts'],
     exclude: ['node_modules'],
-    timeout: 30000
+    timeout: 30000,
   },
   resolve: {
     alias: {
-      '@': '/app/src'
-    }
-  }
+      '@': '/app/src',
+    },
+  },
 });

@@ -1,4 +1,8 @@
-import { SegmentationService, SegmentationRequest, SegmentationResponse } from '../segmentationService';
+import {
+  SegmentationService,
+  SegmentationRequest,
+  SegmentationResponse,
+} from '../segmentationService';
 import { ImageService } from '../imageService';
 import { PrismaClient } from '@prisma/client';
 import axios, { AxiosInstance } from 'axios';
@@ -21,16 +25,21 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     success: true,
     polygons: [
       {
-        points: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+          { x: 100, y: 100 },
+          { x: 0, y: 100 },
+        ],
         area: 10000,
         confidence: 0.95,
-        type: 'external'
-      }
+        type: 'external',
+      },
     ],
     model_used: 'hrnet',
     threshold_used: 0.5,
     processing_time: 1500,
-    image_size: { width: 1024, height: 1024 }
+    image_size: { width: 1024, height: 1024 },
   };
 
   const mockImage = {
@@ -39,7 +48,7 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     originalPath: '/path/to/image',
     width: 1024,
     height: 1024,
-    mimeType: 'image/jpeg'
+    mimeType: 'image/jpeg',
   };
 
   beforeEach(() => {
@@ -49,7 +58,7 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     mockPrisma = {} as any;
     mockImageService = {
       getImageById: jest.fn().mockResolvedValue(mockImage),
-      updateSegmentationStatus: jest.fn().mockResolvedValue(undefined)
+      updateSegmentationStatus: jest.fn().mockResolvedValue(undefined),
     } as any;
 
     // Mock axios instance
@@ -58,8 +67,8 @@ describe('SegmentationService - Concurrent Request Handling', () => {
       get: jest.fn(),
       interceptors: {
         request: { use: jest.fn() },
-        response: { use: jest.fn() }
-      }
+        response: { use: jest.fn() },
+      },
     } as any;
 
     // Mock axios.create to return our mock instance
@@ -74,14 +83,19 @@ describe('SegmentationService - Concurrent Request Handling', () => {
       // Mock successful ML service response
       mockAxios.post.mockResolvedValue({
         status: 200,
-        data: mockSegmentationResponse
+        data: mockSegmentationResponse,
       });
 
       const requests: SegmentationRequest[] = [
         { imageId: 'img1', model: 'hrnet', threshold: 0.5, userId: 'user1' },
         { imageId: 'img2', model: 'hrnet', threshold: 0.5, userId: 'user1' },
-        { imageId: 'img3', model: 'cbam_resunet', threshold: 0.6, userId: 'user2' },
-        { imageId: 'img4', model: 'hrnet', threshold: 0.7, userId: 'user2' }
+        {
+          imageId: 'img3',
+          model: 'cbam_resunet',
+          threshold: 0.6,
+          userId: 'user2',
+        },
+        { imageId: 'img4', model: 'hrnet', threshold: 0.7, userId: 'user2' },
       ];
 
       // Process requests concurrently
@@ -109,22 +123,30 @@ describe('SegmentationService - Concurrent Request Handling', () => {
 
     it('should respect concurrent request limits', async () => {
       // Mock ML service to respond with delay
-      mockAxios.post.mockImplementation(() =>
-        new Promise(resolve =>
-          setTimeout(() => resolve({
-            status: 200,
-            data: mockSegmentationResponse
-          }), 1000)
-        )
+      mockAxios.post.mockImplementation(
+        () =>
+          new Promise(resolve =>
+            setTimeout(
+              () =>
+                resolve({
+                  status: 200,
+                  data: mockSegmentationResponse,
+                }),
+              1000
+            )
+          )
       );
 
       // Create more requests than the concurrent limit (4)
-      const requests: SegmentationRequest[] = Array.from({ length: 6 }, (_, i) => ({
-        imageId: `img${i + 1}`,
-        model: 'hrnet',
-        threshold: 0.5,
-        userId: 'user1'
-      }));
+      const requests: SegmentationRequest[] = Array.from(
+        { length: 6 },
+        (_, i) => ({
+          imageId: `img${i + 1}`,
+          model: 'hrnet',
+          threshold: 0.5,
+          userId: 'user1',
+        })
+      );
 
       const startTime = Date.now();
       const promises = requests.map(request =>
@@ -175,7 +197,7 @@ describe('SegmentationService - Concurrent Request Handling', () => {
         }
         return Promise.resolve({
           status: 200,
-          data: mockSegmentationResponse
+          data: mockSegmentationResponse,
         });
       });
 
@@ -183,7 +205,7 @@ describe('SegmentationService - Concurrent Request Handling', () => {
         { imageId: 'img1', model: 'hrnet', threshold: 0.5, userId: 'user1' },
         { imageId: 'img2', model: 'hrnet', threshold: 0.5, userId: 'user1' },
         { imageId: 'img3', model: 'hrnet', threshold: 0.5, userId: 'user1' },
-        { imageId: 'img4', model: 'hrnet', threshold: 0.5, userId: 'user1' }
+        { imageId: 'img4', model: 'hrnet', threshold: 0.5, userId: 'user1' },
       ];
 
       const promises = requests.map(request =>
@@ -210,7 +232,7 @@ describe('SegmentationService - Concurrent Request Handling', () => {
           maxBodyLength: Infinity,
           maxContentLength: Infinity,
           httpAgent: expect.any(Object),
-          httpsAgent: expect.any(Object)
+          httpsAgent: expect.any(Object),
         })
       );
     });
@@ -218,18 +240,20 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     it('should reuse connections for multiple requests', async () => {
       mockAxios.post.mockResolvedValue({
         status: 200,
-        data: mockSegmentationResponse
+        data: mockSegmentationResponse,
       });
 
       const requests: SegmentationRequest[] = [
         { imageId: 'img1', model: 'hrnet', threshold: 0.5, userId: 'user1' },
-        { imageId: 'img2', model: 'hrnet', threshold: 0.5, userId: 'user1' }
+        { imageId: 'img2', model: 'hrnet', threshold: 0.5, userId: 'user1' },
       ];
 
       // Process multiple requests
-      await Promise.all(requests.map(request =>
-        segmentationService.requestSegmentation(request)
-      ));
+      await Promise.all(
+        requests.map(request =>
+          segmentationService.requestSegmentation(request)
+        )
+      );
 
       // Both requests should use the same HTTP client instance
       expect(mockAxios.post).toHaveBeenCalledTimes(2);
@@ -250,19 +274,23 @@ describe('SegmentationService - Concurrent Request Handling', () => {
       const resolvers: Array<(value: any) => void> = [];
 
       // Mock ML service to respond only when we trigger it
-      mockAxios.post.mockImplementation(() =>
-        new Promise(resolve => {
-          resolvers.push(resolve);
-        })
+      mockAxios.post.mockImplementation(
+        () =>
+          new Promise(resolve => {
+            resolvers.push(resolve);
+          })
       );
 
       // Start 6 requests (more than the 4 concurrent limit)
-      const requests: SegmentationRequest[] = Array.from({ length: 6 }, (_, i) => ({
-        imageId: `img${i + 1}`,
-        model: 'hrnet',
-        threshold: 0.5,
-        userId: 'user1'
-      }));
+      const requests: SegmentationRequest[] = Array.from(
+        { length: 6 },
+        (_, i) => ({
+          imageId: `img${i + 1}`,
+          model: 'hrnet',
+          threshold: 0.5,
+          userId: 'user1',
+        })
+      );
 
       const promises = requests.map(request =>
         segmentationService.requestSegmentation(request)
@@ -296,21 +324,23 @@ describe('SegmentationService - Concurrent Request Handling', () => {
 
     it('should handle request timeout during queuing', async () => {
       // Mock ML service to never respond (timeout scenario)
-      mockAxios.post.mockImplementation(() =>
-        new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Request timeout')), 100)
-        )
+      mockAxios.post.mockImplementation(
+        () =>
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Request timeout')), 100)
+          )
       );
 
       const request: SegmentationRequest = {
         imageId: 'img1',
         model: 'hrnet',
         threshold: 0.5,
-        userId: 'user1'
+        userId: 'user1',
       };
 
-      await expect(segmentationService.requestSegmentation(request))
-        .rejects.toThrow('Request timeout');
+      await expect(
+        segmentationService.requestSegmentation(request)
+      ).rejects.toThrow('Request timeout');
     });
   });
 
@@ -318,20 +348,25 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     it('should handle burst of requests efficiently', async () => {
       mockAxios.post.mockResolvedValue({
         status: 200,
-        data: mockSegmentationResponse
+        data: mockSegmentationResponse,
       });
 
       // Simulate burst of 20 requests
-      const requests: SegmentationRequest[] = Array.from({ length: 20 }, (_, i) => ({
-        imageId: `img${i + 1}`,
-        model: 'hrnet',
-        threshold: 0.5,
-        userId: `user${i % 4 + 1}` // 4 different users
-      }));
+      const requests: SegmentationRequest[] = Array.from(
+        { length: 20 },
+        (_, i) => ({
+          imageId: `img${i + 1}`,
+          model: 'hrnet',
+          threshold: 0.5,
+          userId: `user${(i % 4) + 1}`, // 4 different users
+        })
+      );
 
       const startTime = Date.now();
       const results = await Promise.all(
-        requests.map(request => segmentationService.requestSegmentation(request))
+        requests.map(request =>
+          segmentationService.requestSegmentation(request)
+        )
       );
       const duration = Date.now() - startTime;
 
@@ -345,19 +380,24 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     it('should maintain performance under mixed model requests', async () => {
       mockAxios.post.mockResolvedValue({
         status: 200,
-        data: mockSegmentationResponse
+        data: mockSegmentationResponse,
       });
 
       const models = ['hrnet', 'cbam_resunet', 'unet_spherohq'];
-      const requests: SegmentationRequest[] = Array.from({ length: 12 }, (_, i) => ({
-        imageId: `img${i + 1}`,
-        model: models[i % 3] as any,
-        threshold: 0.5,
-        userId: 'user1'
-      }));
+      const requests: SegmentationRequest[] = Array.from(
+        { length: 12 },
+        (_, i) => ({
+          imageId: `img${i + 1}`,
+          model: models[i % 3] as any,
+          threshold: 0.5,
+          userId: 'user1',
+        })
+      );
 
       const results = await Promise.all(
-        requests.map(request => segmentationService.requestSegmentation(request))
+        requests.map(request =>
+          segmentationService.requestSegmentation(request)
+        )
       );
 
       expect(results).toHaveLength(12);
@@ -381,18 +421,20 @@ describe('SegmentationService - Concurrent Request Handling', () => {
         }
         return Promise.resolve({
           status: 200,
-          data: mockSegmentationResponse
+          data: mockSegmentationResponse,
         });
       });
 
       const requests: SegmentationRequest[] = [
         { imageId: 'img1', model: 'hrnet', threshold: 0.5, userId: 'user1' },
         { imageId: 'img2', model: 'hrnet', threshold: 0.5, userId: 'user1' },
-        { imageId: 'img3', model: 'hrnet', threshold: 0.5, userId: 'user1' }
+        { imageId: 'img3', model: 'hrnet', threshold: 0.5, userId: 'user1' },
       ];
 
       const results = await Promise.allSettled(
-        requests.map(request => segmentationService.requestSegmentation(request))
+        requests.map(request =>
+          segmentationService.requestSegmentation(request)
+        )
       );
 
       // First two should fail, third should succeed
@@ -408,32 +450,37 @@ describe('SegmentationService - Concurrent Request Handling', () => {
         imageId: 'img1',
         model: 'hrnet',
         threshold: 0.5,
-        userId: 'user1'
+        userId: 'user1',
       };
 
-      await expect(segmentationService.requestSegmentation(request))
-        .rejects.toThrow('Network error');
+      await expect(
+        segmentationService.requestSegmentation(request)
+      ).rejects.toThrow('Network error');
 
       // Should update image status even on failure
-      expect(mockImageService.updateSegmentationStatus)
-        .toHaveBeenCalledWith('img1', 'processing', 'user1');
+      expect(mockImageService.updateSegmentationStatus).toHaveBeenCalledWith(
+        'img1',
+        'processing',
+        'user1'
+      );
     });
 
     it('should handle partial response errors', async () => {
       mockAxios.post.mockResolvedValue({
         status: 200,
-        data: null // Invalid response
+        data: null, // Invalid response
       });
 
       const request: SegmentationRequest = {
         imageId: 'img1',
         model: 'hrnet',
         threshold: 0.5,
-        userId: 'user1'
+        userId: 'user1',
       };
 
-      await expect(segmentationService.requestSegmentation(request))
-        .rejects.toThrow('Invalid response from ML service');
+      await expect(
+        segmentationService.requestSegmentation(request)
+      ).rejects.toThrow('Invalid response from ML service');
     });
   });
 
@@ -441,14 +488,14 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     it('should clean up resources after request completion', async () => {
       mockAxios.post.mockResolvedValue({
         status: 200,
-        data: mockSegmentationResponse
+        data: mockSegmentationResponse,
       });
 
       const request: SegmentationRequest = {
         imageId: 'img1',
         model: 'hrnet',
         threshold: 0.5,
-        userId: 'user1'
+        userId: 'user1',
       };
 
       const initialMetrics = segmentationService.getConcurrentRequestMetrics();
@@ -462,17 +509,18 @@ describe('SegmentationService - Concurrent Request Handling', () => {
 
     it('should track active requests correctly during processing', async () => {
       let resolveRequest: (value: any) => void;
-      mockAxios.post.mockImplementation(() =>
-        new Promise(resolve => {
-          resolveRequest = resolve;
-        })
+      mockAxios.post.mockImplementation(
+        () =>
+          new Promise(resolve => {
+            resolveRequest = resolve;
+          })
       );
 
       const request: SegmentationRequest = {
         imageId: 'img1',
         model: 'hrnet',
         threshold: 0.5,
-        userId: 'user1'
+        userId: 'user1',
       };
 
       // Start request but don't wait for completion

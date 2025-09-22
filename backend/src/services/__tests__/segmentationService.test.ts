@@ -1,4 +1,11 @@
-import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  jest,
+  afterEach,
+} from '@jest/globals';
 import { PrismaClient } from '@prisma/client';
 import { SegmentationService } from '../segmentationService';
 import { ImageService } from '../imageService';
@@ -82,11 +89,16 @@ describe('SegmentationService - Batch Result Fetching', () => {
       // Mock segmentation data with valid JSON polygons
       const mockPolygons = [
         {
-          points: [{ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 10 }, { x: 0, y: 10 }],
+          points: [
+            { x: 0, y: 0 },
+            { x: 10, y: 0 },
+            { x: 10, y: 10 },
+            { x: 0, y: 10 },
+          ],
           area: 100,
           confidence: 0.95,
-          type: 'external'
-        }
+          type: 'external',
+        },
       ];
 
       prismaMock.segmentation.findMany.mockResolvedValue([
@@ -112,20 +124,23 @@ describe('SegmentationService - Batch Result Fetching', () => {
         },
       ]);
 
-      const results = await segmentationService.getBatchSegmentationResults(imageIds, userId);
+      const results = await segmentationService.getBatchSegmentationResults(
+        imageIds,
+        userId
+      );
 
       expect(prismaMock.image.findMany).toHaveBeenCalledWith({
         where: {
           id: { in: imageIds },
-          project: { userId }
+          project: { userId },
         },
-        select: { id: true }
+        select: { id: true },
       });
 
       expect(prismaMock.segmentation.findMany).toHaveBeenCalledWith({
         where: {
-          imageId: { in: ['img-1', 'img-2', 'img-3'] }
-        }
+          imageId: { in: ['img-1', 'img-2', 'img-3'] },
+        },
       });
 
       expect(results['img-1']).toEqual({
@@ -175,7 +190,10 @@ describe('SegmentationService - Batch Result Fetching', () => {
         },
       ]);
 
-      const results = await segmentationService.getBatchSegmentationResults(['img-1', 'img-2'], userId);
+      const results = await segmentationService.getBatchSegmentationResults(
+        ['img-1', 'img-2'],
+        userId
+      );
 
       // Should not throw errors
       expect(results['img-1']).toEqual({
@@ -223,7 +241,10 @@ describe('SegmentationService - Batch Result Fetching', () => {
         },
       ]);
 
-      const results = await segmentationService.getBatchSegmentationResults(['img-1', 'img-2'], userId);
+      const results = await segmentationService.getBatchSegmentationResults(
+        ['img-1', 'img-2'],
+        userId
+      );
 
       // Should gracefully handle malformed JSON
       expect(results['img-1']).toEqual({
@@ -281,7 +302,10 @@ describe('SegmentationService - Batch Result Fetching', () => {
         },
       ]);
 
-      const results = await segmentationService.getBatchSegmentationResults(imageIds, userId);
+      const results = await segmentationService.getBatchSegmentationResults(
+        imageIds,
+        userId
+      );
 
       expect(results['img-1']).toBeDefined();
       expect(results['img-2']).toBeUndefined(); // Not accessible, not in results
@@ -293,7 +317,10 @@ describe('SegmentationService - Batch Result Fetching', () => {
       prismaMock.image.findMany.mockResolvedValue([{ id: 'img-1' }]);
       prismaMock.segmentation.findMany.mockResolvedValue([]);
 
-      let results = await segmentationService.getBatchSegmentationResults(['img-1'], userId);
+      let results = await segmentationService.getBatchSegmentationResults(
+        ['img-1'],
+        userId
+      );
       expect(Object.keys(results)).toHaveLength(1);
 
       // Test with large batch (100 images)
@@ -302,7 +329,10 @@ describe('SegmentationService - Batch Result Fetching', () => {
       prismaMock.image.findMany.mockResolvedValue(accessibleImages);
       prismaMock.segmentation.findMany.mockResolvedValue([]);
 
-      results = await segmentationService.getBatchSegmentationResults(largeImageIds, userId);
+      results = await segmentationService.getBatchSegmentationResults(
+        largeImageIds,
+        userId
+      );
       expect(Object.keys(results)).toHaveLength(100);
 
       // All should be null (no segmentation data)
@@ -312,14 +342,17 @@ describe('SegmentationService - Batch Result Fetching', () => {
     });
 
     it('should handle empty imageIds array', async () => {
-      const results = await segmentationService.getBatchSegmentationResults([], userId);
+      const results = await segmentationService.getBatchSegmentationResults(
+        [],
+        userId
+      );
       expect(results).toEqual({});
       expect(prismaMock.image.findMany).toHaveBeenCalledWith({
         where: {
           id: { in: [] },
-          project: { userId }
+          project: { userId },
         },
-        select: { id: true }
+        select: { id: true },
       });
     });
 
@@ -384,7 +417,10 @@ describe('SegmentationService - Batch Result Fetching', () => {
         },
       ]);
 
-      const results = await segmentationService.getBatchSegmentationResults(['img-1'], userId);
+      const results = await segmentationService.getBatchSegmentationResults(
+        ['img-1'],
+        userId
+      );
 
       expect(results['img-1'].polygons).toEqual(complexPolygons);
       expect(results['img-1'].polygons[0].points).toHaveLength(4);
@@ -426,10 +462,16 @@ describe('SegmentationService - Batch Result Fetching', () => {
     const userId = 'test-user-id';
 
     it('should handle null response from database', async () => {
-      imageServiceMock.getImageById.mockResolvedValue({ id: imageId, name: 'test.jpg' });
+      imageServiceMock.getImageById.mockResolvedValue({
+        id: imageId,
+        name: 'test.jpg',
+      });
       prismaMock.segmentation.findUnique.mockResolvedValue(null);
 
-      const result = await segmentationService.getSegmentationResults(imageId, userId);
+      const result = await segmentationService.getSegmentationResults(
+        imageId,
+        userId
+      );
 
       expect(result).toBeNull();
       expect(logger.debug).toHaveBeenCalledWith(
@@ -440,7 +482,10 @@ describe('SegmentationService - Batch Result Fetching', () => {
     });
 
     it('should handle malformed JSON in polygons column', async () => {
-      imageServiceMock.getImageById.mockResolvedValue({ id: imageId, name: 'test.jpg' });
+      imageServiceMock.getImageById.mockResolvedValue({
+        id: imageId,
+        name: 'test.jpg',
+      });
       prismaMock.segmentation.findUnique.mockResolvedValue({
         imageId,
         polygons: 'invalid-json{',
@@ -452,7 +497,10 @@ describe('SegmentationService - Batch Result Fetching', () => {
         imageHeight: 600,
       });
 
-      const result = await segmentationService.getSegmentationResults(imageId, userId);
+      const result = await segmentationService.getSegmentationResults(
+        imageId,
+        userId
+      );
 
       expect(result).toBeDefined();
       expect(result?.polygons).toEqual([]);

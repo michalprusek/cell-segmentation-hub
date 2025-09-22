@@ -12,7 +12,16 @@
  * - Error recovery when one of 4 parallel processes fails
  */
 
-import { describe, test, expect, beforeEach, afterEach, vi, beforeAll, afterAll } from 'vitest';
+import {
+  describe,
+  test,
+  expect,
+  beforeEach,
+  afterEach,
+  vi,
+  beforeAll,
+  afterAll,
+} from 'vitest';
 import { PrismaClient } from '@prisma/client';
 import { QueueService } from '../queueService';
 import { SegmentationService } from '../segmentationService';
@@ -65,29 +74,29 @@ describe('QueueService Parallel Processing', () => {
       projectId: 'project_1',
       imageIds: ['img_1_1', 'img_1_2', 'img_1_3', 'img_1_4'],
       model: 'hrnet',
-      threshold: 0.5
+      threshold: 0.5,
     },
     {
       userId: 'user_2',
       projectId: 'project_2',
       imageIds: ['img_2_1', 'img_2_2', 'img_2_3', 'img_2_4'],
       model: 'cbam_resunet',
-      threshold: 0.6
+      threshold: 0.6,
     },
     {
       userId: 'user_3',
       projectId: 'project_3',
       imageIds: ['img_3_1', 'img_3_2', 'img_3_3', 'img_3_4'],
       model: 'hrnet',
-      threshold: 0.7
+      threshold: 0.7,
     },
     {
       userId: 'user_4',
       projectId: 'project_4',
       imageIds: ['img_4_1', 'img_4_2', 'img_4_3', 'img_4_4'],
       model: 'cbam_resunet',
-      threshold: 0.4
-    }
+      threshold: 0.4,
+    },
   ];
 
   beforeAll(async () => {
@@ -95,8 +104,8 @@ describe('QueueService Parallel Processing', () => {
     prisma = new PrismaClient({
       datasources: {
         db: {
-          url: process.env.TEST_DATABASE_URL || 'file:./test_parallel.db'
-        }
+          url: process.env.TEST_DATABASE_URL || 'file:./test_parallel.db',
+        },
       },
       log: ['error'],
       // Configure connection pool for concurrent testing
@@ -105,9 +114,9 @@ describe('QueueService Parallel Processing', () => {
         engine: {
           connectionLimit: 50, // Test the 50 connection pool limit
           poolTimeout: 30000,
-          queryEngineType: 'binary'
-        }
-      }
+          queryEngineType: 'binary',
+        },
+      },
     });
 
     await prisma.$connect();
@@ -126,18 +135,18 @@ describe('QueueService Parallel Processing', () => {
       requestBatchSegmentation: vi.fn(),
       requestSegmentation: vi.fn(),
       saveSegmentationResults: vi.fn(),
-      checkServiceHealth: vi.fn().mockResolvedValue(true)
+      checkServiceHealth: vi.fn().mockResolvedValue(true),
     } as unknown as SegmentationService;
 
     mockImageService = {
       getImageById: vi.fn(),
-      updateSegmentationStatus: vi.fn().mockResolvedValue(undefined)
+      updateSegmentationStatus: vi.fn().mockResolvedValue(undefined),
     } as unknown as ImageService;
 
     mockWebSocketService = {
       emitSegmentationUpdate: vi.fn(),
       emitSegmentationComplete: vi.fn(),
-      emitQueueStatsUpdate: vi.fn()
+      emitQueueStatsUpdate: vi.fn(),
     } as unknown as WebSocketService;
 
     // Create QueueService instance
@@ -167,16 +176,16 @@ describe('QueueService Parallel Processing', () => {
         data: {
           id: user.userId,
           email: `${user.userId}@test.com`,
-          name: `Test User ${user.userId}`
-        }
+          name: `Test User ${user.userId}`,
+        },
       });
 
       await prisma.project.create({
         data: {
           id: user.projectId,
           name: `Test Project ${user.projectId}`,
-          userId: user.userId
-        }
+          userId: user.userId,
+        },
       });
 
       for (const imageId of user.imageIds) {
@@ -190,59 +199,66 @@ describe('QueueService Parallel Processing', () => {
             userId: user.userId,
             width: 512,
             height: 512,
-            segmentationStatus: 'no_segmentation'
-          }
+            segmentationStatus: 'no_segmentation',
+          },
         });
 
         // Mock image service responses
-        (mockImageService.getImageById as any).mockImplementation((id: string, userId: string) => {
-          const user = concurrentUsers.find(u => u.userId === userId);
-          if (user && user.imageIds.includes(id)) {
-            return Promise.resolve({
-              id,
-              filename: `${id}.jpg`,
-              projectId: user.projectId,
-              userId,
-              width: 512,
-              height: 512,
-              segmentationStatus: 'no_segmentation'
-            });
+        (mockImageService.getImageById as any).mockImplementation(
+          (id: string, userId: string) => {
+            const user = concurrentUsers.find(u => u.userId === userId);
+            if (user && user.imageIds.includes(id)) {
+              return Promise.resolve({
+                id,
+                filename: `${id}.jpg`,
+                projectId: user.projectId,
+                userId,
+                width: 512,
+                height: 512,
+                segmentationStatus: 'no_segmentation',
+              });
+            }
+            return Promise.resolve(null);
           }
-          return Promise.resolve(null);
-        });
+        );
       }
     }
   }
 
   function mockSegmentationResults(polygonCount: number = 5) {
     const mockPolygons = Array.from({ length: polygonCount }, (_, i) => ({
-      coordinates: [[100 + i * 50, 100], [150 + i * 50, 100], [150 + i * 50, 150], [100 + i * 50, 150]],
-      confidence: 0.9
+      coordinates: [
+        [100 + i * 50, 100],
+        [150 + i * 50, 100],
+        [150 + i * 50, 150],
+        [100 + i * 50, 150],
+      ],
+      confidence: 0.9,
     }));
 
     return {
       polygons: mockPolygons,
       confidence: 0.9,
       processing_time: 196, // HRNet baseline timing
-      image_size: { width: 512, height: 512 }
+      image_size: { width: 512, height: 512 },
     };
   }
 
   describe('Concurrent Batch Processing', () => {
     test('should handle 4 simultaneous user batch submissions', async () => {
       // Mock successful segmentation for all batches
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[], _model: string) => {
-          // Simulate processing time based on model
-          const processingTime = model === 'hrnet' ? 196 : 396; // ms
-          await new Promise(resolve => setTimeout(resolve, processingTime));
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[], _model: string) => {
+        // Simulate processing time based on model
+        const processingTime = model === 'hrnet' ? 196 : 396; // ms
+        await new Promise(resolve => setTimeout(resolve, processingTime));
 
-          return images.map(() => mockSegmentationResults());
-        }
-      );
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Submit batches concurrently for all 4 users
-      const concurrentSubmissions = concurrentUsers.map(async (user) => {
+      const concurrentSubmissions = concurrentUsers.map(async user => {
         const startTime = Date.now();
 
         const queueEntries = await queueService.addBatchToQueue(
@@ -262,7 +278,7 @@ describe('QueueService Parallel Processing', () => {
           user: user.userId,
           queueEntries,
           submissionTime: endTime - startTime,
-          batchSize: user.imageIds.length
+          batchSize: user.imageIds.length,
         };
       });
 
@@ -290,7 +306,7 @@ describe('QueueService Parallel Processing', () => {
       // Verify queue items are distributed correctly
       for (const user of concurrentUsers) {
         const userQueueItems = await prisma.segmentationQueue.findMany({
-          where: { userId: user.userId }
+          where: { userId: user.userId },
         });
         expect(userQueueItems).toHaveLength(user.imageIds.length);
       }
@@ -309,13 +325,13 @@ describe('QueueService Parallel Processing', () => {
       }
 
       // Mock segmentation service with realistic timing
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[], _model: string) => {
-          const processingTime = model === 'hrnet' ? 196 : 396;
-          await new Promise(resolve => setTimeout(resolve, processingTime));
-          return images.map(() => mockSegmentationResults());
-        }
-      );
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[], _model: string) => {
+        const processingTime = model === 'hrnet' ? 196 : 396;
+        await new Promise(resolve => setTimeout(resolve, processingTime));
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Process batches concurrently
       const processingPromises: Promise<any>[] = [];
@@ -325,7 +341,7 @@ describe('QueueService Parallel Processing', () => {
         failedBatches: 0,
         averageBatchTime: 0,
         concurrentPeakConnections: 0,
-        websocketNotificationCount: 0
+        websocketNotificationCount: 0,
       };
 
       const startTime = Date.now();
@@ -363,9 +379,10 @@ describe('QueueService Parallel Processing', () => {
         .filter(r => r.success)
         .map(r => r.time);
 
-      batchProcessingMetrics.averageBatchTime = successfulTimes.length > 0
-        ? successfulTimes.reduce((a, b) => a + b, 0) / successfulTimes.length
-        : 0;
+      batchProcessingMetrics.averageBatchTime =
+        successfulTimes.length > 0
+          ? successfulTimes.reduce((a, b) => a + b, 0) / successfulTimes.length
+          : 0;
 
       // Assertions
       expect(batchProcessingMetrics.successfulBatches).toBeGreaterThan(0);
@@ -375,7 +392,7 @@ describe('QueueService Parallel Processing', () => {
 
       // Verify all items were processed
       const remainingQueueItems = await prisma.segmentationQueue.count({
-        where: { status: 'queued' }
+        where: { status: 'queued' },
       });
       expect(remainingQueueItems).toBe(0);
 
@@ -389,7 +406,7 @@ describe('QueueService Parallel Processing', () => {
       const fairnessTestUsers = concurrentUsers.map((user, index) => ({
         ...user,
         imageIds: user.imageIds.slice(0, 2 + index), // Variable batch sizes: 2, 3, 4, 5
-        priority: index % 2 // Alternating priorities: 0, 1, 0, 1
+        priority: index % 2, // Alternating priorities: 0, 1, 0, 1
       }));
 
       // Submit batches with different priorities
@@ -405,25 +422,28 @@ describe('QueueService Parallel Processing', () => {
       }
 
       // Mock segmentation with consistent timing
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[]) => {
-          await new Promise(resolve => setTimeout(resolve, 200)); // Consistent 200ms
-          return images.map(() => mockSegmentationResults());
-        }
-      );
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[]) => {
+        await new Promise(resolve => setTimeout(resolve, 200)); // Consistent 200ms
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Track processing order and timing per user
-      const userProcessingMetrics: Record<string, { startTime: number; endTime: number; batchSize: number }> = {};
+      const userProcessingMetrics: Record<
+        string,
+        { startTime: number; endTime: number; batchSize: number }
+      > = {};
 
       // Process batches and track metrics
-      const processingPromises = fairnessTestUsers.map(async (user) => {
+      const processingPromises = fairnessTestUsers.map(async user => {
         const batch = await queueService.getNextBatch();
         const startTime = Date.now();
 
         userProcessingMetrics[user.userId] = {
           startTime,
           endTime: 0,
-          batchSize: batch.length
+          batchSize: batch.length,
         };
 
         await queueService.processBatch(batch);
@@ -436,17 +456,23 @@ describe('QueueService Parallel Processing', () => {
       await Promise.all(processingPromises);
 
       // Analyze fairness metrics
-      const processingTimes = Object.values(userProcessingMetrics)
-        .map(metrics => metrics.endTime - metrics.startTime);
+      const processingTimes = Object.values(userProcessingMetrics).map(
+        metrics => metrics.endTime - metrics.startTime
+      );
 
-      const avgProcessingTime = processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length;
-      const maxDeviation = Math.max(...processingTimes.map(time => Math.abs(time - avgProcessingTime)));
+      const avgProcessingTime =
+        processingTimes.reduce((a, b) => a + b, 0) / processingTimes.length;
+      const maxDeviation = Math.max(
+        ...processingTimes.map(time => Math.abs(time - avgProcessingTime))
+      );
 
       // Fairness assertions
       expect(maxDeviation).toBeLessThan(100); // Processing times should be within 100ms of average
 
       // Verify all users were processed
-      expect(Object.keys(userProcessingMetrics)).toHaveLength(fairnessTestUsers.length);
+      expect(Object.keys(userProcessingMetrics)).toHaveLength(
+        fairnessTestUsers.length
+      );
 
       // Check that priority was respected (higher priority should process first when possible)
       const highPriorityUsers = fairnessTestUsers
@@ -466,12 +492,21 @@ describe('QueueService Parallel Processing', () => {
         .map(userId => userProcessingMetrics[userId]?.startTime)
         .filter(time => time !== undefined);
 
-      if (highPriorityStartTimes.length > 0 && lowPriorityStartTimes.length > 0) {
-        const avgHighPriorityStart = highPriorityStartTimes.reduce((a, b) => a + b, 0) / highPriorityStartTimes.length;
-        const avgLowPriorityStart = lowPriorityStartTimes.reduce((a, b) => a + b, 0) / lowPriorityStartTimes.length;
+      if (
+        highPriorityStartTimes.length > 0 &&
+        lowPriorityStartTimes.length > 0
+      ) {
+        const avgHighPriorityStart =
+          highPriorityStartTimes.reduce((a, b) => a + b, 0) /
+          highPriorityStartTimes.length;
+        const avgLowPriorityStart =
+          lowPriorityStartTimes.reduce((a, b) => a + b, 0) /
+          lowPriorityStartTimes.length;
 
         // This is a soft check since parallel processing may not guarantee strict ordering
-        expect(avgHighPriorityStart).toBeLessThanOrEqual(avgLowPriorityStart + 50);
+        expect(avgHighPriorityStart).toBeLessThanOrEqual(
+          avgLowPriorityStart + 50
+        );
       }
     });
   });
@@ -492,7 +527,7 @@ describe('QueueService Parallel Processing', () => {
               () => prisma.image.findMany({ take: 1 }),
               () => prisma.project.findMany({ take: 1 }),
               () => queueService.getQueueStats(),
-              () => prisma.segmentationQueue.count()
+              () => prisma.segmentationQueue.count(),
             ];
 
             const operation = operations[i % operations.length];
@@ -503,14 +538,14 @@ describe('QueueService Parallel Processing', () => {
               connectionId: i,
               success: true,
               responseTime,
-              operationType: operation.name
+              operationType: operation.name,
             };
           } catch (_error) {
             return {
               connectionId: i,
               success: false,
               responseTime: Date.now() - startTime,
-              error: error instanceof Error ? error.message : String(error)
+              error: error instanceof Error ? error.message : String(error),
             };
           }
         })();
@@ -527,15 +562,17 @@ describe('QueueService Parallel Processing', () => {
       const successfulConnections = connectionResults.filter(r => r.success);
       const failedConnections = connectionResults.filter(r => !r.success);
 
-      const avgResponseTime = successfulConnections.length > 0
-        ? successfulConnections.reduce((sum, r) => sum + r.responseTime, 0) / successfulConnections.length
-        : 0;
+      const avgResponseTime =
+        successfulConnections.length > 0
+          ? successfulConnections.reduce((sum, r) => sum + r.responseTime, 0) /
+            successfulConnections.length
+          : 0;
 
       const metrics: DatabaseConnectionMetrics = {
         activeConnections: successfulConnections.length,
         maxConnections: 50,
         connectionPoolUtilization: successfulConnections.length / 50,
-        queryResponseTime: avgResponseTime
+        queryResponseTime: avgResponseTime,
       };
 
       // Assertions
@@ -555,23 +592,31 @@ describe('QueueService Parallel Processing', () => {
       const connectionHoldPromises: Promise<any>[] = [];
 
       // Create long-running transactions that hold connections
-      for (let i = 0; i < 60; i++) { // More than the 50 connection limit
+      for (let i = 0; i < 60; i++) {
+        // More than the 50 connection limit
         const holdPromise = (async () => {
           try {
-            return await prisma.$transaction(async (tx) => {
-              // Hold the connection for a while
-              await new Promise(resolve => setTimeout(resolve, 1000));
+            return await prisma.$transaction(
+              async tx => {
+                // Hold the connection for a while
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
-              const result = await tx.segmentationQueue.findMany({ take: 1 });
-              return { connectionId: i, success: true, result: result.length };
-            }, {
-              timeout: 2000 // 2 second timeout
-            });
+                const result = await tx.segmentationQueue.findMany({ take: 1 });
+                return {
+                  connectionId: i,
+                  success: true,
+                  result: result.length,
+                };
+              },
+              {
+                timeout: 2000, // 2 second timeout
+              }
+            );
           } catch (_error) {
             return {
               connectionId: i,
               success: false,
-              error: error instanceof Error ? error.message : String(error)
+              error: error instanceof Error ? error.message : String(error),
             };
           }
         })();
@@ -582,8 +627,14 @@ describe('QueueService Parallel Processing', () => {
       // Wait for all connection attempts
       const results = await Promise.allSettled(connectionHoldPromises);
 
-      const successful = results.filter(r => r.status === 'fulfilled' && r.value.success);
-      const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success));
+      const successful = results.filter(
+        r => r.status === 'fulfilled' && r.value.success
+      );
+      const failed = results.filter(
+        r =>
+          r.status === 'rejected' ||
+          (r.status === 'fulfilled' && !r.value.success)
+      );
 
       // Assertions for graceful degradation
       expect(successful.length).toBeLessThanOrEqual(50); // Should not exceed connection pool limit
@@ -613,13 +664,27 @@ describe('QueueService Parallel Processing', () => {
         () => queueService.getNextBatch(),
 
         // Image status updates
-        () => mockImageService.updateSegmentationStatus(user.imageIds[0], 'processing', user.userId),
-        () => mockImageService.updateSegmentationStatus(user.imageIds[1], 'queued', user.userId),
+        () =>
+          mockImageService.updateSegmentationStatus(
+            user.imageIds[0],
+            'processing',
+            user.userId
+          ),
+        () =>
+          mockImageService.updateSegmentationStatus(
+            user.imageIds[1],
+            'queued',
+            user.userId
+          ),
 
         // Database queries
-        () => prisma.segmentationQueue.findMany({ where: { userId: user.userId } }),
-        () => prisma.segmentationQueue.count({ where: { projectId: user.projectId } }),
-        () => prisma.image.findMany({ where: { projectId: user.projectId } })
+        () =>
+          prisma.segmentationQueue.findMany({ where: { userId: user.userId } }),
+        () =>
+          prisma.segmentationQueue.count({
+            where: { projectId: user.projectId },
+          }),
+        () => prisma.image.findMany({ where: { projectId: user.projectId } }),
       ];
 
       // Execute operations concurrently multiple times
@@ -628,7 +693,7 @@ describe('QueueService Parallel Processing', () => {
       for (let round = 0; round < 3; round++) {
         for (const operation of concurrentOperations) {
           operationPromises.push(
-            operation().catch((error) => ({ error: error.message }))
+            operation().catch(error => ({ error: error.message }))
           );
         }
       }
@@ -665,25 +730,28 @@ describe('QueueService Parallel Processing', () => {
       }
 
       // Mock segmentation service
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[]) => {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          return images.map(() => mockSegmentationResults());
-        }
-      );
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[]) => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Track WebSocket emissions per user
-      const notificationTracker: Record<string, {
-        updates: number;
-        completions: number;
-        queueStats: number;
-      }> = {};
+      const notificationTracker: Record<
+        string,
+        {
+          updates: number;
+          completions: number;
+          queueStats: number;
+        }
+      > = {};
 
       concurrentUsers.forEach(user => {
         notificationTracker[user.userId] = {
           updates: 0,
           completions: 0,
-          queueStats: 0
+          queueStats: 0,
         };
       });
 
@@ -697,7 +765,12 @@ describe('QueueService Parallel Processing', () => {
       );
 
       (mockWebSocketService.emitSegmentationComplete as any).mockImplementation(
-        (_userId: string, _imageId: string, _projectId: string, _polygonCount: number) => {
+        (
+          _userId: string,
+          _imageId: string,
+          _projectId: string,
+          _polygonCount: number
+        ) => {
           if (notificationTracker[userId]) {
             notificationTracker[userId].completions++;
           }
@@ -732,15 +805,21 @@ describe('QueueService Parallel Processing', () => {
         expect(userNotifications.completions).toBeGreaterThan(0); // Should have completion notifications
 
         // Each user should receive notifications for their images
-        expect(userNotifications.updates).toBeGreaterThanOrEqual(user.imageIds.length);
+        expect(userNotifications.updates).toBeGreaterThanOrEqual(
+          user.imageIds.length
+        );
         expect(userNotifications.completions).toBe(user.imageIds.length);
       }
 
       // Verify total notification count
-      const totalUpdates = Object.values(notificationTracker)
-        .reduce((sum, n) => sum + n.updates, 0);
-      const totalCompletions = Object.values(notificationTracker)
-        .reduce((sum, n) => sum + n.completions, 0);
+      const totalUpdates = Object.values(notificationTracker).reduce(
+        (sum, n) => sum + n.updates,
+        0
+      );
+      const totalCompletions = Object.values(notificationTracker).reduce(
+        (sum, n) => sum + n.completions,
+        0
+      );
 
       expect(totalUpdates).toBeGreaterThanOrEqual(16); // At least one update per image
       expect(totalCompletions).toBe(16); // Exactly one completion per image
@@ -758,11 +837,11 @@ describe('QueueService Parallel Processing', () => {
       );
 
       // Mock segmentation service
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[]) => {
-          return images.map(() => mockSegmentationResults());
-        }
-      );
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[]) => {
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Mock WebSocket service to fail on some notifications
       let notificationAttempts = 0;
@@ -776,7 +855,12 @@ describe('QueueService Parallel Processing', () => {
       );
 
       (mockWebSocketService.emitSegmentationComplete as any).mockImplementation(
-        (_userId: string, _imageId: string, _projectId: string, _polygonCount: number) => {
+        (
+          _userId: string,
+          _imageId: string,
+          _projectId: string,
+          _polygonCount: number
+        ) => {
           // Always succeed for completion notifications
         }
       );
@@ -788,7 +872,7 @@ describe('QueueService Parallel Processing', () => {
 
       // Verify processing completed despite WebSocket failures
       const remainingItems = await prisma.segmentationQueue.count({
-        where: { status: 'queued' }
+        where: { status: 'queued' },
       });
       expect(remainingItems).toBe(0);
 
@@ -812,30 +896,32 @@ describe('QueueService Parallel Processing', () => {
 
       // Mock segmentation service to fail for one specific model
       let callCount = 0;
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[], _model: string) => {
-          callCount++;
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[], _model: string) => {
+        callCount++;
 
-          // Fail the second batch (representing one concurrent user's failure)
-          if (callCount === 2) {
-            throw new Error('ML service temporarily unavailable');
-          }
-
-          await new Promise(resolve => setTimeout(resolve, 100));
-          return images.map(() => mockSegmentationResults());
+        // Fail the second batch (representing one concurrent user's failure)
+        if (callCount === 2) {
+          throw new Error('ML service temporarily unavailable');
         }
-      );
+
+        await new Promise(resolve => setTimeout(resolve, 100));
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Process batches concurrently
       const processingResults = await Promise.allSettled([
         queueService.processBatch(await queueService.getNextBatch()),
         queueService.processBatch(await queueService.getNextBatch()),
         queueService.processBatch(await queueService.getNextBatch()),
-        queueService.processBatch(await queueService.getNextBatch())
+        queueService.processBatch(await queueService.getNextBatch()),
       ]);
 
       // Analyze results
-      const successful = processingResults.filter(r => r.status === 'fulfilled');
+      const successful = processingResults.filter(
+        r => r.status === 'fulfilled'
+      );
       const failed = processingResults.filter(r => r.status === 'rejected');
 
       // Should have some successful and some failed processing
@@ -846,15 +932,15 @@ describe('QueueService Parallel Processing', () => {
       const requeuedItems = await prisma.segmentationQueue.findMany({
         where: {
           status: 'queued',
-          retryCount: { gt: 0 }
-        }
+          retryCount: { gt: 0 },
+        },
       });
 
       expect(requeuedItems.length).toBeGreaterThan(0); // Failed items should be requeued
 
       // Verify successful items were processed
       const processedImages = await prisma.image.findMany({
-        where: { segmentationStatus: 'segmented' }
+        where: { segmentationStatus: 'segmented' },
       });
 
       expect(processedImages.length).toBeGreaterThan(0); // Some images should be successfully processed
@@ -874,34 +960,39 @@ describe('QueueService Parallel Processing', () => {
       );
 
       // Mock operations that could cause deadlocks
-      const concurrentDatabaseOperations = Array.from({ length: 10 }, (_, i) => {
-        return (async () => {
-          try {
-            // Simulate concurrent updates that might deadlock
-            return await prisma.$transaction(async (tx) => {
-              // Update queue status
-              await tx.segmentationQueue.updateMany({
-                where: { userId: user.userId },
-                data: { status: i % 2 === 0 ? 'processing' : 'queued' }
-              });
+      const concurrentDatabaseOperations = Array.from(
+        { length: 10 },
+        (_, i) => {
+          return (async () => {
+            try {
+              // Simulate concurrent updates that might deadlock
+              return await prisma.$transaction(async tx => {
+                // Update queue status
+                await tx.segmentationQueue.updateMany({
+                  where: { userId: user.userId },
+                  data: { status: i % 2 === 0 ? 'processing' : 'queued' },
+                });
 
-              // Update image status
-              await tx.image.updateMany({
-                where: { userId: user.userId },
-                data: { segmentationStatus: i % 2 === 0 ? 'processing' : 'queued' }
-              });
+                // Update image status
+                await tx.image.updateMany({
+                  where: { userId: user.userId },
+                  data: {
+                    segmentationStatus: i % 2 === 0 ? 'processing' : 'queued',
+                  },
+                });
 
-              return { success: true, operationId: i };
-            });
-          } catch (_error) {
-            return {
-              success: false,
-              operationId: i,
-              error: error instanceof Error ? error.message : String(error)
-            };
-          }
-        })();
-      });
+                return { success: true, operationId: i };
+              });
+            } catch (_error) {
+              return {
+                success: false,
+                operationId: i,
+                error: error instanceof Error ? error.message : String(error),
+              };
+            }
+          })();
+        }
+      );
 
       // Execute concurrent operations
       const results = await Promise.all(concurrentDatabaseOperations);
@@ -914,12 +1005,12 @@ describe('QueueService Parallel Processing', () => {
       expect(successful.length).toBeGreaterThan(5); // At least half should succeed
 
       // Failed operations should be due to deadlocks, not system crashes
-      const _deadlockErrors = failed.filter(r =>
-        r.error && (
-          r.error.includes('deadlock') ||
-          r.error.includes('timeout') ||
-          r.error.includes('lock')
-        )
+      const _deadlockErrors = failed.filter(
+        r =>
+          r.error &&
+          (r.error.includes('deadlock') ||
+            r.error.includes('timeout') ||
+            r.error.includes('lock'))
       );
 
       // System should remain stable after potential deadlocks
@@ -940,18 +1031,18 @@ describe('QueueService Parallel Processing', () => {
 
       // Mock segmentation service to fail initially, then recover
       let failureCount = 0;
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[]) => {
-          failureCount++;
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[]) => {
+        failureCount++;
 
-          // Fail first two attempts, succeed afterwards
-          if (failureCount <= 2) {
-            throw new Error(`Temporary failure ${failureCount}`);
-          }
-
-          return images.map(() => mockSegmentationResults());
+        // Fail first two attempts, succeed afterwards
+        if (failureCount <= 2) {
+          throw new Error(`Temporary failure ${failureCount}`);
         }
-      );
+
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Attempt processing multiple times
       let processingAttempts = 0;
@@ -999,13 +1090,13 @@ describe('QueueService Parallel Processing', () => {
       }
 
       // Mock segmentation with realistic timings
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[], _model: string) => {
-          const timing = model === 'hrnet' ? 196 : 396; // Realistic model timings
-          await new Promise(resolve => setTimeout(resolve, timing));
-          return images.map(() => mockSegmentationResults());
-        }
-      );
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[], _model: string) => {
+        const timing = model === 'hrnet' ? 196 : 396; // Realistic model timings
+        await new Promise(resolve => setTimeout(resolve, timing));
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Track performance metrics
       const metrics: ParallelProcessingMetrics = {
@@ -1014,7 +1105,7 @@ describe('QueueService Parallel Processing', () => {
         failedBatches: 0,
         averageBatchTime: 0,
         concurrentPeakConnections: 0,
-        websocketNotificationCount: 0
+        websocketNotificationCount: 0,
       };
 
       const startTime = Date.now();
@@ -1039,7 +1130,8 @@ describe('QueueService Parallel Processing', () => {
 
       const batchTimes = await Promise.all(processingPromises);
       metrics.totalTime = Date.now() - startTime;
-      metrics.averageBatchTime = batchTimes.reduce((a, b) => a + b, 0) / batchTimes.length;
+      metrics.averageBatchTime =
+        batchTimes.reduce((a, b) => a + b, 0) / batchTimes.length;
 
       // Performance assertions
       expect(metrics.successfulBatches).toBeGreaterThan(0);
@@ -1055,7 +1147,7 @@ describe('QueueService Parallel Processing', () => {
       // Log performance metrics for debugging
       console.info('Parallel Processing Metrics:', {
         ...metrics,
-        parallelBenefit: `${parallelBenefit.toFixed(2)}x faster than sequential`
+        parallelBenefit: `${parallelBenefit.toFixed(2)}x faster than sequential`,
       });
     });
 
@@ -1072,17 +1164,17 @@ describe('QueueService Parallel Processing', () => {
       }
 
       // Mock slow segmentation service
-      (mockSegmentationService.requestBatchSegmentation as any).mockImplementation(
-        async (images: any[]) => {
-          await new Promise(resolve => setTimeout(resolve, 500)); // Slow processing
-          return images.map(() => mockSegmentationResults());
-        }
-      );
+      (
+        mockSegmentationService.requestBatchSegmentation as any
+      ).mockImplementation(async (images: any[]) => {
+        await new Promise(resolve => setTimeout(resolve, 500)); // Slow processing
+        return images.map(() => mockSegmentationResults());
+      });
 
       // Start concurrent processing
       const processingPromise = Promise.all([
         queueService.processBatch(await queueService.getNextBatch()),
-        queueService.processBatch(await queueService.getNextBatch())
+        queueService.processBatch(await queueService.getNextBatch()),
       ]);
 
       // Check health status during processing

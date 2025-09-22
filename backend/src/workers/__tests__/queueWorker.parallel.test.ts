@@ -32,7 +32,7 @@ describe('QueueWorker - Parallel Processing', () => {
       startedAt: null,
       completedAt: null,
       createdAt: new Date(),
-      updatedAt: new Date()
+      updatedAt: new Date(),
     },
     {
       id: '2',
@@ -50,8 +50,8 @@ describe('QueueWorker - Parallel Processing', () => {
       startedAt: null,
       completedAt: null,
       createdAt: new Date(),
-      updatedAt: new Date()
-    }
+      updatedAt: new Date(),
+    },
   ];
 
   const mockBatches: QueueBatch[] = [
@@ -61,7 +61,7 @@ describe('QueueWorker - Parallel Processing', () => {
       model: 'hrnet',
       threshold: 0.5,
       priority: 0,
-      estimatedProcessingTime: 1000
+      estimatedProcessingTime: 1000,
     },
     {
       id: 'batch2',
@@ -69,8 +69,8 @@ describe('QueueWorker - Parallel Processing', () => {
       model: 'cbam_resunet',
       threshold: 0.5,
       priority: 0,
-      estimatedProcessingTime: 2000
-    }
+      estimatedProcessingTime: 2000,
+    },
   ];
 
   beforeEach(() => {
@@ -87,7 +87,7 @@ describe('QueueWorker - Parallel Processing', () => {
       setQueueWorker: jest.fn(),
       resetStuckItems: jest.fn(),
       getQueueHealthStatus: jest.fn(),
-      cleanupOldEntries: jest.fn()
+      cleanupOldEntries: jest.fn(),
     } as any;
 
     (QueueService.getInstance as jest.Mock).mockReturnValue(mockQueueService);
@@ -117,7 +117,9 @@ describe('QueueWorker - Parallel Processing', () => {
       await new Promise(resolve => setTimeout(resolve, 0));
 
       expect(mockQueueService.getMultipleBatches).toHaveBeenCalledWith(4);
-      expect(mockQueueService.processMultipleBatches).toHaveBeenCalledWith(mockBatches);
+      expect(mockQueueService.processMultipleBatches).toHaveBeenCalledWith(
+        mockBatches
+      );
 
       queueWorker.stop();
     });
@@ -142,8 +144,9 @@ describe('QueueWorker - Parallel Processing', () => {
         .mockResolvedValueOnce(mockBatches)
         .mockResolvedValueOnce([]);
 
-      mockQueueService.processMultipleBatches
-        .mockRejectedValueOnce(new Error('Processing failed'));
+      mockQueueService.processMultipleBatches.mockRejectedValueOnce(
+        new Error('Processing failed')
+      );
 
       queueWorker.start();
 
@@ -164,10 +167,11 @@ describe('QueueWorker - Parallel Processing', () => {
     it('should prevent overlapping processing executions', async () => {
       let resolveProcessing: (value: any) => void;
       mockQueueService.getMultipleBatches.mockResolvedValue(mockBatches);
-      mockQueueService.processMultipleBatches.mockImplementation(() =>
-        new Promise(resolve => {
-          resolveProcessing = resolve;
-        })
+      mockQueueService.processMultipleBatches.mockImplementation(
+        () =>
+          new Promise(resolve => {
+            resolveProcessing = resolve;
+          })
       );
 
       queueWorker.start();
@@ -203,7 +207,9 @@ describe('QueueWorker - Parallel Processing', () => {
       await new Promise(resolve => setTimeout(resolve, 0));
 
       expect(mockQueueService.getMultipleBatches).toHaveBeenCalledWith(4);
-      expect(mockQueueService.processMultipleBatches).toHaveBeenCalledWith(mockBatches);
+      expect(mockQueueService.processMultipleBatches).toHaveBeenCalledWith(
+        mockBatches
+      );
 
       queueWorker.stop();
     });
@@ -229,16 +235,22 @@ describe('QueueWorker - Parallel Processing', () => {
       mockQueueService.resetStuckItems.mockResolvedValue(0);
       mockQueueService.getQueueHealthStatus.mockResolvedValue({
         healthy: true,
-        queueStats: { queued: 0, processing: 0, completed: 0, failed: 0, stuck: 0 },
+        queueStats: {
+          queued: 0,
+          processing: 0,
+          completed: 0,
+          failed: 0,
+          stuck: 0,
+        },
         parallelStats: {
           activeStreams: 0,
           maxConcurrentStreams: 4,
           totalProcessingCapacity: 0,
           currentThroughput: 0,
-          averageProcessingTime: 0
+          averageProcessingTime: 0,
         },
         mlServiceHealthy: true,
-        issues: []
+        issues: [],
       });
 
       queueWorker.start();
@@ -267,7 +279,7 @@ describe('QueueWorker - Parallel Processing', () => {
 
     it('should perform periodic cleanup of old entries', async () => {
       mockPrisma.segmentationQueue = {
-        deleteMany: jest.fn().mockResolvedValue({ count: 5 })
+        deleteMany: jest.fn().mockResolvedValue({ count: 5 }),
       } as any;
 
       queueWorker.start();
@@ -279,16 +291,20 @@ describe('QueueWorker - Parallel Processing', () => {
       expect(mockPrisma.segmentationQueue.deleteMany).toHaveBeenCalledWith({
         where: {
           status: { in: ['completed', 'failed'] },
-          completedAt: { lt: expect.any(Date) }
-        }
+          completedAt: { lt: expect.any(Date) },
+        },
       });
 
       queueWorker.stop();
     });
 
     it('should handle health check failures gracefully', async () => {
-      mockQueueService.resetStuckItems.mockRejectedValue(new Error('Database error'));
-      mockQueueService.getQueueHealthStatus.mockRejectedValue(new Error('Health check failed'));
+      mockQueueService.resetStuckItems.mockRejectedValue(
+        new Error('Database error')
+      );
+      mockQueueService.getQueueHealthStatus.mockRejectedValue(
+        new Error('Health check failed')
+      );
 
       queueWorker.start();
 
@@ -350,7 +366,9 @@ describe('QueueWorker - Parallel Processing', () => {
 
   describe('Error Handling and Resilience', () => {
     it('should handle queue service errors gracefully', async () => {
-      mockQueueService.getMultipleBatches.mockRejectedValue(new Error('Queue service error'));
+      mockQueueService.getMultipleBatches.mockRejectedValue(
+        new Error('Queue service error')
+      );
 
       queueWorker.start();
 
@@ -385,7 +403,9 @@ describe('QueueWorker - Parallel Processing', () => {
 
     it('should handle parallel processing errors without affecting health checks', async () => {
       mockQueueService.getMultipleBatches.mockResolvedValue(mockBatches);
-      mockQueueService.processMultipleBatches.mockRejectedValue(new Error('Processing error'));
+      mockQueueService.processMultipleBatches.mockRejectedValue(
+        new Error('Processing error')
+      );
       mockQueueService.resetStuckItems.mockResolvedValue(0);
 
       queueWorker.start();
@@ -446,7 +466,7 @@ describe('QueueWorker - Parallel Processing', () => {
           model: 'hrnet',
           threshold: 0.5,
           priority: 1,
-          estimatedProcessingTime: 500
+          estimatedProcessingTime: 500,
         },
         {
           id: 'batch2',
@@ -454,8 +474,8 @@ describe('QueueWorker - Parallel Processing', () => {
           model: 'cbam_resunet',
           threshold: 0.7,
           priority: 0,
-          estimatedProcessingTime: 1500
-        }
+          estimatedProcessingTime: 1500,
+        },
       ];
 
       mockQueueService.getMultipleBatches.mockResolvedValue(diverseBatches);
@@ -466,7 +486,9 @@ describe('QueueWorker - Parallel Processing', () => {
 
       await new Promise(resolve => setTimeout(resolve, 0));
 
-      expect(mockQueueService.processMultipleBatches).toHaveBeenCalledWith(diverseBatches);
+      expect(mockQueueService.processMultipleBatches).toHaveBeenCalledWith(
+        diverseBatches
+      );
 
       queueWorker.stop();
     });

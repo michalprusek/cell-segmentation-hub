@@ -5,6 +5,7 @@ export default {
     save: 'Save',
     cancel: 'Cancel',
     cancelling: 'Cancelling...',
+    dismiss: 'Dismiss',
     delete: 'Delete',
     edit: 'Edit',
     create: 'Create',
