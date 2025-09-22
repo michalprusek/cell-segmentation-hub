@@ -154,6 +154,14 @@ const ProjectDetail = () => {
                 segmentationStatus = 'completed';
               }
 
+              // Find existing image to preserve thumbnails for images not affected by cancellation
+              const existingImage = images.find(
+                existing => existing.id === img.id
+              );
+
+              // Only clear thumbnails if the image was actually cancelled (status is no_segmentation)
+              const wasCancelled = segmentationStatus === 'no_segmentation';
+
               return {
                 id: img.id,
                 name: img.name,
@@ -162,9 +170,18 @@ const ProjectDetail = () => {
                 createdAt: new Date(img.created_at || img.createdAt),
                 updatedAt: new Date(img.updated_at || img.updatedAt),
                 segmentationStatus: segmentationStatus,
-                segmentationResult: undefined,
-                segmentationThumbnailPath: undefined,
-                segmentationThumbnailUrl: undefined,
+                segmentationResult: wasCancelled
+                  ? undefined
+                  : existingImage?.segmentationResult,
+                // Only clear thumbnails for cancelled images, preserve for others
+                segmentationThumbnailPath: wasCancelled
+                  ? undefined
+                  : img.segmentationThumbnailPath ||
+                    existingImage?.segmentationThumbnailPath,
+                segmentationThumbnailUrl: wasCancelled
+                  ? undefined
+                  : img.segmentationThumbnailUrl ||
+                    existingImage?.segmentationThumbnailUrl,
               };
             });
 
@@ -179,7 +196,7 @@ const ProjectDetail = () => {
         // Navigation state cleanup removed
       }
     },
-    [id, user?.id, updateImages]
+    [id, user?.id, updateImages, images]
   );
 
   // Optimized refresh function for real-time updates
@@ -256,6 +273,9 @@ const ProjectDetail = () => {
           segmentationStatus = 'completed';
         }
 
+        // Find existing image to preserve segmentation thumbnails if not provided
+        const existingImage = images.find(existing => existing.id === img.id);
+
         return {
           id: img.id,
           name: img.name,
@@ -264,9 +284,15 @@ const ProjectDetail = () => {
           createdAt: new Date(img.created_at || img.createdAt),
           updatedAt: new Date(img.updated_at || img.updatedAt),
           segmentationStatus: segmentationStatus,
-          segmentationResult: img.segmentationResult,
-          segmentationThumbnailPath: img.segmentationThumbnailPath,
-          segmentationThumbnailUrl: img.segmentationThumbnailUrl,
+          segmentationResult:
+            img.segmentationResult || existingImage?.segmentationResult,
+          // CRITICAL: Preserve existing thumbnails if not provided by API
+          segmentationThumbnailPath:
+            img.segmentationThumbnailPath ||
+            existingImage?.segmentationThumbnailPath,
+          segmentationThumbnailUrl:
+            img.segmentationThumbnailUrl ||
+            existingImage?.segmentationThumbnailUrl,
         };
       });
 
@@ -284,7 +310,7 @@ const ProjectDetail = () => {
         error
       );
     }
-  }, [id, user?.id, updateImages]);
+  }, [id, user?.id, updateImages, images]);
 
   // Queue management - must be declared before using queueStats
   const {
@@ -389,7 +415,7 @@ const ProjectDetail = () => {
                   }
                 : null,
             };
-          } catch (_error) {
+          } catch (error) {
             if (
               error &&
               typeof error === 'object' &&
@@ -423,7 +449,7 @@ const ProjectDetail = () => {
             return img;
           })
         );
-      } catch (_error) {
+      } catch (error) {
         logger.error('Error loading visible segmentation data:', error);
       }
     };
@@ -541,6 +567,9 @@ const ProjectDetail = () => {
           segmentationStatus = 'completed';
         }
 
+        // Find existing image to preserve segmentation thumbnails
+        const existingImage = images.find(existing => existing.id === img.id);
+
         return {
           id: img.id,
           name: img.name,
@@ -549,9 +578,15 @@ const ProjectDetail = () => {
           createdAt: new Date(img.created_at || img.createdAt),
           updatedAt: new Date(img.updated_at || img.updatedAt),
           segmentationStatus: segmentationStatus,
-          segmentationResult: undefined,
-          segmentationThumbnailPath: undefined,
-          segmentationThumbnailUrl: undefined,
+          segmentationResult:
+            img.segmentationResult || existingImage?.segmentationResult,
+          // CRITICAL: Preserve existing segmentation thumbnails if not provided by API
+          segmentationThumbnailPath:
+            img.segmentationThumbnailPath ||
+            existingImage?.segmentationThumbnailPath,
+          segmentationThumbnailUrl:
+            img.segmentationThumbnailUrl ||
+            existingImage?.segmentationThumbnailUrl,
         };
       });
 
@@ -559,7 +594,7 @@ const ProjectDetail = () => {
     } catch (error) {
       logger.error('Failed to fetch images after cancellation', error);
     }
-  }, [id, user?.id, updateImages]);
+  }, [id, user?.id, updateImages, images]);
 
   // Batch WebSocket updates to prevent excessive re-renders during bulk operations
   const pendingUpdatesRef = useRef<Map<string, any>>(new Map());
@@ -599,6 +634,13 @@ const ProjectDetail = () => {
             thumbnail_url: update.clearSegmentationData
               ? img.url
               : img.thumbnail_url,
+            // Preserve segmentation thumbnails
+            segmentationThumbnailPath: update.clearSegmentationData
+              ? undefined
+              : img.segmentationThumbnailPath,
+            segmentationThumbnailUrl: update.clearSegmentationData
+              ? undefined
+              : img.segmentationThumbnailUrl,
           };
         }
         return img;
@@ -713,6 +755,13 @@ const ProjectDetail = () => {
                 thumbnail_url: clearSegmentationData
                   ? img.url
                   : img.thumbnail_url,
+                // Preserve segmentation thumbnails
+                segmentationThumbnailPath: clearSegmentationData
+                  ? undefined
+                  : img.segmentationThumbnailPath,
+                segmentationThumbnailUrl: clearSegmentationData
+                  ? undefined
+                  : img.segmentationThumbnailUrl,
               };
             }
             return img;
@@ -816,13 +865,18 @@ const ProjectDetail = () => {
                       lastSegmentationUpdate: Date.now(),
                       // Keep existing thumbnail URL - it should be updated via WebSocket
                       thumbnail_url: prevImg.thumbnail_url,
+                      // Preserve segmentation thumbnails
+                      segmentationThumbnailPath:
+                        prevImg.segmentationThumbnailPath,
+                      segmentationThumbnailUrl:
+                        prevImg.segmentationThumbnailUrl,
                       updatedAt: new Date(),
                     };
                   }
                   return prevImg;
                 });
               });
-            } catch (_error) {
+            } catch (error) {
               logger.error('Failed to refresh image data', error);
 
               // Even if refresh fails, ensure correct status based on segmentation data
@@ -841,6 +895,11 @@ const ProjectDetail = () => {
                       segmentationStatus: hasPolygons
                         ? 'completed'
                         : 'no_segmentation',
+                      // Preserve segmentation thumbnails
+                      segmentationThumbnailPath:
+                        prevImg.segmentationThumbnailPath,
+                      segmentationThumbnailUrl:
+                        prevImg.segmentationThumbnailUrl,
                       updatedAt: new Date(),
                     };
                   }
@@ -857,6 +916,10 @@ const ProjectDetail = () => {
                   return {
                     ...prevImg,
                     segmentationStatus: 'error',
+                    // Preserve segmentation thumbnails even on error
+                    segmentationThumbnailPath:
+                      prevImg.segmentationThumbnailPath,
+                    segmentationThumbnailUrl: prevImg.segmentationThumbnailUrl,
                     updatedAt: new Date(),
                   };
                 }
@@ -1011,6 +1074,9 @@ const ProjectDetail = () => {
             updatedAt: new Date(img.updated_at || img.updatedAt),
             segmentationStatus: segmentationStatus,
             segmentationResult: undefined,
+            // Preserve segmentation thumbnails from backend
+            segmentationThumbnailPath: img.segmentationThumbnailPath,
+            segmentationThumbnailUrl: img.segmentationThumbnailUrl,
           };
         });
 
@@ -1095,7 +1161,7 @@ const ProjectDetail = () => {
                       )
                     );
                   }
-                } catch (_error) {
+                } catch (error) {
                   // Silently fail for individual images - they'll be fetched later if needed
                   logger.debug(
                     `Could not fetch segmentation for image ${img.id}`,
@@ -1114,7 +1180,7 @@ const ProjectDetail = () => {
           detail: { projectId: id, newImageCount: formattedImages.length },
         });
         window.dispatchEvent(event);
-      } catch (_error) {
+      } catch (error) {
         toast.error(t('toast.upload.failed'));
       }
     }
@@ -1202,7 +1268,7 @@ const ProjectDetail = () => {
           t('project.imagesDeleteFailed', { count: result.failedIds.length })
         );
       }
-    } catch (_error) {
+    } catch (error) {
       toast.error(t('errors.deleteImages'));
     } finally {
       setShowDeleteDialog(false);
@@ -1417,7 +1483,7 @@ const ProjectDetail = () => {
 
       // Refresh queue stats
       requestQueueStats();
-    } catch (_error) {
+    } catch (error) {
       toast.error(t('projects.errorAddingToQueue'));
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);

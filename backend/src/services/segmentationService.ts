@@ -32,11 +32,12 @@ export interface SegmentationPoint {
 }
 
 export interface SegmentationPolygon {
+  id: string; // Add missing ID field
   points: SegmentationPoint[];
   area: number;
   confidence: number;
   type: 'external' | 'internal';
-  parent_id?: string; // For internal polygons, references the parent external polygon
+  parentIds?: string[]; // For internal polygons, match frontend API interface
 }
 
 export interface SegmentationRequest {
@@ -756,17 +757,17 @@ export class SegmentationService {
             return false;
           }
 
-          // Validate parent_id for internal polygons
+          // Validate parentIds for internal polygons
           if (
             polygon.type === 'internal' &&
-            polygon.parent_id &&
-            typeof polygon.parent_id !== 'string'
+            polygon.parentIds &&
+            (!Array.isArray(polygon.parentIds) || polygon.parentIds.some(id => typeof id !== 'string'))
           ) {
             logger.warn(
-              'Internal polygon has invalid parent_id',
+              'Internal polygon has invalid parentIds',
               'SegmentationService',
               {
-                parent_id: polygon.parent_id,
+                parentIds: polygon.parentIds,
               }
             );
             return false;
@@ -1170,11 +1171,12 @@ export class SegmentationService {
     // Convert Polygon[] to SegmentationPolygon[] by adding required properties
     const segmentationPolygons: SegmentationPolygon[] = polygons.map(
       (polygon, _index) => ({
+        id: polygon.id || uuidv4(), // Preserve existing ID or generate new one
         points: polygon.points.map(p => ({ x: p.x, y: p.y })),
-        area: 0, // This would be calculated properly in a real implementation
+        area: polygon.area || 0, // Preserve area if available
         confidence: polygon.confidence || 0.8,
-        type: 'external' as const, // Default to external, this should be determined by the logic
-        parent_id: undefined,
+        type: (polygon as any).type || 'external', // Preserve original type or default to external
+        parentIds: (polygon as any).parent_id ? [(polygon as any).parent_id] : undefined, // Convert parent_id to parentIds array
       })
     );
 
@@ -1243,7 +1245,16 @@ export class SegmentationService {
       where: { imageId },
     });
 
-    const polygonsJson = JSON.stringify(polygons);
+    // Transform SegmentationPolygon[] to database format (parentIds -> parent_id)
+    const dbPolygons = polygons.map(polygon => ({
+      id: polygon.id,
+      points: polygon.points,
+      type: polygon.type,
+      area: polygon.area,
+      confidence: polygon.confidence,
+      parent_id: polygon.parentIds && polygon.parentIds.length > 0 ? polygon.parentIds[0] : undefined,
+    }));
+    const polygonsJson = JSON.stringify(dbPolygons);
 
     // Calculate statistics from polygons
     const externalPolygons = polygons.filter(
@@ -1617,7 +1628,19 @@ export class SegmentationService {
           segmentation.imageId
         );
 
-        const polygons = polygonResult.isValid ? polygonResult.polygons : [];
+        const parsedPolygons = polygonResult.isValid ? polygonResult.polygons : [];
+
+        // Convert Polygon[] to SegmentationPolygon[] with IDs - same as single method
+        const polygons: SegmentationPolygon[] = parsedPolygons.map(
+          (polygon, _index) => ({
+            id: polygon.id || uuidv4(), // Preserve existing ID or generate new one
+            points: polygon.points.map(p => ({ x: p.x, y: p.y })),
+            area: polygon.area || 0, // Preserve area if available
+            confidence: polygon.confidence || 0.8,
+            type: (polygon as any).type || 'external', // Preserve original type or default to external
+            parentIds: (polygon as any).parent_id ? [(polygon as any).parent_id] : undefined, // Convert parent_id to parentIds array
+          })
+        );
 
         // Use same response format as single getSegmentationResults method
         results[segmentation.imageId] = {

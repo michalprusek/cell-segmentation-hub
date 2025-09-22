@@ -62,8 +62,13 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
     setEditingName('');
   };
 
-  const getPolygonColor = (type: string) => {
-    return type === 'external' ? 'bg-red-500' : 'bg-blue-500';
+  // Determine if a polygon is internal based on parent_id or type
+  const isInternalPolygon = (polygon: any) => {
+    return polygon.parent_id || polygon.type === 'internal';
+  };
+
+  const getPolygonColor = (polygon: any) => {
+    return isInternalPolygon(polygon) ? 'bg-blue-500' : 'bg-red-500';
   };
 
   // Handle wheel events in the scroll area to prevent page scrolling
@@ -170,7 +175,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                   <div className="flex items-center gap-3">
                     {/* Color indicator */}
                     <div
-                      className={`w-3 h-3 rounded-full ${getPolygonColor(polygon.type || 'external')}`}
+                      className={`w-3 h-3 rounded-full ${getPolygonColor(polygon)}`}
                     />
 
                     {/* Name */}
@@ -201,9 +206,9 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                         </span>
                         <span>•</span>
                         <span>
-                          {polygon.type === 'external'
-                            ? t('segmentation.status.external')
-                            : t('segmentation.status.internal')}
+                          {isInternalPolygon(polygon)
+                            ? t('segmentation.status.internal')
+                            : t('segmentation.status.external')}
                         </span>
                         {polygon.area && (
                           <>
@@ -215,12 +220,12 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                     </div>
 
                     {/* Actions */}
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-1">
                       {/* Visibility toggle */}
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-6 w-6"
+                        className="h-6 w-6 opacity-60 hover:opacity-100 transition-opacity"
                         onClick={e => {
                           e.stopPropagation();
                           onTogglePolygonVisibility?.(polygon.id);
@@ -239,7 +244,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-6 w-6"
+                            className="h-6 w-6 opacity-60 hover:opacity-100 transition-opacity"
                             onClick={e => e.stopPropagation()}
                           >
                             <MoreVertical className="h-3 w-3" />

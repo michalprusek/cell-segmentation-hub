@@ -20,6 +20,7 @@ interface PolygonVerticesProps {
   viewportBounds?: { x: number; y: number; width: number; height: number };
   isUndoRedoInProgress?: boolean;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
+  editMode?: EditMode;
 }
 
 const PolygonVertices = React.memo(
@@ -35,6 +36,7 @@ const PolygonVertices = React.memo(
     viewportBounds,
     isUndoRedoInProgress = false,
     onDeleteVertex,
+    editMode,
   }: PolygonVerticesProps) => {
     // Always show vertices for selected polygons to enable dragging
     const shouldShowVertices = isSelected;
@@ -110,6 +112,7 @@ const PolygonVertices = React.memo(
                   type={polygonType}
                   isStartPoint={originalIndex === 0}
                   isUndoRedoInProgress={isUndoRedoInProgress}
+                  isInAddPointsMode={editMode === EditMode.AddPoints}
                 />
               </g>
             </VertexContextMenu>
