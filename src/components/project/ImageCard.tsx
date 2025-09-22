@@ -18,24 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 // Canvas renderer removed - using server-generated thumbnails only
 
 interface ImageCardProps {
-  image: ProjectImage & {
-    segmentationResult?: {
-      polygons?: Array<{
-        id: string;
-        points: Array<{ x: number; y: number }>;
-        type: 'external' | 'internal';
-        class?: string;
-        originalPointCount?: number;
-        compressionRatio?: number;
-      }>;
-      imageWidth?: number;
-      imageHeight?: number;
-      levelOfDetail?: 'low' | 'medium' | 'high';
-      polygonCount?: number;
-      pointCount?: number;
-      compressionRatio?: number;
-    };
-  };
+  image: ProjectImage;
   onDelete: (imageId: string) => void;
   onOpen: (imageId: string) => void;
   isSelected: boolean;
