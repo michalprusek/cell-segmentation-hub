@@ -47,32 +47,46 @@ export const usePolygonSlicing = ({
       const pointsToUse = providedTempPoints || tempPoints;
 
       if (!selectedPolygonId || pointsToUse.length !== 2) {
+        // Invalid state: missing polygon ID or incorrect points count
         return false;
       }
 
       const polygon = polygons.find(p => p.id === selectedPolygonId);
       if (!polygon) {
+        // Polygon not found error
         toast.error(t('segmentation.polygonNotFound') || 'Polygon not found');
         return false;
       }
 
       const [sliceStart, sliceEnd] = pointsToUse;
 
+      // Attempting slice with points
+
       // Validate slice line
       const validation = validateSliceLine(polygon, sliceStart, sliceEnd);
+
+      // Validation result obtained
+
       if (!validation.isValid) {
-        toast.error(
-          t('segmentation.invalidSlice') ||
-            `Invalid slice: ${validation.reason}`
-        );
+        // Show detailed error message to user
+        const errorMessage = validation.reason
+          ? `${t('segmentation.invalidSlice') || 'Invalid slice operation'}: ${validation.reason}`
+          : t('segmentation.invalidSlice') || 'Invalid slice operation';
+
+        // Validation failed
+        toast.error(errorMessage);
         return false;
       }
+
+      // Validation passed, performing slice
 
       // Perform the slice
       const result = slicePolygon(polygon, sliceStart, sliceEnd);
 
       if (result) {
         const [newPolygon1, newPolygon2] = result;
+
+        // Slice successful - created two new polygons
 
         // Replace the original polygon with the two new ones
         const updatedPolygons = polygons.filter(
@@ -97,6 +111,7 @@ export const usePolygonSlicing = ({
 
         return true;
       } else {
+        // Slice operation failed - slicePolygon returned null
         toast.error(t('segmentation.sliceFailed') || 'Failed to slice polygon');
 
         // Reset state on failure

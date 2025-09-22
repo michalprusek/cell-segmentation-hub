@@ -241,8 +241,19 @@ export const ExportProgressPanel = ({
               {/* Download button for completed exports */}
               {completedJobId && !isExporting && (
                 <Button
-                  onClick={onTriggerDownload}
-                  disabled={isDownloading}
+                  onClick={() => {
+                    if (!completedJobId) {
+                      logger.warn('Download button clicked but no completedJobId available');
+                      return;
+                    }
+                    if (isDownloading) {
+                      logger.warn('Download button clicked but already downloading');
+                      return;
+                    }
+                    logger.debug('🔄 Download button clicked', { completedJobId, isDownloading });
+                    onTriggerDownload();
+                  }}
+                  disabled={isDownloading || !completedJobId}
                   className={cn(
                     'gap-2 transition-all',
                     isDownloading
@@ -261,10 +272,18 @@ export const ExportProgressPanel = ({
               {/* Dismiss button for completed exports */}
               {completedJobId && !isExporting && !isDownloading && (
                 <Button
-                  onClick={onDismissExport}
+                  onClick={() => {
+                    if (!completedJobId) {
+                      logger.warn('Dismiss button clicked but no completedJobId available');
+                      return;
+                    }
+                    logger.debug('✖️ Dismiss button clicked', { completedJobId });
+                    onDismissExport();
+                  }}
                   variant="outline"
                   size="sm"
                   className="gap-2"
+                  disabled={!completedJobId}
                 >
                   {t('common.dismiss')}
                 </Button>

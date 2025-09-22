@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import apiClient from '@/lib/api';
 import { useWebSocket } from '@/contexts/useWebSocket';
 import { logger } from '@/lib/logger';
@@ -49,7 +49,7 @@ interface ExportJob {
   filePath?: string;
 }
 
-export const useSharedAdvancedExport = (projectId: string) => {
+export const useSharedAdvancedExport = (projectId: string, projectName?: string) => {
   const { updateExportState, getExportState } = useExportContext();
 
   const [exportOptions, setExportOptions] = useState<ExportOptions>({
@@ -71,13 +71,15 @@ export const useSharedAdvancedExport = (projectId: string) => {
   });
 
   const [createdBlobUrls, setCreatedBlobUrls] = useState<string[]>([]);
+  const downloadedJobIds = useRef<Set<string>>(new Set());
+  const downloadInProgress = useRef<boolean>(false);
   const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(
     null
   );
   const [wsConnected, setWsConnected] = useState(false);
   const [currentProjectName, setCurrentProjectName] = useState<
     string | undefined
-  >();
+  >(projectName);
 
   const { socket } = useWebSocket();
 
@@ -101,6 +103,31 @@ export const useSharedAdvancedExport = (projectId: string) => {
     [projectId, updateExportState]
   );
 
+  // Helper to get/set persistent download tracking
+  const getDownloadedJobs = useCallback((): Set<string> => {
+    const stored = localStorage.getItem(`exportDownloaded_${projectId}`);
+    if (stored) {
+      try {
+        return new Set(JSON.parse(stored));
+      } catch {
+        return new Set();
+      }
+    }
+    return new Set();
+  }, [projectId]);
+
+  const markJobAsDownloaded = useCallback((jobId: string) => {
+    const downloaded = getDownloadedJobs();
+    downloaded.add(jobId);
+    localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(downloaded)));
+    downloadedJobIds.current.add(jobId);
+  }, [projectId, getDownloadedJobs]);
+
+  const clearDownloadedJobs = useCallback(() => {
+    localStorage.removeItem(`exportDownloaded_${projectId}`);
+    downloadedJobIds.current.clear();
+  }, [projectId]);
+
   // Check resumed export status from server - defined early to avoid dependency issues
   const checkResumedExportStatus = useCallback(
     async (jobId: string) => {
@@ -115,7 +142,7 @@ export const useSharedAdvancedExport = (projectId: string) => {
             currentJob: currentJob
               ? { ...currentJob, status: 'completed' }
               : null,
-            exportStatus: 'Export completed! Starting download...',
+            exportStatus: 'Export completed!',
             isExporting: false,
             completedJobId: jobId,
           });
@@ -159,30 +186,67 @@ export const useSharedAdvancedExport = (projectId: string) => {
     [projectId, updateState, currentJob]
   );
 
+  // Update project name when it changes
+  useEffect(() => {
+    if (projectName && projectName !== currentProjectName) {
+      setCurrentProjectName(projectName);
+      logger.debug('Updated project name:', projectName);
+    }
+  }, [projectName, currentProjectName]);
+
   // Initialize from persisted state on mount
   useEffect(() => {
     if (!projectId) return;
+
+    // Load downloaded jobs from localStorage
+    const persistedDownloaded = getDownloadedJobs();
+    downloadedJobIds.current = persistedDownloaded;
+    
+    // Reset in-progress flag but keep downloaded jobs tracking
+    downloadInProgress.current = false;
+    logger.debug('Initialized download tracking from localStorage', {
+      downloadedJobs: Array.from(persistedDownloaded),
+    });
 
     const persistedState = ExportStateManager.getExportState(projectId);
     if (persistedState) {
       logger.info('Restoring export state from localStorage', persistedState);
 
-      const restoredJob = {
-        id: persistedState.jobId,
-        status:
-          persistedState.status === 'downloading' ? 'completed' : 'processing',
-        progress: persistedState.progress,
-      };
+      // Clear stale downloading states - they should not persist across page reloads
+      // If the state was "downloading", it means the download was interrupted
+      // and we should treat the export as completed but not downloaded
+      if (persistedState.status === 'downloading') {
+        logger.debug('Clearing stale downloading state, treating as completed');
 
-      updateState({
-        currentJob: restoredJob,
-      });
+        const restoredJob = {
+          id: persistedState.jobId,
+          status: 'completed' as const,
+          progress: 100,
+        };
 
-      if (
+        updateState({
+          currentJob: restoredJob,
+          completedJobId: persistedState.jobId,
+          isDownloading: false, // Important: don't restore downloading state
+          isExporting: false,
+          exportProgress: 100,
+          exportStatus: 'Export completed - ready to download',
+        });
+
+        // Clear the stale state from localStorage
+        ExportStateManager.clearExportState(projectId);
+      } else if (
         persistedState.status === 'exporting' ||
         persistedState.status === 'processing'
       ) {
+        const restoredJob = {
+          id: persistedState.jobId,
+          status: 'processing' as const,
+          progress: persistedState.progress,
+        };
+
         updateState({
+          currentJob: restoredJob,
           isExporting: true,
           exportProgress: persistedState.progress,
           exportStatus:
@@ -192,15 +256,34 @@ export const useSharedAdvancedExport = (projectId: string) => {
 
         // Check current status from server
         checkResumedExportStatus(persistedState.jobId);
-      } else if (persistedState.status === 'downloading') {
-        updateState({
-          isDownloading: true,
-          completedJobId: persistedState.jobId,
-          exportStatus: 'Download ready',
-        });
+      } else if (persistedState.status === 'completed') {
+        // Check if this job was already downloaded
+        const wasDownloaded = persistedDownloaded.has(persistedState.jobId);
+        
+        if (!wasDownloaded) {
+          // Restore completed state properly
+          const restoredJob = {
+            id: persistedState.jobId,
+            status: 'completed' as const,
+            progress: 100,
+          };
+
+          updateState({
+            currentJob: restoredJob,
+            completedJobId: persistedState.jobId,
+            isDownloading: false,
+            isExporting: false,
+            exportProgress: 100,
+            exportStatus: 'Export completed - ready to download',
+          });
+        } else {
+          // Job was already downloaded, clear the state
+          logger.info('Export job was already downloaded, clearing state');
+          ExportStateManager.clearExportState(projectId);
+        }
       }
     }
-  }, [projectId, checkResumedExportStatus, updateState]);
+  }, [projectId, checkResumedExportStatus, updateState, getDownloadedJobs]);
 
   // Persist state changes to localStorage
   useEffect(() => {
@@ -380,7 +463,7 @@ export const useSharedAdvancedExport = (projectId: string) => {
                 currentJob: currentJob
                   ? { ...currentJob, status: 'completed' }
                   : null,
-                exportStatus: 'Export completed! Starting download...',
+                exportStatus: 'Export completed!',
                 isExporting: false,
                 completedJobId: currentJob.id,
               });
@@ -437,99 +520,150 @@ export const useSharedAdvancedExport = (projectId: string) => {
     updateState,
   ]);
 
-  // Auto-download when export completes
+  // Auto-download when export completes - FIXED VERSION with persistent tracking
   useEffect(() => {
-    // Only auto-download if not cancelled and job is complete
-    if (completedJobId && currentJob?.status !== 'cancelled') {
-      const autoDownload = async () => {
-        try {
-          // Check if export was cancelled before starting download
-          if (currentJob?.status === 'cancelled') {
-            logger.info('Auto-download skipped - export was cancelled');
-            return;
-          }
-
-          // Set downloading state
-          updateState({ isDownloading: true });
-
-          // Check if browser supports large file downloads - warn but don't block
-          if (!canDownloadLargeFiles()) {
-            logger.warn('Browser may have issues with large file downloads');
-            // Continue with download attempt instead of returning
-          }
-
-          const signal = getSignal('download');
-          logger.info('📥 Starting auto-download with signal aborted:', signal.aborted);
-
-          const response = await apiClient.get(
-            `/projects/${projectId}/export/${completedJobId}/download`,
-            {
-              responseType: 'blob',
-              // Add timeout for large files (5 minutes)
-              timeout: 300000,
-              // Add AbortController signal for cancellation support
-              signal: signal,
-            }
-          );
-
-          logger.info('✅ Download request completed');
-
-          // Double-check cancellation after network request
-          if (currentJob?.status === 'cancelled') {
-            logger.info('Download cancelled after request completion');
-            return;
-          }
-
-          // Use centralized download utility with project name
-          const timestamp = new Date().toISOString().slice(0, 10);
-          const filename = currentProjectName
-            ? `${sanitizeFilename(currentProjectName)}_${timestamp}.zip`
-            : `export_${completedJobId}_${timestamp}.zip`;
-          await downloadFromResponse(response, filename);
-
-          // Show downloading status briefly, then auto-dismiss after a reasonable time
-          updateState({
-            exportStatus:
-              'Download initiated. The file should appear in your downloads folder.',
-          });
-
-          // Auto-dismiss after 5 seconds (reasonable time for download to start)
-          setTimeout(() => {
-            updateState({
-              isDownloading: false,
-              completedJobId: null,
-              exportStatus: '',
-            });
-            logger.info('Export auto-dismissed after download');
-          }, 5000);
-
-          logger.info('Export auto-downloaded', { jobId: completedJobId });
-        } catch (error: any) {
-          // Handle abort errors gracefully
-          if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
-            logger.info('Download cancelled by user');
-            updateState({
-              exportStatus: 'Download cancelled',
-              isDownloading: false,
-              completedJobId: null,
-            });
-            return;
-          }
-
-          logger.error('Failed to auto-download export', error);
-          updateState({
-            exportStatus:
-              "Export completed! Click below to download if it didn't start automatically.",
-            isDownloading: false,
-          });
-          // Keep completedJobId available for manual download
-        }
-      };
-
-      // Small delay to ensure the export file is fully ready
-      setTimeout(autoDownload, 1000);
+    // EARLY VALIDATION: Exit immediately if basic requirements not met
+    if (!completedJobId || !projectId) {
+      return;
     }
-  }, [completedJobId, projectId, updateState, currentJob, getSignal]);
+
+    // Load persistent downloaded jobs
+    const persistedDownloaded = getDownloadedJobs();
+    
+    // Debug logging for troubleshooting
+    logger.debug('Auto-download useEffect triggered', {
+      completedJobId,
+      downloadInProgress: downloadInProgress.current,
+      alreadyDownloaded: persistedDownloaded.has(completedJobId),
+      currentJobStatus: currentJob?.status,
+      isDownloading,
+    });
+
+    // COMPREHENSIVE RACE CONDITION PREVENTION: Check ALL blocking conditions
+    if (
+      currentJob?.status === 'cancelled' ||
+      persistedDownloaded.has(completedJobId) ||
+      downloadInProgress.current ||
+      isDownloading
+    ) {
+      logger.debug('Auto-download blocked:', {
+        cancelled: currentJob?.status === 'cancelled',
+        alreadyDownloaded: persistedDownloaded.has(completedJobId),
+        downloadInProgress: downloadInProgress.current,
+        isDownloading,
+      });
+      return;
+    }
+
+    logger.info('Starting auto-download for jobId:', completedJobId);
+
+    // IMMEDIATE SYNCHRONOUS RACE PREVENTION - MUST be first
+    markJobAsDownloaded(completedJobId);
+    downloadInProgress.current = true;
+
+    // Store jobId in closure to prevent stale closure issues
+    const currentJobId = completedJobId;
+    const currentProjectNameSnapshot = currentProjectName;
+
+    // ASYNC DOWNLOAD FUNCTION
+    const performAutoDownload = async () => {
+      try {
+        // Final cancellation check with closure variable
+        if (currentJob?.status === 'cancelled') {
+          logger.info('Auto-download cancelled - job cancelled');
+          downloadInProgress.current = false;
+          return;
+        }
+
+        // Set downloading state
+        updateState({ isDownloading: true });
+
+        // Browser compatibility check (non-blocking)
+        if (!canDownloadLargeFiles()) {
+          logger.warn('Browser may have issues with large file downloads');
+        }
+
+        const signal = getSignal('download');
+        logger.info('📥 Starting auto-download with signal aborted:', signal.aborted);
+
+        const response = await apiClient.get(
+          `/projects/${projectId}/export/${currentJobId}/download`,
+          {
+            responseType: 'blob',
+            timeout: 300000, // 5 minutes
+            signal: signal,
+          }
+        );
+
+        logger.info('✅ Auto-download request completed');
+
+        // Final cancellation check after network request
+        if (currentJob?.status === 'cancelled') {
+          logger.info('Download cancelled after request completion');
+          downloadInProgress.current = false;
+          updateState({ isDownloading: false });
+          return;
+        }
+
+        // Generate simple filename
+        const filename = currentProjectNameSnapshot
+          ? `${sanitizeFilename(currentProjectNameSnapshot)}.zip`
+          : `export_${currentJobId}.zip`;
+
+        await downloadFromResponse(response, filename);
+        logger.info('Export auto-downloaded successfully', { jobId: currentJobId, filename });
+
+        // SUCCESS: Clear flags and state but keep in downloaded list
+        downloadInProgress.current = false;
+        updateState({
+          completedJobId: null,
+          isDownloading: false,
+          exportStatus: 'Download completed successfully.',
+        });
+
+        // Clear localStorage export state but keep downloaded tracking
+        ExportStateManager.clearExportState(projectId);
+
+        // DO NOT AUTO-DISMISS - let user dismiss manually
+
+      } catch (error: any) {
+        // ERROR HANDLING: Reset flags and allow retry
+        downloadInProgress.current = false;
+
+        if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+          logger.info('Auto-download cancelled by user');
+          updateState({
+            exportStatus: 'Download cancelled',
+            isDownloading: false,
+            completedJobId: null,
+          });
+          ExportStateManager.clearExportState(projectId);
+          return;
+        }
+
+        logger.error('Auto-download failed:', error);
+        // Remove from downloaded set to allow manual retry
+        const downloaded = getDownloadedJobs();
+        downloaded.delete(currentJobId);
+        localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(downloaded)));
+        downloadedJobIds.current.delete(currentJobId);
+        
+        updateState({
+          exportStatus: "Export completed! Click below to download if it didn't start automatically.",
+          isDownloading: false,
+        });
+        // Keep completedJobId for manual download
+      }
+    };
+
+    // Small delay to ensure export file is ready
+    const timeoutId = setTimeout(performAutoDownload, 1000);
+
+    // Cleanup function to prevent orphaned timeouts
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, [completedJobId, projectId, updateState, currentJob, getSignal, currentProjectName, isDownloading, markJobAsDownloaded, getDownloadedJobs]);
 
   const updateExportOptions = useCallback((updates: Partial<ExportOptions>) => {
     setExportOptions(prev => ({ ...prev, ...updates }));
@@ -541,6 +675,10 @@ export const useSharedAdvancedExport = (projectId: string) => {
         // Reset abort controllers for fresh start
         resetController('download');
         resetController('api');
+
+        // Clear downloaded job tracking for new export
+        clearDownloadedJobs();
+        downloadInProgress.current = false;
 
         // Clear any previous completed job when starting new export
         updateState({
@@ -578,36 +716,63 @@ export const useSharedAdvancedExport = (projectId: string) => {
         throw error;
       }
     },
-    [projectId, exportOptions, updateState, resetController]
+    [projectId, exportOptions, updateState, resetController, clearDownloadedJobs]
   );
 
   const triggerDownload = useCallback(async () => {
+    logger.info('🔄 triggerDownload called', {
+      completedJobId,
+      isDownloading,
+      downloadInProgress: downloadInProgress.current,
+      alreadyDownloaded: completedJobId ? getDownloadedJobs().has(completedJobId) : false,
+      currentProjectName
+    });
+
+    // VALIDATION: Check if download is possible
     if (!completedJobId) {
-      logger.warn('No completed export job ID available');
+      logger.warn('No completed export job ID available for manual download');
       return;
     }
 
-    // If already downloading, clicking again dismisses everything
+    // STUCK STATE DETECTION AND RECOVERY
+    // If downloadInProgress is stuck but isDownloading is false, reset the flag
+    if (downloadInProgress.current && !isDownloading) {
+      logger.warn('Detected stuck downloadInProgress flag - resetting');
+      downloadInProgress.current = false;
+    }
+
+    // RACE PREVENTION: Block only if actively downloading
     if (isDownloading) {
-      updateState({
-        isDownloading: false,
-        completedJobId: null,
-        exportStatus: '',
+      logger.warn('Manual download blocked - download actively in progress:', {
+        isDownloading,
+        downloadInProgress: downloadInProgress.current,
       });
-      logger.info('Export dismissed by user during download');
       return;
     }
+
+    // Check if already downloaded (but always allow retry for manual downloads)
+    const persistedDownloaded = getDownloadedJobs();
+    if (persistedDownloaded.has(completedJobId)) {
+      logger.info('Manual download requested for already downloaded job - allowing retry');
+      // Remove from set to allow retry
+      persistedDownloaded.delete(completedJobId);
+      localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(persistedDownloaded)));
+      downloadedJobIds.current.delete(completedJobId);
+    }
+
+    // IMMEDIATE SYNCHRONOUS FLAGS
+    markJobAsDownloaded(completedJobId);
+    downloadInProgress.current = true;
 
     try {
       updateState({
         isDownloading: true,
-        exportStatus: 'Starting download...',
+        exportStatus: 'Starting manual download...',
       });
 
-      // Check if browser supports large file downloads - warn but don't block
+      // Browser compatibility check (non-blocking)
       if (!canDownloadLargeFiles()) {
         logger.warn('Browser may have issues with large file downloads');
-        // Continue with download attempt
       }
 
       const signal = getSignal('download');
@@ -617,41 +782,37 @@ export const useSharedAdvancedExport = (projectId: string) => {
         `/projects/${projectId}/export/${completedJobId}/download`,
         {
           responseType: 'blob',
-          // Add timeout for large files (5 minutes)
-          timeout: 300000,
-          // Add AbortController signal for cancellation support
+          timeout: 300000, // 5 minutes
           signal: signal,
         }
       );
 
       logger.info('✅ Manual download request completed');
 
-      // Use centralized download utility with project name
-      const timestamp = new Date().toISOString().slice(0, 10);
+      // Generate simple filename
       const filename = currentProjectName
-        ? `${sanitizeFilename(currentProjectName)}_${timestamp}.zip`
-        : `export_${completedJobId}_${timestamp}.zip`;
-      await downloadFromResponse(response, filename);
+        ? `${sanitizeFilename(currentProjectName)}.zip`
+        : `export_${completedJobId}.zip`;
 
-      // Show downloading status briefly, then auto-dismiss
+      await downloadFromResponse(response, filename);
+      logger.info('Export manually downloaded successfully', { jobId: completedJobId, filename });
+
+      // SUCCESS: Clear flags
+      downloadInProgress.current = false;
       updateState({
-        exportStatus:
-          'Download initiated. The file should appear in your downloads folder.',
+        exportStatus: 'Download completed successfully.',
+        isDownloading: false,
       });
 
-      // Auto-dismiss after 5 seconds
-      setTimeout(() => {
-        updateState({
-          isDownloading: false,
-          completedJobId: null,
-          exportStatus: '',
-        });
-        logger.info('Export auto-dismissed after manual download');
-      }, 5000);
+      // Clear localStorage
+      ExportStateManager.clearExportState(projectId);
 
-      logger.info('Export manually downloaded', { jobId: completedJobId });
+      // DO NOT AUTO-DISMISS - let user control when to dismiss
+
     } catch (error: any) {
-      // Handle abort errors gracefully
+      // ERROR HANDLING: Reset flags
+      downloadInProgress.current = false;
+
       if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
         logger.info('Manual download cancelled by user');
         updateState({
@@ -659,18 +820,24 @@ export const useSharedAdvancedExport = (projectId: string) => {
           isDownloading: false,
           completedJobId: null,
         });
+        ExportStateManager.clearExportState(projectId);
         return;
       }
 
-      logger.error('Failed to download export', { error, completedJobId });
+      logger.error('Manual download failed:', error);
+      // Remove from downloaded set to allow retry
+      const downloaded = getDownloadedJobs();
+      downloaded.delete(completedJobId);
+      localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(downloaded)));
+      downloadedJobIds.current.delete(completedJobId);
+      
       updateState({
         exportStatus: 'Failed to download export. Please try again.',
         isDownloading: false,
       });
-
-      // Don't clear completedJobId on error so user can retry
+      // Keep completedJobId for retry
     }
-  }, [projectId, completedJobId, isDownloading, updateState, getSignal]);
+  }, [projectId, completedJobId, isDownloading, updateState, getSignal, currentProjectName, markJobAsDownloaded, getDownloadedJobs]);
 
   const cancelExport = useCallback(async () => {
     if (!currentJob) return;
@@ -725,7 +892,7 @@ export const useSharedAdvancedExport = (projectId: string) => {
         exportStatus: 'Failed to cancel export',
       });
     }
-  }, [projectId, currentJob, updateState, socket, abort, getSignal]);
+  }, [projectId, currentJob, updateState, socket, abort, isAborted]);
 
   const getExportStatus = useCallback(
     async (jobId: string) => {
@@ -754,15 +921,36 @@ export const useSharedAdvancedExport = (projectId: string) => {
     }
   }, [projectId]);
 
-  // Function to dismiss/clear completed export
+  // Function to dismiss/clear completed export - ENHANCED
   const dismissExport = useCallback(() => {
+    logger.info('Export dismiss requested', {
+      completedJobId,
+      isDownloading,
+      downloadInProgress: downloadInProgress.current
+    });
+
+    // Clear all download tracking
+    if (completedJobId) {
+      // Keep the job in downloaded list so it won't auto-download again
+      const downloaded = getDownloadedJobs();
+      downloaded.add(completedJobId);
+      localStorage.setItem(`exportDownloaded_${projectId}`, JSON.stringify(Array.from(downloaded)));
+    }
+    downloadInProgress.current = false;
+
+    // Clear state completely
     updateState({
       completedJobId: null,
       exportStatus: '',
       isDownloading: false,
+      currentJob: null,
     });
-    logger.info('Export dismissed by user');
-  }, [updateState]);
+
+    // Clear localStorage to prevent state persistence
+    ExportStateManager.clearExportState(projectId);
+
+    logger.info('Export dismissed successfully');
+  }, [updateState, projectId, completedJobId, isDownloading, getDownloadedJobs]);
 
   return {
     exportOptions,
@@ -781,4 +969,4 @@ export const useSharedAdvancedExport = (projectId: string) => {
     completedJobId,
     wsConnected,
   };
-};
+};;

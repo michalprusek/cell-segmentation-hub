@@ -1,6 +1,6 @@
 /**
  * Queue Type Definitions
- * 
+ *
  * Comprehensive TypeScript interfaces for queue-related operations,
  * providing full type safety from HTTP requests to database operations.
  */
@@ -15,12 +15,22 @@ import { Request } from 'express';
 /**
  * Available segmentation models
  */
-export type SegmentationModel = 'hrnet' | 'cbam_resunet' | 'unet_spherohq' | 'resunet_advanced' | 'resunet_small';
+export type SegmentationModel =
+  | 'hrnet'
+  | 'cbam_resunet'
+  | 'unet_spherohq'
+  | 'resunet_advanced'
+  | 'resunet_small';
 
 /**
  * Queue item status
  */
-export type QueueStatus = 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled';
+export type QueueStatus =
+  | 'queued'
+  | 'processing'
+  | 'completed'
+  | 'failed'
+  | 'cancelled';
 
 /**
  * Queue priority levels (0 = lowest, 10 = highest)
@@ -309,37 +319,67 @@ export class MLServiceUnavailableError extends QueueError {
 /**
  * Type guard for AddImageToQueueData
  */
-export function isAddImageToQueueData(data: unknown): data is AddImageToQueueData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isAddImageToQueueData(
+  data: unknown
+): data is AddImageToQueueData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
-  
-  if (d.model !== undefined && !isSegmentationModel(d.model)) {return false;}
-  if (d.threshold !== undefined && (typeof d.threshold !== 'number' || d.threshold < 0.1 || d.threshold > 0.9)) {return false;}
-  if (d.priority !== undefined && !isQueuePriority(d.priority)) {return false;}
-  if (d.detectHoles !== undefined && typeof d.detectHoles !== 'boolean') {return false;}
-  
+
+  if (d.model !== undefined && !isSegmentationModel(d.model)) {
+    return false;
+  }
+  if (
+    d.threshold !== undefined &&
+    (typeof d.threshold !== 'number' || d.threshold < 0.1 || d.threshold > 0.9)
+  ) {
+    return false;
+  }
+  if (d.priority !== undefined && !isQueuePriority(d.priority)) {
+    return false;
+  }
+  if (d.detectHoles !== undefined && typeof d.detectHoles !== 'boolean') {
+    return false;
+  }
+
   return true;
 }
 
 /**
  * Type guard for SegmentationModel
  */
-export function isSegmentationModel(value: unknown): value is SegmentationModel {
-  return value === 'hrnet' || value === 'cbam_resunet' || value === 'unet_spherohq' || value === 'resunet_advanced' || value === 'resunet_small';
+export function isSegmentationModel(
+  value: unknown
+): value is SegmentationModel {
+  return (
+    value === 'hrnet' ||
+    value === 'cbam_resunet' ||
+    value === 'unet_spherohq' ||
+    value === 'resunet_advanced' ||
+    value === 'resunet_small'
+  );
 }
 
 /**
  * Type guard for QueuePriority
  */
 export function isQueuePriority(value: unknown): value is QueuePriority {
-  return typeof value === 'number' && value >= 0 && value <= 10 && Number.isInteger(value);
+  return (
+    typeof value === 'number' &&
+    value >= 0 &&
+    value <= 10 &&
+    Number.isInteger(value)
+  );
 }
 
 /**
  * Type guard for QueueStatus
  */
 export function isQueueStatus(value: unknown): value is QueueStatus {
-  return ['queued', 'processing', 'completed', 'failed', 'cancelled'].includes(value as string);
+  return ['queued', 'processing', 'completed', 'failed', 'cancelled'].includes(
+    value as string
+  );
 }
 
 // ============================================================================
@@ -476,12 +516,17 @@ export type RequireOnly<T, K extends keyof T> = Partial<T> & Pick<T, K>;
 /**
  * Queue entry creation data
  */
-export type CreateQueueEntry = RequireOnly<QueueEntryResponse, 'imageId' | 'projectId' | 'userId'>;
+export type CreateQueueEntry = RequireOnly<
+  QueueEntryResponse,
+  'imageId' | 'projectId' | 'userId'
+>;
 
 /**
  * Queue entry update data
  */
-export type UpdateQueueEntry = Partial<Pick<QueueEntryResponse, 'status' | 'error' | 'startedAt' | 'completedAt'>>;
+export type UpdateQueueEntry = Partial<
+  Pick<QueueEntryResponse, 'status' | 'error' | 'startedAt' | 'completedAt'>
+>;
 
 export default {
   // Re-export everything for convenient import
@@ -492,5 +537,5 @@ export default {
   QueueError,
   QueueTimeoutError,
   QueueCapacityError,
-  MLServiceUnavailableError
+  MLServiceUnavailableError,
 };

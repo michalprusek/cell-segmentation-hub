@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import CanvasThumbnailRenderer from './CanvasThumbnailRenderer';
+// Canvas renderer removed - using server-generated thumbnails only
 
 interface ImageCardProps {
   image: ProjectImage & {
@@ -210,40 +210,7 @@ export const ImageCard = ({
           )}
         </div>
 
-        {/* Segmentation overlay - only render if we don't have a segmentation thumbnail */}
-        {(() => {
-          const shouldShowSegmentation =
-            !image.segmentationThumbnailUrl &&
-            !image.segmentationThumbnailPath && // Only show canvas if no segmentation thumbnail
-            (image.segmentationStatus === 'completed' ||
-              image.segmentationStatus === 'segmented') &&
-            image.segmentationResult?.polygons &&
-            image.segmentationResult.polygons.length > 0 &&
-            image.segmentationResult.imageWidth &&
-            image.segmentationResult.imageHeight;
-
-          return shouldShowSegmentation ? (
-            <CanvasThumbnailRenderer
-              thumbnailData={{
-                polygons: image.segmentationResult.polygons,
-                imageWidth: image.segmentationResult.imageWidth,
-                imageHeight: image.segmentationResult.imageHeight,
-                levelOfDetail: image.segmentationResult.levelOfDetail || 'low',
-                polygonCount:
-                  image.segmentationResult.polygonCount ||
-                  image.segmentationResult.polygons.length,
-                pointCount:
-                  image.segmentationResult.pointCount ||
-                  image.segmentationResult.polygons.reduce(
-                    (sum, p) => sum + p.points.length,
-                    0
-                  ),
-                compressionRatio:
-                  image.segmentationResult.compressionRatio || 1,
-              }}
-            />
-          ) : null;
-        })()}
+        {/* Server-generated thumbnails are included in the image URLs above */}
 
         {/* Gradient overlay */}
         <div

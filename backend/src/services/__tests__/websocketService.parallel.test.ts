@@ -25,7 +25,7 @@ describe('WebSocketService - Parallel Processing', () => {
       on: jest.fn(),
       to: jest.fn().mockReturnThis(),
       emit: jest.fn(),
-      use: jest.fn()
+      use: jest.fn(),
     } as any;
 
     // Mock Socket.IO constructor
@@ -42,7 +42,7 @@ describe('WebSocketService - Parallel Processing', () => {
         maxConcurrentStreams: 4,
         totalProcessingCapacity: 12,
         currentThroughput: 8.5,
-        concurrentUserCount: 3
+        concurrentUserCount: 3,
       };
 
       webSocketService.emitParallelProcessingStatus(statusData);
@@ -51,7 +51,7 @@ describe('WebSocketService - Parallel Processing', () => {
         'parallel-processing-status',
         expect.objectContaining({
           ...statusData,
-          timestamp: expect.any(String)
+          timestamp: expect.any(String),
         })
       );
     });
@@ -66,11 +66,13 @@ describe('WebSocketService - Parallel Processing', () => {
         maxConcurrentStreams: 4,
         totalProcessingCapacity: 8,
         currentThroughput: 5.2,
-        concurrentUserCount: 2
+        concurrentUserCount: 2,
       };
 
       // Should not throw an error
-      expect(() => webSocketService.emitParallelProcessingStatus(statusData)).not.toThrow();
+      expect(() =>
+        webSocketService.emitParallelProcessingStatus(statusData)
+      ).not.toThrow();
     });
   });
 
@@ -81,13 +83,15 @@ describe('WebSocketService - Parallel Processing', () => {
 
       webSocketService.emitConcurrentUserCount(projectId, userCount);
 
-      expect(mockSocketIOServer.to).toHaveBeenCalledWith(`project:${projectId}`);
+      expect(mockSocketIOServer.to).toHaveBeenCalledWith(
+        `project:${projectId}`
+      );
       expect(mockSocketIOServer.emit).toHaveBeenCalledWith(
         'concurrent-user-count',
         expect.objectContaining({
           projectId,
           count: userCount,
-          timestamp: expect.any(String)
+          timestamp: expect.any(String),
         })
       );
     });
@@ -165,7 +169,7 @@ describe('WebSocketService - Parallel Processing', () => {
         batchSize: 6,
         model: 'hrnet',
         progress: 45,
-        estimatedTimeRemaining: 30000
+        estimatedTimeRemaining: 30000,
       };
 
       webSocketService.emitProcessingStreamUpdate('stream-123', streamData);
@@ -174,7 +178,7 @@ describe('WebSocketService - Parallel Processing', () => {
         'processing-stream-update',
         expect.objectContaining({
           ...streamData,
-          timestamp: expect.any(String)
+          timestamp: expect.any(String),
         })
       );
     });
@@ -184,22 +188,27 @@ describe('WebSocketService - Parallel Processing', () => {
         streamId: 'stream-456',
         batchSize: 4,
         model: 'cbam_resunet',
-        progress: 0
+        progress: 0,
       };
 
-      const statuses = ['started', 'processing', 'completed', 'failed'] as const;
+      const statuses = [
+        'started',
+        'processing',
+        'completed',
+        'failed',
+      ] as const;
 
       statuses.forEach(status => {
         webSocketService.emitProcessingStreamUpdate('stream-456', {
           ...baseStreamData,
-          status
+          status,
         });
 
         expect(mockSocketIOServer.emit).toHaveBeenCalledWith(
           'processing-stream-update',
           expect.objectContaining({
             status,
-            streamId: 'stream-456'
+            streamId: 'stream-456',
           })
         );
       });
@@ -217,7 +226,7 @@ describe('WebSocketService - Parallel Processing', () => {
         status: 'failed' as const,
         batchSize: 2,
         model: 'hrnet',
-        progress: 0
+        progress: 0,
       };
 
       // Should not throw an error
@@ -281,7 +290,7 @@ describe('WebSocketService - Parallel Processing', () => {
         expect.objectContaining({
           type,
           message,
-          timestamp: expect.any(String)
+          timestamp: expect.any(String),
         })
       );
     });
@@ -308,14 +317,18 @@ describe('WebSocketService - Parallel Processing', () => {
         webSocketService.trackParallelProcessingUser(`user${i}`, projectId);
       }
 
-      expect(webSocketService.getConcurrentProcessingUserCount()).toBe(userCount);
+      expect(webSocketService.getConcurrentProcessingUserCount()).toBe(
+        userCount
+      );
 
       // Remove half the users
       for (let i = 0; i < userCount / 2; i++) {
         webSocketService.untrackParallelProcessingUser(`user${i}`, projectId);
       }
 
-      expect(webSocketService.getConcurrentProcessingUserCount()).toBe(userCount / 2);
+      expect(webSocketService.getConcurrentProcessingUserCount()).toBe(
+        userCount / 2
+      );
     });
 
     it('should properly clean up user tracking data', () => {
@@ -371,13 +384,19 @@ describe('WebSocketService - Parallel Processing', () => {
         if (i % 2 === 0) {
           operations.push(
             Promise.resolve().then(() =>
-              webSocketService.trackParallelProcessingUser(`newuser${i}`, projectId)
+              webSocketService.trackParallelProcessingUser(
+                `newuser${i}`,
+                projectId
+              )
             )
           );
         } else {
           operations.push(
             Promise.resolve().then(() =>
-              webSocketService.untrackParallelProcessingUser(`user${i % 5}`, projectId)
+              webSocketService.untrackParallelProcessingUser(
+                `user${i % 5}`,
+                projectId
+              )
             )
           );
         }
@@ -386,7 +405,9 @@ describe('WebSocketService - Parallel Processing', () => {
       await Promise.all(operations);
 
       // Should have some users tracked (exact count depends on operation timing)
-      expect(webSocketService.getConcurrentProcessingUserCount()).toBeGreaterThan(0);
+      expect(
+        webSocketService.getConcurrentProcessingUserCount()
+      ).toBeGreaterThan(0);
     });
   });
 });

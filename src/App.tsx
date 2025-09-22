@@ -20,6 +20,7 @@ import { ToastEventProvider } from '@/components/AuthToastProvider';
 import { toast } from 'sonner';
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 import ExportStateManager from '@/lib/exportStateManager';
+import { ExportProvider } from '@/contexts/ExportContext';
 
 // Enhanced lazy load with better error handling and displayName support
 const Index = createLazyComponent(() => import('./pages/Index'), 'Index');
@@ -104,10 +105,11 @@ const App = () => (
       >
         <AuthProvider>
           <WebSocketProvider>
-            <ThemeProvider>
-              <LanguageProvider>
-                <ToastEventProvider>
-                  <ModelProvider>
+            <ExportProvider>
+              <ThemeProvider>
+                <LanguageProvider>
+                  <ToastEventProvider>
+                    <ModelProvider>
                     <Sonner
                       position="bottom-right"
                       closeButton
@@ -291,8 +293,9 @@ const App = () => (
                 </ToastEventProvider>
               </LanguageProvider>
             </ThemeProvider>
-          </WebSocketProvider>
-        </AuthProvider>
+          </ExportProvider>
+        </WebSocketProvider>
+      </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

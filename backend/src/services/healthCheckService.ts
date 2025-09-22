@@ -64,8 +64,10 @@ export class HealthCheckService {
         lazyConnect: true,
       });
 
-      this.redis.on('error', (err) => {
-        logger.warn('Redis health check connection error:', 'HealthCheck', { error: err.message });
+      this.redis.on('error', err => {
+        logger.warn('Redis health check connection error:', 'HealthCheck', {
+          error: err.message,
+        });
       });
     } catch {
       logger.warn('Redis initialization failed for health checks');
@@ -136,7 +138,9 @@ export class HealthCheckService {
     }
 
     const totalTime = Date.now() - startTime;
-    logger.info(`Health check completed in ${totalTime}ms`, 'HealthCheck', { status: overallStatus });
+    logger.info(`Health check completed in ${totalTime}ms`, 'HealthCheck', {
+      status: overallStatus,
+    });
 
     return healthStatus;
   }
@@ -150,7 +154,7 @@ export class HealthCheckService {
       // Test connection with timeout
       await Promise.race([
         this.prisma.$queryRaw`SELECT 1`,
-        new Promise((_, reject) => 
+        new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Database timeout')), 5000)
         ),
       ]);
@@ -158,7 +162,9 @@ export class HealthCheckService {
       // Check connection pool (if metrics are available)
       let poolMetrics = null;
       try {
-        poolMetrics = await (this.prisma as unknown as { $metrics: { json(): Promise<unknown> } }).$metrics.json();
+        poolMetrics = await (
+          this.prisma as unknown as { $metrics: { json(): Promise<unknown> } }
+        ).$metrics.json();
       } catch {
         // Metrics not available in this Prisma version
         poolMetrics = null;
@@ -171,7 +177,8 @@ export class HealthCheckService {
         responseTime,
         details: {
           poolSize: poolMetrics?.counters?.find(
-            (c: Record<string, unknown>) => c.key === 'prisma_pool_connections_open'
+            (c: Record<string, unknown>) =>
+              c.key === 'prisma_pool_connections_open'
           )?.value,
         },
         lastCheck: new Date(),
@@ -191,7 +198,7 @@ export class HealthCheckService {
    */
   private async checkRedis(): Promise<ComponentHealth> {
     const startTime = Date.now();
-    
+
     if (!this.redis) {
       return {
         status: 'degraded',
@@ -207,7 +214,9 @@ export class HealthCheckService {
 
       // Parse memory usage
       const usedMemoryMatch = info.match(/used_memory_human:(.+)/);
-      const usedMemory = usedMemoryMatch ? usedMemoryMatch[1].trim() : 'unknown';
+      const usedMemory = usedMemoryMatch
+        ? usedMemoryMatch[1].trim()
+        : 'unknown';
 
       return {
         status: 'healthy',
@@ -235,7 +244,7 @@ export class HealthCheckService {
    */
   private async checkMLService(): Promise<ComponentHealth> {
     const startTime = Date.now();
-    
+
     try {
       const response = await axios.get(`${this.mlServiceUrl}/api/v1/health`, {
         timeout: 5000,
@@ -268,17 +277,17 @@ export class HealthCheckService {
    */
   private async checkFileSystem(): Promise<ComponentHealth> {
     const startTime = Date.now();
-    
+
     try {
       const uploadDir = process.env.UPLOAD_DIR || '/app/uploads';
-      
+
       // Check if upload directory exists and is writable
       await fs.access(uploadDir, fs.constants.W_OK | fs.constants.R_OK);
-      
+
       // Check required subdirectories
       const requiredDirs = ['images', 'thumbnails', 'temp'];
       const missingDirs = [];
-      
+
       for (const dir of requiredDirs) {
         const dirPath = path.join(uploadDir, dir);
         try {
@@ -294,9 +303,10 @@ export class HealthCheckService {
 
       return {
         status: missingDirs.length === 0 ? 'healthy' : 'degraded',
-        message: missingDirs.length === 0 
-          ? 'File system is accessible' 
-          : `Missing directories: ${missingDirs.join(', ')}`,
+        message:
+          missingDirs.length === 0
+            ? 'File system is accessible'
+            : `Missing directories: ${missingDirs.join(', ')}`,
         responseTime,
         details: {
           uploadDir,
@@ -320,8 +330,10 @@ export class HealthCheckService {
    */
   private async checkWebSocket(): Promise<ComponentHealth> {
     // Check if WebSocket server is running
-    const io = (global as Record<string, unknown>).io as SocketIOServer | undefined;
-    
+    const io = (global as Record<string, unknown>).io as
+      | SocketIOServer
+      | undefined;
+
     if (!io) {
       return {
         status: 'unhealthy',
@@ -332,7 +344,7 @@ export class HealthCheckService {
 
     try {
       const sockets = await io.fetchSockets();
-      
+
       return {
         status: 'healthy',
         message: 'WebSocket server is operational',
@@ -355,11 +367,11 @@ export class HealthCheckService {
    */
   private async checkEmailService(): Promise<ComponentHealth> {
     const startTime = Date.now();
-    
+
     try {
       // Import email service dynamically to avoid circular dependencies
       const { testConnection, _config } = await import('./emailService');
-      
+
       // Check if email service is configured
       if (!process.env.SMTP_HOST && !process.env.SENDGRID_API_KEY) {
         return {
@@ -368,14 +380,17 @@ export class HealthCheckService {
           responseTime: Date.now() - startTime,
           details: {
             configured: false,
-            reason: 'No SMTP or SendGrid configuration found'
+            reason: 'No SMTP or SendGrid configuration found',
           },
           lastCheck: new Date(),
         };
       }
-      
+
       // Skip email connectivity test in test environments
-      if (process.env.NODE_ENV === 'test' || process.env.SKIP_EMAIL_SEND === 'true') {
+      if (
+        process.env.NODE_ENV === 'test' ||
+        process.env.SKIP_EMAIL_SEND === 'true'
+      ) {
         return {
           status: 'healthy',
           message: 'Email service configured (test mode)',
@@ -384,16 +399,16 @@ export class HealthCheckService {
             configured: true,
             testMode: true,
             smtpHost: process.env.SMTP_HOST,
-            service: process.env.EMAIL_SERVICE || 'smtp'
+            service: process.env.EMAIL_SERVICE || 'smtp',
           },
           lastCheck: new Date(),
         };
       }
-      
+
       // Test email service connection
       const isConnected = await testConnection();
       const responseTime = Date.now() - startTime;
-      
+
       if (isConnected) {
         return {
           status: 'healthy',
@@ -405,7 +420,7 @@ export class HealthCheckService {
             smtpHost: process.env.SMTP_HOST,
             service: process.env.EMAIL_SERVICE || 'smtp',
             fromEmail: process.env.FROM_EMAIL,
-            authEnabled: process.env.SMTP_AUTH !== 'false'
+            authEnabled: process.env.SMTP_AUTH !== 'false',
           },
           lastCheck: new Date(),
         };
@@ -418,7 +433,7 @@ export class HealthCheckService {
             configured: true,
             connected: false,
             smtpHost: process.env.SMTP_HOST,
-            service: process.env.EMAIL_SERVICE || 'smtp'
+            service: process.env.EMAIL_SERVICE || 'smtp',
           },
           lastCheck: new Date(),
         };
@@ -430,7 +445,7 @@ export class HealthCheckService {
         responseTime: Date.now() - startTime,
         details: {
           error: error instanceof Error ? error.message : String(error),
-          configured: !!(process.env.SMTP_HOST || process.env.SENDGRID_API_KEY)
+          configured: !!(process.env.SMTP_HOST || process.env.SENDGRID_API_KEY),
         },
         lastCheck: new Date(),
       };
@@ -478,23 +493,25 @@ export class HealthCheckService {
   /**
    * Calculate overall health status
    */
-  private calculateOverallStatus(checks: { [key: string]: ComponentHealth }): 'healthy' | 'degraded' | 'unhealthy' {
+  private calculateOverallStatus(checks: {
+    [key: string]: ComponentHealth;
+  }): 'healthy' | 'degraded' | 'unhealthy' {
     const statuses = Object.values(checks).map(c => c.status);
-    
+
     if (statuses.every(s => s === 'healthy')) {
       return 'healthy';
     }
-    
+
     if (statuses.some(s => s === 'unhealthy')) {
       // Critical services that must be healthy
       const criticalServices = ['database', 'fileSystem'];
       const criticalUnhealthy = criticalServices.some(
         service => checks[service]?.status === 'unhealthy'
       );
-      
+
       return criticalUnhealthy ? 'unhealthy' : 'degraded';
     }
-    
+
     return 'degraded';
   }
 
@@ -524,7 +541,9 @@ export class HealthCheckService {
    * Get active connections (placeholder)
    */
   private getActiveConnections(): number {
-    const io = (global as Record<string, unknown>).io as SocketIOServer | undefined;
+    const io = (global as Record<string, unknown>).io as
+      | SocketIOServer
+      | undefined;
     return io ? (io.engine as { clientsCount?: number })?.clientsCount || 0 : 0;
   }
 
@@ -569,13 +588,11 @@ export class HealthCheckService {
     }
 
     // Initial check
-    this.checkHealth().catch(err => 
-      logger.error('Health check failed:', err)
-    );
+    this.checkHealth().catch(err => logger.error('Health check failed:', err));
 
     // Periodic checks
     this.checkInterval = setInterval(() => {
-      this.checkHealth().catch(err => 
+      this.checkHealth().catch(err =>
         logger.error('Health check failed:', err)
       );
     }, intervalMs);
@@ -613,7 +630,8 @@ export class HealthCheckService {
     // Check memory usage
     const memoryUsage = health.metrics?.memoryUsage;
     if (memoryUsage) {
-      const usedMemoryPercent = (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
+      const usedMemoryPercent =
+        (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
       if (usedMemoryPercent > 90) {
         issues.push(`High memory usage: ${usedMemoryPercent.toFixed(1)}%`);
       }
@@ -635,7 +653,8 @@ export class HealthCheckService {
       // For now, we'll provide basic health status based on system resources
 
       const memoryUsage = process.memoryUsage();
-      const memoryUsedPercent = (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
+      const memoryUsedPercent =
+        (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
 
       // Check if system has enough resources for parallel processing
       const hasCapacity = memoryUsedPercent < 80; // Less than 80% memory usage
@@ -650,9 +669,9 @@ export class HealthCheckService {
           details: {
             memoryUsedPercent: Math.round(memoryUsedPercent),
             maxConcurrentStreams: 4,
-            systemCapacity: 'adequate'
+            systemCapacity: 'adequate',
           },
-          lastCheck: new Date()
+          lastCheck: new Date(),
         };
       } else {
         return {
@@ -662,9 +681,9 @@ export class HealthCheckService {
           details: {
             memoryUsedPercent: Math.round(memoryUsedPercent),
             maxConcurrentStreams: 4,
-            systemCapacity: 'limited'
+            systemCapacity: 'limited',
           },
-          lastCheck: new Date()
+          lastCheck: new Date(),
         };
       }
     } catch (error) {
@@ -673,8 +692,10 @@ export class HealthCheckService {
         status: 'unhealthy',
         message: `Parallel processing check failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
         responseTime,
-        details: { error: error instanceof Error ? error.message : 'Unknown error' },
-        lastCheck: new Date()
+        details: {
+          error: error instanceof Error ? error.message : 'Unknown error',
+        },
+        lastCheck: new Date(),
       };
     }
   }

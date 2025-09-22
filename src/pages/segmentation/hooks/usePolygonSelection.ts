@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useRef, useEffect } from 'react';
 import { EditMode } from '../types';
 import { logger } from '@/lib/logger';
 
@@ -38,22 +38,49 @@ export const usePolygonSelection = ({
   onDeletePolygon,
   polygons,
 }: UsePolygonSelectionProps): UsePolygonSelectionReturn => {
+  // Use ref to always have the most current editMode value to avoid stale closures
+  const editModeRef = useRef(editMode);
+
+  // Update ref whenever editMode changes to ensure we always have the latest value
+  useEffect(() => {
+    editModeRef.current = editMode;
+  }, [editMode]);
+
+  // Strict coupling validation: EditVertices mode requires polygon selection
+  useEffect(() => {
+    if (editMode === EditMode.EditVertices && !currentSelectedPolygonId) {
+      // Coupling violation: EditVertices without selection
+      logger.warn('usePolygonSelection: Coupling violation detected - EditVertices mode without selection, returning to View mode');
+      onModeChange(EditMode.View);
+    }
+  }, [editMode, currentSelectedPolygonId, onModeChange]);
+
   /**
    * Main selection handler that respects the current edit mode
    * This replaces the problematic default case that forced EditVertices mode
    */
   const handlePolygonSelection = useCallback(
     (polygonId: string | null) => {
+      // Get the most current editMode to avoid stale closures
+      const currentEditMode = editModeRef.current;
+
       logger.debug('usePolygonSelection: handlePolygonSelection called:', {
         polygonId,
         currentSelectedId: currentSelectedPolygonId,
-        currentEditMode: editMode,
+        currentEditMode,
+        closureEditMode: editMode, // For debugging - may be stale
         totalPolygons: polygons.length,
         timeStamp: Date.now(),
         polygonExists: polygonId
           ? polygons.some(p => p.id === polygonId)
           : null,
       });
+
+      // Debug log to identify stale closure issues
+      if (currentEditMode !== editMode) {
+        // STALE CLOSURE DETECTED!
+        // Ref value differs from closure value
+      }
 
       // Detect potential mass selection issues
       if (
@@ -72,7 +99,7 @@ export const usePolygonSelection = ({
       if (polygonId === null) {
         logger.debug('usePolygonSelection: Deselecting polygon');
         // If deselecting and in EditVertices mode, switch to View mode
-        if (editMode === EditMode.EditVertices) {
+        if (currentEditMode === EditMode.EditVertices) {
           onModeChange(EditMode.View);
         }
         onSelectionChange(polygonId);
@@ -93,11 +120,11 @@ export const usePolygonSelection = ({
         'usePolygonSelection: Selecting polygon:',
         polygonId,
         'Mode:',
-        editMode
+        currentEditMode
       );
 
       // Handle mode-specific behavior when selecting a polygon
-      switch (editMode) {
+      switch (currentEditMode) {
         case EditMode.DeletePolygon:
           logger.debug(
             'usePolygonSelection: Delete mode - deleting polygon:',
@@ -112,10 +139,7 @@ export const usePolygonSelection = ({
             'usePolygonSelection: Slice mode - selecting polygon for slicing:',
             polygonId
           );
-          console.log(
-            '[usePolygonSelection] SLICE MODE - Selecting polygon, NOT changing mode:',
-            polygonId
-          );
+          // SLICE MODE - Selecting polygon, NOT changing mode
           onSelectionChange(polygonId);
           // Stay in slice mode - DO NOT change mode!
           return;
@@ -152,13 +176,7 @@ export const usePolygonSelection = ({
             'usePolygonSelection: View mode - selecting polygon and switching to EditVertices:',
             polygonId
           );
-          console.log(
-            '[usePolygonSelection] VIEW MODE - Auto-switching to EditVertices!'
-          );
-          console.log(
-            '[usePolygonSelection] Current mode before switch:',
-            editMode
-          );
+          // VIEW MODE - Auto-switching to EditVertices!
           // Only from View mode should we auto-switch to EditVertices
           onSelectionChange(polygonId);
           onModeChange(EditMode.EditVertices);
@@ -176,7 +194,7 @@ export const usePolygonSelection = ({
       }
     },
     [
-      editMode,
+      // Removed editMode from dependencies since we use editModeRef to avoid stale closures
       currentSelectedPolygonId,
       onModeChange,
       onSelectionChange,
@@ -191,21 +209,24 @@ export const usePolygonSelection = ({
    */
   const handlePolygonClick = useCallback(
     (polygonId: string) => {
+      // Get the most current editMode to avoid stale closures
+      const currentEditMode = editModeRef.current;
+
       logger.debug(
         'usePolygonSelection: handlePolygonClick called for polygon:',
         polygonId
       );
-      console.log(
-        '[usePolygonSelection] handlePolygonClick - Current editMode:',
-        editMode
-      );
-      console.log(
-        '[usePolygonSelection] handlePolygonClick - About to handle selection for:',
-        polygonId
-      );
+      // handlePolygonClick - Current editMode: currentEditMode
+      // handlePolygonClick - handling selection
+
+      // Debug log to identify stale closure issues
+      if (currentEditMode !== editMode) {
+        // STALE CLOSURE DETECTED in handlePolygonClick
+      }
+
       handlePolygonSelection(polygonId);
     },
-    [handlePolygonSelection, editMode]
+    [handlePolygonSelection] // Removed editMode from dependencies since we use ref
   );
 
   return {

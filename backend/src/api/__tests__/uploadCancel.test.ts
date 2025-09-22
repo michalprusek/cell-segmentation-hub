@@ -3,7 +3,16 @@
  * Tests POST /api/uploads/:uploadId/cancel functionality
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, _afterAll } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  _afterAll,
+} from 'vitest';
 import request from 'supertest';
 import express, { Express } from 'express';
 import path from 'path';
@@ -161,18 +170,26 @@ const createMockApp = (): Express => {
         timestamp: new Date().toISOString(),
       });
 
-      webSocketService.emitToRoom(`project:${upload.projectId}`, 'uploadCancelled', {
-        uploadId,
-        fileName: upload.fileName,
-        userId,
-        timestamp: new Date().toISOString(),
-      });
+      webSocketService.emitToRoom(
+        `project:${upload.projectId}`,
+        'uploadCancelled',
+        {
+          uploadId,
+          fileName: upload.fileName,
+          userId,
+          timestamp: new Date().toISOString(),
+        }
+      );
 
       res.json({
         success: true,
         message: 'Upload cancelled successfully',
         uploadId,
-        cleanedFiles: [`temp/${uploadId}/chunk_0.tmp`, `temp/${uploadId}/chunk_1.tmp`, `temp/${uploadId}/chunk_2.tmp`],
+        cleanedFiles: [
+          `temp/${uploadId}/chunk_0.tmp`,
+          `temp/${uploadId}/chunk_1.tmp`,
+          `temp/${uploadId}/chunk_2.tmp`,
+        ],
       });
     } catch (error) {
       console.error('Upload cancel error:', error);
@@ -208,7 +225,10 @@ describe('Upload Cancel API Tests', () => {
 
     // Default successful mock implementations
     mockPrisma.upload.findUnique.mockResolvedValue(mockUploadData.active);
-    mockPrisma.upload.update.mockResolvedValue({ ...mockUploadData.active, status: 'cancelled' });
+    mockPrisma.upload.update.mockResolvedValue({
+      ...mockUploadData.active,
+      status: 'cancelled',
+    });
     mockPrisma.uploadChunk.deleteMany.mockResolvedValue({ count: 3 });
     mockRedis.del.mockResolvedValue(1);
     mockWebSocket.emitToUser.mockResolvedValue(undefined);
@@ -256,17 +276,13 @@ describe('Upload Cancel API Tests', () => {
       });
 
       it('should clean up Redis cache', async () => {
-        await request(app)
-          .post('/api/uploads/upload-123/cancel')
-          .expect(200);
+        await request(app).post('/api/uploads/upload-123/cancel').expect(200);
 
         expect(mockRedis.del).toHaveBeenCalledWith('upload:upload-123');
       });
 
       it('should emit WebSocket events', async () => {
-        await request(app)
-          .post('/api/uploads/upload-123/cancel')
-          .expect(200);
+        await request(app).post('/api/uploads/upload-123/cancel').expect(200);
 
         expect(mockWebSocket.emitToUser).toHaveBeenCalledWith(
           'user-789',
@@ -357,7 +373,9 @@ describe('Upload Cancel API Tests', () => {
       });
 
       it('should return 400 for already completed upload', async () => {
-        mockPrisma.upload.findUnique.mockResolvedValue(mockUploadData.completed);
+        mockPrisma.upload.findUnique.mockResolvedValue(
+          mockUploadData.completed
+        );
 
         const response = await request(app)
           .post('/api/uploads/upload-completed/cancel')
@@ -369,7 +387,9 @@ describe('Upload Cancel API Tests', () => {
       });
 
       it('should return 400 for already cancelled upload', async () => {
-        mockPrisma.upload.findUnique.mockResolvedValue(mockUploadData.cancelled);
+        mockPrisma.upload.findUnique.mockResolvedValue(
+          mockUploadData.cancelled
+        );
 
         const response = await request(app)
           .post('/api/uploads/upload-cancelled/cancel')
@@ -381,7 +401,9 @@ describe('Upload Cancel API Tests', () => {
       });
 
       it('should handle database errors gracefully', async () => {
-        mockPrisma.upload.findUnique.mockRejectedValue(new Error('Database connection failed'));
+        mockPrisma.upload.findUnique.mockRejectedValue(
+          new Error('Database connection failed')
+        );
 
         const response = await request(app)
           .post('/api/uploads/upload-123/cancel')
@@ -404,7 +426,9 @@ describe('Upload Cancel API Tests', () => {
       });
 
       it('should handle WebSocket errors gracefully', async () => {
-        mockWebSocket.emitToUser.mockRejectedValue(new Error('WebSocket error'));
+        mockWebSocket.emitToUser.mockRejectedValue(
+          new Error('WebSocket error')
+        );
 
         // Should still succeed even if WebSocket fails
         const response = await request(app)
@@ -459,9 +483,7 @@ describe('Upload Cancel API Tests', () => {
         const fsModule = vi.mocked(await import('fs/promises'));
         fsModule.rm = vi.fn().mockResolvedValue(undefined);
 
-        await request(app)
-          .post('/api/uploads/upload-123/cancel')
-          .expect(200);
+        await request(app).post('/api/uploads/upload-123/cancel').expect(200);
 
         // File cleanup is handled within the endpoint
         expect(true).toBe(true); // Placeholder for actual file cleanup verification
@@ -485,9 +507,7 @@ describe('Upload Cancel API Tests', () => {
       it('should complete cancellation within reasonable time', async () => {
         const start = Date.now();
 
-        await request(app)
-          .post('/api/uploads/upload-123/cancel')
-          .expect(200);
+        await request(app).post('/api/uploads/upload-123/cancel').expect(200);
 
         const duration = Date.now() - start;
         expect(duration).toBeLessThan(1000); // Should complete in less than 1 second
@@ -560,15 +580,18 @@ describe('Upload Cancel API Tests', () => {
     describe('Authentication', () => {
       it('should require authentication', async () => {
         // Test without authentication middleware
-              const unauthenticatedApp = express();
+        const unauthenticatedApp = express();
         unauthenticatedApp.use(express.json());
 
-        unauthenticatedApp.post('/api/uploads/:uploadId/cancel', (req: any, res: any) => {
-          if (!req.user) {
-            return res.status(401).json({ error: 'Authentication required' });
+        unauthenticatedApp.post(
+          '/api/uploads/:uploadId/cancel',
+          (req: any, res: any) => {
+            if (!req.user) {
+              return res.status(401).json({ error: 'Authentication required' });
+            }
+            res.json({ success: true });
           }
-          res.json({ success: true });
-        });
+        );
 
         const response = await request(unauthenticatedApp)
           .post('/api/uploads/upload-123/cancel')
@@ -584,13 +607,16 @@ describe('Upload Cancel API Tests', () => {
         let requestCount = 0;
 
         const rateLimitedApp = createMockApp();
-        rateLimitedApp.use('/api/uploads/:uploadId/cancel', (req: any, res: any, next: any) => {
-          requestCount++;
-          if (requestCount > 10) {
-            return res.status(429).json({ error: 'Too many requests' });
+        rateLimitedApp.use(
+          '/api/uploads/:uploadId/cancel',
+          (req: any, res: any, next: any) => {
+            requestCount++;
+            if (requestCount > 10) {
+              return res.status(429).json({ error: 'Too many requests' });
+            }
+            next();
           }
-          next();
-        });
+        );
 
         // Make many requests
         const promises = Array.from({ length: 15 }, () =>
@@ -607,24 +633,24 @@ describe('Upload Cancel API Tests', () => {
 
     describe('Monitoring and Logging', () => {
       it('should log cancellation events', async () => {
-        const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        const consoleSpy = vi
+          .spyOn(console, 'log')
+          .mockImplementation(() => {});
 
-        await request(app)
-          .post('/api/uploads/upload-123/cancel')
-          .expect(200);
+        await request(app).post('/api/uploads/upload-123/cancel').expect(200);
 
         // Logging is implementation-specific
         consoleSpy.mockRestore();
       });
 
       it('should log errors appropriately', async () => {
-        const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const consoleErrorSpy = vi
+          .spyOn(console, 'error')
+          .mockImplementation(() => {});
 
         mockPrisma.upload.findUnique.mockRejectedValue(new Error('Test error'));
 
-        await request(app)
-          .post('/api/uploads/upload-123/cancel')
-          .expect(500);
+        await request(app).post('/api/uploads/upload-123/cancel').expect(500);
 
         expect(consoleErrorSpy).toHaveBeenCalledWith(
           'Upload cancel error:',

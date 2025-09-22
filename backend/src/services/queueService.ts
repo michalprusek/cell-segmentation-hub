@@ -1,6 +1,9 @@
 import { PrismaClient, SegmentationQueue, Prisma } from '@prisma/client';
 import { logger } from '../utils/logger';
-import { SegmentationService, SegmentationResponse } from './segmentationService';
+import {
+  SegmentationService,
+  SegmentationResponse,
+} from './segmentationService';
 import { ImageService } from './imageService';
 import { WebSocketService } from './websocketService';
 import { batchProcessor } from '../utils/batchProcessor';
@@ -51,7 +54,7 @@ export class QueueService {
   private static instance: QueueService;
   private batchSizes: BatchConfig = {
     hrnet: 6, // Reduced for concurrent processing
-    cbam_resunet: 4
+    cbam_resunet: 4,
   };
   private websocketService: WebSocketService | null = null;
   private queueWorkerInstance: unknown = null; // Reference to QueueWorker for triggering
@@ -62,7 +65,7 @@ export class QueueService {
     maxConcurrentStreams: 4,
     totalProcessingCapacity: 0,
     currentThroughput: 0,
-    averageProcessingTime: 0
+    averageProcessingTime: 0,
   };
 
   constructor(
@@ -83,22 +86,23 @@ export class QueueService {
     operationName: string,
     batchSize = 10
   ): Promise<R[]> {
-    return batchProcessor.processBatch(
-      items,
-      processor,
-      {
-        batchSize,
-        concurrency: 3,
-        onBatchComplete: (index, results) => {
-          logger.debug(`${operationName} batch ${index + 1} completed, ${results.length} successful`);
-        },
-        onItemError: (item, error) => {
-          logger.error(`${operationName} failed for item`, error instanceof Error ? error : new Error(String(error)));
-        }
-      }
-    );
+    return batchProcessor.processBatch(items, processor, {
+      batchSize,
+      concurrency: 3,
+      onBatchComplete: (index, results) => {
+        logger.debug(
+          `${operationName} batch ${index + 1} completed, ${results.length} successful`
+        );
+      },
+      onItemError: (item, error) => {
+        logger.error(
+          `${operationName} failed for item`,
+          error instanceof Error ? error : new Error(String(error))
+        );
+      },
+    });
   }
-  
+
   public setWebSocketService(wsService: WebSocketService): void {
     this.websocketService = wsService;
     logger.info('WebSocket service connected to QueueService', 'QueueService');
@@ -106,12 +110,21 @@ export class QueueService {
 
   public setQueueWorker(queueWorker: unknown): void {
     this.queueWorkerInstance = queueWorker;
-    logger.info('QueueWorker connected to QueueService for immediate processing', 'QueueService');
+    logger.info(
+      'QueueWorker connected to QueueService for immediate processing',
+      'QueueService'
+    );
   }
 
   private triggerQueueProcessing(): void {
-    if (this.queueWorkerInstance && typeof (this.queueWorkerInstance as Record<string, unknown>).triggerImmediateProcessing === 'function') {
-      (this.queueWorkerInstance as Record<string, () => void>).triggerImmediateProcessing();
+    if (
+      this.queueWorkerInstance &&
+      typeof (this.queueWorkerInstance as Record<string, unknown>)
+        .triggerImmediateProcessing === 'function'
+    ) {
+      (
+        this.queueWorkerInstance as Record<string, () => void>
+      ).triggerImmediateProcessing();
     }
   }
 
@@ -122,9 +135,15 @@ export class QueueService {
   ): QueueService {
     if (!QueueService.instance) {
       if (!segmentationService || !imageService) {
-        throw new Error('SegmentationService and ImageService are required for first initialization');
+        throw new Error(
+          'SegmentationService and ImageService are required for first initialization'
+        );
       }
-      QueueService.instance = new QueueService(prisma, segmentationService, imageService);
+      QueueService.instance = new QueueService(
+        prisma,
+        segmentationService,
+        imageService
+      );
     }
     return QueueService.instance;
   }
@@ -146,15 +165,15 @@ export class QueueService {
       const existingEntry = await this.prisma.segmentationQueue.findFirst({
         where: {
           imageId,
-          status: { in: ['queued', 'processing'] }
-        }
+          status: { in: ['queued', 'processing'] },
+        },
       });
 
       if (existingEntry) {
         logger.warn('Image already in queue', 'QueueService', {
           imageId,
           existingQueueId: existingEntry.id,
-          existingStatus: existingEntry.status
+          existingStatus: existingEntry.status,
         });
         throw new Error('Image is already in segmentation queue');
       }
@@ -169,18 +188,22 @@ export class QueueService {
           threshold,
           detectHoles,
           priority,
-          status: 'queued'
-        }
+          status: 'queued',
+        },
       });
 
       // Update image status
-      await this.imageService.updateSegmentationStatus(imageId, 'queued', userId);
+      await this.imageService.updateSegmentationStatus(
+        imageId,
+        'queued',
+        userId
+      );
 
       logger.info('Image added to segmentation queue', 'QueueService', {
         imageId,
         projectId,
         model,
-        queueId: queueEntry.id
+        queueId: queueEntry.id,
       });
 
       // Trigger immediate processing for low latency
@@ -188,11 +211,16 @@ export class QueueService {
 
       return queueEntry;
     } catch (error) {
-      logger.error('Failed to add image to queue', error instanceof Error ? error : undefined, 'QueueService', {
-        imageId,
-        projectId,
-        userId
-      });
+      logger.error(
+        'Failed to add image to queue',
+        error instanceof Error ? error : undefined,
+        'QueueService',
+        {
+          imageId,
+          projectId,
+          userId,
+        }
+      );
       throw error;
     }
   }
@@ -219,33 +247,50 @@ export class QueueService {
           // Check if image exists and user has access
           const image = await this.imageService.getImageById(imageId, userId);
           if (!image) {
-            logger.warn('Image not found or no access', 'QueueService', { imageId, userId });
-            continue;
-          }
-
-          // Skip if already in queue or processing (unless forceResegment)
-          if (!forceResegment && (image.segmentationStatus === 'queued' || 
-              image.segmentationStatus === 'processing')) {
-            logger.info('Skipping image - already in queue or processing', 'QueueService', {
+            logger.warn('Image not found or no access', 'QueueService', {
               imageId,
-              status: image.segmentationStatus
+              userId,
             });
             continue;
           }
 
-          // Use transaction for atomic operations
-          const queueEntry = await this.prisma.$transaction(async (tx) => {
-            // If forceResegment, delete existing segmentation results
-            if (forceResegment && (image.segmentationStatus === 'completed' || 
-                image.segmentationStatus === 'segmented')) {
-              logger.info('Force resegment - removing existing segmentation', 'QueueService', {
+          // Skip if already in queue or processing (unless forceResegment)
+          if (
+            !forceResegment &&
+            (image.segmentationStatus === 'queued' ||
+              image.segmentationStatus === 'processing')
+          ) {
+            logger.info(
+              'Skipping image - already in queue or processing',
+              'QueueService',
+              {
                 imageId,
-                oldStatus: image.segmentationStatus
-              });
-              
+                status: image.segmentationStatus,
+              }
+            );
+            continue;
+          }
+
+          // Use transaction for atomic operations
+          const queueEntry = await this.prisma.$transaction(async tx => {
+            // If forceResegment, delete existing segmentation results
+            if (
+              forceResegment &&
+              (image.segmentationStatus === 'completed' ||
+                image.segmentationStatus === 'segmented')
+            ) {
+              logger.info(
+                'Force resegment - removing existing segmentation',
+                'QueueService',
+                {
+                  imageId,
+                  oldStatus: image.segmentationStatus,
+                }
+              );
+
               // Delete existing segmentation results
               await tx.segmentation.deleteMany({
-                where: { imageId }
+                where: { imageId },
               });
             }
 
@@ -260,20 +305,29 @@ export class QueueService {
                 detectHoles,
                 priority,
                 status: 'queued',
-                batchId
-              }
+                batchId,
+              },
             });
           });
 
           // Update image status
-          await this.imageService.updateSegmentationStatus(imageId, 'queued', userId);
+          await this.imageService.updateSegmentationStatus(
+            imageId,
+            'queued',
+            userId
+          );
 
           queueEntries.push(queueEntry);
         } catch (error) {
-          logger.error('Failed to add single image to batch', error instanceof Error ? error : undefined, 'QueueService', {
-            imageId,
-            batchId
-          });
+          logger.error(
+            'Failed to add single image to batch',
+            error instanceof Error ? error : undefined,
+            'QueueService',
+            {
+              imageId,
+              batchId,
+            }
+          );
         }
       }
 
@@ -281,7 +335,7 @@ export class QueueService {
         batchId,
         totalImages: imageIds.length,
         queuedImages: queueEntries.length,
-        model
+        model,
       });
 
       // Trigger immediate processing for low latency
@@ -291,11 +345,16 @@ export class QueueService {
 
       return queueEntries;
     } catch (error) {
-      logger.error('Failed to add batch to queue', error instanceof Error ? error : undefined, 'QueueService', {
-        projectId,
-        userId,
-        imageCount: imageIds.length
-      });
+      logger.error(
+        'Failed to add batch to queue',
+        error instanceof Error ? error : undefined,
+        'QueueService',
+        {
+          projectId,
+          userId,
+          imageCount: imageIds.length,
+        }
+      );
       throw error;
     }
   }
@@ -303,48 +362,56 @@ export class QueueService {
   /**
    * Get queue statistics
    */
-  async getQueueStats(projectId?: string, userId?: string): Promise<QueueStats> {
+  async getQueueStats(
+    projectId?: string,
+    userId?: string
+  ): Promise<QueueStats> {
     try {
       const whereClause: Prisma.SegmentationQueueWhereInput = {};
-      
+
       if (projectId) {
         whereClause.projectId = projectId;
       }
-      
+
       if (userId) {
         whereClause.userId = userId;
       }
 
       const [queued, processing, total] = await Promise.all([
         this.prisma.segmentationQueue.count({
-          where: { ...whereClause, status: 'queued' }
+          where: { ...whereClause, status: 'queued' },
         }),
         this.prisma.segmentationQueue.count({
-          where: { ...whereClause, status: 'processing' }
+          where: { ...whereClause, status: 'processing' },
         }),
         this.prisma.segmentationQueue.count({
-          where: { ...whereClause, status: { in: ['queued', 'processing'] } }
-        })
+          where: { ...whereClause, status: { in: ['queued', 'processing'] } },
+        }),
       ]);
 
       const stats = { queued, processing, total };
-      
+
       // Emit queue stats via WebSocket if projectId is provided
       if (this.websocketService && projectId) {
         this.websocketService.emitQueueStatsUpdate(projectId, {
           projectId,
           queued,
           processing,
-          total
+          total,
         });
       }
 
       return stats;
     } catch (error) {
-      logger.error('Failed to get queue stats', error instanceof Error ? error : undefined, 'QueueService', {
-        projectId,
-        userId
-      });
+      logger.error(
+        'Failed to get queue stats',
+        error instanceof Error ? error : undefined,
+        'QueueService',
+        {
+          projectId,
+          userId,
+        }
+      );
       throw error;
     }
   }
@@ -358,12 +425,9 @@ export class QueueService {
         where: {
           projectId,
           userId,
-          status: { in: ['queued', 'processing'] }
+          status: { in: ['queued', 'processing'] },
         },
-        orderBy: [
-          { priority: 'desc' },
-          { createdAt: 'asc' }
-        ]
+        orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
       });
 
       return items.map(item => ({
@@ -375,13 +439,18 @@ export class QueueService {
         threshold: item.threshold,
         priority: item.priority,
         status: item.status,
-        createdAt: item.createdAt
+        createdAt: item.createdAt,
       }));
     } catch (error) {
-      logger.error('Failed to get queue items', error instanceof Error ? error : undefined, 'QueueService', {
-        projectId,
-        userId
-      });
+      logger.error(
+        'Failed to get queue items',
+        error instanceof Error ? error : undefined,
+        'QueueService',
+        {
+          projectId,
+          userId,
+        }
+      );
       throw error;
     }
   }
@@ -395,8 +464,8 @@ export class QueueService {
         where: {
           id: queueId,
           userId,
-          status: { in: ['queued'] } // Only allow removal of queued items
-        }
+          status: { in: ['queued'] }, // Only allow removal of queued items
+        },
       });
 
       if (!queueItem) {
@@ -405,25 +474,33 @@ export class QueueService {
 
       // Remove from queue
       await this.prisma.segmentationQueue.delete({
-        where: { id: queueId }
+        where: { id: queueId },
       });
 
       // Update image status back to no_segmentation
-      await this.imageService.updateSegmentationStatus(queueItem.imageId, 'no_segmentation', userId);
+      await this.imageService.updateSegmentationStatus(
+        queueItem.imageId,
+        'no_segmentation',
+        userId
+      );
 
       logger.info('Item removed from queue', 'QueueService', {
         queueId,
-        imageId: queueItem.imageId
+        imageId: queueItem.imageId,
       });
     } catch (error) {
-      logger.error('Failed to remove item from queue', error instanceof Error ? error : undefined, 'QueueService', {
-        queueId,
-        userId
-      });
+      logger.error(
+        'Failed to remove item from queue',
+        error instanceof Error ? error : undefined,
+        'QueueService',
+        {
+          queueId,
+          userId,
+        }
+      );
       throw error;
     }
   }
-
 
   /**
    * Get multiple batches for parallel processing
@@ -448,18 +525,25 @@ export class QueueService {
         model: firstItem.model,
         threshold: firstItem.threshold,
         priority: firstItem.priority,
-        estimatedProcessingTime: this.estimateProcessingTime(batchItems.length, firstItem.model)
+        estimatedProcessingTime: this.estimateProcessingTime(
+          batchItems.length,
+          firstItem.model
+        ),
       });
 
       // Mark these images as being processed to avoid duplicates
       batchItems.forEach(item => processedImageIds.add(item.imageId));
     }
 
-    logger.info('Retrieved multiple batches for parallel processing', 'QueueService', {
-      batchCount: batches.length,
-      totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0),
-      models: [...new Set(batches.map(batch => batch.model))]
-    });
+    logger.info(
+      'Retrieved multiple batches for parallel processing',
+      'QueueService',
+      {
+        batchCount: batches.length,
+        totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0),
+        models: [...new Set(batches.map(batch => batch.model))],
+      }
+    );
 
     return batches;
   }
@@ -467,30 +551,29 @@ export class QueueService {
   /**
    * Get next batch excluding specific image IDs (to avoid duplicate processing)
    */
-  private async getNextBatchExcluding(excludeImageIds: Set<string>): Promise<SegmentationQueue[]> {
+  private async getNextBatchExcluding(
+    excludeImageIds: Set<string>
+  ): Promise<SegmentationQueue[]> {
     // Model batch size limits (reduced for concurrent processing)
     const BATCH_LIMITS = {
-      'hrnet': 6, // Reduced from 8 for parallel processing
-      'cbam_resunet': 4  // Batch size of 4 for CBAM-ResUNet
+      hrnet: 6, // Reduced from 8 for parallel processing
+      cbam_resunet: 4, // Batch size of 4 for CBAM-ResUNet
     };
 
     // Get the highest priority item first, excluding specified image IDs
     const whereClause: Record<string, unknown> = {
-      status: 'queued'
+      status: 'queued',
     };
 
     if (excludeImageIds.size > 0) {
       whereClause.imageId = {
-        notIn: Array.from(excludeImageIds)
+        notIn: Array.from(excludeImageIds),
       };
     }
 
     const firstItem = await this.prisma.segmentationQueue.findFirst({
       where: whereClause,
-      orderBy: [
-        { priority: 'desc' },
-        { createdAt: 'asc' }
-      ]
+      orderBy: [{ priority: 'desc' }, { createdAt: 'asc' }],
     });
 
     if (!firstItem) {
@@ -498,7 +581,8 @@ export class QueueService {
     }
 
     // Get batch size limit for this model
-    const batchLimit = BATCH_LIMITS[firstItem.model as keyof typeof BATCH_LIMITS] || 1;
+    const batchLimit =
+      BATCH_LIMITS[firstItem.model as keyof typeof BATCH_LIMITS] || 1;
 
     // Find all items with same model, threshold, and priority for batching
     let batch = await this.prisma.segmentationQueue.findMany({
@@ -507,14 +591,15 @@ export class QueueService {
         model: firstItem.model,
         threshold: firstItem.threshold,
         priority: firstItem.priority,
-        imageId: excludeImageIds.size > 0 ? {
-          notIn: Array.from(excludeImageIds)
-        } : undefined
+        imageId:
+          excludeImageIds.size > 0
+            ? {
+                notIn: Array.from(excludeImageIds),
+              }
+            : undefined,
       },
-      orderBy: [
-        { createdAt: 'asc' }
-      ],
-      take: batchLimit
+      orderBy: [{ createdAt: 'asc' }],
+      take: batchLimit,
     });
 
     // If no exact matches found but we have the first item, process it alone
@@ -524,7 +609,6 @@ export class QueueService {
 
     return batch;
   }
-
 
   /**
    * Process a batch of queue items using ML service batch endpoint
@@ -540,32 +624,32 @@ export class QueueService {
     }
     const model = firstItem.model;
     const threshold = firstItem.threshold;
-    
+
     logger.info('Starting batch processing', 'QueueService', {
       batchSize: batch.length,
       model,
       threshold,
-      itemIds: batch.map(item => item.id)
+      itemIds: batch.map(item => item.id),
     });
 
     // Batch update all items to processing status
     const batchIds = batch.map(item => item.id);
     const imageIds = batch.map(item => item.imageId);
     const startedAt = new Date();
-    
+
     // Use batch update for better performance
     await this.prisma.segmentationQueue.updateMany({
       where: { id: { in: batchIds } },
-      data: { 
+      data: {
         status: 'processing',
-        startedAt: startedAt
-      }
+        startedAt: startedAt,
+      },
     });
 
     // Batch update image statuses
     await this.prisma.image.updateMany({
       where: { id: { in: imageIds } },
-      data: { segmentationStatus: 'processing' }
+      data: { segmentationStatus: 'processing' },
     });
 
     // Batch emit WebSocket notifications
@@ -576,17 +660,22 @@ export class QueueService {
           imageId: item.imageId,
           projectId: item.projectId,
           status: 'processing' as QueueStatus,
-          queueId: item.id
-        }
+          queueId: item.id,
+        },
       }));
-      
+
       // Group notifications by userId for efficient emission
-      const groupedNotifications = notifications.reduce((acc, notif) => {
-        if (!acc[notif.userId]) {acc[notif.userId] = [];}
-        acc[notif.userId].push(notif.data);
-        return acc;
-      }, {} as Record<string, SegmentationUpdateData[]>);
-      
+      const groupedNotifications = notifications.reduce(
+        (acc, notif) => {
+          if (!acc[notif.userId]) {
+            acc[notif.userId] = [];
+          }
+          acc[notif.userId].push(notif.data);
+          return acc;
+        },
+        {} as Record<string, SegmentationUpdateData[]>
+      );
+
       for (const [userId, updates] of Object.entries(groupedNotifications)) {
         // Emit all updates for this user at once
         updates.forEach(update => {
@@ -598,30 +687,38 @@ export class QueueService {
     try {
       // Check if this batch will empty the queue (making it the last batch)
       const remainingQueuedCount = await this.prisma.segmentationQueue.count({
-        where: { status: 'queued' }
+        where: { status: 'queued' },
       });
       const isLastBatch = remainingQueuedCount === batch.length;
-      
+
       if (isLastBatch) {
-        logger.info('🏁 Processing LAST BATCH - will coordinate thumbnail generation', 'QueueService', {
-          batchSize: batch.length,
-          remainingQueuedCount,
-          model,
-          message: 'Thumbnails will be generated synchronously to prevent race condition'
-        });
+        logger.info(
+          '🏁 Processing LAST BATCH - will coordinate thumbnail generation',
+          'QueueService',
+          {
+            batchSize: batch.length,
+            remainingQueuedCount,
+            model,
+            message:
+              'Thumbnails will be generated synchronously to prevent race condition',
+          }
+        );
       } else {
         logger.info('Batch processing details', 'QueueService', {
           batchSize: batch.length,
           remainingQueuedCount,
           isLastBatch,
-          model
+          model,
         });
       }
 
       // Prepare images for batch processing
       const imageData = [];
       for (const item of batch) {
-        const image = await this.imageService.getImageById(item.imageId, item.userId);
+        const image = await this.imageService.getImageById(
+          item.imageId,
+          item.userId
+        );
         if (!image) {
           throw new Error(`Image not found: ${item.imageId}`);
         }
@@ -632,13 +729,15 @@ export class QueueService {
       let results: SegmentationResponse[];
       if (batch.length === 1) {
         // Single item - use individual segmentation endpoint for better compatibility
-        const singleResult = await this.segmentationService.requestSegmentation({
-          imageId: firstItem.imageId,
-          model: model as 'hrnet' | 'resunet_advanced' | 'resunet_small',
-          threshold: threshold,
-          userId: firstItem.userId,
-          detectHoles: firstItem.detectHoles ?? false
-        });
+        const singleResult = await this.segmentationService.requestSegmentation(
+          {
+            imageId: firstItem.imageId,
+            model: model as 'hrnet' | 'resunet_advanced' | 'resunet_small',
+            threshold: threshold,
+            userId: firstItem.userId,
+            detectHoles: firstItem.detectHoles ?? false,
+          }
+        );
         results = [singleResult];
       } else {
         // Multiple items - use batch segmentation endpoint
@@ -655,7 +754,7 @@ export class QueueService {
         const item = batch[i];
         const result = results[i];
         const image = imageData[i];
-        
+
         if (!item || !image || !result) {
           continue;
         }
@@ -665,7 +764,7 @@ export class QueueService {
           // Prioritize image dimensions from ML service result, fallback to database
           const imageWidth = result.image_size?.width || image.width || null;
           const imageHeight = result.image_size?.height || image.height || null;
-          
+
           await this.segmentationService.saveSegmentationResults(
             item.imageId,
             result.polygons,
@@ -680,11 +779,15 @@ export class QueueService {
           );
 
           // Update image status to segmented
-          await this.imageService.updateSegmentationStatus(item.imageId, 'segmented', item.userId);
+          await this.imageService.updateSegmentationStatus(
+            item.imageId,
+            'segmented',
+            item.userId
+          );
 
           // Delete completed item from queue to prevent confusion
           await this.prisma.segmentationQueue.delete({
-            where: { id: item.id }
+            where: { id: item.id },
           });
 
           // Emit success notification via WebSocket
@@ -692,10 +795,10 @@ export class QueueService {
             this.websocketService.emitSegmentationUpdate(item.userId, {
               imageId: item.imageId,
               projectId: item.projectId,
-              status: 'segmented',  // Changed from 'completed' to match database status
-              queueId: item.id
+              status: 'segmented', // Changed from 'completed' to match database status
+              queueId: item.id,
             });
-            
+
             this.websocketService.emitSegmentationComplete(
               item.userId,
               item.imageId,
@@ -704,26 +807,35 @@ export class QueueService {
             );
           }
 
-          logger.info('Batch item processed successfully and removed from queue', 'QueueService', {
-            queueId: item.id,
-            imageId: item.imageId,
-            polygonCount: result.polygons.length
-          });
+          logger.info(
+            'Batch item processed successfully and removed from queue',
+            'QueueService',
+            {
+              queueId: item.id,
+              imageId: item.imageId,
+              polygonCount: result.polygons.length,
+            }
+          );
         } else {
           // No polygons found - save empty results but mark as no_segmentation, not segmented
-          logger.warn('ML service returned no polygons - marking as no_segmentation', 'QueueService', {
-            queueId: item.id,
-            imageId: item.imageId,
-            model,
-            threshold,
-            result
-          });
+          logger.warn(
+            'ML service returned no polygons - marking as no_segmentation',
+            'QueueService',
+            {
+              queueId: item.id,
+              imageId: item.imageId,
+              model,
+              threshold,
+              result,
+            }
+          );
 
           // Save empty segmentation results to database so frontend can read them
           // Prioritize image dimensions from ML service result, fallback to database
           const imageWidth = result?.image_size?.width || image.width || null;
-          const imageHeight = result?.image_size?.height || image.height || null;
-          
+          const imageHeight =
+            result?.image_size?.height || image.height || null;
+
           await this.segmentationService.saveSegmentationResults(
             item.imageId,
             [], // Empty polygons array
@@ -738,11 +850,15 @@ export class QueueService {
           );
 
           // Update image status to no_segmentation (not segmented) since no polygons were detected
-          await this.imageService.updateSegmentationStatus(item.imageId, 'no_segmentation', item.userId);
+          await this.imageService.updateSegmentationStatus(
+            item.imageId,
+            'no_segmentation',
+            item.userId
+          );
 
           // Delete completed item from queue to prevent confusion
           await this.prisma.segmentationQueue.delete({
-            where: { id: item.id }
+            where: { id: item.id },
           });
 
           if (this.websocketService) {
@@ -750,7 +866,7 @@ export class QueueService {
               imageId: item.imageId,
               projectId: item.projectId,
               status: 'no_segmentation',
-              queueId: item.id
+              queueId: item.id,
             });
 
             this.websocketService.emitSegmentationComplete(
@@ -761,41 +877,61 @@ export class QueueService {
             );
           }
 
-          logger.info('Batch item completed with no polygons - empty result saved as no_segmentation and removed from queue', 'QueueService', {
-            queueId: item.id,
-            imageId: item.imageId
-          });
+          logger.info(
+            'Batch item completed with no polygons - empty result saved as no_segmentation and removed from queue',
+            'QueueService',
+            {
+              queueId: item.id,
+              imageId: item.imageId,
+            }
+          );
         }
       }
 
       logger.info('Batch processing completed successfully', 'QueueService', {
         batchSize: batch.length,
         model,
-        threshold
+        threshold,
       });
 
       // Emit updated queue stats for all affected projects and users
-      const projectUserPairs = batch.map(item => ({ projectId: item.projectId, userId: item.userId }));
+      const projectUserPairs = batch.map(item => ({
+        projectId: item.projectId,
+        userId: item.userId,
+      }));
       const uniquePairs = Array.from(
-        new Map(projectUserPairs.map(pair => [`${pair.projectId}-${pair.userId}`, pair])).values()
+        new Map(
+          projectUserPairs.map(pair => [
+            `${pair.projectId}-${pair.userId}`,
+            pair,
+          ])
+        ).values()
       );
-      
+
       for (const { projectId, userId } of uniquePairs) {
         const stats = await this.getQueueStats(projectId, userId);
-        logger.debug('Emitted queue stats after batch completion', 'QueueService', {
-          projectId,
-          userId,
-          stats
-        });
+        logger.debug(
+          'Emitted queue stats after batch completion',
+          'QueueService',
+          {
+            projectId,
+            userId,
+            stats,
+          }
+        );
       }
-
     } catch (error) {
-      logger.error('Batch processing failed', error instanceof Error ? error : undefined, 'QueueService', {
-        batchSize: batch.length,
-        model,
-        threshold,
-        itemIds: batch.map(item => item.id)
-      });
+      logger.error(
+        'Batch processing failed',
+        error instanceof Error ? error : undefined,
+        'QueueService',
+        {
+          batchSize: batch.length,
+          model,
+          threshold,
+          itemIds: batch.map(item => item.id),
+        }
+      );
 
       // Mark all items as failed and handle retries
       for (const item of batch) {
@@ -803,32 +939,41 @@ export class QueueService {
           // Increment retry count and reset to queued for retry
           await this.prisma.segmentationQueue.update({
             where: { id: item.id },
-            data: { 
+            data: {
               status: 'queued',
-              retryCount: item.retryCount + 1,  // INCREMENT RETRY COUNT
-              error: error instanceof Error ? error.message : 'Processing failed',
+              retryCount: item.retryCount + 1, // INCREMENT RETRY COUNT
+              error:
+                error instanceof Error ? error.message : 'Processing failed',
               startedAt: null,
-              completedAt: null
-            }
+              completedAt: null,
+            },
           });
 
-          await this.imageService.updateSegmentationStatus(item.imageId, 'no_segmentation', item.userId);
+          await this.imageService.updateSegmentationStatus(
+            item.imageId,
+            'no_segmentation',
+            item.userId
+          );
 
           if (this.websocketService) {
             this.websocketService.emitSegmentationUpdate(item.userId, {
               imageId: item.imageId,
               projectId: item.projectId,
               status: 'queued',
-              queueId: item.id
+              queueId: item.id,
             });
           }
         } else {
           // Max retries exceeded - mark as permanently failed and remove from queue
-          await this.imageService.updateSegmentationStatus(item.imageId, 'failed', item.userId);
+          await this.imageService.updateSegmentationStatus(
+            item.imageId,
+            'failed',
+            item.userId
+          );
 
           // Delete failed item from queue after max retries
           await this.prisma.segmentationQueue.delete({
-            where: { id: item.id }
+            where: { id: item.id },
           });
 
           if (this.websocketService) {
@@ -837,7 +982,7 @@ export class QueueService {
               projectId: item.projectId,
               status: 'failed',
               error: error instanceof Error ? error.message : 'Unknown error',
-              queueId: item.id
+              queueId: item.id,
             });
           }
         }
@@ -858,12 +1003,15 @@ export class QueueService {
     logger.info('Starting parallel batch processing', 'QueueService', {
       batchCount: batches.length,
       totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0),
-      models: [...new Set(batches.map(batch => batch.model))]
+      models: [...new Set(batches.map(batch => batch.model))],
     });
 
     // Update processing stats
     this.processingStats.activeStreams = batches.length;
-    this.processingStats.totalProcessingCapacity = batches.reduce((sum, batch) => sum + batch.items.length, 0);
+    this.processingStats.totalProcessingCapacity = batches.reduce(
+      (sum, batch) => sum + batch.items.length,
+      0
+    );
 
     // Track active batches
     const startTime = new Date();
@@ -874,11 +1022,16 @@ export class QueueService {
     // Process batches concurrently
     const batchPromises = batches.map(batch =>
       this.processSingleBatch(batch.items).catch(error => {
-        logger.error('Batch processing failed', error instanceof Error ? error : undefined, 'QueueService', {
-          batchId: batch.id,
-          batchSize: batch.items.length,
-          model: batch.model
-        });
+        logger.error(
+          'Batch processing failed',
+          error instanceof Error ? error : undefined,
+          'QueueService',
+          {
+            batchId: batch.id,
+            batchSize: batch.items.length,
+            model: batch.model,
+          }
+        );
         return error; // Return error instead of throwing to continue with other batches
       })
     );
@@ -896,18 +1049,23 @@ export class QueueService {
     const processingTime = endTime.getTime() - startTime.getTime();
     this.processingStats.activeStreams = 0;
     this.processingStats.averageProcessingTime = processingTime;
-    this.processingStats.currentThroughput = this.processingStats.totalProcessingCapacity / (processingTime / 1000);
+    this.processingStats.currentThroughput =
+      this.processingStats.totalProcessingCapacity / (processingTime / 1000);
 
     // Log results
-    const successCount = results.filter(result => result.status === 'fulfilled').length;
-    const failureCount = results.filter(result => result.status === 'rejected').length;
+    const successCount = results.filter(
+      result => result.status === 'fulfilled'
+    ).length;
+    const failureCount = results.filter(
+      result => result.status === 'rejected'
+    ).length;
 
     logger.info('Parallel batch processing completed', 'QueueService', {
       batchCount: batches.length,
       successCount,
       failureCount,
       totalProcessingTime: processingTime,
-      throughput: this.processingStats.currentThroughput
+      throughput: this.processingStats.currentThroughput,
     });
 
     // Emit parallel processing status update
@@ -935,7 +1093,7 @@ export class QueueService {
       batchSize: batch.length,
       model,
       threshold,
-      itemIds: batch.map(item => item.id)
+      itemIds: batch.map(item => item.id),
     });
 
     // Call the main processBatch method which contains the full logic
@@ -956,9 +1114,9 @@ export class QueueService {
   private estimateProcessingTime(batchSize: number, model: string): number {
     // Processing time estimates in milliseconds (based on analysis)
     const modelTimes = {
-      'hrnet': 196, // ~196ms per image
-      'cbam_resunet': 396, // ~396ms per image
-      'unet_spherohq': 1000 // ~1000ms per image
+      hrnet: 196, // ~196ms per image
+      cbam_resunet: 396, // ~396ms per image
+      unet_spherohq: 1000, // ~1000ms per image
     };
 
     const timePerImage = modelTimes[model as keyof typeof modelTimes] || 500;
@@ -976,7 +1134,7 @@ export class QueueService {
       ...this.processingStats,
       // Add real-time metrics
       activeStreams: this.activeBatches.size,
-      maxConcurrentStreams: this.maxConcurrentBatches
+      maxConcurrentStreams: this.maxConcurrentBatches,
     };
   }
 
@@ -988,9 +1146,7 @@ export class QueueService {
     // if (!this.websocketService) {
     //   return;
     // }
-
     // const stats = this.processingStats;
-
     // // Emit to all connected users (system-wide status)
     // this.websocketService.broadcastSystemMessage(
     //   `Parallel Processing: ${stats.activeStreams}/${stats.maxConcurrentStreams} streams active`,
@@ -1001,19 +1157,30 @@ export class QueueService {
   /**
    * Emit queue stats for all users/projects affected by a batch
    */
-  private async emitQueueStatsForBatch(batch: SegmentationQueue[]): Promise<void> {
-    const projectUserPairs = batch.map(item => ({ projectId: item.projectId, userId: item.userId }));
+  private async emitQueueStatsForBatch(
+    batch: SegmentationQueue[]
+  ): Promise<void> {
+    const projectUserPairs = batch.map(item => ({
+      projectId: item.projectId,
+      userId: item.userId,
+    }));
     const uniquePairs = Array.from(
-      new Map(projectUserPairs.map(pair => [`${pair.projectId}-${pair.userId}`, pair])).values()
+      new Map(
+        projectUserPairs.map(pair => [`${pair.projectId}-${pair.userId}`, pair])
+      ).values()
     );
 
     for (const { projectId, userId } of uniquePairs) {
       const stats = await this.getQueueStats(projectId, userId);
-      logger.debug('Emitted queue stats after batch completion', 'QueueService', {
-        projectId,
-        userId,
-        stats
-      });
+      logger.debug(
+        'Emitted queue stats after batch completion',
+        'QueueService',
+        {
+          projectId,
+          userId,
+          stats,
+        }
+      );
     }
   }
 
@@ -1037,45 +1204,54 @@ export class QueueService {
     try {
       const now = new Date();
       const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
-      
+
       // Get queue statistics
-      const [queued, processing, completed, failed, stuck, oldestQueued] = await Promise.all([
-        this.prisma.segmentationQueue.count({ where: { status: 'queued' } }),
-        this.prisma.segmentationQueue.count({ where: { status: 'processing' } }),
-        this.prisma.segmentationQueue.count({ where: { status: 'completed' } }),
-        this.prisma.segmentationQueue.count({ where: { status: 'failed' } }),
-        this.prisma.segmentationQueue.count({
-          where: {
-            status: 'processing',
-            startedAt: { lt: tenMinutesAgo }
-          }
-        }),
-        this.prisma.segmentationQueue.findFirst({
-          where: { status: 'queued' },
-          orderBy: { createdAt: 'asc' },
-          select: { createdAt: true }
-        })
-      ]);
+      const [queued, processing, completed, failed, stuck, oldestQueued] =
+        await Promise.all([
+          this.prisma.segmentationQueue.count({ where: { status: 'queued' } }),
+          this.prisma.segmentationQueue.count({
+            where: { status: 'processing' },
+          }),
+          this.prisma.segmentationQueue.count({
+            where: { status: 'completed' },
+          }),
+          this.prisma.segmentationQueue.count({ where: { status: 'failed' } }),
+          this.prisma.segmentationQueue.count({
+            where: {
+              status: 'processing',
+              startedAt: { lt: tenMinutesAgo },
+            },
+          }),
+          this.prisma.segmentationQueue.findFirst({
+            where: { status: 'queued' },
+            orderBy: { createdAt: 'asc' },
+            select: { createdAt: true },
+          }),
+        ]);
 
       // Check ML service health
-      const mlServiceHealthy = await this.segmentationService.checkServiceHealth();
+      const mlServiceHealthy =
+        await this.segmentationService.checkServiceHealth();
 
       // Identify issues
       const issues: string[] = [];
-      
+
       if (stuck > 0) {
         issues.push(`${stuck} items stuck in processing for over 10 minutes`);
       }
-      
+
       if (!mlServiceHealthy) {
         issues.push('ML service is not responding');
       }
-      
+
       if (queued > 100) {
         issues.push(`High queue backlog: ${queued} items waiting`);
       }
-      
-      if (oldestQueued && (now.getTime() - oldestQueued.createdAt.getTime()) > 30 * 60 * 1000) {
+
+      if (
+        oldestQueued &&
+        now.getTime() - oldestQueued.createdAt.getTime() > 30 * 60 * 1000
+      ) {
         issues.push('Oldest queued item is over 30 minutes old');
       }
 
@@ -1091,27 +1267,37 @@ export class QueueService {
           processing,
           completed,
           failed,
-          stuck
+          stuck,
         },
         parallelStats,
         oldestQueuedItem: oldestQueued?.createdAt,
         mlServiceHealthy,
-        issues
+        issues,
       };
     } catch (error) {
-      logger.error('Failed to get queue health status', error instanceof Error ? error : undefined, 'QueueService');
+      logger.error(
+        'Failed to get queue health status',
+        error instanceof Error ? error : undefined,
+        'QueueService'
+      );
       return {
         healthy: false,
-        queueStats: { queued: 0, processing: 0, completed: 0, failed: 0, stuck: 0 },
+        queueStats: {
+          queued: 0,
+          processing: 0,
+          completed: 0,
+          failed: 0,
+          stuck: 0,
+        },
         parallelStats: {
           activeStreams: 0,
           maxConcurrentStreams: 4,
           totalProcessingCapacity: 0,
           currentThroughput: 0,
-          averageProcessingTime: 0
+          averageProcessingTime: 0,
         },
         mlServiceHealthy: false,
-        issues: ['Failed to check queue health']
+        issues: ['Failed to check queue health'],
       };
     }
   }
@@ -1129,8 +1315,8 @@ export class QueueService {
       const stuckItems = await this.prisma.segmentationQueue.findMany({
         where: {
           status: 'processing',
-          startedAt: { lt: cutoffTime }
-        }
+          startedAt: { lt: cutoffTime },
+        },
       });
 
       let resetCount = 0;
@@ -1140,17 +1326,25 @@ export class QueueService {
         if (item.retryCount >= 3) {
           // Max retries exceeded - mark as failed and remove
           await this.prisma.segmentationQueue.delete({
-            where: { id: item.id }
+            where: { id: item.id },
           });
-          
-          await this.imageService.updateSegmentationStatus(item.imageId, 'failed', item.userId);
-          
-          logger.warn('Stuck item exceeded max retries - marked as failed', 'QueueService', {
-            queueId: item.id,
-            imageId: item.imageId,
-            retryCount: item.retryCount
-          });
-          
+
+          await this.imageService.updateSegmentationStatus(
+            item.imageId,
+            'failed',
+            item.userId
+          );
+
+          logger.warn(
+            'Stuck item exceeded max retries - marked as failed',
+            'QueueService',
+            {
+              queueId: item.id,
+              imageId: item.imageId,
+              retryCount: item.retryCount,
+            }
+          );
+
           failedCount++;
         } else {
           // Reset to queued with incremented retry count
@@ -1160,12 +1354,16 @@ export class QueueService {
               status: 'queued',
               retryCount: item.retryCount + 1,
               startedAt: null,
-              error: `Reset due to timeout (attempt ${item.retryCount + 1})`
-            }
+              error: `Reset due to timeout (attempt ${item.retryCount + 1})`,
+            },
           });
-          
-          await this.imageService.updateSegmentationStatus(item.imageId, 'queued', item.userId);
-          
+
+          await this.imageService.updateSegmentationStatus(
+            item.imageId,
+            'queued',
+            item.userId
+          );
+
           resetCount++;
         }
       }
@@ -1174,13 +1372,17 @@ export class QueueService {
         logger.warn('Handled stuck queue items', 'QueueService', {
           resetCount,
           failedCount,
-          maxProcessingMinutes
+          maxProcessingMinutes,
         });
       }
 
       return resetCount + failedCount;
     } catch (error) {
-      logger.error('Failed to reset stuck items', error instanceof Error ? error : undefined, 'QueueService');
+      logger.error(
+        'Failed to reset stuck items',
+        error instanceof Error ? error : undefined,
+        'QueueService'
+      );
       throw error;
     }
   }
@@ -1196,18 +1398,22 @@ export class QueueService {
       const result = await this.prisma.segmentationQueue.deleteMany({
         where: {
           status: { in: ['completed', 'failed'] },
-          completedAt: { lt: cutoffDate }
-        }
+          completedAt: { lt: cutoffDate },
+        },
       });
 
       logger.info('Cleaned up old queue entries', 'QueueService', {
         deletedCount: result.count,
-        daysOld
+        daysOld,
       });
 
       return result.count;
     } catch (error) {
-      logger.error('Failed to cleanup old queue entries', error instanceof Error ? error : undefined, 'QueueService');
+      logger.error(
+        'Failed to cleanup old queue entries',
+        error instanceof Error ? error : undefined,
+        'QueueService'
+      );
       throw error;
     }
   }
@@ -1239,15 +1445,19 @@ export class QueueService {
         where: {
           batchId,
           userId,
-          status: 'queued'
+          status: 'queued',
         },
         include: {
-          image: true
-        }
+          image: true,
+        },
       });
 
       if (queuedItems.length === 0) {
-        logger.info('No queued items found for batch cancellation', 'QueueService', { batchId, userId });
+        logger.info(
+          'No queued items found for batch cancellation',
+          'QueueService',
+          { batchId, userId }
+        );
         return 0;
       }
 
@@ -1256,19 +1466,19 @@ export class QueueService {
         where: {
           batchId,
           userId,
-          status: 'queued'
-        }
+          status: 'queued',
+        },
       });
 
       // Update affected images' segmentation status to 'no_segmentation'
       const imageIds = queuedItems.map(item => item.imageId);
       await this.prisma.image.updateMany({
         where: {
-          id: { in: imageIds }
+          id: { in: imageIds },
         },
         data: {
-          segmentationStatus: 'no_segmentation'
-        }
+          segmentationStatus: 'no_segmentation',
+        },
       });
 
       // Emit cancellation events via WebSocket
@@ -1277,12 +1487,14 @@ export class QueueService {
           this.websocketService.emitToUser(userId, 'segmentation:cancelled', {
             imageId: item.imageId,
             batchId,
-            message: 'Batch processing cancelled by user'
+            message: 'Batch processing cancelled by user',
           });
         }
 
         // Update queue stats for affected projects
-        const projectIds = [...new Set(queuedItems.map(item => item.image.projectId))];
+        const projectIds = [
+          ...new Set(queuedItems.map(item => item.image.projectId)),
+        ];
         for (const projectId of projectIds) {
           const stats = await this.getQueueStats(projectId);
           this.websocketService.emitQueueStatsUpdate(projectId, stats);
@@ -1293,15 +1505,20 @@ export class QueueService {
         batchId,
         userId,
         cancelledCount: deleteResult.count,
-        affectedImages: imageIds.length
+        affectedImages: imageIds.length,
       });
 
       return deleteResult.count;
     } catch (error) {
-      logger.error('Failed to cancel batch', error instanceof Error ? error : undefined, 'QueueService', {
-        batchId,
-        userId
-      });
+      logger.error(
+        'Failed to cancel batch',
+        error instanceof Error ? error : undefined,
+        'QueueService',
+        {
+          batchId,
+          userId,
+        }
+      );
       throw error;
     }
   }
@@ -1316,40 +1533,46 @@ export class QueueService {
     affectedBatches: string[];
   }> {
     try {
-      logger.info('Cancelling all user segmentations', 'QueueService', { userId });
+      logger.info('Cancelling all user segmentations', 'QueueService', {
+        userId,
+      });
 
       // Find all queued and processing items for this user
       const queuedItems = await this.prisma.segmentationQueue.findMany({
         where: {
           userId,
           status: {
-            in: ['queued', 'processing']
-          }
+            in: ['queued', 'processing'],
+          },
         },
         include: {
-          image: true
-        }
+          image: true,
+        },
       });
 
       if (queuedItems.length === 0) {
-        logger.info('No active segmentations found for user', 'QueueService', { userId });
+        logger.info('No active segmentations found for user', 'QueueService', {
+          userId,
+        });
         return {
           cancelledCount: 0,
           affectedProjects: [],
-          affectedBatches: []
+          affectedBatches: [],
         };
       }
 
       // Group by status to handle differently
       const _queuedOnly = queuedItems.filter(item => item.status === 'queued');
-      const processingItems = queuedItems.filter(item => item.status === 'processing');
+      const processingItems = queuedItems.filter(
+        item => item.status === 'processing'
+      );
 
       // Delete all queued items
       const deleteResult = await this.prisma.segmentationQueue.deleteMany({
         where: {
           userId,
-          status: 'queued'
-        }
+          status: 'queued',
+        },
       });
 
       // Mark processing items as cancelled (they'll be handled by the ML service)
@@ -1357,11 +1580,11 @@ export class QueueService {
         await this.prisma.segmentationQueue.updateMany({
           where: {
             userId,
-            status: 'processing'
+            status: 'processing',
           },
           data: {
-            status: 'cancelled'
-          }
+            status: 'cancelled',
+          },
         });
       }
 
@@ -1370,34 +1593,47 @@ export class QueueService {
       if (imageIds.length > 0) {
         await this.prisma.image.updateMany({
           where: {
-            id: { in: imageIds }
+            id: { in: imageIds },
           },
           data: {
-            segmentationStatus: 'no_segmentation'
-          }
+            segmentationStatus: 'no_segmentation',
+          },
         });
       }
 
       // Collect affected batches and projects
-      const affectedBatches = [...new Set(queuedItems.filter(item => item.batchId).map(item => item.batchId).filter(Boolean))];
-      const affectedProjects = [...new Set(queuedItems.map(item => item.image.projectId))];
+      const affectedBatches = [
+        ...new Set(
+          queuedItems
+            .filter(item => item.batchId)
+            .map(item => item.batchId)
+            .filter(Boolean)
+        ),
+      ];
+      const affectedProjects = [
+        ...new Set(queuedItems.map(item => item.image.projectId)),
+      ];
 
       // Emit cancellation events via WebSocket
       if (this.websocketService) {
         // Send bulk cancellation notification
-        this.websocketService.emitToUser(userId, 'segmentation:bulk-cancelled', {
-          cancelledCount: queuedItems.length,
-          affectedProjects,
-          affectedBatches,
-          message: 'All segmentations cancelled by user'
-        });
+        this.websocketService.emitToUser(
+          userId,
+          'segmentation:bulk-cancelled',
+          {
+            cancelledCount: queuedItems.length,
+            affectedProjects,
+            affectedBatches,
+            message: 'All segmentations cancelled by user',
+          }
+        );
 
         // Send individual cancellation events for each image
         for (const item of queuedItems) {
           this.websocketService.emitToUser(userId, 'segmentation:cancelled', {
             imageId: item.imageId,
             batchId: item.batchId,
-            message: 'Segmentation cancelled by user'
+            message: 'Segmentation cancelled by user',
           });
         }
 
@@ -1412,34 +1648,51 @@ export class QueueService {
       if (processingItems.length > 0) {
         try {
           // Call ML service to cancel active jobs
-          logger.info('Requesting ML service to cancel processing jobs', 'QueueService', {
-            userId,
-            jobCount: processingItems.length
-          });
+          logger.info(
+            'Requesting ML service to cancel processing jobs',
+            'QueueService',
+            {
+              userId,
+              jobCount: processingItems.length,
+            }
+          );
           // TODO: Implement ML service cancellation API call if needed
         } catch (mlError) {
-          logger.error('Failed to cancel ML processing', mlError instanceof Error ? mlError : undefined, 'QueueService');
+          logger.error(
+            'Failed to cancel ML processing',
+            mlError instanceof Error ? mlError : undefined,
+            'QueueService'
+          );
         }
       }
 
-      logger.info('All user segmentations cancelled successfully', 'QueueService', {
-        userId,
-        cancelledCount: queuedItems.length,
-        deletedCount: deleteResult.count,
-        processingCancelled: processingItems.length,
-        affectedProjects: affectedProjects.length,
-        affectedBatches: affectedBatches.length
-      });
+      logger.info(
+        'All user segmentations cancelled successfully',
+        'QueueService',
+        {
+          userId,
+          cancelledCount: queuedItems.length,
+          deletedCount: deleteResult.count,
+          processingCancelled: processingItems.length,
+          affectedProjects: affectedProjects.length,
+          affectedBatches: affectedBatches.length,
+        }
+      );
 
       return {
         cancelledCount: queuedItems.length,
         affectedProjects,
-        affectedBatches
+        affectedBatches,
       };
     } catch (error) {
-      logger.error('Failed to cancel all user segmentations', error instanceof Error ? error : undefined, 'QueueService', {
-        userId
-      });
+      logger.error(
+        'Failed to cancel all user segmentations',
+        error instanceof Error ? error : undefined,
+        'QueueService',
+        {
+          userId,
+        }
+      );
       throw error;
     }
   }

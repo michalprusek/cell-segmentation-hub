@@ -9,6 +9,7 @@ This document provides comprehensive definitions for all metrics calculated duri
 ### 1. Area Measurements
 
 #### **Area**
+
 - **Formula**: Shoelace formula: `A = |Σ(x[i] * y[i+1] - x[i+1] * y[i])| / 2`
 - **Description**: Total area of the polygon minus any internal holes (e.g., nuclei within cells)
 - **Units**:
@@ -19,6 +20,7 @@ This document provides comprehensive definitions for all metrics calculated duri
 ### 2. Perimeter Measurements
 
 #### **Perimeter**
+
 - **Formula**: `P = Σ√((x[i+1] - x[i])² + (y[i+1] - y[i])²)`
 - **Description**: Total boundary length of the external contour only (holes are excluded)
 - **Units**:
@@ -29,6 +31,7 @@ This document provides comprehensive definitions for all metrics calculated duri
 ### 3. Diameter Measurements
 
 #### **Equivalent Diameter**
+
 - **Formula**: `D = √(4 * Area / π)`
 - **Description**: Diameter of a circle with the same area as the polygon
 - **Units**: px or µm when scaled
@@ -37,18 +40,21 @@ This document provides comprehensive definitions for all metrics calculated duri
 #### **Feret Diameters (Caliper Diameters)**
 
 ##### **Feret Diameter Max**
+
 - **Algorithm**: Rotating calipers algorithm on convex hull
 - **Description**: Maximum distance between any two points on the polygon boundary
 - **Units**: px or µm when scaled
 - **Use Case**: Maximum object length in any orientation
 
 ##### **Feret Diameter Orthogonal**
+
 - **Formula**: Maximum perpendicular distance from the max Feret diameter line × 2
 - **Description**: Width perpendicular to the maximum Feret diameter
 - **Units**: px or µm when scaled
 - **Use Case**: Object width perpendicular to its longest axis
 
 ##### **Feret Diameter Min**
+
 - **Algorithm**: Minimum caliper width across all orientations
 - **Description**: Minimum width when polygon is rotated through all angles
 - **Units**: px or µm when scaled
@@ -57,6 +63,7 @@ This document provides comprehensive definitions for all metrics calculated duri
 ### 4. Shape Descriptors (Dimensionless)
 
 #### **Circularity**
+
 - **Formula**: `C = 4π * Area / Perimeter²`
 - **Description**: Measure of how circular the shape is
 - **Range**: 0 to 1
@@ -65,12 +72,14 @@ This document provides comprehensive definitions for all metrics calculated duri
 - **Note**: Values are clamped to ≤1 to handle discretization artifacts
 
 #### **Feret Aspect Ratio**
+
 - **Formula**: `Feret Max / Feret Min`
 - **Description**: Ratio of maximum to minimum Feret diameters
 - **Range**: ≥1 (1 = circle/square, higher = more elongated)
 - **Use Case**: Quantifies object elongation
 
 #### **Extent**
+
 - **Formula**: `Area / (BoundingBoxWidth * BoundingBoxHeight)`
 - **Description**: Fraction of the axis-aligned bounding box filled by the shape
 - **Range**: 0 to 1
@@ -78,6 +87,7 @@ This document provides comprehensive definitions for all metrics calculated duri
 - **Note**: Previously mislabeled as "Compactness" in earlier versions
 
 #### **Convexity**
+
 - **Formula**: `Convex Hull Perimeter / Polygon Perimeter`
 - **Description**: Measure of boundary smoothness/convexity
 - **Range**: 0 to 1
@@ -86,6 +96,7 @@ This document provides comprehensive definitions for all metrics calculated duri
 - **Use Case**: Detects irregular boundaries or protrusions
 
 #### **Solidity**
+
 - **Formula**: `Polygon Area / Convex Hull Area`
 - **Description**: Measure of overall convexity and density
 - **Range**: 0 to 1
@@ -96,11 +107,13 @@ This document provides comprehensive definitions for all metrics calculated duri
 ### 5. Bounding Box Measurements
 
 #### **Bounding Box Width**
+
 - **Formula**: `Width = max(x) - min(x)`
 - **Description**: Width of the axis-aligned bounding rectangle
 - **Units**: px or µm when scaled
 
 #### **Bounding Box Height**
+
 - **Formula**: `Height = max(y) - min(y)`
 - **Description**: Height of the axis-aligned bounding rectangle
 - **Units**: px or µm when scaled
@@ -110,15 +123,18 @@ This document provides comprehensive definitions for all metrics calculated duri
 When a pixel-to-micrometer scale is provided:
 
 ### Linear Measurements (multiply by scale)
+
 - Perimeter: `px → µm`
 - Equivalent Diameter: `px → µm`
 - Feret Diameters (Max, Min, Orthogonal): `px → µm`
 - Bounding Box dimensions: `px → µm`
 
 ### Area Measurements (multiply by scale²)
+
 - Area: `px² → µm²`
 
 ### Dimensionless Ratios (unchanged)
+
 - Circularity
 - Feret Aspect Ratio
 - Extent
@@ -128,6 +144,7 @@ When a pixel-to-micrometer scale is provided:
 ## Implementation Details
 
 ### Frontend Calculations
+
 - **Location**: `/src/pages/segmentation/utils/metricCalculations.ts`
 - **Features**:
   - Graham scan algorithm for convex hull
@@ -135,6 +152,7 @@ When a pixel-to-micrometer scale is provided:
   - Handles polygons with holes correctly
 
 ### Backend Calculations
+
 - **Location**: `/backend/src/services/metrics/metricsCalculator.ts`
 - **Features**:
   - Primary: Python service with OpenCV for accurate calculations
@@ -142,6 +160,7 @@ When a pixel-to-micrometer scale is provided:
   - Batch processing support for large datasets
 
 ### Python Service (ML Backend)
+
 - **Endpoint**: `/api/calculate-metrics`
 - **Libraries**: OpenCV, NumPy, SciPy
 - **Advantages**: Hardware-accelerated geometric computations
@@ -156,6 +175,7 @@ When a pixel-to-micrometer scale is provided:
 ## Export Format Support
 
 These metrics are available in:
+
 - **Excel (.xlsx)**: Full metrics with summary statistics
 - **CSV (.csv)**: Full metrics in tabular format
 - **COCO JSON**: Subset of metrics in annotations
@@ -165,12 +185,14 @@ These metrics are available in:
 ## Quality Assurance
 
 ### Validation Rules
+
 1. Polygons must have ≥3 vertices
 2. All coordinates must be finite numbers
 3. Holes are correctly associated with parent polygons
 4. Degenerate polygons are skipped with warnings
 
 ### Error Handling
+
 - Invalid polygons: Return zero metrics with warning
 - Python service failure: Fallback to JavaScript calculations
 - Scale validation: Automatic detection of invalid scales
@@ -190,5 +212,5 @@ These metrics are available in:
 
 ---
 
-*Last Updated: 2025-09-13*
-*For questions or improvements, please contact the development team.*
+_Last Updated: 2025-09-13_
+_For questions or improvements, please contact the development team._

@@ -15,7 +15,7 @@ const DEFAULT_OPTIONS: Required<PasswordOptions> = {
   includeLowercase: true,
   includeNumbers: true,
   includeSpecialChars: true,
-  excludeSimilar: true
+  excludeSimilar: true,
 };
 
 const UPPERCASE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
@@ -31,7 +31,7 @@ const SIMILAR_CHARS = '0Ol1I';
  */
 export function generateSecurePassword(options: PasswordOptions = {}): string {
   const opts = { ...DEFAULT_OPTIONS, ...options };
-  
+
   // Validate length constraints
   if (opts.length < 4) {
     throw new Error('Password length must be at least 4 characters');
@@ -39,48 +39,60 @@ export function generateSecurePassword(options: PasswordOptions = {}): string {
   if (opts.length > 128) {
     throw new Error('Password length cannot exceed 128 characters');
   }
-  
+
   let charset = '';
   let requiredChars = '';
 
   if (opts.includeUppercase) {
-    const upperChars = opts.excludeSimilar 
-      ? UPPERCASE.split('').filter(char => !SIMILAR_CHARS.includes(char)).join('')
+    const upperChars = opts.excludeSimilar
+      ? UPPERCASE.split('')
+          .filter(char => !SIMILAR_CHARS.includes(char))
+          .join('')
       : UPPERCASE;
-    
+
     // Guard against empty character set after filtering
     if (upperChars.length === 0) {
-      throw new Error('No uppercase characters available after filtering similar characters');
+      throw new Error(
+        'No uppercase characters available after filtering similar characters'
+      );
     }
-    
+
     charset += upperChars;
     requiredChars += upperChars[crypto.randomInt(0, upperChars.length)];
   }
 
   if (opts.includeLowercase) {
-    const lowerChars = opts.excludeSimilar 
-      ? LOWERCASE.split('').filter(char => !SIMILAR_CHARS.includes(char)).join('')
+    const lowerChars = opts.excludeSimilar
+      ? LOWERCASE.split('')
+          .filter(char => !SIMILAR_CHARS.includes(char))
+          .join('')
       : LOWERCASE;
-    
+
     // Guard against empty character set after filtering
     if (lowerChars.length === 0) {
-      throw new Error('No lowercase characters available after filtering similar characters');
+      throw new Error(
+        'No lowercase characters available after filtering similar characters'
+      );
     }
-    
+
     charset += lowerChars;
     requiredChars += lowerChars[crypto.randomInt(0, lowerChars.length)];
   }
 
   if (opts.includeNumbers) {
-    const numberChars = opts.excludeSimilar 
-      ? NUMBERS.split('').filter(char => !SIMILAR_CHARS.includes(char)).join('')
+    const numberChars = opts.excludeSimilar
+      ? NUMBERS.split('')
+          .filter(char => !SIMILAR_CHARS.includes(char))
+          .join('')
       : NUMBERS;
-    
+
     // Guard against empty character set after filtering
     if (numberChars.length === 0) {
-      throw new Error('No number characters available after filtering similar characters');
+      throw new Error(
+        'No number characters available after filtering similar characters'
+      );
     }
-    
+
     charset += numberChars;
     requiredChars += numberChars[crypto.randomInt(0, numberChars.length)];
   }
@@ -90,7 +102,7 @@ export function generateSecurePassword(options: PasswordOptions = {}): string {
     if (SPECIAL_CHARS.length === 0) {
       throw new Error('No special characters available');
     }
-    
+
     charset += SPECIAL_CHARS;
     requiredChars += SPECIAL_CHARS[crypto.randomInt(0, SPECIAL_CHARS.length)];
   }
@@ -139,7 +151,7 @@ export function generateFriendlyPassword(length = 12): string {
     includeLowercase: true,
     includeNumbers: true,
     includeSpecialChars: false, // Exclude special chars for easier typing
-    excludeSimilar: true
+    excludeSimilar: true,
   });
 }
 
@@ -153,7 +165,7 @@ export function generateStrongPassword(length = 16): string {
     includeLowercase: true,
     includeNumbers: true,
     includeSpecialChars: true,
-    excludeSimilar: true
+    excludeSimilar: true,
   });
 }
 
@@ -212,6 +224,6 @@ export function validatePasswordStrength(password: string): {
   return {
     score,
     feedback,
-    isStrong: score >= 5
+    isStrong: score >= 5,
   };
 }

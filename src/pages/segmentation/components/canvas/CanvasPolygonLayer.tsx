@@ -29,6 +29,7 @@ import {
 import { lodManager, LODContext } from '@/lib/rendering/LODManager';
 import { WorkerPool } from '@/lib/workerPool';
 import { rafSchedule, ProgressiveRenderer } from '@/lib/performanceUtils';
+import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
 
 // Import existing components that we'll keep
 import CanvasSvgFilters from './CanvasSvgFilters';
@@ -299,7 +300,7 @@ const CanvasPolygonLayer: React.FC<OptimizedCanvasPolygonLayerProps> = ({
             (process.env.NODE_ENV === 'development' && isPolygonHovered)
           ) {
             return (
-              <g key={`svg-vertices-${polygon.id}`}>
+              <g key={`svg-vertices-${ensureValidPolygonId(polygon.id, 'svg-vertex-group')}`}>
                 {polygon.points.map((point, index) => {
                   const isVertexHovered =
                     hoveredVertex?.polygonId === polygon.id &&

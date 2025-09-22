@@ -50,7 +50,9 @@ export interface StorageStats {
 /**
  * Get user profile with real database data
  */
-export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+export async function getUserProfile(
+  userId: string
+): Promise<UserProfile | null> {
   try {
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -58,10 +60,10 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
         profile: true,
         _count: {
           select: {
-            projects: true
-          }
-        }
-      }
+            projects: true,
+          },
+        },
+      },
     });
 
     if (!user) {
@@ -86,15 +88,17 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
           email: user.profile?.emailNotifications || true,
           push: false,
           segmentationComplete: true,
-          projectShared: true
-        }
+          projectShared: true,
+        },
       },
-      stats
+      stats,
     };
 
     return profile;
   } catch (error) {
-    logger.error('Failed to get user profile:', error as Error, 'UserService', { userId });
+    logger.error('Failed to get user profile:', error as Error, 'UserService', {
+      userId,
+    });
     throw error;
   }
 }
@@ -106,16 +110,16 @@ export async function getUserStats(userId: string): Promise<UserStats> {
   try {
     // Get project count (owned projects only)
     const totalProjects = await prisma.project.count({
-      where: { userId }
+      where: { userId },
     });
 
     // Get total images across all user projects
     const totalImages = await prisma.image.count({
       where: {
         project: {
-          userId
-        }
-      }
+          userId,
+        },
+      },
     });
 
     // Get total segmentations for user's images
@@ -123,20 +127,20 @@ export async function getUserStats(userId: string): Promise<UserStats> {
       where: {
         image: {
           project: {
-            userId
-          }
-        }
-      }
+            userId,
+          },
+        },
+      },
     });
 
     // Get processed images (completed segmentations)
     const processedImages = await prisma.image.count({
       where: {
         project: {
-          userId
+          userId,
         },
-        segmentationStatus: 'completed'
-      }
+        segmentationStatus: 'completed',
+      },
     });
 
     // Get images uploaded today
@@ -148,13 +152,13 @@ export async function getUserStats(userId: string): Promise<UserStats> {
     const imagesUploadedToday = await prisma.image.count({
       where: {
         project: {
-          userId
+          userId,
         },
         createdAt: {
           gte: today,
-          lt: tomorrow
-        }
-      }
+          lt: tomorrow,
+        },
+      },
     });
 
     // Calculate storage usage
@@ -167,10 +171,12 @@ export async function getUserStats(userId: string): Promise<UserStats> {
       storageUsed: storageStats.totalUsed,
       storageUsedBytes: storageStats.totalUsedBytes,
       imagesUploadedToday,
-      processedImages
+      processedImages,
     };
   } catch (error) {
-    logger.error('Failed to get user stats:', error as Error, 'UserService', { userId });
+    logger.error('Failed to get user stats:', error as Error, 'UserService', {
+      userId,
+    });
     throw error;
   }
 }
@@ -178,18 +184,20 @@ export async function getUserStats(userId: string): Promise<UserStats> {
 /**
  * Calculate user storage usage from database and file system
  */
-export async function calculateUserStorage(userId: string): Promise<StorageStats> {
+export async function calculateUserStorage(
+  userId: string
+): Promise<StorageStats> {
   try {
     // Get file sizes from database
     const imagesSizeResult = await prisma.image.aggregate({
       where: {
         project: {
-          userId
-        }
+          userId,
+        },
       },
       _sum: {
-        fileSize: true
-      }
+        fileSize: true,
+      },
     });
 
     const totalImageBytes = imagesSizeResult._sum.fileSize || 0;
@@ -200,7 +208,8 @@ export async function calculateUserStorage(userId: string): Promise<StorageStats
     // Estimate export sizes (TODO: track exports in database)
     const estimatedExportBytes = Math.floor(totalImageBytes * 0.05);
 
-    const totalUsedBytes = totalImageBytes + estimatedThumbnailBytes + estimatedExportBytes;
+    const totalUsedBytes =
+      totalImageBytes + estimatedThumbnailBytes + estimatedExportBytes;
 
     // Convert to human readable format
     const formatBytes = (bytes: number): string => {
@@ -214,7 +223,10 @@ export async function calculateUserStorage(userId: string): Promise<StorageStats
     };
 
     const quota = 1024 * 1024 * 1024; // 1GB default quota
-    const usagePercentage = totalUsedBytes > 0 ? Math.round((totalUsedBytes / quota) * 100 * 100) / 100 : 0;
+    const usagePercentage =
+      totalUsedBytes > 0
+        ? Math.round((totalUsedBytes / quota) * 100 * 100) / 100
+        : 0;
 
     return {
       totalUsed: formatBytes(totalUsedBytes),
@@ -222,14 +234,19 @@ export async function calculateUserStorage(userId: string): Promise<StorageStats
       breakdown: {
         images: formatBytes(totalImageBytes),
         thumbnails: formatBytes(estimatedThumbnailBytes),
-        exports: formatBytes(estimatedExportBytes)
+        exports: formatBytes(estimatedExportBytes),
       },
       quota: formatBytes(quota),
       quotaBytes: quota,
-      usagePercentage
+      usagePercentage,
     };
   } catch (error) {
-    logger.error('Failed to calculate user storage:', error as Error, 'UserService', { userId });
+    logger.error(
+      'Failed to calculate user storage:',
+      error as Error,
+      'UserService',
+      { userId }
+    );
     throw error;
   }
 }
@@ -237,7 +254,19 @@ export async function calculateUserStorage(userId: string): Promise<StorageStats
 /**
  * Get user activity log
  */
-export async function getUserActivity(userId: string, limit = 10, offset = 0): Promise<{ items: unknown[]; pagination: { total: number; limit: number; offset: number; hasMore: boolean } }> {
+export async function getUserActivity(
+  userId: string,
+  limit = 10,
+  offset = 0
+): Promise<{
+  items: unknown[];
+  pagination: {
+    total: number;
+    limit: number;
+    offset: number;
+    hasMore: boolean;
+  };
+}> {
   try {
     // For now, we'll construct activity from database events
     // TODO: Implement proper activity logging
@@ -249,44 +278,44 @@ export async function getUserActivity(userId: string, limit = 10, offset = 0): P
       select: {
         id: true,
         title: true,
-        createdAt: true
-      }
+        createdAt: true,
+      },
     });
 
     const recentImages = await prisma.image.findMany({
       where: {
         project: {
-          userId
-        }
+          userId,
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 5,
       include: {
         project: {
           select: {
-            title: true
-          }
-        }
-      }
+            title: true,
+          },
+        },
+      },
     });
 
     const recentSegmentations = await prisma.segmentation.findMany({
       where: {
         image: {
           project: {
-            userId
-          }
-        }
+            userId,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
       take: 5,
       include: {
         image: {
           select: {
-            name: true
-          }
-        }
-      }
+            name: true,
+          },
+        },
+      },
     });
 
     // Construct activity items
@@ -302,7 +331,7 @@ export async function getUserActivity(userId: string, limit = 10, offset = 0): P
         id: `project_${project.id}`,
         type: 'project_created',
         description: `Created project "${project.title}"`,
-        timestamp: project.createdAt.toISOString()
+        timestamp: project.createdAt.toISOString(),
       });
     });
 
@@ -311,7 +340,7 @@ export async function getUserActivity(userId: string, limit = 10, offset = 0): P
         id: `image_${image.id}`,
         type: 'image_uploaded',
         description: `Uploaded image "${image.name}" to project "${image.project.title}"`,
-        timestamp: image.createdAt.toISOString()
+        timestamp: image.createdAt.toISOString(),
       });
     });
 
@@ -320,12 +349,15 @@ export async function getUserActivity(userId: string, limit = 10, offset = 0): P
         id: `segmentation_${segmentation.id}`,
         type: 'segmentation_completed',
         description: `Completed segmentation for "${segmentation.image.name}" using ${segmentation.model} model`,
-        timestamp: segmentation.createdAt.toISOString()
+        timestamp: segmentation.createdAt.toISOString(),
       });
     });
 
     // Sort by timestamp and apply pagination
-    activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    activities.sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
     const paginatedActivities = activities.slice(offset, offset + limit);
 
     return {
@@ -334,11 +366,16 @@ export async function getUserActivity(userId: string, limit = 10, offset = 0): P
         total: activities.length,
         limit,
         offset,
-        hasMore: offset + limit < activities.length
-      }
+        hasMore: offset + limit < activities.length,
+      },
     };
   } catch (error) {
-    logger.error('Failed to get user activity:', error as Error, 'UserService', { userId });
+    logger.error(
+      'Failed to get user activity:',
+      error as Error,
+      'UserService',
+      { userId }
+    );
     throw error;
   }
 }
@@ -346,13 +383,16 @@ export async function getUserActivity(userId: string, limit = 10, offset = 0): P
 /**
  * Update user profile
  */
-export async function updateUserProfile(userId: string, updates: Record<string, unknown>): Promise<{ success: boolean }> {
+export async function updateUserProfile(
+  userId: string,
+  updates: Record<string, unknown>
+): Promise<{ success: boolean }> {
   try {
     // Update user table if email is being changed
     if (updates.email) {
       await prisma.user.update({
         where: { id: userId },
-        data: { email: updates.email }
+        data: { email: updates.email },
       });
     }
 
@@ -360,7 +400,8 @@ export async function updateUserProfile(userId: string, updates: Record<string, 
     const profileData: Record<string, unknown> = {};
 
     if (updates.firstName || updates.lastName) {
-      profileData.title = `${updates.firstName || ''} ${updates.lastName || ''}`.trim();
+      profileData.title =
+        `${updates.firstName || ''} ${updates.lastName || ''}`.trim();
     }
 
     if (updates.language) {
@@ -384,15 +425,20 @@ export async function updateUserProfile(userId: string, updates: Record<string, 
         update: profileData,
         create: {
           userId,
-          ...profileData
-        }
+          ...profileData,
+        },
       });
     }
 
     logger.info('User profile updated:', 'UserService', { userId, updates });
     return { success: true };
   } catch (error) {
-    logger.error('Failed to update user profile:', error as Error, 'UserService', { userId, updates });
+    logger.error(
+      'Failed to update user profile:',
+      error as Error,
+      'UserService',
+      { userId, updates }
+    );
     throw error;
   }
 }

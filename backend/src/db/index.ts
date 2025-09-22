@@ -13,6 +13,7 @@ declare global {
 // Initialize Prisma client (legacy compatibility)
 const createPrismaClient = (): PrismaClient => {
   const config = getPrismaConfig();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return config ? new PrismaClient(config as any) : new PrismaClient();
 };
 
@@ -27,19 +28,22 @@ if (config.NODE_ENV === 'development') {
 export const initializeDatabase = async (): Promise<PrismaClient> => {
   const maxRetries = 10;
   const retryDelay = 5000; // 5 seconds
-  
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      logger.info(`🔌 Initializing database connection (attempt ${attempt}/${maxRetries})...`, 'Database');
-      
+      logger.info(
+        `🔌 Initializing database connection (attempt ${attempt}/${maxRetries})...`,
+        'Database'
+      );
+
       // Try simple connection first
       await prisma.$connect();
-      
+
       // If successful, try to run migrations
       try {
         await prisma.$executeRaw`SELECT 1`;
         logger.info('✅ Database connection established', 'Database');
-        
+
         // Try to count users (might fail if tables don't exist)
         try {
           const userCount = await prisma.user.count();
@@ -47,68 +51,100 @@ export const initializeDatabase = async (): Promise<PrismaClient> => {
         } catch {
           logger.warn('Tables not yet created, run migrations', 'Database');
         }
-        
+
         return prisma;
       } catch (queryError) {
         logger.warn('Database connected but query failed:', queryError);
         return prisma;
       }
-      
     } catch (error) {
-      logger.error(`Database connection attempt ${attempt}/${maxRetries} failed:`, error as Error, 'Database');
-      
+      logger.error(
+        `Database connection attempt ${attempt}/${maxRetries} failed:`,
+        error as Error,
+        'Database'
+      );
+
       if (attempt === maxRetries) {
-        logger.error('❌ All database connection attempts failed', undefined, 'Database');
+        logger.error(
+          '❌ All database connection attempts failed',
+          undefined,
+          'Database'
+        );
         // Don't throw - let the app run without database
-        logger.warn('⚠️ Running without database connection - most features will not work!', 'Database');
+        logger.warn(
+          '⚠️ Running without database connection - most features will not work!',
+          'Database'
+        );
         return prisma;
       }
-      
-      logger.info(`Retrying in ${retryDelay/1000} seconds...`, 'Database');
+
+      logger.info(`Retrying in ${retryDelay / 1000} seconds...`, 'Database');
       await new Promise(resolve => setTimeout(resolve, retryDelay));
     }
   }
-  
+
   return prisma;
 };
 
 // Enhanced graceful shutdown
 export const disconnectDatabase = async (): Promise<void> => {
   try {
-    logger.info('🔌 Shutting down enhanced database connection system...', 'Database');
-    
+    logger.info(
+      '🔌 Shutting down enhanced database connection system...',
+      'Database'
+    );
+
     // Stop metrics collection
     databaseMetrics.stop();
-    
+
     // Shutdown connection pool
     await prismaPool.shutdown();
-    
+
     // Disconnect legacy client as fallback
     await prisma.$disconnect();
-    
-    logger.info('✅ Database connection system shut down successfully', 'Database');
+
+    logger.info(
+      '✅ Database connection system shut down successfully',
+      'Database'
+    );
   } catch (error) {
-    logger.error('❌ Error during database shutdown:', error as Error, 'Database');
+    logger.error(
+      '❌ Error during database shutdown:',
+      error as Error,
+      'Database'
+    );
   }
 };
 
 // Enhanced database health check
-export const checkDatabaseHealth = async (): Promise<{healthy: boolean; message: string}> => {
+export const checkDatabaseHealth = async (): Promise<{
+  healthy: boolean;
+  message: string;
+}> => {
   try {
     // Try to use the enhanced pool health check first
     const poolHealth = await prismaPool.healthCheck();
-    
+
     return {
       healthy: poolHealth.healthy,
-      message: poolHealth.healthy ? 'Database connection pool is healthy' : 'Database connection pool issues detected'
+      message: poolHealth.healthy
+        ? 'Database connection pool is healthy'
+        : 'Database connection pool issues detected',
     };
   } catch {
     // Fallback to basic health check
     try {
       await prisma.$queryRaw`SELECT 1`;
-      return { healthy: true, message: 'Database is accessible (basic connection)' };
+      return {
+        healthy: true,
+        message: 'Database is accessible (basic connection)',
+      };
     } catch (fallbackError) {
-      logger.error('Database health check failed:', fallbackError as Error, 'Database');
+      logger.error(
+        'Database health check failed:',
+        fallbackError as Error,
+        'Database'
+      );
       return { healthy: false, message: 'Database is not accessible' };
     }
   }
@@ -116,14 +152,25 @@ export const checkDatabaseHealth = async (): Promise<{healthy: boolean; message:
 
 // Enhanced helper function for transactions with pooling
 export const transaction = async <T>(
-  callback: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>
+  callback: (
+    prisma: Omit<
+      PrismaClient,
+      '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+    >
+  ) => Promise<T>
 ): Promise<T> => {
   try {
     // Use the enhanced transaction handling from the pool
-    return await prismaPool.executeTransaction(callback, 'legacy-transaction-helper');
+    return await prismaPool.executeTransaction(
+      callback,
+      'legacy-transaction-helper'
+    );
   } catch (error) {
     // Fallback to basic transaction if pool fails
-    logger.warn('Transaction pool failed, falling back to basic transaction:', error);
+    logger.warn(
+      'Transaction pool failed, falling back to basic transaction:',
+      error
+    );
     return await prisma.$transaction(callback);
   }
 };
@@ -132,11 +179,11 @@ export const transaction = async <T>(
 export { prismaPool } from './prismaPool';
 export { databaseMetrics } from '../monitoring/databaseMetrics';
 export { databaseOptimization } from '../utils/databaseOptimization';
-export { 
+export {
   getDatabasePoolConfig,
   getRetryConfig,
   getHealthCheckConfig,
-  getPerformanceBaselines
+  getPerformanceBaselines,
 } from '../config/database';
 
 // Enhanced transaction and query helpers
@@ -146,7 +193,7 @@ export const executeQuery = async <T>(
 ): Promise<T> => {
   return prismaPool.executeQuery(operation, {
     operationType: 'query',
-    operationName
+    operationName,
   });
 };
 
@@ -158,7 +205,12 @@ export const executeMutation = async <T>(
 };
 
 export const executeTransaction = async <T>(
-  operation: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
+  operation: (
+    prisma: Omit<
+      PrismaClient,
+      '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'
+    >
+  ) => Promise<T>,
   operationName?: string
 ): Promise<T> => {
   return prismaPool.executeTransaction(operation, operationName);

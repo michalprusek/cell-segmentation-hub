@@ -20,7 +20,11 @@ import {
   MockSpan,
   // TraceCorrelatedLogger
 } from '../utils/traceCorrelation';
-import { /* addSpanAttributes, */ addSpanEvent, markSpanError, injectTraceHeaders } from '../middleware/tracing';
+import {
+  /* addSpanAttributes, */ addSpanEvent,
+  markSpanError,
+  injectTraceHeaders,
+} from '../middleware/tracing';
 
 export interface SegmentationPoint {
   x: number;
@@ -37,7 +41,12 @@ export interface SegmentationPolygon {
 
 export interface SegmentationRequest {
   imageId: string;
-  model?: 'hrnet' | 'cbam_resunet' | 'unet_spherohq' | 'resunet_advanced' | 'resunet_small';
+  model?:
+    | 'hrnet'
+    | 'cbam_resunet'
+    | 'unet_spherohq'
+    | 'resunet_advanced'
+    | 'resunet_small';
   threshold?: number;
   userId: string;
   detectHoles?: boolean;
@@ -96,25 +105,28 @@ export class SegmentationService {
   private thumbnailService: ThumbnailService;
   private segmentationThumbnailService: SegmentationThumbnailService;
   private thumbnailManager: ThumbnailManager;
-  private concurrentRequestsPool: Map<string, Promise<SegmentationResponse>> = new Map(); // Track concurrent requests
+  private concurrentRequestsPool: Map<string, Promise<SegmentationResponse>> =
+    new Map(); // Track concurrent requests
   private maxConcurrentRequests = 4; // Limit concurrent ML service requests
-  
+
   constructor(
     private prisma: PrismaClient,
     private imageService: ImageService
   ) {
     this.thumbnailService = new ThumbnailService(prisma);
-    this.segmentationThumbnailService = new SegmentationThumbnailService(prisma);
+    this.segmentationThumbnailService = new SegmentationThumbnailService(
+      prisma
+    );
     this.thumbnailManager = new ThumbnailManager(prisma);
     // Python microservice URL - can be configured via environment
     this.pythonServiceUrl = config.SEGMENTATION_SERVICE_URL;
-    
+
     // Configure HTTP client for Python microservice with connection pooling
     this.httpClient = axios.create({
       baseURL: this.pythonServiceUrl,
       timeout: 300000, // 5 minutes timeout for segmentation
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
       },
       maxBodyLength: Infinity,
       maxContentLength: Infinity,
@@ -126,49 +138,66 @@ export class SegmentationService {
         maxSockets: 4, // Support up to 4 concurrent connections
         maxFreeSockets: 2,
         timeout: 60000, // 60 seconds
-        keepAliveMsecs: 1000
+        keepAliveMsecs: 1000,
       }),
       httpsAgent: new HttpsAgent({
         keepAlive: true,
         maxSockets: 4,
         maxFreeSockets: 2,
         timeout: 60000,
-        keepAliveMsecs: 1000
-      })
+        keepAliveMsecs: 1000,
+      }),
     });
 
     // Add request/response interceptors for logging (only if httpClient is properly initialized)
     if (this.httpClient && this.httpClient.interceptors) {
       this.httpClient.interceptors.request.use(
-      (config) => {
-        logger.info('Sending request to Python service', 'SegmentationService', {
-          url: config.url,
-          method: config.method,
-          baseURL: config.baseURL
-        });
-        return config;
-      },
-      (error) => {
-        logger.error('Request interceptor error', error instanceof Error ? error : undefined, 'SegmentationService');
-        return Promise.reject(error);
-      }
+        config => {
+          logger.info(
+            'Sending request to Python service',
+            'SegmentationService',
+            {
+              url: config.url,
+              method: config.method,
+              baseURL: config.baseURL,
+            }
+          );
+          return config;
+        },
+        error => {
+          logger.error(
+            'Request interceptor error',
+            error instanceof Error ? error : undefined,
+            'SegmentationService'
+          );
+          return Promise.reject(error);
+        }
       );
 
       this.httpClient.interceptors.response.use(
-      (response) => {
-        logger.info('Received response from Python service', 'SegmentationService', {
-          status: response.status,
-          url: response.config.url
-        });
-        return response;
-      },
-      (error) => {
-        logger.error('Response interceptor error', error instanceof Error ? error : undefined, 'SegmentationService', {
-          status: error.response?.status,
-          url: error.config?.url
-        });
-        return Promise.reject(error);
-      }
+        response => {
+          logger.info(
+            'Received response from Python service',
+            'SegmentationService',
+            {
+              status: response.status,
+              url: response.config.url,
+            }
+          );
+          return response;
+        },
+        error => {
+          logger.error(
+            'Response interceptor error',
+            error instanceof Error ? error : undefined,
+            'SegmentationService',
+            {
+              status: error.response?.status,
+              url: error.config?.url,
+            }
+          );
+          return Promise.reject(error);
+        }
       );
     }
   }
@@ -181,7 +210,11 @@ export class SegmentationService {
       const response = await this.httpClient.get('/api/v1/health');
       return response.data.status === 'healthy';
     } catch (error) {
-      logger.error('Python segmentation service health check failed', error instanceof Error ? error : undefined, 'SegmentationService');
+      logger.error(
+        'Python segmentation service health check failed',
+        error instanceof Error ? error : undefined,
+        'SegmentationService'
+      );
       return false;
     }
   }
@@ -194,8 +227,14 @@ export class SegmentationService {
       const response = await this.httpClient.get('/api/v1/models');
       return response.data;
     } catch (error) {
-      logger.error('Failed to get available models', error instanceof Error ? error : undefined, 'SegmentationService');
-      throw new Error(`Error loading available models: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      logger.error(
+        'Failed to get available models',
+        error instanceof Error ? error : undefined,
+        'SegmentationService'
+      );
+      throw new Error(
+        `Error loading available models: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -208,11 +247,15 @@ export class SegmentationService {
   ): Promise<T> {
     // Check if we're at the concurrent request limit
     if (this.concurrentRequestsPool.size >= this.maxConcurrentRequests) {
-      logger.warn('ML service concurrent request limit reached, waiting for slot', 'SegmentationService', {
-        currentRequests: this.concurrentRequestsPool.size,
-        maxConcurrentRequests: this.maxConcurrentRequests,
-        requestId
-      });
+      logger.warn(
+        'ML service concurrent request limit reached, waiting for slot',
+        'SegmentationService',
+        {
+          currentRequests: this.concurrentRequestsPool.size,
+          maxConcurrentRequests: this.maxConcurrentRequests,
+          requestId,
+        }
+      );
 
       // Wait for an available slot by monitoring the pool
       while (this.concurrentRequestsPool.size >= this.maxConcurrentRequests) {
@@ -226,12 +269,15 @@ export class SegmentationService {
       this.concurrentRequestsPool.delete(requestId);
     });
 
-    this.concurrentRequestsPool.set(requestId, requestPromise as Promise<SegmentationResponse>);
+    this.concurrentRequestsPool.set(
+      requestId,
+      requestPromise as Promise<SegmentationResponse>
+    );
 
     logger.debug('ML service request started', 'SegmentationService', {
       requestId,
       activeRequests: this.concurrentRequestsPool.size,
-      maxConcurrentRequests: this.maxConcurrentRequests
+      maxConcurrentRequests: this.maxConcurrentRequests,
     });
 
     return requestPromise;
@@ -249,7 +295,8 @@ export class SegmentationService {
     return {
       activeRequests,
       maxConcurrentRequests: this.maxConcurrentRequests,
-      utilizationPercentage: (activeRequests / this.maxConcurrentRequests) * 100
+      utilizationPercentage:
+        (activeRequests / this.maxConcurrentRequests) * 100,
     };
   }
 
@@ -263,23 +310,31 @@ export class SegmentationService {
   /**
    * Request segmentation for an image
    */
-  async requestSegmentation(request: SegmentationRequest): Promise<SegmentationResponse> {
+  async requestSegmentation(
+    request: SegmentationRequest
+  ): Promise<SegmentationResponse> {
     // Temporarily disabled tracing for development setup
     // const tracer = trace.getTracer('segmentation-service', '1.0.0');
     const requestId = RequestIdGenerator.generateRequestId();
-    
+
     // Log request for debugging in development
     logger.debug('Segmentation request (dev mode)', 'SegmentationService', {
-        'segmentation.image_id': request.imageId,
-        'segmentation.model': request.model || 'hrnet',
-        'segmentation.threshold': request.threshold || 0.5,
-        'segmentation.detect_holes': request.detectHoles || false,
-        'segmentation.user_id': request.userId,
-        'request.id': requestId,
-        'operation.name': 'segmentation_request',
+      'segmentation.image_id': request.imageId,
+      'segmentation.model': request.model || 'hrnet',
+      'segmentation.threshold': request.threshold || 0.5,
+      'segmentation.detect_holes': request.detectHoles || false,
+      'segmentation.user_id': request.userId,
+      'request.id': requestId,
+      'operation.name': 'segmentation_request',
     });
-    
-    const { imageId, model = 'hrnet', threshold = 0.5, userId, detectHoles } = request;
+
+    const {
+      imageId,
+      model = 'hrnet',
+      threshold = 0.5,
+      userId,
+      detectHoles,
+    } = request;
     const startTime = Date.now();
 
     try {
@@ -289,13 +344,13 @@ export class SegmentationService {
         threshold,
         detectHoles,
         userId,
-        requestId
+        requestId,
       });
 
       addSpanEvent('segmentation.request.start', {
-        'image_id': imageId,
-        'model_name': model,
-        'user_id': userId,
+        image_id: imageId,
+        model_name: model,
+        user_id: userId,
       });
 
       // Get image details and verify ownership
@@ -307,7 +362,11 @@ export class SegmentationService {
       }
 
       // Update image status to processing
-      await this.imageService.updateSegmentationStatus(imageId, 'processing', userId);
+      await this.imageService.updateSegmentationStatus(
+        imageId,
+        'processing',
+        userId
+      );
 
       // Get image buffer from storage
       const storage = getStorageProvider();
@@ -323,7 +382,7 @@ export class SegmentationService {
       const formData = new FormData();
       formData.append('file', imageBuffer, {
         filename: image.name,
-        contentType: image.mimeType || 'image/jpeg'
+        contentType: image.mimeType || 'image/jpeg',
       });
 
       // Add model, threshold and detect_holes parameters to form data
@@ -331,16 +390,20 @@ export class SegmentationService {
       formData.append('threshold', threshold.toString());
       formData.append('detect_holes', (detectHoles ?? true).toString());
 
-      logger.info('Sending segmentation request to ML service', 'SegmentationService', {
-        imageId,
-        imageName: image.name,
-        imageSize: imageBuffer.length,
-        model,
-        threshold,
-        detectHoles,
-        mlServiceUrl: this.pythonServiceUrl,
-        requestId
-      });
+      logger.info(
+        'Sending segmentation request to ML service',
+        'SegmentationService',
+        {
+          imageId,
+          imageName: image.name,
+          imageSize: imageBuffer.length,
+          model,
+          threshold,
+          detectHoles,
+          mlServiceUrl: this.pythonServiceUrl,
+          requestId,
+        }
+      );
 
       // Use concurrent request management for ML service calls
       const response = await this.manageConcurrentRequest(
@@ -373,7 +436,7 @@ export class SegmentationService {
                 'x-operation': 'segmentation_request',
               },
               maxBodyLength: Infinity,
-              maxContentLength: Infinity
+              maxContentLength: Infinity,
             });
 
             const mlCallDuration = Date.now() - mlCallStartTime;
@@ -400,7 +463,7 @@ export class SegmentationService {
 
               mlCallSpan.setStatus({
                 code: 'ERROR',
-                message: (mlError as Error).message
+                message: (mlError as Error).message,
               });
             }
 
@@ -417,8 +480,15 @@ export class SegmentationService {
 
       // Validate response data exists before assignment
       if (!response || !response.data) {
-        const error = new Error('Invalid response from ML service: missing data');
-        logger.error('ML service response validation failed', error, 'SegmentationService', { response, requestId });
+        const error = new Error(
+          'Invalid response from ML service: missing data'
+        );
+        logger.error(
+          'ML service response validation failed',
+          error,
+          'SegmentationService',
+          { response, requestId }
+        );
         throw error;
       }
 
@@ -427,91 +497,128 @@ export class SegmentationService {
       // Validate segmentation results
       const polygonCount = segmentationResult.polygons?.length || 0;
       const totalDuration = Date.now() - startTime;
-      
+
       if (polygonCount === 0) {
-        logger.warn('Segmentation returned 0 polygons - this may indicate an issue', 'SegmentationService', {
-          imageId,
-          model: segmentationResult.model_used,
-          threshold: segmentationResult.threshold_used,
-          imageName: image.name,
-          imageSize: segmentationResult.image_size,
-          requestId
-        });
-        
+        logger.warn(
+          'Segmentation returned 0 polygons - this may indicate an issue',
+          'SegmentationService',
+          {
+            imageId,
+            model: segmentationResult.model_used,
+            threshold: segmentationResult.threshold_used,
+            imageName: image.name,
+            imageSize: segmentationResult.image_size,
+            requestId,
+          }
+        );
+
         // Still save the results but with a warning flag
-        segmentationResult.error = 'No polygons detected - image may not contain detectable cells or threshold may need adjustment';
+        segmentationResult.error =
+          'No polygons detected - image may not contain detectable cells or threshold may need adjustment';
       }
 
       // Save segmentation results to database
       await this.saveSegmentationResultsInternal(imageId, segmentationResult);
 
       // Update image status - use 'segmented' even with 0 polygons to allow user review
-      await this.imageService.updateSegmentationStatus(imageId, 'segmented', userId);
+      await this.imageService.updateSegmentationStatus(
+        imageId,
+        'segmented',
+        userId
+      );
 
       // Calculate vertices statistics for logging
-      const verticesStats = segmentationResult.polygons.map(p => p.points?.length || 0);
-      const totalVertices = verticesStats.reduce((sum, count) => sum + count, 0);
-      const avgVertices = verticesStats.length > 0 ? totalVertices / verticesStats.length : 0;
+      const verticesStats = segmentationResult.polygons.map(
+        p => p.points?.length || 0
+      );
+      const totalVertices = verticesStats.reduce(
+        (sum, count) => sum + count,
+        0
+      );
+      const avgVertices =
+        verticesStats.length > 0 ? totalVertices / verticesStats.length : 0;
       const maxVertices = Math.max(...verticesStats, 0);
       const minVertices = Math.min(...verticesStats, 0);
 
-      logger.info('Segmentation completed successfully', 'SegmentationService', {
-        imageId,
-        model: segmentationResult.model_used,
-        polygonCount: segmentationResult.polygons.length,
-        processingTime: segmentationResult.processing_time,
-        totalDuration,
-        requestId,
-        verticesStats: {
-          total: totalVertices,
-          average: Math.round(avgVertices),
-          max: maxVertices,
-          min: minVertices,
-          perPolygon: verticesStats
+      logger.info(
+        'Segmentation completed successfully',
+        'SegmentationService',
+        {
+          imageId,
+          model: segmentationResult.model_used,
+          polygonCount: segmentationResult.polygons.length,
+          processingTime: segmentationResult.processing_time,
+          totalDuration,
+          requestId,
+          verticesStats: {
+            total: totalVertices,
+            average: Math.round(avgVertices),
+            max: maxVertices,
+            min: minVertices,
+            perPolygon: verticesStats,
+          },
         }
-      });
+      );
 
       return segmentationResult;
-
     } catch (error) {
       const totalDuration = Date.now() - startTime;
       const axiosError = error as AxiosError;
-      
+
       // Mark span as error
       markSpanError(error as Error);
 
       // Update image status to failed
       try {
-        await this.imageService.updateSegmentationStatus(imageId, 'failed', userId);
+        await this.imageService.updateSegmentationStatus(
+          imageId,
+          'failed',
+          userId
+        );
       } catch (statusError) {
-        logger.error('Failed to update image status to failed', statusError instanceof Error ? statusError : undefined, 'SegmentationService');
+        logger.error(
+          'Failed to update image status to failed',
+          statusError instanceof Error ? statusError : undefined,
+          'SegmentationService'
+        );
       }
 
-      logger.error('Segmentation failed', error instanceof Error ? error : new Error(String(error)), 'SegmentationService', {
-        imageId,
-        userId,
-        model,
-        threshold,
-        requestId,
-        totalDuration,
-        httpStatus: axiosError.response?.status,
-        httpStatusText: axiosError.response?.statusText,
-        responseData: axiosError.response?.data,
-        requestUrl: axiosError.config?.url,
-        requestMethod: axiosError.config?.method,
-        mlServiceUrl: this.pythonServiceUrl
-      });
-      
+      logger.error(
+        'Segmentation failed',
+        error instanceof Error ? error : new Error(String(error)),
+        'SegmentationService',
+        {
+          imageId,
+          userId,
+          model,
+          threshold,
+          requestId,
+          totalDuration,
+          httpStatus: axiosError.response?.status,
+          httpStatusText: axiosError.response?.statusText,
+          responseData: axiosError.response?.data,
+          requestUrl: axiosError.config?.url,
+          requestMethod: axiosError.config?.method,
+          mlServiceUrl: this.pythonServiceUrl,
+        }
+      );
+
       if (axiosError.response?.status === 400) {
-        throw new Error(`Invalid image or segmentation parameters: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Unknown error'}`);
+        throw new Error(
+          `Invalid image or segmentation parameters: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Unknown error'}`
+        );
       } else if (axiosError.response?.status === 500) {
-        throw new Error(`Segmentation service error: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Internal ML service error'}`);
+        throw new Error(
+          `Segmentation service error: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Internal ML service error'}`
+        );
       } else if (axiosError.code === 'ECONNREFUSED') {
         throw new Error('ML služba není dostupná - připojení odmítnuto');
       } else if (axiosError.code === 'ETIMEDOUT') {
         throw new Error('ML služba neodpovídá - timeout');
       } else {
-        throw new Error(`Segmentation error: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        throw new Error(
+          `Segmentation error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     }
   }
@@ -540,11 +647,15 @@ export class SegmentationService {
       processing_time: processingTime ? processingTime / 1000 : null,
       image_size: {
         width: imageWidth || 0,
-        height: imageHeight || 0
-      }
+        height: imageHeight || 0,
+      },
     };
 
-    return this.saveSegmentationResultsInternal(imageId, segmentationResult, awaitThumbnails);
+    return this.saveSegmentationResultsInternal(
+      imageId,
+      segmentationResult,
+      awaitThumbnails
+    );
   }
 
   /**
@@ -557,89 +668,129 @@ export class SegmentationService {
   ): Promise<void> {
     try {
       // Log the full segmentation result for debugging
-      logger.info('Received segmentation result for saving', 'SegmentationService', {
-        imageId,
-        hasImageSize: !!segmentationResult.image_size,
-        imageSize: segmentationResult.image_size,
-        polygonCount: segmentationResult.polygons?.length || 0,
-        modelUsed: segmentationResult.model_used,
-        thresholdUsed: segmentationResult.threshold_used
-      });
+      logger.info(
+        'Received segmentation result for saving',
+        'SegmentationService',
+        {
+          imageId,
+          hasImageSize: !!segmentationResult.image_size,
+          imageSize: segmentationResult.image_size,
+          polygonCount: segmentationResult.polygons?.length || 0,
+          modelUsed: segmentationResult.model_used,
+          thresholdUsed: segmentationResult.threshold_used,
+        }
+      );
 
       // Validate required fields
       if (!segmentationResult.image_size) {
         throw new Error('Missing image_size in segmentation result');
       }
 
-      if (typeof segmentationResult.image_size.width !== 'number' || 
-          typeof segmentationResult.image_size.height !== 'number') {
-        throw new Error(`Invalid image size format: width=${segmentationResult.image_size.width}, height=${segmentationResult.image_size.height}`);
+      if (
+        typeof segmentationResult.image_size.width !== 'number' ||
+        typeof segmentationResult.image_size.height !== 'number'
+      ) {
+        throw new Error(
+          `Invalid image size format: width=${segmentationResult.image_size.width}, height=${segmentationResult.image_size.height}`
+        );
       }
 
       // Validate and clean polygons before storage
-      const validPolygons = (segmentationResult.polygons || []).filter(polygon => {
-        // Validate polygon structure
-        if (!polygon || typeof polygon !== 'object') {
-          logger.warn('Invalid polygon structure detected', 'SegmentationService', { polygon });
-          return false;
-        }
+      const validPolygons = (segmentationResult.polygons || []).filter(
+        polygon => {
+          // Validate polygon structure
+          if (!polygon || typeof polygon !== 'object') {
+            logger.warn(
+              'Invalid polygon structure detected',
+              'SegmentationService',
+              { polygon }
+            );
+            return false;
+          }
 
-        // Validate points array
-        if (!Array.isArray(polygon.points) || polygon.points.length < 3) {
-          logger.warn('Polygon has insufficient points', 'SegmentationService', { 
-            pointsLength: polygon.points?.length 
+          // Validate points array
+          if (!Array.isArray(polygon.points) || polygon.points.length < 3) {
+            logger.warn(
+              'Polygon has insufficient points',
+              'SegmentationService',
+              {
+                pointsLength: polygon.points?.length,
+              }
+            );
+            return false;
+          }
+
+          // Validate each point
+          const validPoints = polygon.points.every(point => {
+            return (
+              point !== null &&
+              point !== undefined &&
+              typeof point.x === 'number' &&
+              typeof point.y === 'number' &&
+              !isNaN(point.x) &&
+              !isNaN(point.y) &&
+              isFinite(point.x) &&
+              isFinite(point.y)
+            );
           });
-          return false;
+
+          if (!validPoints) {
+            logger.warn('Polygon has invalid points', 'SegmentationService', {
+              points: polygon.points,
+            });
+            return false;
+          }
+
+          // Validate polygon type
+          if (
+            !polygon.type ||
+            !['external', 'internal'].includes(polygon.type)
+          ) {
+            logger.warn(
+              'Polygon has invalid or missing type',
+              'SegmentationService',
+              {
+                type: polygon.type,
+              }
+            );
+            return false;
+          }
+
+          // Validate parent_id for internal polygons
+          if (
+            polygon.type === 'internal' &&
+            polygon.parent_id &&
+            typeof polygon.parent_id !== 'string'
+          ) {
+            logger.warn(
+              'Internal polygon has invalid parent_id',
+              'SegmentationService',
+              {
+                parent_id: polygon.parent_id,
+              }
+            );
+            return false;
+          }
+
+          return true;
         }
-
-        // Validate each point
-        const validPoints = polygon.points.every(point => {
-          return point !== null && 
-                 point !== undefined && 
-                 typeof point.x === 'number' && 
-                 typeof point.y === 'number' && 
-                 !isNaN(point.x) && 
-                 !isNaN(point.y) &&
-                 isFinite(point.x) &&
-                 isFinite(point.y);
-        });
-
-        if (!validPoints) {
-          logger.warn('Polygon has invalid points', 'SegmentationService', { 
-            points: polygon.points 
-          });
-          return false;
-        }
-
-        // Validate polygon type
-        if (!polygon.type || !['external', 'internal'].includes(polygon.type)) {
-          logger.warn('Polygon has invalid or missing type', 'SegmentationService', { 
-            type: polygon.type 
-          });
-          return false;
-        }
-
-        // Validate parent_id for internal polygons
-        if (polygon.type === 'internal' && polygon.parent_id && typeof polygon.parent_id !== 'string') {
-          logger.warn('Internal polygon has invalid parent_id', 'SegmentationService', { 
-            parent_id: polygon.parent_id 
-          });
-          return false;
-        }
-
-        return true;
-      });
+      );
 
       // Count polygon types for logging
-      const externalCount = validPolygons.filter(p => p.type === 'external').length;
-      const internalCount = validPolygons.filter(p => p.type === 'internal').length;
+      const externalCount = validPolygons.filter(
+        p => p.type === 'external'
+      ).length;
+      const internalCount = validPolygons.filter(
+        p => p.type === 'internal'
+      ).length;
 
       logger.info('Polygon validation results', 'SegmentationService', {
         originalCount: segmentationResult.polygons?.length || 0,
         validCount: validPolygons.length,
         externalCount,
         internalCount,
-        filteredOut: (segmentationResult.polygons?.length || 0) - validPolygons.length
+        filteredOut:
+          (segmentationResult.polygons?.length || 0) - validPolygons.length,
       });
 
       // Convert polygons to JSON format for storage
@@ -651,9 +802,11 @@ export class SegmentationService {
         imageSize: segmentationResult.image_size,
         createdAt: new Date(),
         polygonCount: validPolygons.length,
-        averageConfidence: validPolygons.length > 0
-          ? validPolygons.reduce((sum, p) => sum + (p.confidence || 0), 0) / validPolygons.length
-          : 0
+        averageConfidence:
+          validPolygons.length > 0
+            ? validPolygons.reduce((sum, p) => sum + (p.confidence || 0), 0) /
+              validPolygons.length
+            : 0,
       };
 
       // Log upsert data
@@ -664,10 +817,12 @@ export class SegmentationService {
           model: segmentationResult.model_used,
           threshold: segmentationResult.threshold_used,
           confidence: segmentationData.averageConfidence,
-          processingTime: segmentationResult.processing_time ? Math.round(segmentationResult.processing_time * 1000) : null,
+          processingTime: segmentationResult.processing_time
+            ? Math.round(segmentationResult.processing_time * 1000)
+            : null,
           imageWidth: segmentationResult.image_size.width,
           imageHeight: segmentationResult.image_size.height,
-          updatedAt: new Date()
+          updatedAt: new Date(),
         },
         create: {
           id: uuidv4(),
@@ -676,21 +831,27 @@ export class SegmentationService {
           model: segmentationResult.model_used,
           threshold: segmentationResult.threshold_used,
           confidence: segmentationData.averageConfidence,
-          processingTime: segmentationResult.processing_time ? Math.round(segmentationResult.processing_time * 1000) : null,
+          processingTime: segmentationResult.processing_time
+            ? Math.round(segmentationResult.processing_time * 1000)
+            : null,
           imageWidth: segmentationResult.image_size.width,
           imageHeight: segmentationResult.image_size.height,
           createdAt: new Date(),
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       };
 
-      logger.info('About to execute segmentation upsert', 'SegmentationService', {
-        imageId,
-        updateImageWidth: upsertData.update.imageWidth,
-        updateImageHeight: upsertData.update.imageHeight,
-        createImageWidth: upsertData.create.imageWidth,
-        createImageHeight: upsertData.create.imageHeight
-      });
+      logger.info(
+        'About to execute segmentation upsert',
+        'SegmentationService',
+        {
+          imageId,
+          updateImageWidth: upsertData.update.imageWidth,
+          updateImageHeight: upsertData.update.imageHeight,
+          createImageWidth: upsertData.create.imageWidth,
+          createImageHeight: upsertData.create.imageHeight,
+        }
+      );
 
       // Save to database - create or update segmentation data
       const result = await this.prisma.segmentation.upsert(upsertData);
@@ -700,12 +861,16 @@ export class SegmentationService {
       try {
         // Use unified ThumbnailManager for both polygon and image thumbnails with retry logic
         await this.thumbnailManager.generateAllThumbnails(result.id);
-        
-        logger.info('Thumbnails generated successfully', 'SegmentationService', {
-          imageId,
-          segmentationId: result.id,
-          batchType: awaitThumbnails ? 'last-batch' : 'regular-batch'
-        });
+
+        logger.info(
+          'Thumbnails generated successfully',
+          'SegmentationService',
+          {
+            imageId,
+            segmentationId: result.id,
+            batchType: awaitThumbnails ? 'last-batch' : 'regular-batch',
+          }
+        );
       } catch (error) {
         logger.error(
           `Failed to generate thumbnails after ML segmentation for ${imageId}`,
@@ -714,22 +879,31 @@ export class SegmentationService {
           {
             segmentationId: result.id,
             batchType: awaitThumbnails ? 'last-batch' : 'regular-batch',
-            errorMessage: error instanceof Error ? error.message : String(error)
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
           }
         );
         // Continue processing - don't block the queue, but log the failure for potential regeneration
       }
 
-      logger.info('Segmentation results saved to database', 'SegmentationService', {
-        imageId,
-        polygonCount: validPolygons.length,
-        segmentationId: result.id
-      });
-
+      logger.info(
+        'Segmentation results saved to database',
+        'SegmentationService',
+        {
+          imageId,
+          polygonCount: validPolygons.length,
+          segmentationId: result.id,
+        }
+      );
     } catch (error) {
-      logger.error('Failed to save segmentation results', error instanceof Error ? error : undefined, 'SegmentationService', {
-        imageId
-      });
+      logger.error(
+        'Failed to save segmentation results',
+        error instanceof Error ? error : undefined,
+        'SegmentationService',
+        {
+          imageId,
+        }
+      );
       throw error;
     }
   }
@@ -738,8 +912,8 @@ export class SegmentationService {
    * Request batch segmentation for multiple images using ML service batch endpoint
    */
   async requestBatchSegmentation(
-    images: ImageForSegmentation[], 
-    model = 'hrnet', 
+    images: ImageForSegmentation[],
+    model = 'hrnet',
     threshold = 0.5,
     detectHoles = true
   ): Promise<SegmentationResponse[]> {
@@ -747,7 +921,7 @@ export class SegmentationService {
       batchSize: images.length,
       model,
       threshold,
-      imageIds: images.map(img => img.id)
+      imageIds: images.map(img => img.id),
     });
 
     try {
@@ -759,13 +933,17 @@ export class SegmentationService {
       for (let i = 0; i < images.length; i++) {
         const image = images[i];
         if (!image || !image.originalPath) {
-          logger.warn('Skipping invalid image at index', 'SegmentationService', { index: i });
+          logger.warn(
+            'Skipping invalid image at index',
+            'SegmentationService',
+            { index: i }
+          );
           continue;
         }
         const imageBuffer = await storage.getBuffer(image.originalPath);
         formData.append('files', imageBuffer, {
           filename: image.name,
-          contentType: image.mimeType || 'image/jpeg'
+          contentType: image.mimeType || 'image/jpeg',
         });
       }
 
@@ -774,26 +952,39 @@ export class SegmentationService {
       formData.append('threshold', threshold.toString());
       formData.append('detect_holes', detectHoles.toString());
 
-      logger.info('Sending batch segmentation request to ML service', 'SegmentationService', {
-        batchSize: images.length,
-        model,
-        threshold,
-        detectHoles,
-        mlServiceUrl: this.pythonServiceUrl
-      });
+      logger.info(
+        'Sending batch segmentation request to ML service',
+        'SegmentationService',
+        {
+          batchSize: images.length,
+          model,
+          threshold,
+          detectHoles,
+          mlServiceUrl: this.pythonServiceUrl,
+        }
+      );
 
       // Send request to ML service batch endpoint
-      const response = await this.httpClient.post('/api/v1/batch-segment', formData, {
-        headers: {
-          ...formData.getHeaders()
-        },
-        timeout: 300000, // 5 minute timeout for batch processing
-        maxBodyLength: 100 * 1024 * 1024, // 100MB
-        maxContentLength: 100 * 1024 * 1024
-      });
+      const response = await this.httpClient.post(
+        '/api/v1/batch-segment',
+        formData,
+        {
+          headers: {
+            ...formData.getHeaders(),
+          },
+          timeout: 300000, // 5 minute timeout for batch processing
+          maxBodyLength: 100 * 1024 * 1024, // 100MB
+          maxContentLength: 100 * 1024 * 1024,
+        }
+      );
 
       if (!response.data || !response.data.results) {
-        logger.error('Invalid response from ML service', new Error(`Invalid ML service response: status ${response.status}, data: ${JSON.stringify(response.data)}`));
+        logger.error(
+          'Invalid response from ML service',
+          new Error(
+            `Invalid ML service response: status ${response.status}, data: ${JSON.stringify(response.data)}`
+          )
+        );
         throw new Error('Invalid response from ML service');
       }
 
@@ -801,35 +992,53 @@ export class SegmentationService {
       const results: SegmentationResponse[] = [];
 
       // Process each result in the batch
-      for (let i = 0; i < batchResult.results.length && i < images.length; i++) {
+      for (
+        let i = 0;
+        i < batchResult.results.length && i < images.length;
+        i++
+      ) {
         const result = batchResult.results[i];
         const image = images[i];
 
         if (!image || !image.originalPath) {
-          logger.warn('Missing or invalid image for batch result', 'SegmentationService', { batchIndex: i });
+          logger.warn(
+            'Missing or invalid image for batch result',
+            'SegmentationService',
+            { batchIndex: i }
+          );
           continue;
         }
 
         if (result.success && result.polygons) {
           // Calculate vertices statistics for logging
-          const verticesStats = result.polygons.map((p: SegmentationPolygon) => p.points?.length || 0);
-          const totalVertices = verticesStats.reduce((sum: number, count: number) => sum + count, 0);
-          const avgVertices = verticesStats.length > 0 ? totalVertices / verticesStats.length : 0;
+          const verticesStats = result.polygons.map(
+            (p: SegmentationPolygon) => p.points?.length || 0
+          );
+          const totalVertices = verticesStats.reduce(
+            (sum: number, count: number) => sum + count,
+            0
+          );
+          const avgVertices =
+            verticesStats.length > 0 ? totalVertices / verticesStats.length : 0;
           const maxVertices = Math.max(...verticesStats, 0);
 
-          logger.info('Batch segmentation completed successfully', 'SegmentationService', {
-            imageId: image.id,
-            batchIndex: i,
-            model: result.model_used,
-            polygonCount: result.polygons.length,
-            processingTime: result.processing_time,
-            verticesStats: {
-              total: totalVertices,
-              average: Math.round(avgVertices),
-              max: maxVertices,
-              perPolygon: verticesStats
+          logger.info(
+            'Batch segmentation completed successfully',
+            'SegmentationService',
+            {
+              imageId: image.id,
+              batchIndex: i,
+              model: result.model_used,
+              polygonCount: result.polygons.length,
+              processingTime: result.processing_time,
+              verticesStats: {
+                total: totalVertices,
+                average: Math.round(avgVertices),
+                max: maxVertices,
+                perPolygon: verticesStats,
+              },
             }
-          });
+          );
 
           results.push({
             success: true,
@@ -838,13 +1047,13 @@ export class SegmentationService {
             threshold_used: result.threshold_used,
             confidence: result.confidence,
             processing_time: result.processing_time,
-            image_size: result.image_size
+            image_size: result.image_size,
           });
         } else {
           logger.warn('Batch segmentation item failed', 'SegmentationService', {
             imageId: image.id,
             batchIndex: i,
-            error: result.error || 'No polygons found'
+            error: result.error || 'No polygons found',
           });
 
           results.push({
@@ -854,7 +1063,7 @@ export class SegmentationService {
             threshold_used: threshold,
             confidence: null,
             processing_time: null,
-            image_size: { width: image.width || 0, height: image.height || 0 }
+            image_size: { width: image.width || 0, height: image.height || 0 },
           });
         }
       }
@@ -862,11 +1071,10 @@ export class SegmentationService {
       logger.info('Batch segmentation completed', 'SegmentationService', {
         batchSize: images.length,
         successCount: results.filter(r => r.success).length,
-        totalProcessingTime: batchResult.processing_time
+        totalProcessingTime: batchResult.processing_time,
       });
 
       return results;
-
     } catch (error) {
       // Enhanced error logging for debugging ML service issues
       const axiosError = error as AxiosError;
@@ -883,20 +1091,25 @@ export class SegmentationService {
           requestConfig: {
             url: axiosError.config?.url,
             method: axiosError.config?.method,
-            contentType: axiosError.config?.headers?.['Content-Type']
-          }
+            contentType: axiosError.config?.headers?.['Content-Type'],
+          },
         });
       } else {
-        logger.error('Batch segmentation failed', error instanceof Error ? error : undefined, 'SegmentationService', {
-          batchSize: images.length,
-          model,
-          threshold,
-          imageIds: images.map(img => img.id)
-        });
+        logger.error(
+          'Batch segmentation failed',
+          error instanceof Error ? error : undefined,
+          'SegmentationService',
+          {
+            batchSize: images.length,
+            model,
+            threshold,
+            imageIds: images.map(img => img.id),
+          }
+        );
       }
 
       // Return failed results for all images
-      return images.map((image) => ({
+      return images.map(image => ({
         success: false,
         polygons: [],
         model_used: model,
@@ -904,7 +1117,7 @@ export class SegmentationService {
         confidence: null,
         processing_time: null,
         image_size: { width: image.width || 0, height: image.height || 0 },
-        error: error instanceof Error ? error.message : 'Unknown error'
+        error: error instanceof Error ? error.message : 'Unknown error',
       }));
     }
   }
@@ -912,43 +1125,58 @@ export class SegmentationService {
   /**
    * Get segmentation results for an image
    */
-  async getSegmentationResults(imageId: string, userId: string): Promise<SegmentationResponse | null> {
-    logger.debug('Getting segmentation results', 'SegmentationService', { imageId, userId });
+  async getSegmentationResults(
+    imageId: string,
+    userId: string
+  ): Promise<SegmentationResponse | null> {
+    logger.debug('Getting segmentation results', 'SegmentationService', {
+      imageId,
+      userId,
+    });
 
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
-      logger.debug('Image not found or no access', 'SegmentationService', { imageId, userId });
+      logger.debug('Image not found or no access', 'SegmentationService', {
+        imageId,
+        userId,
+      });
       return null; // Return null instead of throwing error, controller will handle 404
     }
 
     // Get segmentation data
     const segmentationData = await this.prisma.segmentation.findUnique({
-      where: { imageId }
+      where: { imageId },
     });
 
     if (!segmentationData) {
-      logger.debug('No segmentation data found for image', 'SegmentationService', { imageId });
+      logger.debug(
+        'No segmentation data found for image',
+        'SegmentationService',
+        { imageId }
+      );
       return null;
     }
 
     // Use centralized polygon validator for consistent parsing
     const polygonResult = PolygonValidator.parsePolygonData(
-      segmentationData.polygons, 
-      'single-fetch', 
+      segmentationData.polygons,
+      'single-fetch',
       imageId
     );
-    
+
     const polygons = polygonResult.isValid ? polygonResult.polygons : [];
 
     // Convert Polygon[] to SegmentationPolygon[] by adding required properties
-    const segmentationPolygons: SegmentationPolygon[] = polygons.map((polygon, _index) => ({
-      points: polygon.points.map(p => ({ x: p.x, y: p.y })),
-      area: 0, // This would be calculated properly in a real implementation
-      confidence: polygon.confidence || 0.8,
-      type: 'external' as const, // Default to external, this should be determined by the logic
-      parent_id: undefined
-    }));
+    const segmentationPolygons: SegmentationPolygon[] = polygons.map(
+      (polygon, _index) => ({
+        points: polygon.points.map(p => ({ x: p.x, y: p.y })),
+        area: 0, // This would be calculated properly in a real implementation
+        confidence: polygon.confidence || 0.8,
+        type: 'external' as const, // Default to external, this should be determined by the logic
+        parent_id: undefined,
+      })
+    );
 
     const result: SegmentationResponse = {
       success: true,
@@ -956,22 +1184,28 @@ export class SegmentationService {
       model_used: segmentationData.model,
       threshold_used: segmentationData.threshold,
       confidence: segmentationData.confidence,
-      processing_time: segmentationData.processingTime ? segmentationData.processingTime / 1000 : null,
-      image_size: { 
-        width: segmentationData.imageWidth || 0, 
-        height: segmentationData.imageHeight || 0 
+      processing_time: segmentationData.processingTime
+        ? segmentationData.processingTime / 1000
+        : null,
+      image_size: {
+        width: segmentationData.imageWidth || 0,
+        height: segmentationData.imageHeight || 0,
       },
       // Add image dimensions for frontend rendering
       imageWidth: segmentationData.imageWidth || 0,
-      imageHeight: segmentationData.imageHeight || 0
+      imageHeight: segmentationData.imageHeight || 0,
     };
 
-    logger.debug('Successfully retrieved segmentation results', 'SegmentationService', {
-      imageId,
-      polygonCount: polygons.length,
-      model: segmentationData.model,
-      imageSize: `${segmentationData.imageWidth}x${segmentationData.imageHeight}`
-    });
+    logger.debug(
+      'Successfully retrieved segmentation results',
+      'SegmentationService',
+      {
+        imageId,
+        polygonCount: polygons.length,
+        model: segmentationData.model,
+        imageSize: `${segmentationData.imageWidth}x${segmentationData.imageHeight}`,
+      }
+    );
 
     return result;
   }
@@ -980,10 +1214,10 @@ export class SegmentationService {
    * Update segmentation results for an image
    */
   async updateSegmentationResults(
-    imageId: string, 
-    polygons: SegmentationPolygon[], 
-    userId: string, 
-    imageWidth?: number, 
+    imageId: string,
+    polygons: SegmentationPolygon[],
+    userId: string,
+    imageWidth?: number,
     imageHeight?: number
   ): Promise<{
     id: string;
@@ -1006,38 +1240,50 @@ export class SegmentationService {
 
     // Check if segmentation exists
     const existingSegmentation = await this.prisma.segmentation.findUnique({
-      where: { imageId }
+      where: { imageId },
     });
 
     const polygonsJson = JSON.stringify(polygons);
-    
+
     // Calculate statistics from polygons
-    const externalPolygons = polygons.filter((p: SegmentationPolygon) => p.type === 'external');
-    const internalPolygons = polygons.filter((p: SegmentationPolygon) => p.type === 'internal');
-    const avgConfidence = polygons.reduce((sum: number, p: SegmentationPolygon) => sum + (p.confidence || 0.8), 0) / polygons.length;
+    const externalPolygons = polygons.filter(
+      (p: SegmentationPolygon) => p.type === 'external'
+    );
+    const internalPolygons = polygons.filter(
+      (p: SegmentationPolygon) => p.type === 'internal'
+    );
+    const avgConfidence =
+      polygons.reduce(
+        (sum: number, p: SegmentationPolygon) => sum + (p.confidence || 0.8),
+        0
+      ) / polygons.length;
 
     if (existingSegmentation) {
       // Update existing segmentation
       const updateData: Prisma.SegmentationUpdateInput = {
         polygons: polygonsJson,
         confidence: avgConfidence,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
-      
+
       // Update image dimensions if provided
       if (imageWidth && imageHeight) {
         updateData.imageWidth = imageWidth;
         updateData.imageHeight = imageHeight;
-        logger.debug('Updating segmentation with new image dimensions', 'SegmentationService', {
-          imageId,
-          oldDimensions: `${existingSegmentation.imageWidth}x${existingSegmentation.imageHeight}`,
-          newDimensions: `${imageWidth}x${imageHeight}`
-        });
+        logger.debug(
+          'Updating segmentation with new image dimensions',
+          'SegmentationService',
+          {
+            imageId,
+            oldDimensions: `${existingSegmentation.imageWidth}x${existingSegmentation.imageHeight}`,
+            newDimensions: `${imageWidth}x${imageHeight}`,
+          }
+        );
       }
-      
+
       const updated = await this.prisma.segmentation.update({
         where: { id: existingSegmentation.id },
-        data: updateData
+        data: updateData,
       });
 
       // Generate thumbnails asynchronously after update
@@ -1049,12 +1295,12 @@ export class SegmentationService {
         );
       });
 
-      logger.info('Segmentation results updated', 'SegmentationService', { 
-        imageId, 
+      logger.info('Segmentation results updated', 'SegmentationService', {
+        imageId,
         userId,
         polygonCount: polygons.length,
         externalCount: externalPolygons.length,
-        internalCount: internalPolygons.length
+        internalCount: internalPolygons.length,
       });
 
       return {
@@ -1068,36 +1314,44 @@ export class SegmentationService {
         imageHeight: updated.imageHeight,
         status: 'completed',
         createdAt: updated.createdAt,
-        updatedAt: updated.updatedAt
+        updatedAt: updated.updatedAt,
       };
     } else {
       // Create new segmentation record
       const createData: Prisma.SegmentationCreateInput = {
         image: {
-          connect: { id: imageId }
+          connect: { id: imageId },
         },
         polygons: polygonsJson,
         model: 'manual', // Manual editing
         threshold: 0.5,
-        confidence: avgConfidence
+        confidence: avgConfidence,
       };
-      
+
       // Include image dimensions if provided
       if (imageWidth && imageHeight) {
         createData.imageWidth = imageWidth;
         createData.imageHeight = imageHeight;
-        logger.debug('Creating segmentation with image dimensions', 'SegmentationService', {
-          imageId,
-          dimensions: `${imageWidth}x${imageHeight}`
-        });
+        logger.debug(
+          'Creating segmentation with image dimensions',
+          'SegmentationService',
+          {
+            imageId,
+            dimensions: `${imageWidth}x${imageHeight}`,
+          }
+        );
       }
-      
+
       const created = await this.prisma.segmentation.create({
-        data: createData
+        data: createData,
       });
 
       // Update image segmentation status
-      await this.imageService.updateSegmentationStatus(imageId, 'segmented', userId);
+      await this.imageService.updateSegmentationStatus(
+        imageId,
+        'segmented',
+        userId
+      );
 
       // Generate thumbnails asynchronously after creation
       this.thumbnailManager.generateAllThumbnails(created.id).catch(error => {
@@ -1108,12 +1362,12 @@ export class SegmentationService {
         );
       });
 
-      logger.info('Segmentation results created', 'SegmentationService', { 
-        imageId, 
+      logger.info('Segmentation results created', 'SegmentationService', {
+        imageId,
         userId,
         polygonCount: polygons.length,
         externalCount: externalPolygons.length,
-        internalCount: internalPolygons.length
+        internalCount: internalPolygons.length,
       });
 
       return {
@@ -1127,7 +1381,7 @@ export class SegmentationService {
         imageHeight: created.imageHeight,
         status: 'completed',
         createdAt: created.createdAt,
-        updatedAt: created.updatedAt
+        updatedAt: created.updatedAt,
       };
     }
   }
@@ -1135,7 +1389,10 @@ export class SegmentationService {
   /**
    * Delete segmentation results for an image
    */
-  async deleteSegmentationResults(imageId: string, userId: string): Promise<void> {
+  async deleteSegmentationResults(
+    imageId: string,
+    userId: string
+  ): Promise<void> {
     // Verify image ownership
     const image = await this.imageService.getImageById(imageId, userId);
     if (!image) {
@@ -1144,22 +1401,38 @@ export class SegmentationService {
 
     // Delete segmentation data
     await this.prisma.segmentation.deleteMany({
-      where: { imageId }
+      where: { imageId },
     });
 
     // Reset image segmentation status
-    await this.imageService.updateSegmentationStatus(imageId, 'no_segmentation', userId);
+    await this.imageService.updateSegmentationStatus(
+      imageId,
+      'no_segmentation',
+      userId
+    );
 
-    logger.info('Segmentation results deleted', 'SegmentationService', { imageId, userId });
+    logger.info('Segmentation results deleted', 'SegmentationService', {
+      imageId,
+      userId,
+    });
   }
 
   /**
    * Get segmentation statistics for a project
    */
-  async getProjectSegmentationStats(projectId: string, userId: string): Promise<{ totalImages: number; processedImages: number; totalPolygons: number; averageConfidence: number; models: Record<string, number> }> {
+  async getProjectSegmentationStats(
+    projectId: string,
+    userId: string
+  ): Promise<{
+    totalImages: number;
+    processedImages: number;
+    totalPolygons: number;
+    averageConfidence: number;
+    models: Record<string, number>;
+  }> {
     // Verify project ownership
     const project = await this.prisma.project.findFirst({
-      where: { id: projectId, userId }
+      where: { id: projectId, userId },
     });
 
     if (!project) {
@@ -1168,40 +1441,45 @@ export class SegmentationService {
 
     // Get total images count for the project
     const totalImages = await this.prisma.image.count({
-      where: { projectId }
+      where: { projectId },
     });
 
     // Get all segmentation data for the project
     const segmentationData = await this.prisma.segmentation.findMany({
       where: {
         image: {
-          projectId
-        }
+          projectId,
+        },
       },
       include: {
         image: {
           select: {
             name: true,
-            segmentationStatus: true
-          }
-        }
-      }
+            segmentationStatus: true,
+          },
+        },
+      },
     });
 
     // Calculate statistics
     const totalSegmented = segmentationData.length;
-    
+
     // Calculate total polygons using centralized validator
     const totalPolygons = segmentationData.reduce((sum, data) => {
       const polygonCount = PolygonValidator.getPolygonCount(data.polygons);
       return sum + polygonCount;
     }, 0);
 
-    const _averagePolygonsPerImage = totalSegmented > 0 ? totalPolygons / totalSegmented : 0;
-    
-    const averageConfidence = segmentationData.length > 0
-      ? segmentationData.reduce((sum, data) => sum + (data.confidence || 0), 0) / segmentationData.length
-      : 0;
+    const _averagePolygonsPerImage =
+      totalSegmented > 0 ? totalPolygons / totalSegmented : 0;
+
+    const averageConfidence =
+      segmentationData.length > 0
+        ? segmentationData.reduce(
+            (sum, data) => sum + (data.confidence || 0),
+            0
+          ) / segmentationData.length
+        : 0;
 
     const modelUsage: Record<string, number> = {};
     segmentationData.forEach(data => {
@@ -1216,7 +1494,7 @@ export class SegmentationService {
       processedImages: totalSegmented,
       totalPolygons,
       averageConfidence,
-      models: modelUsage
+      models: modelUsage,
     };
   }
 
@@ -1229,7 +1507,16 @@ export class SegmentationService {
     threshold = 0.5,
     userId: string,
     detectHoles?: boolean
-  ): Promise<{ successful: number; failed: number; results: Array<{ imageId: string; success: boolean; error?: string; result?: SegmentationResponse }> }> {
+  ): Promise<{
+    successful: number;
+    failed: number;
+    results: Array<{
+      imageId: string;
+      success: boolean;
+      error?: string;
+      result?: SegmentationResponse;
+    }>;
+  }> {
     const results = [];
     let successful = 0;
     let failed = 0;
@@ -1239,7 +1526,7 @@ export class SegmentationService {
       model,
       threshold,
       detectHoles,
-      userId
+      userId,
     });
 
     for (const imageId of imageIds) {
@@ -1249,40 +1536,44 @@ export class SegmentationService {
           model,
           threshold,
           userId,
-          detectHoles
+          detectHoles,
         });
-        
+
         results.push({
           imageId,
           success: true,
-          result
+          result,
         });
         successful++;
-
       } catch (error) {
         results.push({
           imageId,
           success: false,
-          error: error instanceof Error ? error.message : 'Unknown error'
+          error: error instanceof Error ? error.message : 'Unknown error',
         });
         failed++;
 
-        logger.error('Batch processing failed for image', error instanceof Error ? error : undefined, 'SegmentationService', {
-          imageId
-        });
+        logger.error(
+          'Batch processing failed for image',
+          error instanceof Error ? error : undefined,
+          'SegmentationService',
+          {
+            imageId,
+          }
+        );
       }
     }
 
     logger.info('Batch segmentation completed', 'SegmentationService', {
       successful,
       failed,
-      userId
+      userId,
     });
 
     return {
       successful,
       failed,
-      results
+      results,
     };
   }
 
@@ -1300,32 +1591,32 @@ export class SegmentationService {
       const accessibleImages = await this.prisma.image.findMany({
         where: {
           id: { in: imageIds },
-          project: { userId }
+          project: { userId },
         },
-        select: { id: true }
+        select: { id: true },
       });
 
       const accessibleImageIds = new Set(accessibleImages.map(img => img.id));
-      
+
       // Fetch all segmentation results in a single query - NO INCLUDES, use JSON parsing
       const segmentations = await this.prisma.segmentation.findMany({
         where: {
-          imageId: { in: Array.from(accessibleImageIds) }
-        }
+          imageId: { in: Array.from(accessibleImageIds) },
+        },
         // Removed the problematic segmentationPolygons include
       });
 
       // Transform results into a map for easy lookup
       const results: Record<string, unknown> = {};
-      
+
       for (const segmentation of segmentations) {
         // Use centralized polygon validator for consistent parsing
         const polygonResult = PolygonValidator.parsePolygonData(
-          segmentation.polygons, 
-          'batch-fetch', 
+          segmentation.polygons,
+          'batch-fetch',
           segmentation.imageId
         );
-        
+
         const polygons = polygonResult.isValid ? polygonResult.polygons : [];
 
         // Use same response format as single getSegmentationResults method
@@ -1335,14 +1626,16 @@ export class SegmentationService {
           model_used: segmentation.model,
           threshold_used: segmentation.threshold,
           confidence: segmentation.confidence,
-          processing_time: segmentation.processingTime ? segmentation.processingTime / 1000 : null,
-          image_size: { 
-            width: segmentation.imageWidth || 0, 
-            height: segmentation.imageHeight || 0 
+          processing_time: segmentation.processingTime
+            ? segmentation.processingTime / 1000
+            : null,
+          image_size: {
+            width: segmentation.imageWidth || 0,
+            height: segmentation.imageHeight || 0,
           },
           // Add image dimensions for frontend rendering
           imageWidth: segmentation.imageWidth || 0,
-          imageHeight: segmentation.imageHeight || 0
+          imageHeight: segmentation.imageHeight || 0,
         };
       }
 
@@ -1353,18 +1646,28 @@ export class SegmentationService {
         }
       }
 
-      logger.debug('Batch segmentation results fetched successfully', 'SegmentationService', {
-        requestedImages: imageIds.length,
-        accessibleImages: accessibleImageIds.size,
-        resultsFound: Object.keys(results).filter(id => results[id] !== null).length
-      });
+      logger.debug(
+        'Batch segmentation results fetched successfully',
+        'SegmentationService',
+        {
+          requestedImages: imageIds.length,
+          accessibleImages: accessibleImageIds.size,
+          resultsFound: Object.keys(results).filter(id => results[id] !== null)
+            .length,
+        }
+      );
 
       return results;
     } catch (error) {
-      logger.error('Failed to batch fetch segmentation results', error as Error, 'SegmentationService', {
-        imageCount: imageIds.length,
-        userId
-      });
+      logger.error(
+        'Failed to batch fetch segmentation results',
+        error as Error,
+        'SegmentationService',
+        {
+          imageCount: imageIds.length,
+          userId,
+        }
+      );
       throw error;
     }
   }

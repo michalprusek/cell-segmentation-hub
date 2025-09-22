@@ -15,7 +15,7 @@ import {
   type ResetPasswordRequestData,
   type ResetPasswordConfirmData,
   type ChangePasswordData,
-  type RefreshTokenData
+  type RefreshTokenData,
 } from '../../auth/validation';
 
 /**
@@ -90,20 +90,20 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   if (!validationResult.success) {
     const errors = validationResult.error.errors.map(err => ({
       field: err.path.join('.'),
-      message: err.message
+      message: err.message,
     }));
     const apiError = {
       code: 'VALIDATION_ERROR' as const,
       message: 'Validation failed',
-      details: { errors }
+      details: { errors },
     };
     return ResponseHelper.error(res, apiError, 400);
   }
-  
+
   const data: RegisterData = validationResult.data;
-  
+
   const result = await AuthService.register(data);
-  
+
   return ResponseHelper.success(res, result, result.message, 201);
 });
 
@@ -189,44 +189,46 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   if (!validationResult.success) {
     const errors = validationResult.error.errors.map(err => ({
       field: err.path.join('.'),
-      message: err.message
+      message: err.message,
     }));
     const apiError = {
       code: 'VALIDATION_ERROR' as const,
       message: 'Validation failed',
-      details: { errors }
+      details: { errors },
     };
     return ResponseHelper.error(res, apiError, 400);
   }
-  
+
   const data: LoginData = validationResult.data;
-  
+
   const result = await AuthService.login(data);
-  
+
   return ResponseHelper.success(res, result, 'Přihlášení bylo úspěšné');
 });
 
 /**
  * Refresh access token
  */
-export const refreshToken = asyncHandler(async (req: Request, res: Response) => {
-  const data: RefreshTokenData = req.body;
-  
-  const result = await AuthService.refreshToken(data);
-  
-  return ResponseHelper.success(res, result, 'Token byl úspěšně obnoven');
-});
+export const refreshToken = asyncHandler(
+  async (req: Request, res: Response) => {
+    const data: RefreshTokenData = req.body;
+
+    const result = await AuthService.refreshToken(data);
+
+    return ResponseHelper.success(res, result, 'Token byl úspěšně obnoven');
+  }
+);
 
 /**
  * Logout user
  */
 export const logout = asyncHandler(async (req: Request, res: Response) => {
   const { refreshToken } = req.body;
-  
+
   if (refreshToken) {
     await AuthService.logout(refreshToken);
   }
-  
+
   return ResponseHelper.success(res, null, 'Odhlášení bylo úspěšné');
 });
 
@@ -274,28 +276,30 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
  *       400:
  *         description: Nevalidní vstupní data
  */
-export const requestPasswordReset = asyncHandler(async (req: Request, res: Response) => {
-  // Validate email using Zod schema
-  const validationResult = resetPasswordRequestSchema.safeParse(req.body);
-  if (!validationResult.success) {
-    const errors = validationResult.error.errors.map(err => ({
-      field: err.path.join('.'),
-      message: err.message
-    }));
-    const apiError = {
-      code: 'VALIDATION_ERROR' as const,
-      message: 'Validation failed',
-      details: { errors }
-    };
-    return ResponseHelper.error(res, apiError, 400);
+export const requestPasswordReset = asyncHandler(
+  async (req: Request, res: Response) => {
+    // Validate email using Zod schema
+    const validationResult = resetPasswordRequestSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(err => ({
+        field: err.path.join('.'),
+        message: err.message,
+      }));
+      const apiError = {
+        code: 'VALIDATION_ERROR' as const,
+        message: 'Validation failed',
+        details: { errors },
+      };
+      return ResponseHelper.error(res, apiError, 400);
+    }
+
+    const data: ResetPasswordRequestData = validationResult.data;
+
+    const result = await AuthService.requestPasswordReset(data);
+
+    return ResponseHelper.success(res, result, result.message);
   }
-  
-  const data: ResetPasswordRequestData = validationResult.data;
-  
-  const result = await AuthService.requestPasswordReset(data);
-  
-  return ResponseHelper.success(res, result, result.message);
-});
+);
 
 /**
  * @swagger
@@ -355,45 +359,48 @@ export const requestPasswordReset = asyncHandler(async (req: Request, res: Respo
  *       404:
  *         description: Token nebyl nalezen
  */
-export const resetPasswordWithToken = asyncHandler(async (req: Request, res: Response) => {
-  // Validate token and new password using Zod schema
-  const validationResult = resetPasswordConfirmSchema.safeParse(req.body);
-  if (!validationResult.success) {
-    const errors = validationResult.error.errors.map(err => ({
-      field: err.path.join('.'),
-      message: err.message
-    }));
-    const apiError = {
-      code: 'VALIDATION_ERROR' as const,
-      message: 'Validation failed',
-      details: { errors }
-    };
-    return ResponseHelper.error(res, apiError, 400);
-  }
-  
-  const data: ResetPasswordConfirmData = validationResult.data;
-  
-  const result = await AuthService.resetPasswordWithToken(data);
-  
-  return ResponseHelper.success(res, result, result.message);
-});
+export const resetPasswordWithToken = asyncHandler(
+  async (req: Request, res: Response) => {
+    // Validate token and new password using Zod schema
+    const validationResult = resetPasswordConfirmSchema.safeParse(req.body);
+    if (!validationResult.success) {
+      const errors = validationResult.error.errors.map(err => ({
+        field: err.path.join('.'),
+        message: err.message,
+      }));
+      const apiError = {
+        code: 'VALIDATION_ERROR' as const,
+        message: 'Validation failed',
+        details: { errors },
+      };
+      return ResponseHelper.error(res, apiError, 400);
+    }
 
+    const data: ResetPasswordConfirmData = validationResult.data;
+
+    const result = await AuthService.resetPasswordWithToken(data);
+
+    return ResponseHelper.success(res, result, result.message);
+  }
+);
 
 /**
  * Change password (authenticated user)
  */
-export const changePassword = asyncHandler(async (req: Request, res: Response) => {
-  const data: ChangePasswordData = req.body;
-  
-  if (!req.user) {
-    return ResponseHelper.unauthorized(res, 'User not authenticated');
+export const changePassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const data: ChangePasswordData = req.body;
+
+    if (!req.user) {
+      return ResponseHelper.unauthorized(res, 'User not authenticated');
+    }
+
+    const userId = req.user.id;
+    const result = await AuthService.changePassword(userId, data);
+
+    return ResponseHelper.success(res, result, result.message);
   }
-  
-  const userId = req.user.id;
-  const result = await AuthService.changePassword(userId, data);
-  
-  return ResponseHelper.success(res, result, result.message);
-});
+);
 
 /**
  * @swagger
@@ -456,13 +463,13 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
  */
 export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
   const { token } = req.params;
-  
+
   if (!token) {
     return ResponseHelper.validationError(res, 'Token je vyžadován');
   }
-  
+
   const result = await AuthService.verifyEmail(token);
-  
+
   return ResponseHelper.success(res, result, result.message);
 });
 
@@ -532,13 +539,15 @@ export const verifyEmail = asyncHandler(async (req: Request, res: Response) => {
  *                       type: string
  *                       example: "Validation failed"
  */
-export const resendVerificationEmail = asyncHandler(async (req: Request, res: Response) => {
-  const { email } = req.body;
-  
-  const result = await AuthService.resendVerificationEmail(email);
-  
-  return ResponseHelper.success(res, result, result.message);
-});
+export const resendVerificationEmail = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email } = req.body;
+
+    const result = await AuthService.resendVerificationEmail(email);
+
+    return ResponseHelper.success(res, result, result.message);
+  }
+);
 
 /**
  * Get current user profile with comprehensive statistics
@@ -556,44 +565,68 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
       return ResponseHelper.notFound(res, 'Profil uživatele nebyl nalezen');
     }
 
-    return ResponseHelper.success(res, profile, 'Profil uživatele úspěšně načten');
+    return ResponseHelper.success(
+      res,
+      profile,
+      'Profil uživatele úspěšně načten'
+    );
   } catch (error) {
-    logger.error('Failed to get user profile:', error as Error, 'AuthController', {
-      userId: req.user.id
-    });
-    return ResponseHelper.internalError(res, error as Error, 'Nepodařilo se načíst profil uživatele');
+    logger.error(
+      'Failed to get user profile:',
+      error as Error,
+      'AuthController',
+      {
+        userId: req.user.id,
+      }
+    );
+    return ResponseHelper.internalError(
+      res,
+      error as Error,
+      'Nepodařilo se načíst profil uživatele'
+    );
   }
 });
 
 /**
  * Update user profile
  */
-export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    return ResponseHelper.unauthorized(res, 'User not authenticated');
+export const updateProfile = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      return ResponseHelper.unauthorized(res, 'User not authenticated');
+    }
+
+    const user = req.user;
+    const profileData = req.body;
+
+    const updatedProfile = await AuthService.updateProfile(
+      user.id,
+      profileData
+    );
+
+    return ResponseHelper.success(
+      res,
+      updatedProfile,
+      'Profil byl úspěšně aktualizován'
+    );
   }
-  
-  const user = req.user;
-  const profileData = req.body;
-  
-  const updatedProfile = await AuthService.updateProfile(user.id, profileData);
-  
-  return ResponseHelper.success(res, updatedProfile, 'Profil byl úspěšně aktualizován');
-});
+);
 
 /**
  * Delete user account
  */
-export const deleteAccount = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    return ResponseHelper.unauthorized(res, 'User not authenticated');
+export const deleteAccount = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      return ResponseHelper.unauthorized(res, 'User not authenticated');
+    }
+
+    const user = req.user;
+    await AuthService.deleteAccount(user.id);
+
+    return ResponseHelper.success(res, null, 'Účet byl úspěšně smazán');
   }
-  
-  const user = req.user;
-  await AuthService.deleteAccount(user.id);
-  
-  return ResponseHelper.success(res, null, 'Účet byl úspěšně smazán');
-});
+);
 
 /**
  * Check authentication status
@@ -602,183 +635,232 @@ export const checkAuth = asyncHandler(async (req: Request, res: Response) => {
   if (!req.user) {
     return ResponseHelper.unauthorized(res, 'User not authenticated');
   }
-  
-  const user = req.user;
-  return ResponseHelper.success(res, { 
-    authenticated: true,
-    user: {
-      id: user.id,
-      email: user.email,
-      emailVerified: user.emailVerified
-    }
-  }, 'Uživatel je přihlášen');
-});
 
-/**
- * Get user storage statistics
- */
-export const getStorageStats = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    return ResponseHelper.unauthorized(res, 'User not authenticated');
-  }
-  
   const user = req.user;
-  
-  // Calculate total storage used by user's images
-  const images = await prisma.image.findMany({
-    where: {
-      project: {
-        userId: user.id
-      }
+  return ResponseHelper.success(
+    res,
+    {
+      authenticated: true,
+      user: {
+        id: user.id,
+        email: user.email,
+        emailVerified: user.emailVerified,
+      },
     },
-    select: {
-      fileSize: true
-    }
-  });
-  
-  const totalBytes = images.reduce((sum, img) => sum + (img.fileSize || 0), 0);
-  const totalMB = Math.round(totalBytes / (1024 * 1024) * 100) / 100;
-  const totalGB = Math.round(totalMB / 1024 * 100) / 100;
-  
-  // Calculate average image size
-  const averageImageSizeMB = images.length > 0 
-    ? Math.round(totalMB / images.length * 100) / 100 
-    : 0;
-  
-  return ResponseHelper.success(res, {
-    totalStorageMB: totalMB,
-    totalStorageGB: totalGB,
-    totalImages: images.length,
-    averageImageSizeMB: averageImageSizeMB,
-    // Keep backward compatibility
-    totalBytes,
-    totalMB,
-    totalGB,
-    imageCount: images.length
-  });
+    'Uživatel je přihlášen'
+  );
 });
 
 /**
  * Get user storage statistics
  */
-export const getUserStorageStats = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    return ResponseHelper.unauthorized(res, 'User not authenticated');
+export const getStorageStats = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      return ResponseHelper.unauthorized(res, 'User not authenticated');
+    }
+
+    const user = req.user;
+
+    // Calculate total storage used by user's images
+    const images = await prisma.image.findMany({
+      where: {
+        project: {
+          userId: user.id,
+        },
+      },
+      select: {
+        fileSize: true,
+      },
+    });
+
+    const totalBytes = images.reduce(
+      (sum, img) => sum + (img.fileSize || 0),
+      0
+    );
+    const totalMB = Math.round((totalBytes / (1024 * 1024)) * 100) / 100;
+    const totalGB = Math.round((totalMB / 1024) * 100) / 100;
+
+    // Calculate average image size
+    const averageImageSizeMB =
+      images.length > 0 ? Math.round((totalMB / images.length) * 100) / 100 : 0;
+
+    return ResponseHelper.success(res, {
+      totalStorageMB: totalMB,
+      totalStorageGB: totalGB,
+      totalImages: images.length,
+      averageImageSizeMB: averageImageSizeMB,
+      // Keep backward compatibility
+      totalBytes,
+      totalMB,
+      totalGB,
+      imageCount: images.length,
+    });
   }
-  
-  const user = req.user;
-  
-  // Get all images from user's projects
-  const userProjects = await prisma.project.findMany({
-    where: { userId: user.id },
-    include: {
-      images: {
-        select: {
-          fileSize: true
+);
+
+/**
+ * Get user storage statistics
+ */
+export const getUserStorageStats = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      return ResponseHelper.unauthorized(res, 'User not authenticated');
+    }
+
+    const user = req.user;
+
+    // Get all images from user's projects
+    const userProjects = await prisma.project.findMany({
+      where: { userId: user.id },
+      include: {
+        images: {
+          select: {
+            fileSize: true,
+          },
+        },
+      },
+    });
+
+    // Calculate total storage used
+    let totalStorageBytes = 0;
+    let totalImages = 0;
+
+    for (const project of userProjects) {
+      for (const image of project.images) {
+        if (image.fileSize) {
+          totalStorageBytes += image.fileSize;
         }
+        totalImages++;
       }
     }
-  });
-  
-  // Calculate total storage used
-  let totalStorageBytes = 0;
-  let totalImages = 0;
-  
-  for (const project of userProjects) {
-    for (const image of project.images) {
-      if (image.fileSize) {
-        totalStorageBytes += image.fileSize;
-      }
-      totalImages++;
-    }
+
+    // Convert to MB for easier display
+    const totalStorageMB = totalStorageBytes / (1024 * 1024);
+
+    return ResponseHelper.success(
+      res,
+      {
+        totalStorageBytes,
+        totalStorageMB: Math.round(totalStorageMB * 100) / 100, // Round to 2 decimal places
+        totalStorageGB: Math.round((totalStorageMB / 1024) * 100) / 100, // Round to 2 decimal places
+        totalImages,
+        averageImageSizeMB:
+          totalImages > 0
+            ? Math.round((totalStorageMB / totalImages) * 100) / 100
+            : 0,
+      },
+      'Storage statistics retrieved successfully'
+    );
   }
-  
-  // Convert to MB for easier display
-  const totalStorageMB = totalStorageBytes / (1024 * 1024);
-  
-  return ResponseHelper.success(res, {
-    totalStorageBytes,
-    totalStorageMB: Math.round(totalStorageMB * 100) / 100, // Round to 2 decimal places
-    totalStorageGB: Math.round((totalStorageMB / 1024) * 100) / 100, // Round to 2 decimal places
-    totalImages,
-    averageImageSizeMB: totalImages > 0 ? Math.round((totalStorageMB / totalImages) * 100) / 100 : 0
-  }, 'Storage statistics retrieved successfully');
-});
+);
 
 /**
  * Upload user avatar
  */
-export const uploadAvatar = asyncHandler(async (req: Request, res: Response) => {
-  if (!req.user) {
-    return ResponseHelper.unauthorized(res, 'User not authenticated');
-  }
+export const uploadAvatar = asyncHandler(
+  async (req: Request, res: Response) => {
+    if (!req.user) {
+      return ResponseHelper.unauthorized(res, 'User not authenticated');
+    }
 
-  if (!req.file) {
-    return ResponseHelper.validationError(res, 'No image file provided');
-  }
+    if (!req.file) {
+      return ResponseHelper.validationError(res, 'No image file provided');
+    }
 
-  const user = req.user;
-  const imageFile = req.file;
-  
-  // Validate file size (2MB max for avatars)
-  const MAX_AVATAR_SIZE_BYTES = parseInt(process.env.MAX_AVATAR_SIZE || '2097152', 10); // Default 2MB
-  if (imageFile.size > MAX_AVATAR_SIZE_BYTES) {
-    // Clean up temp file if it exists
-    if ('path' in imageFile && imageFile.path) {
+    const user = req.user;
+    const imageFile = req.file;
+
+    // Validate file size (2MB max for avatars)
+    const MAX_AVATAR_SIZE_BYTES = parseInt(
+      process.env.MAX_AVATAR_SIZE || '2097152',
+      10
+    ); // Default 2MB
+    if (imageFile.size > MAX_AVATAR_SIZE_BYTES) {
+      // Clean up temp file if it exists
+      if ('path' in imageFile && imageFile.path) {
+        try {
+          await fs.unlink(imageFile.path);
+        } catch (err) {
+          // Log but don't fail the request
+          logger.debug('Failed to cleanup temporary file', err, {
+            context: 'authController',
+          });
+        }
+      }
+      const maxSizeMB = Math.round(MAX_AVATAR_SIZE_BYTES / (1024 * 1024));
+      return ResponseHelper.validationError(
+        res,
+        `Avatar file too large. Maximum size: ${maxSizeMB}MB`
+      );
+    }
+
+    // Get crop data from request body
+    let cropData = null;
+    if (req.body.cropData) {
       try {
-        await fs.unlink(imageFile.path);
-      } catch (err) {
-        // Log but don't fail the request
-        logger.debug('Failed to cleanup temporary file', err, { context: 'authController' });
+        cropData = JSON.parse(req.body.cropData);
+
+        // Validate cropData structure
+        if (cropData && typeof cropData === 'object') {
+          const { x, y, width, height } = cropData;
+
+          // Check all required properties exist and are valid numbers
+          if (
+            !Number.isFinite(Number(x)) ||
+            !Number.isFinite(Number(y)) ||
+            !Number.isFinite(Number(width)) ||
+            !Number.isFinite(Number(height))
+          ) {
+            return ResponseHelper.validationError(
+              res,
+              'Invalid cropData: expected numeric x,y,width,height'
+            );
+          }
+
+          // Check width and height are positive, x and y are non-negative
+          if (
+            Number(width) <= 0 ||
+            Number(height) <= 0 ||
+            Number(x) < 0 ||
+            Number(y) < 0
+          ) {
+            return ResponseHelper.validationError(
+              res,
+              'Invalid cropData: width and height must be positive, x and y must be non-negative'
+            );
+          }
+
+          // Convert to numbers for use
+          cropData = {
+            x: Number(x),
+            y: Number(y),
+            width: Number(width),
+            height: Number(height),
+          };
+        } else {
+          return ResponseHelper.validationError(
+            res,
+            'Invalid cropData: expected object with x,y,width,height'
+          );
+        }
+      } catch {
+        return ResponseHelper.validationError(res, 'Invalid cropData JSON');
       }
     }
-    const maxSizeMB = Math.round(MAX_AVATAR_SIZE_BYTES / (1024 * 1024));
-    return ResponseHelper.validationError(res, `Avatar file too large. Maximum size: ${maxSizeMB}MB`);
-  }
-  
-  // Get crop data from request body
-  let cropData = null;
-  if (req.body.cropData) {
+
     try {
-      cropData = JSON.parse(req.body.cropData);
-      
-      // Validate cropData structure
-      if (cropData && typeof cropData === 'object') {
-        const { x, y, width, height } = cropData;
-        
-        // Check all required properties exist and are valid numbers
-        if (!Number.isFinite(Number(x)) || !Number.isFinite(Number(y)) || 
-            !Number.isFinite(Number(width)) || !Number.isFinite(Number(height))) {
-          return ResponseHelper.validationError(res, 'Invalid cropData: expected numeric x,y,width,height');
-        }
-        
-        // Check width and height are positive, x and y are non-negative
-        if (Number(width) <= 0 || Number(height) <= 0 || Number(x) < 0 || Number(y) < 0) {
-          return ResponseHelper.validationError(res, 'Invalid cropData: width and height must be positive, x and y must be non-negative');
-        }
-        
-        // Convert to numbers for use
-        cropData = {
-          x: Number(x),
-          y: Number(y),
-          width: Number(width),
-          height: Number(height)
-        };
-      } else {
-        return ResponseHelper.validationError(res, 'Invalid cropData: expected object with x,y,width,height');
-      }
-    } catch {
-      return ResponseHelper.validationError(res, 'Invalid cropData JSON');
+      const result = await AuthService.uploadAvatar(
+        user.id,
+        imageFile,
+        cropData || undefined
+      );
+      return ResponseHelper.success(res, result, 'Avatar byl úspěšně nahrán');
+    } catch (error) {
+      logger.error('Avatar upload failed:', error as Error, 'AuthController', {
+        userId: user.id,
+      });
+      return ResponseHelper.internalError(res, error as Error);
     }
   }
-  
-  try {
-    const result = await AuthService.uploadAvatar(user.id, imageFile, cropData || undefined);
-    return ResponseHelper.success(res, result, 'Avatar byl úspěšně nahrán');
-  } catch (error) {
-    logger.error('Avatar upload failed:', error as Error, 'AuthController', {
-      userId: user.id
-    });
-    return ResponseHelper.internalError(res, error as Error);
-  }
-});
+);

@@ -14,7 +14,9 @@ export interface PasswordResetEmailData {
  * - Plain text-like appearance
  * - Proven to work with mail.utia.cas.cz
  */
-export const generateSimplePasswordResetHTML = (data: PasswordResetEmailData): string => {
+export const generateSimplePasswordResetHTML = (
+  data: PasswordResetEmailData
+): string => {
   const validatedUrl = sanitizeUrl(data.resetUrl);
   if (!validatedUrl) {
     throw new Error('Invalid reset URL provided');
@@ -28,7 +30,7 @@ export const generateSimplePasswordResetHTML = (data: PasswordResetEmailData): s
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 
   // ULTRA-SIMPLE HTML - proven to work with UTIA SMTP
@@ -49,7 +51,9 @@ export const generateSimplePasswordResetHTML = (data: PasswordResetEmailData): s
 /**
  * Plain text version for maximum compatibility
  */
-export const generateSimplePasswordResetText = (data: PasswordResetEmailData): string => {
+export const generateSimplePasswordResetText = (
+  data: PasswordResetEmailData
+): string => {
   const validatedUrl = sanitizeUrl(data.resetUrl);
   if (!validatedUrl) {
     throw new Error('Invalid reset URL provided');
@@ -61,7 +65,7 @@ export const generateSimplePasswordResetText = (data: PasswordResetEmailData): s
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 
   return `Reset hesla - SpheroSeg

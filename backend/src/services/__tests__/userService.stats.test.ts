@@ -1,24 +1,24 @@
-import { describe, it, expect, beforeEach, jest } from '@jest/globals'
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 
 // Mock Prisma types for TypeScript
 type MockPrismaClient = {
   user: {
-    findUnique: ReturnType<typeof jest.fn>
-  }
+    findUnique: ReturnType<typeof jest.fn>;
+  };
   project: {
-    count: ReturnType<typeof jest.fn>
-  }
+    count: ReturnType<typeof jest.fn>;
+  };
   image: {
-    count: ReturnType<typeof jest.fn>
-    aggregate: ReturnType<typeof jest.fn>
-  }
+    count: ReturnType<typeof jest.fn>;
+    aggregate: ReturnType<typeof jest.fn>;
+  };
   segmentation: {
-    count: ReturnType<typeof jest.fn>
-  }
+    count: ReturnType<typeof jest.fn>;
+  };
   profile: {
-    upsert: ReturnType<typeof jest.fn>
-  }
-}
+    upsert: ReturnType<typeof jest.fn>;
+  };
+};
 
 const prismaMock: MockPrismaClient = {
   user: {
@@ -37,31 +37,35 @@ const prismaMock: MockPrismaClient = {
   profile: {
     upsert: jest.fn(),
   },
-}
+};
 
 // Mock dependencies
 jest.mock('../../db', () => ({
   prisma: prismaMock,
-}))
+}));
 jest.mock('../../utils/logger', () => ({
   logger: {
     info: jest.fn(),
     error: jest.fn(),
   },
-}))
+}));
 
-import { getUserStats, getUserProfile, calculateUserStorage } from '../userService'
+import {
+  getUserStats,
+  getUserProfile,
+  calculateUserStorage,
+} from '../userService';
 
 describe('UserService Statistics', () => {
-  const testUserId = 'test-user-id'
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const tomorrow = new Date(today)
-  tomorrow.setDate(tomorrow.getDate() + 1)
+  const testUserId = 'test-user-id';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
 
   beforeEach(() => {
-    jest.clearAllMocks()
-  })
+    jest.clearAllMocks();
+  });
 
   describe('getUserStats', () => {
     it('should return correct user statistics with real database data', async () => {
@@ -79,9 +83,11 @@ describe('UserService Statistics', () => {
         .mockResolvedValueOnce(mockImageCount) // Total images
         .mockResolvedValueOnce(mockProcessedImages) // Processed images
         .mockResolvedValueOnce(mockTodayImages); // Today's images
-      prismaMock.segmentation.count.mockResolvedValueOnce(mockSegmentationCount);
+      prismaMock.segmentation.count.mockResolvedValueOnce(
+        mockSegmentationCount
+      );
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: mockStorageSum }
+        _sum: { fileSize: mockStorageSum },
       });
 
       const result = await getUserStats(testUserId);
@@ -97,21 +103,21 @@ describe('UserService Statistics', () => {
 
       // Verify database queries with correct parameters
       expect(prismaMock.project.count).toHaveBeenCalledWith({
-        where: { userId: testUserId }
+        where: { userId: testUserId },
       });
 
       expect(prismaMock.image.count).toHaveBeenCalledWith({
         where: {
-          project: { userId: testUserId }
-        }
+          project: { userId: testUserId },
+        },
       });
 
       expect(prismaMock.segmentation.count).toHaveBeenCalledWith({
         where: {
           image: {
-            project: { userId: testUserId }
-          }
-        }
+            project: { userId: testUserId },
+          },
+        },
       });
 
       // Verify today's images query
@@ -120,9 +126,9 @@ describe('UserService Statistics', () => {
           project: { userId: testUserId },
           createdAt: {
             gte: today,
-            lt: tomorrow
-          }
-        }
+            lt: tomorrow,
+          },
+        },
       });
     });
 
@@ -135,7 +141,7 @@ describe('UserService Statistics', () => {
         .mockResolvedValueOnce(0);
       prismaMock.segmentation.count.mockResolvedValueOnce(0);
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: null }
+        _sum: { fileSize: null },
       });
 
       const result = await getUserStats(testUserId);
@@ -153,7 +159,9 @@ describe('UserService Statistics', () => {
       const dbError = new Error('Database connection failed');
       prismaMock.project.count.mockRejectedValueOnce(dbError);
 
-      await expect(getUserStats(testUserId)).rejects.toThrow('Database connection failed');
+      await expect(getUserStats(testUserId)).rejects.toThrow(
+        'Database connection failed'
+      );
     });
   });
 
@@ -168,11 +176,11 @@ describe('UserService Statistics', () => {
           title: 'John Doe',
           preferredLang: 'en',
           preferredTheme: 'dark',
-          emailNotifications: true
+          emailNotifications: true,
         },
         _count: {
-          projects: 3
-        }
+          projects: 3,
+        },
       };
 
       const mockStats = {
@@ -182,7 +190,7 @@ describe('UserService Statistics', () => {
         storageUsed: '15 MB',
         storageUsedBytes: 15728640,
         imagesUploadedToday: 5,
-        processedImages: 18
+        processedImages: 18,
       };
 
       prismaMock.user.findUnique.mockResolvedValueOnce(mockUser);
@@ -192,9 +200,11 @@ describe('UserService Statistics', () => {
         .mockResolvedValueOnce(mockStats.totalImages)
         .mockResolvedValueOnce(mockStats.processedImages)
         .mockResolvedValueOnce(mockStats.imagesUploadedToday);
-      prismaMock.segmentation.count.mockResolvedValueOnce(mockStats.totalSegmentations);
+      prismaMock.segmentation.count.mockResolvedValueOnce(
+        mockStats.totalSegmentations
+      );
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: mockStats.storageUsedBytes }
+        _sum: { fileSize: mockStats.storageUsedBytes },
       });
 
       const result = await getUserProfile(testUserId);
@@ -207,13 +217,15 @@ describe('UserService Statistics', () => {
       expect(result?.isEmailVerified).toBe(true);
       expect(result?.language).toBe('en');
       expect(result?.theme).toBe('dark');
-      expect(result?.stats).toEqual(expect.objectContaining({
-        totalProjects: mockStats.totalProjects,
-        totalImages: mockStats.totalImages,
-        totalSegmentations: mockStats.totalSegmentations,
-        processedImages: mockStats.processedImages,
-        imagesUploadedToday: mockStats.imagesUploadedToday
-      }));
+      expect(result?.stats).toEqual(
+        expect.objectContaining({
+          totalProjects: mockStats.totalProjects,
+          totalImages: mockStats.totalImages,
+          totalSegmentations: mockStats.totalSegmentations,
+          processedImages: mockStats.processedImages,
+          imagesUploadedToday: mockStats.imagesUploadedToday,
+        })
+      );
     });
 
     it('should return null for non-existent user', async () => {
@@ -232,8 +244,8 @@ describe('UserService Statistics', () => {
         createdAt: new Date(),
         profile: null, // No profile set
         _count: {
-          projects: 0
-        }
+          projects: 0,
+        },
       };
 
       prismaMock.user.findUnique.mockResolvedValueOnce(mockUser);
@@ -245,7 +257,7 @@ describe('UserService Statistics', () => {
         .mockResolvedValueOnce(0);
       prismaMock.segmentation.count.mockResolvedValueOnce(0);
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: null }
+        _sum: { fileSize: null },
       });
 
       const result = await getUserProfile(testUserId);
@@ -263,7 +275,7 @@ describe('UserService Statistics', () => {
       const mockFileSize = 100 * 1024 * 1024; // 100MB in bytes
 
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: mockFileSize }
+        _sum: { fileSize: mockFileSize },
       });
 
       const result = await calculateUserStorage(testUserId);
@@ -279,7 +291,7 @@ describe('UserService Statistics', () => {
 
     it('should handle zero storage usage', async () => {
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: null }
+        _sum: { fileSize: null },
       });
 
       const result = await calculateUserStorage(testUserId);
@@ -296,7 +308,7 @@ describe('UserService Statistics', () => {
       const mockFileSize = 2.5 * 1024 * 1024 * 1024; // 2.5GB
 
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: mockFileSize }
+        _sum: { fileSize: mockFileSize },
       });
 
       const result = await calculateUserStorage(testUserId);
@@ -309,7 +321,9 @@ describe('UserService Statistics', () => {
       const dbError = new Error('Storage calculation failed');
       prismaMock.image.aggregate.mockRejectedValueOnce(dbError);
 
-      await expect(calculateUserStorage(testUserId)).rejects.toThrow('Storage calculation failed');
+      await expect(calculateUserStorage(testUserId)).rejects.toThrow(
+        'Storage calculation failed'
+      );
     });
   });
 
@@ -322,7 +336,7 @@ describe('UserService Statistics', () => {
         segmentations: 8500,
         processedImages: 7200,
         todayImages: 100,
-        storageBytes: 5 * 1024 * 1024 * 1024 // 5GB
+        storageBytes: 5 * 1024 * 1024 * 1024, // 5GB
       };
 
       prismaMock.project.count.mockResolvedValueOnce(largeDataset.projects);
@@ -330,9 +344,11 @@ describe('UserService Statistics', () => {
         .mockResolvedValueOnce(largeDataset.images)
         .mockResolvedValueOnce(largeDataset.processedImages)
         .mockResolvedValueOnce(largeDataset.todayImages);
-      prismaMock.segmentation.count.mockResolvedValueOnce(largeDataset.segmentations);
+      prismaMock.segmentation.count.mockResolvedValueOnce(
+        largeDataset.segmentations
+      );
       prismaMock.image.aggregate.mockResolvedValueOnce({
-        _sum: { fileSize: largeDataset.storageBytes }
+        _sum: { fileSize: largeDataset.storageBytes },
       });
 
       const startTime = Date.now();

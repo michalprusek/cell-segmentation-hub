@@ -4,6 +4,7 @@ export default {
     loading: '加载中...',
     save: '保存',
     cancel: '取消',
+    dismiss: '关闭',
     delete: '删除',
     edit: '编辑',
     create: '创建',

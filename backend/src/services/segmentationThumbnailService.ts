@@ -3,7 +3,10 @@ import path from 'path';
 import fs from 'fs/promises';
 import { existsSync } from 'fs';
 import sharp from 'sharp';
-import { VisualizationGenerator, Polygon } from './visualization/visualizationGenerator';
+import {
+  VisualizationGenerator,
+  Polygon,
+} from './visualization/visualizationGenerator';
 import { logger } from '../utils/logger';
 import { getStorageProvider } from '../storage';
 import { retryService, RetryService } from '../utils/retryService';
@@ -13,10 +16,10 @@ import { batchProcessor } from '../utils/batchProcessor';
 // Default retry configuration optimized for thumbnail generation
 const DEFAULT_THUMBNAIL_RETRY_CONFIG = {
   maxRetries: 3,
-  initialDelay: 1000,  // 1 second
-  maxDelay: 10000,     // 10 seconds
+  initialDelay: 1000, // 1 second
+  maxDelay: 10000, // 10 seconds
   backoffFactor: 2,
-  operationName: 'Thumbnail generation'
+  operationName: 'Thumbnail generation',
 };
 
 // Global concurrency controller instance
@@ -57,26 +60,35 @@ export class SegmentationThumbnailService {
         include: {
           image: {
             include: {
-              project: true
-            }
-          }
-        }
+              project: true,
+            },
+          },
+        },
       });
 
       if (!segmentation || !segmentation.image) {
-        logger.error('Segmentation or image not found', undefined, 'SegmentationThumbnailService', {
-          segmentationId
-        });
+        logger.error(
+          'Segmentation or image not found',
+          undefined,
+          'SegmentationThumbnailService',
+          {
+            segmentationId,
+          }
+        );
         return null;
       }
 
       // Parse polygons from JSON
       const polygons = JSON.parse(segmentation.polygons as string) as Polygon[];
-      
+
       if (!polygons || polygons.length === 0) {
-        logger.warn('No polygons found for segmentation', 'SegmentationThumbnailService', {
-          segmentationId
-        });
+        logger.warn(
+          'No polygons found for segmentation',
+          'SegmentationThumbnailService',
+          {
+            segmentationId,
+          }
+        );
         return null;
       }
 
@@ -84,15 +96,23 @@ export class SegmentationThumbnailService {
       const project = image.project;
 
       // Get original image path - the originalPath already includes the full relative path
-      const originalImagePath = image.originalPath.startsWith('/') 
-        ? image.originalPath 
-        : path.join('/app/uploads', image.originalPath.replace(/^.*\/uploads\//, ''));
+      const originalImagePath = image.originalPath.startsWith('/')
+        ? image.originalPath
+        : path.join(
+            '/app/uploads',
+            image.originalPath.replace(/^.*\/uploads\//, '')
+          );
 
       // Check if original image exists
       if (!existsSync(originalImagePath)) {
-        logger.error('Original image file not found', undefined, 'SegmentationThumbnailService', {
-          originalImagePath
-        });
+        logger.error(
+          'Original image file not found',
+          undefined,
+          'SegmentationThumbnailService',
+          {
+            originalImagePath,
+          }
+        );
         return null;
       }
 
@@ -133,8 +153,8 @@ export class SegmentationThumbnailService {
           transparency: 0.4,
           polygonColors: {
             external: '#FF0000',
-            internal: '#0000FF'
-          }
+            internal: '#0000FF',
+          },
         }
       );
 
@@ -145,7 +165,7 @@ export class SegmentationThumbnailService {
       await sharp(tempVisualizationPath)
         .resize(thumbnailWidth, thumbnailHeight, {
           fit: 'cover',
-          position: 'center'
+          position: 'center',
         })
         .jpeg({ quality: 90, mozjpeg: true })
         .toFile(thumbnailFullPath);
@@ -154,30 +174,37 @@ export class SegmentationThumbnailService {
       try {
         await fs.unlink(tempVisualizationPath);
       } catch {
-        logger.warn('Failed to clean up temp visualization file', 'SegmentationThumbnailService', {
-          tempPath: tempVisualizationPath
-        });
+        logger.warn(
+          'Failed to clean up temp visualization file',
+          'SegmentationThumbnailService',
+          {
+            tempPath: tempVisualizationPath,
+          }
+        );
       }
 
       // Update image record with new segmentation thumbnail path (relative, without /uploads/ prefix)
       // This makes it consistent with originalPath and thumbnailPath fields
-      
+
       await this.prisma.image.update({
         where: { id: image.id },
         data: {
           segmentationThumbnailPath: thumbnailRelativePath, // Store relative path without /uploads/
-          updatedAt: new Date()
-        }
+          updatedAt: new Date(),
+        },
       });
 
-      logger.info('Segmentation thumbnail generated successfully', 'SegmentationThumbnailService', {
-        segmentationId,
-        thumbnailPath: thumbnailFullPath,
-        thumbnailRelativePath: thumbnailRelativePath
-      });
+      logger.info(
+        'Segmentation thumbnail generated successfully',
+        'SegmentationThumbnailService',
+        {
+          segmentationId,
+          thumbnailPath: thumbnailFullPath,
+          thumbnailRelativePath: thumbnailRelativePath,
+        }
+      );
 
       return `/uploads/${thumbnailRelativePath}`; // Return with prefix for immediate use
-
     } catch (error) {
       logger.error(
         'Failed to generate segmentation thumbnail',
@@ -203,9 +230,12 @@ export class SegmentationThumbnailService {
         () => this.generateSegmentationThumbnail(segmentationId, options),
         {
           ...DEFAULT_THUMBNAIL_RETRY_CONFIG,
-          operationName: `Thumbnail generation for ${segmentationId}`
+          operationName: `Thumbnail generation for ${segmentationId}`,
         },
-        (error) => this.isRetriableError(error instanceof Error ? error : new Error(String(error)))
+        error =>
+          this.isRetriableError(
+            error instanceof Error ? error : new Error(String(error))
+          )
       );
     }, `Thumbnail generation for ${segmentationId}`);
   }
@@ -219,32 +249,41 @@ export class SegmentationThumbnailService {
     if (RetryService.isCommonRetriableError(error)) {
       return true;
     }
-    
+
     const message = error.message.toLowerCase();
-    
+
     // Additional thumbnail-specific retriable errors
-    if (message.includes('sharp') && 
-        (message.includes('memory') ||    // Memory issues
-         message.includes('buffer') ||    // Buffer issues
-         message.includes('processing'))) { // Processing issues
+    if (
+      message.includes('sharp') &&
+      (message.includes('memory') || // Memory issues
+        message.includes('buffer') || // Buffer issues
+        message.includes('processing'))
+    ) {
+      // Processing issues
       return true;
     }
-    
+
     // Database errors that might be temporary
-    if (message.includes('prisma') &&
-        (message.includes('timeout') ||   // DB timeouts
-         message.includes('connection'))) { // Connection issues
+    if (
+      message.includes('prisma') &&
+      (message.includes('timeout') || // DB timeouts
+        message.includes('connection'))
+    ) {
+      // Connection issues
       return true;
     }
-    
+
     // Do not retry for permanent errors
-    if (message.includes('invalid') ||    // Invalid data
-        message.includes('corrupt') ||    // Corrupted files
-        message.includes('unsupported') || // Unsupported formats
-        message.includes('not found') && !message.includes('enoent')) { // Permanent not found
+    if (
+      message.includes('invalid') || // Invalid data
+      message.includes('corrupt') || // Corrupted files
+      message.includes('unsupported') || // Unsupported formats
+      (message.includes('not found') && !message.includes('enoent'))
+    ) {
+      // Permanent not found
       return false;
     }
-    
+
     // Default to retriable for unknown errors
     return true;
   }
@@ -262,8 +301,11 @@ export class SegmentationThumbnailService {
     // Use shared BatchProcessor
     await batchProcessor.processBatch(
       segmentationIds,
-      async (id) => {
-        const result = await this.generateSegmentationThumbnailWithRetry(id, options);
+      async id => {
+        const result = await this.generateSegmentationThumbnailWithRetry(
+          id,
+          options
+        );
         results.set(id, result);
         return result;
       },
@@ -271,25 +313,36 @@ export class SegmentationThumbnailService {
         batchSize: 5,
         concurrency: 5,
         onBatchComplete: (index, batchResults) => {
-          logger.info(`Thumbnail batch ${index + 1} completed, ${batchResults.length} successful`);
+          logger.info(
+            `Thumbnail batch ${index + 1} completed, ${batchResults.length} successful`
+          );
         },
         onItemError: (id, error) => {
           const segmentationId = String(id);
-          logger.error(`Failed to generate thumbnail for ${segmentationId}`, error instanceof Error ? error : new Error(String(error)));
+          logger.error(
+            `Failed to generate thumbnail for ${segmentationId}`,
+            error instanceof Error ? error : new Error(String(error))
+          );
           results.set(segmentationId, null);
-        }
+        },
       }
     );
 
-    const successCount = Array.from(results.values()).filter(r => r !== null).length;
+    const successCount = Array.from(results.values()).filter(
+      r => r !== null
+    ).length;
     const failureCount = results.size - successCount;
 
-    logger.info('Batch thumbnail generation completed', 'SegmentationThumbnailService', {
-      batchSize: segmentationIds.length,
-      successCount,
-      failureCount,
-      concurrencyStatus: thumbnailConcurrencyController.getStatus()
-    });
+    logger.info(
+      'Batch thumbnail generation completed',
+      'SegmentationThumbnailService',
+      {
+        batchSize: segmentationIds.length,
+        successCount,
+        failureCount,
+        concurrencyStatus: thumbnailConcurrencyController.getStatus(),
+      }
+    );
 
     return results;
   }
@@ -297,7 +350,11 @@ export class SegmentationThumbnailService {
   /**
    * Get concurrency controller status for monitoring
    */
-  getConcurrencyStatus(): { active: number; queued: number; maxConcurrent: number } {
+  getConcurrencyStatus(): {
+    active: number;
+    queued: number;
+    maxConcurrent: number;
+  } {
     return thumbnailConcurrencyController.getStatus();
   }
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-// Button unused - available for future use
+import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
 import LanguageSwitcher from '@/components/LanguageSwitcher';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
@@ -67,12 +67,16 @@ const Navbar = () => {
           >
             {t('common.privacyPolicy')}
           </Link>
-          <Link
-            to="/sign-in"
-            className="text-sm text-gray-700 hover:text-blue-500 transition-colors"
+          <Button
+            asChild
+            variant="framed"
+            size="sm"
+            className="text-sm signin-btn-hover"
           >
-            {t('auth.signIn')}
-          </Link>
+            <Link to="/sign-in">
+              {t('auth.signIn')}
+            </Link>
+          </Button>
           <div className="flex items-center gap-2 ml-2">
             <LanguageSwitcher />
             <ThemeSwitcher />
@@ -127,13 +131,18 @@ const Navbar = () => {
                 <ThemeSwitcher />
               </div>
             </div>
-            <Link
-              to="/sign-in"
-              className="text-gray-700 hover:text-blue-500 py-2 transition-colors"
-              onClick={() => setIsMobileMenuOpen(false)}
+            <Button
+              asChild
+              variant="framed"
+              className="w-full justify-start signin-btn-hover"
             >
-              {t('auth.signIn')}
-            </Link>
+              <Link
+                to="/sign-in"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                {t('auth.signIn')}
+              </Link>
+            </Button>
           </div>
         </div>
       )}

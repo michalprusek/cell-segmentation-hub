@@ -36,16 +36,19 @@ segmentation/
 ## Available Models
 
 ### HRNet (High-Resolution Network)
+
 - **Parameters**: ~66M
 - **Description**: High-resolution network maintaining spatial precision
 - **Best for**: High-accuracy segmentation with fine details
 
 ### ResUNet Advanced
-- **Parameters**: ~66M  
+
+- **Parameters**: ~66M
 - **Description**: Advanced ResUNet with attention mechanisms
 - **Best for**: Complex cell shapes with attention-guided segmentation
 
 ### ResUNet Small
+
 - **Parameters**: ~60M
 - **Description**: Lightweight ResUNet optimized for efficiency
 - **Best for**: Fast processing with good accuracy
@@ -53,11 +56,13 @@ segmentation/
 ## API Endpoints
 
 ### Health Check
+
 ```http
 GET /api/v1/health
 ```
 
 Response:
+
 ```json
 {
   "status": "healthy",
@@ -68,11 +73,13 @@ Response:
 ```
 
 ### Available Models
+
 ```http
 GET /api/v1/models
 ```
 
 Response:
+
 ```json
 {
   "models": [
@@ -88,6 +95,7 @@ Response:
 ```
 
 ### Segmentation
+
 ```http
 POST /api/v1/segment?model=hrnet&threshold=0.5
 Content-Type: multipart/form-data
@@ -96,14 +104,15 @@ file: [image_file]
 ```
 
 Response:
+
 ```json
 {
   "success": true,
   "polygons": [
     {
       "points": [
-        {"x": 100.5, "y": 200.3},
-        {"x": 150.2, "y": 180.1}
+        { "x": 100.5, "y": 200.3 },
+        { "x": 150.2, "y": 180.1 }
       ],
       "area": 1250.5,
       "confidence": 0.95
@@ -130,17 +139,20 @@ Response:
 ### Local Development
 
 1. **Install Dependencies**:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 2. **Verify Model Weights**:
-Ensure model weights are present in the `weights/` directory:
+   Ensure model weights are present in the `weights/` directory:
+
 - `hrnet_best_model.pth`
-- `resunet_advanced_best_model.pth` 
+- `resunet_advanced_best_model.pth`
 - `resunet_small_best_model.pth`
 
 3. **Start Development Server**:
+
 ```bash
 python api/main.py
 ```
@@ -148,31 +160,35 @@ python api/main.py
 The service will be available at `http://localhost:8000`
 
 4. **View API Documentation**:
+
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 
 ### Docker Deployment
 
 1. **Build Image**:
+
 ```bash
 docker build -t cell-segmentation .
 ```
 
 2. **Run Container**:
+
 ```bash
 docker run -p 8000:8000 cell-segmentation
 ```
 
 For GPU support:
+
 ```bash
 docker run --gpus all -p 8000:8000 cell-segmentation
 ```
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | 8000 | Server port |
+| Variable         | Default               | Description                     |
+| ---------------- | --------------------- | ------------------------------- |
+| `PORT`           | 8000                  | Server port                     |
 | `ML_SERVICE_URL` | http://localhost:8000 | Service URL for Node.js backend |
 
 ## Integration with Node.js Backend
@@ -191,14 +207,14 @@ const result = await segmentationService.requestSegmentation({
   imageId: 'uuid-here',
   model: 'hrnet',
   threshold: 0.5,
-  userId: 'user-uuid'
+  userId: 'user-uuid',
 });
 
 // Batch processing
 const batchResult = await segmentationService.batchProcess(
-  ['image1', 'image2'], 
-  'hrnet', 
-  0.5, 
+  ['image1', 'image2'],
+  'hrnet',
+  0.5,
   'user-uuid'
 );
 ```
@@ -215,11 +231,13 @@ const batchResult = await segmentationService.batchProcess(
 ## Performance
 
 ### Typical Processing Times (GPU)
+
 - **HRNet**: ~2-3 seconds per 1024x1024 image
 - **ResUNet Advanced**: ~1.8-2.5 seconds per image
 - **ResUNet Small**: ~1.2-1.8 seconds per image
 
 ### Memory Usage
+
 - **Base Memory**: ~2-3 GB
 - **Per Model**: ~500-800 MB when loaded
 - **Peak Processing**: +1-2 GB during inference
@@ -237,6 +255,7 @@ The service provides detailed error responses:
 ```
 
 Common error codes:
+
 - `400`: Invalid request parameters
 - `413`: File too large (max 50MB)
 - `500`: Internal processing error
@@ -255,6 +274,7 @@ curl http://localhost:8000/api/v1/health
 ### Logging
 
 Structured logging with levels:
+
 - `INFO`: Normal operations
 - `WARNING`: Non-critical issues
 - `ERROR`: Processing failures
@@ -263,6 +283,7 @@ Structured logging with levels:
 ### Metrics
 
 Key performance metrics:
+
 - Model loading times
 - Inference processing times
 - Memory usage per model
@@ -319,6 +340,7 @@ mypy .
 ### Debug Mode
 
 Enable debug logging:
+
 ```bash
 export LOG_LEVEL=DEBUG
 python api/main.py

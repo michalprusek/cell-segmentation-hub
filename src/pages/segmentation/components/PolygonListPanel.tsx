@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Polygon } from '@/lib/segmentation';
 import { motion } from 'framer-motion';
+import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
 
 interface PolygonListPanelProps {
   loading: boolean;
@@ -148,7 +149,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
             return (
               <motion.div
-                key={polygon.id}
+                key={ensureValidPolygonId(polygon.id, `polygon-list-${index}`)}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}

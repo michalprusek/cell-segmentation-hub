@@ -10,7 +10,7 @@ import { UniversalCancelButton } from '../universal-cancel-button';
 // Mock the language context
 const mockT = vi.fn((key: string, params?: Record<string, unknown>) => {
   const translations: Record<string, string> = {
-    'upload.cancelUpload': 'Cancel Upload',
+    'toast.upload.cancelUpload': 'Cancel Upload',
     'queue.cancelSegmentation': 'Cancel Segmentation',
     'export.cancelExport': 'Cancel Export',
     'common.cancelling': 'Cancelling...',

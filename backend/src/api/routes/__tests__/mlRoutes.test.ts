@@ -1,6 +1,13 @@
 import request from 'supertest';
 import express from 'express';
-import { describe, it, expect, beforeEach, jest, afterEach } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  jest,
+  afterEach,
+} from '@jest/globals';
 import mlRoutes from '../mlRoutes';
 import { authenticate } from '../../../middleware/auth';
 import { apiLimiter } from '../../../middleware/rateLimiter';
@@ -16,10 +23,14 @@ jest.mock('../../../auth/jwt');
 jest.mock('../../../db');
 
 // Create mocked functions with proper typing
-const mockedAuthenticate = authenticate as jest.MockedFunction<typeof authenticate>;
+const mockedAuthenticate = authenticate as jest.MockedFunction<
+  typeof authenticate
+>;
 const mockedApiLimiter = apiLimiter as jest.MockedFunction<typeof apiLimiter>;
 const mockedLogger = logger as jest.Mocked<typeof logger>;
-const _mockedVerifyAccessToken = verifyAccessToken as jest.MockedFunction<typeof verifyAccessToken>;
+const _mockedVerifyAccessToken = verifyAccessToken as jest.MockedFunction<
+  typeof verifyAccessToken
+>;
 const mockedPrisma = prisma as jest.Mocked<typeof prisma>;
 
 // Mock user data
@@ -50,8 +61,8 @@ const mockUser = {
     consentToFeatureDevelopment: true,
     consentUpdatedAt: new Date(),
     createdAt: new Date(),
-    updatedAt: new Date()
-  }
+    updatedAt: new Date(),
+  },
 };
 
 describe('ML Routes Authentication Tests', () => {
@@ -74,7 +85,7 @@ describe('ML Routes Authentication Tests', () => {
 
     // Mock Prisma user findUnique
     mockedPrisma.user = {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
     } as any;
   });
 
@@ -90,9 +101,7 @@ describe('ML Routes Authentication Tests', () => {
 
     describe('GET /api/ml/health', () => {
       it('should return health status without authentication', async () => {
-        const response = await request(app)
-          .get('/api/ml/health')
-          .expect(200);
+        const response = await request(app).get('/api/ml/health').expect(200);
 
         expect(response.body).toEqual({
           success: true,
@@ -101,21 +110,23 @@ describe('ML Routes Authentication Tests', () => {
             uptime: expect.any(Number),
             models: {
               loaded: 3,
-              failed: 0
+              failed: 0,
             },
             memory: {
               used: '256MB',
-              available: '1.2GB'
+              available: '1.2GB',
             },
             gpu: {
               available: false,
-              utilization: '0%'
-            }
+              utilization: '0%',
+            },
           },
-          message: 'ML service health check completed'
+          message: 'ML service health check completed',
         });
 
-        expect(mockedLogger.info).toHaveBeenCalledWith('🏥 ML: Health check requested');
+        expect(mockedLogger.info).toHaveBeenCalledWith(
+          '🏥 ML: Health check requested'
+        );
         expect(mockedAuthenticate).not.toHaveBeenCalled();
       });
 
@@ -126,9 +137,7 @@ describe('ML Routes Authentication Tests', () => {
           throw new Error('Uptime calculation failed');
         });
 
-        const response = await request(app)
-          .get('/api/ml/health')
-          .expect(500);
+        const response = await request(app).get('/api/ml/health').expect(500);
 
         expect(response.body.success).toBe(false);
         expect(mockedLogger.error).toHaveBeenCalledWith(
@@ -141,9 +150,7 @@ describe('ML Routes Authentication Tests', () => {
       });
 
       it('should work without Authorization header', async () => {
-        const response = await request(app)
-          .get('/api/ml/health')
-          .expect(200);
+        const response = await request(app).get('/api/ml/health').expect(200);
 
         expect(response.body.success).toBe(true);
       });
@@ -160,9 +167,7 @@ describe('ML Routes Authentication Tests', () => {
 
     describe('GET /api/ml/status', () => {
       it('should return service status without authentication', async () => {
-        const response = await request(app)
-          .get('/api/ml/status')
-          .expect(200);
+        const response = await request(app).get('/api/ml/status').expect(200);
 
         expect(response.body).toEqual({
           success: true,
@@ -175,13 +180,15 @@ describe('ML Routes Authentication Tests', () => {
             performance: {
               averageInferenceTime: '8.5s',
               successRate: '99.2%',
-              errorRate: '0.8%'
-            }
+              errorRate: '0.8%',
+            },
           },
-          message: 'ML service status retrieved successfully'
+          message: 'ML service status retrieved successfully',
         });
 
-        expect(mockedLogger.info).toHaveBeenCalledWith('🔍 ML: Checking service status');
+        expect(mockedLogger.info).toHaveBeenCalledWith(
+          '🔍 ML: Checking service status'
+        );
         expect(mockedAuthenticate).not.toHaveBeenCalled();
       });
 
@@ -192,9 +199,7 @@ describe('ML Routes Authentication Tests', () => {
           throw new Error('Date creation failed');
         });
 
-        const response = await request(app)
-          .get('/api/ml/status')
-          .expect(500);
+        const response = await request(app).get('/api/ml/status').expect(500);
 
         expect(response.body.success).toBe(false);
         expect(mockedLogger.error).toHaveBeenCalledWith(
@@ -209,9 +214,7 @@ describe('ML Routes Authentication Tests', () => {
 
     describe('GET /api/ml/models', () => {
       it('should return available models without authentication', async () => {
-        const response = await request(app)
-          .get('/api/ml/models')
-          .expect(200);
+        const response = await request(app).get('/api/ml/models').expect(200);
 
         expect(response.body).toEqual({
           success: true,
@@ -221,27 +224,31 @@ describe('ML Routes Authentication Tests', () => {
               name: 'HRNetV2',
               description: 'Best accuracy, ~3.1s inference time',
               version: '1.0.0',
-              status: 'active'
+              status: 'active',
             },
             {
               id: 'cbam-resunet',
               name: 'CBAM-ResUNet',
-              description: 'Precise segmentation with attention mechanisms, optimized inference time',
+              description:
+                'Precise segmentation with attention mechanisms, optimized inference time',
               version: '2.0.0',
-              status: 'active'
+              status: 'active',
             },
             {
               id: 'unet_spherohq',
               name: 'UNet (SpheroHQ)',
-              description: 'Best performance on SpheroHQ dataset, balanced speed and accuracy',
+              description:
+                'Best performance on SpheroHQ dataset, balanced speed and accuracy',
               version: '1.0.0',
-              status: 'active'
-            }
+              status: 'active',
+            },
           ],
-          message: 'Available ML models retrieved successfully'
+          message: 'Available ML models retrieved successfully',
         });
 
-        expect(mockedLogger.info).toHaveBeenCalledWith('📊 ML: Fetching available models');
+        expect(mockedLogger.info).toHaveBeenCalledWith(
+          '📊 ML: Fetching available models'
+        );
         expect(mockedAuthenticate).not.toHaveBeenCalled();
       });
 
@@ -251,9 +258,7 @@ describe('ML Routes Authentication Tests', () => {
           throw new Error('Logger error');
         });
 
-        const response = await request(app)
-          .get('/api/ml/models')
-          .expect(500);
+        const response = await request(app).get('/api/ml/models').expect(500);
 
         expect(response.body.success).toBe(false);
         expect(mockedLogger.error).toHaveBeenCalledWith(
@@ -292,12 +297,14 @@ describe('ML Routes Authentication Tests', () => {
             completed: 0,
             failed: 0,
             averageWaitTime: '2.3s',
-            estimatedProcessingTime: '0s'
+            estimatedProcessingTime: '0s',
           },
-          message: 'ML queue status retrieved successfully'
+          message: 'ML queue status retrieved successfully',
         });
 
-        expect(mockedLogger.info).toHaveBeenCalledWith('📋 ML: Fetching queue status');
+        expect(mockedLogger.info).toHaveBeenCalledWith(
+          '📋 ML: Fetching queue status'
+        );
         expect(mockedAuthenticate).toHaveBeenCalled();
       });
 
@@ -307,18 +314,16 @@ describe('ML Routes Authentication Tests', () => {
           res.status(401).json({
             success: false,
             message: 'Chybí autentizační token',
-            source: 'Auth'
+            source: 'Auth',
           });
         });
 
-        const response = await request(app)
-          .get('/api/ml/queue')
-          .expect(401);
+        const response = await request(app).get('/api/ml/queue').expect(401);
 
         expect(response.body).toEqual({
           success: false,
           message: 'Chybí autentizační token',
-          source: 'Auth'
+          source: 'Auth',
         });
 
         expect(mockedAuthenticate).toHaveBeenCalled();
@@ -330,7 +335,7 @@ describe('ML Routes Authentication Tests', () => {
           res.status(401).json({
             success: false,
             message: 'Neplatný token',
-            source: 'Auth'
+            source: 'Auth',
           });
         });
 
@@ -342,7 +347,7 @@ describe('ML Routes Authentication Tests', () => {
         expect(response.body).toEqual({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
 
         expect(mockedAuthenticate).toHaveBeenCalled();
@@ -354,7 +359,7 @@ describe('ML Routes Authentication Tests', () => {
           res.status(401).json({
             success: false,
             message: 'Token vypršel',
-            source: 'Auth'
+            source: 'Auth',
           });
         });
 
@@ -366,7 +371,7 @@ describe('ML Routes Authentication Tests', () => {
         expect(response.body).toEqual({
           success: false,
           message: 'Token vypršel',
-          source: 'Auth'
+          source: 'Auth',
         });
 
         expect(mockedAuthenticate).toHaveBeenCalled();
@@ -374,7 +379,7 @@ describe('ML Routes Authentication Tests', () => {
 
       it('should handle queue fetch errors after authentication', async () => {
         // Mock logger to throw an error after authentication passes
-        mockedLogger.info.mockImplementation((message) => {
+        mockedLogger.info.mockImplementation(message => {
           if (message.includes('Fetching queue status')) {
             throw new Error('Queue service unavailable');
           }
@@ -405,10 +410,12 @@ describe('ML Routes Authentication Tests', () => {
         expect(response.body).toEqual({
           success: true,
           data: { modelId, status: 'warming-up' },
-          message: `Model ${modelId} warm-up initiated`
+          message: `Model ${modelId} warm-up initiated`,
         });
 
-        expect(mockedLogger.info).toHaveBeenCalledWith(`🔥 ML: Warming up model: ${modelId}`);
+        expect(mockedLogger.info).toHaveBeenCalledWith(
+          `🔥 ML: Warming up model: ${modelId}`
+        );
         expect(mockedAuthenticate).toHaveBeenCalled();
       });
 
@@ -418,7 +425,7 @@ describe('ML Routes Authentication Tests', () => {
           res.status(401).json({
             success: false,
             message: 'Chybí autentizační token',
-            source: 'Auth'
+            source: 'Auth',
           });
         });
 
@@ -429,7 +436,7 @@ describe('ML Routes Authentication Tests', () => {
         expect(response.body).toEqual({
           success: false,
           message: 'Chybí autentizační token',
-          source: 'Auth'
+          source: 'Auth',
         });
 
         expect(mockedAuthenticate).toHaveBeenCalled();
@@ -437,7 +444,7 @@ describe('ML Routes Authentication Tests', () => {
 
       it('should handle warm-up errors after authentication', async () => {
         // Mock logger to throw an error after authentication passes
-        mockedLogger.info.mockImplementation((message) => {
+        mockedLogger.info.mockImplementation(message => {
           if (message.includes('Warming up model')) {
             throw new Error('Model warm-up failed');
           }
@@ -464,7 +471,9 @@ describe('ML Routes Authentication Tests', () => {
           .expect(200);
 
         expect(response.body.data.modelId).toBe(modelId);
-        expect(mockedLogger.info).toHaveBeenCalledWith(`🔥 ML: Warming up model: ${modelId}`);
+        expect(mockedLogger.info).toHaveBeenCalledWith(
+          `🔥 ML: Warming up model: ${modelId}`
+        );
       });
     });
   });
@@ -490,9 +499,7 @@ describe('ML Routes Authentication Tests', () => {
       });
 
       // Test public endpoint
-      await request(app)
-        .get('/api/ml/health')
-        .expect(200);
+      await request(app).get('/api/ml/health').expect(200);
 
       // Should only have rate limiter, not authentication
       expect(middlewareOrder).toEqual(['rateLimiter']);
@@ -531,7 +538,7 @@ describe('ML Routes Authentication Tests', () => {
         res.status(500).json({
           success: false,
           message: 'Chyba autentizace',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -543,7 +550,7 @@ describe('ML Routes Authentication Tests', () => {
       expect(response.body).toEqual({
         success: false,
         message: 'Chyba autentizace',
-        source: 'Auth'
+        source: 'Auth',
       });
     });
 
@@ -553,7 +560,7 @@ describe('ML Routes Authentication Tests', () => {
         res.status(503).json({
           success: false,
           message: 'Authentication service unavailable',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -575,9 +582,7 @@ describe('ML Routes Authentication Tests', () => {
       expect(modelsResponse.body.success).toBe(true);
 
       // Protected endpoints should fail
-      await request(app)
-        .get('/api/ml/queue')
-        .expect(503);
+      await request(app).get('/api/ml/queue').expect(503);
     });
   });
 
@@ -591,7 +596,7 @@ describe('ML Routes Authentication Tests', () => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -646,7 +651,7 @@ describe('ML Routes Authentication Tests', () => {
         req.user = {
           ...mockUser,
           id: '<script>alert("xss")</script>',
-          email: 'malicious@<script>alert("xss")</script>.com'
+          email: 'malicious@<script>alert("xss")</script>.com',
         };
         next();
       });
@@ -703,7 +708,7 @@ describe('ML Routes Authentication Tests', () => {
         res.status(500).json({
           success: false,
           message: 'Database connection failed',
-          source: 'Auth'
+          source: 'Auth',
         });
       });
 
@@ -715,7 +720,7 @@ describe('ML Routes Authentication Tests', () => {
       expect(response.body).toEqual({
         success: false,
         message: 'Database connection failed',
-        source: 'Auth'
+        source: 'Auth',
       });
     });
 
@@ -727,9 +732,7 @@ describe('ML Routes Authentication Tests', () => {
 
       // Error handling would depend on Express error middleware configuration
       // This test ensures our routes don't break the middleware chain
-      const response = await request(app)
-        .get('/api/ml/health')
-        .expect(500);
+      const response = await request(app).get('/api/ml/health').expect(500);
 
       // The exact response depends on Express error handling middleware
       expect(response.status).toBe(500);

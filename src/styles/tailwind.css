@@ -110,6 +110,16 @@
   .btn-press {
     @apply active:scale-95 transition-transform;
   }
+
+  /* Button hover lift animation */
+  .btn-hover-lift {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 hover:scale-105;
+  }
+
+  /* Sign-in button specific hover animation */
+  .signin-btn-hover {
+    @apply transition-all duration-300 hover:shadow-xl hover:-translate-y-1 hover:scale-105 active:scale-95;
+  }
 }
 
 @keyframes fadeIn {

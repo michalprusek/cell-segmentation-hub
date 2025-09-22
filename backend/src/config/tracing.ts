@@ -35,7 +35,10 @@ export function getActiveSpan(): unknown {
  * Create a new span
  * Placeholder implementation
  */
-export function createSpan(_name: string, _options?: Record<string, unknown>): Record<string, () => void> {
+export function createSpan(
+  _name: string,
+  _options?: Record<string, unknown>
+): Record<string, () => void> {
   return {
     setAttribute: (): void => {},
     setStatus: (): void => {},

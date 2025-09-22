@@ -4,7 +4,6 @@ import React, {
   useRef,
   useCallback,
   useMemo,
-  startTransition,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
@@ -56,11 +55,7 @@ const ProjectDetail = () => {
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
-  const [shouldNavigateOnComplete, setShouldNavigateOnComplete] =
-    useState<boolean>(false);
-  const [navigationTargetImageId, setNavigationTargetImageId] = useState<
-    string | null
-  >(null);
+  // Navigation state variables removed - automatic navigation to segmentation editor disabled
 
   // Debouncing and deduplication for segmentation refresh
   const debounceTimeoutRef = useRef<{ [imageId: string]: NodeJS.Timeout }>({});
@@ -181,8 +176,7 @@ const ProjectDetail = () => {
 
         // Reset batch submitted state
         setBatchSubmitted(false);
-        setShouldNavigateOnComplete(false);
-        setNavigationTargetImageId(null);
+        // Navigation state cleanup removed
       }
     },
     [id, user?.id, updateImages]
@@ -220,6 +214,73 @@ const ProjectDetail = () => {
     []
   );
 
+  // Handle batch completion to refresh gallery
+  const handleBatchCompleted = useCallback(async () => {
+    if (!id || !user?.id) return;
+
+    logger.info('🔄 Batch segmentation completed, refreshing image gallery...', {
+      projectId: id,
+    });
+
+    try {
+      // Fetch updated images to refresh statuses and thumbnails
+      let allImages: any[] = [];
+      let page = 1;
+      let hasMore = true;
+      const limit = 50;
+
+      while (hasMore) {
+        const imagesResponse = await apiClient.getProjectImages(id, {
+          limit,
+          page,
+        });
+
+        if (
+          !imagesResponse.images ||
+          !Array.isArray(imagesResponse.images)
+        ) {
+          break;
+        }
+
+        allImages = [...allImages, ...imagesResponse.images];
+        hasMore = page * limit < imagesResponse.total;
+        page++;
+
+        if (page > 40) break; // Safety limit
+      }
+
+      const formattedImages = (allImages || []).map(img => {
+        let segmentationStatus =
+          img.segmentationStatus || img.segmentation_status;
+        if (segmentationStatus === 'segmented') {
+          segmentationStatus = 'completed';
+        }
+
+        return {
+          id: img.id,
+          name: img.name,
+          url: img.url || img.image_url,
+          thumbnail_url: img.thumbnail_url,
+          createdAt: new Date(img.created_at || img.createdAt),
+          updatedAt: new Date(img.updated_at || img.updatedAt),
+          segmentationStatus: segmentationStatus,
+          segmentationResult: img.segmentationResult,
+          segmentationThumbnailPath: img.segmentationThumbnailPath,
+          segmentationThumbnailUrl: img.segmentationThumbnailUrl,
+        };
+      });
+
+      updateImages(formattedImages);
+
+      logger.info('✅ Gallery refreshed successfully after batch completion', {
+        imageCount: formattedImages.length,
+        completedCount: formattedImages.filter(img => img.segmentationStatus === 'completed').length,
+      });
+    } catch (error) {
+      logger.error('❌ Failed to refresh gallery after batch completion:', error);
+    }
+  }, [id, user?.id, updateImages]);
+
   // Queue management - must be declared before using queueStats
   const {
     isConnected,
@@ -230,110 +291,15 @@ const ProjectDetail = () => {
   } = useSegmentationQueue(
     id,
     handleSegmentationCancelled,
-    handleBulkSegmentationCancelled
+    handleBulkSegmentationCancelled,
+    handleBatchCompleted
   );
 
   // Global queue stats for Cancel All button
   const { queueStats: globalQueueStats } = useSegmentationQueue(undefined);
 
-  // Export progress tracking
-  const exportHook = useAdvancedExport(id || '');
-
-  // Local export state to sync with dialog
-  const [localExportState, setLocalExportState] = useState({
-    isExporting: false,
-    isDownloading: false,
-    exportProgress: 0,
-    exportStatus: '',
-    completedJobId: null as string | null,
-  });
-
-  // Merge local export state with hook state for panel display
-  const displayExportState = {
-    isExporting: exportHook.isExporting || localExportState.isExporting,
-    isDownloading: exportHook.isDownloading || localExportState.isDownloading,
-    exportProgress: localExportState.isExporting
-      ? localExportState.exportProgress
-      : exportHook.exportProgress,
-    exportStatus: localExportState.isExporting
-      ? localExportState.exportStatus
-      : exportHook.exportStatus,
-    completedJobId:
-      exportHook.completedJobId || localExportState.completedJobId,
-    wsConnected: exportHook.wsConnected,
-  };
-
-  // Sync with export hook when it updates
-  useEffect(() => {
-    if (
-      exportHook.isExporting ||
-      exportHook.isDownloading ||
-      exportHook.completedJobId
-    ) {
-      setLocalExportState({
-        isExporting: exportHook.isExporting,
-        isDownloading: exportHook.isDownloading,
-        exportProgress: exportHook.exportProgress,
-        exportStatus: exportHook.exportStatus,
-        completedJobId: exportHook.completedJobId,
-      });
-    }
-  }, [
-    exportHook.isExporting,
-    exportHook.isDownloading,
-    exportHook.exportProgress,
-    exportHook.exportStatus,
-    exportHook.completedJobId,
-  ]);
-
-  // Callbacks for export dialog state synchronization
-  const handleExportingChange = useCallback((isExporting: boolean) => {
-    logger.debug('📤 Export dialog state change - isExporting:', isExporting);
-    setLocalExportState(prev => ({
-      ...prev,
-      isExporting,
-      exportProgress: isExporting ? 0 : prev.exportProgress,
-      exportStatus: isExporting ? 'Preparing export...' : prev.exportStatus,
-    }));
-  }, []);
-
-  const handleDownloadingChange = useCallback((isDownloading: boolean) => {
-    logger.debug(
-      '📥 Export dialog state change - isDownloading:',
-      isDownloading
-    );
-    setLocalExportState(prev => ({
-      ...prev,
-      isDownloading,
-    }));
-  }, []);
-
-  // Debug export state visibility
-  useEffect(() => {
-    logger.debug('🔍 Export state debug:', {
-      hookState: {
-        isExporting: exportHook.isExporting,
-        isDownloading: exportHook.isDownloading,
-        exportProgress: exportHook.exportProgress,
-        exportStatus: exportHook.exportStatus,
-        completedJobId: exportHook.completedJobId,
-        wsConnected: exportHook.wsConnected,
-      },
-      localState: localExportState,
-      displayState: displayExportState,
-      projectId: id,
-    });
-  }, [
-    exportHook.isExporting,
-    exportHook.isDownloading,
-    exportHook.exportProgress,
-    exportHook.exportStatus,
-    exportHook.completedJobId,
-    exportHook.wsConnected,
-    localExportState,
-    displayExportState,
-    id,
-  ]);
+  // Export progress tracking - use ONLY shared hook for SSOT
+  const exportHook = useSharedAdvancedExport(id || '', projectTitle);
 
   // Handle thumbnail updates via WebSocket
   useThumbnailUpdates({
@@ -537,8 +503,7 @@ const ProjectDetail = () => {
           }
         );
         setBatchSubmitted(false);
-        setShouldNavigateOnComplete(false);
-        setNavigationTargetImageId(null);
+        // Navigation state cleanup removed
       }, 60000); // 60 second timeout for disconnection
 
       return () => clearTimeout(disconnectionTimeout);
@@ -739,7 +704,7 @@ const ProjectDetail = () => {
 
       if (isBulkOperation) {
         // Batch the update
-        pendingUpdatesRef.current.set(lastUpdate.imageId, {
+        pendingUpdatesRef.current.set(update.imageId, {
           normalizedStatus,
           clearSegmentationData,
         });
@@ -960,23 +925,8 @@ const ProjectDetail = () => {
             // Force reconciliation to catch any missed updates
             reconcileRef.current();
 
-            // Navigate to segmentation editor if batch is complete and navigation was requested
-            if (shouldNavigateOnComplete && navigationTargetImageId) {
-              logger.info(
-                'Batch processing complete, navigating to segmentation editor',
-                'ProjectDetail',
-                {
-                  projectId: id,
-                  imageId: navigationTargetImageId,
-                }
-              );
-              // Use startTransition to ensure navigation works with React 18 concurrent features
-              startTransition(() => {
-                navigate(`/segmentation/${id}/${navigationTargetImageId}`);
-              });
-              setShouldNavigateOnComplete(false);
-              setNavigationTargetImageId(null);
-            }
+            // Automatic navigation to segmentation editor removed per user request
+            // Gallery refresh is handled by handleBatchCompleted callback
           }
         }, 2000);
 
@@ -991,8 +941,6 @@ const ProjectDetail = () => {
       id,
       queueStats,
       batchSubmitted,
-      shouldNavigateOnComplete,
-      navigationTargetImageId,
       navigate,
       images,
     ]
@@ -1000,7 +948,13 @@ const ProjectDetail = () => {
 
   // Real-time image status updates - debounced handler
   useEffect(() => {
-    if (!lastUpdate || lastUpdate.projectId !== id) {
+    // Defensive null checks and type safety
+    if (!lastUpdate || !lastUpdate.imageId) {
+      return;
+    }
+
+    // Only process updates for current project (if projectId is available)
+    if (lastUpdate.projectId && lastUpdate.projectId !== id) {
       return;
     }
 
@@ -1385,11 +1339,7 @@ const ProjectDetail = () => {
       // Mark as submitted to prevent double clicks
       setBatchSubmitted(true);
 
-      // Set navigation flags to navigate to first image after batch completion
-      if (allImagesToProcess.length > 0) {
-        setShouldNavigateOnComplete(true);
-        setNavigationTargetImageId(allImagesToProcess[0].id);
-      }
+      // Navigation flags removed - user doesn't want automatic navigation to segmentation editor
 
       // Safety timeout to reset batchSubmitted state if WebSocket updates are missed
       // This prevents the button from getting permanently stuck in "adding to queue" state
@@ -1403,8 +1353,7 @@ const ProjectDetail = () => {
           }
         );
         setBatchSubmitted(false);
-        setShouldNavigateOnComplete(false);
-        setNavigationTargetImageId(null);
+        // Navigation state cleanup removed
       }, 30000); // 30 second safety timeout
 
       // Prepare image IDs for batch processing
@@ -1513,8 +1462,7 @@ const ProjectDetail = () => {
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);
       // Reset navigation flags on error
-      setShouldNavigateOnComplete(false);
-      setNavigationTargetImageId(null);
+      // Navigation state cleanup removed
 
       // Dismiss progress toast if it exists
       toast.dismiss('batch-progress');
@@ -1595,8 +1543,8 @@ const ProjectDetail = () => {
               onSelectAllToggle={handleSelectAllToggle}
               onBatchDelete={handleBatchDelete}
               showSelectAll={true}
-              onExportingChange={handleExportingChange}
-              onDownloadingChange={handleDownloadingChange}
+              onExportingChange={() => {}} // No longer needed - hook handles state
+              onDownloadingChange={() => {}} // No longer needed - hook handles state
             />
 
             {/* Queue Stats Panel */}
@@ -1617,15 +1565,15 @@ const ProjectDetail = () => {
 
             {/* Export Progress Panel */}
             <ExportProgressPanel
-              isExporting={displayExportState.isExporting}
-              isDownloading={displayExportState.isDownloading}
-              exportProgress={displayExportState.exportProgress}
-              exportStatus={displayExportState.exportStatus}
-              completedJobId={displayExportState.completedJobId}
+              isExporting={exportHook.isExporting}
+              isDownloading={exportHook.isDownloading}
+              exportProgress={exportHook.exportProgress}
+              exportStatus={exportHook.exportStatus}
+              completedJobId={exportHook.completedJobId}
               onCancelExport={exportHook.cancelExport}
               onTriggerDownload={exportHook.triggerDownload}
               onDismissExport={exportHook.dismissExport}
-              wsConnected={displayExportState.wsConnected}
+              wsConnected={exportHook.wsConnected}
             />
 
             {loading ? (

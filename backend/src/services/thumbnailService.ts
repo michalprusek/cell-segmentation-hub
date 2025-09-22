@@ -42,7 +42,10 @@ export class ThumbnailService {
     try {
       this.webSocketService = WebSocketService.getInstance();
     } catch {
-      logger.debug('WebSocket service not yet available for thumbnail service', 'ThumbnailService');
+      logger.debug(
+        'WebSocket service not yet available for thumbnail service',
+        'ThumbnailService'
+      );
     }
   }
 
@@ -50,19 +53,25 @@ export class ThumbnailService {
    * Douglas-Peucker algorithm for polygon simplification
    */
   private simplifyPolygon(points: Point[], tolerance: number): Point[] {
-    if (points.length <= 3) {return points;}
+    if (points.length <= 3) {
+      return points;
+    }
 
     // Find the point with the maximum distance from the line between start and end
     let maxDistance = 0;
     let maxIndex = 0;
     const start = points[0];
     const end = points[points.length - 1];
-    
-    if (!start || !end) {return points;}
+
+    if (!start || !end) {
+      return points;
+    }
 
     for (let i = 1; i < points.length - 1; i++) {
       const point = points[i];
-      if (!point) {continue;}
+      if (!point) {
+        continue;
+      }
       const distance = this.perpendicularDistance(point, start, end);
       if (distance > maxDistance) {
         maxDistance = distance;
@@ -72,7 +81,10 @@ export class ThumbnailService {
 
     // If max distance is greater than tolerance, recursively simplify
     if (maxDistance > tolerance) {
-      const leftPart = this.simplifyPolygon(points.slice(0, maxIndex + 1), tolerance);
+      const leftPart = this.simplifyPolygon(
+        points.slice(0, maxIndex + 1),
+        tolerance
+      );
       const rightPart = this.simplifyPolygon(points.slice(maxIndex), tolerance);
 
       // Combine the two parts (removing the duplicate point at maxIndex)
@@ -86,18 +98,27 @@ export class ThumbnailService {
   /**
    * Calculate perpendicular distance from a point to a line
    */
-  private perpendicularDistance(point: Point, lineStart: Point, lineEnd: Point): number {
+  private perpendicularDistance(
+    point: Point,
+    lineStart: Point,
+    lineEnd: Point
+  ): number {
     const dx = lineEnd.x - lineStart.x;
     const dy = lineEnd.y - lineStart.y;
 
     if (dx === 0 && dy === 0) {
       // Line start and end are the same
-      return Math.sqrt((point.x - lineStart.x) ** 2 + (point.y - lineStart.y) ** 2);
+      return Math.sqrt(
+        (point.x - lineStart.x) ** 2 + (point.y - lineStart.y) ** 2
+      );
     }
 
     const normalLength = Math.sqrt(dx * dx + dy * dy);
     return Math.abs(
-      (dy * point.x - dx * point.y + lineEnd.x * lineStart.y - lineEnd.y * lineStart.x) /
+      (dy * point.x -
+        dx * point.y +
+        lineEnd.x * lineStart.y -
+        lineEnd.y * lineStart.x) /
         normalLength
     );
   }
@@ -110,13 +131,15 @@ export class ThumbnailService {
     imageWidth: number,
     imageHeight: number
   ): ThumbnailData[] {
-    const imageDiagonal = Math.sqrt(imageWidth * imageWidth + imageHeight * imageHeight);
-    
+    const imageDiagonal = Math.sqrt(
+      imageWidth * imageWidth + imageHeight * imageHeight
+    );
+
     // Define tolerance levels based on image size
     const tolerances = {
-      low: imageDiagonal * 0.02,    // 2% of diagonal - very simplified
-      medium: imageDiagonal * 0.01,  // 1% of diagonal - moderate detail
-      high: imageDiagonal * 0.005   // 0.5% of diagonal - high detail
+      low: imageDiagonal * 0.02, // 2% of diagonal - very simplified
+      medium: imageDiagonal * 0.01, // 1% of diagonal - moderate detail
+      high: imageDiagonal * 0.005, // 0.5% of diagonal - high detail
     };
 
     const levels: ThumbnailData[] = [];
@@ -124,8 +147,12 @@ export class ThumbnailService {
     for (const [level, tolerance] of Object.entries(tolerances)) {
       const simplifiedPolygons: SimplifiedPolygon[] = polygons.map(polygon => {
         const originalPointCount = polygon.points.length;
-        const simplifiedPoints = this.simplifyPolygon(polygon.points, tolerance);
-        const compressionRatio = originalPointCount / Math.max(simplifiedPoints.length, 1);
+        const simplifiedPoints = this.simplifyPolygon(
+          polygon.points,
+          tolerance
+        );
+        const compressionRatio =
+          originalPointCount / Math.max(simplifiedPoints.length, 1);
 
         return {
           ...polygon,
@@ -133,21 +160,26 @@ export class ThumbnailService {
           originalPointCount,
           compressionRatio,
           area: polygon.area ?? 0,
-          confidence: polygon.confidence ?? 0.8
+          confidence: polygon.confidence ?? 0.8,
         };
       });
 
-      const totalPoints = simplifiedPolygons.reduce((sum, p) => sum + p.points.length, 0);
-      const averageCompressionRatio = simplifiedPolygons.length === 0 
-        ? 0 
-        : simplifiedPolygons.reduce((sum, p) => sum + p.compressionRatio, 0) / simplifiedPolygons.length;
+      const totalPoints = simplifiedPolygons.reduce(
+        (sum, p) => sum + p.points.length,
+        0
+      );
+      const averageCompressionRatio =
+        simplifiedPolygons.length === 0
+          ? 0
+          : simplifiedPolygons.reduce((sum, p) => sum + p.compressionRatio, 0) /
+            simplifiedPolygons.length;
 
       levels.push({
         levelOfDetail: level as 'low' | 'medium' | 'high',
         polygons: simplifiedPolygons,
         totalPolygons: simplifiedPolygons.length,
         totalPoints,
-        averageCompressionRatio
+        averageCompressionRatio,
       });
     }
 
@@ -159,12 +191,15 @@ export class ThumbnailService {
    */
   async generateThumbnails(segmentationId: string): Promise<void> {
     try {
-      logger.info(`🖼️ Generating thumbnails for segmentation ${segmentationId}`, 'ThumbnailService');
+      logger.info(
+        `🖼️ Generating thumbnails for segmentation ${segmentationId}`,
+        'ThumbnailService'
+      );
 
       // Get the segmentation data
       const segmentation = await this.prisma.segmentation.findUnique({
         where: { id: segmentationId },
-        include: { image: true }
+        include: { image: true },
       });
 
       if (!segmentation) {
@@ -172,7 +207,9 @@ export class ThumbnailService {
       }
 
       if (!segmentation.imageWidth || !segmentation.imageHeight) {
-        throw new Error(`Segmentation ${segmentationId} missing image dimensions`);
+        throw new Error(
+          `Segmentation ${segmentationId} missing image dimensions`
+        );
       }
 
       // Parse polygons
@@ -180,11 +217,16 @@ export class ThumbnailService {
       try {
         polygons = JSON.parse(segmentation.polygons);
       } catch (error) {
-        throw new Error(`Failed to parse polygons for segmentation ${segmentationId}: ${error}`);
+        throw new Error(
+          `Failed to parse polygons for segmentation ${segmentationId}: ${error}`
+        );
       }
 
       if (!polygons || polygons.length === 0) {
-        logger.warn(`⚠️ No polygons found for segmentation ${segmentationId}`, 'ThumbnailService');
+        logger.warn(
+          `⚠️ No polygons found for segmentation ${segmentationId}`,
+          'ThumbnailService'
+        );
         return;
       }
 
@@ -196,10 +238,10 @@ export class ThumbnailService {
       );
 
       // Store thumbnails in database
-      await this.prisma.$transaction(async (tx) => {
+      await this.prisma.$transaction(async tx => {
         // Remove existing thumbnails
         await tx.segmentationThumbnail.deleteMany({
-          where: { segmentationId }
+          where: { segmentationId },
         });
 
         // Create new thumbnails
@@ -211,8 +253,8 @@ export class ThumbnailService {
               simplifiedData: JSON.stringify(thumbnailData.polygons),
               polygonCount: thumbnailData.totalPolygons,
               pointCount: thumbnailData.totalPoints,
-              compressionRatio: thumbnailData.averageCompressionRatio
-            }
+              compressionRatio: thumbnailData.averageCompressionRatio,
+            },
           });
         }
       });
@@ -221,7 +263,9 @@ export class ThumbnailService {
       if (this.webSocketService && segmentation.image.projectId) {
         try {
           // Send only the 'low' level thumbnail for card updates (most commonly used)
-          const lowDetailThumbnail = thumbnailLevels.find(t => t.levelOfDetail === 'low');
+          const lowDetailThumbnail = thumbnailLevels.find(
+            t => t.levelOfDetail === 'low'
+          );
           if (lowDetailThumbnail) {
             const thumbnailUpdate: ThumbnailUpdate = {
               imageId: segmentation.imageId,
@@ -232,11 +276,14 @@ export class ThumbnailService {
                 polygons: lowDetailThumbnail.polygons,
                 polygonCount: lowDetailThumbnail.totalPolygons,
                 pointCount: lowDetailThumbnail.totalPoints,
-                compressionRatio: lowDetailThumbnail.averageCompressionRatio
-              }
+                compressionRatio: lowDetailThumbnail.averageCompressionRatio,
+              },
             };
 
-            this.webSocketService.broadcastThumbnailUpdate(segmentation.image.projectId, thumbnailUpdate);
+            this.webSocketService.broadcastThumbnailUpdate(
+              segmentation.image.projectId,
+              thumbnailUpdate
+            );
           }
         } catch (error) {
           logger.error(
@@ -257,11 +304,10 @@ export class ThumbnailService {
             level: level.levelOfDetail,
             polygons: level.totalPolygons,
             points: level.totalPoints,
-            compression: level.averageCompressionRatio.toFixed(2)
-          }))
+            compression: level.averageCompressionRatio.toFixed(2),
+          })),
         }
       );
-
     } catch (error) {
       logger.error(
         `❌ Failed to generate thumbnails for segmentation ${segmentationId}`,
@@ -289,15 +335,15 @@ export class ThumbnailService {
       );
       return null;
     }
-    
+
     try {
       const thumbnail = await this.prisma.segmentationThumbnail.findUnique({
         where: {
           segmentationId_levelOfDetail: {
             segmentationId,
-            levelOfDetail
-          }
-        }
+            levelOfDetail,
+          },
+        },
       });
 
       if (!thumbnail) {
@@ -311,9 +357,8 @@ export class ThumbnailService {
         polygons,
         totalPolygons: thumbnail.polygonCount,
         totalPoints: thumbnail.pointCount,
-        averageCompressionRatio: thumbnail.compressionRatio
+        averageCompressionRatio: thumbnail.compressionRatio,
       };
-
     } catch (error) {
       logger.error(
         `❌ Failed to get thumbnail for segmentation ${segmentationId}`,
@@ -337,8 +382,8 @@ export class ThumbnailService {
       const thumbnails = await this.prisma.segmentationThumbnail.findMany({
         where: {
           segmentationId: { in: segmentationIds },
-          levelOfDetail
-        }
+          levelOfDetail,
+        },
       });
 
       for (const thumbnail of thumbnails) {
@@ -349,7 +394,7 @@ export class ThumbnailService {
             polygons,
             totalPolygons: thumbnail.polygonCount,
             totalPoints: thumbnail.pointCount,
-            averageCompressionRatio: thumbnail.compressionRatio
+            averageCompressionRatio: thumbnail.compressionRatio,
           });
         } catch (error) {
           logger.error(
@@ -365,7 +410,6 @@ export class ThumbnailService {
         'ThumbnailService',
         { levelOfDetail, segmentationIds: segmentationIds.length }
       );
-
     } catch (error) {
       logger.error(
         `❌ Failed to batch get thumbnails`,
@@ -382,10 +426,13 @@ export class ThumbnailService {
    */
   async regenerateAllThumbnails(): Promise<void> {
     try {
-      logger.info('🔄 Starting regeneration of all thumbnails', 'ThumbnailService');
+      logger.info(
+        '🔄 Starting regeneration of all thumbnails',
+        'ThumbnailService'
+      );
 
       const segmentations = await this.prisma.segmentation.findMany({
-        select: { id: true }
+        select: { id: true },
       });
 
       let processed = 0;
@@ -410,7 +457,6 @@ export class ThumbnailService {
         'ThumbnailService',
         { processed, failed, total: segmentations.length }
       );
-
     } catch (error) {
       logger.error(
         `❌ Failed to regenerate all thumbnails`,

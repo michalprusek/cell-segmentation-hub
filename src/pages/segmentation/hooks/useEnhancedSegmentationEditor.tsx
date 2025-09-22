@@ -88,17 +88,11 @@ export const useEnhancedSegmentationEditor = ({
   // Debug wrapper for setEditMode to track mode changes
   const setEditMode = useCallback(
     (newMode: EditMode | ((prev: EditMode) => EditMode)) => {
-      console.log(
-        '[useEnhancedSegmentationEditor] setEditMode called with:',
-        newMode
-      );
+      // setEditMode called with: newMode
       // Note: Don't log editMode here as it would create a dependency and stale closure
       // Instead, use the raw state setter's functional form if we need the current value
       setEditModeRaw(currentMode => {
-        console.log(
-          '[useEnhancedSegmentationEditor] Current mode before change:',
-          currentMode
-        );
+        // Current mode before change: currentMode
         if (typeof newMode === 'function') {
           return newMode(currentMode);
         }
@@ -276,18 +270,7 @@ export const useEnhancedSegmentationEditor = ({
 
     // DEBUG: Log why isNewData is triggering
     if (isNewData) {
-      console.log('[useEnhancedSegmentationEditor] isNewData triggered:', {
-        isNewData,
-        hasInitialized: hasInitialized.current,
-        imageChanged,
-        lengthChanged,
-        currentImageId: currentImageIdRef.current,
-        newImageId: imageId,
-        currentPolygonLength: initialPolygonsRef.current.length,
-        newPolygonLength: initialPolygons.length,
-        currentEditMode: editMode,
-        timestamp: Date.now(),
-      });
+      // isNewData triggered with state changes
     }
 
     if (isNewData) {
@@ -329,14 +312,7 @@ export const useEnhancedSegmentationEditor = ({
         // CRITICAL FIX: Only reset to View mode when actually switching images, not on polygon updates
         // This prevents slice/delete mode from being reset when polygons change
         if (imageChanged || !hasInitialized.current) {
-          console.log(
-            '[useEnhancedSegmentationEditor] Resetting to View mode because:',
-            {
-              imageChanged,
-              firstLoad: !hasInitialized.current,
-              currentMode: editMode,
-            }
-          );
+          // Resetting to View mode due to image change or first load
           setEditMode(EditMode.View); // Reset to view mode only on image change
         }
 
@@ -719,7 +695,7 @@ export const useEnhancedSegmentationEditor = ({
     [polygons, updatePolygons, t]
   );
 
-  // Escape handler
+  // Escape handler - always return to View mode
   const handleEscape = useCallback(() => {
     // Reset all temporary state
     setTempPoints([]);
@@ -737,14 +713,10 @@ export const useEnhancedSegmentationEditor = ({
     // Reset slice processing flag
     sliceProcessingRef.current = false;
 
-    // If we have a selected polygon, go to EditVertices mode instead of View mode
-    // This keeps the polygon selected when exiting other modes
-    if (selectedPolygonId) {
-      setEditMode(EditMode.EditVertices);
-    } else {
-      setEditMode(EditMode.View);
-    }
-  }, [selectedPolygonId]);
+    // ENHANCED: Return to base state (View mode + No selection)
+    setEditMode(EditMode.View);
+    setSelectedPolygonIdInternal(null);
+  }, []); // No dependencies to prevent recreation cycles
 
   // Initialize keyboard shortcuts first to get access to shift key state
   // Force HMR update - Fixed slice mode keyboard shortcut 2025-09-22

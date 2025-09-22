@@ -1,4 +1,8 @@
-import { generateTokenPair, verifyAccessToken, JwtPayload } from '../../auth/jwt';
+import {
+  generateTokenPair,
+  verifyAccessToken,
+  JwtPayload,
+} from '../../auth/jwt';
 import { prisma as _prisma } from '../../db';
 
 /**
@@ -72,8 +76,8 @@ export const defaultTestUser: TestUser = {
     consentToFeatureDevelopment: true,
     consentUpdatedAt: new Date('2025-01-01T00:00:00Z'),
     createdAt: new Date('2025-01-01T00:00:00Z'),
-    updatedAt: new Date('2025-01-01T00:00:00Z')
-  }
+    updatedAt: new Date('2025-01-01T00:00:00Z'),
+  },
 };
 
 /**
@@ -85,7 +89,7 @@ export function createTestUser(overrides?: Partial<TestUser>): TestUser {
     ...overrides,
     profile: overrides?.profile
       ? { ...defaultTestUser.profile, ...overrides.profile }
-      : defaultTestUser.profile
+      : defaultTestUser.profile,
   };
 }
 
@@ -102,7 +106,7 @@ export async function createTestTokens(
   const payload: JwtPayload = {
     userId: user.id,
     email: user.email,
-    emailVerified: user.emailVerified
+    emailVerified: user.emailVerified,
   };
 
   return generateTokenPair(payload, rememberMe);
@@ -143,10 +147,12 @@ export async function createTestSession(
     userId: user.id,
     refreshToken: tokens.refreshToken,
     isValid: true,
-    expiresAt: new Date(Date.now() + (rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000)), // 30 days or 1 day
+    expiresAt: new Date(
+      Date.now() + (rememberMe ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000)
+    ), // 30 days or 1 day
     rememberMe,
     createdAt: new Date(),
-    updatedAt: new Date()
+    updatedAt: new Date(),
   };
 
   return sessionData;
@@ -164,7 +170,7 @@ export const authTestScenarios = {
     user: defaultTestUser,
     shouldSucceed: true,
     expectedStatus: 200,
-    description: 'User with valid token and verified email'
+    description: 'User with valid token and verified email',
   },
 
   /**
@@ -177,7 +183,7 @@ export const authTestScenarios = {
     shouldSucceed: false,
     expectedStatus: 401,
     expectedMessage: 'Chybí autentizační token',
-    description: 'Request without Authorization header'
+    description: 'Request without Authorization header',
   },
 
   /**
@@ -190,7 +196,7 @@ export const authTestScenarios = {
     shouldSucceed: false,
     expectedStatus: 401,
     expectedMessage: 'Neplatný token',
-    description: 'Malformed JWT token'
+    description: 'Malformed JWT token',
   },
 
   /**
@@ -203,7 +209,7 @@ export const authTestScenarios = {
     shouldSucceed: false,
     expectedStatus: 401,
     expectedMessage: 'Token vypršel',
-    description: 'Valid JWT token that has expired'
+    description: 'Valid JWT token that has expired',
   },
 
   /**
@@ -216,7 +222,7 @@ export const authTestScenarios = {
     shouldSucceed: false,
     expectedStatus: 401,
     expectedMessage: 'Neplatný token',
-    description: 'JWT token with invalid signature'
+    description: 'JWT token with invalid signature',
   },
 
   /**
@@ -228,7 +234,7 @@ export const authTestScenarios = {
     shouldSucceed: false,
     expectedStatus: 401,
     expectedMessage: 'Uživatel nenalezen',
-    description: 'Valid token but user no longer exists in database'
+    description: 'Valid token but user no longer exists in database',
   },
 
   /**
@@ -239,7 +245,7 @@ export const authTestScenarios = {
     user: createTestUser({ emailVerified: false }),
     shouldSucceed: true, // Auth succeeds but might be restricted by other middleware
     expectedStatus: 200,
-    description: 'User with valid token but unverified email'
+    description: 'User with valid token but unverified email',
   },
 
   /**
@@ -250,8 +256,8 @@ export const authTestScenarios = {
     user: createTestUser({ profile: null }),
     shouldSucceed: true,
     expectedStatus: 200,
-    description: 'User with valid token but no profile data'
-  }
+    description: 'User with valid token but no profile data',
+  },
 };
 
 /**
@@ -264,14 +270,22 @@ export function createAuthHeader(token: string): string {
 /**
  * Mock authentication middleware factory for testing
  */
-export function createMockAuthMiddleware(scenario: typeof authTestScenarios[keyof typeof authTestScenarios]) {
-  return (req: Record<string, unknown>, res: Record<string, unknown>, next: () => void) => {
+export function createMockAuthMiddleware(
+  scenario: (typeof authTestScenarios)[keyof typeof authTestScenarios]
+) {
+  return (
+    req: Record<string, unknown>,
+    res: Record<string, unknown>,
+    next: () => void
+  ) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const response = res as any;
     if (!scenario.shouldSucceed) {
       return response.status(scenario.expectedStatus).json({
         success: false,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         message: (scenario as any).expectedMessage,
-        source: 'Auth'
+        source: 'Auth',
       });
     }
 
@@ -314,7 +328,7 @@ export function createMockUserResponses() {
       return new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Database timeout')), 100);
       });
-    }
+    },
   };
 }
 
@@ -324,7 +338,7 @@ export function createMockUserResponses() {
 export const securityTestVectors = {
   // Common JWT attack vectors
   nullBytes: 'Bearer valid.token.with\x00nullbyte',
-  sqlInjection: 'Bearer \'; DROP TABLE users; --',
+  sqlInjection: "Bearer '; DROP TABLE users; --",
   xssAttempt: 'Bearer <script>alert("xss")</script>',
   pathTraversal: 'Bearer ../../../etc/passwd',
   longToken: 'Bearer ' + 'a'.repeat(10000),
@@ -337,7 +351,7 @@ export const securityTestVectors = {
     'Bearer token with spaces',
     'Bearer token\nwith\nnewlines',
     'Basic dXNlcjpwYXNzd29yZA==', // Basic auth instead of Bearer
-    'Bearer token\ttab\tcharacters'
+    'Bearer token\ttab\tcharacters',
   ],
 
   // Edge cases
@@ -346,9 +360,11 @@ export const securityTestVectors = {
   unicodeToken: 'Bearer 🚀💾🔐',
 
   // JWT structure attacks
-  missingSignature: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0',
+  missingSignature:
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0',
   noneAlgorithm: 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VySWQiOiJ0ZXN0In0.',
-  wrongAlgorithm: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0.invalid'
+  wrongAlgorithm:
+    'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0.invalid',
 };
 
 /**
@@ -362,7 +378,7 @@ export const performanceTestUtils = {
     return Array.from({ length: count }, (_, i) => ({
       id: i,
       token: token,
-      headers: { Authorization: createAuthHeader(token) }
+      headers: { Authorization: createAuthHeader(token) },
     }));
   },
 
@@ -382,8 +398,8 @@ export const performanceTestUtils = {
     light: { concurrentUsers: 10, requestsPerUser: 5 },
     moderate: { concurrentUsers: 50, requestsPerUser: 10 },
     heavy: { concurrentUsers: 100, requestsPerUser: 20 },
-    stress: { concurrentUsers: 500, requestsPerUser: 50 }
-  }
+    stress: { concurrentUsers: 500, requestsPerUser: 50 },
+  },
 };
 
 /**
@@ -411,5 +427,5 @@ export const testCleanup = {
    */
   cleanupAll: async () => {
     // Performing general test cleanup
-  }
+  },
 };

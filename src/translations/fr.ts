@@ -4,6 +4,7 @@ export default {
     loading: 'Chargement...',
     save: 'Enregistrer',
     cancel: 'Annuler',
+    dismiss: 'Fermer',
     delete: 'Supprimer',
     edit: 'Modifier',
     create: 'Créer',

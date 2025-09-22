@@ -2,26 +2,30 @@
  * Escapes HTML special characters to prevent XSS attacks
  */
 export function escapeHtml(str: string): string {
-  if (!str) {return '';}
-  
+  if (!str) {
+    return '';
+  }
+
   const htmlEscapeMap: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
     "'": '&#39;',
-    '/': '&#x2F;'
+    '/': '&#x2F;',
   };
-  
-  return String(str).replace(/[&<>"'/]/g, (char) => htmlEscapeMap[char] || char);
+
+  return String(str).replace(/[&<>"'/]/g, char => htmlEscapeMap[char] || char);
 }
 
 /**
  * Validates and sanitizes a URL
  */
 export function sanitizeUrl(url: string): string {
-  if (!url) {return '';}
-  
+  if (!url) {
+    return '';
+  }
+
   try {
     const parsed = new URL(url);
     // Only allow http and https protocols

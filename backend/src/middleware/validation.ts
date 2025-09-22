@@ -12,21 +12,21 @@ export type ValidationTarget = 'body' | 'query' | 'params';
 export const validate = <T>(
   schema: ZodSchema<T>,
   target: ValidationTarget = 'body'
-): (req: Request, res: Response, next: NextFunction) => void => {
+): ((req: Request, res: Response, next: NextFunction) => void) => {
   return (req: Request, res: Response, next: NextFunction) => {
     const data = req[target];
     try {
       const validatedData = schema.parse(data);
-      
+
       // Replace the original data with validated data
       (req as unknown as Record<string, unknown>)[target] = validatedData;
-      
+
       return next();
     } catch (error) {
       if (error instanceof ZodError) {
         const errors: Record<string, string[]> = {};
-        
-        error.errors.forEach((err) => {
+
+        error.errors.forEach(err => {
           const path = err.path.join('.');
           if (!errors[path]) {
             errors[path] = [];
@@ -42,13 +42,18 @@ export const validate = <T>(
           userId: (req as Request & { user?: { id?: string } }).user?.id,
           validationErrors: errors,
           receivedData: data,
-          errorCount: error.errors.length
+          errorCount: error.errors.length,
         });
 
         return ResponseHelper.validationError(res, errors, 'Validation');
       }
-      
-      return ResponseHelper.internalError(res, error as Error, undefined, 'Validation');
+
+      return ResponseHelper.internalError(
+        res,
+        error as Error,
+        undefined,
+        'Validation'
+      );
     }
   };
 };
@@ -56,21 +61,27 @@ export const validate = <T>(
 /**
  * Validate request body
  */
-export const validateBody = <T>(schema: ZodSchema<T>): (req: Request, res: Response, next: NextFunction) => void => {
+export const validateBody = <T>(
+  schema: ZodSchema<T>
+): ((req: Request, res: Response, next: NextFunction) => void) => {
   return validate(schema, 'body');
 };
 
 /**
  * Validate query parameters
  */
-export const validateQuery = <T>(schema: ZodSchema<T>): (req: Request, res: Response, next: NextFunction) => void => {
+export const validateQuery = <T>(
+  schema: ZodSchema<T>
+): ((req: Request, res: Response, next: NextFunction) => void) => {
   return validate(schema, 'query');
 };
 
 /**
  * Validate URL parameters
  */
-export const validateParams = <T>(schema: ZodSchema<T>): (req: Request, res: Response, next: NextFunction) => void => {
+export const validateParams = <T>(
+  schema: ZodSchema<T>
+): ((req: Request, res: Response, next: NextFunction) => void) => {
   return validate(schema, 'params');
 };
 
@@ -83,11 +94,18 @@ export const validateFile = (
     maxSize?: number;
     allowedMimeTypes?: string[];
   } = {}
-): (req: Request, res: Response, next: NextFunction) => void => {
+): ((req: Request, res: Response, next: NextFunction) => void) => {
   const {
     required = false,
     maxSize = 10 * 1024 * 1024, // 10MB default
-    allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff']
+    allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/bmp',
+      'image/tiff',
+    ],
   } = options;
 
   return (req: Request, res: Response, next: NextFunction) => {
@@ -95,7 +113,11 @@ export const validateFile = (
 
     // Check if file is required
     if (required && !file) {
-      return ResponseHelper.validationError(res, 'Soubor je vyžadován', 'FileValidation');
+      return ResponseHelper.validationError(
+        res,
+        'Soubor je vyžadován',
+        'FileValidation'
+      );
     }
 
     // If no file and not required, continue
@@ -136,18 +158,29 @@ export const validateFiles = (
     maxSize?: number;
     allowedMimeTypes?: string[];
   } = {}
-): (req: Request, res: Response, next: NextFunction) => void => {
+): ((req: Request, res: Response, next: NextFunction) => void) => {
   const {
     maxFiles = 10,
     maxSize = 10 * 1024 * 1024, // 10MB default
-    allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/bmp', 'image/tiff']
+    allowedMimeTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/gif',
+      'image/bmp',
+      'image/tiff',
+    ],
   } = options;
 
   return (req: Request, res: Response, next: NextFunction) => {
     const files = req.files as Express.Multer.File[] | undefined;
 
     if (!files || files.length === 0) {
-      return ResponseHelper.validationError(res, 'Alespoň jeden soubor je vyžadován', 'FileValidation');
+      return ResponseHelper.validationError(
+        res,
+        'Alespoň jeden soubor je vyžadován',
+        'FileValidation'
+      );
     }
 
     // Check number of files

@@ -17,10 +17,10 @@ const ALLOWED_MODELS = [
   'passwordResetToken',
   'segmentationHistory',
   'polygon',
-  'exportTask'
+  'exportTask',
 ] as const;
 
-type AllowedModel = typeof ALLOWED_MODELS[number];
+type AllowedModel = (typeof ALLOWED_MODELS)[number];
 
 /**
  * Validates and sanitizes a model name for safe Prisma access
@@ -30,12 +30,12 @@ type AllowedModel = typeof ALLOWED_MODELS[number];
 export function validatePrismaModel(modelName: string): AllowedModel | null {
   // Convert to lowercase for case-insensitive comparison
   const normalized = modelName.toLowerCase().trim();
-  
+
   // Check if the model is in the allowed list
   if (ALLOWED_MODELS.includes(normalized as AllowedModel)) {
     return normalized as AllowedModel;
   }
-  
+
   return null;
 }
 
@@ -44,7 +44,9 @@ export function validatePrismaModel(modelName: string): AllowedModel | null {
  * @param modelName - The model name to check
  * @returns True if the model name is valid
  */
-export function isValidPrismaModel(modelName: string): modelName is AllowedModel {
+export function isValidPrismaModel(
+  modelName: string
+): modelName is AllowedModel {
   return validatePrismaModel(modelName) !== null;
 }
 
@@ -56,17 +58,17 @@ export function isValidPrismaModel(modelName: string): modelName is AllowedModel
 export function validateFieldName(fieldName: string): string | null {
   // Allow only alphanumeric characters and underscores
   const sanitized = fieldName.trim();
-  
+
   // Check for valid field name pattern
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(sanitized)) {
     return null;
   }
-  
+
   // Limit field name length to prevent abuse
   if (sanitized.length > 64) {
     return null;
   }
-  
+
   return sanitized;
 }
 
@@ -82,19 +84,31 @@ export function sanitizeWhereClause(where: unknown): unknown {
 
   const sanitized: Record<string, unknown> = {};
   const whereObj = where as Record<string, unknown>;
-  
+
   for (const [key, value] of Object.entries(whereObj)) {
     const validKey = validateFieldName(key);
     if (!validKey) {
       continue; // Skip invalid field names
     }
-    
+
     // Handle nested conditions
     if (value && typeof value === 'object' && !Array.isArray(value)) {
       // Check for Prisma operators
-      const operators = ['equals', 'not', 'in', 'notIn', 'lt', 'lte', 'gt', 'gte', 'contains', 'startsWith', 'endsWith'];
+      const operators = [
+        'equals',
+        'not',
+        'in',
+        'notIn',
+        'lt',
+        'lte',
+        'gt',
+        'gte',
+        'contains',
+        'startsWith',
+        'endsWith',
+      ];
       const hasOperator = Object.keys(value).some(k => operators.includes(k));
-      
+
       if (hasOperator) {
         sanitized[validKey] = value; // Trust Prisma's built-in validation for operators
       } else {
@@ -106,7 +120,7 @@ export function sanitizeWhereClause(where: unknown): unknown {
       sanitized[validKey] = value;
     }
   }
-  
+
   return sanitized;
 }
 
@@ -121,7 +135,7 @@ export function createSafeModelAccessor(prisma: Record<string, unknown>) {
     if (!validModel) {
       throw new Error(`Invalid or unauthorized model name: ${modelName}`);
     }
-    
+
     return prisma[validModel] as unknown;
   };
 }

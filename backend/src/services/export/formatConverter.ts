@@ -140,7 +140,7 @@ export class FormatConverter {
       if (!image) {
         continue;
       }
-      
+
       // Add image to COCO images list
       imagesList.push({
         id: imageIdx + 1,
@@ -158,35 +158,47 @@ export class FormatConverter {
           try {
             polygons = JSON.parse(result.polygons);
           } catch (error) {
-            logger.error('Failed to parse polygons JSON for COCO format', 
+            logger.error(
+              'Failed to parse polygons JSON for COCO format',
               error instanceof Error ? error : new Error('Unknown error'),
               'FormatConverter',
-              { 
-                imageId: image.id, 
-                polygonsData: result.polygons ? result.polygons.substring(0, 100) + '...' : 'undefined'
+              {
+                imageId: image.id,
+                polygonsData: result.polygons
+                  ? result.polygons.substring(0, 100) + '...'
+                  : 'undefined',
               }
             );
             polygons = [];
           }
-          
+
           // Process external polygons
-          const externalPolygons = polygons.filter((p: Polygon) => p.type === 'external');
-          const internalPolygons = polygons.filter((p: Polygon) => p.type === 'internal');
+          const externalPolygons = polygons.filter(
+            (p: Polygon) => p.type === 'external'
+          );
+          const internalPolygons = polygons.filter(
+            (p: Polygon) => p.type === 'internal'
+          );
 
           for (const polygon of externalPolygons) {
             // Find internal polygons that belong to this external polygon
             // (simplified - in real scenario, you'd check spatial containment)
-            const associatedInternalPolygons = internalPolygons.filter((internal: Polygon) => 
-              this.isPolygonInsidePolygon(internal.points, polygon.points)
+            const associatedInternalPolygons = internalPolygons.filter(
+              (internal: Polygon) =>
+                this.isPolygonInsidePolygon(internal.points, polygon.points)
             );
 
             // Calculate bounding box
             const bbox = this.calculateBoundingBox(polygon.points);
 
             // Calculate area (accounting for holes)
-            const area = this.calculatePolygonArea(polygon.points) -
-              associatedInternalPolygons.reduce((sum: number, internal: Polygon) => 
-                sum + this.calculatePolygonArea(internal.points), 0);
+            const area =
+              this.calculatePolygonArea(polygon.points) -
+              associatedInternalPolygons.reduce(
+                (sum: number, internal: Polygon) =>
+                  sum + this.calculatePolygonArea(internal.points),
+                0
+              );
 
             let segmentation: number[][] | RLEFormat;
 
@@ -200,7 +212,11 @@ export class FormatConverter {
               );
 
               // Encode mask to COCO RLE format
-              const rle = this.encodeMaskToRLE(mask, image.width || 800, image.height || 600);
+              const rle = this.encodeMaskToRLE(
+                mask,
+                image.width || 800,
+                image.height || 600
+              );
               segmentation = rle;
             } else {
               // Simple polygon without holes - use polygon format
@@ -208,7 +224,7 @@ export class FormatConverter {
                 polygon.points.reduce((acc: number[], point: Point) => {
                   acc.push(point.x, point.y);
                   return acc;
-                }, [])
+                }, []),
               ];
             }
 
@@ -223,7 +239,7 @@ export class FormatConverter {
               attributes: {
                 type: 'external',
                 has_holes: associatedInternalPolygons.length > 0,
-              }
+              },
             });
           }
         }
@@ -247,14 +263,14 @@ export class FormatConverter {
           name: 'cell',
           supercategory: 'biological',
           color: [0, 255, 0] as [number, number, number],
-        }
+        },
       ],
       licenses: [
         {
           id: 1,
           name: 'Internal Use',
           url: '',
-        }
+        },
       ],
     };
 
@@ -276,24 +292,31 @@ export class FormatConverter {
         throw new Error('Parsed polygons is not an array');
       }
     } catch (error) {
-      logger.error('Failed to parse polygons JSON for YOLO format', 
+      logger.error(
+        'Failed to parse polygons JSON for YOLO format',
         error instanceof Error ? error : new Error('Unknown error'),
         'FormatConverter',
-        { 
-          polygonsData: polygonsJson ? polygonsJson.substring(0, 100) + '...' : 'undefined'
+        {
+          polygonsData: polygonsJson
+            ? polygonsJson.substring(0, 100) + '...'
+            : 'undefined',
         }
       );
-      throw new Error(`Invalid polygon data format: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Invalid polygon data format: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
     const lines: string[] = [];
 
     // Filter external polygons only for YOLO
-    const externalPolygons = polygons.filter((p: Polygon) => p.type === 'external');
+    const externalPolygons = polygons.filter(
+      (p: Polygon) => p.type === 'external'
+    );
 
     for (const polygon of externalPolygons) {
       // Calculate bounding box
       const bbox = this.calculateBoundingBox(polygon.points);
-      
+
       // Normalize coordinates for YOLO (0-1 range)
       const x_center = (bbox[0] + bbox[2] / 2) / imageWidth;
       const y_center = (bbox[1] + bbox[3] / 2) / imageHeight;
@@ -302,14 +325,19 @@ export class FormatConverter {
 
       // YOLO format: class_id x_center y_center width height
       // Using class_id 0 for cells
-      lines.push(`0 ${x_center.toFixed(6)} ${y_center.toFixed(6)} ${width.toFixed(6)} ${height.toFixed(6)}`);
+      lines.push(
+        `0 ${x_center.toFixed(6)} ${y_center.toFixed(6)} ${width.toFixed(6)} ${height.toFixed(6)}`
+      );
 
       // Optionally add polygon coordinates (YOLO segmentation format)
       // Format: class_id x1 y1 x2 y2 ... xn yn
       const segmentationPoints = polygon.points
-        .map((p: Point) => `${(p.x / imageWidth).toFixed(6)} ${(p.y / imageHeight).toFixed(6)}`)
+        .map(
+          (p: Point) =>
+            `${(p.x / imageWidth).toFixed(6)} ${(p.y / imageHeight).toFixed(6)}`
+        )
         .join(' ');
-      
+
       lines.push(`# Segmentation: 0 ${segmentationPoints}`);
     }
 
@@ -335,7 +363,7 @@ export class FormatConverter {
       if (!image) {
         continue;
       }
-      
+
       const imageData: JSONImageData = {
         id: image.id,
         index: imageIdx + 1,
@@ -355,18 +383,25 @@ export class FormatConverter {
           try {
             polygons = JSON.parse(result.polygons);
           } catch (error) {
-            logger.error('Failed to parse polygons JSON for custom JSON format', 
+            logger.error(
+              'Failed to parse polygons JSON for custom JSON format',
               error instanceof Error ? error : new Error('Unknown error'),
               'FormatConverter',
-              { 
-                polygonsData: result?.polygons ? result.polygons.substring(0, 100) + '...' : 'undefined'
+              {
+                polygonsData: result?.polygons
+                  ? result.polygons.substring(0, 100) + '...'
+                  : 'undefined',
               }
             );
             polygons = [];
           }
-          
-          const externalPolygons = polygons.filter((p: Polygon) => p.type === 'external');
-          const internalPolygons = polygons.filter((p: Polygon) => p.type === 'internal');
+
+          const externalPolygons = polygons.filter(
+            (p: Polygon) => p.type === 'external'
+          );
+          const internalPolygons = polygons.filter(
+            (p: Polygon) => p.type === 'internal'
+          );
 
           imageData.segmentation = {
             cellCount: result.cellCount || externalPolygons.length,
@@ -390,10 +425,17 @@ export class FormatConverter {
             statistics: {
               totalExternalPolygons: externalPolygons.length,
               totalInternalPolygons: internalPolygons.length,
-              totalArea: externalPolygons.reduce((sum: number, p: Polygon) => 
-                sum + this.calculatePolygonArea(p.points), 0) -
-                internalPolygons.reduce((sum: number, p: Polygon) => 
-                  sum + this.calculatePolygonArea(p.points), 0),
+              totalArea:
+                externalPolygons.reduce(
+                  (sum: number, p: Polygon) =>
+                    sum + this.calculatePolygonArea(p.points),
+                  0
+                ) -
+                internalPolygons.reduce(
+                  (sum: number, p: Polygon) =>
+                    sum + this.calculatePolygonArea(p.points),
+                  0
+                ),
             },
           };
         }
@@ -408,18 +450,20 @@ export class FormatConverter {
   /**
    * Calculate bounding box [x, y, width, height]
    */
-  private calculateBoundingBox(points: Point[]): [number, number, number, number] {
+  private calculateBoundingBox(
+    points: Point[]
+  ): [number, number, number, number] {
     if (!points || points.length === 0) {
       return [0, 0, 0, 0];
     }
-    
+
     const xs = points.map(p => p.x);
     const ys = points.map(p => p.y);
     const minX = Math.min(...xs);
     const minY = Math.min(...ys);
     const maxX = Math.max(...xs);
     const maxY = Math.max(...ys);
-    
+
     return [minX, minY, maxX - minX, maxY - minY];
   }
 
@@ -479,7 +523,7 @@ export class FormatConverter {
       if (!pointI || !pointJ) {
         continue;
       }
-      
+
       const xi = pointI.x;
       const yi = pointI.y;
       const xj = pointJ.x;
@@ -492,7 +536,7 @@ export class FormatConverter {
     }
 
     area *= 0.5;
-    
+
     // Guard against division by zero for degenerate/collinear polygons
     if (Math.abs(area) < 1e-9) {
       // Return arithmetic mean of vertices as fallback
@@ -500,9 +544,9 @@ export class FormatConverter {
       const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
       return { x: meanX, y: meanY };
     }
-    
-    cx /= (6 * area);
-    cy /= (6 * area);
+
+    cx /= 6 * area;
+    cy /= 6 * area;
 
     return { x: cx, y: cy };
   }
@@ -511,21 +555,21 @@ export class FormatConverter {
    * Create binary mask from polygon with holes
    */
   private createBinaryMask(
-    outerPolygon: Point[], 
-    innerPolygons: Point[][], 
-    width: number, 
+    outerPolygon: Point[],
+    innerPolygons: Point[][],
+    width: number,
     height: number
   ): Uint8Array {
     const mask = new Uint8Array(width * height);
-    
+
     // Fill outer polygon
     this.fillPolygonInMask(mask, outerPolygon, width, height, 1);
-    
+
     // Cut out inner polygons (holes)
     for (const innerPolygon of innerPolygons) {
       this.fillPolygonInMask(mask, innerPolygon, width, height, 0);
     }
-    
+
     return mask;
   }
 
@@ -533,31 +577,35 @@ export class FormatConverter {
    * Fill polygon in binary mask using scanline algorithm
    */
   private fillPolygonInMask(
-    mask: Uint8Array, 
-    polygon: Point[], 
-    width: number, 
-    height: number, 
+    mask: Uint8Array,
+    polygon: Point[],
+    width: number,
+    height: number,
     value: number
   ): void {
-    if (polygon.length < 3) {return;}
+    if (polygon.length < 3) {
+      return;
+    }
 
     // Create edge table
-    const edges: Array<{yMin: number; yMax: number; x: number; dx: number}> = [];
-    
+    const edges: Array<{ yMin: number; yMax: number; x: number; dx: number }> =
+      [];
+
     for (let i = 0; i < polygon.length; i++) {
       const p1 = polygon[i];
       const p2 = polygon[(i + 1) % polygon.length];
-      
+
       if (!p1 || !p2) {
         continue;
       }
-      
-      if (p1.y !== p2.y) { // Skip horizontal edges
+
+      if (p1.y !== p2.y) {
+        // Skip horizontal edges
         const yMin = Math.min(p1.y, p2.y);
         const yMax = Math.max(p1.y, p2.y);
         const x = p1.y < p2.y ? p1.x : p2.x;
         const dx = (p2.x - p1.x) / (p2.y - p1.y);
-        
+
         edges.push({ yMin, yMax, x, dx });
       }
     }
@@ -567,18 +615,18 @@ export class FormatConverter {
 
     // Scanline fill
     for (let y = 0; y < height; y++) {
-      const activeEdges = edges.filter(edge => 
-        y >= Math.floor(edge.yMin) && y < Math.ceil(edge.yMax)
+      const activeEdges = edges.filter(
+        edge => y >= Math.floor(edge.yMin) && y < Math.ceil(edge.yMax)
       );
-      
+
       if (activeEdges.length < 2) {
         continue;
       }
 
       // Calculate x intersections
-      const intersections = activeEdges.map(edge => 
-        edge.x + (y - edge.yMin) * edge.dx
-      ).sort((a, b) => a - b);
+      const intersections = activeEdges
+        .map(edge => edge.x + (y - edge.yMin) * edge.dx)
+        .sort((a, b) => a - b);
 
       // Fill between pairs of intersections
       for (let i = 0; i < intersections.length - 1; i += 2) {
@@ -587,10 +635,10 @@ export class FormatConverter {
         if (x1 === undefined || x2 === undefined) {
           continue;
         }
-        
+
         const xStart = Math.max(0, Math.ceil(x1));
         const xEnd = Math.min(width - 1, Math.floor(x2));
-        
+
         for (let x = xStart; x <= xEnd; x++) {
           mask[y * width + x] = value;
         }
@@ -601,17 +649,25 @@ export class FormatConverter {
   /**
    * Encode binary mask to COCO RLE format (Fortran column-major order)
    */
-  private encodeMaskToRLE(mask: Uint8Array, width: number, height: number): {
+  private encodeMaskToRLE(
+    mask: Uint8Array,
+    width: number,
+    height: number
+  ): {
     size: [number, number];
     counts: number[];
   } {
     // Validate inputs
     if (!mask || width < 0 || height < 0) {
-      throw new Error('Invalid mask parameters: mask, width, and height must be valid');
+      throw new Error(
+        'Invalid mask parameters: mask, width, and height must be valid'
+      );
     }
-    
+
     if (width * height > mask.length) {
-      throw new Error(`Invalid dimensions: width*height (${width * height}) exceeds mask length (${mask.length})`);
+      throw new Error(
+        `Invalid dimensions: width*height (${width * height}) exceeds mask length (${mask.length})`
+      );
     }
 
     const counts: number[] = [];
@@ -623,8 +679,14 @@ export class FormatConverter {
       for (let y = 0; y < height; y++) {
         const maskIndex = y * width + x;
         // Add defensive bounds checks
-        const pixelValue = maskIndex >= 0 && maskIndex < mask.length && mask[maskIndex] !== undefined && mask[maskIndex] > 0 ? 1 : 0;
-        
+        const pixelValue =
+          maskIndex >= 0 &&
+          maskIndex < mask.length &&
+          mask[maskIndex] !== undefined &&
+          mask[maskIndex] > 0
+            ? 1
+            : 0;
+
         if (pixelValue === currentValue) {
           currentCount++;
         } else {
@@ -637,7 +699,7 @@ export class FormatConverter {
         }
       }
     }
-    
+
     // Add final run
     if (currentCount > 0 && (counts.length > 0 || currentValue === 1)) {
       counts.push(currentCount);
@@ -645,16 +707,21 @@ export class FormatConverter {
 
     return {
       size: [height, width], // COCO format uses [height, width]
-      counts
+      counts,
     };
   }
 
   /**
    * Check if polygon is inside another polygon using point-in-polygon test
    */
-  private isPolygonInsidePolygon(innerPolygon: Point[], outerPolygon: Point[]): boolean {
+  private isPolygonInsidePolygon(
+    innerPolygon: Point[],
+    outerPolygon: Point[]
+  ): boolean {
     // Simple check: test if all points of inner polygon are inside outer polygon
-    return innerPolygon.every(point => this.isPointInPolygon(point, outerPolygon));
+    return innerPolygon.every(point =>
+      this.isPointInPolygon(point, outerPolygon)
+    );
   }
 
   /**
@@ -670,12 +737,17 @@ export class FormatConverter {
       const yi = polygon[i]?.y;
       const xj = polygon[j]?.x;
       const yj = polygon[j]?.y;
-      
-      if (xi === undefined || yi === undefined || xj === undefined || yj === undefined) {
+
+      if (
+        xi === undefined ||
+        yi === undefined ||
+        xj === undefined ||
+        yj === undefined
+      ) {
         continue;
       }
 
-      if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+      if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) {
         inside = !inside;
       }
     }

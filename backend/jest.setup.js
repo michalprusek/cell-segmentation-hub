@@ -1,7 +1,9 @@
 // Set up test environment variables
 process.env.NODE_ENV = 'test';
-process.env.JWT_ACCESS_SECRET = 'test-access-secret-for-testing-only-32-characters-long';
-process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-for-testing-only-32-characters-long';
+process.env.JWT_ACCESS_SECRET =
+  'test-access-secret-for-testing-only-32-characters-long';
+process.env.JWT_REFRESH_SECRET =
+  'test-refresh-secret-for-testing-only-32-characters-long';
 process.env.JWT_ACCESS_EXPIRY = '15m';
 process.env.JWT_REFRESH_EXPIRY = '7d';
 process.env.JWT_REFRESH_EXPIRY_REMEMBER = '30d';

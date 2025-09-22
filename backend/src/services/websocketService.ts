@@ -65,27 +65,39 @@ export class WebSocketService {
   private parallelProcessingUsers: Map<string, Date> = new Map(); // Track users in parallel processing
   private concurrentUserCount = 0; // Track concurrent processing users
 
-  constructor(server: HTTPServer, private prisma: PrismaClient) {
+  constructor(
+    server: HTTPServer,
+    private prisma: PrismaClient
+  ) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: (origin, callback: (err: Error | null, success?: boolean) => void): void => {
+        origin: (
+          origin,
+          callback: (err: Error | null, success?: boolean) => void
+        ): void => {
           // Environment-aware CORS origin validation
           if (process.env.NODE_ENV === 'development') {
             // Allow all localhost origins for development
-            if (!origin || origin.includes('localhost') || origin.includes('127.0.0.1')) {
+            if (
+              !origin ||
+              origin.includes('localhost') ||
+              origin.includes('127.0.0.1')
+            ) {
               callback(null, true);
             } else {
               callback(new Error('Not allowed by CORS'));
             }
           } else {
             // Production: validate against allowlist
-            const allowedOrigins = process.env.WS_ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || [];
-            
+            const allowedOrigins =
+              process.env.WS_ALLOWED_ORIGINS?.split(',').map(o => o.trim()) ||
+              [];
+
             if (allowedOrigins.length === 0) {
               callback(new Error('Not allowed by CORS'));
               return;
             }
-            
+
             if (!origin || allowedOrigins.includes(origin)) {
               callback(null, true);
             } else {
@@ -93,23 +105,28 @@ export class WebSocketService {
             }
           }
         },
-        methods: ["GET", "POST"],
-        credentials: true
+        methods: ['GET', 'POST'],
+        credentials: true,
       },
       path: '/socket.io/',
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
     });
 
     this.setupMiddleware();
     this.setupEventHandlers();
-    
+
     logger.info('WebSocket service initialized', 'WebSocketService');
   }
 
-  public static getInstance(server?: HTTPServer, prisma?: PrismaClient): WebSocketService {
+  public static getInstance(
+    server?: HTTPServer,
+    prisma?: PrismaClient
+  ): WebSocketService {
     if (!WebSocketService.instance) {
       if (!server || !prisma) {
-        throw new Error('Server and Prisma are required for first initialization');
+        throw new Error(
+          'Server and Prisma are required for first initialization'
+        );
       }
       WebSocketService.instance = new WebSocketService(server, prisma);
     }
@@ -121,7 +138,10 @@ export class WebSocketService {
    */
   public setQueueService(queueService: QueueService): void {
     this.queueService = queueService;
-    logger.info('QueueService connected to WebSocketService', 'WebSocketService');
+    logger.info(
+      'QueueService connected to WebSocketService',
+      'WebSocketService'
+    );
   }
 
   /**
@@ -132,49 +152,70 @@ export class WebSocketService {
       try {
         logger.info('WebSocket connection attempt', 'WebSocketService', {
           socketId: socket.id,
-          origin: socket.handshake.headers.origin
+          origin: socket.handshake.headers.origin,
         });
-        
-        const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.replace('Bearer ', '');
-        
+
+        const token =
+          socket.handshake.auth.token ||
+          socket.handshake.headers.authorization?.replace('Bearer ', '');
+
         if (!token) {
-          logger.warn('WebSocket connection attempted without token', 'WebSocketService');
+          logger.warn(
+            'WebSocket connection attempted without token',
+            'WebSocketService'
+          );
           return next(new Error('Authentication token required'));
         }
 
         // Verify JWT token - use JWT_ACCESS_SECRET
         const jwtSecret = process.env.JWT_ACCESS_SECRET;
         if (!jwtSecret) {
-          logger.error('JWT_ACCESS_SECRET not configured', new Error('JWT_ACCESS_SECRET not configured'), 'WebSocketService');
+          logger.error(
+            'JWT_ACCESS_SECRET not configured',
+            new Error('JWT_ACCESS_SECRET not configured'),
+            'WebSocketService'
+          );
           return next(new Error('Server configuration error'));
         }
 
-        const decoded = jwt.verify(token, jwtSecret) as { userId: string; email: string; emailVerified?: boolean };
-        
+        const decoded = jwt.verify(token, jwtSecret) as {
+          userId: string;
+          email: string;
+          emailVerified?: boolean;
+        };
+
         // Verify user exists in database
         const user = await this.prisma.user.findUnique({
-          where: { id: decoded.userId }
+          where: { id: decoded.userId },
         });
 
         if (!user) {
-          logger.warn('WebSocket authentication failed - user not found', 'WebSocketService', {
-            userId: decoded.userId
-          });
+          logger.warn(
+            'WebSocket authentication failed - user not found',
+            'WebSocketService',
+            {
+              userId: decoded.userId,
+            }
+          );
           return next(new Error('Invalid authentication token'));
         }
 
         socket.userId = user.id;
         socket.userEmail = user.email;
-        
+
         logger.info('WebSocket authentication successful', 'WebSocketService', {
           userId: user.id,
           email: user.email,
-          socketId: socket.id
+          socketId: socket.id,
         });
 
         next();
       } catch (error) {
-        logger.error('WebSocket authentication error', error instanceof Error ? error : undefined, 'WebSocketService');
+        logger.error(
+          'WebSocket authentication error',
+          error instanceof Error ? error : undefined,
+          'WebSocketService'
+        );
         next(new Error('Authentication failed'));
       }
     });
@@ -187,7 +228,7 @@ export class WebSocketService {
     this.io.on('connection', (socket: AuthenticatedSocket) => {
       logger.info('User connected via WebSocket', 'WebSocketService', {
         userId: socket.userId,
-        socketId: socket.id
+        socketId: socket.id,
       });
 
       // Track connected user
@@ -209,20 +250,26 @@ export class WebSocketService {
       // Handle project room joining
       socket.on('join-project', async (projectId: string) => {
         if (!socket.userId) {
-          logger.warn('Unauthenticated socket attempted to join project room', 'WebSocketService', {
-            projectId,
-            socketId: socket.id
+          logger.warn(
+            'Unauthenticated socket attempted to join project room',
+            'WebSocketService',
+            {
+              projectId,
+              socketId: socket.id,
+            }
+          );
+          socket.emit('unauthorized', {
+            message: 'Authentication required to join project room',
           });
-          socket.emit('unauthorized', { message: 'Authentication required to join project room' });
           return;
         }
-        
+
         if (await this.isValidProjectAccess(socket.userId, projectId)) {
           socket.join(`project:${projectId}`);
           logger.info('User joined project room', 'WebSocketService', {
             userId: socket.userId,
             projectId,
-            socketId: socket.id
+            socketId: socket.id,
           });
         }
       });
@@ -233,182 +280,234 @@ export class WebSocketService {
         logger.info('User left project room', 'WebSocketService', {
           userId: socket.userId,
           projectId,
-          socketId: socket.id
+          socketId: socket.id,
         });
       });
 
       // Handle queue stats request
       socket.on('request-queue-stats', async (projectId: string) => {
         try {
-          if (socket.userId && await this.isValidProjectAccess(socket.userId, projectId)) {
+          if (
+            socket.userId &&
+            (await this.isValidProjectAccess(socket.userId, projectId))
+          ) {
             // Get queue stats from QueueService and emit them
             if (this.queueService) {
               await this.queueService.getQueueStats(projectId, socket.userId);
-              logger.debug('Queue stats requested and emitted', 'WebSocketService', {
-                userId: socket.userId,
-                projectId
-              });
+              logger.debug(
+                'Queue stats requested and emitted',
+                'WebSocketService',
+                {
+                  userId: socket.userId,
+                  projectId,
+                }
+              );
             } else {
-              const errorMessage = 'QueueService not available for stats request';
+              const errorMessage =
+                'QueueService not available for stats request';
               logger.warn(errorMessage, 'WebSocketService', {
                 userId: socket.userId,
-                projectId
+                projectId,
               });
-              socket.emit('queue-stats-error', { 
-                projectId, 
+              socket.emit('queue-stats-error', {
+                projectId,
                 error: errorMessage,
-                reason: 'QueueService not initialized'
+                reason: 'QueueService not initialized',
               });
             }
           }
         } catch (error) {
-          logger.error('Error handling queue stats request', error instanceof Error ? error : undefined, 'WebSocketService', {
-            userId: socket.userId,
-            projectId
-          });
+          logger.error(
+            'Error handling queue stats request',
+            error instanceof Error ? error : undefined,
+            'WebSocketService',
+            {
+              userId: socket.userId,
+              projectId,
+            }
+          );
         }
       });
 
       // Handle universal operation cancellation
-      socket.on('operation:cancel', async (data: {
-        operationId: string;
-        operationType: 'upload' | 'segmentation' | 'export';
-        projectId?: string;
-      }) => {
-        try {
-          if (!socket.userId) {
-            logger.warn('Unauthenticated socket attempted to cancel operation', 'WebSocketService', {
-              socketId: socket.id,
-              operationId: data.operationId
-            });
-            return;
-          }
-
-          logger.info('Operation cancellation requested via WebSocket', 'WebSocketService', {
-            userId: socket.userId,
-            operationId: data.operationId,
-            operationType: data.operationType,
-            projectId: data.projectId
-          });
-
-          // Handle different operation types
-          switch (data.operationType) {
-            case 'upload':
-              // Emit cancel signal to all user sockets
-              this.emitToUser(socket.userId, 'upload:cancelled', {
-                operationId: data.operationId,
-                message: 'Upload cancelled by user',
-                timestamp: new Date().toISOString()
-              });
-              break;
-
-            case 'segmentation':
-              // Cancel segmentation jobs via queue service
-              if (this.queueService && data.projectId) {
-                try {
-                  // TODO: Implement cancelBatch method in QueueService
-                  // await this.queueService.cancelBatch(data.operationId, socket.userId);
-                } catch (error) {
-                  logger.error('Failed to cancel segmentation via queue service', error instanceof Error ? error : undefined, 'WebSocketService');
+      socket.on(
+        'operation:cancel',
+        async (data: {
+          operationId: string;
+          operationType: 'upload' | 'segmentation' | 'export';
+          projectId?: string;
+        }) => {
+          try {
+            if (!socket.userId) {
+              logger.warn(
+                'Unauthenticated socket attempted to cancel operation',
+                'WebSocketService',
+                {
+                  socketId: socket.id,
+                  operationId: data.operationId,
                 }
+              );
+              return;
+            }
+
+            logger.info(
+              'Operation cancellation requested via WebSocket',
+              'WebSocketService',
+              {
+                userId: socket.userId,
+                operationId: data.operationId,
+                operationType: data.operationType,
+                projectId: data.projectId,
               }
+            );
 
-              this.emitToUser(socket.userId, 'segmentation:cancelled', {
-                operationId: data.operationId,
-                message: 'Segmentation cancelled by user',
-                timestamp: new Date().toISOString()
-              });
-              break;
+            // Handle different operation types
+            switch (data.operationType) {
+              case 'upload':
+                // Emit cancel signal to all user sockets
+                this.emitToUser(socket.userId, 'upload:cancelled', {
+                  operationId: data.operationId,
+                  message: 'Upload cancelled by user',
+                  timestamp: new Date().toISOString(),
+                });
+                break;
 
-            case 'export':
-              // Export cancellation is handled by export service
-              this.emitToUser(socket.userId, 'export:cancelled', {
+              case 'segmentation':
+                // Cancel segmentation jobs via queue service
+                if (this.queueService && data.projectId) {
+                  try {
+                    // TODO: Implement cancelBatch method in QueueService
+                    // await this.queueService.cancelBatch(data.operationId, socket.userId);
+                  } catch (error) {
+                    logger.error(
+                      'Failed to cancel segmentation via queue service',
+                      error instanceof Error ? error : undefined,
+                      'WebSocketService'
+                    );
+                  }
+                }
+
+                this.emitToUser(socket.userId, 'segmentation:cancelled', {
+                  operationId: data.operationId,
+                  message: 'Segmentation cancelled by user',
+                  timestamp: new Date().toISOString(),
+                });
+                break;
+
+              case 'export':
+                // Export cancellation is handled by export service
+                this.emitToUser(socket.userId, 'export:cancelled', {
+                  operationId: data.operationId,
+                  message: 'Export cancelled by user',
+                  timestamp: new Date().toISOString(),
+                });
+                break;
+            }
+
+            // Send universal cancellation acknowledgment
+            socket.emit('operation:cancel-ack', {
+              operationId: data.operationId,
+              operationType: data.operationType,
+              success: true,
+              timestamp: new Date().toISOString(),
+            });
+          } catch (error) {
+            logger.error(
+              'Error handling operation cancellation',
+              error instanceof Error ? error : undefined,
+              'WebSocketService',
+              {
+                userId: socket.userId,
                 operationId: data.operationId,
-                message: 'Export cancelled by user',
-                timestamp: new Date().toISOString()
-              });
-              break;
+                operationType: data.operationType,
+              }
+            );
+
+            socket.emit('operation:cancel-error', {
+              operationId: data.operationId,
+              operationType: data.operationType,
+              error: error instanceof Error ? error.message : 'Unknown error',
+              timestamp: new Date().toISOString(),
+            });
           }
-
-          // Send universal cancellation acknowledgment
-          socket.emit('operation:cancel-ack', {
-            operationId: data.operationId,
-            operationType: data.operationType,
-            success: true,
-            timestamp: new Date().toISOString()
-          });
-
-        } catch (error) {
-          logger.error('Error handling operation cancellation', error instanceof Error ? error : undefined, 'WebSocketService', {
-            userId: socket.userId,
-            operationId: data.operationId,
-            operationType: data.operationType
-          });
-
-          socket.emit('operation:cancel-error', {
-            operationId: data.operationId,
-            operationType: data.operationType,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: new Date().toISOString()
-          });
         }
-      });
+      );
 
       // Handle direct export cancellation via WebSocket
-      socket.on('export:cancel', async (data: {
-        jobId: string;
-        projectId: string;
-      }) => {
-        try {
-          if (!socket.userId) {
-            logger.warn('Unauthenticated socket attempted to cancel export', 'WebSocketService', {
-              socketId: socket.id,
-              jobId: data.jobId
+      socket.on(
+        'export:cancel',
+        async (data: { jobId: string; projectId: string }) => {
+          try {
+            if (!socket.userId) {
+              logger.warn(
+                'Unauthenticated socket attempted to cancel export',
+                'WebSocketService',
+                {
+                  socketId: socket.id,
+                  jobId: data.jobId,
+                }
+              );
+              return;
+            }
+
+            logger.info(
+              'Export cancellation requested via direct WebSocket event',
+              'WebSocketService',
+              {
+                userId: socket.userId,
+                jobId: data.jobId,
+                projectId: data.projectId,
+              }
+            );
+
+            // Import export service dynamically to avoid circular dependencies
+            const { ExportService } = await import('./exportService');
+            const exportService = ExportService.getInstance();
+
+            // Call the export service cancelJob method directly
+            await exportService.cancelJob(
+              data.jobId,
+              data.projectId,
+              socket.userId
+            );
+
+            logger.info(
+              'Export successfully cancelled via WebSocket',
+              'WebSocketService',
+              {
+                userId: socket.userId,
+                jobId: data.jobId,
+                projectId: data.projectId,
+              }
+            );
+          } catch (error) {
+            logger.error(
+              'Error handling export cancellation via WebSocket',
+              error instanceof Error ? error : undefined,
+              'WebSocketService',
+              {
+                userId: socket.userId,
+                jobId: data.jobId,
+                projectId: data.projectId,
+              }
+            );
+
+            // Send error back to client
+            socket.emit('export:cancel-error', {
+              jobId: data.jobId,
+              error: error instanceof Error ? error.message : 'Unknown error',
+              timestamp: new Date().toISOString(),
             });
-            return;
           }
-
-          logger.info('Export cancellation requested via direct WebSocket event', 'WebSocketService', {
-            userId: socket.userId,
-            jobId: data.jobId,
-            projectId: data.projectId
-          });
-
-          // Import export service dynamically to avoid circular dependencies
-          const { ExportService } = await import('./exportService');
-          const exportService = ExportService.getInstance();
-
-          // Call the export service cancelJob method directly
-          await exportService.cancelJob(data.jobId, data.projectId, socket.userId);
-
-          logger.info('Export successfully cancelled via WebSocket', 'WebSocketService', {
-            userId: socket.userId,
-            jobId: data.jobId,
-            projectId: data.projectId
-          });
-
-        } catch (error) {
-          logger.error('Error handling export cancellation via WebSocket', error instanceof Error ? error : undefined, 'WebSocketService', {
-            userId: socket.userId,
-            jobId: data.jobId,
-            projectId: data.projectId
-          });
-
-          // Send error back to client
-          socket.emit('export:cancel-error', {
-            jobId: data.jobId,
-            error: error instanceof Error ? error.message : 'Unknown error',
-            timestamp: new Date().toISOString()
-          });
         }
-      });
+      );
 
       // Handle disconnection
       socket.on('disconnect', (reason: string) => {
         logger.info('User disconnected from WebSocket', 'WebSocketService', {
           userId: socket.userId,
           socketId: socket.id,
-          reason
+          reason,
         });
 
         // Clean up user tracking
@@ -416,7 +515,7 @@ export class WebSocketService {
           const userSockets = this.connectedUsers.get(socket.userId);
           if (userSockets) {
             userSockets.delete(socket.id);
-            
+
             if (userSockets.size === 0) {
               this.connectedUsers.delete(socket.userId);
             }
@@ -428,7 +527,7 @@ export class WebSocketService {
       socket.on('error', (error: Error) => {
         logger.error('WebSocket error', error, 'WebSocketService', {
           userId: socket.userId,
-          socketId: socket.id
+          socketId: socket.id,
         });
       });
     });
@@ -437,7 +536,10 @@ export class WebSocketService {
   /**
    * Check if user has access to project
    */
-  private async isValidProjectAccess(userId: string, projectId: string): Promise<boolean> {
+  private async isValidProjectAccess(
+    userId: string,
+    projectId: string
+  ): Promise<boolean> {
     try {
       const project = await this.prisma.project.findFirst({
         where: {
@@ -448,20 +550,25 @@ export class WebSocketService {
               shares: {
                 some: {
                   sharedWithId: userId,
-                  status: 'accepted'
-                }
-              }
-            }
-          ]
-        }
+                  status: 'accepted',
+                },
+              },
+            },
+          ],
+        },
       });
-      
+
       return !!project;
     } catch (error) {
-      logger.error('Error checking project access', error instanceof Error ? error : undefined, 'WebSocketService', {
-        userId,
-        projectId
-      });
+      logger.error(
+        'Error checking project access',
+        error instanceof Error ? error : undefined,
+        'WebSocketService',
+        {
+          userId,
+          projectId,
+        }
+      );
       return false;
     }
   }
@@ -469,21 +576,31 @@ export class WebSocketService {
   /**
    * Emit segmentation status update to specific user
    */
-  public emitSegmentationUpdate(userId: string, update: SegmentationUpdateData): void {
+  public emitSegmentationUpdate(
+    userId: string,
+    update: SegmentationUpdateData
+  ): void {
     try {
       // Only emit to user room to avoid duplicates (user is already in project room)
-      this.io.to(getUserRoom(userId)).emit(WebSocketEvent.SEGMENTATION_UPDATE, update);
+      this.io
+        .to(getUserRoom(userId))
+        .emit(WebSocketEvent.SEGMENTATION_UPDATE, update);
 
       logger.debug('Segmentation update emitted', 'WebSocketService', {
         userId,
         imageId: update.imageId,
-        status: update.status
+        status: update.status,
       });
     } catch (error) {
-      logger.error('Error emitting segmentation update', error instanceof Error ? error : undefined, 'WebSocketService', {
-        userId,
-        update
-      });
+      logger.error(
+        'Error emitting segmentation update',
+        error instanceof Error ? error : undefined,
+        'WebSocketService',
+        {
+          userId,
+          update,
+        }
+      );
     }
   }
 
@@ -492,45 +609,66 @@ export class WebSocketService {
    */
   public emitQueueStatsUpdate(projectId: string, stats: QueueStatsData): void {
     try {
-      this.io.to(getProjectRoom(projectId)).emit(WebSocketEvent.QUEUE_STATS, stats);
-      
+      this.io
+        .to(getProjectRoom(projectId))
+        .emit(WebSocketEvent.QUEUE_STATS, stats);
+
       logger.debug('Queue stats update emitted', 'WebSocketService', {
         projectId,
-        stats
+        stats,
       });
     } catch (error) {
-      logger.error('Error emitting queue stats update', error instanceof Error ? error : undefined, 'WebSocketService', {
-        projectId,
-        stats
-      });
+      logger.error(
+        'Error emitting queue stats update',
+        error instanceof Error ? error : undefined,
+        'WebSocketService',
+        {
+          projectId,
+          stats,
+        }
+      );
     }
   }
 
   /**
    * Emit segmentation completion notification
    */
-  public emitSegmentationComplete(userId: string, imageId: string, projectId: string, polygonCount: number): void {
+  public emitSegmentationComplete(
+    userId: string,
+    imageId: string,
+    projectId: string,
+    polygonCount: number
+  ): void {
     try {
       const notification = {
         type: 'segmentation-complete',
         imageId,
         projectId,
         polygonCount,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       };
 
       this.io.to(`user:${userId}`).emit('notification', notification);
-      
-      logger.info('Segmentation completion notification sent', 'WebSocketService', {
-        userId,
-        imageId,
-        polygonCount
-      });
+
+      logger.info(
+        'Segmentation completion notification sent',
+        'WebSocketService',
+        {
+          userId,
+          imageId,
+          polygonCount,
+        }
+      );
     } catch (error) {
-      logger.error('Error emitting segmentation completion', error instanceof Error ? error : undefined, 'WebSocketService', {
-        userId,
-        imageId
-      });
+      logger.error(
+        'Error emitting segmentation completion',
+        error instanceof Error ? error : undefined,
+        'WebSocketService',
+        {
+          userId,
+          imageId,
+        }
+      );
     }
   }
 
@@ -553,97 +691,146 @@ export class WebSocketService {
    */
   public isUserConnected(userId: string): boolean {
     const userSockets = this.connectedUsers.get(userId);
-    return this.connectedUsers.has(userId) && userSockets !== undefined && userSockets.size > 0;
+    return (
+      this.connectedUsers.has(userId) &&
+      userSockets !== undefined &&
+      userSockets.size > 0
+    );
   }
 
   /**
    * Broadcast thumbnail update to project room
    */
-  public broadcastThumbnailUpdate(projectId: string, thumbnailUpdate: ThumbnailUpdate): void {
+  public broadcastThumbnailUpdate(
+    projectId: string,
+    thumbnailUpdate: ThumbnailUpdate
+  ): void {
     try {
       logger.debug('Broadcasting thumbnail update', 'WebSocketService', {
         projectId,
         imageId: thumbnailUpdate.imageId,
         levelOfDetail: thumbnailUpdate.thumbnailData.levelOfDetail,
-        polygonCount: thumbnailUpdate.thumbnailData.polygonCount
+        polygonCount: thumbnailUpdate.thumbnailData.polygonCount,
       });
 
-      this.io.to(`project:${projectId}`).emit('thumbnail:updated', thumbnailUpdate);
-      
-      logger.debug('Thumbnail update broadcasted successfully', 'WebSocketService', {
-        projectId,
-        imageId: thumbnailUpdate.imageId
-      });
+      this.io
+        .to(`project:${projectId}`)
+        .emit('thumbnail:updated', thumbnailUpdate);
+
+      logger.debug(
+        'Thumbnail update broadcasted successfully',
+        'WebSocketService',
+        {
+          projectId,
+          imageId: thumbnailUpdate.imageId,
+        }
+      );
     } catch (error) {
-      logger.error('Error broadcasting thumbnail update', error instanceof Error ? error : undefined, 'WebSocketService', {
-        projectId,
-        imageId: thumbnailUpdate.imageId
-      });
+      logger.error(
+        'Error broadcasting thumbnail update',
+        error instanceof Error ? error : undefined,
+        'WebSocketService',
+        {
+          projectId,
+          imageId: thumbnailUpdate.imageId,
+        }
+      );
     }
   }
 
   /**
    * Broadcast project update to project room
    */
-  public broadcastProjectUpdate(projectId: string, projectUpdate: ProjectUpdateData): void {
+  public broadcastProjectUpdate(
+    projectId: string,
+    projectUpdate: ProjectUpdateData
+  ): void {
     try {
-      this.io.to(`project:${projectId}`).emit(WebSocketEvent.PROJECT_UPDATE, projectUpdate);
-      
-      logger.debug('Project update broadcasted to project room', 'WebSocketService', {
-        projectId,
-        operation: projectUpdate.operation,
-        imageCount: projectUpdate.updates?.imageCount,
-        segmentedCount: projectUpdate.updates?.segmentedCount
-      });
+      this.io
+        .to(`project:${projectId}`)
+        .emit(WebSocketEvent.PROJECT_UPDATE, projectUpdate);
+
+      logger.debug(
+        'Project update broadcasted to project room',
+        'WebSocketService',
+        {
+          projectId,
+          operation: projectUpdate.operation,
+          imageCount: projectUpdate.updates?.imageCount,
+          segmentedCount: projectUpdate.updates?.segmentedCount,
+        }
+      );
     } catch (error) {
-      logger.error('Error broadcasting project update', error instanceof Error ? error : undefined, 'WebSocketService', {
-        projectId,
-        operation: projectUpdate.operation
-      });
+      logger.error(
+        'Error broadcasting project update',
+        error instanceof Error ? error : undefined,
+        'WebSocketService',
+        {
+          projectId,
+          operation: projectUpdate.operation,
+        }
+      );
     }
   }
 
   /**
    * Emit custom event to specific user
    */
-  public emitToUser(userId: string, event: string, data: WebSocketEventData): void {
+  public emitToUser(
+    userId: string,
+    event: string,
+    data: WebSocketEventData
+  ): void {
     try {
       // Validate inputs
       if (!userId || typeof userId !== 'string' || userId.trim().length === 0) {
-        logger.warn('Invalid userId provided to emitToUser', 'WebSocketService', {
-          userId: typeof userId,
-          event
-        });
+        logger.warn(
+          'Invalid userId provided to emitToUser',
+          'WebSocketService',
+          {
+            userId: typeof userId,
+            event,
+          }
+        );
         return;
       }
 
       if (!event || typeof event !== 'string' || event.trim().length === 0) {
-        logger.warn('Invalid event provided to emitToUser', 'WebSocketService', {
-          userId,
-          event: typeof event
-        });
+        logger.warn(
+          'Invalid event provided to emitToUser',
+          'WebSocketService',
+          {
+            userId,
+            event: typeof event,
+          }
+        );
         return;
       }
 
       this.io.to(`user:${userId}`).emit(event, data);
-      
+
       // Create sanitized summary for logging
       const dataSummary = this.createDataSummary(data);
-      
+
       logger.debug('Custom event emitted to user', 'WebSocketService', {
         userId,
         event,
-        dataSummary
+        dataSummary,
       });
     } catch (error) {
       // Create sanitized summary for error logging
       const dataSummary = this.createDataSummary(data);
-      
-      logger.error('Error emitting custom event to user', error instanceof Error ? error : undefined, 'WebSocketService', {
-        userId,
-        event,
-        dataSummary
-      });
+
+      logger.error(
+        'Error emitting custom event to user',
+        error instanceof Error ? error : undefined,
+        'WebSocketService',
+        {
+          userId,
+          event,
+          dataSummary,
+        }
+      );
     }
   }
 
@@ -656,10 +843,10 @@ export class WebSocketService {
     }
 
     if (typeof data === 'string') {
-      return { 
-        type: 'string', 
+      return {
+        type: 'string',
         length: data.length,
-        preview: data.length > 50 ? `${data.substring(0, 50)}...` : data
+        preview: data.length > 50 ? `${data.substring(0, 50)}...` : data,
       };
     }
 
@@ -667,14 +854,14 @@ export class WebSocketService {
       if (Array.isArray(data)) {
         return {
           type: 'array',
-          length: data.length
+          length: data.length,
         };
       }
-      
+
       return {
         type: 'object',
         keys: Object.keys(data).length,
-        keyNames: Object.keys(data).slice(0, 5)
+        keyNames: Object.keys(data).slice(0, 5),
       };
     }
 
@@ -694,12 +881,20 @@ export class WebSocketService {
     try {
       this.io.emit('parallel-processing-status', {
         ...data,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
 
-      logger.debug('Parallel processing status emitted', 'WebSocketService', data);
+      logger.debug(
+        'Parallel processing status emitted',
+        'WebSocketService',
+        data
+      );
     } catch (error) {
-      logger.error('Error emitting parallel processing status', error instanceof Error ? error : undefined, 'WebSocketService');
+      logger.error(
+        'Error emitting parallel processing status',
+        error instanceof Error ? error : undefined,
+        'WebSocketService'
+      );
     }
   }
 
@@ -711,38 +906,53 @@ export class WebSocketService {
       this.io.to(`project:${projectId}`).emit('concurrent-user-count', {
         projectId,
         count,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
 
       logger.debug('Concurrent user count emitted', 'WebSocketService', {
         projectId,
-        count
+        count,
       });
     } catch (error) {
-      logger.error('Error emitting concurrent user count', error instanceof Error ? error : undefined, 'WebSocketService');
+      logger.error(
+        'Error emitting concurrent user count',
+        error instanceof Error ? error : undefined,
+        'WebSocketService'
+      );
     }
   }
 
   /**
    * Emit processing stream update for real-time throughput monitoring
    */
-  public emitProcessingStreamUpdate(streamId: string, data: {
-    streamId: string;
-    status: 'started' | 'processing' | 'completed' | 'failed';
-    batchSize: number;
-    model: string;
-    progress: number;
-    estimatedTimeRemaining?: number;
-  }): void {
+  public emitProcessingStreamUpdate(
+    streamId: string,
+    data: {
+      streamId: string;
+      status: 'started' | 'processing' | 'completed' | 'failed';
+      batchSize: number;
+      model: string;
+      progress: number;
+      estimatedTimeRemaining?: number;
+    }
+  ): void {
     try {
       this.io.emit('processing-stream-update', {
         ...data,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
 
-      logger.debug('Processing stream update emitted', 'WebSocketService', data);
+      logger.debug(
+        'Processing stream update emitted',
+        'WebSocketService',
+        data
+      );
     } catch (error) {
-      logger.error('Error emitting processing stream update', error instanceof Error ? error : undefined, 'WebSocketService');
+      logger.error(
+        'Error emitting processing stream update',
+        error instanceof Error ? error : undefined,
+        'WebSocketService'
+      );
     }
   }
 
@@ -759,14 +969,17 @@ export class WebSocketService {
     logger.debug('User entered parallel processing', 'WebSocketService', {
       userId,
       projectId,
-      concurrentUserCount: this.concurrentUserCount
+      concurrentUserCount: this.concurrentUserCount,
     });
   }
 
   /**
    * Track user exiting parallel processing
    */
-  public untrackParallelProcessingUser(userId: string, projectId: string): void {
+  public untrackParallelProcessingUser(
+    userId: string,
+    projectId: string
+  ): void {
     this.parallelProcessingUsers.delete(userId);
     this.concurrentUserCount = this.parallelProcessingUsers.size;
 
@@ -776,7 +989,7 @@ export class WebSocketService {
     logger.debug('User exited parallel processing', 'WebSocketService', {
       userId,
       projectId,
-      concurrentUserCount: this.concurrentUserCount
+      concurrentUserCount: this.concurrentUserCount,
     });
   }
 
@@ -790,39 +1003,54 @@ export class WebSocketService {
   /**
    * Broadcast system message to all connected users
    */
-  public broadcastSystemMessage(message: string, type: 'info' | 'warning' | 'error' = 'info'): void {
+  public broadcastSystemMessage(
+    message: string,
+    type: 'info' | 'warning' | 'error' = 'info'
+  ): void {
     try {
       this.io.emit('system-message', {
         type,
         message,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
 
       logger.info('System message broadcasted', 'WebSocketService', {
         type,
         message,
-        connectedUsers: this.getConnectedUsersCount()
+        connectedUsers: this.getConnectedUsersCount(),
       });
     } catch (error) {
-      logger.error('Error broadcasting system message', error instanceof Error ? error : undefined, 'WebSocketService');
+      logger.error(
+        'Error broadcasting system message',
+        error instanceof Error ? error : undefined,
+        'WebSocketService'
+      );
     }
   }
 
   /**
    * Emit dashboard metrics update to a specific user
    */
-  public emitDashboardUpdate(userId: string, dashboardUpdate: DashboardUpdateData): void {
+  public emitDashboardUpdate(
+    userId: string,
+    dashboardUpdate: DashboardUpdateData
+  ): void {
     try {
       this.emitToUser(userId, WebSocketEvent.DASHBOARD_UPDATE, dashboardUpdate);
 
       logger.debug('Dashboard update emitted to user', 'WebSocketService', {
         userId,
-        metrics: dashboardUpdate.metrics
+        metrics: dashboardUpdate.metrics,
       });
     } catch (error) {
-      logger.error('Failed to emit dashboard update:', error as Error, 'WebSocketService', {
-        userId
-      });
+      logger.error(
+        'Failed to emit dashboard update:',
+        error as Error,
+        'WebSocketService',
+        {
+          userId,
+        }
+      );
     }
   }
 
@@ -831,19 +1059,19 @@ export class WebSocketService {
    */
   public async shutdown(): Promise<void> {
     logger.info('Shutting down WebSocket service...', 'WebSocketService');
-    
+
     // Notify all connected clients
     this.broadcastSystemMessage('Server is shutting down', 'warning');
-    
+
     // Wait a moment for messages to be sent
     await new Promise(resolve => setTimeout(resolve, 1000));
-    
+
     // Close all connections
     this.io.close();
-    
+
     // Clear tracking data
     this.connectedUsers.clear();
-    
+
     logger.info('WebSocket service shut down', 'WebSocketService');
   }
 }

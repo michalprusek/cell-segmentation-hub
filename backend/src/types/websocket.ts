@@ -1,6 +1,6 @@
 /**
  * WebSocket Type Definitions
- * 
+ *
  * Comprehensive TypeScript interfaces for WebSocket events and real-time updates.
  */
 
@@ -18,35 +18,35 @@ export enum WebSocketEvent {
   CONNECT = 'connect',
   DISCONNECT = 'disconnect',
   CONNECTION_STATUS = 'connectionStatus',
-  
+
   // Authentication events
   AUTHENTICATE = 'authenticate',
   AUTHENTICATION_ERROR = 'authenticationError',
-  
+
   // Segmentation events
   SEGMENTATION_STATUS = 'segmentationStatus',
   SEGMENTATION_UPDATE = 'segmentationUpdate',
   SEGMENTATION_COMPLETED = 'segmentationCompleted',
   SEGMENTATION_FAILED = 'segmentationFailed',
   SEGMENTATION_PROGRESS = 'segmentationProgress',
-  
+
   // Queue events
   QUEUE_STATS = 'queueStats',
   QUEUE_POSITION = 'queuePosition',
   QUEUE_UPDATE = 'queueUpdate',
-  
+
   // Upload events
   UPLOAD_PROGRESS = 'uploadProgress',
   UPLOAD_COMPLETED = 'uploadCompleted',
   UPLOAD_FAILED = 'uploadFailed',
-  
+
   // Project events
   PROJECT_UPDATE = 'projectUpdate',
   PROJECT_DELETED = 'projectDeleted',
 
   // Dashboard events
   DASHBOARD_UPDATE = 'dashboardUpdate',
-  
+
   // Sharing events
   SHARE_RECEIVED = 'shareReceived',
   SHARE_ACCEPTED = 'shareAccepted',
@@ -62,7 +62,7 @@ export enum WebSocketEvent {
 
   // Error events
   ERROR = 'error',
-  VALIDATION_ERROR = 'validationError'
+  VALIDATION_ERROR = 'validationError',
 }
 
 // ============================================================================
@@ -152,7 +152,12 @@ export interface SegmentationFailedData {
   projectId: string;
   queueId: string;
   error: string;
-  errorCode?: 'TIMEOUT' | 'MODEL_ERROR' | 'INVALID_IMAGE' | 'OUT_OF_MEMORY' | 'UNKNOWN';
+  errorCode?:
+    | 'TIMEOUT'
+    | 'MODEL_ERROR'
+    | 'INVALID_IMAGE'
+    | 'OUT_OF_MEMORY'
+    | 'UNKNOWN';
   suggestion?: string;
   model: SegmentationModel;
   retryable: boolean;
@@ -431,7 +436,12 @@ export interface ExportProgressData {
   jobId: string;
   progress: number; // 0-100
   phase: 'processing' | 'downloading';
-  stage?: 'images' | 'visualizations' | 'annotations' | 'metrics' | 'compression';
+  stage?:
+    | 'images'
+    | 'visualizations'
+    | 'annotations'
+    | 'metrics'
+    | 'compression';
   message: string;
   stageProgress?: {
     current: number;
@@ -478,7 +488,11 @@ export interface ExportFailedData {
   jobId: string;
   projectId: string;
   error: string;
-  errorCode?: 'INSUFFICIENT_SPACE' | 'PERMISSION_DENIED' | 'TIMEOUT' | 'UNKNOWN';
+  errorCode?:
+    | 'INSUFFICIENT_SPACE'
+    | 'PERMISSION_DENIED'
+    | 'TIMEOUT'
+    | 'UNKNOWN';
   stage?: string;
   recoverable: boolean;
   retryable: boolean;
@@ -553,8 +567,12 @@ export function getBatchRoom(batchId: string): string {
 /**
  * Type guard for SegmentationStatusData
  */
-export function isSegmentationStatusData(data: unknown): data is SegmentationStatusData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isSegmentationStatusData(
+  data: unknown
+): data is SegmentationStatusData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -566,14 +584,25 @@ export function isSegmentationStatusData(data: unknown): data is SegmentationSta
 /**
  * Type guard for SegmentationUpdateData
  */
-export function isSegmentationUpdateData(data: unknown): data is SegmentationUpdateData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isSegmentationUpdateData(
+  data: unknown
+): data is SegmentationUpdateData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
     typeof d.projectId === 'string' &&
     typeof d.status === 'string' &&
-    ['queued', 'processing', 'completed', 'failed', 'cancelled', 'no_segmentation'].includes(d.status as string)
+    [
+      'queued',
+      'processing',
+      'completed',
+      'failed',
+      'cancelled',
+      'no_segmentation',
+    ].includes(d.status as string)
   );
 }
 
@@ -581,7 +610,9 @@ export function isSegmentationUpdateData(data: unknown): data is SegmentationUpd
  * Type guard for QueueStatsData
  */
 export function isQueueStatsData(data: unknown): data is QueueStatsData {
-  if (typeof data !== 'object' || data === null) {return false;}
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.queued === 'number' &&
@@ -593,8 +624,12 @@ export function isQueueStatsData(data: unknown): data is QueueStatsData {
 /**
  * Type guard for SegmentationCompletedData
  */
-export function isSegmentationCompletedData(data: unknown): data is SegmentationCompletedData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isSegmentationCompletedData(
+  data: unknown
+): data is SegmentationCompletedData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -610,8 +645,12 @@ export function isSegmentationCompletedData(data: unknown): data is Segmentation
 /**
  * Type guard for SegmentationFailedData
  */
-export function isSegmentationFailedData(data: unknown): data is SegmentationFailedData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isSegmentationFailedData(
+  data: unknown
+): data is SegmentationFailedData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -627,7 +666,9 @@ export function isSegmentationFailedData(data: unknown): data is SegmentationFai
  * Type guard for WebSocketMessage
  */
 export function isWebSocketMessage(data: unknown): data is WebSocketMessage {
-  if (typeof data !== 'object' || data === null) {return false;}
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.event === 'string' &&
@@ -650,5 +691,5 @@ export default {
   isSegmentationCompletedData,
   isSegmentationFailedData,
   isQueueStatsData,
-  isWebSocketMessage
+  isWebSocketMessage,
 };

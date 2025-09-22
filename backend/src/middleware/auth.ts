@@ -1,6 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { prisma } from '../db';
-import { verifyAccessToken, extractTokenFromHeader, JwtPayload } from '../auth/jwt';
+import {
+  verifyAccessToken,
+  extractTokenFromHeader,
+  JwtPayload,
+} from '../auth/jwt';
 import { ResponseHelper } from '../utils/response';
 import { logger } from '../utils/logger';
 
@@ -50,7 +54,7 @@ export const authenticate = async (
 ): Promise<void> => {
   try {
     const token = extractTokenFromHeader(req.headers.authorization);
-    
+
     if (!token) {
       ResponseHelper.unauthorized(res, 'Chybí autentizační token', 'Auth');
       return;
@@ -75,8 +79,8 @@ export const authenticate = async (
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       include: {
-        profile: true
-      }
+        profile: true,
+      },
     });
 
     if (!user) {
@@ -89,13 +93,18 @@ export const authenticate = async (
       id: user.id,
       email: user.email,
       emailVerified: user.emailVerified,
-      profile: user.profile
+      profile: user.profile,
     };
 
     return next();
   } catch (error) {
     logger.error('Authentication middleware error:', error as Error, 'Auth');
-    ResponseHelper.internalError(res, error as Error, 'Chyba autentizace', 'Auth');
+    ResponseHelper.internalError(
+      res,
+      error as Error,
+      'Chyba autentizace',
+      'Auth'
+    );
     return;
   }
 };
@@ -124,8 +133,15 @@ export const requireEmailVerification = (
 /**
  * Middleware to check if user owns resource
  */
-export const requireResourceOwnership = (resourceModel: string, resourceUserIdField = 'userId') => {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+export const requireResourceOwnership = (
+  resourceModel: string,
+  resourceUserIdField = 'userId'
+) => {
+  return async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ): Promise<void> => {
     if (!req.user) {
       ResponseHelper.unauthorized(res, 'Uživatel není autentizován', 'Auth');
       return;
@@ -145,7 +161,17 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
       }
 
       // Dynamic access to Prisma model with proper typing
-      const model = (prisma as unknown as Record<string, { findUnique: (args: { where: { id: string }; select: Record<string, boolean> }) => Promise<Record<string, unknown> | null> }>)[resourceModel];
+      const model = (
+        prisma as unknown as Record<
+          string,
+          {
+            findUnique: (args: {
+              where: { id: string };
+              select: Record<string, boolean>;
+            }) => Promise<Record<string, unknown> | null>;
+          }
+        >
+      )[resourceModel];
 
       // Check if model is valid
       if (!model || typeof model.findUnique !== 'function') {
@@ -155,7 +181,7 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
 
       const resource = await model.findUnique({
         where: { id: resourceId },
-        select: { [resourceUserIdField]: true }
+        select: { [resourceUserIdField]: true },
       });
 
       if (!resource) {
@@ -165,7 +191,12 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
 
       // Check if the resource has the expected field
       if (!(resourceUserIdField in resource)) {
-        ResponseHelper.internalError(res, new Error(`Resource missing field: ${resourceUserIdField}`), 'Invalid resource structure', 'Auth');
+        ResponseHelper.internalError(
+          res,
+          new Error(`Resource missing field: ${resourceUserIdField}`),
+          'Invalid resource structure',
+          'Auth'
+        );
         return;
       }
 
@@ -177,7 +208,12 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
       return next();
     } catch (error) {
       logger.error('Resource ownership check failed:', error as Error, 'Auth');
-      ResponseHelper.internalError(res, error as Error, 'Chyba kontroly oprávnění', 'Auth');
+      ResponseHelper.internalError(
+        res,
+        error as Error,
+        'Chyba kontroly oprávnění',
+        'Auth'
+      );
       return;
     }
   };
@@ -193,7 +229,7 @@ export const optionalAuthenticate = async (
 ): Promise<void> => {
   try {
     const token = extractTokenFromHeader(req.headers.authorization);
-    
+
     if (!token) {
       return next(); // No token, continue without user
     }
@@ -210,8 +246,8 @@ export const optionalAuthenticate = async (
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       include: {
-        profile: true
-      }
+        profile: true,
+      },
     });
 
     if (user) {
@@ -219,7 +255,7 @@ export const optionalAuthenticate = async (
         id: user.id,
         email: user.email,
         emailVerified: user.emailVerified,
-        profile: user.profile
+        profile: user.profile,
       };
     }
 
