@@ -51,7 +51,15 @@ export enum WebSocketEvent {
   SHARE_RECEIVED = 'shareReceived',
   SHARE_ACCEPTED = 'shareAccepted',
   SHARE_REJECTED = 'shareRejected',
-  
+
+  // Export events
+  EXPORT_STARTED = 'export:started',
+  EXPORT_PROGRESS = 'export:progress',
+  EXPORT_COMPLETED = 'export:completed',
+  EXPORT_FAILED = 'export:failed',
+  EXPORT_CANCELLED = 'export:cancelled',
+  EXPORT_PHASE_CHANGED = 'export:phase-changed',
+
   // Error events
   ERROR = 'error',
   VALIDATION_ERROR = 'validationError'
@@ -396,6 +404,101 @@ export interface ValidationErrorData {
 }
 
 // ============================================================================
+// Export Events
+// ============================================================================
+
+/**
+ * Export started event data
+ */
+export interface ExportStartedData {
+  jobId: string;
+  projectId: string;
+  projectName?: string;
+  estimatedDuration?: number;
+  options: {
+    includeOriginalImages?: boolean;
+    includeVisualizations?: boolean;
+    annotationFormats?: string[];
+    metricsFormats?: string[];
+  };
+  timestamp: Date;
+}
+
+/**
+ * Export progress event data with enhanced context
+ */
+export interface ExportProgressData {
+  jobId: string;
+  progress: number; // 0-100
+  phase: 'processing' | 'downloading';
+  stage?: 'images' | 'visualizations' | 'annotations' | 'metrics' | 'compression';
+  message: string;
+  stageProgress?: {
+    current: number;
+    total: number;
+    currentItem?: string;
+  };
+  estimatedTimeRemaining?: number;
+  timestamp: Date;
+}
+
+/**
+ * Export phase change event
+ */
+export interface ExportPhaseChangeData {
+  jobId: string;
+  fromPhase: string;
+  toPhase: string;
+  progress: number;
+  message: string;
+  timestamp: Date;
+}
+
+/**
+ * Export completed event data
+ */
+export interface ExportCompletedData {
+  jobId: string;
+  projectId: string;
+  filePath: string;
+  fileSize?: number;
+  processingTime: number;
+  summary: {
+    totalImages: number;
+    includedFormats: string[];
+    exportOptions: Record<string, unknown>;
+  };
+  timestamp: Date;
+}
+
+/**
+ * Export failed event data
+ */
+export interface ExportFailedData {
+  jobId: string;
+  projectId: string;
+  error: string;
+  errorCode?: 'INSUFFICIENT_SPACE' | 'PERMISSION_DENIED' | 'TIMEOUT' | 'UNKNOWN';
+  stage?: string;
+  recoverable: boolean;
+  retryable: boolean;
+  timestamp: Date;
+}
+
+/**
+ * Export cancelled event data
+ */
+export interface ExportCancelledData {
+  jobId: string;
+  projectId: string;
+  cancelledBy: 'user' | 'system' | 'timeout';
+  progress: number;
+  cleanupCompleted: boolean;
+  message: string;
+  timestamp: Date;
+}
+
+// ============================================================================
 // WebSocket Message Envelope
 // ============================================================================
 
@@ -427,6 +530,13 @@ export function getUserRoom(userId: string): string {
  */
 export function getProjectRoom(projectId: string): string {
   return `project:${projectId}`;
+}
+
+/**
+ * Generate room name for export-specific events
+ */
+export function getExportRoom(jobId: string): string {
+  return `export:${jobId}`;
 }
 
 /**

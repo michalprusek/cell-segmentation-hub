@@ -7,9 +7,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import CanvasPolygon from '../components/canvas/CanvasPolygon';
-import {
-  createMockPolygon,
-} from '@/test-utils/segmentationTestUtils';
+import { createMockPolygon } from '@/test-utils/segmentationTestUtils';
 import type { Polygon } from '@/lib/segmentation';
 
 // Mock dependencies
@@ -63,7 +61,10 @@ describe('Polygon Hole Rendering', () => {
   });
 
   // Helper to render polygon in SVG context
-  const renderPolygonInSvg = (polygon: Polygon, isSelected: boolean = false) => {
+  const renderPolygonInSvg = (
+    polygon: Polygon,
+    isSelected: boolean = false
+  ) => {
     return render(
       <svg width="800" height="600" viewBox="0 0 800 600">
         <CanvasPolygon
@@ -473,7 +474,10 @@ describe('Polygon Hole Rendering', () => {
       expect(polygonElement).toHaveClass('external');
 
       // Change to internal
-      const internalPolygon = { ...changeablePolygon, type: 'internal' as const };
+      const internalPolygon = {
+        ...changeablePolygon,
+        type: 'internal' as const,
+      };
       rerender(
         <svg width="800" height="600" viewBox="0 0 800 600">
           <CanvasPolygon
@@ -641,7 +645,7 @@ describe('Polygon Hole Rendering', () => {
 
       render(
         <svg width="800" height="600" viewBox="0 0 800 600">
-          {internalPolygons.map((polygon) => (
+          {internalPolygons.map(polygon => (
             <CanvasPolygon
               key={polygon.id}
               polygon={polygon}
@@ -664,7 +668,7 @@ describe('Polygon Hole Rendering', () => {
       expect(renderTime).toBeLessThan(100);
 
       // All internal polygons should be rendered with correct classes
-      internalPolygons.forEach((polygon) => {
+      internalPolygons.forEach(polygon => {
         const element = screen.getByTestId(polygon.id);
         expect(element).toHaveClass('internal');
       });

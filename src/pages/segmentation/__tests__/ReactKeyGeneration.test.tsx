@@ -33,9 +33,7 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
 
 vi.mock('../../context-menu/PolygonContextMenu', () => ({
   default: ({ children, polygonId }: any) => (
-    <g key={`context-${polygonId}`}>
-      {children}
-    </g>
+    <g key={`context-${polygonId}`}>{children}</g>
   ),
 }));
 
@@ -73,21 +71,36 @@ describe('React Key Generation for Polygon Rendering', () => {
       const polygons = [
         createMockPolygon({
           id: 'polygon-alpha',
-          points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+          points: [
+            { x: 0, y: 0 },
+            { x: 50, y: 0 },
+            { x: 50, y: 50 },
+            { x: 0, y: 50 },
+          ],
         }),
         createMockPolygon({
           id: 'polygon-beta',
-          points: [{ x: 100, y: 0 }, { x: 150, y: 0 }, { x: 150, y: 50 }, { x: 100, y: 50 }],
+          points: [
+            { x: 100, y: 0 },
+            { x: 150, y: 0 },
+            { x: 150, y: 50 },
+            { x: 100, y: 50 },
+          ],
         }),
         createMockPolygon({
           id: 'polygon-gamma',
-          points: [{ x: 200, y: 0 }, { x: 250, y: 0 }, { x: 250, y: 50 }, { x: 200, y: 50 }],
+          points: [
+            { x: 200, y: 0 },
+            { x: 250, y: 0 },
+            { x: 250, y: 50 },
+            { x: 200, y: 50 },
+          ],
         }),
       ];
 
       render(
         <svg width="800" height="600" viewBox="0 0 800 600">
-          {polygons.map((polygon) => (
+          {polygons.map(polygon => (
             <CanvasPolygon
               key={polygon.id}
               polygon={polygon}
@@ -120,17 +133,32 @@ describe('React Key Generation for Polygon Rendering', () => {
       const polygonsWithDuplicateIds: Polygon[] = [
         {
           id: 'duplicate-id',
-          points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+          points: [
+            { x: 0, y: 0 },
+            { x: 50, y: 0 },
+            { x: 50, y: 50 },
+            { x: 0, y: 50 },
+          ],
           type: 'external',
         },
         {
           id: 'duplicate-id', // Same ID
-          points: [{ x: 100, y: 0 }, { x: 150, y: 0 }, { x: 150, y: 50 }, { x: 100, y: 50 }],
+          points: [
+            { x: 100, y: 0 },
+            { x: 150, y: 0 },
+            { x: 150, y: 50 },
+            { x: 100, y: 50 },
+          ],
           type: 'external',
         },
         {
           id: 'unique-id',
-          points: [{ x: 200, y: 0 }, { x: 250, y: 0 }, { x: 250, y: 50 }, { x: 200, y: 50 }],
+          points: [
+            { x: 200, y: 0 },
+            { x: 250, y: 0 },
+            { x: 250, y: 50 },
+            { x: 200, y: 50 },
+          ],
           type: 'external',
         },
       ];
@@ -165,17 +193,32 @@ describe('React Key Generation for Polygon Rendering', () => {
       const polygonsWithUndefinedIds: Polygon[] = [
         {
           id: undefined as any,
-          points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+          points: [
+            { x: 0, y: 0 },
+            { x: 50, y: 0 },
+            { x: 50, y: 50 },
+            { x: 0, y: 50 },
+          ],
           type: 'external',
         },
         {
           id: undefined as any,
-          points: [{ x: 100, y: 0 }, { x: 150, y: 0 }, { x: 150, y: 50 }, { x: 100, y: 50 }],
+          points: [
+            { x: 100, y: 0 },
+            { x: 150, y: 0 },
+            { x: 150, y: 50 },
+            { x: 100, y: 50 },
+          ],
           type: 'external',
         },
         {
           id: 'valid-id',
-          points: [{ x: 200, y: 0 }, { x: 250, y: 0 }, { x: 250, y: 50 }, { x: 200, y: 50 }],
+          points: [
+            { x: 200, y: 0 },
+            { x: 250, y: 0 },
+            { x: 250, y: 50 },
+            { x: 200, y: 50 },
+          ],
           type: 'external',
         },
       ];
@@ -214,7 +257,12 @@ describe('React Key Generation for Polygon Rendering', () => {
     it('should maintain stable keys when polygon data changes', () => {
       const initialPolygon = createMockPolygon({
         id: 'stable-polygon',
-        points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 50, y: 0 },
+          { x: 50, y: 50 },
+          { x: 0, y: 50 },
+        ],
       });
 
       const { rerender } = render(
@@ -239,7 +287,12 @@ describe('React Key Generation for Polygon Rendering', () => {
       // Modify polygon data but keep same ID
       const modifiedPolygon = {
         ...initialPolygon,
-        points: [{ x: 10, y: 10 }, { x: 60, y: 10 }, { x: 60, y: 60 }, { x: 10, y: 60 }],
+        points: [
+          { x: 10, y: 10 },
+          { x: 60, y: 10 },
+          { x: 60, y: 60 },
+          { x: 10, y: 60 },
+        ],
         confidence: 0.95,
       };
 
@@ -264,8 +317,8 @@ describe('React Key Generation for Polygon Rendering', () => {
       expect(screen.getByTestId('stable-polygon')).toBeInTheDocument();
 
       // No re-render warnings
-      const rerenderWarnings = mockReactErrors.filter(error =>
-        error.includes('Warning:') && error.includes('key')
+      const rerenderWarnings = mockReactErrors.filter(
+        error => error.includes('Warning:') && error.includes('key')
       );
       expect(rerenderWarnings).toHaveLength(0);
     });
@@ -273,7 +326,12 @@ describe('React Key Generation for Polygon Rendering', () => {
     it('should handle key changes when polygon ID changes', () => {
       const polygon = createMockPolygon({
         id: 'original-id',
-        points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 50, y: 0 },
+          { x: 50, y: 50 },
+          { x: 0, y: 50 },
+        ],
       });
 
       const { rerender } = render(
@@ -368,7 +426,11 @@ describe('React Key Generation for Polygon Rendering', () => {
         <svg width="2000" height="600" viewBox="0 0 2000 600">
           {polygons.map((polygon, index) => (
             <CanvasPolygon
-              key={polygon.id && polygon.id.trim() ? polygon.id : `fallback-${index}`}
+              key={
+                polygon.id && polygon.id.trim()
+                  ? polygon.id
+                  : `fallback-${index}`
+              }
               polygon={polygon}
               isSelected={false}
               zoom={1}
@@ -512,10 +574,14 @@ describe('React Key Generation for Polygon Rendering', () => {
       );
 
       // All vertices should render with unique keys
-      expect(screen.getByTestId('vertices-many-vertices-polygon')).toBeInTheDocument();
+      expect(
+        screen.getByTestId('vertices-many-vertices-polygon')
+      ).toBeInTheDocument();
 
       // Check that multiple vertices exist
-      const vertices = screen.getAllByTestId(/^vertex-many-vertices-polygon-\d+$/);
+      const vertices = screen.getAllByTestId(
+        /^vertex-many-vertices-polygon-\d+$/
+      );
       expect(vertices.length).toBe(20);
 
       // No duplicate key warnings for vertices
@@ -543,7 +609,7 @@ describe('React Key Generation for Polygon Rendering', () => {
 
       render(
         <svg width="8000" height="600" viewBox="0 0 8000 600">
-          {complexPolygons.map((polygon) => (
+          {complexPolygons.map(polygon => (
             <CanvasPolygon
               key={polygon.id}
               polygon={polygon}
@@ -566,12 +632,12 @@ describe('React Key Generation for Polygon Rendering', () => {
       expect(renderTime).toBeLessThan(300);
 
       // No performance-related React warnings
-      const performanceWarnings = mockReactErrors.filter(error =>
-        error.includes('Warning:') && (
-          error.includes('performance') ||
-          error.includes('slow') ||
-          error.includes('key')
-        )
+      const performanceWarnings = mockReactErrors.filter(
+        error =>
+          error.includes('Warning:') &&
+          (error.includes('performance') ||
+            error.includes('slow') ||
+            error.includes('key'))
       );
       expect(performanceWarnings).toHaveLength(0);
     });
@@ -581,7 +647,12 @@ describe('React Key Generation for Polygon Rendering', () => {
     it('should not leak memory during key generation', () => {
       const testPolygon = createMockPolygon({
         id: 'memory-test-polygon',
-        points: [{ x: 0, y: 0 }, { x: 50, y: 0 }, { x: 50, y: 50 }, { x: 0, y: 50 }],
+        points: [
+          { x: 0, y: 0 },
+          { x: 50, y: 0 },
+          { x: 50, y: 50 },
+          { x: 0, y: 50 },
+        ],
       });
 
       // Render and unmount many times to test memory leaks
@@ -607,8 +678,8 @@ describe('React Key Generation for Polygon Rendering', () => {
       }
 
       // No memory-related warnings
-      const memoryWarnings = mockReactErrors.filter(error =>
-        error.includes('memory') || error.includes('leak')
+      const memoryWarnings = mockReactErrors.filter(
+        error => error.includes('memory') || error.includes('leak')
       );
       expect(memoryWarnings).toHaveLength(0);
     });

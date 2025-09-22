@@ -347,7 +347,8 @@ export const useAdvancedExport = (projectId: string) => {
     return () => {
       if (pollingInterval) {
         clearInterval(pollingInterval);
-        setPollingInterval(null);
+        // Don't set state during cleanup to prevent infinite loop
+        // The state will be cleaned up when component unmounts
       }
     };
   }, [currentJob, isExporting, wsConnected, pollingInterval, projectId]);

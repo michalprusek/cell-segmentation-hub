@@ -31,7 +31,7 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
           cy={point.y}
           r="3"
           onClick={() => onVertexClick?.(index)}
-          onMouseDown={(e) => {
+          onMouseDown={e => {
             e.stopPropagation();
             onVertexMouseDown?.(index);
           }}
@@ -131,7 +131,7 @@ describe('Polygon Selection Functionality', () => {
   ) => {
     return render(
       <svg width="800" height="600" viewBox="0 0 800 600">
-        {polygons.map((polygon) => (
+        {polygons.map(polygon => (
           <CanvasPolygon
             key={polygon.id}
             polygon={polygon}
@@ -180,8 +180,12 @@ describe('Polygon Selection Functionality', () => {
 
       // Verify polygon-1 is selected
       expect(screen.getByTestId('polygon-1')).toHaveClass('polygon-selected');
-      expect(screen.getByTestId('polygon-2')).not.toHaveClass('polygon-selected');
-      expect(screen.getByTestId('polygon-3')).not.toHaveClass('polygon-selected');
+      expect(screen.getByTestId('polygon-2')).not.toHaveClass(
+        'polygon-selected'
+      );
+      expect(screen.getByTestId('polygon-3')).not.toHaveClass(
+        'polygon-selected'
+      );
 
       // Click polygon-2
       const polygon2 = screen.getByTestId('polygon-2');
@@ -193,7 +197,7 @@ describe('Polygon Selection Functionality', () => {
       // Re-render with polygon-2 selected
       rerender(
         <svg width="800" height="600" viewBox="0 0 800 600">
-          {mockPolygons.map((polygon) => (
+          {mockPolygons.map(polygon => (
             <CanvasPolygon
               key={polygon.id}
               polygon={polygon}
@@ -211,9 +215,13 @@ describe('Polygon Selection Functionality', () => {
       );
 
       // Verify only polygon-2 is now selected
-      expect(screen.getByTestId('polygon-1')).not.toHaveClass('polygon-selected');
+      expect(screen.getByTestId('polygon-1')).not.toHaveClass(
+        'polygon-selected'
+      );
       expect(screen.getByTestId('polygon-2')).toHaveClass('polygon-selected');
-      expect(screen.getByTestId('polygon-3')).not.toHaveClass('polygon-selected');
+      expect(screen.getByTestId('polygon-3')).not.toHaveClass(
+        'polygon-selected'
+      );
     });
 
     it('should not trigger multiple selections when clicking rapidly', async () => {
@@ -235,8 +243,12 @@ describe('Polygon Selection Functionality', () => {
     it('should handle concurrent clicks on different polygons correctly', async () => {
       renderPolygonsInSvg(mockPolygons);
 
-      const polygon1Path = screen.getByTestId('polygon-1').querySelector('path')!;
-      const polygon2Path = screen.getByTestId('polygon-2').querySelector('path')!;
+      const polygon1Path = screen
+        .getByTestId('polygon-1')
+        .querySelector('path')!;
+      const polygon2Path = screen
+        .getByTestId('polygon-2')
+        .querySelector('path')!;
 
       // Simulate near-simultaneous clicks
       fireEvent.click(polygon1Path);
@@ -271,7 +283,9 @@ describe('Polygon Selection Functionality', () => {
         </div>
       );
 
-      const polygonPath = screen.getByTestId('polygon-1').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('polygon-1')
+        .querySelector('path')!;
       fireEvent.click(polygonPath);
 
       // Polygon selection should be called
@@ -295,7 +309,9 @@ describe('Polygon Selection Functionality', () => {
     it('should handle double-click for edit mode correctly', () => {
       renderPolygonsInSvg(mockPolygons);
 
-      const polygonPath = screen.getByTestId('polygon-1').querySelector('path')!;
+      const polygonPath = screen
+        .getByTestId('polygon-1')
+        .querySelector('path')!;
       fireEvent.doubleClick(polygonPath);
 
       expect(mockOnEditPolygon).toHaveBeenCalledWith('polygon-1');
@@ -308,7 +324,9 @@ describe('Polygon Selection Functionality', () => {
       fireEvent.contextMenu(polygon);
 
       await waitFor(() => {
-        expect(screen.getByTestId('context-menu-polygon-1')).toBeInTheDocument();
+        expect(
+          screen.getByTestId('context-menu-polygon-1')
+        ).toBeInTheDocument();
       });
 
       // Context menu should appear without additional selection calls
@@ -326,7 +344,7 @@ describe('Polygon Selection Functionality', () => {
       // Re-render with same selection
       rerender(
         <svg width="800" height="600" viewBox="0 0 800 600">
-          {mockPolygons.map((polygon) => (
+          {mockPolygons.map(polygon => (
             <CanvasPolygon
               key={polygon.id}
               polygon={polygon}
@@ -351,18 +369,30 @@ describe('Polygon Selection Functionality', () => {
       renderPolygonsInSvg(mockPolygons, null);
 
       // No polygons should be selected
-      expect(screen.getByTestId('polygon-1')).not.toHaveClass('polygon-selected');
-      expect(screen.getByTestId('polygon-2')).not.toHaveClass('polygon-selected');
-      expect(screen.getByTestId('polygon-3')).not.toHaveClass('polygon-selected');
+      expect(screen.getByTestId('polygon-1')).not.toHaveClass(
+        'polygon-selected'
+      );
+      expect(screen.getByTestId('polygon-2')).not.toHaveClass(
+        'polygon-selected'
+      );
+      expect(screen.getByTestId('polygon-3')).not.toHaveClass(
+        'polygon-selected'
+      );
     });
 
     it('should handle selection of non-existent polygon gracefully', () => {
       renderPolygonsInSvg(mockPolygons, 'non-existent-polygon');
 
       // All polygons should remain unselected
-      expect(screen.getByTestId('polygon-1')).not.toHaveClass('polygon-selected');
-      expect(screen.getByTestId('polygon-2')).not.toHaveClass('polygon-selected');
-      expect(screen.getByTestId('polygon-3')).not.toHaveClass('polygon-selected');
+      expect(screen.getByTestId('polygon-1')).not.toHaveClass(
+        'polygon-selected'
+      );
+      expect(screen.getByTestId('polygon-2')).not.toHaveClass(
+        'polygon-selected'
+      );
+      expect(screen.getByTestId('polygon-3')).not.toHaveClass(
+        'polygon-selected'
+      );
     });
   });
 
@@ -469,7 +499,7 @@ describe('Polygon Selection Functionality', () => {
       // Re-render with different zoom
       rerender(
         <svg width="800" height="600" viewBox="0 0 800 600">
-          {mockPolygons.map((polygon) => (
+          {mockPolygons.map(polygon => (
             <CanvasPolygon
               key={polygon.id}
               polygon={polygon}
@@ -515,7 +545,9 @@ describe('Polygon Selection Functionality', () => {
       const unselectedPolygon = screen.getByTestId('polygon-2');
 
       expect(selectedPolygon.getAttribute('aria-label')).toContain('selected');
-      expect(unselectedPolygon.getAttribute('aria-label')).not.toContain('selected');
+      expect(unselectedPolygon.getAttribute('aria-label')).not.toContain(
+        'selected'
+      );
     });
   });
 });

@@ -38,7 +38,6 @@ export const usePolygonSelection = ({
   onDeletePolygon,
   polygons,
 }: UsePolygonSelectionProps): UsePolygonSelectionReturn => {
-
   /**
    * Main selection handler that respects the current edit mode
    * This replaces the problematic default case that forced EditVertices mode
@@ -83,53 +82,93 @@ export const usePolygonSelection = ({
       // Validate polygon exists
       const polygonExists = polygons.some(p => p.id === polygonId);
       if (!polygonExists) {
-        logger.warn('usePolygonSelection: Attempted to select non-existent polygon:', polygonId);
+        logger.warn(
+          'usePolygonSelection: Attempted to select non-existent polygon:',
+          polygonId
+        );
         return;
       }
 
-      logger.debug('usePolygonSelection: Selecting polygon:', polygonId, 'Mode:', editMode);
+      logger.debug(
+        'usePolygonSelection: Selecting polygon:',
+        polygonId,
+        'Mode:',
+        editMode
+      );
 
       // Handle mode-specific behavior when selecting a polygon
       switch (editMode) {
         case EditMode.DeletePolygon:
-          logger.debug('usePolygonSelection: Delete mode - deleting polygon:', polygonId);
+          logger.debug(
+            'usePolygonSelection: Delete mode - deleting polygon:',
+            polygonId
+          );
           onDeletePolygon(polygonId);
           // Stay in delete mode for multiple deletions
           return;
 
         case EditMode.Slice:
-          logger.debug('usePolygonSelection: Slice mode - selecting polygon for slicing:', polygonId);
+          logger.debug(
+            'usePolygonSelection: Slice mode - selecting polygon for slicing:',
+            polygonId
+          );
+          console.log(
+            '[usePolygonSelection] SLICE MODE - Selecting polygon, NOT changing mode:',
+            polygonId
+          );
           onSelectionChange(polygonId);
-          // Stay in slice mode
+          // Stay in slice mode - DO NOT change mode!
           return;
 
         case EditMode.EditVertices:
-          logger.debug('usePolygonSelection: EditVertices mode - selecting polygon:', polygonId);
+          logger.debug(
+            'usePolygonSelection: EditVertices mode - selecting polygon:',
+            polygonId
+          );
           onSelectionChange(polygonId);
           // Already in correct mode
           return;
 
         case EditMode.AddPoints:
-          logger.debug('usePolygonSelection: AddPoints mode - selecting polygon:', polygonId);
+          logger.debug(
+            'usePolygonSelection: AddPoints mode - selecting polygon:',
+            polygonId
+          );
           onSelectionChange(polygonId);
           // Stay in current mode
           return;
 
         case EditMode.CreatePolygon:
-          logger.debug('usePolygonSelection: CreatePolygon mode - selecting polygon:', polygonId);
+          logger.debug(
+            'usePolygonSelection: CreatePolygon mode - selecting polygon:',
+            polygonId
+          );
           onSelectionChange(polygonId);
           // Stay in current mode
           return;
 
         case EditMode.View:
-          logger.debug('usePolygonSelection: View mode - selecting polygon and switching to EditVertices:', polygonId);
+          logger.debug(
+            'usePolygonSelection: View mode - selecting polygon and switching to EditVertices:',
+            polygonId
+          );
+          console.log(
+            '[usePolygonSelection] VIEW MODE - Auto-switching to EditVertices!'
+          );
+          console.log(
+            '[usePolygonSelection] Current mode before switch:',
+            editMode
+          );
           // Only from View mode should we auto-switch to EditVertices
           onSelectionChange(polygonId);
           onModeChange(EditMode.EditVertices);
           return;
 
         default:
-          logger.debug('usePolygonSelection: Unknown/other mode - selecting polygon without mode change:', polygonId);
+          logger.debug(
+            'usePolygonSelection: Unknown/other mode - selecting polygon without mode change:',
+            polygonId
+          );
           // CRITICAL FIX: Don't force mode changes for undefined modes
           onSelectionChange(polygonId);
           // Let the mode stay as is
@@ -152,10 +191,21 @@ export const usePolygonSelection = ({
    */
   const handlePolygonClick = useCallback(
     (polygonId: string) => {
-      logger.debug('usePolygonSelection: handlePolygonClick called for polygon:', polygonId);
+      logger.debug(
+        'usePolygonSelection: handlePolygonClick called for polygon:',
+        polygonId
+      );
+      console.log(
+        '[usePolygonSelection] handlePolygonClick - Current editMode:',
+        editMode
+      );
+      console.log(
+        '[usePolygonSelection] handlePolygonClick - About to handle selection for:',
+        polygonId
+      );
       handlePolygonSelection(polygonId);
     },
-    [handlePolygonSelection]
+    [handlePolygonSelection, editMode]
   );
 
   return {

@@ -82,9 +82,31 @@ export const useEnhancedSegmentationEditor = ({
   }, []);
 
   // Initialize centralized polygon selection system (SSOT)
-  // We'll create this after handleDeletePolygon is defined
-  let polygonSelection: ReturnType<typeof usePolygonSelection> | null = null;
-  const [editMode, setEditMode] = useState<EditMode>(EditMode.View);
+  // This will be properly initialized after handleDeletePolygon is defined
+  const [editMode, setEditModeRaw] = useState<EditMode>(EditMode.View);
+
+  // Debug wrapper for setEditMode to track mode changes
+  const setEditMode = useCallback(
+    (newMode: EditMode | ((prev: EditMode) => EditMode)) => {
+      console.log(
+        '[useEnhancedSegmentationEditor] setEditMode called with:',
+        newMode
+      );
+      // Note: Don't log editMode here as it would create a dependency and stale closure
+      // Instead, use the raw state setter's functional form if we need the current value
+      setEditModeRaw(currentMode => {
+        console.log(
+          '[useEnhancedSegmentationEditor] Current mode before change:',
+          currentMode
+        );
+        if (typeof newMode === 'function') {
+          return newMode(currentMode);
+        }
+        return newMode;
+      });
+    },
+    []
+  ); // CRITICAL: No dependencies to prevent stale closures!
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   const [hoveredVertex, setHoveredVertex] = useState<{
     polygonId: string;
@@ -252,6 +274,22 @@ export const useEnhancedSegmentationEditor = ({
       initialPolygons.length !== initialPolygonsRef.current.length;
     const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
 
+    // DEBUG: Log why isNewData is triggering
+    if (isNewData) {
+      console.log('[useEnhancedSegmentationEditor] isNewData triggered:', {
+        isNewData,
+        hasInitialized: hasInitialized.current,
+        imageChanged,
+        lengthChanged,
+        currentImageId: currentImageIdRef.current,
+        newImageId: imageId,
+        currentPolygonLength: initialPolygonsRef.current.length,
+        newPolygonLength: initialPolygons.length,
+        currentEditMode: editMode,
+        timestamp: Date.now(),
+      });
+    }
+
     if (isNewData) {
       // First, cancel any ongoing autosave for the previous image
       if (imageChanged) {
@@ -287,7 +325,21 @@ export const useEnhancedSegmentationEditor = ({
         // Reset all editor state when switching images
         setPolygons(initialPolygons);
         setSelectedPolygonId(null); // Clear selection
-        setEditMode(EditMode.View); // Reset to view mode
+
+        // CRITICAL FIX: Only reset to View mode when actually switching images, not on polygon updates
+        // This prevents slice/delete mode from being reset when polygons change
+        if (imageChanged || !hasInitialized.current) {
+          console.log(
+            '[useEnhancedSegmentationEditor] Resetting to View mode because:',
+            {
+              imageChanged,
+              firstLoad: !hasInitialized.current,
+              currentMode: editMode,
+            }
+          );
+          setEditMode(EditMode.View); // Reset to view mode only on image change
+        }
+
         setTempPoints([]); // Clear temp points
         setHoveredVertex(null); // Clear hover state
         setCursorPosition(null); // Clear cursor
@@ -625,7 +677,7 @@ export const useEnhancedSegmentationEditor = ({
   );
 
   // Now initialize centralized polygon selection system (SSOT) after handleDeletePolygon is defined
-  polygonSelection = usePolygonSelection({
+  const polygonSelection = usePolygonSelection({
     editMode,
     currentSelectedPolygonId: selectedPolygonId,
     onModeChange: setEditMode,
@@ -695,6 +747,7 @@ export const useEnhancedSegmentationEditor = ({
   }, [selectedPolygonId]);
 
   // Initialize keyboard shortcuts first to get access to shift key state
+  // Force HMR update - Fixed slice mode keyboard shortcut 2025-09-22
   const keyboardShortcuts = useKeyboardShortcuts({
     editMode,
     canUndo,
@@ -877,48 +930,75 @@ export const useEnhancedSegmentationEditor = ({
   // Update interaction handlers to include pan handling
   const enhancedHandleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      // Track cursor position in image coordinates for visual feedback
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        const canvasX = e.clientX - rect.left;
-        const canvasY = e.clientY - rect.top;
+      // PERFORMANCE OPTIMIZATION: Use RAF throttling for mouse move events
+      const handleMouseMoveInternal = () => {
+        // Track cursor position in image coordinates for visual feedback
+        if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect();
+          const canvasX = e.clientX - rect.left;
+          const canvasY = e.clientY - rect.top;
 
-        // Get the container dimensions
-        const containerWidth = rect.width;
-        const containerHeight = rect.height;
+          // Get the container dimensions
+          const containerWidth = rect.width;
+          const containerHeight = rect.height;
 
-        // The content is centered, so we need to adjust for that
-        const centerOffsetX = containerWidth / 2;
-        const centerOffsetY = containerHeight / 2;
+          // The content is centered, so we need to adjust for that
+          const centerOffsetX = containerWidth / 2;
+          const centerOffsetY = containerHeight / 2;
 
-        // Convert to image coordinates using the same calculation as getCanvasCoordinates
-        const imageX =
-          (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
-        const imageY =
-          (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
+          // Convert to image coordinates using the same calculation as getCanvasCoordinates
+          const imageX =
+            (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
+          const imageY =
+            (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
 
-        // Use throttled version to prevent excessive re-renders
-        throttledSetCursorPosition({ x: imageX, y: imageY });
+          // Use throttled version to prevent excessive re-renders
+          throttledSetCursorPosition({ x: imageX, y: imageY });
+        }
+
+        // Handle panning if active - use incremental deltas for smooth movement
+        if (interactionState.isPanning && interactionState.panStart) {
+          const deltaX = e.clientX - interactionState.panStart.x;
+          const deltaY = e.clientY - interactionState.panStart.y;
+
+          // PERFORMANCE OPTIMIZATION: Batch state updates to prevent cascade re-renders
+          // Import { unstable_batchedUpdates } from 'react-dom' at top of file
+          if (
+            typeof window !== 'undefined' &&
+            (window as any).React &&
+            (window as any).React.unstable_batchedUpdates
+          ) {
+            (window as any).React.unstable_batchedUpdates(() => {
+              // Apply the delta movement
+              handlePan(deltaX, deltaY);
+
+              // Update pan start position for next delta calculation
+              setInteractionState({
+                ...interactionState,
+                panStart: { x: e.clientX, y: e.clientY },
+              });
+            });
+          } else {
+            // Fallback for environments without batchedUpdates
+            handlePan(deltaX, deltaY);
+            setInteractionState({
+              ...interactionState,
+              panStart: { x: e.clientX, y: e.clientY },
+            });
+          }
+          return;
+        }
+
+        // Delegate to advanced interactions
+        interactions.handleMouseMove(e);
+      };
+
+      // PERFORMANCE FIX: Use requestAnimationFrame for smooth 60fps handling
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(handleMouseMoveInternal);
+      } else {
+        handleMouseMoveInternal();
       }
-
-      // Handle panning if active - use incremental deltas for smooth movement
-      if (interactionState.isPanning && interactionState.panStart) {
-        const deltaX = e.clientX - interactionState.panStart.x;
-        const deltaY = e.clientY - interactionState.panStart.y;
-
-        // Apply the delta movement
-        handlePan(deltaX, deltaY);
-
-        // Update pan start position for next delta calculation
-        setInteractionState({
-          ...interactionState,
-          panStart: { x: e.clientX, y: e.clientY },
-        });
-        return;
-      }
-
-      // Delegate to advanced interactions
-      interactions.handleMouseMove(e);
     },
     [
       interactionState,

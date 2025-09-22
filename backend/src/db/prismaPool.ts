@@ -106,7 +106,7 @@ class PrismaPool {
     if (this.config.enablePoolLogging) {
       clientConfig.log = ['query', 'info', 'warn', 'error'];
     }
-    const client = new PrismaClient(clientConfig as any);
+    const client = new PrismaClient(clientConfig);
 
     try {
       // Test the connection

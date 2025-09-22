@@ -737,11 +737,11 @@ export class MetricsCalculator {
    * Calculate convex hull using Graham scan algorithm
    */
   private calculateConvexHull(points: Point[]): Point[] {
-    if (points.length < 3) return points;
+    if (points.length < 3) {return points;}
 
     // Sort points by x-coordinate, then by y-coordinate
     const sortedPoints = [...points].sort((a, b) => {
-      if (a.x === b.x) return a.y - b.y;
+      if (a.x === b.x) {return a.y - b.y;}
       return a.x - b.x;
     });
 
@@ -809,7 +809,7 @@ export class MetricsCalculator {
     const dot = A * C + B * D;
     const lenSq = C * C + D * D;
 
-    if (lenSq === 0) return this.distance(point, lineStart);
+    if (lenSq === 0) {return this.distance(point, lineStart);}
 
     const param = dot / lenSq;
 
@@ -868,7 +868,7 @@ export class MetricsCalculator {
 
       // Find the furthest point from this edge
       for (let k = 0; k < hull.length; k++) {
-        if (k === i || k === j) continue;
+        if (k === i || k === j) {continue;}
         const dist = this.pointToLineDistance(hull[k], hull[i], hull[j]);
         maxDistFromEdge = Math.max(maxDistFromEdge, dist);
       }

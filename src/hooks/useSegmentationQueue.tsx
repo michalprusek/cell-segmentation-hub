@@ -280,7 +280,10 @@ export const useSegmentationQueue = (
           manager.off('segmentation:cancelled', onSegmentationCancelled);
         }
         if (onBulkSegmentationCancelled) {
-          manager.off('segmentation:bulk-cancelled', onBulkSegmentationCancelled);
+          manager.off(
+            'segmentation:bulk-cancelled',
+            onBulkSegmentationCancelled
+          );
         }
 
         wsManagerRef.current = null;
@@ -328,7 +331,10 @@ export const useSegmentationQueue = (
           manager.off('segmentation:cancelled', onSegmentationCancelled);
         }
         if (onBulkSegmentationCancelled) {
-          manager.off('segmentation:bulk-cancelled', onBulkSegmentationCancelled);
+          manager.off(
+            'segmentation:bulk-cancelled',
+            onBulkSegmentationCancelled
+          );
         }
       }
     };

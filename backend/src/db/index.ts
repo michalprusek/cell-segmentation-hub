@@ -13,7 +13,7 @@ declare global {
 // Initialize Prisma client (legacy compatibility)
 const createPrismaClient = (): PrismaClient => {
   const config = getPrismaConfig();
-  return config ? new PrismaClient(config as any) : new PrismaClient();
+  return config ? new PrismaClient(config) : new PrismaClient();
 };
 
 // Use global variable in development to prevent multiple instances (legacy compatibility)

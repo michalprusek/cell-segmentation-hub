@@ -1,19 +1,24 @@
 # Complete Cancel Segmentation with UI Updates Solution
 
 ## Problem
+
 After cancelling segmentation operations, the UI was not properly updating:
+
 - Images retained their "processing" or "queued" status
 - Thumbnails still showed segmentation polygon overlays
 - Segment All button count didn't reflect cancelled images
 - Images weren't refetched to show their actual state
 
 ## Solution Overview
+
 Implemented a complete event-driven cancellation flow using WebSocket events to trigger UI updates when segmentation is cancelled.
 
 ## Key Components
 
 ### 1. Backend WebSocket Events (queueService.ts)
+
 The backend emits two types of cancellation events:
+
 - `segmentation:cancelled` - Individual image cancellation
 - `segmentation:bulk-cancelled` - Batch cancellation with affected projects list
 
@@ -23,14 +28,14 @@ this.websocketService.emitToUser(userId, 'segmentation:bulk-cancelled', {
   cancelledCount: queuedItems.length,
   affectedProjects,
   affectedBatches,
-  message: 'All segmentations cancelled by user'
+  message: 'All segmentations cancelled by user',
 });
 
 // Individual image events:
 this.websocketService.emitToUser(userId, 'segmentation:cancelled', {
   imageId: item.imageId,
   batchId: item.batchId,
-  message: 'Segmentation cancelled by user'
+  message: 'Segmentation cancelled by user',
 });
 ```
 
@@ -42,7 +47,7 @@ Added handlers that are called when WebSocket events are received:
 const handleSegmentationCancelled = useCallback(
   (data: { imageId?: string; batchId?: string; message?: string }) => {
     if (!data.imageId) return;
-    
+
     // Update specific image to no_segmentation status
     updateImages(prevImages =>
       prevImages.map(img => {
@@ -66,7 +71,7 @@ const handleSegmentationCancelled = useCallback(
 );
 
 const handleBulkSegmentationCancelled = useCallback(
-  async (data) => {
+  async data => {
     if (data.affectedProjects?.includes(id)) {
       // Refetch all images to get latest status
       // This ensures all images show correct no_segmentation status
@@ -91,7 +96,7 @@ export const useSegmentationQueue = (
   onBulkSegmentationCancelled?: (data: any) => void
 ) => {
   // ... existing code ...
-  
+
   // Register cancellation event handlers if provided
   if (onSegmentationCancelled) {
     manager.on('segmentation:cancelled', onSegmentationCancelled);
@@ -99,7 +104,7 @@ export const useSegmentationQueue = (
   if (onBulkSegmentationCancelled) {
     manager.on('segmentation:bulk-cancelled', onBulkSegmentationCancelled);
   }
-}
+};
 ```
 
 ### 4. Cancel Button Integration

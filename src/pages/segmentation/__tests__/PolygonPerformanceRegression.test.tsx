@@ -72,8 +72,13 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
 
     return (
       <g data-testid={`vertices-${polygonId}`}>
-        {points.slice(0, 100).map((point: any, index: number) => { // Limit vertices for performance
-          if (!point || typeof point.x !== 'number' || typeof point.y !== 'number') {
+        {points.slice(0, 100).map((point: any, index: number) => {
+          // Limit vertices for performance
+          if (
+            !point ||
+            typeof point.x !== 'number' ||
+            typeof point.y !== 'number'
+          ) {
             return null;
           }
           return (
@@ -93,9 +98,7 @@ vi.mock('../components/canvas/PolygonVertices', () => ({
 
 vi.mock('../../context-menu/PolygonContextMenu', () => ({
   default: React.memo(({ children, polygonId }: any) => (
-    <g key={`context-${polygonId}`}>
-      {children}
-    </g>
+    <g key={`context-${polygonId}`}>{children}</g>
   )),
 }));
 
@@ -106,7 +109,10 @@ vi.mock('@/lib/polygonGeometry', () => ({
     }
 
     // Fast bounding box calculation
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    let minX = Infinity,
+      maxX = -Infinity,
+      minY = Infinity,
+      maxY = -Infinity;
 
     for (const point of points) {
       if (point && typeof point.x === 'number' && typeof point.y === 'number') {
@@ -203,41 +209,57 @@ describe('Polygon Performance Regression Tests', () => {
       const simplePolygon = PolygonIdTestFactory.createMLPolygon();
       const metrics = renderPolygonsWithMetrics([simplePolygon]);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.SINGLE_POLYGON_RENDER);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.SINGLE_POLYGON_RENDER
+      );
       expect(screen.getByTestId(simplePolygon.id)).toBeInTheDocument();
     });
 
     it('should render complex polygon efficiently', () => {
-      const complexPolygon = PolygonPointTestFactory.createManyPointsPolygon(200);
+      const complexPolygon =
+        PolygonPointTestFactory.createManyPointsPolygon(200);
       const metrics = renderPolygonsWithMetrics([complexPolygon]);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.COMPLEX_POLYGON_RENDER);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.COMPLEX_POLYGON_RENDER
+      );
       expect(screen.getByTestId(complexPolygon.id)).toBeInTheDocument();
     });
 
     it('should handle extreme coordinate values without performance degradation', () => {
-      const extremePolygon = PolygonShapeTestFactory.createExtremeCoordinatesPolygon();
+      const extremePolygon =
+        PolygonShapeTestFactory.createExtremeCoordinatesPolygon();
       const metrics = renderPolygonsWithMetrics([extremePolygon]);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.SINGLE_POLYGON_RENDER * 2);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.SINGLE_POLYGON_RENDER * 2
+      );
       expect(screen.getByTestId(extremePolygon.id)).toBeInTheDocument();
     });
 
     it('should render self-intersecting polygon without performance issues', () => {
-      const selfIntersectingPolygon = PolygonShapeTestFactory.createSelfIntersectingPolygon();
+      const selfIntersectingPolygon =
+        PolygonShapeTestFactory.createSelfIntersectingPolygon();
       const metrics = renderPolygonsWithMetrics([selfIntersectingPolygon]);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.SINGLE_POLYGON_RENDER);
-      expect(screen.getByTestId(selfIntersectingPolygon.id)).toBeInTheDocument();
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.SINGLE_POLYGON_RENDER
+      );
+      expect(
+        screen.getByTestId(selfIntersectingPolygon.id)
+      ).toBeInTheDocument();
     });
   });
 
   describe('Multiple Polygon Rendering Performance', () => {
     it('should render many simple polygons within threshold', () => {
-      const manyPolygons = PolygonPerformanceTestFactory.createManySimplePolygons(100);
+      const manyPolygons =
+        PolygonPerformanceTestFactory.createManySimplePolygons(100);
       const metrics = renderPolygonsWithMetrics(manyPolygons);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER
+      );
 
       // Verify some polygons rendered
       expect(screen.getByTestId('perf-simple-0')).toBeInTheDocument();
@@ -245,23 +267,31 @@ describe('Polygon Performance Regression Tests', () => {
     });
 
     it('should handle variable complexity polygons efficiently', () => {
-      const variablePolygons = PolygonPerformanceTestFactory.createVariableComplexityPolygons(50);
+      const variablePolygons =
+        PolygonPerformanceTestFactory.createVariableComplexityPolygons(50);
       const metrics = renderPolygonsWithMetrics(variablePolygons);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER
+      );
 
       // Check that complex polygons rendered
-      const complexPolygons = variablePolygons.filter(p => p.points.length > 50);
+      const complexPolygons = variablePolygons.filter(
+        p => p.points.length > 50
+      );
       if (complexPolygons.length > 0) {
         expect(screen.getByTestId(complexPolygons[0].id)).toBeInTheDocument();
       }
     });
 
     it('should maintain performance with mixed data quality', () => {
-      const stressTestPolygons = PolygonPerformanceTestFactory.createStressTestScenario(75);
+      const stressTestPolygons =
+        PolygonPerformanceTestFactory.createStressTestScenario(75);
       const metrics = renderPolygonsWithMetrics(stressTestPolygons);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER
+      );
 
       // Application should remain stable
       expect(stressTestPolygons.length).toBeGreaterThan(0);
@@ -271,7 +301,9 @@ describe('Polygon Performance Regression Tests', () => {
       const gridPolygons = PolygonTestUtils.createPolygonGrid(10, 10, 80, 5);
       const metrics = renderPolygonsWithMetrics(gridPolygons);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER
+      );
       expect(gridPolygons.length).toBe(100);
 
       // Check corners of grid
@@ -282,7 +314,8 @@ describe('Polygon Performance Regression Tests', () => {
 
   describe('Interaction Performance', () => {
     it('should respond to polygon selection quickly', () => {
-      const testPolygons = PolygonPerformanceTestFactory.createManySimplePolygons(20);
+      const testPolygons =
+        PolygonPerformanceTestFactory.createManySimplePolygons(20);
       renderPolygonsWithMetrics(testPolygons);
 
       const targetPolygon = screen.getByTestId('perf-simple-5');
@@ -293,13 +326,18 @@ describe('Polygon Performance Regression Tests', () => {
         fireEvent.click(pathElement);
         const interactionTime = performance.now() - interactionStart;
 
-        expect(interactionTime).toBeLessThan(PERFORMANCE_THRESHOLDS.INTERACTION_RESPONSE);
-        expect(mockHandlers.onSelectPolygon).toHaveBeenCalledWith('perf-simple-5');
+        expect(interactionTime).toBeLessThan(
+          PERFORMANCE_THRESHOLDS.INTERACTION_RESPONSE
+        );
+        expect(mockHandlers.onSelectPolygon).toHaveBeenCalledWith(
+          'perf-simple-5'
+        );
       }
     });
 
     it('should handle rapid selection changes efficiently', () => {
-      const testPolygons = PolygonPerformanceTestFactory.createManySimplePolygons(10);
+      const testPolygons =
+        PolygonPerformanceTestFactory.createManySimplePolygons(10);
       renderPolygonsWithMetrics(testPolygons);
 
       const startTime = performance.now();
@@ -315,12 +353,15 @@ describe('Polygon Performance Regression Tests', () => {
 
       const totalInteractionTime = performance.now() - startTime;
 
-      expect(totalInteractionTime).toBeLessThan(PERFORMANCE_THRESHOLDS.INTERACTION_RESPONSE * 2);
+      expect(totalInteractionTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.INTERACTION_RESPONSE * 2
+      );
       expect(mockHandlers.onSelectPolygon).toHaveBeenCalledTimes(5);
     });
 
     it('should handle vertex interactions without performance degradation', () => {
-      const complexPolygon = PolygonPointTestFactory.createManyPointsPolygon(50);
+      const complexPolygon =
+        PolygonPointTestFactory.createManyPointsPolygon(50);
       renderPolygonsWithMetrics([complexPolygon], complexPolygon.id);
 
       const vertices = screen.getByTestId(`vertices-${complexPolygon.id}`);
@@ -337,12 +378,15 @@ describe('Polygon Performance Regression Tests', () => {
         }
 
         const interactionTime = performance.now() - interactionStart;
-        expect(interactionTime).toBeLessThan(PERFORMANCE_THRESHOLDS.INTERACTION_RESPONSE);
+        expect(interactionTime).toBeLessThan(
+          PERFORMANCE_THRESHOLDS.INTERACTION_RESPONSE
+        );
       }
     });
 
     it('should maintain performance during zoom operations', () => {
-      const testPolygons = PolygonPerformanceTestFactory.createManySimplePolygons(30);
+      const testPolygons =
+        PolygonPerformanceTestFactory.createManySimplePolygons(30);
 
       // Test different zoom levels
       const zoomLevels = [0.5, 1, 2, 5];
@@ -372,7 +416,9 @@ describe('Polygon Performance Regression Tests', () => {
         );
 
         const metrics = performanceMonitor.end();
-        expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER);
+        expect(metrics.renderTime).toBeLessThan(
+          PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER
+        );
       });
     });
   });
@@ -402,16 +448,21 @@ describe('Polygon Performance Regression Tests', () => {
 
       // Memory increase should be minimal (accounting for test framework overhead)
       if (initialMemory > 0 && finalMemory > 0) {
-        expect(memoryIncrease).toBeLessThan(PERFORMANCE_THRESHOLDS.MEMORY_LEAK_THRESHOLD);
+        expect(memoryIncrease).toBeLessThan(
+          PERFORMANCE_THRESHOLDS.MEMORY_LEAK_THRESHOLD
+        );
       }
     });
 
     it('should efficiently handle large polygon datasets', () => {
-      const largeDataset = PolygonPerformanceTestFactory.createStressTestScenario(200);
+      const largeDataset =
+        PolygonPerformanceTestFactory.createStressTestScenario(200);
 
       const metrics = renderPolygonsWithMetrics(largeDataset);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER * 2);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER * 2
+      );
 
       // Memory usage should be reasonable
       if (metrics.memoryDelta > 0) {
@@ -421,7 +472,8 @@ describe('Polygon Performance Regression Tests', () => {
     });
 
     it('should handle polygon updates without memory accumulation', () => {
-      let testPolygons = PolygonPerformanceTestFactory.createManySimplePolygons(20);
+      let testPolygons =
+        PolygonPerformanceTestFactory.createManySimplePolygons(20);
 
       const { rerender } = render(
         <svg width="2000" height="2000" viewBox="0 0 2000 2000">
@@ -475,7 +527,9 @@ describe('Polygon Performance Regression Tests', () => {
         );
 
         const updateTime = performance.now() - updateStart;
-        expect(updateTime).toBeLessThan(PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER / 2);
+        expect(updateTime).toBeLessThan(
+          PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER / 2
+        );
       }
     });
   });
@@ -490,16 +544,21 @@ describe('Polygon Performance Regression Tests', () => {
         if (scenario.performanceThreshold) {
           const metrics = renderPolygonsWithMetrics(scenario.polygons);
 
-          expect(metrics.renderTime).toBeLessThan(scenario.performanceThreshold);
+          expect(metrics.renderTime).toBeLessThan(
+            scenario.performanceThreshold
+          );
 
           // Log performance for regression tracking
-          console.log(`Scenario "${scenario.name}": ${metrics.renderTime.toFixed(2)}ms (threshold: ${scenario.performanceThreshold}ms)`);
+          console.log(
+            `Scenario "${scenario.name}": ${metrics.renderTime.toFixed(2)}ms (threshold: ${scenario.performanceThreshold}ms)`
+          );
         }
       });
     });
 
     it('should maintain consistent performance across browser conditions', () => {
-      const testPolygons = PolygonPerformanceTestFactory.createManySimplePolygons(50);
+      const testPolygons =
+        PolygonPerformanceTestFactory.createManySimplePolygons(50);
       const measurements: number[] = [];
 
       // Take multiple measurements
@@ -510,8 +569,13 @@ describe('Polygon Performance Regression Tests', () => {
       }
 
       // Calculate variance
-      const average = measurements.reduce((sum, time) => sum + time, 0) / measurements.length;
-      const variance = measurements.reduce((sum, time) => sum + Math.pow(time - average, 2), 0) / measurements.length;
+      const average =
+        measurements.reduce((sum, time) => sum + time, 0) / measurements.length;
+      const variance =
+        measurements.reduce(
+          (sum, time) => sum + Math.pow(time - average, 2),
+          0
+        ) / measurements.length;
       const standardDeviation = Math.sqrt(variance);
 
       // Performance should be consistent (low variance)
@@ -520,16 +584,20 @@ describe('Polygon Performance Regression Tests', () => {
     });
 
     it('should track performance metrics for monitoring', () => {
-      const baselinePolygons = PolygonPerformanceTestFactory.createManySimplePolygons(25);
+      const baselinePolygons =
+        PolygonPerformanceTestFactory.createManySimplePolygons(25);
       const baselineMetrics = renderPolygonsWithMetrics(baselinePolygons);
 
       cleanup();
 
-      const stressPolygons = PolygonPerformanceTestFactory.createStressTestScenario(25);
+      const stressPolygons =
+        PolygonPerformanceTestFactory.createStressTestScenario(25);
       const stressMetrics = renderPolygonsWithMetrics(stressPolygons);
 
       // Stress test should not be more than 3x slower than baseline
-      expect(stressMetrics.renderTime).toBeLessThan(baselineMetrics.renderTime * 3);
+      expect(stressMetrics.renderTime).toBeLessThan(
+        baselineMetrics.renderTime * 3
+      );
 
       // Create performance report
       const performanceReport = {
@@ -565,15 +633,20 @@ describe('Polygon Performance Regression Tests', () => {
       const metrics = renderPolygonsWithMetrics(invalidPolygons);
 
       // Should render quickly despite invalid data
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.SINGLE_POLYGON_RENDER * invalidPolygons.length);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.SINGLE_POLYGON_RENDER * invalidPolygons.length
+      );
     });
 
     it('should maintain performance with extremely complex polygons', () => {
-      const extremePolygon = PolygonPointTestFactory.createManyPointsPolygon(1000);
+      const extremePolygon =
+        PolygonPointTestFactory.createManyPointsPolygon(1000);
       const metrics = renderPolygonsWithMetrics([extremePolygon]);
 
       // Should handle complex polygon reasonably
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.COMPLEX_POLYGON_RENDER * 2);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.COMPLEX_POLYGON_RENDER * 2
+      );
     });
 
     it('should handle mixed valid and invalid polygon sets efficiently', () => {
@@ -585,7 +658,9 @@ describe('Polygon Performance Regression Tests', () => {
 
       const metrics = renderPolygonsWithMetrics(mixedPolygons);
 
-      expect(metrics.renderTime).toBeLessThan(PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER);
+      expect(metrics.renderTime).toBeLessThan(
+        PERFORMANCE_THRESHOLDS.MANY_POLYGONS_RENDER
+      );
 
       // Valid polygons should still render
       expect(screen.getByTestId('perf-simple-0')).toBeInTheDocument();

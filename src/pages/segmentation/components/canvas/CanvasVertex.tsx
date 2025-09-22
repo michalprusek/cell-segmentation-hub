@@ -1,5 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Point } from '@/lib/segmentation';
+import {
+  getOptimizedVertexRadius,
+  getOptimizedStrokeWidth,
+  debugLog,
+} from '@/lib/vertexOptimization';
 
 interface CanvasVertexProps {
   point: Point;
@@ -29,12 +34,10 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
     isStartPoint = false,
     isUndoRedoInProgress = false,
   }) => {
-    // Simple radius calculation - increased for better clickability
-    const baseRadius = 6; // Increased from 4
-    const radius = baseRadius / Math.sqrt(zoom); // Use sqrt for better scaling
-    const hoverScale = isHovered ? 1.5 : 1;
-    const startPointScale = isStartPoint ? 1.2 : 1;
-    const finalRadius = Math.max(radius * hoverScale * startPointScale, 3); // Minimum size
+    // PERFORMANCE OPTIMIZATION: Use cached vertex calculations
+    const finalRadius = useMemo(() => {
+      return getOptimizedVertexRadius(zoom, 3, isHovered, isStartPoint);
+    }, [zoom, isHovered, isStartPoint]);
 
     // Simple color scheme
     const fillColor =
@@ -51,39 +54,76 @@ const CanvasVertex = React.memo<CanvasVertexProps>(
             : '#ea384c';
 
     const strokeColor = '#ffffff';
-    const strokeWidth = 1.5 / zoom;
-    const opacity = isSelected ? 1 : 0.8;
+    // PERFORMANCE OPTIMIZATION: Use cached stroke calculations
+    const strokeWidth = useMemo(() => {
+      return getOptimizedStrokeWidth(zoom, isHovered);
+    }, [zoom, isHovered]);
+    const opacity = isSelected ? 0.95 : 0.7; // Slightly more transparent
+
+    // Add glow effect on hover
+    const strokeOpacity = isHovered ? 1.0 : 0.9;
 
     // Calculate actual position with drag offset
     const actualX = isDragging && dragOffset ? point.x + dragOffset.x : point.x;
     const actualY = isDragging && dragOffset ? point.y + dragOffset.y : point.y;
 
     // Event handlers to ensure events are captured
-    const handleMouseDown = React.useCallback((e: React.MouseEvent) => {
-      // Stop propagation to prevent polygon selection
-      e.stopPropagation();
-      // Let the event bubble up with data attributes intact
-    }, []);
+    const handleMouseDown = React.useCallback(
+      (e: React.MouseEvent) => {
+        // DON'T stop propagation - let the event bubble up to useAdvancedInteractions
+        // The canvas-level handler needs to receive this event to detect vertex clicks
+        // and initiate drag operations via dataset attributes
+        // PERFORMANCE FIX: Use optimized debug logging
+        debugLog('Vertex mouseDown', { polygonId, vertexIndex });
+      },
+      [polygonId, vertexIndex]
+    );
 
     return (
-      <circle
-        cx={actualX}
-        cy={actualY}
-        r={finalRadius}
-        fill={fillColor}
-        stroke={strokeColor}
-        strokeWidth={strokeWidth}
-        opacity={opacity}
-        data-polygon-id={polygonId}
-        data-vertex-index={vertexIndex}
-        onMouseDown={handleMouseDown}
-        style={{
-          cursor: isDragging ? 'grabbing' : 'grab',
-          transition:
-            isDragging || isUndoRedoInProgress ? 'none' : 'all 0.15s ease-out',
-          pointerEvents: 'all',
-        }}
-      />
+      <>
+        {/* Glow effect circle - only visible on hover */}
+        {isHovered && (
+          <circle
+            cx={actualX}
+            cy={actualY}
+            r={finalRadius + 2 / zoom} // Slightly larger for glow
+            fill="none"
+            stroke="#ffffff"
+            strokeWidth={strokeWidth * 0.5}
+            opacity={0.3}
+            style={{
+              pointerEvents: 'none',
+              // PERFORMANCE FIX: Replace expensive blur with opacity
+              opacity: 0.2,
+            }}
+          />
+        )}
+
+        {/* Main vertex circle */}
+        <circle
+          cx={actualX}
+          cy={actualY}
+          r={finalRadius}
+          fill={fillColor}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          strokeOpacity={strokeOpacity}
+          opacity={opacity}
+          data-polygon-id={polygonId}
+          data-vertex-index={vertexIndex}
+          onMouseDown={handleMouseDown}
+          style={{
+            cursor: isDragging ? 'grabbing' : 'grab',
+            transition:
+              isDragging || isUndoRedoInProgress
+                ? 'none'
+                : 'stroke-width 0.15s ease-out, r 0.15s ease-out, opacity 0.15s ease-out',
+            pointerEvents: 'all',
+            // PERFORMANCE FIX: Replace expensive filter with simpler shadow
+            boxShadow: isHovered ? '0 0 3px rgba(255, 255, 255, 0.8)' : 'none',
+          }}
+        />
+      </>
     );
   },
   (prevProps, nextProps) => {

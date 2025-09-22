@@ -145,7 +145,7 @@ export const requireResourceOwnership = (resourceModel: string, resourceUserIdFi
       }
 
       // Dynamic access to Prisma model with proper typing
-      const model = (prisma as any)[resourceModel];
+      const model = (prisma as unknown as Record<string, { findUnique: (args: { where: { id: string }; select: Record<string, boolean> }) => Promise<Record<string, unknown> | null> }>)[resourceModel];
 
       // Check if model is valid
       if (!model || typeof model.findUnique !== 'function') {

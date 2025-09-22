@@ -372,7 +372,7 @@ export async function updateUserProfile(userId: string, updates: Record<string, 
     }
 
     if (updates.notifications && typeof updates.notifications === 'object') {
-      const notifications = updates.notifications as Record<string, any>;
+      const notifications = updates.notifications as Record<string, unknown>;
       if (notifications.email !== undefined) {
         profileData.emailNotifications = notifications.email;
       }

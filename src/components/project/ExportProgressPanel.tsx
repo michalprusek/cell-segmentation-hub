@@ -65,19 +65,31 @@ export const ExportProgressPanel = ({
       isDownloading,
       completedJobId,
       isCancelling,
-      shouldShow: isExporting || isDownloading || !!completedJobId || isCancelling,
+      shouldShow:
+        isExporting || isDownloading || !!completedJobId || isCancelling,
       exportProgress,
       exportStatus,
     });
-  }, [isExporting, isDownloading, completedJobId, isCancelling, exportProgress, exportStatus]);
+  }, [
+    isExporting,
+    isDownloading,
+    completedJobId,
+    isCancelling,
+    exportProgress,
+    exportStatus,
+  ]);
 
   // Show panel if any export operation is active OR if we're in cancelling state
   if (!isExporting && !isDownloading && !completedJobId && !isCancelling) {
-    logger.debug('❌ ExportProgressPanel: Hidden - no active export operations');
+    logger.debug(
+      '❌ ExportProgressPanel: Hidden - no active export operations'
+    );
     return null;
   }
 
-  logger.debug('✅ ExportProgressPanel: Visible - active export operation detected');
+  logger.debug(
+    '✅ ExportProgressPanel: Visible - active export operation detected'
+  );
 
   // Determine the current export phase
   const getExportPhase = () => {
@@ -148,11 +160,24 @@ export const ExportProgressPanel = ({
     }
   };
 
-  // Get progress percentage for display
+  // Get progress percentage for display with two-phase system
   const getProgressPercentage = () => {
     if (phase === 'completed') return 100;
-    if (phase === 'downloading') return 100;
     if (phase === 'cancelling') return exportProgress; // Keep current progress during cancellation
+
+    // Two-phase progress calculation:
+    // Processing phase: 0-50% of total progress
+    // Downloading phase: 50-100% of total progress
+    if (phase === 'downloading') {
+      // For download phase, map 0-100% download progress to 50-100% total progress
+      return Math.round(50 + exportProgress * 0.5);
+    }
+
+    // For processing phase, map 0-100% export progress to 0-50% total progress
+    if (isExporting && !isDownloading) {
+      return Math.round(exportProgress * 0.5);
+    }
+
     return Math.round(exportProgress);
   };
 
@@ -267,7 +292,9 @@ export const ExportProgressPanel = ({
                   primaryText=""
                   disabled={isCancelling}
                   showPrimaryButton={false} // Only show cancel button
-                  cancelText={isCancelling ? t('export.cancelling') : t('export.cancel')}
+                  cancelText={
+                    isCancelling ? t('export.cancelling') : t('export.cancel')
+                  }
                   className="min-w-[100px]"
                 />
               )}
