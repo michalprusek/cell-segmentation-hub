@@ -324,6 +324,10 @@ const SegmentationEditor = () => {
               class: segPoly.class,
               confidence: segPoly.confidence,
               area: segPoly.area,
+              parent_id:
+                segPoly.parentIds && segPoly.parentIds.length > 0
+                  ? segPoly.parentIds[0]
+                  : undefined,
             };
           }
 
@@ -334,6 +338,10 @@ const SegmentationEditor = () => {
             class: segPoly.class,
             confidence: segPoly.confidence,
             area: segPoly.area,
+            parent_id:
+              segPoly.parentIds && segPoly.parentIds.length > 0
+                ? segPoly.parentIds[0]
+                : undefined,
           };
         }
 
@@ -371,10 +379,17 @@ const SegmentationEditor = () => {
         ? {
             id: polygons[0].id,
             type: polygons[0].type,
+            parent_id: polygons[0].parent_id,
             pointsCount: polygons[0].points?.length || 0,
             firstPoints: polygons[0].points?.slice(0, 3),
           }
         : null,
+      internalPolygonCount: polygons.filter(
+        p => p.type === 'internal' || p.parent_id
+      ).length,
+      externalPolygonCount: polygons.filter(
+        p => p.type === 'external' && !p.parent_id
+      ).length,
     });
 
     return polygons;
@@ -471,7 +486,7 @@ const SegmentationEditor = () => {
           points: polygon.points,
           type: polygon.type || 'external',
           class: polygon.class || 'spheroid',
-          parentIds: [], // Add empty array for API compatibility
+          parentIds: polygon.parent_id ? [polygon.parent_id] : [], // Preserve parent_id as parentIds array
           confidence: polygon.confidence,
           area: polygon.area,
         }));
@@ -1192,6 +1207,7 @@ const SegmentationEditor = () => {
                                 isUndoRedoInProgress={
                                   editor.isUndoRedoInProgress
                                 }
+                                editMode={editor.editMode}
                                 onSelectPolygon={editor.handlePolygonClick}
                                 onDeletePolygon={
                                   handleDeletePolygonFromContextMenu

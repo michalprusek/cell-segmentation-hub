@@ -20,6 +20,7 @@ The vertex deletion context menu was not working properly. Users could not right
 
 - Added `isVertexTarget()` utility function to detect vertex elements by checking for `data-polygon-id` and `data-vertex-index` attributes
 - Modified right-click handler to allow context menu events on vertices:
+
   ```typescript
   // Right-click - handle step-by-step undo OR allow vertex context menu
   if (e.button === 2) {

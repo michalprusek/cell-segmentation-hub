@@ -11,6 +11,9 @@ export interface Polygon {
   color?: string;
   category?: string;
   confidence?: number;
+  type?: 'external' | 'internal';
+  parent_id?: string;
+  area?: number;
 }
 
 export interface ParsedPolygonResult {
@@ -246,6 +249,23 @@ export const PolygonValidator = {
       polygonObj.confidence <= 1
     ) {
       validatedPolygon.confidence = polygonObj.confidence;
+    }
+
+    // Add hierarchy support - preserve type field
+    if (polygonObj.type &&
+        typeof polygonObj.type === 'string' &&
+        ['external', 'internal'].includes(polygonObj.type as string)) {
+      validatedPolygon.type = polygonObj.type as 'external' | 'internal';
+    }
+
+    // Add parent_id for internal polygons
+    if (polygonObj.parent_id && typeof polygonObj.parent_id === 'string') {
+      validatedPolygon.parent_id = polygonObj.parent_id;
+    }
+
+    // Add area if present
+    if (polygonObj.area && typeof polygonObj.area === 'number' && polygonObj.area >= 0) {
+      validatedPolygon.area = polygonObj.area;
     }
 
     return validatedPolygon;

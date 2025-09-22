@@ -8,6 +8,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAdvancedInteractions } from '../useAdvancedInteractions';
 import { EditMode, InteractionState, TransformState } from '../../types';
 import { Polygon, Point } from '@/lib/segmentation';
+import { findClosestVertex } from '@/lib/polygonGeometry';
 
 // Mock coordinate utilities
 vi.mock('@/lib/coordinateUtils', () => ({
@@ -412,8 +413,7 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
       );
 
       // Mock finding closest vertex to return null (not near any vertex)
-      const { findClosestVertex } = require('@/lib/polygonGeometry');
-      findClosestVertex.mockReturnValue(null);
+      vi.mocked(findClosestVertex).mockReturnValue(null);
 
       const canvasElement = document.createElement('div');
       const mockEvent = {

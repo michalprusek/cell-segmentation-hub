@@ -51,10 +51,20 @@ export interface ProjectImage {
   name: string;
   project_id: string;
   user_id: string;
+  url?: string;
   image_url: string;
   thumbnail_url?: string;
+  displayUrl?: string;
+  width?: number | null;
+  height?: number | null;
+  segmentationThumbnailPath?: string;
   segmentationThumbnailUrl?: string; // New field for segmentation thumbnails
-  segmentation_status: 'pending' | 'processing' | 'completed' | 'failed';
+  segmentation_status:
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'no_segmentation';
   created_at: string;
   updated_at: string;
 }
@@ -219,38 +229,71 @@ class ApiClient {
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/refresh');
 
-        // Check if error is due to missing authentication token
+        // Check if error is due to missing, expired, or invalid authentication token
+        // Handle ALL 401 errors uniformly for immediate logout
         if (
           error.response?.status === 401 &&
-          error.response?.data?.message === 'Chybí autentizační token'
+          !isRefreshRequest &&
+          !originalRequest._retry
         ) {
-          // Token is missing - immediately logout the user
-          logger.debug('🔒 Missing authentication token - logging out user');
+          // Determine the specific auth issue
+          const errorMessage = error.response?.data?.message || '';
+          const isMissingToken =
+            errorMessage === 'Chybí autentizační token' ||
+            errorMessage.toLowerCase().includes('missing') ||
+            errorMessage.toLowerCase().includes('no token');
+          const isExpiredToken = errorMessage.toLowerCase().includes('expired');
+          const isInvalidToken = errorMessage.toLowerCase().includes('invalid');
+
+          // Token is missing, expired, or invalid - immediately logout the user
+          logger.debug(
+            '🔒 Authentication error (401) - forcing immediate logout',
+            {
+              errorMessage,
+              isMissingToken,
+              isExpiredToken,
+              isInvalidToken,
+            }
+          );
+
+          // Clear all authentication data immediately
           this.clearTokensFromStorage();
 
-          // Emit event to notify the app about missing token
+          // Emit appropriate event to notify the app
           if (typeof window !== 'undefined') {
             // Import dynamically to avoid circular dependencies
-            import('./authEvents').then(({ authEventEmitter }) => {
-              authEventEmitter.emit({
-                type: 'token_missing',
-                data: {
-                  message: 'Authentication required',
-                  description:
-                    'Your session has expired. Please sign in again.',
-                },
-              });
-            });
+            import('./authEvents')
+              .then(({ authEventEmitter }) => {
+                const eventType = isMissingToken
+                  ? 'token_missing'
+                  : isExpiredToken
+                    ? 'token_expired'
+                    : 'token_invalid';
 
-            // Only redirect if not already on sign-in page
+                authEventEmitter.emit({
+                  type: eventType,
+                  data: {
+                    message: 'Authentication required',
+                    description:
+                      'Your session has ended. Please sign in again.',
+                  },
+                });
+              })
+              .catch(err => {
+                logger.error('Failed to emit auth event', err);
+              });
+
+            // Force immediate redirect with page refresh if not already on auth pages
             if (
               window.location.pathname !== '/sign-in' &&
               window.location.pathname !== '/sign-up' &&
-              !window.location.pathname.startsWith('/public')
+              !window.location.pathname.startsWith('/public') &&
+              !window.location.pathname.startsWith('/share')
             ) {
+              // Use replace() to force page refresh and prevent back navigation
               setTimeout(() => {
-                window.location.href = '/sign-in';
-              }, 100); // Small delay to allow event to be processed
+                window.location.replace('/sign-in');
+              }, 50); // Minimal delay to allow event emission
             }
           }
 
@@ -272,10 +315,40 @@ class ApiClient {
             originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
             return this.instance(originalRequest);
           } catch (refreshError) {
-            // Refresh failed, logout user
-            logger.debug('🔄 Token refresh failed, clearing tokens');
+            // Refresh failed, force immediate logout
+            logger.debug('🔄 Token refresh failed, forcing immediate logout');
             this.clearTokensFromStorage();
-            // Don't force redirect here, let the app handle it naturally
+
+            // Force immediate redirect with page refresh
+            if (typeof window !== 'undefined') {
+              // Import and emit token expired event
+              import('./authEvents')
+                .then(({ authEventEmitter }) => {
+                  authEventEmitter.emit({
+                    type: 'token_expired',
+                    data: {
+                      message: 'Session expired',
+                      description:
+                        'Your session has expired. Please sign in again.',
+                    },
+                  });
+                })
+                .catch(err => {
+                  logger.error('Failed to emit token expired event', err);
+                });
+
+              // Force redirect with refresh if not on auth pages
+              if (
+                window.location.pathname !== '/sign-in' &&
+                window.location.pathname !== '/sign-up' &&
+                !window.location.pathname.startsWith('/public')
+              ) {
+                setTimeout(() => {
+                  window.location.replace('/sign-in');
+                }, 50);
+              }
+            }
+
             return Promise.reject(refreshError);
           }
         }
@@ -634,6 +707,14 @@ class ApiClient {
     thumbnailUrl = thumbnailUrl ? ensureAbsoluteUrl(thumbnailUrl) : imageUrl;
     displayUrl = ensureAbsoluteUrl(displayUrl);
 
+    // Get segmentation thumbnail fields
+    const segmentationThumbnailPath = image.segmentationThumbnailPath as
+      | string
+      | undefined;
+    const segmentationThumbnailUrl = segmentationThumbnailPath
+      ? ensureAbsoluteUrl(segmentationThumbnailPath)
+      : (image.segmentationThumbnailUrl as string | undefined);
+
     return {
       id: image.id as string,
       name: image.name as string,
@@ -648,6 +729,8 @@ class ApiClient {
       segmentation_status: this.mapSegmentationStatus(
         image.segmentationStatus || image.segmentation_status
       ),
+      segmentationThumbnailPath: segmentationThumbnailPath,
+      segmentationThumbnailUrl: segmentationThumbnailUrl,
       created_at: (image.createdAt as string) || (image.created_at as string),
       updated_at: (image.updatedAt as string) || (image.updated_at as string),
     };
