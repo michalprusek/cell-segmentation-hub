@@ -21,10 +21,22 @@ interface PendingTiming {
   metadata?: Record<string, any>;
 }
 
+interface RaceConditionEvent {
+  imageId: string;
+  wsUpdateTime: number;
+  dbFetchTime: number;
+  retryCount: number;
+  resolved: boolean;
+  timeDiff: number;
+}
+
 class PerformanceMonitor {
   private metrics: Map<string, PerformanceMetric[]> = new Map();
   private pendingTimings: Map<string, PendingTiming> = new Map();
+  private raceConditions: RaceConditionEvent[] = [];
+  private wsTimings: Map<string, number> = new Map(); // Track WebSocket update times
   private maxMetricsPerType = 100; // Keep last 100 measurements per metric type
+  private maxRaceConditions = 100; // Keep last 100 race condition events
 
   /**
    * Start timing a performance measurement
@@ -161,11 +173,134 @@ class PerformanceMonitor {
   }
 
   /**
+   * Record WebSocket update timing for race condition detection
+   */
+  recordWebSocketUpdate(imageId: string, metadata?: Record<string, any>): void {
+    const now = Date.now();
+    this.wsTimings.set(imageId, now);
+
+    this.recordMetric({
+      name: 'websocket_update',
+      duration: 0,
+      timestamp: now,
+      metadata: { imageId, ...metadata },
+    });
+  }
+
+  /**
+   * Record database fetch and check for race conditions
+   */
+  recordDatabaseFetch(
+    imageId: string,
+    duration: number,
+    success: boolean,
+    retryCount: number = 0
+  ): void {
+    const now = Date.now();
+    const wsTime = this.wsTimings.get(imageId);
+
+    // Check for race condition
+    if (wsTime) {
+      const timeDiff = now - wsTime;
+
+      // Race condition detected if DB fetch happens within 1 second of WS update
+      if (timeDiff < 1000) {
+        this.recordRaceCondition(imageId, wsTime, now, retryCount, success);
+      }
+
+      // Clean up old timing
+      this.wsTimings.delete(imageId);
+    }
+
+    this.recordMetric({
+      name: 'database_fetch',
+      duration,
+      timestamp: now,
+      metadata: { imageId, success, retryCount },
+    });
+  }
+
+  /**
+   * Record a race condition event
+   */
+  private recordRaceCondition(
+    imageId: string,
+    wsUpdateTime: number,
+    dbFetchTime: number,
+    retryCount: number,
+    resolved: boolean
+  ): void {
+    const event: RaceConditionEvent = {
+      imageId,
+      wsUpdateTime,
+      dbFetchTime,
+      retryCount,
+      resolved,
+      timeDiff: dbFetchTime - wsUpdateTime,
+    };
+
+    this.raceConditions.push(event);
+
+    // Log significant race conditions
+    if (event.timeDiff < 100) {
+      logger.warn(`🏁 Race condition detected for ${imageId.slice(0, 8)}:`, {
+        timeDiff: `${event.timeDiff}ms`,
+        retryCount,
+        resolved,
+      });
+    }
+
+    // Maintain max size
+    if (this.raceConditions.length > this.maxRaceConditions) {
+      this.raceConditions.shift();
+    }
+  }
+
+  /**
+   * Get race condition statistics
+   */
+  getRaceConditionStats(): {
+    total: number;
+    resolved: number;
+    unresolved: number;
+    averageTimeDiff: number;
+    averageRetries: number;
+  } {
+    if (this.raceConditions.length === 0) {
+      return {
+        total: 0,
+        resolved: 0,
+        unresolved: 0,
+        averageTimeDiff: 0,
+        averageRetries: 0,
+      };
+    }
+
+    const resolved = this.raceConditions.filter(rc => rc.resolved).length;
+    const avgTimeDiff =
+      this.raceConditions.reduce((sum, rc) => sum + rc.timeDiff, 0) /
+      this.raceConditions.length;
+    const avgRetries =
+      this.raceConditions.reduce((sum, rc) => sum + rc.retryCount, 0) /
+      this.raceConditions.length;
+
+    return {
+      total: this.raceConditions.length,
+      resolved,
+      unresolved: this.raceConditions.length - resolved,
+      averageTimeDiff: Math.round(avgTimeDiff),
+      averageRetries: Math.round(avgRetries * 10) / 10,
+    };
+  }
+
+  /**
    * Clear all metrics
    */
   clear(): void {
     this.metrics.clear();
     this.pendingTimings.clear();
+    this.raceConditions = [];
+    this.wsTimings.clear();
   }
 
   /**
@@ -232,12 +367,23 @@ class PerformanceMonitor {
    */
   getPerformanceReport(): string {
     const stats = this.getAllStats();
+    const raceStats = this.getRaceConditionStats();
     const lines: string[] = ['Performance Report:'];
 
     for (const [name, stat] of Object.entries(stats)) {
       lines.push(
         `  ${name}: avg=${stat.average.toFixed(2)}ms, min=${stat.min.toFixed(2)}ms, max=${stat.max.toFixed(2)}ms, count=${stat.count}`
       );
+    }
+
+    // Add race condition statistics
+    if (raceStats.total > 0) {
+      lines.push('\nRace Condition Statistics:');
+      lines.push(`  Total: ${raceStats.total}`);
+      lines.push(`  Resolved: ${raceStats.resolved} (${Math.round(raceStats.resolved / raceStats.total * 100)}%)`);
+      lines.push(`  Unresolved: ${raceStats.unresolved}`);
+      lines.push(`  Average Time Diff: ${raceStats.averageTimeDiff}ms`);
+      lines.push(`  Average Retries: ${raceStats.averageRetries}`);
     }
 
     return lines.join('\n');

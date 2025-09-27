@@ -972,7 +972,10 @@ export class SegmentationService {
       const formData = new FormData();
       const storage = getStorageProvider();
 
-      // Add each image file to the form data
+      // Track valid images and their original indices
+      const validImageIndices: number[] = [];
+      
+      // Add each valid image file to the form data
       for (let i = 0; i < images.length; i++) {
         const image = images[i];
         if (!image || !image.originalPath) {
@@ -988,6 +991,9 @@ export class SegmentationService {
           filename: image.name,
           contentType: image.mimeType || 'image/jpeg',
         });
+        
+        // Track this valid image's original index
+        validImageIndices.push(i);
       }
 
       // Add model, threshold and detectHoles parameters
@@ -1000,6 +1006,7 @@ export class SegmentationService {
         'SegmentationService',
         {
           batchSize: images.length,
+          validImageCount: validImageIndices.length,
           model,
           threshold,
           detectHoles,
@@ -1032,22 +1039,44 @@ export class SegmentationService {
       }
 
       const batchResult = response.data;
-      const results: SegmentationResponse[] = [];
+      
+      // Pre-allocate results array with failed responses for all images
+      const results: SegmentationResponse[] = images.map(image => ({
+        success: false,
+        polygons: [],
+        model_used: model,
+        threshold_used: threshold,
+        confidence: null,
+        processing_time: null,
+        image_size: { width: image.width || 0, height: image.height || 0 },
+        error: 'Image skipped or invalid'
+      }));
 
-      // Process each result in the batch
-      for (
-        let i = 0;
-        i < batchResult.results.length && i < images.length;
-        i++
-      ) {
-        const result = batchResult.results[i];
-        const image = images[i];
-
-        if (!image || !image.originalPath) {
+      // Process each ML result and map it back to the correct original index
+      for (let resultIndex = 0; resultIndex < batchResult.results.length; resultIndex++) {
+        // Get the original image index for this result
+        if (resultIndex >= validImageIndices.length) {
           logger.warn(
-            'Missing or invalid image for batch result',
+            'More results than valid images',
             'SegmentationService',
-            { batchIndex: i }
+            { 
+              resultIndex, 
+              validImageCount: validImageIndices.length,
+              resultsCount: batchResult.results.length
+            }
+          );
+          break;
+        }
+        
+        const originalIndex = validImageIndices[resultIndex];
+        const result = batchResult.results[resultIndex];
+        const image = images[originalIndex];
+
+        if (!image) {
+          logger.warn(
+            'Missing image for batch result',
+            'SegmentationService',
+            { originalIndex, resultIndex }
           );
           continue;
         }
@@ -1070,7 +1099,8 @@ export class SegmentationService {
             'SegmentationService',
             {
               imageId: image.id,
-              batchIndex: i,
+              originalIndex,
+              resultIndex,
               model: result.model_used,
               polygonCount: result.polygons.length,
               processingTime: result.processing_time,
@@ -1083,7 +1113,8 @@ export class SegmentationService {
             }
           );
 
-          results.push({
+          // Update the pre-allocated result at the correct original index
+          results[originalIndex] = {
             success: true,
             polygons: result.polygons,
             model_used: result.model_used,
@@ -1091,15 +1122,17 @@ export class SegmentationService {
             confidence: result.confidence,
             processing_time: result.processing_time,
             image_size: result.image_size,
-          });
+          };
         } else {
           logger.warn('Batch segmentation item failed', 'SegmentationService', {
             imageId: image.id,
-            batchIndex: i,
+            originalIndex,
+            resultIndex,
             error: result.error || 'No polygons found',
           });
 
-          results.push({
+          // Update with specific failure information
+          results[originalIndex] = {
             success: false,
             polygons: [],
             model_used: model,
@@ -1107,12 +1140,14 @@ export class SegmentationService {
             confidence: null,
             processing_time: null,
             image_size: { width: image.width || 0, height: image.height || 0 },
-          });
+            error: result.error || 'No polygons found'
+          };
         }
       }
 
       logger.info('Batch segmentation completed', 'SegmentationService', {
         batchSize: images.length,
+        validImageCount: validImageIndices.length,
         successCount: results.filter(r => r.success).length,
         totalProcessingTime: batchResult.processing_time,
       });

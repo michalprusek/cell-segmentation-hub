@@ -25,7 +25,7 @@ export enum WebSocketEvent {
 
   // Segmentation events
   SEGMENTATION_STATUS = 'segmentationStatus',
-  SEGMENTATION_UPDATE = 'segmentationUpdate',
+  SEGMENTATION_UPDATE = 'segmentation-update', // Fixed to match frontend expectation
   SEGMENTATION_COMPLETED = 'segmentationCompleted',
   SEGMENTATION_FAILED = 'segmentationFailed',
   SEGMENTATION_PROGRESS = 'segmentationProgress',
