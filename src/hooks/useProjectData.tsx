@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useAuth } from '@/contexts/useAuth';
+import { performanceMonitor } from '@/lib/performanceMonitor';
 import apiClient, {
   SegmentationResultData as _SegmentationResultData,
 } from '@/lib/api';
@@ -416,14 +417,57 @@ export const useProjectData = (
         `🔄 Refreshing segmentation data for image ${imageId.slice(0, 8)}...`
       );
 
-      const segmentationData = await apiClient.getSegmentationResults(imageId);
+      const startTime = performance.now();
+      let segmentationData = await apiClient.getSegmentationResults(imageId);
+      const firstFetchDuration = performance.now() - startTime;
 
-      // Check if segmentation data exists before accessing properties
-      if (!segmentationData) {
-        logger.debug(
-          `ℹ️ No segmentation data available for image ${imageId.slice(0, 8)} - API returned null`
+      // If no data on first attempt and image was just marked as segmented,
+      // retry multiple times with increasing delays (race condition with backend update)
+      let retryCount = 0;
+      const maxRetries = 3;
+      const retryDelays = [500, 1000, 2000]; // Increasing delays
+
+      while (!segmentationData && retryCount < maxRetries) {
+        const delay = retryDelays[retryCount];
+        logger.info(
+          `⏳ No segmentation data yet for ${imageId.slice(0, 8)}, retry ${retryCount + 1}/${maxRetries} in ${delay}ms...`
         );
-        return; // Exit early if no data
+
+        // Record failed attempt
+        performanceMonitor.recordDatabaseFetch(
+          imageId,
+          retryCount === 0 ? firstFetchDuration : performance.now() - startTime,
+          false,
+          retryCount
+        );
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        const retryStartTime = performance.now();
+        segmentationData = await apiClient.getSegmentationResults(imageId);
+        retryCount++;
+      }
+
+      // Record final attempt result
+      if (segmentationData) {
+        performanceMonitor.recordDatabaseFetch(
+          imageId,
+          performance.now() - startTime,
+          true,
+          retryCount
+        );
+      }
+
+      // Check if segmentation data exists after retry
+      if (!segmentationData) {
+        logger.warn(
+          `⚠️ No segmentation data available for image ${imageId.slice(0, 8)} after retry - keeping existing status`
+        );
+
+        // DO NOT change the status - if backend says it's segmented, trust that
+        // The data might be available later or on next page refresh
+        // Just log the issue but don't override the backend status
+        return;
       }
 
       logger.debug(
