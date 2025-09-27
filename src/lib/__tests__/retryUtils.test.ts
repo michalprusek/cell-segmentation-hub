@@ -467,6 +467,250 @@ describe(
         );
       });
     });
+
+    describe('Edge Cases and Advanced Scenarios', () => {
+      it('should handle zero delay configuration', async () => {
+        const fn = vi
+          .fn()
+          .mockRejectedValueOnce(new Error('fail'))
+          .mockResolvedValueOnce('success');
+
+        const result = await retryWithBackoff(fn, {
+          maxAttempts: 2,
+          initialDelay: 0,
+          maxDelay: 0,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.attempts).toBe(2);
+        expect(fn).toHaveBeenCalledTimes(2);
+      });
+
+      it('should handle negative delay gracefully', async () => {
+        const delay = calculateBackoffDelay(1, {
+          initialDelay: -100,
+          maxDelay: 1000,
+          backoffFactor: 2,
+        });
+
+        expect(delay).toBeGreaterThanOrEqual(0);
+      });
+
+      it('should handle fractional backoff factors', () => {
+        const config = {
+          initialDelay: 1000,
+          maxDelay: 5000,
+          backoffFactor: 1.5,
+        };
+
+        expect(calculateBackoffDelay(1, config)).toBe(1000);
+        expect(calculateBackoffDelay(2, config)).toBe(1500);
+        expect(calculateBackoffDelay(3, config)).toBe(2250);
+        expect(calculateBackoffDelay(4, config)).toBe(3375);
+      });
+
+      it('should handle very large attempt numbers without overflow', () => {
+        const delay = calculateBackoffDelay(100, {
+          initialDelay: 1000,
+          maxDelay: 30000,
+          backoffFactor: 2,
+        });
+
+        expect(delay).toBe(30000); // Should be capped at maxDelay
+        expect(Number.isFinite(delay)).toBe(true);
+      });
+
+      it('should handle concurrent retries with different configurations', async () => {
+        const fn1 = vi
+          .fn()
+          .mockRejectedValueOnce(new Error('fail'))
+          .mockResolvedValueOnce('result1');
+
+        const fn2 = vi
+          .fn()
+          .mockRejectedValueOnce(new Error('fail'))
+          .mockRejectedValueOnce(new Error('fail'))
+          .mockResolvedValueOnce('result2');
+
+        const [result1, result2] = await Promise.all([
+          retryWithBackoff(fn1, { maxAttempts: 2, initialDelay: 10 }),
+          retryWithBackoff(fn2, { maxAttempts: 3, initialDelay: 20 }),
+        ]);
+
+        expect(result1.data).toBe('result1');
+        expect(result1.attempts).toBe(2);
+        expect(result2.data).toBe('result2');
+        expect(result2.attempts).toBe(3);
+      });
+
+      it('should handle promise rejection with non-Error objects', async () => {
+        const fn = vi
+          .fn()
+          .mockRejectedValueOnce({ code: 'NETWORK_ERROR', message: 'Network failed' })
+          .mockRejectedValueOnce('string error')
+          .mockRejectedValueOnce(null)
+          .mockResolvedValueOnce('success');
+
+        const result = await retryWithBackoff(fn, { maxAttempts: 4 });
+
+        expect(result.success).toBe(true);
+        expect(result.attempts).toBe(4);
+      });
+
+      it('should handle functions that throw synchronously', async () => {
+        const fn = vi.fn(() => {
+          throw new Error('Synchronous error');
+        });
+
+        const result = await retryWithBackoff(fn, { maxAttempts: 2 });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toEqual(new Error('Synchronous error'));
+        expect(fn).toHaveBeenCalledTimes(2);
+      });
+
+      it('should maintain error context through retries', async () => {
+        const errors: unknown[] = [];
+        const fn = vi
+          .fn()
+          .mockRejectedValueOnce(new Error('Error 1'))
+          .mockRejectedValueOnce(new Error('Error 2'))
+          .mockRejectedValueOnce(new Error('Error 3'));
+
+        const result = await retryWithBackoff(fn, {
+          maxAttempts: 3,
+          initialDelay: 10,
+          onRetry: (error) => errors.push(error),
+        });
+
+        expect(result.success).toBe(false);
+        expect(errors).toHaveLength(2); // onRetry called for attempts 1 and 2
+        expect(errors[0]).toEqual(new Error('Error 1'));
+        expect(errors[1]).toEqual(new Error('Error 2'));
+        expect(result.error).toEqual(new Error('Error 3'));
+      });
+
+      it('should handle race conditions with abort signals', async () => {
+        const controller1 = new AbortController();
+        const controller2 = new AbortController();
+
+        const fn = vi.fn(() => new Promise(resolve => setTimeout(resolve, 100)));
+
+        const promise1 = retryWithBackoff(fn, {
+          signal: controller1.signal,
+          maxAttempts: 3,
+        });
+
+        const promise2 = retryWithBackoff(fn, {
+          signal: controller2.signal,
+          maxAttempts: 3,
+        });
+
+        // Abort only the first one
+        setTimeout(() => controller1.abort(), 50);
+
+        const [result1, result2] = await Promise.all([promise1, promise2]);
+
+        expect(result1.success).toBe(false);
+        expect(result1.error).toBeInstanceOf(DOMException);
+        expect(result2.success).toBe(true);
+      });
+
+      it('should handle memory leaks with circuit breaker', () => {
+        const breaker = new CircuitBreaker(3, 1000);
+
+        // Create many keys
+        for (let i = 0; i < 1000; i++) {
+          const key = `test-key-${i}`;
+          breaker.recordFailure(key);
+        }
+
+        // Reset should clear all
+        breaker.reset();
+
+        // Verify memory is cleared
+        for (let i = 0; i < 1000; i++) {
+          expect(breaker.isOpen(`test-key-${i}`)).toBe(false);
+        }
+      });
+
+      it('should handle makeRetryable with complex function signatures', async () => {
+        const originalFn = vi.fn(
+          async (a: number, b: string, c?: boolean) => {
+            if (c) throw new Error('Optional param error');
+            return `${a}-${b}`;
+          }
+        );
+
+        const retryableFn = makeRetryable(originalFn, {
+          maxAttempts: 2,
+          initialDelay: 10,
+        });
+
+        // Test with required params
+        const result1 = await retryableFn(42, 'test');
+        expect(result1).toBe('42-test');
+
+        // Test with optional param causing failure
+        originalFn.mockClear();
+        originalFn.mockRejectedValueOnce(new Error('fail')).mockResolvedValueOnce('success');
+
+        const result2 = await retryableFn(1, 'retry', false);
+        expect(result2).toBe('success');
+        expect(originalFn).toHaveBeenCalledTimes(2);
+      });
+
+      it('should handle extremely long-running operations with timeout', async () => {
+        const fn = vi.fn(
+          () => new Promise(resolve => setTimeout(() => resolve('never'), 1000000))
+        );
+
+        const promise = retryWithTimeout(fn, 100, { maxAttempts: 1 });
+
+        await vi.advanceTimersByTimeAsync(100);
+
+        const result = await promise;
+        expect(result.success).toBe(false);
+        expect(result.error).toBeInstanceOf(DOMException);
+      });
+
+      it('should handle rapid successive calls to same circuit breaker key', () => {
+        const breaker = new CircuitBreaker(3, 1000);
+        const key = 'rapid-test';
+
+        // Rapid failures
+        for (let i = 0; i < 10; i++) {
+          breaker.recordFailure(key);
+        }
+
+        expect(breaker.isOpen(key)).toBe(true);
+
+        // Rapid success shouldn't affect already open breaker immediately
+        breaker.recordSuccess(key);
+        expect(breaker.isOpen(key)).toBe(false);
+      });
+
+      it('should validate isRetryableError with edge cases', () => {
+        // Undefined and null
+        expect(isRetryableError(undefined)).toBe(false);
+        expect(isRetryableError(null)).toBe(false);
+
+        // Empty objects
+        expect(isRetryableError({})).toBe(false);
+
+        // Non-standard error objects
+        expect(isRetryableError({ statusCode: 503 })).toBe(false); // Wrong property
+        expect(isRetryableError({ status: '503' })).toBe(false); // String status
+
+        // Network-like errors
+        expect(isRetryableError(new TypeError('Failed to fetch'))).toBe(true);
+        expect(isRetryableError({ name: 'AbortError' })).toBe(false); // Not retryable
+
+        // Custom error messages
+        expect(isRetryableError(new Error('ECONNREFUSED'))).toBe(false);
+        expect(isRetryableError(new Error('ChunkLoadError: Loading failed'))).toBe(true);
+      });
+    });
   },
   TEST_TIMEOUTS.UNIT
 );
