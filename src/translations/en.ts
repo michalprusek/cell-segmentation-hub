@@ -75,6 +75,20 @@ export default {
     untitledImage: 'Untitled Image',
     rename: 'Rename',
     redirectingToDashboard: 'Redirecting to dashboard...',
+
+    // Retry mechanism
+    retry: 'Retry',
+    retrying: 'Retrying...',
+    retryAttempt: 'Retry attempt {{attempt}} of {{max}}',
+    retryingIn: 'Retrying in {{seconds}} seconds...',
+    nextRetryIn: 'Next retry in {{seconds}}s',
+    operationFailed: 'Operation failed',
+    unexpectedError: 'An unexpected error occurred',
+    failedToLoad: 'Failed to load',
+    loadingFailed: 'Loading failed. Please try again.',
+    networkError: 'Network error. Please check your connection.',
+    refreshPage: 'Refresh Page',
+    tryAgainLater: 'Please try again later',
   },
 
   landing: {
@@ -315,7 +329,8 @@ export default {
     uploadImages: 'Upload Images',
     dragDrop: 'Drag & drop images here',
     clickToSelect: 'or click to select files',
-    acceptedFormats: 'Accepted formats: JPEG, PNG, TIFF, BMP (max 10MB)',
+    acceptedFormats:
+      'Accepted formats: JPEG, PNG, TIFF, BMP (max 20MB per file)',
     uploadProgress: 'Upload Progress',
     readyToUpload: 'Ready to Upload',
     uploadingTo: 'Select a project first',
@@ -1946,6 +1961,7 @@ export default {
     reloadingSegmentation: 'Reloading segmentation...',
     segmenting: 'Segmenting...',
     waitingInQueue: 'Waiting in queue...',
+    retryingLoad: 'Having trouble loading. Retrying...',
     error: {
       title: 'Segmentation Error',
       description:
@@ -1953,6 +1969,7 @@ export default {
       errorDetails: 'Error Details',
       tryAgain: 'Try Again',
       unsavedChanges: 'Unsaved changes',
+      imageLoadFailed: 'Failed to load image. Please refresh to try again.',
     },
     export: {
       exportAllMetrics: 'Export all metrics as XLSX',

@@ -277,7 +277,7 @@ export default {
     uploadImages: '上传图像',
     dragDrop: '将图像拖放到这里',
     clickToSelect: '或点击选择文件',
-    acceptedFormats: '支持格式：JPEG、PNG、TIFF、BMP（最大10MB）',
+    acceptedFormats: '支持格式：JPEG、PNG、TIFF、BMP（单个文件最大20MB）',
     uploadProgress: '上传进度',
     uploadingTo: '请先选择项目',
     currentProject: '当前项目',

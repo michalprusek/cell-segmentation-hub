@@ -30,6 +30,7 @@ import {
   ensureValidPolygonId,
   logPolygonIdIssue,
 } from '@/lib/polygonIdUtils';
+import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
 
 // New layout components
 import VerticalToolbar from './components/VerticalToolbar';
@@ -1075,7 +1076,9 @@ const SegmentationEditor = () => {
         <EditorHeader
           projectId={projectId || ''}
           projectTitle={project?.name || t('projects.noProjects')}
-          imageName={selectedImage.name}
+          imageName={
+            selectedImage.name ? selectedImage.name.normalize('NFC') : ''
+          }
           currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
           totalImages={projectImages?.length || 0}
           onNavigate={navigateToImage}
@@ -1134,7 +1137,11 @@ const SegmentationEditor = () => {
                     {/* Base Image */}
                     {selectedImage && (
                       <CanvasImage
-                        src={selectedImage.url}
+                        src={ensureBrowserCompatibleUrl(
+                          selectedImage.id,
+                          selectedImage.url,
+                          selectedImage.name
+                        )}
                         width={imageDimensions?.width || canvasWidth}
                         height={imageDimensions?.height || canvasHeight}
                         alt={t('common.image')}

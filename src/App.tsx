@@ -3,11 +3,8 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Suspense } from 'react';
-// lazy import removed - using createLazyComponent instead
-import {
-  createLazyComponent,
-  // LazyWrapper unused - available for future use
-} from '@/components/LazyComponentWrapper';
+// Using lazyWithRetry for robust chunk loading with automatic retries
+import { lazyWithRetry, LazyImportErrorBoundary } from '@/lib/lazyWithRetry';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -22,56 +19,47 @@ import PageLoadingFallback from '@/components/PageLoadingFallback';
 import ExportStateManager from '@/lib/exportStateManager';
 import { ExportProvider } from '@/contexts/ExportContext';
 
-// Enhanced lazy load with better error handling and displayName support
-const Index = createLazyComponent(() => import('./pages/Index'), 'Index');
-const SignIn = createLazyComponent(() => import('./pages/SignIn'), 'SignIn');
-const SignUp = createLazyComponent(() => import('./pages/SignUp'), 'SignUp');
-const ForgotPassword = createLazyComponent(
+// Lazy load components with automatic retry mechanism for chunk load failures
+const Index = lazyWithRetry(() => import('./pages/Index'), 'Index');
+const SignIn = lazyWithRetry(() => import('./pages/SignIn'), 'SignIn');
+const SignUp = lazyWithRetry(() => import('./pages/SignUp'), 'SignUp');
+const ForgotPassword = lazyWithRetry(
   () => import('./pages/ForgotPassword'),
   'ForgotPassword'
 );
-const ResetPassword = createLazyComponent(
+const ResetPassword = lazyWithRetry(
   () => import('./pages/ResetPassword'),
   'ResetPassword'
 );
-const Dashboard = createLazyComponent(
-  () => import('./pages/Dashboard'),
-  'Dashboard'
-);
-const ProjectDetail = createLazyComponent(
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'), 'Dashboard');
+const ProjectDetail = lazyWithRetry(
   () => import('./pages/ProjectDetail'),
   'ProjectDetail'
 );
-const SegmentationEditor = createLazyComponent(
+const SegmentationEditor = lazyWithRetry(
   () => import('./pages/segmentation/SegmentationEditor'),
   'SegmentationEditor'
 );
-const NotFound = createLazyComponent(
-  () => import('./pages/NotFound'),
-  'NotFound'
-);
-const Settings = createLazyComponent(
-  () => import('./pages/Settings'),
-  'Settings'
-);
-const Profile = createLazyComponent(() => import('./pages/Profile'), 'Profile');
-const TermsOfService = createLazyComponent(
+const NotFound = lazyWithRetry(() => import('./pages/NotFound'), 'NotFound');
+const Settings = lazyWithRetry(() => import('./pages/Settings'), 'Settings');
+const Profile = lazyWithRetry(() => import('./pages/Profile'), 'Profile');
+const TermsOfService = lazyWithRetry(
   () => import('./pages/TermsOfService'),
   'TermsOfService'
 );
-const PrivacyPolicy = createLazyComponent(
+const PrivacyPolicy = lazyWithRetry(
   () => import('./pages/PrivacyPolicy'),
   'PrivacyPolicy'
 );
-const Documentation = createLazyComponent(
+const Documentation = lazyWithRetry(
   () => import('./pages/Documentation'),
   'Documentation'
 );
-const ProjectExport = createLazyComponent(
+const ProjectExport = lazyWithRetry(
   () => import('./pages/export/ProjectExport'),
   'ProjectExport'
 );
-const ShareAccept = createLazyComponent(
+const ShareAccept = lazyWithRetry(
   () => import('./pages/ShareAccept'),
   'ShareAccept'
 );

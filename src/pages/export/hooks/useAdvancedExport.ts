@@ -143,6 +143,13 @@ export const useAdvancedExport = (projectId: string) => {
   useEffect(() => {
     if (!projectId) return;
 
+    // DEPRECATED: This hook is deprecated, skip restoration to prevent duplicates
+    // Use useSharedAdvancedExport instead
+    logger.debug('[DEPRECATED] useAdvancedExport: Skipping state restoration');
+    return;
+
+    // Original code commented out to prevent duplicate restoration
+    /*
     const persistedState = ExportStateManager.getExportState(projectId);
     if (persistedState) {
       logger.info('Restoring export state from localStorage', persistedState);
@@ -173,6 +180,7 @@ export const useAdvancedExport = (projectId: string) => {
         setExportStatus('Download ready');
       }
     }
+    */
   }, [projectId, checkResumedExportStatus]);
 
   // Persist state changes to localStorage

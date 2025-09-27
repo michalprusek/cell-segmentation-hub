@@ -1,6 +1,7 @@
 import { useState, useEffect as _useEffect, useMemo } from 'react';
 import type { ProjectImage } from '@/types';
 import { logger } from '@/lib/logger';
+import { normalizeText } from '@/lib/textUtils';
 
 type SortField = 'name' | 'updatedAt' | 'segmentationStatus';
 type SortDirection = 'asc' | 'desc';
@@ -40,7 +41,7 @@ const getImageComparator = (settings?: FilterSettings) => {
 
     switch (sortField) {
       case 'name':
-        comparison = a.name.localeCompare(b.name);
+        comparison = (a.name || '').localeCompare(b.name || '');
         break;
       case 'updatedAt':
         comparison = a.updatedAt.getTime() - b.updatedAt.getTime();
@@ -79,7 +80,9 @@ export const useImageFilter = (images: ProjectImage[]) => {
 
     if (searchTerm) {
       result = result.filter(img =>
-        img.name.toLowerCase().includes(searchTerm.toLowerCase())
+        normalizeText(img.name)
+          ?.toLowerCase()
+          .includes(normalizeText(searchTerm).toLowerCase())
       );
     }
 

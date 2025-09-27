@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { motion } from 'framer-motion';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { ProjectImage } from '@/types';
 import { Badge } from '@/components/ui/badge';
+import { getImageFallbackUrls } from '@/lib/tiffUtils';
+import { useRetryImage } from '@/hooks/shared/useRetry';
 import {
   Loader2,
   Clock,
@@ -12,6 +14,7 @@ import {
   XCircle,
   Circle,
   Trash2,
+  RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -83,43 +86,32 @@ export const ImageCard = ({
   className,
 }: ImageCardProps) => {
   const [isHovered, setIsHovered] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const [fallbackIndex, setFallbackIndex] = useState(0);
   const { t } = useLanguage();
 
-  // Reset fallback state when image changes
-  React.useEffect(() => {
-    setFallbackIndex(0);
-    setImageError(false);
+  // Create ordered list of candidate URLs, with TIFF support
+  const candidateUrls = React.useMemo(() => {
+    return getImageFallbackUrls(image);
   }, [
     image.id,
+    image.name,
     image.segmentationThumbnailUrl,
     image.segmentationThumbnailPath,
     image.thumbnail_url,
     image.url,
     image.image_url,
+    image.displayUrl,
   ]);
 
-  // Create ordered list of candidate URLs, deduplicating falsy/identical entries
-  const candidateUrls = React.useMemo(() => {
-    // If we have a segmentation thumbnail, use it as the primary source
-    // Support both new (segmentationThumbnailUrl) and legacy (segmentationThumbnailPath) fields
-    const urls = [
-      image.segmentationThumbnailUrl || image.segmentationThumbnailPath, // Prefer segmentation thumbnail if available
-      image.thumbnail_url,
-      image.url,
-      image.image_url,
-    ]
-      .filter(Boolean) // Remove falsy values
-      .filter((url, index, array) => array.indexOf(url) === index); // Deduplicate identical entries
-    return urls;
-  }, [
-    image.segmentationThumbnailUrl,
-    image.segmentationThumbnailPath,
-    image.thumbnail_url,
-    image.url,
-    image.image_url,
-  ]);
+  // Use the retry hook for image loading with fallback URLs
+  const {
+    currentUrl,
+    loading: imageLoading,
+    retrying: imageRetrying,
+    attempt: retryAttempt,
+    nextRetryIn,
+    imageError,
+    retry: retryImageLoad,
+  } = useRetryImage(candidateUrls);
   const statusInfo = getStatusInfo(
     image.segmentationStatus || 'no_segmentation',
     t
@@ -161,34 +153,55 @@ export const ImageCard = ({
         }}
         onClick={() => onOpen(image.id)}
       >
-        {/* Image preview */}
+        {/* Image preview with retry mechanism */}
         <div className="absolute inset-0">
-          {!imageError && candidateUrls.length > 0 ? (
-            <img
-              src={
-                candidateUrls[
-                  Math.min(fallbackIndex, candidateUrls.length - 1)
-                ] || ''
-              }
-              alt={image.name || 'Image'}
-              className="w-full h-full object-cover"
-              loading="lazy"
-              onError={() => {
-                const nextIndex = fallbackIndex + 1;
-                if (nextIndex < candidateUrls.length) {
-                  // Try the next candidate URL
-                  setFallbackIndex(nextIndex);
-                } else {
-                  // All URLs failed, show placeholder
-                  setImageError(true);
-                }
-              }}
-            />
+          {!imageError && currentUrl ? (
+            <>
+              <img
+                src={currentUrl}
+                alt={image.name ? image.name.normalize('NFC') : 'Image'}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+
+              {/* Retry overlay when retrying */}
+              {imageRetrying && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center z-10">
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-3 shadow-lg">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                      <span className="text-sm">
+                        {t('common.retrying')} ({retryAttempt}/3)
+                      </span>
+                    </div>
+                    {nextRetryIn && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {t('common.nextRetryIn', { seconds: nextRetryIn })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700">
+            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-200 dark:bg-gray-700 gap-2">
               <span className="text-gray-400 dark:text-gray-500 text-sm">
                 {t('common.no_preview')}
               </span>
+              {imageError && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={e => {
+                    e.stopPropagation();
+                    retryImageLoad();
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  {t('common.retry')}
+                </Button>
+              )}
             </div>
           )}
         </div>
@@ -247,9 +260,9 @@ export const ImageCard = ({
           {/* File name */}
           <h3
             className="font-semibold text-sm truncate mb-1"
-            title={image.name || t('common.image')}
+            title={image.name ? image.name.normalize('NFC') : t('common.image')}
           >
-            {image.name || t('common.image')}
+            {image.name ? image.name.normalize('NFC') : t('common.image')}
           </h3>
 
           {/* Date and status */}

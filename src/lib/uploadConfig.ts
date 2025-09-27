@@ -5,8 +5,8 @@
 
 export const UPLOAD_CONFIG = {
   // File limits
-  MAX_FILE_SIZE_MB: 100, // 100MB per file (matches backend MAX_FILE_SIZE_BYTES)
-  MAX_FILE_SIZE_BYTES: 100 * 1024 * 1024, // 100MB in bytes
+  MAX_FILE_SIZE_MB: 20, // 20MB per file (optimized for better performance)
+  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024, // 20MB in bytes
 
   // Chunk limits
   FILES_PER_CHUNK: 100, // Max files per chunk (matches backend MAX_FILES_PER_REQUEST)

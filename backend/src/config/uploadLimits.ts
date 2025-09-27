@@ -29,7 +29,7 @@ export interface UploadLimitsConfig {
 // Production-optimized configuration for 10,000 files
 const PRODUCTION_LIMITS: UploadLimitsConfig = {
   MAX_FILES_PER_REQUEST: 100, // 100 files per chunk
-  MAX_FILE_SIZE_BYTES: 100 * 1024 * 1024, // 100MB per file (safety margin)
+  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024, // 20MB per file (optimized for performance)
   MAX_TOTAL_FILES: 10000, // Support 10,000 total files
   MAX_FIELDS: 20, // Additional form fields
   MAX_FIELD_SIZE_KB: 100, // Field size limit
@@ -52,7 +52,7 @@ const PRODUCTION_LIMITS: UploadLimitsConfig = {
 
 const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
   MAX_FILES_PER_REQUEST: 1000, // Increased to allow 1000 files per request in development
-  MAX_FILE_SIZE_BYTES: 50 * 1024 * 1024,
+  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024,
   MAX_TOTAL_FILES: 1000,
   MAX_FIELDS: 1010, // Increased to support 1000 files + additional form fields
   MAX_FIELD_SIZE_KB: 50,
@@ -75,7 +75,7 @@ const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
 
 const TEST_LIMITS: UploadLimitsConfig = {
   MAX_FILES_PER_REQUEST: 20,
-  MAX_FILE_SIZE_BYTES: 10 * 1024 * 1024,
+  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024,
   MAX_TOTAL_FILES: 100,
   MAX_FIELDS: 5,
   MAX_FIELD_SIZE_KB: 10,

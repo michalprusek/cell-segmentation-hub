@@ -164,7 +164,7 @@ const ProjectDetail = () => {
 
               return {
                 id: img.id,
-                name: img.name,
+                name: img.name || `Image ${img.id}`, // Provide fallback for missing name
                 url: img.url || img.image_url,
                 thumbnail_url: img.thumbnail_url,
                 createdAt: new Date(img.created_at || img.createdAt),
@@ -278,7 +278,7 @@ const ProjectDetail = () => {
 
         return {
           id: img.id,
-          name: img.name,
+          name: img.name || `Image ${img.id}`, // Provide fallback for missing name
           url: img.url || img.image_url,
           thumbnail_url: img.thumbnail_url,
           createdAt: new Date(img.created_at || img.createdAt),
@@ -524,6 +524,9 @@ const ProjectDetail = () => {
   const reconcileRef = useRef(reconcileImageStatuses);
   reconcileRef.current = reconcileImageStatuses;
 
+  // Separate ref for queue processing timeout to avoid overwriting the function ref
+  const queueProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Store updateImages function in ref to avoid dependency issues
   const updateImagesRef = useRef(updateImages);
   updateImagesRef.current = updateImages;
@@ -572,7 +575,7 @@ const ProjectDetail = () => {
 
         return {
           id: img.id,
-          name: img.name,
+          name: img.name || `Image ${img.id}`, // Provide fallback for missing name
           url: img.url || img.image_url,
           thumbnail_url: img.thumbnail_url,
           createdAt: new Date(img.created_at || img.createdAt),
@@ -959,11 +962,11 @@ const ProjectDetail = () => {
           }
         }, 2000);
 
-        // Store timeout for cleanup
-        if (reconcileRef.current) {
-          clearTimeout(reconcileRef.current);
+        // Store timeout for cleanup using the dedicated timeout ref
+        if (queueProcessingTimeoutRef.current) {
+          clearTimeout(queueProcessingTimeoutRef.current);
         }
-        reconcileRef.current = timeoutId;
+        queueProcessingTimeoutRef.current = timeoutId;
       }
     },
     [id, queueStats, batchSubmitted, navigate, images]
@@ -1012,6 +1015,11 @@ const ProjectDetail = () => {
       // Clear batch update timeout
       if (batchUpdateTimeoutRef.current) {
         clearTimeout(batchUpdateTimeoutRef.current);
+      }
+
+      // Clear queue processing timeout
+      if (queueProcessingTimeoutRef.current) {
+        clearTimeout(queueProcessingTimeoutRef.current);
       }
     };
   }, []);
@@ -1067,7 +1075,7 @@ const ProjectDetail = () => {
 
           return {
             id: img.id,
-            name: img.name,
+            name: img.name || `Image ${img.id}`, // Provide fallback for missing name
             url: img.url || img.image_url,
             thumbnail_url: img.thumbnail_url,
             createdAt: new Date(img.created_at || img.createdAt),

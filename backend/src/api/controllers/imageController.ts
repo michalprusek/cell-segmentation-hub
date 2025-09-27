@@ -77,7 +77,7 @@ export class ImageController {
         'image/tif',
         'image/gif',
       ];
-      const maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '5242880', 10); // Default 5MB
+      const maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '20971520', 10); // Default 20MB
 
       for (const file of files) {
         if (!file.buffer || !file.originalname) {
@@ -107,12 +107,46 @@ export class ImageController {
       }
 
       // Convert multer files to service format
-      const uploadFiles = files.map(file => ({
-        originalname: file.originalname,
-        buffer: file.buffer,
-        mimetype: file.mimetype,
-        size: file.size,
-      }));
+      // Robust Unicode normalization to handle all OS/browser combinations
+      const uploadFiles = files.map(file => {
+        let normalizedName = file.originalname;
+
+        // Handle potential double UTF-8 encoding (can happen with some browsers)
+        // Check for mojibake patterns (Ã, Ä, Å followed by special chars)
+        if (/[ÀÁÂÃÄÅ][\x80-\xBF]/.test(normalizedName)) {
+          try {
+            // Attempt to fix double-encoded UTF-8
+            const bytes = Buffer.from(normalizedName, 'latin1');
+            const decoded = bytes.toString('utf8');
+            // Verify the decoded string is valid
+            if (decoded && !decoded.includes('�')) {
+              normalizedName = decoded;
+            }
+          } catch (e) {
+            logger.warn('Failed to decode potential double-encoded filename', undefined, {
+              filename: normalizedName,
+              error: e.message,
+            });
+          }
+        }
+
+        // Always normalize to NFC (composed form) for consistency
+        // This handles NFD from macOS and ensures consistency across all platforms
+        normalizedName = normalizedName.normalize('NFC');
+
+        logger.debug('Filename normalization', undefined, {
+          original: file.originalname,
+          normalized: normalizedName,
+          isChanged: file.originalname !== normalizedName,
+        });
+
+        return {
+          originalname: normalizedName,
+          buffer: file.buffer,
+          mimetype: file.mimetype,
+          size: file.size,
+        };
+      });
 
       logger.info('Starting image upload request', 'ImageController', {
         projectId,
@@ -785,15 +819,7 @@ export class ImageController {
           projectId,
         },
         include: {
-          segmentation: {
-            include: {
-              segmentationThumbnails: {
-                where: {
-                  levelOfDetail,
-                },
-              },
-            },
-          },
+          segmentation: true,
         },
         orderBy: {
           updatedAt: 'desc',
@@ -823,14 +849,12 @@ export class ImageController {
             compressionRatio: number;
           } | null = null;
 
-          if (
-            image.segmentation &&
-            image.segmentation.segmentationThumbnails.length > 0
-          ) {
-            const thumbnail = image.segmentation.segmentationThumbnails[0];
-            if (thumbnail) {
+          if (image.segmentation) {
+            // Use full segmentation data as we don't have thumbnails table yet
+            const segmentationData = image.segmentation;
+            if (segmentationData.polygons) {
               try {
-                const parsedPolygons = JSON.parse(thumbnail.simplifiedData);
+                const parsedPolygons = JSON.parse(segmentationData.polygons);
 
                 // Validate the parsed data structure
                 if (!Array.isArray(parsedPolygons)) {
@@ -854,10 +878,11 @@ export class ImageController {
                   polygons: parsedPolygons,
                   imageWidth: image.segmentation.imageWidth,
                   imageHeight: image.segmentation.imageHeight,
-                  levelOfDetail: thumbnail.levelOfDetail,
-                  polygonCount: thumbnail.polygonCount,
-                  pointCount: thumbnail.pointCount,
-                  compressionRatio: thumbnail.compressionRatio,
+                  levelOfDetail: levelOfDetail,
+                  polygonCount: parsedPolygons.length,
+                  pointCount: parsedPolygons.reduce((sum: number, p: any) =>
+                    sum + (p.points?.length || p.coordinates?.length || 0), 0),
+                  compressionRatio: 1.0,
                 };
               } catch (error) {
                 logger.error(
@@ -870,10 +895,10 @@ export class ImageController {
                   polygons: [],
                   imageWidth: image.segmentation.imageWidth,
                   imageHeight: image.segmentation.imageHeight,
-                  levelOfDetail: thumbnail.levelOfDetail,
+                  levelOfDetail: levelOfDetail,
                   polygonCount: 0,
                   pointCount: 0,
-                  compressionRatio: thumbnail.compressionRatio,
+                  compressionRatio: 1.0,
                 };
               }
             }

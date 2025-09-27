@@ -316,7 +316,8 @@ export default {
     uploadImages: 'Subir imágenes',
     dragDrop: 'Arrastra y suelta imágenes aquí',
     clickToSelect: 'o haz clic para seleccionar archivos',
-    acceptedFormats: 'Formatos aceptados: JPEG, PNG, TIFF, BMP (máx. 10MB)',
+    acceptedFormats:
+      'Formatos aceptados: JPEG, PNG, TIFF, BMP (máx. 20MB por archivo)',
     uploadProgress: 'Progreso de la carga',
     uploadingTo: 'Subiendo a',
     currentProject: 'Proyecto actual',

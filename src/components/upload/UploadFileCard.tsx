@@ -114,8 +114,16 @@ export const UploadFileCard: React.FC<UploadFileCardProps> = React.memo(
                 onError={() => setImageError(true)}
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-200 dark:bg-gray-700">
+              <div className="w-full h-full flex flex-col items-center justify-center bg-gray-200 dark:bg-gray-700">
                 <ImageIcon className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                {(file.type === 'image/tiff' ||
+                  file.type === 'image/tif' ||
+                  file.name?.toLowerCase().endsWith('.tiff') ||
+                  file.name?.toLowerCase().endsWith('.tif')) && (
+                  <span className="text-[10px] text-gray-500 dark:text-gray-400 mt-1">
+                    TIFF
+                  </span>
+                )}
               </div>
             )}
           </div>

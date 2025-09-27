@@ -188,6 +188,10 @@ export class LocalStorageProvider implements StorageProvider {
    * Get URL for accessing file
    */
   async getUrl(key: string): Promise<string> {
+    // In production, nginx serves /uploads from /app/uploads/blue (or /green)
+    // In development, Express serves /uploads from config.UPLOAD_DIR
+    // Both configurations automatically handle the environment-specific path mapping
+
     // In production, use relative URL to work with any domain
     // This will be served through nginx proxy
     if (process.env.NODE_ENV === 'production') {
@@ -311,7 +315,10 @@ export class LocalStorageProvider implements StorageProvider {
         .replace(/\.\./g, '') // Remove parent directory references
         .replace(/[/\\]/g, '') // Remove path separators
         .replace(/^\.+/, '') // Remove leading dots
-        .replace(/[^a-zA-Z0-9_-]/g, '_') // Keep only safe characters
+        // Updated regex to preserve Unicode characters (including diacritics) while removing unsafe characters
+        // This allows letters from any language, numbers, spaces, dots, dashes, and underscores
+        .replace(/[^\p{L}\p{N}\s._-]/gu, '_') // Unicode-aware: Keep letters, numbers, space, dot, dash, underscore
+        .replace(/\s+/g, '_') // Replace spaces with underscores for filesystem compatibility
         .substring(0, 255); // Limit length to prevent filesystem issues
     };
 
@@ -327,10 +334,10 @@ export class LocalStorageProvider implements StorageProvider {
     const nameWithoutExt = path.basename(basename, ext);
     const sanitizedName = sanitizePathComponent(nameWithoutExt);
 
-    // Validate and sanitize extension
+    // Validate and sanitize extension (keep only alphanumeric and dots)
     const sanitizedExt = ext
       .toLowerCase()
-      .replace(/[^a-z0-9.]/g, '')
+      .replace(/[^a-z0-9.]/g, '') // Extensions should remain ASCII for compatibility
       .substring(0, 10);
 
     return `${sanitizedUserId}/${sanitizedProjectId}/${folder}/${timestamp}_${sanitizedName}${sanitizedExt}`;
