@@ -18,7 +18,10 @@ export const hashPassword = async (password: string): Promise<string> => {
 /**
  * Verify password against hash
  */
-export const verifyPassword = async (password: string, hash: string): Promise<boolean> => {
+export const verifyPassword = async (
+  password: string,
+  hash: string
+): Promise<boolean> => {
   try {
     return await bcrypt.compare(password, hash);
   } catch (error) {
@@ -38,58 +41,69 @@ export const generateSecureToken = (): string => {
  * Generate random password
  */
 export const generateRandomPassword = (length = 12): string => {
-  const charset = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
+  const charset =
+    'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*';
   let password = '';
-  
+
   for (let i = 0; i < length; i++) {
     const randomIndex = crypto.randomInt(0, charset.length);
     password += charset[randomIndex];
   }
-  
+
   return password;
 };
 
 /**
  * Validate password strength
  */
-export const validatePasswordStrength = (password: string): {
+export const validatePasswordStrength = (
+  password: string
+): {
   isValid: boolean;
   errors: string[];
 } => {
   const errors: string[] = [];
-  
+
   if (password.length < 6) {
     errors.push('Heslo musí mít minimálně 6 znaků');
   }
-  
+
   if (password.length > 128) {
     errors.push('Heslo může mít maximálně 128 znaků');
   }
-  
+
   if (!/[a-z]/.test(password)) {
     errors.push('Heslo musí obsahovat alespoň jedno malé písmeno');
   }
-  
+
   if (!/[A-Z]/.test(password)) {
     errors.push('Heslo musí obsahovat alespoň jedno velké písmeno');
   }
-  
+
   if (!/[0-9]/.test(password)) {
     errors.push('Heslo musí obsahovat alespoň jednu číslici');
   }
-  
+
   // Check for common weak passwords
   const commonPasswords = [
-    'password', '123456', '123456789', 'qwerty', 'abc123',
-    'password123', '111111', '1234567890', 'admin', 'letmein'
+    'password',
+    '123456',
+    '123456789',
+    'qwerty',
+    'abc123',
+    'password123',
+    '111111',
+    '1234567890',
+    'admin',
+    'letmein',
   ];
-  
+
   if (commonPasswords.includes(password.toLowerCase())) {
     errors.push('Heslo je příliš obvyklé');
   }
-  
+
   return {
     isValid: errors.length === 0,
-    errors
+    errors,
   };
 };

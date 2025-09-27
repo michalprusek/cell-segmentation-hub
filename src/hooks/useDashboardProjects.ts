@@ -101,7 +101,7 @@ export const useDashboardProjects = ({
         logger.debug(`Shared projects count: ${sharedProjects.length}`);
 
         // Get current user info for owned projects
-        const currentUser = { email: userEmail || 'Unknown' };
+        const _currentUser = { email: userEmail || 'Unknown' };
 
         // Create a map to track unique projects and avoid duplicates
         const projectMap = new Map();
@@ -351,7 +351,7 @@ export const useDashboardProjects = ({
         }
       }
     },
-    [userId, userEmail, sortField, sortDirection, t]
+    [userId, userEmail, sortField, sortDirection, t, navigate, signOut]
   );
 
   // Use debounced values to prevent excessive API calls

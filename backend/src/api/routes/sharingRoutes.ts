@@ -6,7 +6,7 @@ import {
   revokeProjectShare,
   acceptShareInvitation,
   getSharedProjects,
-  validateShareToken
+  validateShareToken,
 } from '../controllers/sharingController';
 import { authenticate, optionalAuthenticate } from '../../middleware/auth';
 import { validateBody, validateParams } from '../../middleware/validation';
@@ -15,7 +15,7 @@ import {
   shareByLinkSchema,
   projectIdSchema,
   shareIdSchema,
-  shareTokenSchema
+  shareTokenSchema,
 } from '../../types/validation';
 
 const router = Router();
@@ -70,11 +70,7 @@ router.delete(
  * GET /api/shared/projects
  * Get all projects shared with the current user
  */
-router.get(
-  '/shared/projects',
-  authenticate,
-  getSharedProjects
-);
+router.get('/shared/projects', authenticate, getSharedProjects);
 
 /**
  * GET /api/share/validate/:token

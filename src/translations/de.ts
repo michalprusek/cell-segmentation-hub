@@ -4,6 +4,7 @@ export default {
     loading: 'Laden...',
     save: 'Speichern',
     cancel: 'Abbrechen',
+    dismiss: 'Schließen',
     delete: 'Löschen',
     edit: 'Bearbeiten',
     create: 'Erstellen',
@@ -319,7 +320,8 @@ export default {
     uploadImages: 'Bilder hochladen',
     dragDrop: 'Bilder hier hineinziehen',
     clickToSelect: 'oder klicken Sie, um Dateien auszuwählen',
-    acceptedFormats: 'Akzeptierte Formate: JPEG, PNG, TIFF, BMP (max 10MB)',
+    acceptedFormats:
+      'Akzeptierte Formate: JPEG, PNG, TIFF, BMP (max 20MB pro Datei)',
     uploadProgress: 'Upload-Fortschritt',
     uploadingTo: 'Wählen Sie zuerst ein Projekt aus',
     currentProject: 'Aktuelles Projekt',
@@ -878,6 +880,28 @@ export default {
       'Segmentiere {{new}} + Re-segmentiere {{resegment}} ({{total}} gesamt)',
     segmentTooltip:
       '{{new}} neue Bilder werden segmentiert, {{resegment}} ausgewählte Bilder werden re-segmentiert',
+    cancelSegmentation: 'Segmentierung Abbrechen',
+    segmentationCancelled: '{{count}} Segmentierung abgebrochen',
+    segmentationCancelled_other: '{{count}} Segmentierungen abgebrochen',
+    cancelFailed: 'Segmentierung konnte nicht abgebrochen werden',
+    // Cancel All functionality
+    cancelAll: 'Alle Abbrechen',
+    cancelAllTooltip: 'Alle {{count}} Segmentierungsaufgabe(n) abbrechen',
+    confirmCancelAll: 'Alle Segmentierungen Abbrechen?',
+    confirmCancelAllDescription:
+      'Sie sind dabei, {{count}} Segmentierungsaufgabe(n) in allen Ihren Projekten abzubrechen.',
+    processingTasks: '{{count}} Aufgabe(n) werden derzeit verarbeitet',
+    queuedTasks: '{{count}} Aufgabe(n) in der Warteschlange',
+    cancelAllWarning:
+      'Diese Aktion kann nicht rückgängig gemacht werden. Abgebrochene Aufgaben müssen erneut übermittelt werden.',
+    confirmCancelAllButton: 'Ja, {{count}} Aufgabe(n) Abbrechen',
+    cancellingAllSegmentations: 'Alle Segmentierungen werden abgebrochen...',
+    allSegmentationsCancelled:
+      '{{count}} Segmentierung(en) erfolgreich abgebrochen',
+    affectedProjects: '{{count}} Projekt(e) betroffen',
+    cancelAllFailed: 'Fehler beim Abbrechen der Segmentierungen',
+    cancelAllError: 'Fehler beim Abbrechen der Segmentierungen',
+    cancelling: 'Wird abgebrochen...',
   },
   toast: {
     error: 'Ein Fehler ist aufgetreten',
@@ -930,6 +954,10 @@ export default {
     },
     upload: {
       failed: 'Aktualisierung der Bilder nach Upload fehlgeschlagen',
+      cancelUpload: 'Upload abbrechen',
+      uploadCancelled: 'Upload abgebrochen',
+      uploadCancelledSuccess: 'Upload erfolgreich abgebrochen',
+      redirectingToGallery: 'Weiterleitung zur Bildergalerie...',
     },
     segmentation: {
       saved: 'Segmentierung erfolgreich gespeichert',
@@ -958,6 +986,8 @@ export default {
     selected: '{{count}} Bild ausgewählt',
     selected_other: '{{count}} Bilder ausgewählt',
     deleteSelected: 'Ausgewählte löschen',
+    imagesDeleted: '{{count}} Bild gelöscht',
+    imagesDeleted_other: '{{count}} Bilder gelöscht',
   },
   export: {
     advancedExport: 'Erweiterter Export',
@@ -976,6 +1006,8 @@ export default {
     selectedImages: 'Ausgewählte Bilder',
     imagesSelected: '{{count}} von {{total}} Bildern ausgewählt',
     selectAll: 'Alle Auswählen',
+    allSelected: 'Alle {{count}} Bilder ausgewählt',
+    selectAllProject: 'Alle {{count}} Bilder auswählen',
     selectNone: 'Nichts Auswählen',
     imageSelection: 'Bildauswahl',
     chooseImages:
@@ -1015,6 +1047,12 @@ export default {
       excel: 'Excel-Format',
       json: 'JSON-Format',
     },
+    // Progress panel specific
+    title: 'Export-Fortschritt',
+    readyToDownload: 'Export bereit zum Download',
+    fallbackMode: 'Abruf-Modus',
+    fallbackMessage:
+      'Verwende Abruf für Fortschrittsaktualisierungen aufgrund von Verbindungsproblemen',
     exportToZip: 'Als ZIP-Archiv exportieren',
     generateExcel: 'Excel-Metriken generieren',
     includeCocoFormat: 'COCO-Format-Annotationen einschließen',
@@ -1025,6 +1063,7 @@ export default {
     packaging: 'Paket wird erstellt...',
     completed: 'Export abgeschlossen',
     downloading: 'Herunterladen...',
+    cancelling: 'Wird abgebrochen...',
     cancelled: 'Export abgebrochen',
     connected: 'Verbunden',
     disconnected: 'Getrennt',

@@ -16,6 +16,7 @@ import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { useCoordinatedAbortController } from '@/hooks/shared/useAbortController';
 import useDebounce from '@/hooks/useDebounce';
 import { EditMode } from './types';
+import { shouldPreventCanvasDeselection } from './config/modeConfig';
 import { Polygon } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
@@ -23,6 +24,13 @@ import { logger } from '@/lib/logger';
 import {
   handleCancelledError /* , isCancelledError */,
 } from '@/lib/errorUtils';
+import {
+  generateSafePolygonKey,
+  validatePolygonId,
+  ensureValidPolygonId,
+  logPolygonIdIssue,
+} from '@/lib/polygonIdUtils';
+import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
 
 // New layout components
 import VerticalToolbar from './components/VerticalToolbar';
@@ -298,13 +306,43 @@ const SegmentationEditor = () => {
 
         // Only include polygon if it still has at least 3 valid points
         if (validPoints.length >= 3) {
+          // CRITICAL: Validate and ensure polygon has a valid ID
+          if (!validatePolygonId(segPoly.id)) {
+            logPolygonIdIssue(
+              segPoly,
+              'Invalid or missing polygon ID from ML service'
+            );
+            // Generate fallback ID for polygons from ML service
+            const fallbackId = ensureValidPolygonId(segPoly.id, 'ml_polygon');
+            logger.warn(
+              `Generated fallback ID: ${fallbackId} for polygon with invalid ID: ${segPoly.id}`
+            );
+
+            return {
+              id: fallbackId,
+              points: validPoints,
+              type: segPoly.type,
+              class: segPoly.class,
+              confidence: segPoly.confidence,
+              area: segPoly.area,
+              parent_id:
+                segPoly.parentIds && segPoly.parentIds.length > 0
+                  ? segPoly.parentIds[0]
+                  : undefined,
+            };
+          }
+
           return {
-            id: segPoly.id,
+            id: segPoly.id, // Now guaranteed to be valid
             points: validPoints,
             type: segPoly.type,
             class: segPoly.class,
             confidence: segPoly.confidence,
             area: segPoly.area,
+            parent_id:
+              segPoly.parentIds && segPoly.parentIds.length > 0
+                ? segPoly.parentIds[0]
+                : undefined,
           };
         }
 
@@ -342,10 +380,17 @@ const SegmentationEditor = () => {
         ? {
             id: polygons[0].id,
             type: polygons[0].type,
+            parent_id: polygons[0].parent_id,
             pointsCount: polygons[0].points?.length || 0,
             firstPoints: polygons[0].points?.slice(0, 3),
           }
         : null,
+      internalPolygonCount: polygons.filter(
+        p => p.type === 'internal' || p.parent_id
+      ).length,
+      externalPolygonCount: polygons.filter(
+        p => p.type === 'external' && !p.parent_id
+      ).length,
     });
 
     return polygons;
@@ -442,7 +487,7 @@ const SegmentationEditor = () => {
           points: polygon.points,
           type: polygon.type || 'external',
           class: polygon.class || 'spheroid',
-          parentIds: [], // Add empty array for API compatibility
+          parentIds: polygon.parent_id ? [polygon.parent_id] : [], // Preserve parent_id as parentIds array
           confidence: polygon.confidence,
           area: polygon.area,
         }));
@@ -480,30 +525,10 @@ const SegmentationEditor = () => {
     // 3. Leaving the editor (unmount autosave)
   });
 
-  // Wrapper for handling polygon selection that automatically switches to EditVertices mode
-  // when selecting a polygon and to View mode when deselecting
-  const handlePolygonSelection = useCallback(
-    (polygonId: string | null) => {
-      // Don't allow polygon selection changes when in Slice mode
-      // The slice mode handles its own polygon selection logic
-      if (editor.editMode === EditMode.Slice) {
-        return;
-      }
+  // REMOVED: Duplicate usePolygonSelection instance - now using editor.handlePolygonSelection and editor.handlePolygonClick
+  // These handlers are provided by useEnhancedSegmentationEditor which has the centralized polygon selection logic
 
-      if (polygonId === null) {
-        // If deselecting (setting to null) and we're in Edit Vertices mode, switch to View mode
-        if (editor.editMode === EditMode.EditVertices) {
-          editor.setEditMode(EditMode.View);
-        }
-      } else {
-        // When selecting a polygon, automatically enable EditVertices mode (purple frame)
-        editor.setEditMode(EditMode.EditVertices);
-      }
-
-      editor.setSelectedPolygonId(polygonId);
-    },
-    [editor]
-  );
+  // REMOVED: Old problematic handlePolygonSelection that forced EditVertices mode
 
   // Load segmentation data with proper cancellation handling
   useEffect(() => {
@@ -1051,7 +1076,9 @@ const SegmentationEditor = () => {
         <EditorHeader
           projectId={projectId || ''}
           projectTitle={project?.name || t('projects.noProjects')}
-          imageName={selectedImage.name}
+          imageName={
+            selectedImage.name ? selectedImage.name.normalize('NFC') : ''
+          }
           currentImageIndex={currentImageIndex !== -1 ? currentImageIndex : 0}
           totalImages={projectImages?.length || 0}
           onNavigate={navigateToImage}
@@ -1110,7 +1137,11 @@ const SegmentationEditor = () => {
                     {/* Base Image */}
                     {selectedImage && (
                       <CanvasImage
-                        src={selectedImage.url}
+                        src={ensureBrowserCompatibleUrl(
+                          selectedImage.id,
+                          selectedImage.url,
+                          selectedImage.name
+                        )}
                         width={imageDimensions?.width || canvasWidth}
                         height={imageDimensions?.height || canvasHeight}
                         alt={t('common.image')}
@@ -1134,12 +1165,12 @@ const SegmentationEditor = () => {
                       }}
                       onClick={e => {
                         // Unselect polygon when clicking on empty canvas area
-                        // BUT skip deselection when in AddPoints mode to allow point placement
+                        // BUT skip deselection when in modes that require point placement (centralized SSOT config)
                         if (
                           e.target === e.currentTarget &&
-                          editor.editMode !== EditMode.AddPoints
+                          !shouldPreventCanvasDeselection(editor.editMode)
                         ) {
-                          handlePolygonSelection(null);
+                          editor.handlePolygonSelection(null);
                         }
                       }}
                       data-transform={JSON.stringify(editor.transform)}
@@ -1164,7 +1195,10 @@ const SegmentationEditor = () => {
                             {/* Actual polygons */}
                             {visiblePolygons.map(polygon => (
                               <CanvasPolygon
-                                key={`${polygon.id}-${editor.isUndoRedoInProgress ? 'undo' : 'normal'}`}
+                                key={generateSafePolygonKey(
+                                  polygon,
+                                  editor.isUndoRedoInProgress
+                                )}
                                 polygon={polygon}
                                 isSelected={
                                   polygon.id === editor.selectedPolygonId
@@ -1180,9 +1214,8 @@ const SegmentationEditor = () => {
                                 isUndoRedoInProgress={
                                   editor.isUndoRedoInProgress
                                 }
-                                onSelectPolygon={() =>
-                                  handlePolygonSelection(polygon.id)
-                                }
+                                editMode={editor.editMode}
+                                onSelectPolygon={editor.handlePolygonClick}
                                 onDeletePolygon={
                                   handleDeletePolygonFromContextMenu
                                 }
@@ -1230,7 +1263,7 @@ const SegmentationEditor = () => {
                 loading={projectLoading}
                 polygons={editor.polygons}
                 selectedPolygonId={editor.selectedPolygonId}
-                onSelectPolygon={handlePolygonSelection}
+                onSelectPolygon={editor.handlePolygonSelection}
                 hiddenPolygonIds={hiddenPolygonIds}
                 onTogglePolygonVisibility={handleTogglePolygonVisibility}
                 onRenamePolygon={handleRenamePolygon}

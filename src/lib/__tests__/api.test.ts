@@ -3,16 +3,16 @@ import axios from 'axios';
 
 // Import types
 import type {
-  AuthResponse,
-  Project,
-  ProjectImage,
-  SegmentationResult,
-  SegmentationPolygon,
-  SegmentationResultData,
-  QueueItem,
-  QueueStats,
-  AddToQueueResponse,
-  BatchQueueResponse,
+  AuthResponse as _AuthResponse,
+  Project as _Project,
+  ProjectImage as _ProjectImage,
+  SegmentationResult as _SegmentationResult,
+  SegmentationPolygon as _SegmentationPolygon,
+  SegmentationResultData as _SegmentationResultData,
+  QueueItem as _QueueItem,
+  QueueStats as _QueueStats,
+  AddToQueueResponse as _AddToQueueResponse,
+  BatchQueueResponse as _BatchQueueResponse,
 } from '../api';
 
 // Mock axios completely

@@ -55,13 +55,13 @@ export const ImageListItem = ({
         {image.thumbnail_url ? (
           <img
             src={image.thumbnail_url}
-            alt={image.name || 'Image'}
+            alt={image.name ? image.name.normalize('NFC') : 'Image'}
             className="h-full w-full object-cover"
           />
         ) : image.url ? (
           <img
             src={image.url}
-            alt={image.name || 'Image'}
+            alt={image.name ? image.name.normalize('NFC') : 'Image'}
             className="h-full w-full object-cover"
           />
         ) : (
@@ -75,7 +75,9 @@ export const ImageListItem = ({
       <div className="ml-3 flex-1 min-w-0 cursor-pointer">
         <div className="flex items-center">
           <h4 className="text-sm font-medium truncate">
-            {image.name || t('common.untitledImage')}
+            {image.name
+              ? image.name.normalize('NFC')
+              : t('common.untitledImage')}
           </h4>
           {image.segmentationStatus && (
             <Badge
@@ -108,7 +110,7 @@ export const ImageListItem = ({
           variant="destructive"
           size="icon"
           className="h-8 w-8"
-          aria-label={`Delete ${image.name || 'image'}`}
+          aria-label={`Delete ${image.name ? image.name.normalize('NFC') : 'image'}`}
           onClick={e => {
             e.stopPropagation();
             onDelete(image.id);

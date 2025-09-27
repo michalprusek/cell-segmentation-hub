@@ -1,11 +1,11 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach as _beforeEach } from 'vitest';
 import {
   getCanvasCoordinates,
   imageToCanvasCoordinates,
   canvasToImageCoordinates,
   calculateCenteringTransform,
-  calculateWheelZoom,
-  calculateFixedPointZoom,
+  calculateWheelZoom as _calculateWheelZoom,
+  calculateFixedPointZoom as _calculateFixedPointZoom,
   constrainTransform,
   isPointVisible,
   isPolygonVisible,

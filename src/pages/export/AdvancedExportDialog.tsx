@@ -44,11 +44,12 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import { useAdvancedExport } from './hooks/useAdvancedExport';
+import { useSharedAdvancedExport } from './hooks/useSharedAdvancedExport';
 import { useLanguage } from '@/contexts/useLanguage';
 import { ProjectImage } from '@/types';
 import { EXPORT_DEFAULTS } from '@/lib/export-config';
 import { ImageSelectionGrid } from './components/ImageSelectionGrid';
+import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
 
 interface AdvancedExportDialogProps {
   open: boolean;
@@ -88,7 +89,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
         completedJobId,
         wsConnected,
         currentJob,
-      } = useAdvancedExport(projectId);
+      } = useSharedAdvancedExport(projectId);
 
       const [activeTab, setActiveTab] = useState('general');
 
@@ -114,7 +115,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
           await startExport(projectName);
           toast.success(t('toast.exportCompleted'));
           onClose();
-        } catch (error) {
+        } catch (_error) {
           toast.error(t('toast.exportFailed'));
         }
       };
@@ -751,19 +752,23 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
             )}
 
             <DialogFooter>
-              <Button
-                variant={isExporting ? 'destructive' : 'outline'}
-                onClick={isExporting ? cancelExport : onClose}
-                disabled={false}
-              >
-                {t('export.cancel')}
-              </Button>
+              {/* Close dialog button - only shown when not exporting */}
               {!isExporting && (
-                <Button onClick={handleExport} disabled={isExporting}>
-                  <Download className="mr-2 h-4 w-4" />
-                  {t('export.startExport')}
+                <Button variant="outline" onClick={onClose}>
+                  {t('common.cancel')}
                 </Button>
               )}
+
+              {/* Universal Cancel/Export Button */}
+              <UniversalCancelButton
+                operationType="export"
+                isOperationActive={isExporting}
+                isCancelling={isDownloading} // Use downloading state as cancelling indicator
+                onCancel={cancelExport}
+                onPrimaryAction={handleExport}
+                primaryText={t('export.startExport')}
+                disabled={false}
+              />
             </DialogFooter>
           </DialogContent>
         </Dialog>

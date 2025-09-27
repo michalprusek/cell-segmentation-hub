@@ -56,20 +56,20 @@ Create these labels in CVAT:
 
 ```yaml
 # Primary cell label
-- name: "cell"
-  color: "#FF0000"
-  type: "polygon"
+- name: 'cell'
+  color: '#FF0000'
+  type: 'polygon'
   attributes:
-    - name: "cell_type"
-      type: "select"
-      values: ["unknown", "healthy", "damaged", "dividing"]
-    - name: "confidence"
-      type: "number"
+    - name: 'cell_type'
+      type: 'select'
+      values: ['unknown', 'healthy', 'damaged', 'dividing']
+    - name: 'confidence'
+      type: 'number'
       min: 0.0
       max: 1.0
       step: 0.1
-    - name: "area_pixels"
-      type: "number"
+    - name: 'area_pixels'
+      type: 'number'
       min: 0
 ```
 
@@ -101,17 +101,20 @@ Create these labels in CVAT:
 After import, you can:
 
 #### View and Verify Annotations
+
 - **Polygon mode**: See imported cell boundaries
 - **Attributes panel**: Check cell_type, confidence values
 - **Navigation**: Use arrow keys to browse images
 
 #### Edit and Refine
+
 - **Add vertices**: Click on polygon edge
 - **Move vertices**: Drag polygon points
 - **Split cells**: Use polygon tools to separate merged cells
 - **Merge cells**: Delete boundaries and redraw
 
 #### Quality Control
+
 - **Review mode**: Enable to check annotation quality
 - **Comments**: Add notes for problematic areas
 - **Statistics**: View annotation counts and coverage
@@ -127,24 +130,27 @@ When ready to export back from CVAT:
 ## Label Mapping
 
 | SpheroSeg Export | CVAT Label | Category ID |
-|------------------|------------|-------------|
+| ---------------- | ---------- | ----------- |
 | External polygon | cell       | 1           |
 | Internal polygon | cell_hole  | 2           |
 
 ## Best Practices
 
 ### Before Import
+
 - ✅ Verify image file names match between export and CVAT upload
 - ✅ Check image dimensions are preserved
 - ✅ Ensure consistent naming convention
 
 ### During Annotation
+
 - 🎯 **Use polygon mode** for accurate cell boundaries
 - 🔍 **Zoom in closely** for precise vertex placement
 - 📝 **Fill attributes** for each cell (type, confidence)
 - ⚡ **Save frequently** to prevent data loss
 
 ### Quality Assurance
+
 - 👀 **Review annotations** in different zoom levels
 - 🔄 **Cross-check** with original segmentation results
 - 📊 **Use statistics** to identify outliers or missing annotations
@@ -152,11 +158,13 @@ When ready to export back from CVAT:
 ## Troubleshooting
 
 ### Import Issues
+
 - **"No annotations imported"**: Check label names match exactly
 - **"Invalid polygon"**: Verify polygon coordinates are valid
 - **"Image not found"**: Ensure image filenames match annotation references
 
 ### Common Fixes
+
 ```bash
 # Check COCO file validity
 python -c "import json; print('Valid JSON') if json.load(open('annotations.json')) else print('Invalid')"
@@ -168,6 +176,7 @@ grep -o '"file_name":"[^"]*"' annotations.json | sort | uniq
 ## Integration with ML Pipelines
 
 The COCO format is widely supported by:
+
 - **Detectron2** (Facebook AI Research)
 - **MMDetection** (OpenMMLab)
 - **YOLOv8** (Ultralytics)

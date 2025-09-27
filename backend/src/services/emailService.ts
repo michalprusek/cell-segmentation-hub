@@ -2,8 +2,17 @@ import nodemailer, { Transporter } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from '../utils/logger';
 import { getBooleanEnvVar } from '../utils/envValidator';
-import { sendEmailWithRetry, parseEmailTimeout, updateEmailMetrics, queueEmailForRetry } from './emailRetryService';
-import { generateSimplePasswordResetHTML as generateMultilangPasswordResetHTML, generateSimplePasswordResetText as generateMultilangPasswordResetText, getPasswordResetSubject } from '../templates/passwordResetEmailMultilang';
+import {
+  sendEmailWithRetry,
+  parseEmailTimeout,
+  updateEmailMetrics,
+  queueEmailForRetry,
+} from './emailRetryService';
+import {
+  generateSimplePasswordResetHTML as generateMultilangPasswordResetHTML,
+  generateSimplePasswordResetText as generateMultilangPasswordResetText,
+  getPasswordResetSubject,
+} from '../templates/passwordResetEmailMultilang';
 import { generateVerificationEmailHTML } from '../templates/verificationEmail';
 import { escapeHtml, sanitizeUrl } from '../utils/escapeHtml';
 
@@ -44,422 +53,533 @@ let _config: EmailConfig | null = null;
 // Export config for health checks
 export { _config };
 
-  /**
-   * Initialize email service with configuration
-   */
+/**
+ * Initialize email service with configuration
+ */
 export function init(): void {
-    try {
-      const config: EmailConfig = {
-        service: (process.env.EMAIL_SERVICE as 'smtp' | 'sendgrid') || 'smtp',
-        from: {
-          email: process.env.FROM_EMAIL || 'noreply@localhost',
-          name: process.env.FROM_NAME || 'Cell Segmentation Platform'
-        }
+  try {
+    const config: EmailConfig = {
+      service: (process.env.EMAIL_SERVICE as 'smtp' | 'sendgrid') || 'smtp',
+      from: {
+        email: process.env.FROM_EMAIL || 'noreply@localhost',
+        name: process.env.FROM_NAME || 'Cell Segmentation Platform',
+      },
+    };
+
+    if (config.service === 'smtp') {
+      config.smtp = {
+        host: process.env.SMTP_HOST || 'mailhog',
+        port: parseInt(process.env.SMTP_PORT || '1025'),
+        secure: process.env.SMTP_SECURE === 'true',
+        user: process.env.SMTP_USER || '',
+        pass: process.env.SMTP_PASS || '',
       };
 
-      if (config.service === 'smtp') {
-        config.smtp = {
-          host: process.env.SMTP_HOST || 'mailhog',
-          port: parseInt(process.env.SMTP_PORT || '1025'),
-          secure: process.env.SMTP_SECURE === 'true',
-          user: process.env.SMTP_USER || '',
-          pass: process.env.SMTP_PASS || ''
-        };
+      const transportConfig: SMTPTransport.Options & {
+        pool?: boolean;
+        maxConnections?: number;
+        maxMessages?: number;
+      } = {
+        host: config.smtp.host,
+        port: config.smtp.port,
+        secure: config.smtp.secure,
+        ignoreTLS: getBooleanEnvVar('SMTP_IGNORE_TLS', false),
+        requireTLS:
+          getBooleanEnvVar('SMTP_REQUIRE_TLS', true) &&
+          !getBooleanEnvVar('SMTP_IGNORE_TLS', false),
+        // Optimized timeouts for UTIA SMTP server
+        connectionTimeout: parseEmailTimeout(
+          'SMTP_CONNECTION_TIMEOUT_MS',
+          15000
+        ), // Connection is fast
+        greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', 15000), // Greeting is fast
+        socketTimeout: parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', 120000), // Extended for UTIA server response delays
+        logger:
+          getBooleanEnvVar('SMTP_DEBUG', false) ||
+          getBooleanEnvVar('EMAIL_DEBUG', false),
+        debug:
+          getBooleanEnvVar('SMTP_DEBUG', false) ||
+          getBooleanEnvVar('EMAIL_DEBUG', false),
+        // Connection pooling options for UTIA SMTP stability
+        pool: true, // Enable pooling with extended timeouts
+        maxConnections: 2, // Limited connections to avoid overwhelming server
+        maxMessages: 5, // Reuse connections for multiple messages
+      };
 
-        const transportConfig: SMTPTransport.Options & {
-          pool?: boolean;
-          maxConnections?: number;
-          maxMessages?: number;
-        } = {
-          host: config.smtp.host,
-          port: config.smtp.port,
-          secure: config.smtp.secure,
-          ignoreTLS: getBooleanEnvVar('SMTP_IGNORE_TLS', false),
-          requireTLS: getBooleanEnvVar('SMTP_REQUIRE_TLS', true) && !getBooleanEnvVar('SMTP_IGNORE_TLS', false),
-          // Optimized timeouts for UTIA SMTP server
-          connectionTimeout: parseEmailTimeout('SMTP_CONNECTION_TIMEOUT_MS', 15000), // Connection is fast
-          greetingTimeout: parseEmailTimeout('SMTP_GREETING_TIMEOUT_MS', 15000), // Greeting is fast
-          socketTimeout: parseEmailTimeout('SMTP_SOCKET_TIMEOUT_MS', 120000), // Extended for UTIA server response delays
-          logger: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
-          debug: getBooleanEnvVar('SMTP_DEBUG', false) || getBooleanEnvVar('EMAIL_DEBUG', false),
-          // Connection pooling options for UTIA SMTP stability
-          pool: true, // Enable pooling with extended timeouts
-          maxConnections: 2, // Limited connections to avoid overwhelming server
-          maxMessages: 5 // Reuse connections for multiple messages
-        };
-        
-        // Configure TLS settings for UTIA SMTP (port 25 with STARTTLS)
-        if (process.env.SMTP_IGNORE_TLS !== 'true') {
-          // Special handling for UTIA SMTP server
-          if (config.smtp.host === 'mail.utia.cas.cz') {
-            transportConfig.requireTLS = true; // Force STARTTLS for UTIA
-            transportConfig.tls = {
-              // UTIA server certificate validation - disable for production
-              rejectUnauthorized: false,
-              // Support STARTTLS with minimum TLS 1.2
-              minVersion: 'TLSv1.2',
-              // Additional UTIA-specific TLS options
-              ciphers: 'HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA'
-            };
-          } else {
-            transportConfig.tls = {
-              // Certificate validation enabled by default, only disable with explicit flag
-              rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true',
-              // Support STARTTLS and direct SSL connections with minimum TLS 1.2
-              minVersion: 'TLSv1.2'
-              // Note: Don't use secureProtocol with minVersion - they conflict
-            };
-          }
-        }
-
-        // Only include auth if explicitly enabled and credentials are provided
-        // Check SMTP_AUTH environment variable to disable auth when not needed
-        if (process.env.SMTP_AUTH !== 'false' && config.smtp.user && config.smtp.pass) {
-          transportConfig.auth = {
-            user: config.smtp.user,
-            pass: config.smtp.pass
+      // Configure TLS settings for UTIA SMTP (port 25 with STARTTLS)
+      if (process.env.SMTP_IGNORE_TLS !== 'true') {
+        // Special handling for UTIA SMTP server
+        if (config.smtp.host === 'mail.utia.cas.cz') {
+          transportConfig.requireTLS = true; // Force STARTTLS for UTIA
+          transportConfig.tls = {
+            // UTIA server certificate validation - disable for production
+            rejectUnauthorized: false,
+            // Support STARTTLS with minimum TLS 1.2
+            minVersion: 'TLSv1.2',
+            // Additional UTIA-specific TLS options
+            ciphers:
+              'HIGH:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA',
+          };
+        } else {
+          transportConfig.tls = {
+            // Certificate validation enabled by default, only disable with explicit flag
+            rejectUnauthorized: process.env.EMAIL_ALLOW_INSECURE !== 'true',
+            // Support STARTTLS and direct SSL connections with minimum TLS 1.2
+            minVersion: 'TLSv1.2',
+            // Note: Don't use secureProtocol with minVersion - they conflict
           };
         }
+      }
 
-        logger.info('SMTP Transport Config', 'EmailService', {
-          host: transportConfig.host,
-          port: transportConfig.port,
-          secure: transportConfig.secure,
-          requireTLS: transportConfig.requireTLS,
-          hasAuth: !!transportConfig.auth,
-          authDisabled: process.env.SMTP_AUTH === 'false',
-          isUTIAConfig: config.smtp.host === 'mail.utia.cas.cz'
-        });
-        
-        // For UTIA SMTP, initialize transporter in next tick to avoid blocking
-        if (config.smtp.host === 'mail.utia.cas.cz') {
-          process.nextTick(() => {
-            _transporter = nodemailer.createTransport(transportConfig);
-            logger.info('UTIA SMTP transporter initialized (non-blocking)', 'EmailService', {
-              host: config.smtp?.host
-            });
-          });
-        } else {
-          _transporter = nodemailer.createTransport(transportConfig);
-        }
-      } else if (config.service === 'sendgrid') {
-        config.sendgrid = {
-          apiKey: process.env.SENDGRID_API_KEY || ''
+      // Only include auth if explicitly enabled and credentials are provided
+      // Check SMTP_AUTH environment variable to disable auth when not needed
+      if (
+        process.env.SMTP_AUTH !== 'false' &&
+        config.smtp.user &&
+        config.smtp.pass
+      ) {
+        transportConfig.auth = {
+          user: config.smtp.user,
+          pass: config.smtp.pass,
         };
-
-        // Note: For SendGrid, you would typically use @sendgrid/mail
-        // This is a basic SMTP configuration for SendGrid
-        _transporter = nodemailer.createTransport({
-          host: 'smtp.sendgrid.net',
-          port: 587,
-          auth: {
-            user: 'apikey',
-            pass: config.sendgrid.apiKey
-          }
-        });
       }
 
-      _config = config;
-      logger.info('Email service initialized successfully', 'EmailService', { 
-        service: config.service,
-        host: config.smtp?.host || 'sendgrid'
+      logger.info('SMTP Transport Config', 'EmailService', {
+        host: transportConfig.host,
+        port: transportConfig.port,
+        secure: transportConfig.secure,
+        requireTLS: transportConfig.requireTLS,
+        hasAuth: !!transportConfig.auth,
+        authDisabled: process.env.SMTP_AUTH === 'false',
+        isUTIAConfig: config.smtp.host === 'mail.utia.cas.cz',
       });
-    } catch (error) {
-      logger.error('Failed to initialize email service:', error as Error, 'EmailService');
-      throw new Error('Email service initialization failed');
-    }
-  }
 
-  /**
-   * Send email with fail-safe mechanism
-   */
-export async function sendEmail(options: EmailServiceOptions, allowQueue = true): Promise<void> {
-    const retryCount = 0;
-    const startTime = Date.now();
-    
-    try {
-      // Skip email sending in test/dev environments if configured
-      if (getBooleanEnvVar('SKIP_EMAIL_SEND', false)) {
-        logger.warn('Email sending skipped (SKIP_EMAIL_SEND=true)', 'EmailService', {
-          to: options.to,
-          subject: options.subject
+      // For UTIA SMTP, initialize transporter in next tick to avoid blocking
+      if (config.smtp.host === 'mail.utia.cas.cz') {
+        process.nextTick(() => {
+          _transporter = nodemailer.createTransport(transportConfig);
+          logger.info(
+            'UTIA SMTP transporter initialized (non-blocking)',
+            'EmailService',
+            {
+              host: config.smtp?.host,
+            }
+          );
         });
-        return;
-      }
-      
-      // For UTIA SMTP, auto-queue sharing emails to prevent blocking
-      if (process.env.SMTP_HOST === 'mail.utia.cas.cz' && allowQueue) {
-        const isShareEmail = options.subject?.includes('shared a project with you') || 
-                           options.subject?.includes('Share invitation') ||
-                           options.html?.includes('share') || 
-                           options.html?.includes('invitation');
-        
-        if (isShareEmail) {
-          const queueId = queueEmailForRetry(options);
-          logger.info('Share email queued for background processing (UTIA SMTP)', 'EmailService', { 
-            to: options.to,
-            subject: options.subject,
-            queueId 
-          });
-          return;
-        }
-      }
-      
-      ensureInitialized();
-      
-      if (!_transporter || !_config) {
-        throw new Error('Email service not properly initialized.');
-      }
-      
-      // Use retry logic for email sending with timeout protection
-      const _result = await sendEmailWithRetry(_transporter, _config as unknown as Record<string, unknown>, options);
-      
-      // Update metrics for successful send
-      updateEmailMetrics(true, retryCount);
-      
-      const totalTime = Date.now() - startTime;
-      logger.info('Email sent successfully', 'EmailService', {
-        to: options.to,
-        subject: options.subject,
-        totalTime
-      });
-      
-    } catch (error) {
-      const totalTime = Date.now() - startTime;
-      const errorMessage = (error as Error).message;
-      const errorType = error instanceof Error ? error.constructor.name : 'Unknown';
-      
-      // Update metrics for failed send
-      updateEmailMetrics(false, retryCount, error as Error);
-      
-      // Enhanced error categorization and logging
-      const errorContext = {
-        to: options.to,
-        subject: options.subject,
-        totalTime,
-        errorType,
-        errorMessage,
-        smtpHost: process.env.SMTP_HOST,
-        authEnabled: process.env.SMTP_AUTH !== 'false'
-      };
-      
-      // Check if this is a timeout error and we should queue for background retry
-      if (allowQueue && (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT'))) {
-        logger.warn('Email send timeout, queuing for background retry', 'EmailService', errorContext);
-        
-        // Queue for background retry
-        const queueId = queueEmailForRetry(options);
-        
-        logger.info('Email queued for background retry due to timeout', 'EmailService', {
-          ...errorContext,
-          queueId
-        });
-        
-        // Return success to user to prevent 504 error
-        return;
-      }
-      
-      // Check for specific error types and provide helpful logging
-      if (errorMessage.includes('ECONNREFUSED')) {
-        logger.error('SMTP connection refused - server may be down', error as Error, 'EmailService', errorContext);
-      } else if (errorMessage.includes('ENOTFOUND')) {
-        logger.error('SMTP host not found - check configuration', error as Error, 'EmailService', errorContext);
-      } else if (errorMessage.includes('authentication')) {
-        logger.error('SMTP authentication failed - check credentials or disable auth', error as Error, 'EmailService', errorContext);
-      } else if (errorMessage.includes('ESOCKET')) {
-        logger.error('Socket error - network connectivity issue', error as Error, 'EmailService', errorContext);
       } else {
-        logger.error('Email send failed with unexpected error:', error as Error, 'EmailService', errorContext);
+        _transporter = nodemailer.createTransport(transportConfig);
       }
-      
-      // For non-timeout errors or when queuing is disabled, throw error with context
-      throw new Error(`Failed to send email to ${options.to}: ${errorMessage}`);
-    }
-  }
+    } else if (config.service === 'sendgrid') {
+      config.sendgrid = {
+        apiKey: process.env.SENDGRID_API_KEY || '',
+      };
 
-  /**
-   * Send password reset email with secure token link
-   */
-export async function sendPasswordResetEmail(userEmail: string, resetToken: string, expiresAt: Date, locale?: string): Promise<void> {
-    if (process.env.SKIP_EMAIL_SEND === 'true') {
-      logger.warn('Password reset email skipped (SKIP_EMAIL_SEND=true)', 'EmailService', {
-        userEmail,
-        tokenExpiry: expiresAt
+      // Note: For SendGrid, you would typically use @sendgrid/mail
+      // This is a basic SMTP configuration for SendGrid
+      _transporter = nodemailer.createTransport({
+        host: 'smtp.sendgrid.net',
+        port: 587,
+        auth: {
+          user: 'apikey',
+          pass: config.sendgrid.apiKey,
+        },
       });
+    }
+
+    _config = config;
+    logger.info('Email service initialized successfully', 'EmailService', {
+      service: config.service,
+      host: config.smtp?.host || 'sendgrid',
+    });
+  } catch (error) {
+    logger.error(
+      'Failed to initialize email service:',
+      error as Error,
+      'EmailService'
+    );
+    throw new Error('Email service initialization failed');
+  }
+}
+
+/**
+ * Send email with fail-safe mechanism
+ */
+export async function sendEmail(
+  options: EmailServiceOptions,
+  allowQueue = true
+): Promise<void> {
+  const retryCount = 0;
+  const startTime = Date.now();
+
+  try {
+    // Skip email sending in test/dev environments if configured
+    if (getBooleanEnvVar('SKIP_EMAIL_SEND', false)) {
+      logger.warn(
+        'Email sending skipped (SKIP_EMAIL_SEND=true)',
+        'EmailService',
+        {
+          to: options.to,
+          subject: options.subject,
+        }
+      );
       return;
     }
-    
-    try {
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
 
-      const emailData = {
-        resetToken,
-        userEmail,
-        resetUrl,
-        expiresAt,
-        locale: locale || 'en'
-      };
+    // For UTIA SMTP, auto-queue sharing emails to prevent blocking
+    if (process.env.SMTP_HOST === 'mail.utia.cas.cz' && allowQueue) {
+      const isShareEmail =
+        options.subject?.includes('shared a project with you') ||
+        options.subject?.includes('Share invitation') ||
+        options.html?.includes('share') ||
+        options.html?.includes('invitation');
 
-      // Use multi-language templates for UTIA compatibility
-      // UTIA server hangs on complex HTML with inline styles
-      const htmlContent = generateMultilangPasswordResetHTML(emailData);
-      const textContent = generateMultilangPasswordResetText(emailData);
-
-      const emailOptions = {
-        to: userEmail,
-        subject: getPasswordResetSubject(locale),
-        html: htmlContent,
-        text: textContent
-      };
-
-      // For UTIA SMTP server with extreme delays (>2 min response), always queue password reset emails
-      if (process.env.SMTP_HOST === 'mail.utia.cas.cz') {
-        logger.info('Password reset email queued for background processing (UTIA SMTP)', 'EmailService', { 
-          userEmail,
-          reason: 'UTIA server has >120s response delays after DATA transmission'
-        });
-        
-        const queueId = queueEmailForRetry(emailOptions);
-        
-        logger.info('Password reset email queued successfully', 'EmailService', {
-          userEmail,
-          queueId,
-          tokenExpiry: expiresAt
-        });
-        
-        // Return immediately to prevent 504 timeout errors
+      if (isShareEmail) {
+        const queueId = queueEmailForRetry(options);
+        logger.info(
+          'Share email queued for background processing (UTIA SMTP)',
+          'EmailService',
+          {
+            to: options.to,
+            subject: options.subject,
+            queueId,
+          }
+        );
         return;
       }
-
-      // For other SMTP servers, attempt immediate send
-      await sendEmail(emailOptions);
-
-      logger.info('Password reset email sent', 'EmailService', { userEmail });
-    } catch (error) {
-      logger.error('Failed to send password reset email:', error as Error, 'EmailService', { userEmail });
-      throw error;
     }
+
+    ensureInitialized();
+
+    if (!_transporter || !_config) {
+      throw new Error('Email service not properly initialized.');
+    }
+
+    // Use retry logic for email sending with timeout protection
+    const _result = await sendEmailWithRetry(
+      _transporter,
+      _config as unknown as Record<string, unknown>,
+      options
+    );
+
+    // Update metrics for successful send
+    updateEmailMetrics(true, retryCount);
+
+    const totalTime = Date.now() - startTime;
+    logger.info('Email sent successfully', 'EmailService', {
+      to: options.to,
+      subject: options.subject,
+      totalTime,
+    });
+  } catch (error) {
+    const totalTime = Date.now() - startTime;
+    const errorMessage = (error as Error).message;
+    const errorType =
+      error instanceof Error ? error.constructor.name : 'Unknown';
+
+    // Update metrics for failed send
+    updateEmailMetrics(false, retryCount, error as Error);
+
+    // Enhanced error categorization and logging
+    const errorContext = {
+      to: options.to,
+      subject: options.subject,
+      totalTime,
+      errorType,
+      errorMessage,
+      smtpHost: process.env.SMTP_HOST,
+      authEnabled: process.env.SMTP_AUTH !== 'false',
+    };
+
+    // Check if this is a timeout error and we should queue for background retry
+    if (
+      allowQueue &&
+      (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT'))
+    ) {
+      logger.warn(
+        'Email send timeout, queuing for background retry',
+        'EmailService',
+        errorContext
+      );
+
+      // Queue for background retry
+      const queueId = queueEmailForRetry(options);
+
+      logger.info(
+        'Email queued for background retry due to timeout',
+        'EmailService',
+        {
+          ...errorContext,
+          queueId,
+        }
+      );
+
+      // Return success to user to prevent 504 error
+      return;
+    }
+
+    // Check for specific error types and provide helpful logging
+    if (errorMessage.includes('ECONNREFUSED')) {
+      logger.error(
+        'SMTP connection refused - server may be down',
+        error as Error,
+        'EmailService',
+        errorContext
+      );
+    } else if (errorMessage.includes('ENOTFOUND')) {
+      logger.error(
+        'SMTP host not found - check configuration',
+        error as Error,
+        'EmailService',
+        errorContext
+      );
+    } else if (errorMessage.includes('authentication')) {
+      logger.error(
+        'SMTP authentication failed - check credentials or disable auth',
+        error as Error,
+        'EmailService',
+        errorContext
+      );
+    } else if (errorMessage.includes('ESOCKET')) {
+      logger.error(
+        'Socket error - network connectivity issue',
+        error as Error,
+        'EmailService',
+        errorContext
+      );
+    } else {
+      logger.error(
+        'Email send failed with unexpected error:',
+        error as Error,
+        'EmailService',
+        errorContext
+      );
+    }
+
+    // For non-timeout errors or when queuing is disabled, throw error with context
+    throw new Error(`Failed to send email to ${options.to}: ${errorMessage}`);
+  }
+}
+
+/**
+ * Send password reset email with secure token link
+ */
+export async function sendPasswordResetEmail(
+  userEmail: string,
+  resetToken: string,
+  expiresAt: Date,
+  locale?: string
+): Promise<void> {
+  if (process.env.SKIP_EMAIL_SEND === 'true') {
+    logger.warn(
+      'Password reset email skipped (SKIP_EMAIL_SEND=true)',
+      'EmailService',
+      {
+        userEmail,
+        tokenExpiry: expiresAt,
+      }
+    );
+    return;
   }
 
-  /**
-   * Send verification email (for future use)
-   */
-export async function sendVerificationEmail(userEmail: string, verificationToken: string, locale = 'en'): Promise<void> {
-    try {
-      const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      const verificationUrl = `${baseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+  try {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const resetUrl = `${baseUrl}/reset-password?token=${encodeURIComponent(resetToken)}`;
 
-      const emailContent = generateVerificationEmailHTML({
-        verificationUrl,
+    const emailData = {
+      resetToken,
+      userEmail,
+      resetUrl,
+      expiresAt,
+      locale: locale || 'en',
+    };
+
+    // Use multi-language templates for UTIA compatibility
+    // UTIA server hangs on complex HTML with inline styles
+    const htmlContent = generateMultilangPasswordResetHTML(emailData);
+    const textContent = generateMultilangPasswordResetText(emailData);
+
+    const emailOptions = {
+      to: userEmail,
+      subject: getPasswordResetSubject(locale),
+      html: htmlContent,
+      text: textContent,
+    };
+
+    // For UTIA SMTP server with extreme delays (>2 min response), always queue password reset emails
+    if (process.env.SMTP_HOST === 'mail.utia.cas.cz') {
+      logger.info(
+        'Password reset email queued for background processing (UTIA SMTP)',
+        'EmailService',
+        {
+          userEmail,
+          reason:
+            'UTIA server has >120s response delays after DATA transmission',
+        }
+      );
+
+      const queueId = queueEmailForRetry(emailOptions);
+
+      logger.info('Password reset email queued successfully', 'EmailService', {
         userEmail,
-        locale
+        queueId,
+        tokenExpiry: expiresAt,
       });
 
-      const emailOptions = {
-        to: userEmail,
-        subject: emailContent.subject,
-        html: emailContent.html
-      };
+      // Return immediately to prevent 504 timeout errors
+      return;
+    }
 
-      // For UTIA SMTP, always queue verification emails to prevent blocking
-      if (process.env.SMTP_HOST === 'mail.utia.cas.cz') {
-        const queueId = queueEmailForRetry(emailOptions);
-        logger.info('Verification email queued for background processing (UTIA SMTP)', 'EmailService', { 
+    // For other SMTP servers, attempt immediate send
+    await sendEmail(emailOptions);
+
+    logger.info('Password reset email sent', 'EmailService', { userEmail });
+  } catch (error) {
+    logger.error(
+      'Failed to send password reset email:',
+      error as Error,
+      'EmailService',
+      { userEmail }
+    );
+    throw error;
+  }
+}
+
+/**
+ * Send verification email (for future use)
+ */
+export async function sendVerificationEmail(
+  userEmail: string,
+  verificationToken: string,
+  locale = 'en'
+): Promise<void> {
+  try {
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const verificationUrl = `${baseUrl}/verify-email?token=${encodeURIComponent(verificationToken)}`;
+
+    const emailContent = generateVerificationEmailHTML({
+      verificationUrl,
+      userEmail,
+      locale,
+    });
+
+    const emailOptions = {
+      to: userEmail,
+      subject: emailContent.subject,
+      html: emailContent.html,
+    };
+
+    // For UTIA SMTP, always queue verification emails to prevent blocking
+    if (process.env.SMTP_HOST === 'mail.utia.cas.cz') {
+      const queueId = queueEmailForRetry(emailOptions);
+      logger.info(
+        'Verification email queued for background processing (UTIA SMTP)',
+        'EmailService',
+        {
           userEmail,
           locale,
-          queueId
-        });
-        return;
-      }
-
-      // For other SMTP servers, attempt immediate send
-      await sendEmail(emailOptions);
-
-      logger.info('Verification email sent', 'EmailService', { userEmail, locale });
-    } catch (error) {
-      logger.error('Failed to send verification email:', error as Error, 'EmailService', { userEmail });
-      throw error;
-    }
-  }
-
-  /**
-   * Send project share email (for future use)
-   */
-export async function sendProjectShareEmail(
-    recipientEmail: string, 
-    senderName: string, 
-    projectName: string, 
-    projectUrl: string,
-    locale = 'en'
-  ): Promise<void> {
-    try {
-      // Simple inline translations for project share email
-      // Escape user-provided values
-      const escapedSenderName = escapeHtml(senderName);
-      const escapedProjectName = escapeHtml(projectName);
-      
-      const translations = {
-        en: {
-          subject: `Shared Project: ${escapedProjectName} - SpheroSeg`,
-          title: 'Shared Project',
-          body: `${escapedSenderName} has shared the project "${escapedProjectName}" with you.`,
-          buttonText: 'View Project',
-          altText: 'Or copy and paste this link into your browser:'
-        },
-        cs: {
-          subject: `Sdílený projekt: ${escapedProjectName} - SpheroSeg`,
-          title: 'Sdílený projekt',
-          body: `${escapedSenderName} s vámi sdílel projekt "${escapedProjectName}".`,
-          buttonText: 'Zobrazit projekt',
-          altText: 'Nebo zkopírujte a vložte tento odkaz do prohlížeče:'
-        },
-        es: {
-          subject: `Proyecto compartido: ${escapedProjectName} - SpheroSeg`,
-          title: 'Proyecto compartido',
-          body: `${escapedSenderName} ha compartido el proyecto "${escapedProjectName}" contigo.`,
-          buttonText: 'Ver proyecto',
-          altText: 'O copia y pega este enlace en tu navegador:'
-        },
-        de: {
-          subject: `Geteiltes Projekt: ${escapedProjectName} - SpheroSeg`,
-          title: 'Geteiltes Projekt',
-          body: `${escapedSenderName} hat das Projekt "${escapedProjectName}" mit Ihnen geteilt.`,
-          buttonText: 'Projekt anzeigen',
-          altText: 'Oder kopieren Sie diesen Link und fügen Sie ihn in Ihren Browser ein:'
-        },
-        fr: {
-          subject: `Projet partagé : ${escapedProjectName} - SpheroSeg`,
-          title: 'Projet partagé',
-          body: `${escapedSenderName} a partagé le projet "${escapedProjectName}" avec vous.`,
-          buttonText: 'Voir le projet',
-          altText: 'Ou copiez et collez ce lien dans votre navigateur :'
-        },
-        zh: {
-          subject: `共享项目：${escapedProjectName} - 细胞分割平台`,
-          title: '共享项目',
-          body: `${escapedSenderName} 与您分享了项目 "${escapedProjectName}"。`,
-          buttonText: '查看项目',
-          altText: '或将此链接复制并粘贴到您的浏览器中：'
+          queueId,
         }
-      };
+      );
+      return;
+    }
 
-      const t = translations[locale as keyof typeof translations] || translations.en;
-      
-      // Validate the project URL first
-      try {
-        new URL(projectUrl);
-      } catch {
-        throw new Error('Invalid project URL provided');
-      }
-      
-      // Then sanitize the validated URL
-      const sanitizedUrl = sanitizeUrl(projectUrl);
-      if (!sanitizedUrl) {
-        throw new Error('Invalid project URL provided');
-      }
-      
-      const htmlContent = `
+    // For other SMTP servers, attempt immediate send
+    await sendEmail(emailOptions);
+
+    logger.info('Verification email sent', 'EmailService', {
+      userEmail,
+      locale,
+    });
+  } catch (error) {
+    logger.error(
+      'Failed to send verification email:',
+      error as Error,
+      'EmailService',
+      { userEmail }
+    );
+    throw error;
+  }
+}
+
+/**
+ * Send project share email (for future use)
+ */
+export async function sendProjectShareEmail(
+  recipientEmail: string,
+  senderName: string,
+  projectName: string,
+  projectUrl: string,
+  locale = 'en'
+): Promise<void> {
+  try {
+    // Simple inline translations for project share email
+    // Escape user-provided values
+    const escapedSenderName = escapeHtml(senderName);
+    const escapedProjectName = escapeHtml(projectName);
+
+    const translations = {
+      en: {
+        subject: `Shared Project: ${escapedProjectName} - SpheroSeg`,
+        title: 'Shared Project',
+        body: `${escapedSenderName} has shared the project "${escapedProjectName}" with you.`,
+        buttonText: 'View Project',
+        altText: 'Or copy and paste this link into your browser:',
+      },
+      cs: {
+        subject: `Sdílený projekt: ${escapedProjectName} - SpheroSeg`,
+        title: 'Sdílený projekt',
+        body: `${escapedSenderName} s vámi sdílel projekt "${escapedProjectName}".`,
+        buttonText: 'Zobrazit projekt',
+        altText: 'Nebo zkopírujte a vložte tento odkaz do prohlížeče:',
+      },
+      es: {
+        subject: `Proyecto compartido: ${escapedProjectName} - SpheroSeg`,
+        title: 'Proyecto compartido',
+        body: `${escapedSenderName} ha compartido el proyecto "${escapedProjectName}" contigo.`,
+        buttonText: 'Ver proyecto',
+        altText: 'O copia y pega este enlace en tu navegador:',
+      },
+      de: {
+        subject: `Geteiltes Projekt: ${escapedProjectName} - SpheroSeg`,
+        title: 'Geteiltes Projekt',
+        body: `${escapedSenderName} hat das Projekt "${escapedProjectName}" mit Ihnen geteilt.`,
+        buttonText: 'Projekt anzeigen',
+        altText:
+          'Oder kopieren Sie diesen Link und fügen Sie ihn in Ihren Browser ein:',
+      },
+      fr: {
+        subject: `Projet partagé : ${escapedProjectName} - SpheroSeg`,
+        title: 'Projet partagé',
+        body: `${escapedSenderName} a partagé le projet "${escapedProjectName}" avec vous.`,
+        buttonText: 'Voir le projet',
+        altText: 'Ou copiez et collez ce lien dans votre navigateur :',
+      },
+      zh: {
+        subject: `共享项目：${escapedProjectName} - 细胞分割平台`,
+        title: '共享项目',
+        body: `${escapedSenderName} 与您分享了项目 "${escapedProjectName}"。`,
+        buttonText: '查看项目',
+        altText: '或将此链接复制并粘贴到您的浏览器中：',
+      },
+    };
+
+    const t =
+      translations[locale as keyof typeof translations] || translations.en;
+
+    // Validate the project URL first
+    try {
+      new URL(projectUrl);
+    } catch {
+      throw new Error('Invalid project URL provided');
+    }
+
+    // Then sanitize the validated URL
+    const sanitizedUrl = sanitizeUrl(projectUrl);
+    if (!sanitizedUrl) {
+      throw new Error('Invalid project URL provided');
+    }
+
+    const htmlContent = `
         <h2>${escapeHtml(t.title)}</h2>
         <p>${t.body}</p>
         <a href="${sanitizedUrl}" style="background-color: #28a745; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
@@ -469,7 +589,7 @@ export async function sendProjectShareEmail(
         <p>${escapeHtml(sanitizedUrl)}</p>
       `;
 
-      const textContent = `
+    const textContent = `
         ${t.title}
         
         ${t.body}
@@ -477,86 +597,125 @@ export async function sendProjectShareEmail(
         ${t.buttonText}: ${projectUrl}
       `;
 
-      await sendEmail({
-        to: recipientEmail,
-        subject: t.subject,
-        html: htmlContent,
-        text: textContent
-      });
+    await sendEmail({
+      to: recipientEmail,
+      subject: t.subject,
+      html: htmlContent,
+      text: textContent,
+    });
 
-      logger.info('Project share email sent', 'EmailService', { recipientEmail, projectName, locale });
-    } catch (error) {
-      logger.error('Failed to send project share email:', error as Error, 'EmailService', { 
-        recipientEmail, 
-        projectName 
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Test email configuration with detailed error reporting
-   */
-export async function testConnection(): Promise<boolean> {
-    try {
-      if (!_transporter) {
-        logger.warn('Email service not initialized for connection test', 'EmailService');
-        return false;
+    logger.info('Project share email sent', 'EmailService', {
+      recipientEmail,
+      projectName,
+      locale,
+    });
+  } catch (error) {
+    logger.error(
+      'Failed to send project share email:',
+      error as Error,
+      'EmailService',
+      {
+        recipientEmail,
+        projectName,
       }
+    );
+    throw error;
+  }
+}
 
-      logger.info('Testing email service connection...', 'EmailService', {
-        smtpHost: process.env.SMTP_HOST,
-        smtpPort: process.env.SMTP_PORT,
-        smtpSecure: process.env.SMTP_SECURE,
-        authEnabled: process.env.SMTP_AUTH !== 'false'
-      });
+/**
+ * Test email configuration with detailed error reporting
+ */
+export async function testConnection(): Promise<boolean> {
+  try {
+    if (!_transporter) {
+      logger.warn(
+        'Email service not initialized for connection test',
+        'EmailService'
+      );
+      return false;
+    }
 
-      await _transporter.verify();
-      
-      logger.info('Email service connection test successful', 'EmailService', {
-        smtpHost: process.env.SMTP_HOST,
-        transporterReady: !!_transporter
-      });
-      return true;
-    } catch (error) {
-      const errorMessage = (error as Error).message;
-      logger.error('Email service connection test failed:', error as Error, 'EmailService', {
+    logger.info('Testing email service connection...', 'EmailService', {
+      smtpHost: process.env.SMTP_HOST,
+      smtpPort: process.env.SMTP_PORT,
+      smtpSecure: process.env.SMTP_SECURE,
+      authEnabled: process.env.SMTP_AUTH !== 'false',
+    });
+
+    await _transporter.verify();
+
+    logger.info('Email service connection test successful', 'EmailService', {
+      smtpHost: process.env.SMTP_HOST,
+      transporterReady: !!_transporter,
+    });
+    return true;
+  } catch (error) {
+    const errorMessage = (error as Error).message;
+    logger.error(
+      'Email service connection test failed:',
+      error as Error,
+      'EmailService',
+      {
         smtpHost: process.env.SMTP_HOST,
         smtpPort: process.env.SMTP_PORT,
         authEnabled: process.env.SMTP_AUTH !== 'false',
         errorType: error instanceof Error ? error.constructor.name : 'Unknown',
-        errorMessage
-      });
-      
-      // Provide specific guidance based on error type
-      if (errorMessage.includes('ECONNREFUSED')) {
-        logger.warn('Connection refused - SMTP server may be down or unreachable', 'EmailService');
-      } else if (errorMessage.includes('ENOTFOUND')) {
-        logger.warn('SMTP host not found - check SMTP_HOST configuration', 'EmailService');
-      } else if (errorMessage.includes('timeout')) {
-        logger.warn('Connection timeout - SMTP server response too slow', 'EmailService');
-      } else if (errorMessage.includes('authentication')) {
-        logger.warn('Authentication failed - check SMTP credentials or disable SMTP_AUTH', 'EmailService');
+        errorMessage,
       }
-      
-      return false;
+    );
+
+    // Provide specific guidance based on error type
+    if (errorMessage.includes('ECONNREFUSED')) {
+      logger.warn(
+        'Connection refused - SMTP server may be down or unreachable',
+        'EmailService'
+      );
+    } else if (errorMessage.includes('ENOTFOUND')) {
+      logger.warn(
+        'SMTP host not found - check SMTP_HOST configuration',
+        'EmailService'
+      );
+    } else if (errorMessage.includes('timeout')) {
+      logger.warn(
+        'Connection timeout - SMTP server response too slow',
+        'EmailService'
+      );
+    } else if (errorMessage.includes('authentication')) {
+      logger.warn(
+        'Authentication failed - check SMTP credentials or disable SMTP_AUTH',
+        'EmailService'
+      );
     }
+
+    return false;
   }
+}
 
 /**
  * Initialize email service - should be called from server startup
  */
 export async function initializeEmailService(): Promise<void> {
-  if (process.env.NODE_ENV !== 'test' && (process.env.SMTP_HOST || process.env.SENDGRID_API_KEY)) {
+  if (
+    process.env.NODE_ENV !== 'test' &&
+    (process.env.SMTP_HOST || process.env.SENDGRID_API_KEY)
+  ) {
     try {
       init(); // Changed to sync call since init() is not async
       logger.info('Email service initialized successfully', 'EmailService');
     } catch (error) {
-      logger.error('Failed to initialize email service', error as Error, 'EmailService');
+      logger.error(
+        'Failed to initialize email service',
+        error as Error,
+        'EmailService'
+      );
       // Don't throw - allow app to start even if email fails
     }
   } else {
-    logger.info('Email service skipped (test mode or no configuration)', 'EmailService');
+    logger.info(
+      'Email service skipped (test mode or no configuration)',
+      'EmailService'
+    );
   }
 }
 

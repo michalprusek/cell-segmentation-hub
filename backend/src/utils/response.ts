@@ -15,7 +15,7 @@ export const ResponseHelper = {
     const response: ApiResponse<T> = {
       success: true,
       data,
-      message
+      message,
     };
 
     return res.status(statusCode).json(response);
@@ -40,7 +40,7 @@ export const ResponseHelper = {
       success: true,
       data,
       pagination,
-      message
+      message,
     };
 
     return res.status(statusCode).json(response);
@@ -61,7 +61,7 @@ export const ResponseHelper = {
     if (typeof error === 'string') {
       apiError = {
         code: 'GENERIC_ERROR',
-        message: error
+        message: error,
       };
     } else {
       apiError = error;
@@ -69,25 +69,22 @@ export const ResponseHelper = {
 
     // Log the error
     if (logError || statusCode >= 500) {
-      logger.error(
-        `API Error: ${apiError.message}`,
-        logError,
-        context,
-        { code: apiError.code, statusCode }
-      );
+      logger.error(`API Error: ${apiError.message}`, logError, context, {
+        code: apiError.code,
+        statusCode,
+      });
     } else {
-      logger.warn(
-        `API Warning: ${apiError.message}`,
-        context,
-        { code: apiError.code, statusCode }
-      );
+      logger.warn(`API Warning: ${apiError.message}`, context, {
+        code: apiError.code,
+        statusCode,
+      });
     }
 
     const response: ApiResponse = {
       success: false,
       error: apiError.message,
       code: apiError.code,
-      details: apiError.details
+      details: apiError.details,
     };
 
     return res.status(statusCode).json(response);
@@ -103,7 +100,7 @@ export const ResponseHelper = {
   ): Response<ApiResponse> {
     const apiError: ApiError = {
       code: 'BAD_REQUEST',
-      message
+      message,
     };
 
     return ResponseHelper.error(res, apiError, 400, undefined, context);
@@ -117,14 +114,12 @@ export const ResponseHelper = {
     errors: Record<string, string[]> | string,
     context?: string
   ): Response<ApiResponse> {
-    const message = typeof errors === 'string' 
-      ? errors 
-      : 'Validation error';
+    const message = typeof errors === 'string' ? errors : 'Validation error';
 
     const apiError: ApiError = {
       code: 'VALIDATION_ERROR',
       message,
-      details: typeof errors === 'object' ? errors : undefined
+      details: typeof errors === 'object' ? errors : undefined,
     };
 
     return ResponseHelper.error(res, apiError, 400, undefined, context);
@@ -140,7 +135,7 @@ export const ResponseHelper = {
   ): Response<ApiResponse> {
     const apiError: ApiError = {
       code: 'UNAUTHORIZED',
-      message
+      message,
     };
 
     return ResponseHelper.error(res, apiError, 401, undefined, context);
@@ -156,7 +151,7 @@ export const ResponseHelper = {
   ): Response<ApiResponse> {
     const apiError: ApiError = {
       code: 'FORBIDDEN',
-      message
+      message,
     };
 
     return ResponseHelper.error(res, apiError, 403, undefined, context);
@@ -172,7 +167,7 @@ export const ResponseHelper = {
   ): Response<ApiResponse> {
     const apiError: ApiError = {
       code: 'NOT_FOUND',
-      message
+      message,
     };
 
     return ResponseHelper.error(res, apiError, 404, undefined, context);
@@ -188,7 +183,7 @@ export const ResponseHelper = {
   ): Response<ApiResponse> {
     const apiError: ApiError = {
       code: 'CONFLICT',
-      message
+      message,
     };
 
     return ResponseHelper.error(res, apiError, 409, undefined, context);
@@ -204,7 +199,7 @@ export const ResponseHelper = {
   ): Response<ApiResponse> {
     const apiError: ApiError = {
       code: 'RATE_LIMIT_EXCEEDED',
-      message
+      message,
     };
 
     return ResponseHelper.error(res, apiError, 429, undefined, context);
@@ -221,7 +216,7 @@ export const ResponseHelper = {
   ): Response<ApiResponse> {
     const apiError: ApiError = {
       code: 'INTERNAL_ERROR',
-      message
+      message,
     };
 
     return ResponseHelper.error(res, apiError, 500, error, context);
@@ -237,11 +232,11 @@ export const ResponseHelper = {
   ): Response<ApiResponse> {
     const apiError: ApiError = {
       code: 'SERVICE_UNAVAILABLE',
-      message
+      message,
     };
 
     return ResponseHelper.error(res, apiError, 503, undefined, context);
-  }
+  },
 };
 
 // Helper function for async error handling
@@ -258,7 +253,15 @@ export const calculatePagination = (
   page = 1,
   limit = 10,
   total: number
-): {page: number; limit: number; total: number; totalPages: number; offset: number; hasNext: boolean; hasPrev: boolean} => {
+): {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  offset: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+} => {
   const offset = (page - 1) * limit;
   const totalPages = Math.ceil(total / limit);
 
@@ -269,6 +272,6 @@ export const calculatePagination = (
     totalPages,
     offset,
     hasNext: page < totalPages,
-    hasPrev: page > 1
+    hasPrev: page > 1,
   };
 };

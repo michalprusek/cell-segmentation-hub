@@ -407,7 +407,7 @@ components:
               format: date-time
             version:
               type: string
-              example: "1.0.0"
+              example: '1.0.0'
             environment:
               type: string
               example: development
@@ -419,10 +419,10 @@ components:
                   example: true
                 message:
                   type: string
-                  example: "Database connection successful"
+                  example: 'Database connection successful'
         message:
           type: string
-          example: "Server is healthy"
+          example: 'Server is healthy'
 
     RegisterRequest:
       type: object
@@ -433,19 +433,19 @@ components:
         email:
           type: string
           format: email
-          example: "jan.novak@example.com"
+          example: 'jan.novak@example.com'
         password:
           type: string
           minLength: 12
           maxLength: 128
           pattern: "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{12,128}$"
-          description: "Password must be 12-128 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character"
-          example: "SecurePass123!"
+          description: 'Password must be 12-128 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character'
+          example: 'SecurePass123!'
         username:
           type: string
           minLength: 2
           maxLength: 50
-          example: "jan_novak"
+          example: 'jan_novak'
         consentToMLTraining:
           type: boolean
           example: true
@@ -465,10 +465,10 @@ components:
         email:
           type: string
           format: email
-          example: "jan.novak@example.com"
+          example: 'jan.novak@example.com'
         password:
           type: string
-          example: "securePassword123"
+          example: 'securePassword123'
 
     RefreshRequest:
       type: object
@@ -477,7 +477,7 @@ components:
       properties:
         refreshToken:
           type: string
-          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+          example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
 
     AuthResponse:
       type: object
@@ -492,13 +492,13 @@ components:
               $ref: '#/components/schemas/User'
             accessToken:
               type: string
-              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
             refreshToken:
               type: string
-              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
         message:
           type: string
-          example: "Uživatel úspěšně přihlášen"
+          example: 'Uživatel úspěšně přihlášen'
 
     RefreshResponse:
       type: object
@@ -511,10 +511,10 @@ components:
           properties:
             accessToken:
               type: string
-              example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+              example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
         message:
           type: string
-          example: "Token úspěšně obnoven"
+          example: 'Token úspěšně obnoven'
 
     User:
       type: object
@@ -522,11 +522,11 @@ components:
         id:
           type: string
           format: uuid
-          example: "123e4567-e89b-12d3-a456-426614174000"
+          example: '123e4567-e89b-12d3-a456-426614174000'
         email:
           type: string
           format: email
-          example: "jan.novak@example.com"
+          example: 'jan.novak@example.com'
         emailVerified:
           type: boolean
           example: true
@@ -547,11 +547,11 @@ components:
           type: string
           minLength: 3
           maxLength: 100
-          example: "Segmentace buněk v tkáních"
+          example: 'Segmentace buněk v tkáních'
         description:
           type: string
           maxLength: 500
-          example: "Projekt pro segmentaci buněčných struktur v histologických preparátech"
+          example: 'Projekt pro segmentaci buněčných struktur v histologických preparátech'
 
     UpdateProjectRequest:
       type: object
@@ -560,11 +560,11 @@ components:
           type: string
           minLength: 3
           maxLength: 100
-          example: "Aktualizovaný název projektu"
+          example: 'Aktualizovaný název projektu'
         description:
           type: string
           maxLength: 500
-          example: "Aktualizovaný popis projektu"
+          example: 'Aktualizovaný popis projektu'
 
     Project:
       type: object
@@ -572,13 +572,13 @@ components:
         id:
           type: string
           format: uuid
-          example: "123e4567-e89b-12d3-a456-426614174000"
+          example: '123e4567-e89b-12d3-a456-426614174000'
         title:
           type: string
-          example: "Segmentace buněk v tkáních"
+          example: 'Segmentace buněk v tkáních'
         description:
           type: string
-          example: "Projekt pro segmentaci buněčných struktur v histologických preparátech"
+          example: 'Projekt pro segmentaci buněčných struktur v histologických preparátech'
         userId:
           type: string
           format: uuid
@@ -602,7 +602,7 @@ components:
           $ref: '#/components/schemas/Project'
         message:
           type: string
-          example: "Projekt úspěšně vytvořen"
+          example: 'Projekt úspěšně vytvořen'
 
     ProjectsResponse:
       type: object
@@ -634,7 +634,7 @@ components:
                   example: 3
         message:
           type: string
-          example: "Projekty úspěšně načteny"
+          example: 'Projekty úspěšně načteny'
 
     ProjectDetailResponse:
       type: object
@@ -653,7 +653,7 @@ components:
                 $ref: '#/components/schemas/Image'
         message:
           type: string
-          example: "Detail projektu úspěšně načten"
+          example: 'Detail projektu úspěšně načten'
 
     Image:
       type: object
@@ -661,13 +661,13 @@ components:
         id:
           type: string
           format: uuid
-          example: "123e4567-e89b-12d3-a456-426614174000"
+          example: '123e4567-e89b-12d3-a456-426614174000'
         name:
           type: string
-          example: "cell_sample_001.jpg"
+          example: 'cell_sample_001.jpg'
         mimeType:
           type: string
-          example: "image/jpeg"
+          example: 'image/jpeg'
         fileSize:
           type: integer
           example: 2048576
@@ -679,11 +679,11 @@ components:
           example: 768
         thumbnailPath:
           type: string
-          example: "/uploads/thumbnails/thumb_cell_sample_001.jpg"
+          example: '/uploads/thumbnails/thumb_cell_sample_001.jpg'
         segmentationStatus:
           type: string
           enum: [no_segmentation, processing, completed, failed, queued]
-          example: "no_segmentation"
+          example: 'no_segmentation'
         createdAt:
           type: string
           format: date-time
@@ -701,7 +701,7 @@ components:
           $ref: '#/components/schemas/Image'
         message:
           type: string
-          example: "Obrázek úspěšně nahrán"
+          example: 'Obrázek úspěšně nahrán'
 
     ErrorResponse:
       type: object
@@ -711,10 +711,10 @@ components:
           example: false
         error:
           type: string
-          example: "Chybová zpráva"
+          example: 'Chybová zpráva'
         details:
           type: object
-          description: "Dodatečné informace o chybě"
+          description: 'Dodatečné informace o chybě'
         timestamp:
           type: string
           format: date-time

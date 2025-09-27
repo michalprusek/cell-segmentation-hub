@@ -449,7 +449,15 @@ export interface ProjectImage {
   height?: number | null; // Image height in pixels
   createdAt: Date;
   updatedAt: Date;
-  segmentationStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  segmentationStatus:
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'segmented'
+    | 'queued'
+    | 'no_segmentation'
+    | 'no_polygons';
   segmentationResult?: SegmentationData;
   project_id?: string;
   thumbnail_url?: string;

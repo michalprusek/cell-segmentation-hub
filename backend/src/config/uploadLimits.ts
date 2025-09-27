@@ -28,15 +28,15 @@ export interface UploadLimitsConfig {
 
 // Production-optimized configuration for 10,000 files
 const PRODUCTION_LIMITS: UploadLimitsConfig = {
-  MAX_FILES_PER_REQUEST: 100,        // 100 files per chunk
-  MAX_FILE_SIZE_BYTES: 100 * 1024 * 1024,  // 100MB per file (safety margin)
-  MAX_TOTAL_FILES: 10000,            // Support 10,000 total files
-  MAX_FIELDS: 20,                    // Additional form fields
-  MAX_FIELD_SIZE_KB: 100,            // Field size limit
-  CHUNK_SIZE: 100,                   // Files per chunk for frontend
-  NGINX_BODY_LIMIT: '500M',           // 100 files * 1.5MB * safety factor
-  EXPRESS_JSON_LIMIT: '50mb',         // JSON payload limit
-  EXPRESS_URL_ENCODED_LIMIT: '50mb',   // URL-encoded payload limit
+  MAX_FILES_PER_REQUEST: 100, // 100 files per chunk
+  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024, // 20MB per file (optimized for performance)
+  MAX_TOTAL_FILES: 10000, // Support 10,000 total files
+  MAX_FIELDS: 20, // Additional form fields
+  MAX_FIELD_SIZE_KB: 100, // Field size limit
+  CHUNK_SIZE: 100, // Files per chunk for frontend
+  NGINX_BODY_LIMIT: '500M', // 100 files * 1.5MB * safety factor
+  EXPRESS_JSON_LIMIT: '50mb', // JSON payload limit
+  EXPRESS_URL_ENCODED_LIMIT: '50mb', // URL-encoded payload limit
   // Rate limiting properties
   UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
   UPLOAD_MAX_REQUESTS: 200, // 200 chunks per 5 minutes
@@ -51,15 +51,15 @@ const PRODUCTION_LIMITS: UploadLimitsConfig = {
 };
 
 const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
-  MAX_FILES_PER_REQUEST: 50,
-  MAX_FILE_SIZE_BYTES: 50 * 1024 * 1024,
+  MAX_FILES_PER_REQUEST: 1000, // Increased to allow 1000 files per request in development
+  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024,
   MAX_TOTAL_FILES: 1000,
-  MAX_FIELDS: 10,
+  MAX_FIELDS: 1010, // Increased to support 1000 files + additional form fields
   MAX_FIELD_SIZE_KB: 50,
-  CHUNK_SIZE: 50,
-  NGINX_BODY_LIMIT: '200M',
-  EXPRESS_JSON_LIMIT: '20mb',
-  EXPRESS_URL_ENCODED_LIMIT: '20mb',
+  CHUNK_SIZE: 100, // Keep chunk size at 100 for better performance
+  NGINX_BODY_LIMIT: '2000M', // Increased to handle up to 1000 files at ~2MB each
+  EXPRESS_JSON_LIMIT: '200mb', // Increased for metadata
+  EXPRESS_URL_ENCODED_LIMIT: '200mb', // Increased for form data
   // Rate limiting properties
   UPLOAD_WINDOW_MS: 5 * 60 * 1000, // 5 minutes
   UPLOAD_MAX_REQUESTS: 1000, // More permissive for development
@@ -75,7 +75,7 @@ const DEVELOPMENT_LIMITS: UploadLimitsConfig = {
 
 const TEST_LIMITS: UploadLimitsConfig = {
   MAX_FILES_PER_REQUEST: 20,
-  MAX_FILE_SIZE_BYTES: 10 * 1024 * 1024,
+  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024,
   MAX_TOTAL_FILES: 100,
   MAX_FIELDS: 5,
   MAX_FIELD_SIZE_KB: 10,
@@ -99,9 +99,11 @@ const TEST_LIMITS: UploadLimitsConfig = {
 /**
  * Get upload limits based on environment
  */
-export function getUploadLimitsForEnvironment(env?: string): UploadLimitsConfig {
+export function getUploadLimitsForEnvironment(
+  env?: string
+): UploadLimitsConfig {
   const environment = env || process.env.NODE_ENV || 'development';
-  
+
   switch (environment) {
     case 'production':
       return PRODUCTION_LIMITS;
@@ -124,7 +126,10 @@ export function calculateChunks(fileCount: number, env?: string): number {
 /**
  * Estimate upload time in minutes
  */
-export function estimateUploadTime(fileCount: number, _avgFileSizeMB = 1.5): number {
+export function estimateUploadTime(
+  fileCount: number,
+  _avgFileSizeMB = 1.5
+): number {
   const chunks = calculateChunks(fileCount, 'production');
   // Assume 10 seconds per chunk (network + processing)
   const secondsPerChunk = 10;
@@ -134,16 +139,19 @@ export function estimateUploadTime(fileCount: number, _avgFileSizeMB = 1.5): num
 /**
  * Validate if file count is within limits
  */
-export function validateFileCount(fileCount: number, env?: string): { valid: boolean; message?: string } {
+export function validateFileCount(
+  fileCount: number,
+  env?: string
+): { valid: boolean; message?: string } {
   const limits = getUploadLimitsForEnvironment(env);
-  
+
   if (fileCount > limits.MAX_TOTAL_FILES) {
     return {
       valid: false,
-      message: `Maximum ${limits.MAX_TOTAL_FILES} files allowed. You tried to upload ${fileCount} files.`
+      message: `Maximum ${limits.MAX_TOTAL_FILES} files allowed. You tried to upload ${fileCount} files.`,
     };
   }
-  
+
   return { valid: true };
 }
 

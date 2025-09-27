@@ -1,24 +1,31 @@
 import { Request, Response } from 'express';
 import { ImageService } from '../../services/imageService';
-import { ThumbnailService } from '../../services/thumbnailService';
+// Removed ThumbnailService - using unified approach with SegmentationThumbnailService only
 import { SegmentationThumbnailService } from '../../services/segmentationThumbnailService';
 import { WebSocketService } from '../../services/websocketService';
-import { WebSocketEvent, UploadProgressData, UploadCompletedData } from '../../types/websocket';
+import {
+  WebSocketEvent,
+  UploadProgressData,
+  UploadCompletedData,
+} from '../../types/websocket';
 import { ResponseHelper } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { prisma } from '../../db/index';
 import { getStorageProvider } from '../../storage/index';
 import { ApiError } from '../../middleware/error';
+import * as SharingService from '../../services/sharingService';
 
 export class ImageController {
   private imageService: ImageService;
-  private thumbnailService: ThumbnailService;
+  // Removed thumbnailService - using unified approach
   private segmentationThumbnailService: SegmentationThumbnailService;
 
   constructor() {
     this.imageService = new ImageService(prisma);
-    this.thumbnailService = new ThumbnailService(prisma);
-    this.segmentationThumbnailService = new SegmentationThumbnailService(prisma);
+    // Unified thumbnail approach - no polygon service needed
+    this.segmentationThumbnailService = new SegmentationThumbnailService(
+      prisma
+    );
   }
 
   /**
@@ -39,64 +46,123 @@ export class ImageController {
       }
 
       // Check if files were uploaded
-      const files = req.files as Array<{
-        fieldname: string;
-        originalname: string;
-        path: string;
-        size: number;
-        buffer: Buffer;
-        mimetype: string;
-      }> | undefined;
+      const files = req.files as
+        | Array<{
+            fieldname: string;
+            originalname: string;
+            path: string;
+            size: number;
+            buffer: Buffer;
+            mimetype: string;
+          }>
+        | undefined;
       if (!files || files.length === 0) {
-        ResponseHelper.validationError(res, 'Je nutné vybrat alespoň jeden soubor');
+        ResponseHelper.validationError(
+          res,
+          'Je nutné vybrat alespoň jeden soubor'
+        );
         return;
       }
 
       // Validate files before processing
-      const allowedMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/bmp', 'image/x-ms-bmp', 'image/x-bmp', 'image/tiff', 'image/tif', 'image/gif'];
-      const maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '5242880', 10); // Default 5MB
+      const allowedMimeTypes = [
+        'image/png',
+        'image/jpeg',
+        'image/jpg',
+        'image/webp',
+        'image/bmp',
+        'image/x-ms-bmp',
+        'image/x-bmp',
+        'image/tiff',
+        'image/tif',
+        'image/gif',
+      ];
+      const maxFileSize = parseInt(process.env.MAX_FILE_SIZE || '20971520', 10); // Default 20MB
 
       for (const file of files) {
         if (!file.buffer || !file.originalname) {
-          ResponseHelper.validationError(res, 'Invalid file: missing buffer or name');
+          ResponseHelper.validationError(
+            res,
+            'Invalid file: missing buffer or name'
+          );
           return;
         }
-        
+
         if (!allowedMimeTypes.includes(file.mimetype)) {
-          ResponseHelper.validationError(res, `Invalid file type: ${file.mimetype}. Allowed types: ${allowedMimeTypes.join(', ')}`);
+          ResponseHelper.validationError(
+            res,
+            `Invalid file type: ${file.mimetype}. Allowed types: ${allowedMimeTypes.join(', ')}`
+          );
           return;
         }
-        
+
         if (file.size > maxFileSize) {
           const maxSizeMB = Math.round(maxFileSize / (1024 * 1024));
-          ResponseHelper.validationError(res, `File too large: ${file.originalname}. Maximum size: ${maxSizeMB}MB`);
+          ResponseHelper.validationError(
+            res,
+            `File too large: ${file.originalname}. Maximum size: ${maxSizeMB}MB`
+          );
           return;
         }
       }
 
       // Convert multer files to service format
-      const uploadFiles = files.map(file => ({
-        originalname: file.originalname,
-        buffer: file.buffer,
-        mimetype: file.mimetype,
-        size: file.size
-      }));
+      // Robust Unicode normalization to handle all OS/browser combinations
+      const uploadFiles = files.map(file => {
+        let normalizedName = file.originalname;
+
+        // Handle potential double UTF-8 encoding (can happen with some browsers)
+        // Check for mojibake patterns (Ã, Ä, Å followed by special chars)
+        if (/[ÀÁÂÃÄÅ][\x80-\xBF]/.test(normalizedName)) {
+          try {
+            // Attempt to fix double-encoded UTF-8
+            const bytes = Buffer.from(normalizedName, 'latin1');
+            const decoded = bytes.toString('utf8');
+            // Verify the decoded string is valid
+            if (decoded && !decoded.includes('�')) {
+              normalizedName = decoded;
+            }
+          } catch (e) {
+            logger.warn('Failed to decode potential double-encoded filename', undefined, {
+              filename: normalizedName,
+              error: e.message,
+            });
+          }
+        }
+
+        // Always normalize to NFC (composed form) for consistency
+        // This handles NFD from macOS and ensures consistency across all platforms
+        normalizedName = normalizedName.normalize('NFC');
+
+        logger.debug('Filename normalization', undefined, {
+          original: file.originalname,
+          normalized: normalizedName,
+          isChanged: file.originalname !== normalizedName,
+        });
+
+        return {
+          originalname: normalizedName,
+          buffer: file.buffer,
+          mimetype: file.mimetype,
+          size: file.size,
+        };
+      });
 
       logger.info('Starting image upload request', 'ImageController', {
         projectId,
         userId,
-        fileCount: files.length
+        fileCount: files.length,
       });
 
       // Generate unique batch ID for this upload session
       const batchId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
+
       // Get WebSocket service instance
       const wsService = WebSocketService.getInstance();
 
       // Track files uploaded (not just completed) for more responsive progress
       let filesUploaded = 0;
-      
+
       // Upload images with progress tracking
       const uploadedImages = await this.imageService.uploadImagesWithProgress(
         projectId,
@@ -104,7 +170,13 @@ export class ImageController {
         uploadFiles,
         batchId,
         // Progress callback for each file
-        (filename: string, fileSize: number, progress: number, status: string, filesCompleted: number) => {
+        (
+          filename: string,
+          fileSize: number,
+          progress: number,
+          status: string,
+          filesCompleted: number
+        ) => {
           // Track uploaded files separately for more responsive progress bar
           if (status === 'uploading' && progress >= 50) {
             // File has been uploaded to storage (50% progress)
@@ -113,29 +185,38 @@ export class ImageController {
             // File is fully processed
             filesUploaded = Math.max(filesUploaded, filesCompleted);
           }
-          
+
           // Calculate overall progress based on files uploaded, not just completed
-          const overallProgress = files.length > 0 
-            ? Math.round((filesUploaded / files.length) * 100)
-            : 0;
-          
+          const overallProgress =
+            files.length > 0
+              ? Math.round((filesUploaded / files.length) * 100)
+              : 0;
+
           const progressData: UploadProgressData = {
             projectId,
             batchId,
             filename,
             fileSize,
             progress,
-            currentFileStatus: status as 'uploading' | 'processing' | 'completed' | 'failed',
+            currentFileStatus: status as
+              | 'uploading'
+              | 'processing'
+              | 'completed'
+              | 'failed',
             filesCompleted,
             filesTotal: files.length,
             percentComplete: overallProgress,
-            timestamp: new Date()
+            timestamp: new Date(),
           };
-          
-          wsService.emitToUser(userId, WebSocketEvent.UPLOAD_PROGRESS, progressData);
+
+          wsService.emitToUser(
+            userId,
+            WebSocketEvent.UPLOAD_PROGRESS,
+            progressData
+          );
         }
       );
-      
+
       // Emit completion event
       const completedData: UploadCompletedData = {
         projectId,
@@ -144,35 +225,59 @@ export class ImageController {
           totalFiles: files.length,
           successCount: uploadedImages.length,
           failedCount: files.length - uploadedImages.length,
-          failedFiles: files.length > uploadedImages.length ? 
-            files.filter(f => !uploadedImages.find(img => img.name === f.originalname))
-                 .map(f => f.originalname) : undefined
+          failedFiles:
+            files.length > uploadedImages.length
+              ? files
+                  .filter(
+                    f =>
+                      !uploadedImages.find(img => img.name === f.originalname)
+                  )
+                  .map(f => f.originalname)
+              : undefined,
         },
         uploadedImages: uploadedImages.map(img => ({
           id: img.id,
           name: img.name,
           originalUrl: img.originalUrl,
-          thumbnailUrl: img.thumbnailUrl
+          thumbnailUrl: img.thumbnailUrl,
         })),
-        timestamp: new Date()
+        timestamp: new Date(),
       };
-      
-      wsService.emitToUser(userId, WebSocketEvent.UPLOAD_COMPLETED, completedData);
 
-      ResponseHelper.success(res, {
-        images: uploadedImages,
-        count: uploadedImages.length
-      }, `Úspěšně nahráno ${uploadedImages.length} obrázků`);
+      wsService.emitToUser(
+        userId,
+        WebSocketEvent.UPLOAD_COMPLETED,
+        completedData
+      );
 
+      ResponseHelper.success(
+        res,
+        {
+          images: uploadedImages,
+          count: uploadedImages.length,
+        },
+        `Úspěšně nahráno ${uploadedImages.length} obrázků`
+      );
     } catch (error) {
-      logger.error('Image upload failed', error instanceof Error ? error : undefined, 'ImageController', {
-        userId: req.user?.id,
-        projectId: req.params.id
-      });
+      logger.error(
+        'Image upload failed',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          projectId: req.params.id,
+        }
+      );
 
       // Handle ApiError instances directly
       if (error instanceof ApiError) {
-        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        ResponseHelper.error(
+          res,
+          error,
+          error.statusCode,
+          undefined,
+          'ImageController'
+        );
         return;
       }
 
@@ -208,20 +313,26 @@ export class ImageController {
       // Validate sortBy
       const allowedSortFields = ['name', 'createdAt', 'updatedAt', 'fileSize'];
       if (!allowedSortFields.includes(sortByRaw)) {
-        res.status(400).json({ error: 'Invalid query parameter', field: 'sortBy' });
+        res
+          .status(400)
+          .json({ error: 'Invalid query parameter', field: 'sortBy' });
         return;
       }
 
       // Validate sortOrder
       if (!['asc', 'desc'].includes(sortOrderRaw)) {
-        res.status(400).json({ error: 'Invalid query parameter', field: 'sortOrder' });
+        res
+          .status(400)
+          .json({ error: 'Invalid query parameter', field: 'sortOrder' });
         return;
       }
 
       // Validate status
       const allowedStatuses = ['pending', 'processing', 'completed', 'failed'];
       if (statusRaw && !allowedStatuses.includes(statusRaw)) {
-        res.status(400).json({ error: 'Invalid query parameter', field: 'status' });
+        res
+          .status(400)
+          .json({ error: 'Invalid query parameter', field: 'status' });
         return;
       }
 
@@ -234,13 +345,18 @@ export class ImageController {
         limit,
         sortBy: sortBy as 'name' | 'createdAt' | 'updatedAt' | 'fileSize',
         sortOrder: sortOrder as 'asc' | 'desc',
-        status: status as 'pending' | 'processing' | 'completed' | 'failed' | undefined
+        status: status as
+          | 'pending'
+          | 'processing'
+          | 'completed'
+          | 'failed'
+          | undefined,
       };
 
       logger.info('Getting project images', 'ImageController', {
         projectId,
         userId,
-        queryParams
+        queryParams,
       });
 
       const result = await this.imageService.getProjectImages(
@@ -250,16 +366,26 @@ export class ImageController {
       );
 
       ResponseHelper.success(res, result, 'Seznam obrázků úspěšně načten');
-
     } catch (error) {
-      logger.error('Failed to get project images', error instanceof Error ? error : undefined, 'ImageController', {
-        userId: req.user?.id,
-        projectId: req.params.id
-      });
+      logger.error(
+        'Failed to get project images',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          projectId: req.params.id,
+        }
+      );
 
       // Handle ApiError instances directly - this is the primary fix
       if (error instanceof ApiError) {
-        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        ResponseHelper.error(
+          res,
+          error,
+          error.statusCode,
+          undefined,
+          'ImageController'
+        );
         return;
       }
 
@@ -288,7 +414,7 @@ export class ImageController {
 
       logger.info('Getting image detail', 'ImageController', {
         imageId,
-        userId
+        userId,
       });
 
       const image = await this.imageService.getImageById(imageId, userId);
@@ -299,12 +425,16 @@ export class ImageController {
       }
 
       ResponseHelper.success(res, { image }, 'Detail obrázku úspěšně načten');
-
     } catch (error) {
-      logger.error('Failed to get image detail', error instanceof Error ? error : undefined, 'ImageController', {
-        userId: req.user?.id,
-        imageId: req.params.imageId
-      });
+      logger.error(
+        'Failed to get image detail',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          imageId: req.params.imageId,
+        }
+      );
 
       ResponseHelper.internalError(res, error as Error);
     }
@@ -330,22 +460,32 @@ export class ImageController {
 
       logger.info('Deleting image', 'ImageController', {
         imageId,
-        userId
+        userId,
       });
 
       await this.imageService.deleteImage(imageId, userId);
 
       ResponseHelper.success(res, null, 'Obrázek byl úspěšně smazán');
-
     } catch (error) {
-      logger.error('Failed to delete image', error instanceof Error ? error : undefined, 'ImageController', {
-        userId: req.user?.id,
-        imageId: req.params.imageId
-      });
+      logger.error(
+        'Failed to delete image',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          imageId: req.params.imageId,
+        }
+      );
 
       // Handle ApiError instances directly
       if (error instanceof ApiError) {
-        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        ResponseHelper.error(
+          res,
+          error,
+          error.statusCode,
+          undefined,
+          'ImageController'
+        );
         return;
       }
 
@@ -375,7 +515,10 @@ export class ImageController {
       }
 
       if (imageIds.length > 100) {
-        ResponseHelper.badRequest(res, 'Můžete smazat maximálně 100 obrázků najednou');
+        ResponseHelper.badRequest(
+          res,
+          'Můžete smazat maximálně 100 obrázků najednou'
+        );
         return;
       }
 
@@ -385,7 +528,8 @@ export class ImageController {
       }
 
       // Validate all imageIds are UUIDs
-      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
       const invalidIds = imageIds.filter(id => !uuidRegex.test(id));
       if (invalidIds.length > 0) {
         ResponseHelper.badRequest(res, 'Neplatná ID obrázků');
@@ -396,22 +540,40 @@ export class ImageController {
         imageIds,
         projectId,
         userId,
-        count: imageIds.length
+        count: imageIds.length,
       });
 
-      const result = await this.imageService.deleteBatch(imageIds, userId, projectId);
+      const result = await this.imageService.deleteBatch(
+        imageIds,
+        userId,
+        projectId
+      );
 
-      ResponseHelper.success(res, result, `Úspěšně smazáno ${result.deletedCount} obrázků`);
-
+      ResponseHelper.success(
+        res,
+        result,
+        `Úspěšně smazáno ${result.deletedCount} obrázků`
+      );
     } catch (error) {
-      logger.error('Failed to delete images in batch', error instanceof Error ? error : undefined, 'ImageController', {
-        userId: req.user?.id,
-        imageIds: req.body?.imageIds
-      });
+      logger.error(
+        'Failed to delete images in batch',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          imageIds: req.body?.imageIds,
+        }
+      );
 
       // Handle ApiError instances directly
       if (error instanceof ApiError) {
-        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        ResponseHelper.error(
+          res,
+          error,
+          error.statusCode,
+          undefined,
+          'ImageController'
+        );
         return;
       }
 
@@ -424,7 +586,10 @@ export class ImageController {
    * Get single image with optional segmentation data
    * GET /api/images/:imageId
    */
-  getImageWithSegmentation = async (req: Request, res: Response): Promise<void> => {
+  getImageWithSegmentation = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -442,12 +607,12 @@ export class ImageController {
       logger.info('Getting image with segmentation', 'ImageController', {
         imageId,
         userId,
-        includeSegmentation
+        includeSegmentation,
       });
 
       // Get image data
       const image = await this.imageService.getImageById(imageId, userId);
-      
+
       if (!image) {
         ResponseHelper.notFound(res, 'Obrázek nenalezen');
         return;
@@ -456,7 +621,7 @@ export class ImageController {
       // Include segmentation if requested
       if (includeSegmentation === 'true') {
         const segmentation = await prisma.segmentation.findUnique({
-          where: { imageId }
+          where: { imageId },
         });
 
         if (segmentation) {
@@ -464,39 +629,54 @@ export class ImageController {
           try {
             parsedPolygons = JSON.parse(segmentation.polygons);
           } catch (error) {
-            logger.error('Failed to parse segmentation polygons:', error instanceof Error ? error : new Error(String(error)), 'ImageController');
-            ResponseHelper.internalError(res, new Error('Invalid segmentation data format'));
+            logger.error(
+              'Failed to parse segmentation polygons:',
+              error instanceof Error ? error : new Error(String(error)),
+              'ImageController'
+            );
+            ResponseHelper.internalError(
+              res,
+              new Error('Invalid segmentation data format')
+            );
             return;
           }
-          ResponseHelper.success(res, {
-            ...image,
-            segmentation: {
-              id: segmentation.id,
-              imageId: segmentation.imageId,
-              polygons: parsedPolygons,
-              model: segmentation.model,
-              threshold: segmentation.threshold,
-              confidence: segmentation.confidence,
-              processingTime: segmentation.processingTime,
-              imageWidth: segmentation.imageWidth,
-              imageHeight: segmentation.imageHeight,
-              status: 'completed',
-              createdAt: segmentation.createdAt,
-              updatedAt: segmentation.updatedAt
-            }
-          }, 'Obrázek načten');
+          ResponseHelper.success(
+            res,
+            {
+              ...image,
+              segmentation: {
+                id: segmentation.id,
+                imageId: segmentation.imageId,
+                polygons: parsedPolygons,
+                model: segmentation.model,
+                threshold: segmentation.threshold,
+                confidence: segmentation.confidence,
+                processingTime: segmentation.processingTime,
+                imageWidth: segmentation.imageWidth,
+                imageHeight: segmentation.imageHeight,
+                status: 'completed',
+                createdAt: segmentation.createdAt,
+                updatedAt: segmentation.updatedAt,
+              },
+            },
+            'Obrázek načten'
+          );
         } else {
           ResponseHelper.success(res, image, 'Obrázek načten');
         }
       } else {
         ResponseHelper.success(res, image, 'Obrázek načten');
       }
-
     } catch (error) {
-      logger.error('Failed to get image with segmentation', error instanceof Error ? error : undefined, 'ImageController', {
-        userId: req.user?.id,
-        imageId: req.params.imageId
-      });
+      logger.error(
+        'Failed to get image with segmentation',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          imageId: req.params.imageId,
+        }
+      );
 
       ResponseHelper.internalError(res, error as Error);
     }
@@ -522,22 +702,36 @@ export class ImageController {
 
       logger.info('Getting image statistics', 'ImageController', {
         projectId,
-        userId
+        userId,
       });
 
       const stats = await this.imageService.getImageStats(projectId, userId);
 
-      ResponseHelper.success(res, { stats }, 'Statistiky obrázků úspěšně načteny');
-
+      ResponseHelper.success(
+        res,
+        { stats },
+        'Statistiky obrázků úspěšně načteny'
+      );
     } catch (error) {
-      logger.error('Failed to get image statistics', error instanceof Error ? error : undefined, 'ImageController', {
-        userId: req.user?.id,
-        projectId: req.params.id
-      });
+      logger.error(
+        'Failed to get image statistics',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          projectId: req.params.id,
+        }
+      );
 
       // Handle ApiError instances directly
       if (error instanceof ApiError) {
-        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        ResponseHelper.error(
+          res,
+          error,
+          error.statusCode,
+          undefined,
+          'ImageController'
+        );
         return;
       }
 
@@ -550,7 +744,10 @@ export class ImageController {
    * Get project images with optimized thumbnail data for cards
    * GET /api/projects/:projectId/images-with-thumbnails
    */
-  getProjectImagesWithThumbnails = async (req: Request, res: Response): Promise<void> => {
+  getProjectImagesWithThumbnails = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -559,10 +756,10 @@ export class ImageController {
       }
 
       const projectId = req.params.id;
-      const { 
-        lod = 'low',  // level of detail: low, medium, high
+      const {
+        lod = 'low', // level of detail: low, medium, high
         page = '1',
-        limit = '50'
+        limit = '50',
       } = req.query;
 
       if (!projectId) {
@@ -580,15 +777,21 @@ export class ImageController {
       // Validate and parse limit parameter
       const limitNum = parseInt(limit as string, 10);
       if (isNaN(limitNum) || limitNum < 1 || limitNum > 100) {
-        ResponseHelper.badRequest(res, 'Limit must be a positive integer between 1 and 100');
+        ResponseHelper.badRequest(
+          res,
+          'Limit must be a positive integer between 1 and 100'
+        );
         return;
       }
 
       // Validate level of detail parameter
       const validLods = ['low', 'medium', 'high'] as const;
       const levelOfDetail = lod as string;
-      if (!validLods.includes(levelOfDetail as typeof validLods[number])) {
-        ResponseHelper.badRequest(res, 'Level of detail must be one of: low, medium, high');
+      if (!validLods.includes(levelOfDetail as (typeof validLods)[number])) {
+        ResponseHelper.badRequest(
+          res,
+          'Level of detail must be one of: low, medium, high'
+        );
         return;
       }
 
@@ -597,18 +800,15 @@ export class ImageController {
         userId,
         levelOfDetail,
         page: pageNum,
-        limit: limitNum
+        limit: limitNum,
       });
 
-      // Verify project ownership
-      const project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          userId
-        }
-      });
-
-      if (!project) {
+      // Check if user has access to this project (owner or shared)
+      const accessCheck = await SharingService.hasProjectAccess(
+        projectId,
+        userId
+      );
+      if (!accessCheck.hasAccess) {
         ResponseHelper.notFound(res, 'Projekt nenalezen nebo nemáte oprávnění');
         return;
       }
@@ -616,126 +816,125 @@ export class ImageController {
       // Get images with segmentation data in a single optimized query
       const images = await prisma.image.findMany({
         where: {
-          projectId
+          projectId,
         },
         include: {
-          segmentation: {
-            include: {
-              segmentationThumbnails: {
-                where: {
-                  levelOfDetail
-                }
-              }
-            }
-          }
+          segmentation: true,
         },
         orderBy: {
-          updatedAt: 'desc'
+          updatedAt: 'desc',
         },
         skip: (pageNum - 1) * limitNum,
-        take: limitNum
+        take: limitNum,
       });
 
       // Get total count for pagination
       const totalCount = await prisma.image.count({
-        where: { projectId }
+        where: { projectId },
       });
 
       // Get storage provider for URL generation
       const storage = getStorageProvider();
 
       // Transform data for frontend with proper URLs
-      const transformedImages = await Promise.all(images.map(async (image) => {
-        let thumbnailData: {
-          polygons: Array<Record<string, unknown>>;
-          imageWidth: number | null;
-          imageHeight: number | null;
-          levelOfDetail: string;
-          polygonCount: number;
-          pointCount: number;
-          compressionRatio: number;
-        } | null = null;
+      const transformedImages = await Promise.all(
+        images.map(async image => {
+          let thumbnailData: {
+            polygons: Array<Record<string, unknown>>;
+            imageWidth: number | null;
+            imageHeight: number | null;
+            levelOfDetail: string;
+            polygonCount: number;
+            pointCount: number;
+            compressionRatio: number;
+          } | null = null;
 
-        if (image.segmentation && image.segmentation.segmentationThumbnails.length > 0) {
-          const thumbnail = image.segmentation.segmentationThumbnails[0];
-          if (thumbnail) {
-            try {
-              const parsedPolygons = JSON.parse(thumbnail.simplifiedData);
-              
-              // Validate the parsed data structure
-              if (!Array.isArray(parsedPolygons)) {
-                throw new Error('Parsed polygon data is not an array');
-              }
-              
-              // Basic validation for polygon structure
-              for (const polygon of parsedPolygons) {
-                if (!polygon || typeof polygon !== 'object') {
-                  throw new Error('Invalid polygon structure');
+          if (image.segmentation) {
+            // Use full segmentation data as we don't have thumbnails table yet
+            const segmentationData = image.segmentation;
+            if (segmentationData.polygons) {
+              try {
+                const parsedPolygons = JSON.parse(segmentationData.polygons);
+
+                // Validate the parsed data structure
+                if (!Array.isArray(parsedPolygons)) {
+                  throw new Error('Parsed polygon data is not an array');
                 }
-                if (!Array.isArray(polygon.points) && !Array.isArray(polygon.coordinates)) {
-                  throw new Error('Polygon missing points/coordinates array');
+
+                // Basic validation for polygon structure
+                for (const polygon of parsedPolygons) {
+                  if (!polygon || typeof polygon !== 'object') {
+                    throw new Error('Invalid polygon structure');
+                  }
+                  if (
+                    !Array.isArray(polygon.points) &&
+                    !Array.isArray(polygon.coordinates)
+                  ) {
+                    throw new Error('Polygon missing points/coordinates array');
+                  }
                 }
+
+                thumbnailData = {
+                  polygons: parsedPolygons,
+                  imageWidth: image.segmentation.imageWidth,
+                  imageHeight: image.segmentation.imageHeight,
+                  levelOfDetail: levelOfDetail,
+                  polygonCount: parsedPolygons.length,
+                  pointCount: parsedPolygons.reduce((sum: number, p: any) =>
+                    sum + (p.points?.length || p.coordinates?.length || 0), 0),
+                  compressionRatio: 1.0,
+                };
+              } catch (error) {
+                logger.error(
+                  `Failed to parse or validate thumbnail data for image ${image.id}: ${error instanceof Error ? error.message : String(error)}`,
+                  error instanceof Error ? error : new Error(String(error)),
+                  'ImageController'
+                );
+                // Use safe default when parsing fails
+                thumbnailData = {
+                  polygons: [],
+                  imageWidth: image.segmentation.imageWidth,
+                  imageHeight: image.segmentation.imageHeight,
+                  levelOfDetail: levelOfDetail,
+                  polygonCount: 0,
+                  pointCount: 0,
+                  compressionRatio: 1.0,
+                };
               }
-              
-              thumbnailData = {
-                polygons: parsedPolygons,
-                imageWidth: image.segmentation.imageWidth,
-                imageHeight: image.segmentation.imageHeight,
-                levelOfDetail: thumbnail.levelOfDetail,
-                polygonCount: thumbnail.polygonCount,
-                pointCount: thumbnail.pointCount,
-                compressionRatio: thumbnail.compressionRatio
-              };
-            } catch (error) {
-              logger.error(
-                `Failed to parse or validate thumbnail data for image ${image.id}: ${error instanceof Error ? error.message : String(error)}`,
-                error instanceof Error ? error : new Error(String(error)),
-                'ImageController'
-              );
-              // Use safe default when parsing fails
-              thumbnailData = {
-                polygons: [],
-                imageWidth: image.segmentation.imageWidth,
-                imageHeight: image.segmentation.imageHeight,
-                levelOfDetail: thumbnail.levelOfDetail,
-                polygonCount: 0,
-                pointCount: 0,
-                compressionRatio: thumbnail.compressionRatio
-              };
             }
           }
-        }
 
-        // Generate proper URLs using storage service
-        const originalUrl = await storage.getUrl(image.originalPath);
-        const thumbnailUrl = image.thumbnailPath 
-          ? await storage.getUrl(image.thumbnailPath)
-          : originalUrl; // Fallback to original if no thumbnail
+          // Generate proper URLs using storage service
+          const originalUrl = await storage.getUrl(image.originalPath);
+          const thumbnailUrl = image.thumbnailPath
+            ? await storage.getUrl(image.thumbnailPath)
+            : originalUrl; // Fallback to original if no thumbnail
 
-        // Generate segmentation thumbnail URL if it exists
-        const segmentationThumbnailUrl = image.segmentationThumbnailPath
-          ? await storage.getUrl(image.segmentationThumbnailPath)
-          : null;
+          // Generate segmentation thumbnail URL if it exists
+          const segmentationThumbnailUrl = image.segmentationThumbnailPath
+            ? await storage.getUrl(image.segmentationThumbnailPath)
+            : null;
 
-        return {
-          id: image.id,
-          name: image.name,
-          thumbnail_url: thumbnailUrl,
-          url: originalUrl,
-          image_url: originalUrl,
-          projectId: image.projectId,
-          segmentationStatus: image.segmentationStatus,
-          fileSize: image.fileSize,
-          width: image.width,
-          height: image.height,
-          mimeType: image.mimeType,
-          createdAt: image.createdAt,
-          updatedAt: image.updatedAt,
-          segmentationResult: thumbnailData,
-          segmentationThumbnailUrl: segmentationThumbnailUrl,
-          segmentationThumbnailPath: image.segmentationThumbnailPath
-        };
-      }));
+          return {
+            id: image.id,
+            name: image.name,
+            thumbnail_url: thumbnailUrl,
+            url: originalUrl,
+            image_url: originalUrl,
+            projectId: image.projectId,
+            segmentationStatus: image.segmentationStatus,
+            fileSize: image.fileSize,
+            width: image.width,
+            height: image.height,
+            mimeType: image.mimeType,
+            createdAt: image.createdAt,
+            updatedAt: image.updatedAt,
+            segmentationResult: thumbnailData,
+            segmentationThumbnailUrl: segmentationThumbnailUrl,
+            segmentationThumbnailPath: image.segmentationThumbnailPath,
+          };
+        })
+      );
 
       const response = {
         images: transformedImages,
@@ -743,13 +942,15 @@ export class ImageController {
           page: pageNum,
           limit: limitNum,
           total: totalCount,
-          pages: Math.ceil(totalCount / limitNum)
+          pages: Math.ceil(totalCount / limitNum),
         },
         metadata: {
           levelOfDetail,
           totalImages: totalCount,
-          imagesWithThumbnails: transformedImages.filter(img => img.segmentationResult).length
-        }
+          imagesWithThumbnails: transformedImages.filter(
+            img => img.segmentationResult
+          ).length,
+        },
       };
 
       logger.debug(
@@ -758,12 +959,15 @@ export class ImageController {
         {
           projectId,
           levelOfDetail,
-          totalImages: totalCount
+          totalImages: totalCount,
         }
       );
 
-      ResponseHelper.success(res, response, 'Obrázky s náhledy úspěšně načteny');
-
+      ResponseHelper.success(
+        res,
+        response,
+        'Obrázky s náhledy úspěšně načteny'
+      );
     } catch (error) {
       logger.error(
         'Failed to get project images with thumbnails',
@@ -771,13 +975,19 @@ export class ImageController {
         'ImageController',
         {
           userId: req.user?.id,
-          projectId: req.params.projectId
+          projectId: req.params.projectId,
         }
       );
 
       // Handle ApiError instances directly
       if (error instanceof ApiError) {
-        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        ResponseHelper.error(
+          res,
+          error,
+          error.statusCode,
+          undefined,
+          'ImageController'
+        );
         return;
       }
 
@@ -800,37 +1010,47 @@ export class ImageController {
 
       // Optional user ID for logging (but don't require authentication for display)
       const userId = req.user?.id;
-      
+
       logger.info('Serving image for display', 'ImageController', {
         imageId,
-        userId: userId || 'anonymous'
+        userId: userId || 'anonymous',
       });
 
       // Get browser-compatible image data (without strict user permission check for display)
-      const imageData = await this.imageService.getBrowserCompatibleImage(imageId);
+      const imageData =
+        await this.imageService.getBrowserCompatibleImage(imageId);
 
       // Set appropriate headers
       res.set({
         'Content-Type': imageData.mimeType,
         'Content-Length': imageData.buffer.length.toString(),
         'Cache-Control': 'public, max-age=31536000', // Cache for 1 year
-        'ETag': `"${imageId}"`,
-        'Content-Disposition': `inline; filename="${imageData.filename}"`
+        ETag: `"${imageId}"`,
+        'Content-Disposition': `inline; filename="${imageData.filename}"`,
       });
 
       // Send the image buffer
       res.send(imageData.buffer);
-
     } catch (error) {
-      logger.error('Failed to serve image for display', error instanceof Error ? error : undefined, 'ImageController', {
-        imageId: req.params.imageId,
-        userId: req.user?.id
-      });
+      logger.error(
+        'Failed to serve image for display',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          imageId: req.params.imageId,
+          userId: req.user?.id,
+        }
+      );
 
       if (error instanceof Error && error.message.includes('nenalezen')) {
         ResponseHelper.notFound(res, 'Image not found or access denied');
       } else {
-        ResponseHelper.internalError(res, error as Error, undefined, 'ImageController');
+        ResponseHelper.internalError(
+          res,
+          error as Error,
+          undefined,
+          'ImageController'
+        );
       }
     }
   };
@@ -838,7 +1058,7 @@ export class ImageController {
   /**
    * Regenerate missing segmentation thumbnails for a project
    * POST /api/projects/:projectId/regenerate-thumbnails
-   * 
+   *
    * This endpoint finds images with segmentationStatus='segmented' but missing segmentationThumbnailPath
    * and regenerates the thumbnails using the retry-enabled service
    */
@@ -857,16 +1077,19 @@ export class ImageController {
       }
 
       // Optional query parameters
-      const { 
-        dryRun = 'false',  // If true, only count missing thumbnails without regenerating
-        limit = '100'      // Limit number of thumbnails to regenerate in one request
+      const {
+        dryRun = 'false', // If true, only count missing thumbnails without regenerating
+        limit = '100', // Limit number of thumbnails to regenerate in one request
       } = req.query;
 
       const isDryRun = dryRun === 'true';
       const limitNum = parseInt(limit as string, 10);
-      
+
       if (isNaN(limitNum) || limitNum < 1 || limitNum > 1000) {
-        ResponseHelper.badRequest(res, 'Limit must be a positive integer between 1 and 1000');
+        ResponseHelper.badRequest(
+          res,
+          'Limit must be a positive integer between 1 and 1000'
+        );
         return;
       }
 
@@ -874,18 +1097,15 @@ export class ImageController {
         projectId,
         userId,
         isDryRun,
-        limit: limitNum
+        limit: limitNum,
       });
 
-      // Verify project ownership
-      const project = await prisma.project.findFirst({
-        where: {
-          id: projectId,
-          userId
-        }
-      });
-
-      if (!project) {
+      // Check if user has access to this project (owner or shared)
+      const accessCheck = await SharingService.hasProjectAccess(
+        projectId,
+        userId
+      );
+      if (!accessCheck.hasAccess) {
         ResponseHelper.notFound(res, 'Projekt nenalezen nebo nemáte oprávnění');
         return;
       }
@@ -897,31 +1117,33 @@ export class ImageController {
           segmentationStatus: 'segmented',
           OR: [
             { segmentationThumbnailPath: null },
-            { segmentationThumbnailPath: '' }
-          ]
+            { segmentationThumbnailPath: '' },
+          ],
         },
         include: {
           segmentation: {
             select: {
               id: true,
-              imageId: true
-            }
-          }
+              imageId: true,
+            },
+          },
         },
         orderBy: {
-          updatedAt: 'desc'  // Prioritize recently processed images
+          updatedAt: 'desc', // Prioritize recently processed images
         },
-        take: limitNum
+        take: limitNum,
       });
 
       // Filter to only images that actually have segmentation data
-      const validImages = imagesWithMissingThumbnails.filter(img => img.segmentation);
-      
+      const validImages = imagesWithMissingThumbnails.filter(
+        img => img.segmentation
+      );
+
       logger.info('Found images with missing thumbnails', 'ImageController', {
         projectId,
         totalFound: imagesWithMissingThumbnails.length,
         validWithSegmentation: validImages.length,
-        isDryRun
+        isDryRun,
       });
 
       if (isDryRun) {
@@ -934,22 +1156,31 @@ export class ImageController {
             id: img.id,
             name: img.name,
             segmentationId: img.segmentation?.id,
-            updatedAt: img.updatedAt
+            updatedAt: img.updatedAt,
           })),
-          concurrencyStatus: this.segmentationThumbnailService.getConcurrencyStatus()
+          concurrencyStatus:
+            this.segmentationThumbnailService.getConcurrencyStatus(),
         };
 
-        ResponseHelper.success(res, summary, `Nalezeno ${validImages.length} obrázků s chybějícími náhledy (dry run)`);
+        ResponseHelper.success(
+          res,
+          summary,
+          `Nalezeno ${validImages.length} obrázků s chybějícími náhledy (dry run)`
+        );
         return;
       }
 
       if (validImages.length === 0) {
-        ResponseHelper.success(res, {
-          projectId,
-          regeneratedCount: 0,
-          failedCount: 0,
-          message: 'No images with missing thumbnails found'
-        }, 'Žádné obrázky s chybějícími náhledy nebyly nalezeny');
+        ResponseHelper.success(
+          res,
+          {
+            projectId,
+            regeneratedCount: 0,
+            failedCount: 0,
+            message: 'No images with missing thumbnails found',
+          },
+          'Žádné obrázky s chybějícími náhledy nebyly nalezeny'
+        );
         return;
       }
 
@@ -960,14 +1191,15 @@ export class ImageController {
 
       // Regenerate thumbnails using batch processing with retry logic
       const startTime = Date.now();
-      const results = await this.segmentationThumbnailService.generateBatchThumbnails(
-        segmentationIds,
-        {
-          width: 300,
-          height: 300,
-          showNumbers: false
-        }
-      );
+      const results =
+        await this.segmentationThumbnailService.generateBatchThumbnails(
+          segmentationIds,
+          {
+            width: 300,
+            height: 300,
+            showNumbers: false,
+          }
+        );
 
       // Count successes and failures
       let successCount = 0;
@@ -979,7 +1211,9 @@ export class ImageController {
           successCount++;
         } else {
           failureCount++;
-          const failedImage = validImages.find(img => img.segmentation?.id === segmentationId);
+          const failedImage = validImages.find(
+            img => img.segmentation?.id === segmentationId
+          );
           if (failedImage) {
             failedImages.push(failedImage.name);
           }
@@ -994,7 +1228,8 @@ export class ImageController {
         successCount,
         failureCount,
         totalTime,
-        concurrencyStatus: this.segmentationThumbnailService.getConcurrencyStatus()
+        concurrencyStatus:
+          this.segmentationThumbnailService.getConcurrencyStatus(),
       });
 
       const response = {
@@ -1004,26 +1239,43 @@ export class ImageController {
         failedCount: failureCount,
         processingTime: totalTime,
         failedImages: failureCount > 0 ? failedImages : undefined,
-        concurrencyStatus: this.segmentationThumbnailService.getConcurrencyStatus()
+        concurrencyStatus:
+          this.segmentationThumbnailService.getConcurrencyStatus(),
       };
 
       if (failureCount > 0) {
-        ResponseHelper.success(res, response, 
-          `Úspěšně regenerováno ${successCount} náhledů, ${failureCount} selhalo`);
+        ResponseHelper.success(
+          res,
+          response,
+          `Úspěšně regenerováno ${successCount} náhledů, ${failureCount} selhalo`
+        );
       } else {
-        ResponseHelper.success(res, response, 
-          `Úspěšně regenerováno ${successCount} náhledů`);
+        ResponseHelper.success(
+          res,
+          response,
+          `Úspěšně regenerováno ${successCount} náhledů`
+        );
       }
-
     } catch (error) {
-      logger.error('Failed to regenerate thumbnails', error instanceof Error ? error : undefined, 'ImageController', {
-        userId: req.user?.id,
-        projectId: req.params.projectId
-      });
+      logger.error(
+        'Failed to regenerate thumbnails',
+        error instanceof Error ? error : undefined,
+        'ImageController',
+        {
+          userId: req.user?.id,
+          projectId: req.params.projectId,
+        }
+      );
 
       // Handle ApiError instances directly
       if (error instanceof ApiError) {
-        ResponseHelper.error(res, error, error.statusCode, undefined, 'ImageController');
+        ResponseHelper.error(
+          res,
+          error,
+          error.statusCode,
+          undefined,
+          'ImageController'
+        );
         return;
       }
 
