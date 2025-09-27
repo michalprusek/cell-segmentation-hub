@@ -714,23 +714,41 @@ const ProjectDetail = () => {
         queueStats && (queueStats.queued > 10 || queueStats.processing > 5);
 
       if (isBulkOperation) {
-        // Batch the update
+        // Batch the update - store in pending map
         pendingUpdatesRef.current.set(update.imageId, {
           normalizedStatus,
           clearSegmentationData,
         });
 
-        // Clear existing timeout and set new one
-        if (batchUpdateTimeoutRef.current) {
-          clearTimeout(batchUpdateTimeoutRef.current);
-        }
+        // Set up periodic batch processing if not already running
+        // Don't reset the timer on every update to ensure all updates get processed
+        if (!batchUpdateTimeoutRef.current) {
+          // Shorter timeout to ensure updates are visible sooner
+          const batchTimeout = queueStats.queued > 100 ? 300 : 200;
 
-        // Longer batch timeout for bulk operations to reduce UI updates
-        const batchTimeout = queueStats.queued > 100 ? 1000 : 500;
-        batchUpdateTimeoutRef.current = setTimeout(
-          processBatchUpdates,
-          batchTimeout
-        );
+          const processBatchAndReschedule = () => {
+            processBatchUpdates();
+
+            // If still in bulk mode and have pending updates, schedule another batch
+            if (
+              pendingUpdatesRef.current.size > 0 ||
+              (queueStats &&
+                (queueStats.queued > 0 || queueStats.processing > 0))
+            ) {
+              batchUpdateTimeoutRef.current = setTimeout(
+                processBatchAndReschedule,
+                batchTimeout
+              );
+            } else {
+              batchUpdateTimeoutRef.current = null;
+            }
+          };
+
+          batchUpdateTimeoutRef.current = setTimeout(
+            processBatchAndReschedule,
+            batchTimeout
+          );
+        }
       } else {
         // Apply update immediately for single operations
         updateImagesRef.current(prevImages =>

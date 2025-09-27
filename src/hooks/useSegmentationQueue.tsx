@@ -67,7 +67,13 @@ export const useSegmentationQueue = (
 
   // Create stable callback that has access to current t function
   const handleSegmentationUpdate = useCallback((update: SegmentationUpdate) => {
+    // ALWAYS set the last update to ensure UI updates occur
     setLastUpdate(update);
+
+    // Debug logging to confirm updates are being propagated
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 useSegmentationQueue: Setting lastUpdate for image', update.imageId?.slice(0, 8), 'status:', update.status);
+    }
 
     const now = Date.now();
     const batchState = batchStateRef.current;
@@ -91,6 +97,7 @@ export const useSegmentationQueue = (
       }
 
       // Don't show individual completion toasts during batch processing
+      // But STILL propagate the update for UI changes
       return;
     }
 
