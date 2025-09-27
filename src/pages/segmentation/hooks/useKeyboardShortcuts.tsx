@@ -130,7 +130,6 @@ export const useKeyboardShortcuts = ({
           } else {
             // S: Slice mode (can be activated without selection)
             event.preventDefault();
-            console.log('[KeyboardShortcuts] Activating slice mode via S key');
             setEditMode(EditMode.Slice);
           }
           break;

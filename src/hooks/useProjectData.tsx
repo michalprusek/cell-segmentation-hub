@@ -265,7 +265,7 @@ export const useProjectData = (
 
           return {
             id: img.id,
-            name: img.name,
+            name: img.name || `Image ${img.id}`, // Provide fallback for missing name
             url: img.url || img.image_url, // Use url field that's already mapped in api.ts
             width: img.width,
             height: img.height,

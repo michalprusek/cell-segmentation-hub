@@ -48,7 +48,7 @@ const UPLOAD_CONFIGS: Record<string, UploadLimits> = {
   development: {
     maxTotalFiles: 10000, // Support 10,000 files in dev
     maxFilesPerChunk: 50, // 50 files per chunk (75MB per request)
-    maxFileSize: 50 * 1024 * 1024, // 50MB per file (large safety margin)
+    maxFileSize: 20 * 1024 * 1024, // 20MB per file (optimized for performance)
     maxTotalUploadSize: 20 * 1024 * 1024 * 1024, // 20GB total (15GB + buffer)
     chunkConcurrency: 3, // 3 parallel uploads
     retryAttempts: 3,
@@ -59,7 +59,7 @@ const UPLOAD_CONFIGS: Record<string, UploadLimits> = {
   staging: {
     maxTotalFiles: 10000, // Support 10,000 files in staging
     maxFilesPerChunk: 100, // 100 files per chunk (150MB per request)
-    maxFileSize: 50 * 1024 * 1024, // 50MB per file
+    maxFileSize: 20 * 1024 * 1024, // 20MB per file (optimized for performance)
     maxTotalUploadSize: 20 * 1024 * 1024 * 1024, // 20GB total
     chunkConcurrency: 5, // 5 parallel uploads
     retryAttempts: 3,
@@ -70,7 +70,7 @@ const UPLOAD_CONFIGS: Record<string, UploadLimits> = {
   production: {
     maxTotalFiles: 10000, // Support 10,000 files in production
     maxFilesPerChunk: 100, // 100 files per chunk (150MB per request)
-    maxFileSize: 100 * 1024 * 1024, // 100MB per file (very large images)
+    maxFileSize: 20 * 1024 * 1024, // 20MB per file (optimized for performance)
     maxTotalUploadSize: 20 * 1024 * 1024 * 1024, // 20GB total (15GB typical + buffer)
     chunkConcurrency: 5, // 5 parallel uploads
     retryAttempts: 5,

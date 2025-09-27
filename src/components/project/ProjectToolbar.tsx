@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AdvancedExportDialog } from '@/pages/export/AdvancedExportDialog';
 import ExportStateManager from '@/lib/exportStateManager';
+import { logger } from '@/lib/logger';
 
 interface ProjectToolbarProps {
   searchTerm?: string;
@@ -75,6 +76,11 @@ const ProjectToolbar = ({
   // Check for persisted export state on mount
   useEffect(() => {
     if (projectId) {
+      // Skip direct restoration - let useSharedAdvancedExport handle it
+      // This prevents duplicate restoration attempts
+      logger.debug('ProjectToolbar: Skipping direct export state restoration');
+
+      // Just check if export is in progress for UI state
       const persistedState = ExportStateManager.getExportState(projectId);
       if (persistedState) {
         if (

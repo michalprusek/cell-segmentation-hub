@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { ProjectImage } from '@/types';
+import { normalizeText } from '@/lib/textUtils';
 
 export type SortOption = 'date' | 'name' | 'status';
 
@@ -77,7 +78,7 @@ export const useImageSelection = ({
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         img =>
-          img.name?.toLowerCase().includes(query) ||
+          normalizeText(img.name)?.toLowerCase().includes(query) ||
           img.segmentationStatus?.toLowerCase().includes(query)
       );
     }
@@ -86,7 +87,7 @@ export const useImageSelection = ({
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'name':
-          return (a.name || '').localeCompare(b.name || '');
+          return normalizeText(a.name).localeCompare(normalizeText(b.name));
         case 'status':
           return (a.segmentationStatus || '').localeCompare(
             b.segmentationStatus || ''

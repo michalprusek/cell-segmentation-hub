@@ -10,6 +10,7 @@ import {
 import ExportStateManager from '@/lib/exportStateManager';
 import { useExportContext } from '@/contexts/ExportContext';
 import { useAbortController } from '@/hooks/shared/useAbortController';
+import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
 
 // Sanitize filename to remove/replace invalid characters
 const sanitizeFilename = (filename: string): string => {
@@ -142,8 +143,10 @@ export const useSharedAdvancedExport = (
   const checkResumedExportStatus = useCallback(
     async (jobId: string) => {
       try {
-        const response = await apiClient.get(
-          `/projects/${projectId}/export/${jobId}/status`
+        // Use deduplication to prevent multiple simultaneous requests for same job
+        const response = await ExportStateManager.deduplicateRequest(
+          jobId,
+          () => apiClient.get(`/projects/${projectId}/export/${jobId}/status`)
         );
         const status = response.data;
 
@@ -208,70 +211,35 @@ export const useSharedAdvancedExport = (
   useEffect(() => {
     if (!projectId) return;
 
-    // Load downloaded jobs from localStorage
-    const persistedDownloaded = getDownloadedJobs();
-    downloadedJobIds.current = persistedDownloaded;
+    // Prevent multiple restorations
+    let hasRestored = false;
 
-    // Reset in-progress flag but keep downloaded jobs tracking
-    downloadInProgress.current = false;
-    logger.debug('Initialized download tracking from localStorage', {
-      downloadedJobs: Array.from(persistedDownloaded),
-    });
+    const restore = () => {
+      if (hasRestored) return;
+      hasRestored = true;
 
-    const persistedState = ExportStateManager.getExportState(projectId);
-    if (persistedState) {
-      logger.info('Restoring export state from localStorage', persistedState);
+      // Load downloaded jobs from localStorage
+      const persistedDownloaded = getDownloadedJobs();
+      downloadedJobIds.current = persistedDownloaded;
 
-      // Clear stale downloading states - they should not persist across page reloads
-      // If the state was "downloading", it means the download was interrupted
-      // and we should treat the export as completed but not downloaded
-      if (persistedState.status === 'downloading') {
-        logger.debug('Clearing stale downloading state, treating as completed');
+      // Reset in-progress flag but keep downloaded jobs tracking
+      downloadInProgress.current = false;
+      logger.debug('Initialized download tracking from localStorage', {
+        downloadedJobs: Array.from(persistedDownloaded),
+      });
 
-        const restoredJob = {
-          id: persistedState.jobId,
-          status: 'completed' as const,
-          progress: 100,
-        };
+      const persistedState = ExportStateManager.getExportState(projectId);
+      if (persistedState) {
+        logger.info('Restoring export state from localStorage', persistedState);
 
-        updateState({
-          currentJob: restoredJob,
-          completedJobId: persistedState.jobId,
-          isDownloading: false, // Important: don't restore downloading state
-          isExporting: false,
-          exportProgress: 100,
-          exportStatus: 'Export completed - ready to download',
-        });
+        // Clear stale downloading states - they should not persist across page reloads
+        // If the state was "downloading", it means the download was interrupted
+        // and we should treat the export as completed but not downloaded
+        if (persistedState.status === 'downloading') {
+          logger.debug(
+            'Clearing stale downloading state, treating as completed'
+          );
 
-        // Clear the stale state from localStorage
-        ExportStateManager.clearExportState(projectId);
-      } else if (
-        persistedState.status === 'exporting' ||
-        persistedState.status === 'processing'
-      ) {
-        const restoredJob = {
-          id: persistedState.jobId,
-          status: 'processing' as const,
-          progress: persistedState.progress,
-        };
-
-        updateState({
-          currentJob: restoredJob,
-          isExporting: true,
-          exportProgress: persistedState.progress,
-          exportStatus:
-            persistedState.exportStatus ||
-            `Processing... ${Math.round(persistedState.progress)}%`,
-        });
-
-        // Check current status from server
-        checkResumedExportStatus(persistedState.jobId);
-      } else if (persistedState.status === 'completed') {
-        // Check if this job was already downloaded
-        const wasDownloaded = persistedDownloaded.has(persistedState.jobId);
-
-        if (!wasDownloaded) {
-          // Restore completed state properly
           const restoredJob = {
             id: persistedState.jobId,
             status: 'completed' as const,
@@ -281,18 +249,66 @@ export const useSharedAdvancedExport = (
           updateState({
             currentJob: restoredJob,
             completedJobId: persistedState.jobId,
-            isDownloading: false,
+            isDownloading: false, // Important: don't restore downloading state
             isExporting: false,
             exportProgress: 100,
             exportStatus: 'Export completed - ready to download',
           });
-        } else {
-          // Job was already downloaded, clear the state
-          logger.info('Export job was already downloaded, clearing state');
+
+          // Clear the stale state from localStorage
           ExportStateManager.clearExportState(projectId);
+        } else if (
+          persistedState.status === 'exporting' ||
+          persistedState.status === 'processing'
+        ) {
+          const restoredJob = {
+            id: persistedState.jobId,
+            status: 'processing' as const,
+            progress: persistedState.progress,
+          };
+
+          updateState({
+            currentJob: restoredJob,
+            isExporting: true,
+            exportProgress: persistedState.progress,
+            exportStatus:
+              persistedState.exportStatus ||
+              `Processing... ${Math.round(persistedState.progress)}%`,
+          });
+
+          // Check current status from server
+          checkResumedExportStatus(persistedState.jobId);
+        } else if (persistedState.status === 'completed') {
+          // Check if this job was already downloaded
+          const wasDownloaded = persistedDownloaded.has(persistedState.jobId);
+
+          if (!wasDownloaded) {
+            // Restore completed state properly
+            const restoredJob = {
+              id: persistedState.jobId,
+              status: 'completed' as const,
+              progress: 100,
+            };
+
+            updateState({
+              currentJob: restoredJob,
+              completedJobId: persistedState.jobId,
+              isDownloading: false,
+              isExporting: false,
+              exportProgress: 100,
+              exportStatus: 'Export completed - ready to download',
+            });
+          } else {
+            // Job was already downloaded, clear the state
+            logger.info('Export job was already downloaded, clearing state');
+            ExportStateManager.clearExportState(projectId);
+          }
         }
       }
-    }
+    };
+
+    // Call restore function once
+    restore();
   }, [projectId, checkResumedExportStatus, updateState, getDownloadedJobs]);
 
   // Persist state changes to localStorage
@@ -819,20 +835,67 @@ export const useSharedAdvancedExport = (
 
       const signal = getSignal('download');
       logger.info(
-        '📥 Starting manual download with signal aborted:',
+        '📥 Starting manual download with retry mechanism, signal aborted:',
         signal.aborted
       );
 
-      const response = await apiClient.get(
-        `/projects/${projectId}/export/${completedJobId}/download`,
-        {
-          responseType: 'blob',
-          timeout: 300000, // 5 minutes
-          signal: signal,
-        }
-      );
+      // Enhanced download with retry mechanism for 503 errors
+      const downloadWithRetry = async () => {
+        return await retryWithBackoff(
+          async () => {
+            const response = await apiClient.get(
+              `/projects/${projectId}/export/${completedJobId}/download`,
+              {
+                responseType: 'blob',
+                timeout: 300000, // 5 minutes
+                signal: signal,
+              }
+            );
+            return response;
+          },
+          {
+            ...RETRY_CONFIGS.api,
+            maxAttempts: 3,
+            shouldRetry: (err, attempt) => {
+              const error = err as any;
+              const status = error?.response?.status;
+              // Retry on 502, 503, 504 (server errors)
+              const retryableStatuses = [502, 503, 504];
+              const isRetryable = retryableStatuses.includes(status);
 
-      logger.info('✅ Manual download request completed');
+              logger.debug(
+                `Download attempt ${attempt}: status=${status}, retryable=${isRetryable}`
+              );
+              return isRetryable && attempt < 3;
+            },
+            onRetry: (err, attempt, nextDelay) => {
+              const error = err as any;
+              const status = error?.response?.status || 'unknown';
+
+              // Update UI to show retry status
+              updateState({
+                exportStatus: `Download failed (${status}), retrying in ${Math.round(nextDelay / 1000)}s... (${attempt}/3)`,
+                isDownloading: true,
+              });
+
+              logger.warn(
+                `🔄 Download retry ${attempt}/3 for status ${status}, waiting ${Math.round(nextDelay)}ms`
+              );
+            },
+          }
+        );
+      };
+
+      const result = await downloadWithRetry();
+
+      if (!result.success) {
+        throw result.error;
+      }
+
+      const response = result.data;
+      logger.info(
+        '✅ Manual download request completed (possibly after retries)'
+      );
 
       // Generate simple filename
       const filename = currentProjectName

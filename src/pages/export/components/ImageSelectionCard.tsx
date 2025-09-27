@@ -63,7 +63,7 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
                   {image.thumbnail_url ? (
                     <img
                       src={image.thumbnail_url}
-                      alt={image.name}
+                      alt={image.name ? image.name.normalize('NFC') : 'Image'}
                       className="h-full w-full object-cover"
                     />
                   ) : (
@@ -77,7 +77,7 @@ const ImageSelectionCard: React.FC<ImageSelectionCardProps> = ({
 
                 <div className="flex-1 truncate">
                   <div className="font-medium text-sm">
-                    {image.name || 'Untitled'}
+                    {image.name ? image.name.normalize('NFC') : 'Untitled'}
                   </div>
                   <div className="text-xs text-gray-500">
                     {image.createdAt && format(image.createdAt, 'PPP')}

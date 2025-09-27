@@ -136,6 +136,17 @@ if (config.RATE_LIMIT_ENABLED) {
   logger.warn('⚠️  Rate limiting is disabled');
 }
 
+// Set UTF-8 charset for all JSON responses
+app.use((req, res, next) => {
+  // Only override for JSON responses
+  const originalJson = res.json;
+  res.json = function (body) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    return originalJson.call(this, body);
+  };
+  next();
+});
+
 // Body parsing middleware - increased limits for large uploads
 app.use(express.json({ limit: uploadLimits.EXPRESS_JSON_LIMIT }));
 app.use(

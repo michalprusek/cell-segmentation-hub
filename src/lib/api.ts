@@ -3,6 +3,12 @@ import { Profile, UpdateProfile } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import {
+  retryWithBackoff,
+  makeRetryable,
+  RETRY_CONFIGS,
+  sleep,
+} from '@/lib/retryUtils';
+import {
   chunkFiles,
   processChunksWithConcurrency,
   DEFAULT_CHUNKING_CONFIG,
@@ -69,46 +75,8 @@ export interface ProjectImage {
   updated_at: string;
 }
 
-// Utility function for exponential backoff with retry logic
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const exponentialBackoff = async <T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000,
-  maxDelay: number = 10000
-): Promise<T> => {
-  let lastError: Error;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      lastError = error as Error;
-
-      // Don't retry if it's not a rate limit error or if it's the last attempt
-      const errorWithResponse = error as { response?: { status: number } };
-      if (
-        errorWithResponse.response?.status !== 429 ||
-        attempt === maxRetries
-      ) {
-        throw error;
-      }
-
-      // Calculate delay with exponential backoff
-      const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-      const jitter = Math.random() * 0.1 * delay; // Add 10% jitter
-      const finalDelay = delay + jitter;
-
-      logger.warn(
-        `🔄 Rate limited (429), retrying in ${Math.round(finalDelay)}ms (attempt ${attempt + 1}/${maxRetries + 1})`
-      );
-      await sleep(finalDelay);
-    }
-  }
-
-  throw lastError!;
-};
+// Using unified retry system from retryUtils
+// Legacy exponentialBackoff replaced with retryWithBackoff for consistency
 
 export interface SegmentationRequest {
   imageId: string;
@@ -228,6 +196,9 @@ class ApiClient {
           originalRequest.url?.includes('/auth/login') ||
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/refresh');
+
+        // Check if this is a refresh token request to avoid infinite loops
+        const isRefreshRequest = originalRequest.url?.includes('/auth/refresh');
 
         // Check if error is due to missing, expired, or invalid authentication token
         // Handle ALL 401 errors uniformly for immediate logout
@@ -353,9 +324,47 @@ class ApiClient {
           }
         }
 
-        // Handle rate limiting with exponential backoff
-        if (error.response?.status === 429) {
-          return exponentialBackoff(() => this.instance(originalRequest));
+        // Handle retryable errors (429, 502, 503, 504) with unified retry system
+        const retryableStatuses = [429, 502, 503, 504];
+        if (
+          error.response?.status &&
+          retryableStatuses.includes(error.response.status)
+        ) {
+          const status = error.response.status;
+          const result = await retryWithBackoff(
+            () => this.instance(originalRequest),
+            {
+              ...RETRY_CONFIGS.api,
+              shouldRetry: (err, attempt) => {
+                const errorWithResponse = err as {
+                  response?: { status: number };
+                };
+                return (
+                  retryableStatuses.includes(
+                    errorWithResponse.response?.status || 0
+                  ) && attempt < 3
+                );
+              },
+              onRetry: (err, attempt, nextDelay) => {
+                const statusText =
+                  {
+                    429: 'Rate limited',
+                    502: 'Bad gateway',
+                    503: 'Service unavailable',
+                    504: 'Gateway timeout',
+                  }[status] || 'Server error';
+
+                logger.warn(
+                  `🔄 ${statusText} (${status}), retrying in ${Math.round(nextDelay)}ms (attempt ${attempt}/3)`
+                );
+              },
+            }
+          );
+
+          if (result.success) {
+            return result.data;
+          }
+          throw result.error;
         }
 
         return Promise.reject(error);
@@ -1046,7 +1055,21 @@ class ApiClient {
   ): Promise<ProjectImage[]> {
     const formData = new FormData();
     files.forEach(file => {
-      formData.append('images', file);
+      // Normalize filename to NFC to ensure diacritics are properly composed
+      // This prevents issues with decomposed Unicode (NFD) filenames
+      const normalizedName = file.name.normalize('NFC');
+
+      // If the filename needs normalization, create a new File with the normalized name
+      // Otherwise, use the original file
+      if (normalizedName !== file.name) {
+        const normalizedFile = new File([file], normalizedName, {
+          type: file.type,
+          lastModified: file.lastModified,
+        });
+        formData.append('images', normalizedFile);
+      } else {
+        formData.append('images', file);
+      }
     });
 
     const response = await this.instance.post(
@@ -1189,7 +1212,21 @@ class ApiClient {
         // Create FormData for this chunk
         const formData = new FormData();
         chunk.forEach(file => {
-          formData.append('images', file);
+          // Normalize filename to NFC to ensure diacritics are properly composed
+          // This prevents issues with decomposed Unicode (NFD) filenames
+          const normalizedName = file.name.normalize('NFC');
+
+          // If the filename needs normalization, create a new File with the normalized name
+          // Otherwise, use the original file
+          if (normalizedName !== file.name) {
+            const normalizedFile = new File([file], normalizedName, {
+              type: file.type,
+              lastModified: file.lastModified,
+            });
+            formData.append('images', normalizedFile);
+          } else {
+            formData.append('images', file);
+          }
         });
 
         const response = await this.instance.post(
@@ -1607,7 +1644,16 @@ class ApiClient {
 
   // User profile methods
   async getUserProfile(): Promise<Profile> {
-    const response = await this.instance.get('/auth/profile');
+    // Add cache-busting to ensure fresh data after avatar upload
+    const response = await this.instance.get('/auth/profile', {
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+      params: {
+        _t: Date.now(), // Cache buster parameter
+      },
+    });
     return this.extractData(response);
   }
 

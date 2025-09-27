@@ -794,19 +794,61 @@ export class SegmentationService {
           (segmentationResult.polygons?.length || 0) - validPolygons.length,
       });
 
+      // Assign IDs to polygons and fix parent_id relationships
+      const polygonsWithIds = validPolygons.map((polygon, index) => {
+        // Generate ID if missing
+        if (!polygon.id) {
+          polygon.id = `polygon_${index + 1}`;
+        }
+
+        // For database storage, we need to convert parentIds array to parent_id string
+        const dbPolygon: any = {
+          id: polygon.id,
+          points: polygon.points,
+          type: polygon.type,
+          area: polygon.area || 0,
+          confidence: polygon.confidence || 0.8,
+        };
+
+        // Convert parentIds array to parent_id for database storage
+        if (polygon.parentIds && polygon.parentIds.length > 0) {
+          dbPolygon.parent_id = polygon.parentIds[0];
+        } else if ((polygon as any).parent_id) {
+          dbPolygon.parent_id = (polygon as any).parent_id;
+        }
+
+        return dbPolygon;
+      });
+
+      // Validate parent_id references
+      polygonsWithIds.forEach(polygon => {
+        if (polygon.parent_id) {
+          const parentExists = polygonsWithIds.some(p => p.id === polygon.parent_id);
+          if (!parentExists) {
+            logger.warn('Polygon has invalid parent_id reference', 'SegmentationService', {
+              polygonId: polygon.id,
+              parentId: polygon.parent_id,
+              availableIds: polygonsWithIds.map(p => p.id)
+            });
+            // Clear invalid parent_id
+            delete polygon.parent_id;
+          }
+        }
+      });
+
       // Convert polygons to JSON format for storage
       const segmentationData = {
-        polygons: validPolygons,
+        polygons: polygonsWithIds,
         modelUsed: segmentationResult.model_used,
         thresholdUsed: segmentationResult.threshold_used,
         processingTime: segmentationResult.processing_time,
         imageSize: segmentationResult.image_size,
         createdAt: new Date(),
-        polygonCount: validPolygons.length,
+        polygonCount: polygonsWithIds.length,
         averageConfidence:
-          validPolygons.length > 0
-            ? validPolygons.reduce((sum, p) => sum + (p.confidence || 0), 0) /
-              validPolygons.length
+          polygonsWithIds.length > 0
+            ? polygonsWithIds.reduce((sum, p) => sum + (p.confidence || 0), 0) /
+              polygonsWithIds.length
             : 0,
       };
 
@@ -814,7 +856,7 @@ export class SegmentationService {
       const upsertData = {
         where: { imageId },
         update: {
-          polygons: JSON.stringify(validPolygons),
+          polygons: JSON.stringify(polygonsWithIds),
           model: segmentationResult.model_used,
           threshold: segmentationResult.threshold_used,
           confidence: segmentationData.averageConfidence,
@@ -828,7 +870,7 @@ export class SegmentationService {
         create: {
           id: uuidv4(),
           imageId,
-          polygons: JSON.stringify(validPolygons),
+          polygons: JSON.stringify(polygonsWithIds),
           model: segmentationResult.model_used,
           threshold: segmentationResult.threshold_used,
           confidence: segmentationData.averageConfidence,
@@ -892,7 +934,7 @@ export class SegmentationService {
         'SegmentationService',
         {
           imageId,
-          polygonCount: validPolygons.length,
+          polygonCount: polygonsWithIds.length,
           segmentationId: result.id,
         }
       );

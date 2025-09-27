@@ -1,5 +1,5 @@
 import { createCanvas, loadImage, CanvasRenderingContext2D } from 'canvas';
-import { writeFile, readFile } from 'fs/promises';
+import { writeFile, readFile, mkdir, unlink } from 'fs/promises';
 import sharp from 'sharp';
 import path from 'path';
 import { logger } from '../../utils/logger';
@@ -97,18 +97,32 @@ export class VisualizationGenerator {
     try {
       // Check if image is TIFF and convert to PNG if needed
       let imageToLoad = imagePath;
+      let tempPngPath: string | null = null;
       const ext = path.extname(imagePath).toLowerCase();
 
       if (ext === '.tiff' || ext === '.tif') {
-        // Convert TIFF to PNG buffer
+        // Convert TIFF to PNG and save to temp file
         const tiffBuffer = await readFile(imagePath);
-        const pngBuffer = await sharp(tiffBuffer).png().toBuffer();
+        const pngBuffer = await sharp(tiffBuffer)
+          .png({ quality: 95, compressionLevel: 6 })
+          .toBuffer();
 
-        // Create a temporary PNG file path (in memory)
-        imageToLoad = `data:image/png;base64,${pngBuffer.toString('base64')}`;
+        // Create a temporary PNG file
+        tempPngPath = path.join(
+          '/app/uploads/temp',
+          `tiff_viz_${Date.now()}_${path.basename(imagePath, ext)}.png`
+        );
+
+        // Ensure temp directory exists
+        const tempDir = path.dirname(tempPngPath);
+        await mkdir(tempDir, { recursive: true });
+
+        // Write PNG buffer to temp file
+        await writeFile(tempPngPath, pngBuffer);
+        imageToLoad = tempPngPath;
 
         logger.info(
-          `Converting TIFF to PNG for visualization: ${imagePath}`,
+          `Converting TIFF to PNG for visualization: ${imagePath} -> ${tempPngPath}`,
           'VisualizationGenerator'
         );
       }
@@ -138,6 +152,22 @@ export class VisualizationGenerator {
       // Save the canvas to file
       const buffer = canvas.toBuffer('image/png');
       await writeFile(outputPath, buffer);
+
+      // Clean up temp PNG file if it was created for TIFF conversion
+      if (tempPngPath) {
+        try {
+          await unlink(tempPngPath);
+          logger.debug(
+            `Cleaned up temp PNG file: ${tempPngPath}`,
+            'VisualizationGenerator'
+          );
+        } catch (error) {
+          logger.warn(
+            `Failed to clean up temp PNG file: ${tempPngPath}`,
+            'VisualizationGenerator'
+          );
+        }
+      }
 
       // Calculate final metrics
       metrics.renderTime = Date.now() - startTime;
@@ -177,6 +207,23 @@ export class VisualizationGenerator {
       return VisualizationResult.SUCCESS;
     } catch (error) {
       const renderTime = Date.now() - startTime;
+
+      // Clean up temp PNG file if it was created for TIFF conversion (even on error)
+      if (tempPngPath) {
+        try {
+          await unlink(tempPngPath);
+          logger.debug(
+            `Cleaned up temp PNG file after error: ${tempPngPath}`,
+            'VisualizationGenerator'
+          );
+        } catch (cleanupError) {
+          logger.warn(
+            `Failed to clean up temp PNG file after error: ${tempPngPath}`,
+            'VisualizationGenerator'
+          );
+        }
+      }
+
       logger.error(
         `Failed to generate visualization for ${imagePath} after ${renderTime}ms:`,
         error instanceof Error ? error : new Error(String(error)),

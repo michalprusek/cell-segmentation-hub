@@ -78,8 +78,17 @@ export const createFileWithPreview = (file: File): FileWithPreview => {
   // and causes FormData.append() to fail
   const fileWithPreview = file as FileWithPreview;
 
-  // Add additional properties without losing the File prototype
-  fileWithPreview.preview = URL.createObjectURL(file);
+  // For TIFF files, browsers cannot natively display them via blob URLs
+  // Instead, we'll set preview to undefined and let the upload component
+  // show a placeholder icon. The actual image will be displayed via
+  // the backend conversion endpoint after upload.
+  if (file.type === 'image/tiff' || file.type === 'image/tif') {
+    fileWithPreview.preview = undefined; // Will show placeholder in UploadFileCard
+  } else {
+    // Add additional properties without losing the File prototype
+    fileWithPreview.preview = URL.createObjectURL(file);
+  }
+
   fileWithPreview.uploadProgress = 0;
   fileWithPreview.status = 'pending' as const;
 
@@ -130,6 +139,8 @@ export const validateImageFile = (file: File): FileValidationResult => {
     'image/png',
     'image/gif',
     'image/webp',
+    'image/tiff',
+    'image/tif',
   ];
 
   if (!supportedTypes.includes(file.type)) {
@@ -157,7 +168,7 @@ export const validateImageFile = (file: File): FileValidationResult => {
  */
 export const cleanupFilePreviewUrls = (files: FileWithPreview[]): void => {
   files.forEach(file => {
-    if (file.preview) {
+    if (file.preview && file.preview.startsWith('blob:')) {
       URL.revokeObjectURL(file.preview);
     }
   });

@@ -184,7 +184,6 @@ export function clearOptimizationCaches(): void {
  * Development-only performance logging
  */
 export function debugLog(message: string, data?: any): void {
-  if (process.env.NODE_ENV === 'development') {
-    console.log(`[VertexOptimization] ${message}`, data);
-  }
+  // Debug logging disabled to avoid console.log in production
+  // Can be enabled for debugging if needed
 }

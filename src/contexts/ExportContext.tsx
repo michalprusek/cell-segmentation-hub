@@ -1,4 +1,7 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect } from 'react';
+import { useMultiProjectExportState } from '@/hooks/usePersistedExportState';
+import ExportStateManager from '@/lib/exportStateManager';
+import { logger } from '@/lib/logger';
 
 interface ExportState {
   projectId: string | null;
@@ -8,6 +11,7 @@ interface ExportState {
   exportStatus: string;
   completedJobId: string | null;
   currentJob: any | null;
+  isCancelling?: boolean;
 }
 
 interface ExportContextType {
@@ -15,54 +19,58 @@ interface ExportContextType {
   updateExportState: (projectId: string, updates: Partial<ExportState>) => void;
   clearExportState: (projectId: string) => void;
   getExportState: (projectId: string) => ExportState | null;
+  hasActiveExport: (projectId: string) => boolean;
 }
-
-const defaultExportState: ExportState = {
-  projectId: null,
-  isExporting: false,
-  isDownloading: false,
-  exportProgress: 0,
-  exportStatus: '',
-  completedJobId: null,
-  currentJob: null,
-};
 
 const ExportContext = createContext<ExportContextType | null>(null);
 
 export const ExportProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [exportStates, setExportStates] = useState<Record<string, ExportState>>(
-    {}
-  );
+  const {
+    getExportState: getPersistedState,
+    updateExportState: updatePersistedState,
+    clearExportState: clearPersistedState,
+    getAllActiveStates,
+  } = useMultiProjectExportState();
 
-  const updateExportState = useCallback(
-    (projectId: string, updates: Partial<ExportState>) => {
-      setExportStates(prev => ({
-        ...prev,
-        [projectId]: {
-          ...(prev[projectId] || { ...defaultExportState, projectId }),
-          ...updates,
-        },
-      }));
-    },
-    []
-  );
+  // Initialize ExportStateManager
+  useEffect(() => {
+    ExportStateManager.initialize();
+    logger.debug('ExportContext: ExportStateManager initialized');
 
-  const clearExportState = useCallback((projectId: string) => {
-    setExportStates(prev => {
-      const newStates = { ...prev };
-      delete newStates[projectId];
-      return newStates;
-    });
+    return () => {
+      ExportStateManager.cleanup();
+    };
   }, []);
 
-  const getExportState = useCallback(
-    (projectId: string): ExportState | null => {
-      return exportStates[projectId] || null;
-    },
-    [exportStates]
-  );
+  // Get all current export states (always fresh from localStorage)
+  const exportStates = getAllActiveStates();
+
+  const updateExportState = (
+    projectId: string,
+    updates: Partial<ExportState>
+  ) => {
+    updatePersistedState(projectId, updates);
+  };
+
+  const clearExportState = (projectId: string) => {
+    clearPersistedState(projectId);
+  };
+
+  const getExportState = (projectId: string): ExportState | null => {
+    return getPersistedState(projectId);
+  };
+
+  const hasActiveExport = (projectId: string): boolean => {
+    const state = getExportState(projectId);
+    return !!(
+      state?.isExporting ||
+      state?.isDownloading ||
+      state?.completedJobId ||
+      state?.isCancelling
+    );
+  };
 
   return (
     <ExportContext.Provider
@@ -71,6 +79,7 @@ export const ExportProvider: React.FC<{ children: React.ReactNode }> = ({
         updateExportState,
         clearExportState,
         getExportState,
+        hasActiveExport,
       }}
     >
       {children}

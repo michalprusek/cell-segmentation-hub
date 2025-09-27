@@ -317,7 +317,8 @@ export default {
     uploadImages: 'Nahrát obrázky',
     dragDrop: 'Přetáhněte obrázky sem',
     clickToSelect: 'nebo klikněte pro výběr souborů',
-    acceptedFormats: 'Podporované formáty: JPEG, PNG, TIFF, BMP (max 10MB)',
+    acceptedFormats:
+      'Podporované formáty: JPEG, PNG, TIFF, BMP (max 20MB na soubor)',
     uploadProgress: 'Průběh nahrávání',
     uploadingTo: 'Nahrávání do',
     currentProject: 'Aktuální projekt',

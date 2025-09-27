@@ -2,7 +2,7 @@ import React from 'react';
 import { Point } from '@/lib/segmentation';
 import CanvasVertex from './CanvasVertex';
 import VertexContextMenu from '../context-menu/VertexContextMenu';
-import { VertexDragState } from '@/pages/segmentation/types';
+import { VertexDragState, EditMode } from '@/pages/segmentation/types';
 import {
   shouldRenderVertices,
   getDecimatedVertices,
