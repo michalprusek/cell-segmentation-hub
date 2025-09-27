@@ -18,6 +18,7 @@ import {
 import { useAdvancedInteractions } from './useAdvancedInteractions';
 import { usePolygonSlicing } from './usePolygonSlicing';
 import { useKeyboardShortcuts } from './useKeyboardShortcuts';
+import { usePolygonSelection } from './usePolygonSelection';
 import {
   calculateCenteringTransform,
   calculateFixedPointZoom,
@@ -43,6 +44,7 @@ interface UseEnhancedSegmentationEditorProps {
   onPolygonsChange?: (polygons: Polygon[]) => void;
   imageId?: string; // Add imageId to detect image changes
   isFromGallery?: boolean; // Add flag to trigger auto-reset
+  // onPolygonSelection is now handled internally via usePolygonSelection for SSOT
 }
 
 /**
@@ -59,6 +61,7 @@ export const useEnhancedSegmentationEditor = ({
   onPolygonsChange,
   imageId,
   isFromGallery = false,
+  // onPolygonSelection is now handled internally
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
 
@@ -69,10 +72,35 @@ export const useEnhancedSegmentationEditor = ({
 
   // Core state
   const [polygons, setPolygons] = useState<Polygon[]>(initialPolygons);
-  const [selectedPolygonId, setSelectedPolygonId] = useState<string | null>(
-    null
-  );
-  const [editMode, setEditMode] = useState<EditMode>(EditMode.View);
+  const [selectedPolygonId, setSelectedPolygonIdInternal] = useState<
+    string | null
+  >(null);
+
+  // Wrapped setSelectedPolygonId - fixed to not depend on selectedPolygonId
+  const setSelectedPolygonId = useCallback((id: string | null) => {
+    setSelectedPolygonIdInternal(id);
+  }, []);
+
+  // Initialize centralized polygon selection system (SSOT)
+  // This will be properly initialized after handleDeletePolygon is defined
+  const [editMode, setEditModeRaw] = useState<EditMode>(EditMode.View);
+
+  // Debug wrapper for setEditMode to track mode changes
+  const setEditMode = useCallback(
+    (newMode: EditMode | ((prev: EditMode) => EditMode)) => {
+      // setEditMode called with: newMode
+      // Note: Don't log editMode here as it would create a dependency and stale closure
+      // Instead, use the raw state setter's functional form if we need the current value
+      setEditModeRaw(currentMode => {
+        // Current mode before change: currentMode
+        if (typeof newMode === 'function') {
+          return newMode(currentMode);
+        }
+        return newMode;
+      });
+    },
+    []
+  ); // CRITICAL: No dependencies to prevent stale closures!
   const [tempPoints, setTempPoints] = useState<Point[]>([]);
   const [hoveredVertex, setHoveredVertex] = useState<{
     polygonId: string;
@@ -240,6 +268,11 @@ export const useEnhancedSegmentationEditor = ({
       initialPolygons.length !== initialPolygonsRef.current.length;
     const isNewData = !hasInitialized.current || imageChanged || lengthChanged;
 
+    // DEBUG: Log why isNewData is triggering
+    if (isNewData) {
+      // isNewData triggered with state changes
+    }
+
     if (isNewData) {
       // First, cancel any ongoing autosave for the previous image
       if (imageChanged) {
@@ -275,7 +308,14 @@ export const useEnhancedSegmentationEditor = ({
         // Reset all editor state when switching images
         setPolygons(initialPolygons);
         setSelectedPolygonId(null); // Clear selection
-        setEditMode(EditMode.View); // Reset to view mode
+
+        // CRITICAL FIX: Only reset to View mode when actually switching images, not on polygon updates
+        // This prevents slice/delete mode from being reset when polygons change
+        if (imageChanged || !hasInitialized.current) {
+          // Resetting to View mode due to image change or first load
+          setEditMode(EditMode.View); // Reset to view mode only on image change
+        }
+
         setTempPoints([]); // Clear temp points
         setHoveredVertex(null); // Clear hover state
         setCursorPosition(null); // Clear cursor
@@ -545,7 +585,7 @@ export const useEnhancedSegmentationEditor = ({
   const handleZoomIn = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
-      transform,
+      transformRef.current, // Use ref to avoid transform dependency
       center,
       EDITING_CONSTANTS.ZOOM_FACTOR,
       EDITING_CONSTANTS.MIN_ZOOM,
@@ -561,12 +601,12 @@ export const useEnhancedSegmentationEditor = ({
       canvasHeight
     );
     setTransform(constrainedTransform);
-  }, [transform, canvasWidth, canvasHeight, imageWidth, imageHeight]);
+  }, [canvasWidth, canvasHeight, imageWidth, imageHeight]); // Removed transform dependency
 
   const handleZoomOut = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
-      transform,
+      transformRef.current, // Use ref to avoid transform dependency
       center,
       1 / EDITING_CONSTANTS.ZOOM_FACTOR,
       EDITING_CONSTANTS.MIN_ZOOM,
@@ -582,7 +622,7 @@ export const useEnhancedSegmentationEditor = ({
       canvasHeight
     );
     setTransform(constrainedTransform);
-  }, [transform, canvasWidth, canvasHeight, imageWidth, imageHeight]);
+  }, [canvasWidth, canvasHeight, imageWidth, imageHeight]); // Removed transform dependency
 
   const handleResetView = useCallback(() => {
     const newTransform = calculateCenteringTransform(
@@ -611,6 +651,16 @@ export const useEnhancedSegmentationEditor = ({
     },
     [polygons, selectedPolygonId, updatePolygons, t]
   );
+
+  // Now initialize centralized polygon selection system (SSOT) after handleDeletePolygon is defined
+  const polygonSelection = usePolygonSelection({
+    editMode,
+    currentSelectedPolygonId: selectedPolygonId,
+    onModeChange: setEditMode,
+    onSelectionChange: setSelectedPolygonId,
+    onDeletePolygon: handleDeletePolygon,
+    polygons,
+  });
 
   // Vertex operations
   const handleDeleteVertex = useCallback(
@@ -645,7 +695,7 @@ export const useEnhancedSegmentationEditor = ({
     [polygons, updatePolygons, t]
   );
 
-  // Escape handler
+  // Escape handler - always return to View mode
   const handleEscape = useCallback(() => {
     // Reset all temporary state
     setTempPoints([]);
@@ -663,16 +713,13 @@ export const useEnhancedSegmentationEditor = ({
     // Reset slice processing flag
     sliceProcessingRef.current = false;
 
-    // If we have a selected polygon, go to EditVertices mode instead of View mode
-    // This keeps the polygon selected when exiting other modes
-    if (selectedPolygonId) {
-      setEditMode(EditMode.EditVertices);
-    } else {
-      setEditMode(EditMode.View);
-    }
-  }, [selectedPolygonId]);
+    // ENHANCED: Return to base state (View mode + No selection)
+    setEditMode(EditMode.View);
+    setSelectedPolygonIdInternal(null);
+  }, []); // No dependencies to prevent recreation cycles
 
   // Initialize keyboard shortcuts first to get access to shift key state
+  // Force HMR update - Fixed slice mode keyboard shortcut 2025-09-22
   const keyboardShortcuts = useKeyboardShortcuts({
     editMode,
     canUndo,
@@ -750,11 +797,10 @@ export const useEnhancedSegmentationEditor = ({
     setInteractionState,
   ]);
 
-  // Enhanced wheel handler with non-passive event listener
+  // Enhanced wheel handler with throttling for performance
   useEffect(() => {
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
-
+    // Create throttled zoom handler using RAF for smooth 60fps updates
+    const throttledZoom = rafThrottle((e: WheelEvent) => {
       const rect = canvasRef.current?.getBoundingClientRect();
       if (!rect) return;
 
@@ -788,6 +834,11 @@ export const useEnhancedSegmentationEditor = ({
           canvasHeight
         )
       );
+    }, 16); // ~60fps throttle
+
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      throttledZoom.fn(e);
     };
 
     const element = canvasRef.current;
@@ -797,6 +848,7 @@ export const useEnhancedSegmentationEditor = ({
 
       return () => {
         element.removeEventListener('wheel', handleWheel);
+        throttledZoom.cancel();
       };
     }
   }, [imageWidth, imageHeight, canvasWidth, canvasHeight]); // Removed transform from dependencies
@@ -836,6 +888,7 @@ export const useEnhancedSegmentationEditor = ({
     isShiftPressed: keyboardShortcuts.isShiftPressed,
     isSpacePressed: keyboardShortcuts.isSpacePressed,
     setSelectedPolygonId,
+    onPolygonSelection: polygonSelection.handlePolygonSelection, // Pass centralized selection handler
     setEditMode,
     setInteractionState,
     setTempPoints,
@@ -849,48 +902,75 @@ export const useEnhancedSegmentationEditor = ({
   // Update interaction handlers to include pan handling
   const enhancedHandleMouseMove = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
-      // Track cursor position in image coordinates for visual feedback
-      if (canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        const canvasX = e.clientX - rect.left;
-        const canvasY = e.clientY - rect.top;
+      // PERFORMANCE OPTIMIZATION: Use RAF throttling for mouse move events
+      const handleMouseMoveInternal = () => {
+        // Track cursor position in image coordinates for visual feedback
+        if (canvasRef.current) {
+          const rect = canvasRef.current.getBoundingClientRect();
+          const canvasX = e.clientX - rect.left;
+          const canvasY = e.clientY - rect.top;
 
-        // Get the container dimensions
-        const containerWidth = rect.width;
-        const containerHeight = rect.height;
+          // Get the container dimensions
+          const containerWidth = rect.width;
+          const containerHeight = rect.height;
 
-        // The content is centered, so we need to adjust for that
-        const centerOffsetX = containerWidth / 2;
-        const centerOffsetY = containerHeight / 2;
+          // The content is centered, so we need to adjust for that
+          const centerOffsetX = containerWidth / 2;
+          const centerOffsetY = containerHeight / 2;
 
-        // Convert to image coordinates using the same calculation as getCanvasCoordinates
-        const imageX =
-          (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
-        const imageY =
-          (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
+          // Convert to image coordinates using the same calculation as getCanvasCoordinates
+          const imageX =
+            (canvasX - centerOffsetX - transform.translateX) / transform.zoom;
+          const imageY =
+            (canvasY - centerOffsetY - transform.translateY) / transform.zoom;
 
-        // Use throttled version to prevent excessive re-renders
-        throttledSetCursorPosition({ x: imageX, y: imageY });
+          // Use throttled version to prevent excessive re-renders
+          throttledSetCursorPosition({ x: imageX, y: imageY });
+        }
+
+        // Handle panning if active - use incremental deltas for smooth movement
+        if (interactionState.isPanning && interactionState.panStart) {
+          const deltaX = e.clientX - interactionState.panStart.x;
+          const deltaY = e.clientY - interactionState.panStart.y;
+
+          // PERFORMANCE OPTIMIZATION: Batch state updates to prevent cascade re-renders
+          // Import { unstable_batchedUpdates } from 'react-dom' at top of file
+          if (
+            typeof window !== 'undefined' &&
+            (window as any).React &&
+            (window as any).React.unstable_batchedUpdates
+          ) {
+            (window as any).React.unstable_batchedUpdates(() => {
+              // Apply the delta movement
+              handlePan(deltaX, deltaY);
+
+              // Update pan start position for next delta calculation
+              setInteractionState({
+                ...interactionState,
+                panStart: { x: e.clientX, y: e.clientY },
+              });
+            });
+          } else {
+            // Fallback for environments without batchedUpdates
+            handlePan(deltaX, deltaY);
+            setInteractionState({
+              ...interactionState,
+              panStart: { x: e.clientX, y: e.clientY },
+            });
+          }
+          return;
+        }
+
+        // Delegate to advanced interactions
+        interactions.handleMouseMove(e);
+      };
+
+      // PERFORMANCE FIX: Use requestAnimationFrame for smooth 60fps handling
+      if (typeof window !== 'undefined') {
+        window.requestAnimationFrame(handleMouseMoveInternal);
+      } else {
+        handleMouseMoveInternal();
       }
-
-      // Handle panning if active - use incremental deltas for smooth movement
-      if (interactionState.isPanning && interactionState.panStart) {
-        const deltaX = e.clientX - interactionState.panStart.x;
-        const deltaY = e.clientY - interactionState.panStart.y;
-
-        // Apply the delta movement
-        handlePan(deltaX, deltaY);
-
-        // Update pan start position for next delta calculation
-        setInteractionState({
-          ...interactionState,
-          panStart: { x: e.clientX, y: e.clientY },
-        });
-        return;
-      }
-
-      // Delegate to advanced interactions
-      interactions.handleMouseMove(e);
     },
     [
       interactionState,
@@ -980,6 +1060,10 @@ export const useEnhancedSegmentationEditor = ({
 
     // Polygon operations
     handleDeletePolygon,
+
+    // Centralized selection handlers (SSOT)
+    handlePolygonSelection: polygonSelection.handlePolygonSelection,
+    handlePolygonClick: polygonSelection.handlePolygonClick,
 
     // Vertex operations
     handleDeleteVertex,

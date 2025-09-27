@@ -25,21 +25,21 @@ export function createCacheMiddleware(options: CacheOptions) {
       // Support both maxAge and ttl
       const maxAge = options.maxAge ?? options.ttl ?? 0;
       const optionsWithMaxAge = { ...options, maxAge };
-      
+
       const cacheControl = buildCacheControlHeader(optionsWithMaxAge);
-      
+
       if (cacheControl) {
         res.setHeader('Cache-Control', cacheControl);
-        
+
         // Set Expires header if maxAge is specified
         if (maxAge > 0) {
           const expires = new Date(Date.now() + maxAge * 1000);
           res.setHeader('Expires', expires.toUTCString());
         }
-        
+
         // Add ETag support for better caching
         if (maxAge > 0 && !options.noCache) {
-          const etag = options.keyGenerator 
+          const etag = options.keyGenerator
             ? generateCustomETag(req, options.keyGenerator)
             : generateETag(req);
           if (etag) {
@@ -47,7 +47,7 @@ export function createCacheMiddleware(options: CacheOptions) {
           }
         }
       }
-      
+
       next();
     } catch (error) {
       logger.error('Cache middleware error:', error as Error);
@@ -61,29 +61,29 @@ export function createCacheMiddleware(options: CacheOptions) {
  */
 function buildCacheControlHeader(options: CacheOptions): string {
   const directives: string[] = [];
-  
+
   if (options.noCache) {
     directives.push('no-cache');
   }
-  
+
   if (options.private) {
     directives.push('private');
   } else {
     directives.push('public');
   }
-  
+
   if (options.maxAge > 0) {
     directives.push(`max-age=${options.maxAge}`);
   }
-  
+
   if (options.mustRevalidate) {
     directives.push('must-revalidate');
   }
-  
+
   if (options.staleWhileRevalidate) {
     directives.push(`stale-while-revalidate=${options.staleWhileRevalidate}`);
   }
-  
+
   return directives.join(', ');
 }
 
@@ -106,7 +106,10 @@ function generateETag(req: Request): string | null {
 /**
  * Generate custom ETag using key generator
  */
-function generateCustomETag(req: Request, keyGenerator: (req: Request) => string): string | null {
+function generateCustomETag(
+  req: Request,
+  keyGenerator: (req: Request) => string
+): string | null {
   try {
     const key = keyGenerator(req);
     const timestamp = Math.floor(Date.now() / 1000); // Round to seconds
@@ -125,7 +128,7 @@ export const noCache = createCacheMiddleware({
   maxAge: 0,
   noCache: true,
   mustRevalidate: true,
-  private: true
+  private: true,
 });
 
 /**
@@ -135,7 +138,7 @@ export const shortCache = createCacheMiddleware({
   maxAge: 300, // 5 minutes
   private: false,
   mustRevalidate: true,
-  staleWhileRevalidate: 60 // Allow stale for 1 minute
+  staleWhileRevalidate: 60, // Allow stale for 1 minute
 });
 
 /**
@@ -144,7 +147,7 @@ export const shortCache = createCacheMiddleware({
 export const mediumCache = createCacheMiddleware({
   maxAge: 3600, // 1 hour
   private: false,
-  staleWhileRevalidate: 300 // Allow stale for 5 minutes
+  staleWhileRevalidate: 300, // Allow stale for 5 minutes
 });
 
 /**
@@ -153,7 +156,7 @@ export const mediumCache = createCacheMiddleware({
 export const longCache = createCacheMiddleware({
   maxAge: 86400, // 1 day
   private: false,
-  staleWhileRevalidate: 3600 // Allow stale for 1 hour
+  staleWhileRevalidate: 3600, // Allow stale for 1 hour
 });
 
 /**
@@ -161,7 +164,7 @@ export const longCache = createCacheMiddleware({
  */
 export const staticCache = createCacheMiddleware({
   maxAge: 2592000, // 30 days
-  private: false
+  private: false,
 });
 
 /**
@@ -171,7 +174,7 @@ export const apiCache = createCacheMiddleware({
   maxAge: 600, // 10 minutes
   private: true,
   mustRevalidate: true,
-  staleWhileRevalidate: 120 // Allow stale for 2 minutes
+  staleWhileRevalidate: 120, // Allow stale for 2 minutes
 });
 
 /**
@@ -199,7 +202,7 @@ export const conditionalCache = Object.assign(
         next();
       };
     },
-    
+
     /**
      * Public cache middleware
      */
@@ -207,16 +210,20 @@ export const conditionalCache = Object.assign(
       return createCacheMiddleware({
         maxAge: ttl,
         private: false,
-        mustRevalidate: true
+        mustRevalidate: true,
       });
-    }
+    },
   }
 );
 
 /**
  * Cache-busting middleware for dynamic content
  */
-export const bustCache = (req: Request, res: Response, next: NextFunction): void => {
+export const bustCache = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   try {
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
@@ -269,7 +276,10 @@ export const cacheInvalidationMiddleware = (
       if (res.statusCode >= 200 && res.statusCode < 300) {
         const patterns = patternGenerator(req);
         patterns.forEach(pattern => {
-          logger.info(`Cache invalidation triggered for pattern: ${pattern}`, 'Cache');
+          logger.info(
+            `Cache invalidation triggered for pattern: ${pattern}`,
+            'Cache'
+          );
           // Here you would actually invalidate the cache patterns
           // This is a placeholder for the actual cache invalidation logic
         });
@@ -295,5 +305,5 @@ export default {
   varyOnUserAgent,
   varyOnAcceptLanguage,
   cacheMiddleware,
-  cacheInvalidationMiddleware
+  cacheInvalidationMiddleware,
 };

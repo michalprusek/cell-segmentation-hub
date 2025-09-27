@@ -5,6 +5,7 @@ import { User, Profile, getErrorMessage } from '@/types';
 import { logger } from '@/lib/logger';
 import { authEventEmitter } from '@/lib/authEvents';
 import { tokenRefreshManager } from '@/lib/tokenRefresh';
+import { isEmergencyLogout, clearEmergencyFlag } from '@/lib/emergencyLogout';
 import {
   AuthContext,
   // type AuthContextType,
@@ -22,6 +23,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        // Check if this was an emergency logout - if so, clear the flag and skip auth check
+        if (isEmergencyLogout()) {
+          logger.info(
+            'Emergency logout detected, clearing flag and staying on sign-in'
+          );
+          clearEmergencyFlag();
+          setLoading(false);
+          return;
+        }
+
         // Check if user is authenticated by checking if we have tokens
         if (apiClient.isAuthenticated()) {
           // Get the current access token

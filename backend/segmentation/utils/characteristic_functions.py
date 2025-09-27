@@ -36,6 +36,33 @@ def calculate_sphericity_from_contour(contour):
     perimeter = calculate_perimeter_from_contour(contour)
     return np.pi * np.sqrt(4 * area / np.pi) / perimeter if perimeter else 0
 
+def calculate_compactness_from_contour(contour):
+    """
+    Calculate compactness: P²/(4πA) - reciprocal of circularity
+    Values equal 1 for perfect circle, increase for complex shapes
+    Following ImageJ standard definition
+    """
+    area = calculate_area_from_contour(contour)
+    perimeter = calculate_perimeter_from_contour(contour)
+    return (perimeter ** 2) / (4 * np.pi * area) if area > 0 else 0
+
+def calculate_extent_from_contour(contour):
+    """
+    Calculate extent: area / bounding box area
+    Measures how much of the bounding box is filled by the shape
+    """
+    area = calculate_area_from_contour(contour)
+    x, y, w, h = cv2.boundingRect(contour)
+    bbox_area = w * h
+    return area / bbox_area if bbox_area > 0 else 0
+
+def calculate_bounding_box_dimensions(contour):
+    """
+    Calculate axis-aligned bounding box width and height
+    """
+    x, y, w, h = cv2.boundingRect(contour)
+    return float(w), float(h)
+
 
 def calculate_feret_properties_from_contour(contour):
     # Check if contour has sufficient points for minAreaRect
@@ -88,22 +115,49 @@ def calculate_orthogonal_diameter(contour):
 
     return orthogonal_diameter
 
-def calculate_all(contour):
+def calculate_all(contour, hole_contours=None):
+    """
+    Calculate all morphometric metrics for a contour
+
+    Args:
+        contour: Main contour (numpy array)
+        hole_contours: Optional list of hole contours for perimeter calculation
+    """
     area = calculate_area_from_contour(contour)
     perimeter = calculate_perimeter_from_contour(contour)
+
+    # Calculate perimeter with holes if provided
+    perimeter_with_holes = perimeter
+    if hole_contours:
+        for hole in hole_contours:
+            perimeter_with_holes += cv2.arcLength(hole, True)
+
     eq_diam = calculate_equivalent_diameter_from_contour(contour)
-    circularity = calculate_circularity_from_contour(contour)
+    # Use perimeter with holes for circularity calculation (ImageJ convention)
+    circularity = (4 * np.pi * area) / (perimeter_with_holes ** 2) if perimeter_with_holes > 0 else 0
+    circularity = min(1.0, circularity)  # Clamp to [0, 1]
+
     feret_diameter_max, feret_diameter_min, feret_aspect_ratio = calculate_feret_properties_from_contour(contour)
     feret_max_orthogonal_distance = calculate_orthogonal_diameter(contour)
     major_axis_length, minor_axis_length = calculate_diameters_from_contour(contour)
-    compactness = calculate_circularity_from_contour(contour)
-    convexity = calculate_convexity_from_contour(contour)
+
+    # Use correct compactness formula: P²/(4πA)
+    compactness = calculate_compactness_from_contour(contour)
+
+    # Convexity uses perimeter with holes for boundary smoothness measure
+    hull = cv2.convexHull(contour)
+    hull_perimeter = cv2.arcLength(hull, True)
+    convexity = hull_perimeter / perimeter_with_holes if perimeter_with_holes > 0 else 0
+
     solidity = calculate_solidity_from_contour(contour)
     sphericity = calculate_sphericity_from_contour(contour)
+    extent = calculate_extent_from_contour(contour)
+    bbox_width, bbox_height = calculate_bounding_box_dimensions(contour)
 
     data = {
         "Area": area,
         "Perimeter": perimeter,
+        "PerimeterWithHoles": perimeter_with_holes,
         "EquivalentDiameter": eq_diam,
         "Circularity": circularity,
         "FeretDiameterMax": feret_diameter_max,
@@ -115,7 +169,10 @@ def calculate_all(contour):
         "Compactness": compactness,
         "Convexity": convexity,
         "Solidity": solidity,
-        "Sphericity": sphericity
+        "Sphericity": sphericity,
+        "Extent": extent,
+        "BoundingBoxWidth": bbox_width,
+        "BoundingBoxHeight": bbox_height
     }
 
     return data

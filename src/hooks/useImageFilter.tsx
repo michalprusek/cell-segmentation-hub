@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect as _useEffect, useMemo } from 'react';
 import type { ProjectImage } from '@/types';
 import { logger } from '@/lib/logger';
 

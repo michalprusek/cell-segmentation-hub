@@ -6,6 +6,7 @@ import {
   User as UserIcon,
   LogOut,
   X,
+  LayoutDashboard,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -86,6 +87,16 @@ const MobileMenu = ({
           >
             <SettingsIcon className="h-5 w-5 mr-3 text-gray-500" />
             <span>{t('common.settings')}</span>
+          </button>
+          <button
+            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            onClick={() => {
+              setIsMenuOpen(false);
+              navigate('/dashboard');
+            }}
+          >
+            <LayoutDashboard className="h-5 w-5 mr-3 text-gray-500" />
+            <span>{t('common.dashboard')}</span>
           </button>
           <button
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"

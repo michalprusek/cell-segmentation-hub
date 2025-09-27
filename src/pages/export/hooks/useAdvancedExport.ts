@@ -8,6 +8,17 @@ import {
   canDownloadLargeFiles,
 } from '@/lib/downloadUtils';
 import ExportStateManager from '@/lib/exportStateManager';
+import { useAbortController } from '@/hooks/shared/useAbortController';
+
+// Sanitize filename to remove/replace invalid characters
+const sanitizeFilename = (filename: string): string => {
+  return filename
+    .replace(/[<>:"/\\|?*]/g, '_') // Replace invalid filename characters
+    .replace(/[\s]+/g, '_') // Replace spaces with underscores
+    .replace(/_{2,}/g, '_') // Replace multiple underscores with single
+    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+    .substring(0, 100); // Limit length to prevent issues
+};
 
 export interface ExportOptions {
   includeOriginalImages?: boolean;
@@ -68,6 +79,13 @@ export const useAdvancedExport = (projectId: string) => {
   const [wsConnected, setWsConnected] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
 
+  // Initialize AbortController for cancellable downloads
+  const { getSignal, abort, resetController, isAborted } =
+    useAbortController('export');
+  const [currentProjectName, setCurrentProjectName] = useState<
+    string | undefined
+  >();
+
   const { socket } = useWebSocket();
 
   // Check resumed export status from server - defined early to avoid dependency issues
@@ -125,6 +143,13 @@ export const useAdvancedExport = (projectId: string) => {
   useEffect(() => {
     if (!projectId) return;
 
+    // DEPRECATED: This hook is deprecated, skip restoration to prevent duplicates
+    // Use useSharedAdvancedExport instead
+    logger.debug('[DEPRECATED] useAdvancedExport: Skipping state restoration');
+    return;
+
+    // Original code commented out to prevent duplicate restoration
+    /*
     const persistedState = ExportStateManager.getExportState(projectId);
     if (persistedState) {
       logger.info('Restoring export state from localStorage', persistedState);
@@ -155,6 +180,7 @@ export const useAdvancedExport = (projectId: string) => {
         setExportStatus('Download ready');
       }
     }
+    */
   }, [projectId, checkResumedExportStatus]);
 
   // Persist state changes to localStorage
@@ -334,7 +360,8 @@ export const useAdvancedExport = (projectId: string) => {
     return () => {
       if (pollingInterval) {
         clearInterval(pollingInterval);
-        setPollingInterval(null);
+        // Don't set state during cleanup to prevent infinite loop
+        // The state will be cleaned up when component unmounts
       }
     };
   }, [currentJob, isExporting, wsConnected, pollingInterval, projectId]);
@@ -353,17 +380,30 @@ export const useAdvancedExport = (projectId: string) => {
             // Continue with download attempt instead of returning
           }
 
+          const signal = getSignal('download');
+          logger.info(
+            '📥 Starting auto-download with signal aborted:',
+            signal.aborted
+          );
+
           const response = await apiClient.get(
             `/projects/${projectId}/export/${completedJobId}/download`,
             {
               responseType: 'blob',
               // Add timeout for large files (5 minutes)
               timeout: 300000,
+              // Add AbortController signal for cancellation support
+              signal: signal,
             }
           );
 
-          // Use centralized download utility
-          const filename = `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+          logger.info('✅ Download request completed');
+
+          // Use centralized download utility with project name
+          // Use simple project name for download (as requested by user)
+          const filename = currentProjectName
+            ? `${sanitizeFilename(currentProjectName)}.zip`
+            : `export_${completedJobId}.zip`;
           await downloadFromResponse(response, filename);
 
           // Show downloading status briefly, then auto-dismiss after a reasonable time
@@ -380,7 +420,16 @@ export const useAdvancedExport = (projectId: string) => {
           }, 5000);
 
           logger.info('Export auto-downloaded', { jobId: completedJobId });
-        } catch (error) {
+        } catch (error: any) {
+          // Handle abort errors gracefully
+          if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+            logger.info('Download cancelled by user');
+            setExportStatus('Download cancelled');
+            setIsDownloading(false);
+            setCompletedJobId(null);
+            return;
+          }
+
           logger.error('Failed to auto-download export', error);
           setExportStatus(
             "Export completed! Click below to download if it didn't start automatically."
@@ -393,40 +442,51 @@ export const useAdvancedExport = (projectId: string) => {
       // Small delay to ensure the export file is fully ready
       setTimeout(autoDownload, 1000);
     }
-  }, [completedJobId, projectId]);
+  }, [completedJobId, projectId, currentProjectName, getSignal]);
 
   const updateExportOptions = useCallback((updates: Partial<ExportOptions>) => {
     setExportOptions(prev => ({ ...prev, ...updates }));
   }, []);
 
-  const startExport = useCallback(async () => {
-    try {
-      // Clear any previous completed job when starting new export
-      setCompletedJobId(null);
-      setIsExporting(true);
-      setExportProgress(0);
-      setExportStatus('Starting export...');
+  const startExport = useCallback(
+    async (projectName?: string) => {
+      try {
+        // Reset abort controllers for fresh start
+        resetController('download');
+        resetController('api');
 
-      const response = await apiClient.post(`/projects/${projectId}/export`, {
-        options: exportOptions,
-      });
+        // Clear any previous completed job when starting new export
+        setCompletedJobId(null);
+        setIsExporting(true);
+        setExportProgress(0);
+        setExportStatus('Preparing export...');
 
-      const jobId = response.data.jobId;
-      setCurrentJob({
-        id: jobId,
-        status: 'pending',
-        progress: 0,
-      });
+        // Store project name for download filename
+        setCurrentProjectName(projectName);
 
-      logger.info('Export job started', { jobId, projectId });
-      return jobId;
-    } catch (error) {
-      logger.error('Failed to start export', error);
-      setIsExporting(false);
-      setExportStatus('Failed to start export');
-      throw error;
-    }
-  }, [projectId, exportOptions]);
+        const response = await apiClient.post(`/projects/${projectId}/export`, {
+          options: exportOptions,
+          projectName: projectName,
+        });
+
+        const jobId = response.data.jobId;
+        setCurrentJob({
+          id: jobId,
+          status: 'pending',
+          progress: 0,
+        });
+
+        logger.info('Export job started', { jobId, projectId });
+        return jobId;
+      } catch (error) {
+        logger.error('Failed to start export', error);
+        setIsExporting(false);
+        setExportStatus('Failed to start export');
+        throw error;
+      }
+    },
+    [projectId, exportOptions, resetController]
+  );
 
   const triggerDownload = useCallback(async () => {
     if (!completedJobId) {
@@ -453,17 +513,30 @@ export const useAdvancedExport = (projectId: string) => {
         // Continue with download attempt
       }
 
+      const signal = getSignal('download');
+      logger.info(
+        '📥 Starting manual download with signal aborted:',
+        signal.aborted
+      );
+
       const response = await apiClient.get(
         `/projects/${projectId}/export/${completedJobId}/download`,
         {
           responseType: 'blob',
           // Add timeout for large files (5 minutes)
           timeout: 300000,
+          // Add AbortController signal for cancellation support
+          signal: signal,
         }
       );
 
-      // Use centralized download utility with unique filename
-      const filename = `export_${completedJobId}_${new Date().toISOString().slice(0, 10)}.zip`;
+      logger.info('✅ Manual download request completed');
+
+      // Use centralized download utility with project name
+      // Use simple project name for download (as requested by user)
+      const filename = currentProjectName
+        ? `${sanitizeFilename(currentProjectName)}.zip`
+        : `export_${completedJobId}.zip`;
       await downloadFromResponse(response, filename);
 
       // Show downloading status briefly, then auto-dismiss
@@ -480,17 +553,55 @@ export const useAdvancedExport = (projectId: string) => {
       }, 5000);
 
       logger.info('Export manually downloaded', { jobId: completedJobId });
-    } catch (error) {
+    } catch (error: any) {
+      // Handle abort errors gracefully
+      if (error?.name === 'AbortError' || error?.code === 'ERR_CANCELED') {
+        logger.info('Manual download cancelled by user');
+        setExportStatus('Download cancelled');
+        setIsDownloading(false);
+        setCompletedJobId(null);
+        return;
+      }
+
       logger.error('Failed to download export', { error, completedJobId });
       setExportStatus('Failed to download export. Please try again.');
       setIsDownloading(false);
 
       // Don't clear completedJobId on error so user can retry
     }
-  }, [projectId, completedJobId, isDownloading]);
+  }, [projectId, completedJobId, isDownloading, getSignal]);
 
   const cancelExport = useCallback(async () => {
-    if (!currentJob) return;
+    logger.info('🔴 cancelExport called', {
+      currentJob,
+      isExporting,
+      isDownloading,
+      projectId,
+    });
+
+    if (!currentJob) {
+      logger.warn('⚠️ Cannot cancel - no currentJob found');
+      // Still abort any in-progress downloads even if no job
+      abort('download');
+      abort('api');
+      setIsDownloading(false);
+      setIsExporting(false);
+      return;
+    }
+
+    // CRITICAL: Abort any in-progress downloads immediately
+    logger.info('🔴 Calling abort for download and api with job', currentJob);
+    abort('download');
+    abort('api');
+
+    // Verify the signal is actually aborted (use isAborted to avoid creating new controller)
+    const downloadAborted = isAborted('download');
+    const apiAborted = isAborted('api');
+    logger.info('🔍 Download signal aborted state:', downloadAborted);
+    logger.info('🔍 API signal aborted state:', apiAborted);
+
+    // Set cancelling state immediately for instant feedback
+    setIsDownloading(false);
 
     try {
       await apiClient.post(
@@ -503,7 +614,7 @@ export const useAdvancedExport = (projectId: string) => {
     } catch (error) {
       logger.error('Failed to cancel export', error);
     }
-  }, [projectId, currentJob]);
+  }, [projectId, currentJob, abort, isAborted, isExporting, isDownloading]);
 
   const getExportStatus = useCallback(
     async (jobId: string) => {

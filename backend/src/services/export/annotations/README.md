@@ -12,11 +12,11 @@ This directory contains annotation export utilities for various computer vision 
 
 ## Available Formats
 
-| Format | Directory | Best Use Case |
-|--------|-----------|---------------|
-| **COCO** | `coco/` | Instance segmentation, research datasets |
-| **YOLO** | `yolo/` | Real-time object detection training |
-| **JSON** | `json/` | Custom workflows, full detail preservation |
+| Format   | Directory | Best Use Case                              |
+| -------- | --------- | ------------------------------------------ |
+| **COCO** | `coco/`   | Instance segmentation, research datasets   |
+| **YOLO** | `yolo/`   | Real-time object detection training        |
+| **JSON** | `json/`   | Custom workflows, full detail preservation |
 
 ## Directory Structure
 
@@ -33,6 +33,7 @@ annotations/
 ## Scale Conversion Support
 
 All formats support pixel-to-micrometer scale conversion:
+
 - Linear measurements: px → µm
 - Area measurements: px² → µm²
 - Dimensionless ratios remain unchanged

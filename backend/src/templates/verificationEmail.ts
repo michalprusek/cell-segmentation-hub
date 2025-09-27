@@ -12,7 +12,7 @@ function escapeHtml(text: string): string {
     '>': '&gt;',
     '"': '&quot;',
     "'": '&#39;',
-    '/': '&#x2F;'
+    '/': '&#x2F;',
   };
   return text.replace(/[&<>"'/]/g, char => map[char] || char);
 }
@@ -25,9 +25,10 @@ const translations = {
     body: 'Please click the button below to verify your email address and activate your account.',
     buttonText: 'Verify Email',
     altText: 'Or copy and paste this link into your browser:',
-    footer: 'If you did not create an account, you can safely ignore this email.',
+    footer:
+      'If you did not create an account, you can safely ignore this email.',
     regards: 'Best regards,',
-    team: 'SpheroSeg Team'
+    team: 'SpheroSeg Team',
   },
   cs: {
     subject: 'Ověřte svůj e-mail - SpheroSeg',
@@ -36,9 +37,10 @@ const translations = {
     body: 'Kliknutím na tlačítko níže ověřte svou e-mailovou adresu a aktivujte svůj účet.',
     buttonText: 'Ověřit e-mail',
     altText: 'Nebo zkopírujte a vložte tento odkaz do svého prohlížeče:',
-    footer: 'Pokud jste si nevytvořili účet, můžete tento e-mail bezpečně ignorovat.',
+    footer:
+      'Pokud jste si nevytvořili účet, můžete tento e-mail bezpečně ignorovat.',
     regards: 'S pozdravem,',
-    team: 'Tým SpheroSeg'
+    team: 'Tým SpheroSeg',
   },
   es: {
     subject: 'Verifica tu correo - SpheroSeg',
@@ -47,9 +49,10 @@ const translations = {
     body: 'Haz clic en el botón de abajo para verificar tu dirección de correo y activar tu cuenta.',
     buttonText: 'Verificar correo',
     altText: 'O copia y pega este enlace en tu navegador:',
-    footer: 'Si no creaste una cuenta, puedes ignorar este correo de forma segura.',
+    footer:
+      'Si no creaste una cuenta, puedes ignorar este correo de forma segura.',
     regards: 'Saludos,',
-    team: 'Equipo de SpheroSeg'
+    team: 'Equipo de SpheroSeg',
   },
   de: {
     subject: 'E-Mail bestätigen - SpheroSeg',
@@ -57,21 +60,24 @@ const translations = {
     greeting: 'Hallo,',
     body: 'Klicken Sie auf die Schaltfläche unten, um Ihre E-Mail-Adresse zu bestätigen und Ihr Konto zu aktivieren.',
     buttonText: 'E-Mail bestätigen',
-    altText: 'Oder kopieren Sie diesen Link und fügen Sie ihn in Ihren Browser ein:',
-    footer: 'Wenn Sie kein Konto erstellt haben, können Sie diese E-Mail sicher ignorieren.',
+    altText:
+      'Oder kopieren Sie diesen Link und fügen Sie ihn in Ihren Browser ein:',
+    footer:
+      'Wenn Sie kein Konto erstellt haben, können Sie diese E-Mail sicher ignorieren.',
     regards: 'Mit freundlichen Grüßen,',
-    team: 'SpheroSeg Team'
+    team: 'SpheroSeg Team',
   },
   fr: {
     subject: 'Vérifiez votre email - SpheroSeg',
-    title: 'Vérification d\'email',
+    title: "Vérification d'email",
     greeting: 'Bonjour,',
     body: 'Cliquez sur le bouton ci-dessous pour vérifier votre adresse email et activer votre compte.',
-    buttonText: 'Vérifier l\'email',
+    buttonText: "Vérifier l'email",
     altText: 'Ou copiez et collez ce lien dans votre navigateur :',
-    footer: 'Si vous n\'avez pas créé de compte, vous pouvez ignorer cet email en toute sécurité.',
+    footer:
+      "Si vous n'avez pas créé de compte, vous pouvez ignorer cet email en toute sécurité.",
     regards: 'Cordialement,',
-    team: 'Équipe SpheroSeg'
+    team: 'Équipe SpheroSeg',
   },
   zh: {
     subject: '验证您的电子邮件 - 细胞分割平台',
@@ -82,8 +88,8 @@ const translations = {
     altText: '或将此链接复制并粘贴到您的浏览器中：',
     footer: '如果您没有创建账户，可以安全地忽略此邮件。',
     regards: '此致，',
-    team: '细胞分割平台团队'
-  }
+    team: '细胞分割平台团队',
+  },
 };
 
 export function generateVerificationEmailHTML(data: VerificationEmailData): {
@@ -91,8 +97,9 @@ export function generateVerificationEmailHTML(data: VerificationEmailData): {
   html: string;
 } {
   const locale = data.locale || 'en';
-  const t = translations[locale as keyof typeof translations] || translations.en;
-  
+  const t =
+    translations[locale as keyof typeof translations] || translations.en;
+
   // Validate and escape verification URL for security
   let safeUrl;
   try {
@@ -105,13 +112,15 @@ export function generateVerificationEmailHTML(data: VerificationEmailData): {
     // Fall back to safe default if URL is invalid
     safeUrl = escapeHtml('#');
   }
-  
+
   const safeEmail = data.userEmail ? escapeHtml(data.userEmail) : '';
 
   // Validate and sanitize locale for HTML lang attribute
   const allowedLocales = ['en', 'cs', 'es', 'de', 'fr', 'zh'];
-  const safeLocale = allowedLocales.includes(locale.toLowerCase()) ? locale.toLowerCase() : 'en';
-  
+  const safeLocale = allowedLocales.includes(locale.toLowerCase())
+    ? locale.toLowerCase()
+    : 'en';
+
   const html = `
     <!DOCTYPE html>
     <html lang="${safeLocale}">
@@ -202,6 +211,6 @@ export function generateVerificationEmailHTML(data: VerificationEmailData): {
 
   return {
     subject: t.subject,
-    html
+    html,
   };
 }

@@ -1,44 +1,22 @@
-import React, { Suspense, lazy, Component, ErrorInfo, ReactNode } from 'react';
+import React, { Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { FileSpreadsheet, Loader2, AlertCircle } from 'lucide-react';
 import { SegmentationResult } from '@/lib/segmentation';
-import { logger } from '@/lib/logger';
 import { useLanguage } from '@/contexts/exports';
+import { lazyWithRetry, LazyImportErrorBoundary } from '@/lib/lazyWithRetry';
 
-// Lazy load the heavy ExcelExporter component that imports ExcelJS
-const ExcelExporter = lazy(() => import('./ExcelExporter'));
+// Lazy load the heavy ExcelExporter component with automatic retry
+const ExcelExporter = lazyWithRetry(
+  () => import('./ExcelExporter'),
+  'Excel Exporter'
+);
 
 interface LazyExcelExporterProps {
   segmentation: SegmentationResult | null;
   imageName?: string;
 }
 
-// Error boundary for handling dynamic import failures
-class LazyImportErrorBoundary extends Component<
-  { children: ReactNode; fallback: ReactNode },
-  { hasError: boolean }
-> {
-  constructor(props: { children: ReactNode; fallback: ReactNode }) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(_: Error) {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    logger.error('LazyExcelExporter failed to load', { error, errorInfo });
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-
-    return this.props.children;
-  }
-}
+// Component implementation
 
 const LazyExcelExporter: React.FC<LazyExcelExporterProps> = ({
   segmentation,
@@ -64,14 +42,7 @@ const LazyExcelExporter: React.FC<LazyExcelExporterProps> = ({
   }
 
   return (
-    <LazyImportErrorBoundary
-      fallback={
-        <Button variant="default" size="sm" disabled className="text-xs">
-          <AlertCircle className="h-4 w-4 mr-1" />
-          {t('segmentationEditor.export.exportUnavailable')}
-        </Button>
-      }
-    >
+    <LazyImportErrorBoundary componentName="Excel Exporter">
       <Suspense
         fallback={
           <Button variant="default" size="sm" disabled className="text-xs">

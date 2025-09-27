@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { AdvancedExportDialog } from '@/pages/export/AdvancedExportDialog';
 import ExportStateManager from '@/lib/exportStateManager';
+import { logger } from '@/lib/logger';
 
 interface ProjectToolbarProps {
   searchTerm?: string;
@@ -36,6 +37,9 @@ interface ProjectToolbarProps {
   onSelectAllToggle?: () => void;
   onBatchDelete?: () => void;
   showSelectAll?: boolean;
+  // Export state callbacks
+  onExportingChange?: (isExporting: boolean) => void;
+  onDownloadingChange?: (isDownloading: boolean) => void;
 }
 
 const ProjectToolbar = ({
@@ -59,6 +63,8 @@ const ProjectToolbar = ({
   onSelectAllToggle,
   onBatchDelete,
   showSelectAll = false,
+  onExportingChange,
+  onDownloadingChange,
 }: ProjectToolbarProps) => {
   const { t } = useLanguage();
   const _navigate = useNavigate();
@@ -70,6 +76,11 @@ const ProjectToolbar = ({
   // Check for persisted export state on mount
   useEffect(() => {
     if (projectId) {
+      // Skip direct restoration - let useSharedAdvancedExport handle it
+      // This prevents duplicate restoration attempts
+      logger.debug('ProjectToolbar: Skipping direct export state restoration');
+
+      // Just check if export is in progress for UI state
       const persistedState = ExportStateManager.getExportState(projectId);
       if (persistedState) {
         if (
@@ -128,7 +139,9 @@ const ProjectToolbar = ({
               className="h-4 w-4"
             />
             <span className="text-sm font-medium text-gray-700 dark:text-gray-300 select-none">
-              {t('export.selectAll')}
+              {isAllSelected
+                ? t('export.allSelected', { count: images.length })
+                : t('export.selectAllProject', { count: images.length })}
             </span>
           </label>
         )}
@@ -347,8 +360,8 @@ const ProjectToolbar = ({
           projectName={projectName}
           images={images}
           selectedImageIds={selectedImageIds}
-          onExportingChange={setIsExporting}
-          onDownloadingChange={setIsDownloading}
+          onExportingChange={onExportingChange || setIsExporting}
+          onDownloadingChange={onDownloadingChange || setIsDownloading}
         />
       )}
     </div>

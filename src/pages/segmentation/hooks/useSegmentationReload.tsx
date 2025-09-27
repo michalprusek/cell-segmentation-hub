@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useLanguage } from '@/contexts/useLanguage';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { logger } from '@/lib/logger';
+import { retryWithBackoff, RETRY_CONFIGS } from '@/lib/retryUtils';
 
 interface UseSegmentationReloadProps {
   projectId?: string;
@@ -90,7 +91,7 @@ export function useSegmentationReload({
   }, []);
 
   /**
-   * Fetch segmentation data from API
+   * Fetch segmentation data from API with retry logic
    */
   const fetchSegmentationData = useCallback(
     async (
@@ -100,35 +101,90 @@ export function useSegmentationReload({
       imageWidth?: number;
       imageHeight?: number;
     } | null> => {
-      try {
-        const data = await apiClient.getSegmentationResults(imageId!, {
+      const result = await retryWithBackoff(
+        async () => {
+          const data = await apiClient.getSegmentationResults(imageId!, {
+            signal,
+          });
+
+          if (signal.aborted) {
+            logger.debug('Segmentation fetch was aborted:', { imageId });
+            return null;
+          }
+
+          if (!data || !data.polygons) {
+            logger.debug('No segmentation data found:', imageId);
+            return { polygons: null };
+          }
+
+          return {
+            polygons: data.polygons,
+            imageWidth: data.imageWidth,
+            imageHeight: data.imageHeight,
+          };
+        },
+        {
+          ...RETRY_CONFIGS.api,
           signal,
-        });
+          shouldRetry: (error, attempt) => {
+            // Don't retry on abort
+            if (error && typeof error === 'object' && 'name' in error) {
+              const errorName = (error as any).name;
+              if (errorName === 'AbortError' || errorName === 'CanceledError') {
+                return false;
+              }
+            }
 
-        if (signal.aborted) {
-          logger.debug('Segmentation fetch was aborted:', { imageId });
-          return null;
-        }
+            // Don't retry on 404 (no segmentation data)
+            if (error && typeof error === 'object' && 'status' in error) {
+              const status = (error as any).status;
+              if (status === 404) {
+                return false;
+              }
+            }
 
-        if (!data || !data.polygons) {
-          logger.debug('No segmentation data found:', imageId);
-          return { polygons: null };
-        }
+            return attempt < 3;
+          },
+          onRetry: (error, attempt, nextDelay) => {
+            logger.warn(`Retrying segmentation fetch for image ${imageId}`, {
+              attempt,
+              nextDelay,
+              error,
+            });
 
-        return {
-          polygons: data.polygons,
-          imageWidth: data.imageWidth,
-          imageHeight: data.imageHeight,
-        };
-      } catch (error: any) {
-        if (error.name === 'AbortError') {
-          logger.debug('Segmentation fetch was aborted:', { imageId });
-          return null;
+            // Show user feedback on second retry
+            if (attempt === 2) {
+              toast.loading(t('segmentationEditor.retryingLoad'), {
+                description: t('common.retryingIn', {
+                  seconds: Math.ceil(nextDelay / 1000),
+                }),
+              });
+            }
+          },
         }
-        throw error;
+      );
+
+      if (result.success) {
+        toast.dismiss(); // Clear any loading toast
+        return result.data;
       }
+
+      // Check if it was aborted
+      if (
+        result.error &&
+        typeof result.error === 'object' &&
+        'name' in result.error
+      ) {
+        const errorName = (result.error as any).name;
+        if (errorName === 'AbortError' || errorName === 'CanceledError') {
+          logger.debug('Segmentation fetch was aborted:', { imageId });
+          return null;
+        }
+      }
+
+      throw result.error;
     },
-    [imageId]
+    [imageId, t]
   );
 
   /**

@@ -2,55 +2,56 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     // Build Configuration for Backend (Node.js)
-    "target": "ES2022",
-    "module": "ES2022",
+    "target": "ES2020",
+    "module": "ES2020",
     "moduleResolution": "node",
     "lib": ["ES2022"],
     "outDir": "./dist",
     "rootDir": ".",
-    
+
     // Module System
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    
+
     // Build Outputs
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "removeComments": false,
     "importHelpers": true,
-    
+    "downlevelIteration": true,
+
     // MIGRATION STRATEGY: Backend needs significant type fixes
     // Current: Phase 0 (Basic compilation)
     // Target: Phase 2 (Full strict mode)
-    
+
     "strict": false, // PHASE 1: Fix ~150 type errors first
     "noUncheckedIndexedAccess": false, // PHASE 2: After strict mode enabled
-    "exactOptionalPropertyTypes": false, // PHASE 2: After strict mode enabled  
+    "exactOptionalPropertyTypes": false, // PHASE 2: After strict mode enabled
     "noPropertyAccessFromIndexSignature": false, // PHASE 2: After code cleanup
-    
+
     // Core Safety (Minimal viable safety)
     "noImplicitAny": false, // TODO: ~50 files need explicit types
     "noImplicitReturns": false, // TODO: ~20 functions need return types
     "noImplicitThis": false, // TODO: Some this context issues
     "noFallthroughCasesInSwitch": true, // ✅ ENABLED: No existing violations
     "noImplicitOverride": false, // TODO: Need override keywords
-    
+
     // Code Quality (Phase 3 targets)
     "noUnusedLocals": false, // TODO: Major cleanup needed
     "noUnusedParameters": false, // TODO: Major cleanup needed
     "allowUnusedLabels": false, // ✅ ENABLED: Good practice
     "allowUnreachableCode": false, // ✅ ENABLED: Good practice
-    
+
     // Development Experience (Always enabled for productivity)
     "skipLibCheck": true, // ✅ ENABLED: Skip third-party lib checks
     "forceConsistentCasingInFileNames": true, // ✅ ENABLED: Prevent case issues
-    
+
     // Experimental Features (for decorators)
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    
+
     // Path Configuration
     "baseUrl": ".",
     "paths": {
@@ -63,11 +64,7 @@
       "@utils/*": ["./src/utils/*"]
     }
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.js",
-    "prisma/seed.ts"
-  ],
+  "include": ["src/**/*.ts", "src/**/*.js", "prisma/seed.ts"],
   "exclude": [
     "node_modules",
     "dist",

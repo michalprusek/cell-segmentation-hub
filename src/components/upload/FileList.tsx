@@ -4,54 +4,34 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ImagePlus, FileX, CheckCircle, X, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
-
-export interface FileWithPreview extends File {
-  preview?: string;
-  uploadProgress?: number;
-  status?: 'pending' | 'uploading' | 'complete' | 'error';
-  id?: string;
-}
+import { UniversalCancelButton } from '@/components/ui/universal-cancel-button';
+import { FileWithPreview, getFileSize } from '@/lib/fileUtils';
 
 interface FileListProps {
   files: FileWithPreview[];
   uploadProgress: number;
   isUploading?: boolean;
+  isCancelling?: boolean;
   onRemoveFile: (file: FileWithPreview) => void;
+  onCancelUpload?: () => void;
+  onStartUpload?: () => void;
 }
 
 const FileList = ({
   files,
   uploadProgress,
   isUploading = false,
+  isCancelling = false,
   onRemoveFile,
+  onCancelUpload,
+  onStartUpload,
 }: FileListProps) => {
   const { t } = useLanguage();
 
   if (files.length === 0) return null;
 
-  // Helper function to format file size
-  const formatFileSize = (file: FileWithPreview): string => {
-    // Try multiple sources for file size
-    let sizeInBytes: number;
-
-    if (typeof file.size === 'number' && !isNaN(file.size)) {
-      sizeInBytes = file.size;
-    } else if (file instanceof File && typeof file.size === 'number') {
-      sizeInBytes = file.size;
-    } else {
-      return 'Unknown size';
-    }
-
-    if (sizeInBytes === 0) return '0 KB';
-
-    if (sizeInBytes < 1024) {
-      return `${sizeInBytes} B`;
-    } else if (sizeInBytes < 1024 * 1024) {
-      return `${(sizeInBytes / 1024).toFixed(0)} KB`;
-    } else {
-      return `${(sizeInBytes / (1024 * 1024)).toFixed(1)} MB`;
-    }
-  };
+  // Use shared file size utility
+  // Removed duplicate formatFileSize function - now using getFileSize from shared utils
 
   return (
     <div className="space-y-4 bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded-lg">
@@ -61,12 +41,27 @@ const FileList = ({
             <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
           )}
           <h3 className="text-sm font-medium dark:text-white">
-            {t('images.uploadProgress')}
+            {isUploading
+              ? t('images.uploadProgress')
+              : t('images.readyToUpload')}
           </h3>
         </div>
-        <span className="text-sm text-gray-500 dark:text-gray-400">
-          {uploadProgress}%
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-500 dark:text-gray-400">
+            {isUploading ? `${uploadProgress}%` : `${files.length} files`}
+          </span>
+          {files.length > 0 && onStartUpload && onCancelUpload && (
+            <UniversalCancelButton
+              operationType="upload"
+              isOperationActive={isUploading}
+              isCancelling={isCancelling}
+              onCancel={onCancelUpload}
+              onPrimaryAction={onStartUpload}
+              primaryText={t('common.upload')}
+              size="sm"
+            />
+          )}
+        </div>
       </div>
 
       <Progress value={uploadProgress} className="h-2" />
@@ -101,7 +96,7 @@ const FileList = ({
                   </p>
                   <div className="flex items-center gap-2">
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {formatFileSize(file)}
+                      {getFileSize(file)}
                     </p>
                     {file.status === 'uploading' &&
                       file.uploadProgress !== undefined && (

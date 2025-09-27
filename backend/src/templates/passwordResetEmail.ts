@@ -7,23 +7,25 @@ export interface PasswordResetEmailData {
   expiresAt: Date;
 }
 
-export const generatePasswordResetEmailHTML = (data: PasswordResetEmailData): string => {
+export const generatePasswordResetEmailHTML = (
+  data: PasswordResetEmailData
+): string => {
   // Validate and sanitize the reset URL first
   const validatedUrl = sanitizeUrl(data.resetUrl);
   if (!validatedUrl) {
     throw new Error('Invalid reset URL provided');
   }
-  
+
   // Escape all user-supplied values
   const safeUserEmail = escapeHtml(data.userEmail);
   const safeResetUrl = escapeHtml(validatedUrl);
-  const expirationTime = data.expiresAt.toLocaleString('cs-CZ', { 
+  const expirationTime = data.expiresAt.toLocaleString('cs-CZ', {
     timeZone: 'Europe/Prague',
     day: '2-digit',
-    month: '2-digit', 
+    month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
   // Simplified HTML template for UTIA SMTP compatibility
   return `
@@ -67,35 +69,39 @@ export const generatePasswordResetEmailHTML = (data: PasswordResetEmailData): st
 
 // Helper function to escape plain text for security
 const escapePlainText = (text: string): string => {
-  return text
-    // Remove all control characters (0-31 and 127) except space
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    // Normalize whitespace
-    .replace(/[\r\n\t]/g, ' ')
-    // Remove multiple consecutive spaces
-    .replace(/\s+/g, ' ')
-    .trim();
+  return (
+    text
+      // Remove all control characters (0-31 and 127) except space
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+      // Normalize whitespace
+      .replace(/[\r\n\t]/g, ' ')
+      // Remove multiple consecutive spaces
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 };
 
-export const generatePasswordResetEmailText = (data: PasswordResetEmailData): string => {
+export const generatePasswordResetEmailText = (
+  data: PasswordResetEmailData
+): string => {
   // Validate and sanitize the reset URL first
   const validatedUrl = sanitizeUrl(data.resetUrl);
   if (!validatedUrl) {
     throw new Error('Invalid reset URL provided');
   }
-  
+
   const safeEmail = escapePlainText(data.userEmail);
   const safeResetUrl = escapePlainText(validatedUrl);
-  const expirationTime = data.expiresAt.toLocaleString('cs-CZ', { 
+  const expirationTime = data.expiresAt.toLocaleString('cs-CZ', {
     timeZone: 'Europe/Prague',
     day: '2-digit',
-    month: '2-digit', 
+    month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
-  
+
   return `
 Reset hesla - SpheroSeg
 

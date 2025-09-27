@@ -24,7 +24,7 @@ export interface AuthRequest<
   ResBody = unknown,
   ReqBody = unknown,
   ReqQuery = qs.ParsedQs,
-  Locals extends Record<string, unknown> = Record<string, unknown>
+  Locals extends Record<string, unknown> = Record<string, unknown>,
 > extends Request<P, ResBody, ReqBody, ReqQuery, Locals> {
   user?: AuthUser;
   profile?: UserProfile;

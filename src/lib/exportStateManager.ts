@@ -28,11 +28,21 @@ class ExportStateManager {
   private static readonly CLEANUP_INTERVAL = 30 * 60 * 1000; // 30 minutes
   private static cleanupTimer: NodeJS.Timeout | null = null;
   private static throttledSaves: Map<string, NodeJS.Timeout> = new Map();
+  private static isInitialized = false;
+  // Request deduplication cache: jobId -> Promise
+  private static pendingRequests: Map<string, Promise<any>> = new Map();
 
   /**
-   * Initialize the manager - starts periodic cleanup
+   * Initialize the manager - starts periodic cleanup (singleton pattern)
    */
   static initialize(): void {
+    // Prevent multiple initializations
+    if (this.isInitialized) {
+      logger.debug('ExportStateManager already initialized, skipping');
+      return;
+    }
+
+    this.isInitialized = true;
     this.startPeriodicCleanup();
     this.cleanupExpiredStates();
     logger.debug('ExportStateManager initialized');
@@ -225,6 +235,40 @@ class ExportStateManager {
     } catch (error) {
       logger.warn('Failed to cleanup expired states:', error);
     }
+  }
+
+  /**
+   * Deduplicate API requests by jobId
+   * Returns existing promise if request is already in progress
+   */
+  static deduplicateRequest<T>(
+    jobId: string,
+    requestFn: () => Promise<T>
+  ): Promise<T> {
+    // Check if request already in progress
+    const existingRequest = this.pendingRequests.get(jobId);
+    if (existingRequest) {
+      logger.debug(
+        `Request already in progress for job ${jobId}, returning existing promise`
+      );
+      return existingRequest;
+    }
+
+    // Create new request and cache it
+    const requestPromise = requestFn().finally(() => {
+      // Clean up after request completes
+      this.pendingRequests.delete(jobId);
+    });
+
+    this.pendingRequests.set(jobId, requestPromise);
+    return requestPromise;
+  }
+
+  /**
+   * Clear all pending requests (useful for cleanup)
+   */
+  static clearPendingRequests(): void {
+    this.pendingRequests.clear();
   }
 
   /**

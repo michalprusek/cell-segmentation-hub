@@ -11,6 +11,9 @@ export interface Polygon {
   color?: string;
   category?: string;
   confidence?: number;
+  type?: 'external' | 'internal';
+  parent_id?: string;
+  area?: number;
 }
 
 export interface ParsedPolygonResult {
@@ -38,30 +41,32 @@ export const PolygonValidator = {
   ): ParsedPolygonResult {
     try {
       let parsed: unknown;
-      
+
       // Handle string input - parse JSON
       if (typeof polygonData === 'string') {
         if (polygonData.trim() === '' || polygonData === 'null') {
           return { polygons: [], isValid: true };
         }
-        
+
         try {
           parsed = JSON.parse(polygonData);
         } catch (parseError) {
           logger.error(
-            'Failed to parse polygons JSON', 
-            parseError instanceof Error ? parseError : undefined, 
-            'PolygonValidator', 
-            { 
-              context, 
+            'Failed to parse polygons JSON',
+            parseError instanceof Error ? parseError : undefined,
+            'PolygonValidator',
+            {
+              context,
               imageId: imageId || 'unknown',
-              rawData: polygonData.slice(0, 100) + (polygonData.length > 100 ? '...' : '')
+              rawData:
+                polygonData.slice(0, 100) +
+                (polygonData.length > 100 ? '...' : ''),
             }
           );
           return {
             polygons: [],
             isValid: false,
-            error: 'Invalid JSON format'
+            error: 'Invalid JSON format',
           };
         }
       } else {
@@ -75,53 +80,60 @@ export const PolygonValidator = {
 
       // Handle array format
       if (Array.isArray(parsed)) {
-        const validatedPolygons = this.validatePolygonArray(parsed, context, imageId);
+        const validatedPolygons = this.validatePolygonArray(
+          parsed,
+          context,
+          imageId
+        );
         return {
           polygons: validatedPolygons,
-          isValid: true
+          isValid: true,
         };
       }
 
       // Handle object format (might have nested polygons property)
       const parsedObj = parsed as { polygons?: unknown };
-      if (typeof parsed === 'object' && parsedObj.polygons && Array.isArray(parsedObj.polygons)) {
-        const validatedPolygons = this.validatePolygonArray(parsedObj.polygons, context, imageId);
+      if (
+        typeof parsed === 'object' &&
+        parsedObj.polygons &&
+        Array.isArray(parsedObj.polygons)
+      ) {
+        const validatedPolygons = this.validatePolygonArray(
+          parsedObj.polygons,
+          context,
+          imageId
+        );
         return {
           polygons: validatedPolygons,
-          isValid: true
+          isValid: true,
         };
       }
 
       // Unexpected format
-      logger.warn(
-        'Unexpected polygon data format', 
-        'PolygonValidator', 
-        { 
-          context, 
-          imageId: imageId || 'unknown',
-          dataType: typeof parsed,
-          isArray: Array.isArray(parsed)
-        }
-      );
-      
+      logger.warn('Unexpected polygon data format', 'PolygonValidator', {
+        context,
+        imageId: imageId || 'unknown',
+        dataType: typeof parsed,
+        isArray: Array.isArray(parsed),
+      });
+
       return {
         polygons: [],
         isValid: false,
-        error: 'Unexpected data format'
+        error: 'Unexpected data format',
       };
-
     } catch (error) {
       logger.error(
-        'Unexpected error in polygon parsing', 
-        error instanceof Error ? error : undefined, 
-        'PolygonValidator', 
+        'Unexpected error in polygon parsing',
+        error instanceof Error ? error : undefined,
+        'PolygonValidator',
         { context, imageId: imageId || 'unknown' }
       );
-      
+
       return {
         polygons: [],
         isValid: false,
-        error: 'Parsing failed with unexpected error'
+        error: 'Parsing failed with unexpected error',
       };
     }
   },
@@ -147,7 +159,7 @@ export const PolygonValidator = {
 
     for (let i = 0; i < polygonArray.length; i++) {
       const polygon = polygonArray[i] as unknown;
-      
+
       try {
         const validatedPolygon = this.validateSinglePolygon(polygon, i);
         if (validatedPolygon) {
@@ -156,24 +168,20 @@ export const PolygonValidator = {
           invalidCount++;
         }
       } catch (error) {
-        logger.warn(
-          `Invalid polygon at index ${i}`, 
-          'PolygonValidator', 
-          { 
-            context, 
-            imageId: imageId || 'unknown', 
-            polygonIndex: i,
-            error: error instanceof Error ? error.message : 'Unknown error'
-          }
-        );
+        logger.warn(`Invalid polygon at index ${i}`, 'PolygonValidator', {
+          context,
+          imageId: imageId || 'unknown',
+          polygonIndex: i,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
         invalidCount++;
       }
     }
 
     if (invalidCount > 0) {
       logger.debug(
-        `Filtered out ${invalidCount} invalid polygons from array of ${polygonArray.length}`, 
-        'PolygonValidator', 
+        `Filtered out ${invalidCount} invalid polygons from array of ${polygonArray.length}`,
+        'PolygonValidator',
         { context, imageId: imageId || 'unknown' }
       );
     }
@@ -206,7 +214,7 @@ export const PolygonValidator = {
         const validPoint = point as { x: number; y: number };
         validPoints.push({
           x: Number(validPoint.x),
-          y: Number(validPoint.y)
+          y: Number(validPoint.y),
         });
       }
     }
@@ -218,7 +226,7 @@ export const PolygonValidator = {
 
     // Build validated polygon
     const validatedPolygon: Polygon = {
-      points: validPoints
+      points: validPoints,
     };
 
     // Add optional properties if present and valid
@@ -234,9 +242,30 @@ export const PolygonValidator = {
       validatedPolygon.category = polygonObj.category;
     }
 
-    if (polygonObj.confidence && typeof polygonObj.confidence === 'number' &&
-        polygonObj.confidence >= 0 && polygonObj.confidence <= 1) {
+    if (
+      polygonObj.confidence &&
+      typeof polygonObj.confidence === 'number' &&
+      polygonObj.confidence >= 0 &&
+      polygonObj.confidence <= 1
+    ) {
       validatedPolygon.confidence = polygonObj.confidence;
+    }
+
+    // Add hierarchy support - preserve type field
+    if (polygonObj.type &&
+        typeof polygonObj.type === 'string' &&
+        ['external', 'internal'].includes(polygonObj.type as string)) {
+      validatedPolygon.type = polygonObj.type as 'external' | 'internal';
+    }
+
+    // Add parent_id for internal polygons
+    if (polygonObj.parent_id && typeof polygonObj.parent_id === 'string') {
+      validatedPolygon.parent_id = polygonObj.parent_id;
+    }
+
+    // Add area if present
+    if (polygonObj.area && typeof polygonObj.area === 'number' && polygonObj.area >= 0) {
+      validatedPolygon.area = polygonObj.area;
     }
 
     return validatedPolygon;
@@ -252,12 +281,14 @@ export const PolygonValidator = {
       return false;
     }
     const pointObj = point as Record<string, unknown>;
-    return typeof pointObj.x === 'number' &&
-           typeof pointObj.y === 'number' &&
-           !isNaN(pointObj.x) &&
-           !isNaN(pointObj.y) &&
-           isFinite(pointObj.x) &&
-           isFinite(pointObj.y);
+    return (
+      typeof pointObj.x === 'number' &&
+      typeof pointObj.y === 'number' &&
+      !isNaN(pointObj.x) &&
+      !isNaN(pointObj.y) &&
+      isFinite(pointObj.x) &&
+      isFinite(pointObj.y)
+    );
   },
 
   /**
@@ -280,9 +311,11 @@ export const PolygonValidator = {
    * @returns True if data exists and is parseable
    */
   hasValidPolygonData(polygonData: string | unknown): boolean {
-    if (!polygonData) {return false;}
-    
+    if (!polygonData) {
+      return false;
+    }
+
     const result = this.parsePolygonData(polygonData, 'validation-check');
     return result.isValid && result.polygons.length > 0;
-  }
+  },
 } as const;

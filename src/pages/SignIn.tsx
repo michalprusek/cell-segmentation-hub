@@ -172,6 +172,7 @@ const SignIn = () => {
 
             <Button
               type="submit"
+              variant="framed"
               className="w-full h-11 text-base rounded-md"
               disabled={isLoading}
             >

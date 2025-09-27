@@ -2,7 +2,7 @@ import React from 'react';
 import { Point } from '@/lib/segmentation';
 import CanvasVertex from './CanvasVertex';
 import VertexContextMenu from '../context-menu/VertexContextMenu';
-import { VertexDragState } from '@/pages/segmentation/types';
+import { VertexDragState, EditMode } from '@/pages/segmentation/types';
 import {
   shouldRenderVertices,
   getDecimatedVertices,
@@ -20,6 +20,7 @@ interface PolygonVerticesProps {
   viewportBounds?: { x: number; y: number; width: number; height: number };
   isUndoRedoInProgress?: boolean;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
+  editMode?: EditMode;
 }
 
 const PolygonVertices = React.memo(
@@ -35,6 +36,7 @@ const PolygonVertices = React.memo(
     viewportBounds,
     isUndoRedoInProgress = false,
     onDeleteVertex,
+    editMode,
   }: PolygonVerticesProps) => {
     // Always show vertices for selected polygons to enable dragging
     const shouldShowVertices = isSelected;
@@ -110,6 +112,7 @@ const PolygonVertices = React.memo(
                   type={polygonType}
                   isStartPoint={originalIndex === 0}
                   isUndoRedoInProgress={isUndoRedoInProgress}
+                  isInAddPointsMode={editMode === EditMode.AddPoints}
                 />
               </g>
             </VertexContextMenu>

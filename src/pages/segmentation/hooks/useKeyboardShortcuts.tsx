@@ -29,6 +29,7 @@ interface UseKeyboardShortcutsProps {
  * Comprehensive keyboard shortcuts for polygon editing
  * Inspired by SpheroSeg and professional CAD tools
  */
+// Force HMR update - Fixed slice mode activation 2025-09-22
 export const useKeyboardShortcuts = ({
   editMode,
   canUndo,
@@ -126,8 +127,8 @@ export const useKeyboardShortcuts = ({
             // Ctrl+S: Save
             event.preventDefault();
             handleSave();
-          } else if (selectedPolygonId) {
-            // S: Slice mode
+          } else {
+            // S: Slice mode (can be activated without selection)
             event.preventDefault();
             setEditMode(EditMode.Slice);
           }
@@ -304,18 +305,13 @@ function cycleEditMode(
   const allModes = [
     EditMode.View,
     EditMode.CreatePolygon,
+    EditMode.Slice, // Slice mode available always
     EditMode.DeletePolygon,
   ];
 
   // Add selection-dependent modes if polygon is selected
   if (selectedPolygonId) {
-    allModes.splice(
-      1,
-      0,
-      EditMode.EditVertices,
-      EditMode.AddPoints,
-      EditMode.Slice
-    );
+    allModes.splice(1, 0, EditMode.EditVertices, EditMode.AddPoints);
   }
 
   const currentIndex = allModes.indexOf(currentMode);

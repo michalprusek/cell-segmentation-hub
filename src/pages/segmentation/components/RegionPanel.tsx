@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/useLanguage';
 import { motion } from 'framer-motion';
 import PolygonItem from './PolygonItem';
 import { isPointInPolygon, getPolygonCentroid } from '@/lib/polygonGeometry';
+import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
 
 interface RegionPanelProps {
   loading: boolean;
@@ -138,7 +139,7 @@ const RegionPanel = ({
           <div className="space-y-2">
             {organizedPolygons.map((polygon, index) => (
               <PolygonItem
-                key={polygon.id}
+                key={ensureValidPolygonId(polygon.id, `region-${index}`)}
                 polygon={polygon}
                 index={index}
                 selectedPolygonId={selectedPolygonId}

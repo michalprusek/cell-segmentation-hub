@@ -359,12 +359,17 @@ export function validateSliceLine(
   const lineLength = Math.sqrt(dx * dx + dy * dy);
 
   if (lineLength < 1) {
-    return { isValid: false, reason: 'Slice line is too short' };
+    return {
+      isValid: false,
+      reason:
+        'Slice line is too short - draw points further apart (minimum 1 pixel distance)',
+    };
   }
 
   // First, try with the line segment (original behavior)
   let intersectionCount = 0;
   const points = polygon.points;
+  const intersectionPoints: Point[] = [];
 
   for (let i = 0; i < points.length; i++) {
     const j = (i + 1) % points.length;
@@ -377,17 +382,23 @@ export function validateSliceLine(
 
     if (intersection) {
       intersectionCount++;
+      intersectionPoints.push(intersection);
     }
   }
 
   // If we have exactly 2 intersections with the segment, we're good
   if (intersectionCount === 2) {
+    // Valid slice line - found 2 intersections with line segment
     return { isValid: true, intersectionCount };
   }
+
+  // Log the segment attempt for debugging
+  // Line segment intersections logged for debugging
 
   // If we have 0 or 1 intersections with the segment, try extending to infinite line
   // This handles cases where one or both slice points are inside the polygon
   let rayIntersectionCount = 0;
+  const rayIntersectionPoints: Point[] = [];
 
   for (let i = 0; i < points.length; i++) {
     const j = (i + 1) % points.length;
@@ -400,11 +411,15 @@ export function validateSliceLine(
 
     if (intersection) {
       rayIntersectionCount++;
+      rayIntersectionPoints.push(intersection);
     }
   }
 
+  // Infinite line intersections logged for debugging
+
   // If the infinite line has exactly 2 intersections, the slice can work
   if (rayIntersectionCount === 2) {
+    // Valid slice line - found 2 intersections with infinite line
     return {
       isValid: true,
       intersectionCount: rayIntersectionCount,
@@ -412,11 +427,28 @@ export function validateSliceLine(
     };
   }
 
+  // Provide detailed feedback about why the slice failed
+  let detailedReason = '';
+
+  if (intersectionCount === 0 && rayIntersectionCount === 0) {
+    detailedReason =
+      'Slice line does not intersect the polygon. Try drawing the line across the polygon edges.';
+  } else if (intersectionCount === 1 && rayIntersectionCount === 1) {
+    detailedReason =
+      'Slice line only touches the polygon at one point. Draw the line completely across the polygon.';
+  } else if (intersectionCount > 2 || rayIntersectionCount > 2) {
+    detailedReason = `Slice line intersects too many polygon edges (${Math.max(intersectionCount, rayIntersectionCount)} intersections). Try a simpler cut across the polygon.`;
+  } else {
+    detailedReason = `Unexpected intersection pattern. Line segment: ${intersectionCount} intersections, infinite line: ${rayIntersectionCount} intersections.`;
+  }
+
+  console.warn('[Slice Validation] ❌ Invalid slice:', detailedReason);
+
   // Neither segment nor infinite line work
   return {
     isValid: false,
-    reason: `Expected 2 intersections, found ${intersectionCount} with segment, ${rayIntersectionCount} with infinite line`,
-    intersectionCount,
+    reason: detailedReason,
+    intersectionCount: Math.max(intersectionCount, rayIntersectionCount),
   };
 }
 

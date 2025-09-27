@@ -353,8 +353,8 @@ export function useOptimizedPolygonRendering(
   // Generate stats
   const stats = useMemo((): RenderingStats => {
     const boundingBoxStats = boundingBoxCache.getStats();
-    const visibilityStats = polygonVisibilityManager.getStats();
-    const batchStats = renderBatchManager.getStats();
+    const _visibilityStats = polygonVisibilityManager.getStats();
+    const _batchStats = renderBatchManager.getStats();
     const lodStats = lodManager.getStats();
     const workerStats = polygonServiceRef.current?.getStats();
 

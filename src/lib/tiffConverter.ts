@@ -12,8 +12,8 @@ export const isTiffFile = (file: File): boolean => {
   return (
     file.type === 'image/tiff' ||
     file.type === 'image/tif' ||
-    file.name.toLowerCase().endsWith('.tiff') ||
-    file.name.toLowerCase().endsWith('.tif')
+    file.name?.toLowerCase().endsWith('.tiff') ||
+    file.name?.toLowerCase().endsWith('.tif')
   );
 };
 

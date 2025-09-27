@@ -35,7 +35,8 @@ interface UseAdvancedInteractionsProps {
   isSpacePressed?: () => boolean;
 
   // State setters
-  setSelectedPolygonId: (id: string | null) => void;
+  setSelectedPolygonId: (id: string | null) => void; // DEPRECATED: Use onPolygonSelection instead
+  onPolygonSelection?: (id: string | null) => void; // Centralized selection handler
   setEditMode: (mode: EditMode) => void;
   setInteractionState: (state: InteractionState) => void;
   setTempPoints: (points: Point[]) => void;
@@ -68,7 +69,8 @@ export const useAdvancedInteractions = ({
   cursorPosition,
   isShiftPressed: isShiftPressedCallback,
   isSpacePressed: isSpacePressedCallback,
-  setSelectedPolygonId,
+  setSelectedPolygonId, // DEPRECATED: Kept for backward compatibility
+  onPolygonSelection, // Use this for new centralized selection
   setEditMode,
   setInteractionState,
   setTempPoints,
@@ -82,33 +84,24 @@ export const useAdvancedInteractions = ({
   const lastAutoAddedPoint = useRef<Point | null>(null);
 
   /**
-   * Handle View mode clicks - polygon selection and panning
+   * Handle View mode clicks - panning only (polygon selection handled by CanvasPolygon onClick)
    */
   const handleViewModeClick = useCallback(
     (imagePoint: Point, e: React.MouseEvent) => {
-      const polygons = getPolygons();
-
-      // Check if we clicked on a polygon
-      const containingPolygons = polygons.filter(polygon =>
-        isPointInPolygon(imagePoint, polygon.points)
-      );
-
-      if (containingPolygons.length > 0) {
-        // If multiple polygons, prioritize the smallest one (likely a hole)
-        if (containingPolygons.length > 1) {
-          containingPolygons.sort((a, b) => {
-            const areaA = calculatePolygonArea(a.points);
-            const areaB = calculatePolygonArea(b.points);
-            return areaA - areaB;
-          });
+      // In View mode, deselect current polygon if clicking on empty space
+      // Polygon selection is handled by CanvasPolygon onClick events which call stopPropagation()
+      // So if this handler runs, it means we clicked on empty space
+      if (selectedPolygonId) {
+        // Use centralized selection if available, otherwise fallback to direct call
+        if (onPolygonSelection) {
+          onPolygonSelection(null);
+        } else {
+          setSelectedPolygonId(null);
         }
-
-        setSelectedPolygonId(containingPolygons[0].id);
-        setEditMode(EditMode.EditVertices);
-        return; // Don't start panning if we selected a polygon
+        return;
       }
 
-      // No polygon clicked - start panning for free navigation
+      // Start panning for free navigation when no polygon is selected
       setInteractionState({
         ...interactionState,
         isPanning: true,
@@ -117,10 +110,10 @@ export const useAdvancedInteractions = ({
     },
     [
       interactionState,
-      getPolygons,
-      setSelectedPolygonId,
-      setEditMode,
+      selectedPolygonId,
       setInteractionState,
+      setSelectedPolygonId,
+      onPolygonSelection,
     ]
   );
 
@@ -325,30 +318,10 @@ export const useAdvancedInteractions = ({
     (imagePoint: Point) => {
       const polygons = getPolygons();
 
-      // Step 1: If no polygon is selected, try to find one at the click point
+      // Step 1: If no polygon is selected, slice tool needs polygon selection first
       if (!selectedPolygonId) {
-        const containingPolygons = polygons.filter(polygon =>
-          isPointInPolygon(imagePoint, polygon.points)
-        );
-
-        if (containingPolygons.length > 0) {
-          // If multiple polygons, prioritize the smallest one (likely a hole)
-          if (containingPolygons.length > 1) {
-            containingPolygons.sort((a, b) => {
-              const areaA = calculatePolygonArea(a.points);
-              const areaB = calculatePolygonArea(b.points);
-              return areaA - areaB;
-            });
-          }
-
-          // Select the polygon but don't start slicing yet - wait for next click
-          const polygonToSlice = containingPolygons[0];
-          setSelectedPolygonId(polygonToSlice.id);
-          return;
-        } else {
-          // No polygon found at click point
-          return;
-        }
+        // No polygon selected - slice tool needs polygon selection first
+        return;
       }
 
       // We have a selected polygon, continue with slice logic
@@ -385,36 +358,21 @@ export const useAdvancedInteractions = ({
   /**
    * Handle Delete Polygon mode clicks
    */
-  const handleDeletePolygonClick = useCallback(
-    (imagePoint: Point) => {
-      const polygons = getPolygons();
-      const containingPolygons = polygons.filter(polygon =>
-        isPointInPolygon(imagePoint, polygon.points)
-      );
+  const handleDeletePolygonClick = useCallback((imagePoint: Point) => {
+    // Delete mode now relies on polygon-level selection
+    return;
+  }, []);
 
-      if (containingPolygons.length > 0) {
-        // If multiple polygons, prioritize the smallest one
-        if (containingPolygons.length > 1) {
-          containingPolygons.sort((a, b) => {
-            const areaA = calculatePolygonArea(a.points);
-            const areaB = calculatePolygonArea(b.points);
-            return areaA - areaB;
-          });
-        }
-
-        const polygonToDelete = containingPolygons[0];
-        const updatedPolygons = polygons.filter(
-          p => p.id !== polygonToDelete.id
-        );
-        updatePolygons(updatedPolygons);
-
-        if (selectedPolygonId === polygonToDelete.id) {
-          setSelectedPolygonId(null);
-        }
-      }
-    },
-    [getPolygons, updatePolygons, selectedPolygonId, setSelectedPolygonId]
-  );
+  /**
+   * Check if the event target is a vertex element
+   */
+  const isVertexTarget = useCallback((target: EventTarget | null): boolean => {
+    if (!target || !(target instanceof SVGElement)) return false;
+    return (
+      target.dataset?.polygonId !== undefined &&
+      target.dataset?.vertexIndex !== undefined
+    );
+  }, []);
 
   /**
    * Handle mouse down events with mode-specific logic
@@ -432,8 +390,19 @@ export const useAdvancedInteractions = ({
         return;
       }
 
-      // Right-click - handle step-by-step undo
+      // Right-click - handle step-by-step undo OR allow vertex context menu
       if (e.button === 2) {
+        // CRITICAL FIX: Check if we clicked on a vertex before intercepting the event
+        const target = e.target as SVGElement;
+
+        // If this is a vertex, allow the context menu to proceed
+        if (isVertexTarget(target)) {
+          // Don't prevent default or stop propagation for vertex right-clicks
+          // This allows the VertexContextMenu to work properly
+          return;
+        }
+
+        // Not a vertex - proceed with existing step-by-step undo logic
         // Special handling for slice mode - step-by-step undo
         if (editMode === EditMode.Slice) {
           if (tempPoints.length > 0) {
@@ -445,7 +414,11 @@ export const useAdvancedInteractions = ({
             });
           } else if (selectedPolygonId) {
             // Polygon is selected but no slice points - deselect polygon but stay in slice mode
-            setSelectedPolygonId(null);
+            if (onPolygonSelection) {
+              onPolygonSelection(null);
+            } else {
+              setSelectedPolygonId(null);
+            }
             setInteractionState({
               ...interactionState,
               sliceStartPoint: null,
@@ -489,6 +462,8 @@ export const useAdvancedInteractions = ({
 
         // Check if we clicked on a vertex element directly
         const target = e.target as SVGElement;
+        // Canvas mouseDown event
+
         if (target && target.dataset) {
           const polygonId = target.dataset.polygonId;
           const vertexIndex = target.dataset.vertexIndex;
@@ -509,7 +484,12 @@ export const useAdvancedInteractions = ({
               if (e.shiftKey) {
                 // Only set selected polygon if it's not already selected
                 if (selectedPolygonId !== polygonId) {
-                  setSelectedPolygonId(polygonId);
+                  // Use centralized selection for polygon selection
+                  if (onPolygonSelection) {
+                    onPolygonSelection(polygonId);
+                  } else {
+                    setSelectedPolygonId(polygonId);
+                  }
                 }
                 setEditMode(EditMode.AddPoints);
                 setInteractionState({
@@ -525,6 +505,8 @@ export const useAdvancedInteractions = ({
               }
 
               // Start dragging this vertex
+              // Starting vertex drag
+
               setInteractionState({
                 ...interactionState,
                 isDraggingVertex: true,
@@ -546,6 +528,9 @@ export const useAdvancedInteractions = ({
                   originalPosition: { ...originalPosition },
                   dragOffset: { x: 0, y: 0 },
                 });
+                // Vertex drag state initialized
+              } else {
+                // setVertexDragState not available
               }
               return;
             }
@@ -594,6 +579,8 @@ export const useAdvancedInteractions = ({
       handleViewModeClick,
       setSelectedPolygonId,
       isSpacePressedCallback,
+      isVertexTarget,
+      onPolygonSelection,
     ]
   );
 
@@ -655,6 +642,8 @@ export const useAdvancedInteractions = ({
             originalPosition: interactionState.originalVertexPosition,
             dragOffset: { x: offsetX, y: offsetY },
           });
+
+          // Vertex drag offset updated
         }
         return;
       }

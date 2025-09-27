@@ -4,7 +4,11 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { sendTestEmailReliable, getAllDeliveryStatuses, sendPasswordResetEmailReliable } from '../../services/reliableEmailService';
+import {
+  sendTestEmailReliable,
+  getAllDeliveryStatuses,
+  sendPasswordResetEmailReliable,
+} from '../../services/reliableEmailService';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -19,11 +23,13 @@ router.post('/test-reliable', async (req: Request, res: Response) => {
     if (!email) {
       return res.status(400).json({
         success: false,
-        error: 'Email address is required'
+        error: 'Email address is required',
       });
     }
 
-    logger.info('Testing reliable email service', 'TestReliableEmail', { to: email });
+    logger.info('Testing reliable email service', 'TestReliableEmail', {
+      to: email,
+    });
 
     const status = await sendTestEmailReliable(email);
 
@@ -32,14 +38,13 @@ router.post('/test-reliable', async (req: Request, res: Response) => {
       messageId: status.messageId,
       timestamp: status.timestamp,
       attempts: status.attempts,
-      error: status.error
+      error: status.error,
     });
-
   } catch (error) {
     logger.error('Test email failed:', error as Error, 'TestReliableEmail');
     res.status(500).json({
       success: false,
-      error: (error as Error).message
+      error: (error as Error).message,
     });
   }
 });
@@ -54,11 +59,15 @@ router.post('/test-password-reset', async (req: Request, res: Response) => {
     if (!email) {
       return res.status(400).json({
         success: false,
-        error: 'Email address is required'
+        error: 'Email address is required',
       });
     }
 
-    logger.info('Testing password reset with reliable service', 'TestReliableEmail', { to: email });
+    logger.info(
+      'Testing password reset with reliable service',
+      'TestReliableEmail',
+      { to: email }
+    );
 
     // Generate test token and expiry
     const testToken = 'TEST_TOKEN_' + Date.now();
@@ -70,14 +79,17 @@ router.post('/test-password-reset', async (req: Request, res: Response) => {
       success: true,
       message: 'Password reset email sent successfully',
       testToken,
-      expiresAt
+      expiresAt,
     });
-
   } catch (error) {
-    logger.error('Test password reset failed:', error as Error, 'TestReliableEmail');
+    logger.error(
+      'Test password reset failed:',
+      error as Error,
+      'TestReliableEmail'
+    );
     res.status(500).json({
       success: false,
-      error: (error as Error).message
+      error: (error as Error).message,
     });
   }
 });
@@ -94,15 +106,18 @@ router.get('/delivery-status', async (req: Request, res: Response) => {
       count: statuses.length,
       statuses: statuses.map(([id, status]) => ({
         id,
-        ...status
-      }))
+        ...status,
+      })),
     });
-
   } catch (error) {
-    logger.error('Failed to get delivery status:', error as Error, 'TestReliableEmail');
+    logger.error(
+      'Failed to get delivery status:',
+      error as Error,
+      'TestReliableEmail'
+    );
     res.status(500).json({
       success: false,
-      error: (error as Error).message
+      error: (error as Error).message,
     });
   }
 });

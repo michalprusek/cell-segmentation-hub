@@ -4,6 +4,7 @@ import {
   User as UserIcon,
   Settings as SettingsIcon,
   LogOut,
+  LayoutDashboard,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -75,6 +76,13 @@ const UserProfileDropdown = ({ username }: UserProfileDropdownProps) => {
         >
           <SettingsIcon className="mr-2 h-4 w-4" />
           <span>{t('common.settings')}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => navigate('/dashboard')}
+          className="dark:text-gray-300 dark:hover:bg-gray-700"
+        >
+          <LayoutDashboard className="mr-2 h-4 w-4" />
+          <span>{t('common.dashboard')}</span>
         </DropdownMenuItem>
         <DropdownMenuSeparator className="dark:bg-gray-700" />
         <DropdownMenuItem

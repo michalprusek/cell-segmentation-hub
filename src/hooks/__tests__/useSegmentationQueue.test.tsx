@@ -1,5 +1,5 @@
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useSegmentationQueue } from '../useSegmentationQueue';
 import webSocketManager from '@/services/webSocketManager';
 import React from 'react';

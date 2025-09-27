@@ -10,12 +10,13 @@ const router = Router();
  */
 
 // Public endpoints
-router.get('/models',
+router.get(
+  '/models',
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       logger.info('📊 ML: Fetching available models');
-      
+
       // Placeholder response for available ML models
       const models = [
         {
@@ -23,28 +24,30 @@ router.get('/models',
           name: 'HRNetV2',
           description: 'Best accuracy, ~3.1s inference time',
           version: '1.0.0',
-          status: 'active'
+          status: 'active',
         },
         {
           id: 'cbam-resunet',
           name: 'CBAM-ResUNet',
-          description: 'Precise segmentation with attention mechanisms, optimized inference time',
+          description:
+            'Precise segmentation with attention mechanisms, optimized inference time',
           version: '2.0.0',
-          status: 'active'
+          status: 'active',
         },
         {
           id: 'unet_spherohq',
           name: 'UNet (SpheroHQ)',
-          description: 'Best performance on SpheroHQ dataset, balanced speed and accuracy',
+          description:
+            'Best performance on SpheroHQ dataset, balanced speed and accuracy',
           version: '1.0.0',
-          status: 'active'
-        }
+          status: 'active',
+        },
       ];
 
       res.json({
         success: true,
         data: models,
-        message: 'Available ML models retrieved successfully'
+        message: 'Available ML models retrieved successfully',
       });
     } catch (error) {
       logger.error('❌ ML: Error fetching models:', error);
@@ -54,12 +57,13 @@ router.get('/models',
 );
 
 // Public status endpoint - no authentication required
-router.get('/status',
+router.get(
+  '/status',
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       logger.info('🔍 ML: Checking service status');
-      
+
       // Placeholder ML service status check
       const status = {
         service: 'online',
@@ -70,14 +74,14 @@ router.get('/status',
         performance: {
           averageInferenceTime: '8.5s',
           successRate: '99.2%',
-          errorRate: '0.8%'
-        }
+          errorRate: '0.8%',
+        },
       };
 
       res.json({
         success: true,
         data: status,
-        message: 'ML service status retrieved successfully'
+        message: 'ML service status retrieved successfully',
       });
     } catch (error) {
       logger.error('❌ ML: Error checking service status:', error);
@@ -86,15 +90,54 @@ router.get('/status',
   }
 );
 
+// Public health endpoint - no authentication required for monitoring/status checks
+router.get(
+  '/health',
+  apiLimiter,
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      logger.info('🏥 ML: Health check requested');
+
+      // Placeholder health check
+      const health = {
+        status: 'healthy',
+        uptime: process.uptime(),
+        models: {
+          loaded: 3,
+          failed: 0,
+        },
+        memory: {
+          used: '256MB',
+          available: '1.2GB',
+        },
+        gpu: {
+          available: false,
+          utilization: '0%',
+        },
+      };
+
+      res.json({
+        success: true,
+        data: health,
+        message: 'ML service health check completed',
+      });
+    } catch (error) {
+      logger.error('❌ ML: Health check failed:', error);
+      next(error);
+    }
+  }
+);
+
 // Protected endpoints
 router.use(authenticate);
 
-router.get('/queue',
+router.get(
+  '/queue',
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       logger.info('📋 ML: Fetching queue status');
-      
+
       // Placeholder queue status
       const queueStatus = {
         totalItems: 0,
@@ -103,13 +146,13 @@ router.get('/queue',
         completed: 0,
         failed: 0,
         averageWaitTime: '2.3s',
-        estimatedProcessingTime: '0s'
+        estimatedProcessingTime: '0s',
       };
 
       res.json({
         success: true,
         data: queueStatus,
-        message: 'ML queue status retrieved successfully'
+        message: 'ML queue status retrieved successfully',
       });
     } catch (error) {
       logger.error('❌ ML: Error fetching queue status:', error);
@@ -118,57 +161,22 @@ router.get('/queue',
   }
 );
 
-router.post('/models/:modelId/warm-up',
+router.post(
+  '/models/:modelId/warm-up',
   apiLimiter,
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { modelId } = req.params;
       logger.info(`🔥 ML: Warming up model: ${modelId}`);
-      
+
       // Placeholder model warm-up
       res.json({
         success: true,
         data: { modelId, status: 'warming-up' },
-        message: `Model ${modelId} warm-up initiated`
+        message: `Model ${modelId} warm-up initiated`,
       });
     } catch (error) {
       logger.error('❌ ML: Error warming up model:', error);
-      next(error);
-    }
-  }
-);
-
-router.get('/health',
-  apiLimiter,
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      logger.info('🏥 ML: Health check requested');
-      
-      // Placeholder health check
-      const health = {
-        status: 'healthy',
-        uptime: process.uptime(),
-        models: {
-          loaded: 3,
-          failed: 0
-        },
-        memory: {
-          used: '256MB',
-          available: '1.2GB'
-        },
-        gpu: {
-          available: false,
-          utilization: '0%'
-        }
-      };
-
-      res.json({
-        success: true,
-        data: health,
-        message: 'ML service health check completed'
-      });
-    } catch (error) {
-      logger.error('❌ ML: Health check failed:', error);
       next(error);
     }
   }

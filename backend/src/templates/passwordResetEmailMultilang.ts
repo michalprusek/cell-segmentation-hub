@@ -30,7 +30,7 @@ const translations: Record<string, PasswordResetTranslations> = {
     orCopy: 'Or copy this link:',
     validUntil: 'Valid until:',
     ignoreText: 'If you did not request this reset, please ignore this email.',
-    signature: '---\nSpheroSeg'
+    signature: '---\nSpheroSeg',
   },
   cs: {
     subject: 'Reset hesla - SpheroSeg',
@@ -41,18 +41,19 @@ const translations: Record<string, PasswordResetTranslations> = {
     orCopy: 'Nebo zkopírujte tento odkaz:',
     validUntil: 'Platnost do:',
     ignoreText: 'Pokud jste si reset nevyžádali, ignorujte tento email.',
-    signature: '---\nSpheroSeg'
+    signature: '---\nSpheroSeg',
   },
   es: {
     subject: 'Restablecimiento de contraseña - SpheroSeg',
     title: 'Restablecimiento de contraseña - SpheroSeg',
     greeting: 'Hola,',
-    requestText: 'Se solicitó un restablecimiento de contraseña para la cuenta:',
+    requestText:
+      'Se solicitó un restablecimiento de contraseña para la cuenta:',
     clickHere: 'Haga clic aquí para restablecer la contraseña',
     orCopy: 'O copie este enlace:',
     validUntil: 'Válido hasta:',
     ignoreText: 'Si no solicitó este restablecimiento, ignore este correo.',
-    signature: '---\nSpheroSeg'
+    signature: '---\nSpheroSeg',
   },
   de: {
     subject: 'Passwort zurücksetzen - SpheroSeg',
@@ -62,19 +63,22 @@ const translations: Record<string, PasswordResetTranslations> = {
     clickHere: 'Hier klicken um Passwort zurückzusetzen',
     orCopy: 'Oder kopieren Sie diesen Link:',
     validUntil: 'Gültig bis:',
-    ignoreText: 'Falls Sie diese Zurücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.',
-    signature: '---\nSpheroSeg'
+    ignoreText:
+      'Falls Sie diese Zurücksetzung nicht angefordert haben, ignorieren Sie diese E-Mail.',
+    signature: '---\nSpheroSeg',
   },
   fr: {
     subject: 'Réinitialisation du mot de passe - SpheroSeg',
     title: 'Réinitialisation du mot de passe - SpheroSeg',
     greeting: 'Bonjour,',
-    requestText: 'Une réinitialisation du mot de passe a été demandée pour le compte:',
+    requestText:
+      'Une réinitialisation du mot de passe a été demandée pour le compte:',
     clickHere: 'Cliquez ici pour réinitialiser le mot de passe',
     orCopy: 'Ou copiez ce lien:',
-    validUntil: 'Valide jusqu\'au:',
-    ignoreText: 'Si vous n\'avez pas demandé cette réinitialisation, veuillez ignorer cet e-mail.',
-    signature: '---\nSpheroSeg'
+    validUntil: "Valide jusqu'au:",
+    ignoreText:
+      "Si vous n'avez pas demandé cette réinitialisation, veuillez ignorer cet e-mail.",
+    signature: '---\nSpheroSeg',
   },
   zh: {
     subject: '密码重置 - SpheroSeg',
@@ -85,8 +89,8 @@ const translations: Record<string, PasswordResetTranslations> = {
     orCopy: '或复制此链接：',
     validUntil: '有效期至：',
     ignoreText: '如果您没有请求重置密码，请忽略此邮件。',
-    signature: '---\nSpheroSeg'
-  }
+    signature: '---\nSpheroSeg',
+  },
 };
 
 function getLocaleString(date: Date, locale: string): string {
@@ -97,7 +101,7 @@ function getLocaleString(date: Date, locale: string): string {
     es: 'es-ES',
     de: 'de-DE',
     fr: 'fr-FR',
-    zh: 'zh-CN'
+    zh: 'zh-CN',
   };
 
   const localeString = localeMap[locale] || 'en-US';
@@ -109,7 +113,7 @@ function getLocaleString(date: Date, locale: string): string {
     month: '2-digit',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   });
 }
 
@@ -120,7 +124,9 @@ function getLocaleString(date: Date, locale: string): string {
  * - Plain text-like appearance
  * - Proven to work with mail.utia.cas.cz
  */
-export const generateSimplePasswordResetHTML = (data: PasswordResetEmailData): string => {
+export const generateSimplePasswordResetHTML = (
+  data: PasswordResetEmailData
+): string => {
   const validatedUrl = sanitizeUrl(data.resetUrl);
   if (!validatedUrl) {
     throw new Error('Invalid reset URL provided');
@@ -151,7 +157,9 @@ export const generateSimplePasswordResetHTML = (data: PasswordResetEmailData): s
 /**
  * Plain text version for maximum compatibility with multi-language support
  */
-export const generateSimplePasswordResetText = (data: PasswordResetEmailData): string => {
+export const generateSimplePasswordResetText = (
+  data: PasswordResetEmailData
+): string => {
   const validatedUrl = sanitizeUrl(data.resetUrl);
   if (!validatedUrl) {
     throw new Error('Invalid reset URL provided');

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useLanguage } from '@/contexts/exports';
 import { useEnhancedSegmentationEditor } from '../hooks/useEnhancedSegmentationEditor';
 import { Polygon } from '@/lib/segmentation';
+import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
 import EnhancedEditorToolbar from './EnhancedEditorToolbar';
 import CanvasContainer from './canvas/CanvasContainer';
 import CanvasContent from './canvas/CanvasContent';
@@ -147,9 +148,9 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
               }}
             >
               {/* Render all polygons */}
-              {editor.polygons.map(polygon => (
+              {editor.polygons.map((polygon, index) => (
                 <CanvasPolygon
-                  key={polygon.id}
+                  key={ensureValidPolygonId(polygon.id, `enhanced-${index}`)}
                   polygon={polygon}
                   isSelected={polygon.id === editor.selectedPolygonId}
                   hoveredVertex={

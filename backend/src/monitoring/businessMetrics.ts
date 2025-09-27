@@ -78,7 +78,11 @@ const queueSize = new client.Gauge({
 /**
  * Track API errors
  */
-export function trackApiError(endpoint: string, errorType: string, statusCode: number): void {
+export function trackApiError(
+  endpoint: string,
+  errorType: string,
+  statusCode: number
+): void {
   try {
     apiErrorsTotal.inc({
       endpoint,
@@ -93,7 +97,10 @@ export function trackApiError(endpoint: string, errorType: string, statusCode: n
 /**
  * Track feature usage
  */
-export function trackFeatureUsage(feature: string, userType = 'anonymous'): void {
+export function trackFeatureUsage(
+  feature: string,
+  userType = 'anonymous'
+): void {
   try {
     featureUsageCounter.inc({
       feature,
@@ -107,7 +114,10 @@ export function trackFeatureUsage(feature: string, userType = 'anonymous'): void
 /**
  * Track image processing
  */
-export function trackImageProcessing(type: string, status: 'success' | 'failure'): void {
+export function trackImageProcessing(
+  type: string,
+  status: 'success' | 'failure'
+): void {
   try {
     imageProcessingCounter.inc({
       type,
@@ -143,7 +153,10 @@ export function trackProjectCreated(): void {
 /**
  * Track segmentation job
  */
-export function trackSegmentationJob(model: string, status: 'started' | 'completed' | 'failed'): void {
+export function trackSegmentationJob(
+  model: string,
+  status: 'started' | 'completed' | 'failed'
+): void {
   try {
     segmentationJobsTotal.inc({
       model,
@@ -168,7 +181,10 @@ export function updateStorageUsage(type: string, bytes: number): void {
 /**
  * Track authentication attempt
  */
-export function trackAuthenticationAttempt(type: string, status: 'success' | 'failure'): void {
+export function trackAuthenticationAttempt(
+  type: string,
+  status: 'success' | 'failure'
+): void {
   try {
     authenticationAttempts.inc({
       type,
@@ -182,12 +198,13 @@ export function trackAuthenticationAttempt(type: string, status: 'success' | 'fa
 /**
  * Record API response time
  */
-export function recordApiResponseTime(endpoint: string, method: string, seconds: number): void {
+export function recordApiResponseTime(
+  endpoint: string,
+  method: string,
+  seconds: number
+): void {
   try {
-    apiResponseTime.observe(
-      { endpoint, method },
-      seconds
-    );
+    apiResponseTime.observe({ endpoint, method }, seconds);
   } catch (error) {
     logger.error('Failed to record API response time metric:', error);
   }
@@ -210,19 +227,19 @@ export function updateQueueSize(queueName: string, size: number): void {
 export function initializeBusinessMetricsCollection(): void {
   try {
     logger.info('Initializing business metrics collection...');
-    
+
     // Set initial values for gauges
     updateActiveUsers('free', 0);
     updateActiveUsers('premium', 0);
     updateActiveUsers('admin', 0);
-    
+
     updateStorageUsage('images', 0);
     updateStorageUsage('thumbnails', 0);
     updateStorageUsage('temp', 0);
-    
+
     updateQueueSize('segmentation', 0);
     updateQueueSize('export', 0);
-    
+
     logger.info('✅ Business metrics collection initialized');
   } catch (error) {
     logger.error('Failed to initialize business metrics collection:', error);
@@ -242,14 +259,16 @@ export async function getBusinessMetricsSummary(): Promise<{
 }> {
   try {
     const metrics = await businessMetricsRegistry.getMetricsAsJSON();
-    
+
     const getMetricValue = (name: string): number => {
       const metric = metrics.find(m => m.name === name);
-      if (!metric || !metric.values) {return 0;}
-      
+      if (!metric || !metric.values) {
+        return 0;
+      }
+
       return metric.values.reduce((sum, v) => sum + (v.value || 0), 0);
     };
-    
+
     return {
       totalApiErrors: getMetricValue('api_errors_total'),
       totalFeatureUsage: getMetricValue('feature_usage_total'),
