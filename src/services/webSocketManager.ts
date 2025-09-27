@@ -278,8 +278,8 @@ class WebSocketManager {
     });
 
     // Data events
-    // Backend emits 'segmentationUpdate', we need to listen for that
-    this.socket.on('segmentationUpdate', (update: SegmentationUpdate) => {
+    // Backend emits 'segmentation-update' (kebab-case), we need to listen for that exact event name
+    this.socket.on('segmentation-update', (update: SegmentationUpdate) => {
       // ENHANCED DEBUG LOGGING
       logger.warn('🔴 SEGMENTATION UPDATE RECEIVED:', {
         imageId: update.imageId,

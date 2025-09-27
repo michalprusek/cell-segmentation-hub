@@ -112,10 +112,14 @@ export const ImageCard = ({
     imageError,
     retry: retryImageLoad,
   } = useRetryImage(candidateUrls);
-  const statusInfo = getStatusInfo(
-    image.segmentationStatus || 'no_segmentation',
-    t
-  );
+  // Use the actual status from the image, don't default to 'no_segmentation' if it's missing
+  const actualStatus =
+    image.segmentationStatus ||
+    (image as any).segmentation_status ||
+    (image as any).status ||
+    'pending';
+
+  const statusInfo = getStatusInfo(actualStatus, t);
   const StatusIcon = statusInfo.icon;
 
   const handleDelete = (e: React.MouseEvent) => {
