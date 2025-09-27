@@ -93,6 +93,7 @@ Desktop.ini
 # IDE and tool directories
 .claude/
 .cursor/
+.active-environment
 
 # Build artifacts
 build/
