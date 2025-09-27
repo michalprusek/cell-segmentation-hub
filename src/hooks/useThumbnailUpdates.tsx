@@ -1,94 +1,85 @@
 import { useEffect, useCallback } from 'react';
-import { useWebSocket } from '@/contexts/useWebSocket';
-import { thumbnailCache } from '@/lib/thumbnailCache';
+import { useWebSocket } from '@/contexts/exports';
 import { logger } from '@/lib/logger';
 
 interface ThumbnailUpdateData {
   imageId: string;
-  projectId: string;
-  segmentationId: string;
   thumbnailData: {
-    levelOfDetail: 'low' | 'medium' | 'high';
-    polygons: any[];
-    polygonCount: number;
-    pointCount: number;
-    compressionRatio: number;
+    levelOfDetail: number;
+    url?: string;
   };
 }
 
-interface UseThumbnailUpdatesProps {
+interface UseThumbnailUpdatesOptions {
   projectId?: string;
-  onThumbnailUpdate?: (update: ThumbnailUpdateData) => void;
   enabled?: boolean;
+  onThumbnailUpdate?: (update: ThumbnailUpdateData) => void;
 }
 
+/**
+ * Hook for handling real-time thumbnail updates via WebSocket
+ * Listens for thumbnail generation events and notifies components
+ */
 export const useThumbnailUpdates = ({
   projectId,
-  onThumbnailUpdate,
   enabled = true,
-}: UseThumbnailUpdatesProps) => {
+  onThumbnailUpdate,
+}: UseThumbnailUpdatesOptions) => {
   const { socket, isConnected } = useWebSocket();
 
-  // Handle thumbnail update from WebSocket
   const handleThumbnailUpdate = useCallback(
     (data: ThumbnailUpdateData) => {
-      if (!enabled) return;
+      if (!enabled || !projectId) return;
 
-      logger.debug('🔄 Received thumbnail update via WebSocket', {
+      logger.debug('Thumbnail update received', 'useThumbnailUpdates', {
+        projectId,
         imageId: data.imageId,
-        projectId: data.projectId,
         levelOfDetail: data.thumbnailData.levelOfDetail,
-        polygonCount: data.thumbnailData.polygonCount,
       });
 
-      // Update cache with new thumbnail data
-      thumbnailCache
-        .set(data.imageId, data.thumbnailData.levelOfDetail, data.thumbnailData)
-        .catch(error => {
-          logger.error(
-            'Failed to cache thumbnail update',
-            error instanceof Error ? error : new Error(String(error)),
-            'useThumbnailUpdates'
-          );
-        });
-
-      // Trigger callback if provided
-      if (onThumbnailUpdate) {
-        onThumbnailUpdate(data);
-      }
+      onThumbnailUpdate?.(data);
     },
-    [enabled, onThumbnailUpdate]
+    [enabled, projectId, onThumbnailUpdate]
   );
 
-  // Set up WebSocket listeners
   useEffect(() => {
-    if (!socket || !isConnected || !enabled) return;
-
-    // Join project room if projectId is provided
-    if (projectId) {
-      socket.emit('join-project', projectId);
-      logger.debug('🏠 Joined project room for thumbnail updates', {
-        projectId,
-      });
+    if (!socket || !isConnected || !enabled || !projectId) {
+      return;
     }
 
-    // Listen for thumbnail updates
-    socket.on('thumbnail:updated', handleThumbnailUpdate);
+    // Listen for thumbnail update events
+    const eventName = `thumbnailUpdate:${projectId}`;
+    socket.on(eventName, handleThumbnailUpdate);
+
+    // Also listen for generic thumbnail updates
+    socket.on('thumbnailUpdate', handleThumbnailUpdate);
+
+    logger.debug(
+      'Thumbnail update listener registered',
+      'useThumbnailUpdates',
+      {
+        projectId,
+        eventName,
+      }
+    );
 
     return () => {
-      socket.off('thumbnail:updated', handleThumbnailUpdate);
+      socket.off(eventName, handleThumbnailUpdate);
+      socket.off('thumbnailUpdate', handleThumbnailUpdate);
 
-      if (projectId) {
-        socket.emit('leave-project', projectId);
-        logger.debug('🚪 Left project room', { projectId });
-      }
+      logger.debug(
+        'Thumbnail update listener unregistered',
+        'useThumbnailUpdates',
+        {
+          projectId,
+          eventName,
+        }
+      );
     };
-  }, [socket, isConnected, projectId, enabled, handleThumbnailUpdate]);
+  }, [socket, isConnected, enabled, projectId, handleThumbnailUpdate]);
 
   return {
     isConnected,
-    isEnabled: enabled,
+    enabled: enabled && !!projectId,
   };
 };
-
-export default useThumbnailUpdates;

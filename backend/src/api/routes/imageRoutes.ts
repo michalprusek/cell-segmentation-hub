@@ -1,17 +1,21 @@
 import { Router } from 'express';
 import { ImageController } from '../controllers/imageController';
 import { authenticate } from '../../middleware/auth';
-import { validateParams, validateQuery, validateBody } from '../../middleware/validation';
-import { 
-  uploadImages, 
-  handleUploadError, 
-  validateUploadedFiles 
+import {
+  validateParams,
+  validateQuery,
+  validateBody,
+} from '../../middleware/validation';
+import {
+  uploadImages,
+  handleUploadError,
+  validateUploadedFiles,
 } from '../../middleware/upload';
 import {
   projectIdSchema,
   projectImageParamsSchema,
   imageQuerySchema,
-  imageBatchDeleteSchema
+  imageBatchDeleteSchema,
 } from '../../types/validation';
 
 const router = Router();
@@ -26,10 +30,7 @@ const imageController = new ImageController();
  * GET /images/:imageId/display
  * Note: No authentication required for image display
  */
-router.get(
-  '/:imageId/display',
-  imageController.getImageForDisplay
-);
+router.get('/:imageId/display', imageController.getImageForDisplay);
 
 // All other routes require authentication (email verification disabled for development)
 router.use(authenticate);
@@ -126,9 +127,6 @@ router.delete(
  * Get single image with optional segmentation data
  * GET /images/:imageId?includeSegmentation=true
  */
-router.get(
-  '/:imageId',
-  imageController.getImageWithSegmentation
-);
+router.get('/:imageId', imageController.getImageWithSegmentation);
 
 export default router;

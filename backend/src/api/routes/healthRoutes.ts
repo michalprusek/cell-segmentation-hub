@@ -16,16 +16,23 @@ const router = Router();
 router.get('/', async (req: Request, res: Response) => {
   try {
     const health = await healthCheckService.checkHealth();
-    const statusCode = health.status === 'healthy' ? 200 : 
-                       health.status === 'degraded' ? 200 : 503;
-    
+    const statusCode =
+      health.status === 'healthy'
+        ? 200
+        : health.status === 'degraded'
+          ? 200
+          : 503;
+
     res.status(statusCode).json({
       success: statusCode === 200,
       data: health,
       message: `Server is ${health.status}`,
     });
   } catch (error: unknown) {
-    logger.error('Health check failed:', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Health check failed:',
+      error instanceof Error ? error : new Error(String(error))
+    );
     res.status(503).json({
       success: false,
       error: 'Health check failed',
@@ -52,7 +59,7 @@ router.get('/live', (req: Request, res: Response) => {
 router.get('/ready', async (req: Request, res: Response) => {
   try {
     const { ready, issues } = await healthCheckService.isReadyForDeployment();
-    
+
     if (ready) {
       res.status(200).json({
         ready: true,
@@ -82,7 +89,7 @@ router.get('/detailed', async (req: Request, res: Response) => {
   try {
     const health = await healthCheckService.checkHealth();
     const history = healthCheckService.getHealthHistory();
-    
+
     res.status(200).json({
       success: true,
       current: health,
@@ -95,7 +102,10 @@ router.get('/detailed', async (req: Request, res: Response) => {
       },
     });
   } catch (error: unknown) {
-    logger.error('Detailed health check failed:', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Detailed health check failed:',
+      error instanceof Error ? error : new Error(String(error))
+    );
     res.status(500).json({
       success: false,
       error: 'Detailed health check failed',
@@ -112,7 +122,7 @@ router.get('/components/:component', async (req: Request, res: Response) => {
   try {
     const { component } = req.params;
     const health = await healthCheckService.checkHealth();
-    
+
     if (!health.checks[component]) {
       return res.status(404).json({
         success: false,
@@ -120,7 +130,7 @@ router.get('/components/:component', async (req: Request, res: Response) => {
         availableComponents: Object.keys(health.checks),
       });
     }
-    
+
     res.status(200).json({
       success: true,
       component,
@@ -128,7 +138,10 @@ router.get('/components/:component', async (req: Request, res: Response) => {
       timestamp: health.timestamp,
     });
   } catch (error: unknown) {
-    logger.error(`Component health check failed for ${req.params.component}:`, error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      `Component health check failed for ${req.params.component}:`,
+      error instanceof Error ? error : new Error(String(error))
+    );
     res.status(500).json({
       success: false,
       error: 'Component health check failed',
@@ -144,14 +157,17 @@ router.get('/components/:component', async (req: Request, res: Response) => {
 router.post('/check', async (req: Request, res: Response) => {
   try {
     const health = await healthCheckService.checkHealth();
-    
+
     res.status(200).json({
       success: true,
       data: health,
       message: 'Health check completed',
     });
   } catch (error: unknown) {
-    logger.error('Manual health check failed:', error instanceof Error ? error : new Error(String(error)));
+    logger.error(
+      'Manual health check failed:',
+      error instanceof Error ? error : new Error(String(error))
+    );
     res.status(500).json({
       success: false,
       error: 'Manual health check failed',

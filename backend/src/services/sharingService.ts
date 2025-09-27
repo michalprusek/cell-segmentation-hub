@@ -9,17 +9,19 @@ import { ShareByEmailData, ShareByLinkData } from '../types/validation';
  * Escape HTML special characters to prevent XSS
  */
 function escapeHtml(str: string | null | undefined): string {
-  if (!str) {return '';}
-  
+  if (!str) {
+    return '';
+  }
+
   const htmlEscapeMap: Record<string, string> = {
     '&': '&amp;',
     '<': '&lt;',
     '>': '&gt;',
     '"': '&quot;',
     "'": '&#39;',
-    '/': '&#x2F;'
+    '/': '&#x2F;',
   };
-  
+
   return str.replace(/[&<>"'/]/g, char => htmlEscapeMap[char] || char);
 }
 
@@ -42,11 +44,11 @@ export async function shareProjectByEmail(
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        userId: sharedById
+        userId: sharedById,
       },
       include: {
-        user: true
-      }
+        user: true,
+      },
     });
 
     if (!project) {
@@ -63,8 +65,8 @@ export async function shareProjectByEmail(
       where: {
         projectId,
         email: data.email,
-        status: 'accepted'
-      }
+        status: 'accepted',
+      },
     });
 
     if (existingAcceptedShare) {
@@ -81,35 +83,44 @@ export async function shareProjectByEmail(
         sharedById,
         email: data.email,
         shareToken,
-        status: 'pending'
+        status: 'pending',
       },
       include: {
         project: true,
         sharedBy: {
           include: {
-            profile: true
-          }
-        }
-      }
+            profile: true,
+          },
+        },
+      },
     });
 
     // Send email invitation
     await sendShareInvitationEmail(share, data.message);
 
-    logger.info(`Project shared via email: ${projectId} with ${data.email}`, 'SharingService', {
-      projectId,
-      sharedById,
-      email: data.email,
-      shareId: share.id
-    });
+    logger.info(
+      `Project shared via email: ${projectId} with ${data.email}`,
+      'SharingService',
+      {
+        projectId,
+        sharedById,
+        email: data.email,
+        shareId: share.id,
+      }
+    );
 
     return share;
   } catch (error) {
-    logger.error('Failed to share project by email:', error as Error, 'SharingService', {
-      projectId,
-      sharedById,
-      email: data.email
-    });
+    logger.error(
+      'Failed to share project by email:',
+      error as Error,
+      'SharingService',
+      {
+        projectId,
+        sharedById,
+        email: data.email,
+      }
+    );
     throw error;
   }
 }
@@ -127,8 +138,8 @@ export async function shareProjectByLink(
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        userId: sharedById
-      }
+        userId: sharedById,
+      },
     });
 
     if (!project) {
@@ -137,7 +148,7 @@ export async function shareProjectByLink(
 
     // Generate unique share token
     const shareToken = uuidv4();
-    
+
     // Calculate expiry if specified
     let tokenExpiry = null;
     if (data.expiryHours) {
@@ -152,23 +163,28 @@ export async function shareProjectByLink(
         sharedById,
         shareToken,
         tokenExpiry,
-        status: 'pending' // Link shares start as pending until someone accepts them
-      }
+        status: 'pending', // Link shares start as pending until someone accepts them
+      },
     });
 
     logger.info(`Project shared via link: ${projectId}`, 'SharingService', {
       projectId,
       sharedById,
       shareId: share.id,
-      expiryHours: data.expiryHours
+      expiryHours: data.expiryHours,
     });
 
     return share;
   } catch (error) {
-    logger.error('Failed to share project by link:', error as Error, 'SharingService', {
-      projectId,
-      sharedById
-    });
+    logger.error(
+      'Failed to share project by link:',
+      error as Error,
+      'SharingService',
+      {
+        projectId,
+        sharedById,
+      }
+    );
     throw error;
   }
 }
@@ -185,7 +201,7 @@ export async function acceptShareInvitation(
     const share = await prisma.projectShare.findFirst({
       where: {
         shareToken: token,
-        status: 'pending'
+        status: 'pending',
       },
       include: {
         project: {
@@ -193,13 +209,13 @@ export async function acceptShareInvitation(
             user: {
               select: {
                 id: true,
-                email: true
-              }
-            }
-          }
+                email: true,
+              },
+            },
+          },
         },
-        sharedBy: true
-      }
+        sharedBy: true,
+      },
     });
 
     if (!share) {
@@ -210,7 +226,7 @@ export async function acceptShareInvitation(
     if (share.tokenExpiry && new Date() > share.tokenExpiry) {
       await prisma.projectShare.update({
         where: { id: share.id },
-        data: { status: 'expired' }
+        data: { status: 'expired' },
       });
       throw new Error('Share link has expired');
     }
@@ -225,7 +241,7 @@ export async function acceptShareInvitation(
       where: {
         projectId: share.projectId,
         sharedWithId: userId,
-        status: 'accepted'
+        status: 'accepted',
       },
       include: {
         project: {
@@ -233,14 +249,14 @@ export async function acceptShareInvitation(
             user: {
               select: {
                 id: true,
-                email: true
-              }
-            }
-          }
+                email: true,
+              },
+            },
+          },
         },
         sharedBy: true,
-        sharedWith: true
-      }
+        sharedWith: true,
+      },
     });
 
     if (existingAcceptedShare) {
@@ -252,7 +268,7 @@ export async function acceptShareInvitation(
     let targetUser = null;
     if (share.email) {
       targetUser = await prisma.user.findUnique({
-        where: { email: share.email }
+        where: { email: share.email },
       });
 
       if (!targetUser || targetUser.id !== userId) {
@@ -265,7 +281,7 @@ export async function acceptShareInvitation(
       where: { id: share.id },
       data: {
         status: 'accepted',
-        sharedWithId: userId
+        sharedWithId: userId,
       },
       include: {
         project: {
@@ -273,14 +289,14 @@ export async function acceptShareInvitation(
             user: {
               select: {
                 id: true,
-                email: true
-              }
-            }
-          }
+                email: true,
+              },
+            },
+          },
         },
         sharedBy: true,
-        sharedWith: true
-      }
+        sharedWith: true,
+      },
     });
 
     logger.info(`Share invitation accepted: ${share.id}`, 'SharingService', {
@@ -288,14 +304,19 @@ export async function acceptShareInvitation(
       projectId: share.projectId,
       userId,
       status: updatedShare.status,
-      sharedWithId: updatedShare.sharedWithId
+      sharedWithId: updatedShare.sharedWithId,
     });
 
     return { share: updatedShare, needsLogin: false };
   } catch (error) {
-    logger.error('Failed to accept share invitation:', error as Error, 'SharingService', {
-      token
-    });
+    logger.error(
+      'Failed to accept share invitation:',
+      error as Error,
+      'SharingService',
+      {
+        token,
+      }
+    );
     throw error;
   }
 }
@@ -303,31 +324,37 @@ export async function acceptShareInvitation(
 /**
  * Get all projects shared with a user
  */
-export async function getSharedProjects(userId: string): Promise<ShareWithDetails[]> {
+export async function getSharedProjects(
+  userId: string
+): Promise<ShareWithDetails[]> {
   try {
     // Fetch user email once
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    
+
     // Only fetch ACCEPTED shares where the user is the recipient
     // Removed the email condition as it was causing confusion
     const whereConditions = {
       sharedWithId: userId,
-      status: 'accepted'
+      status: 'accepted',
     };
-    
-    logger.debug(`Fetching shared projects for user ${userId}`, 'SharingService', {
-      userId,
-      userEmail: user?.email,
-      conditions: whereConditions
-    });
-    
+
+    logger.debug(
+      `Fetching shared projects for user ${userId}`,
+      'SharingService',
+      {
+        userId,
+        userEmail: user?.email,
+        conditions: whereConditions,
+      }
+    );
+
     const shares = await prisma.projectShare.findMany({
       where: whereConditions,
       include: {
         project: {
           include: {
             _count: {
-              select: { images: true }
+              select: { images: true },
             },
             images: {
               take: 1,
@@ -336,44 +363,49 @@ export async function getSharedProjects(userId: string): Promise<ShareWithDetail
                 id: true,
                 name: true,
                 thumbnailPath: true,
-                originalPath: true
-              }
+                originalPath: true,
+              },
             },
             user: {
               select: {
                 id: true,
-                email: true
-              }
-            }
-          }
+                email: true,
+              },
+            },
+          },
         },
         sharedBy: true,
-        sharedWith: true
+        sharedWith: true,
       },
       orderBy: {
-        createdAt: 'desc'
-      }
+        createdAt: 'desc',
+      },
     });
-    
+
     logger.debug(`Found ${shares.length} shares for user`, 'SharingService', {
       userId,
       shareCount: shares.length,
-      shares: shares.map(s => ({ 
-        id: s.id, 
-        projectId: s.projectId, 
+      shares: shares.map(s => ({
+        id: s.id,
+        projectId: s.projectId,
         hasProject: !!s.project,
         projectTitle: s.project?.title,
         sharedById: s.sharedById,
         sharedWithId: s.sharedWithId,
-        status: s.status
-      }))
+        status: s.status,
+      })),
     });
 
     return shares as ShareWithDetails[];
   } catch (error) {
-    logger.error('Failed to get shared projects:', error as Error, 'SharingService', {
-      userId
-    });
+    logger.error(
+      'Failed to get shared projects:',
+      error as Error,
+      'SharingService',
+      {
+        userId,
+      }
+    );
     throw error;
   }
 }
@@ -390,8 +422,8 @@ export async function getProjectShares(
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        userId: ownerId
-      }
+        userId: ownerId,
+      },
     });
 
     if (!project) {
@@ -401,31 +433,36 @@ export async function getProjectShares(
     const shares = await prisma.projectShare.findMany({
       where: {
         projectId,
-        status: { in: ['pending', 'accepted'] }
+        status: { in: ['pending', 'accepted'] },
       },
       include: {
         project: true,
         sharedBy: true,
-        sharedWith: true
+        sharedWith: true,
       },
       orderBy: [
         { status: 'asc' }, // accepted first, then pending
-        { createdAt: 'desc' }
-      ]
+        { createdAt: 'desc' },
+      ],
     });
 
     // Add share URL to each share for frontend display
     const sharesWithUrls = shares.map(share => ({
       ...share,
-      shareUrl: `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`
+      shareUrl: `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`,
     }));
 
     return sharesWithUrls as ShareWithDetails[];
   } catch (error) {
-    logger.error('Failed to get project shares:', error as Error, 'SharingService', {
-      projectId,
-      ownerId
-    });
+    logger.error(
+      'Failed to get project shares:',
+      error as Error,
+      'SharingService',
+      {
+        projectId,
+        ownerId,
+      }
+    );
     throw error;
   }
 }
@@ -444,8 +481,8 @@ export async function revokeShare(
       where: {
         id: shareId,
         sharedWithId: ownerId,
-        status: 'accepted'
-      }
+        status: 'accepted',
+      },
     });
 
     if (shareAsRecipient) {
@@ -453,13 +490,17 @@ export async function revokeShare(
       // Mark it as removed/declined by the recipient
       await prisma.projectShare.update({
         where: { id: shareId },
-        data: { status: 'revoked' }
+        data: { status: 'revoked' },
       });
 
-      logger.info(`User removed shared project from their list: ${shareId}`, 'SharingService', {
-        shareId,
-        userId: ownerId
-      });
+      logger.info(
+        `User removed shared project from their list: ${shareId}`,
+        'SharingService',
+        {
+          shareId,
+          userId: ownerId,
+        }
+      );
       return;
     }
 
@@ -468,9 +509,9 @@ export async function revokeShare(
       where: {
         id: shareId,
         project: {
-          userId: ownerId
-        }
-      }
+          userId: ownerId,
+        },
+      },
     });
 
     if (!share) {
@@ -480,17 +521,17 @@ export async function revokeShare(
     // Update share status to revoked
     await prisma.projectShare.update({
       where: { id: shareId },
-      data: { status: 'revoked' }
+      data: { status: 'revoked' },
     });
 
     logger.info(`Share revoked by owner: ${shareId}`, 'SharingService', {
       shareId,
-      ownerId
+      ownerId,
     });
   } catch (error) {
     logger.error('Failed to revoke share:', error as Error, 'SharingService', {
       shareId,
-      ownerId
+      ownerId,
     });
     throw error;
   }
@@ -506,28 +547,32 @@ export async function hasProjectAccess(
   try {
     logger.debug('hasProjectAccess called', 'SharingService', {
       projectId,
-      userId
+      userId,
     });
 
     // Check if user is the owner
     const project = await prisma.project.findFirst({
       where: {
         id: projectId,
-        userId
-      }
+        userId,
+      },
     });
 
     logger.debug('Owner check result', 'SharingService', {
       projectId,
       userId,
-      isOwner: !!project
+      isOwner: !!project,
     });
 
     if (project) {
-      logger.debug('User is project owner - granting access', 'SharingService', {
-        projectId,
-        userId
-      });
+      logger.debug(
+        'User is project owner - granting access',
+        'SharingService',
+        {
+          projectId,
+          userId,
+        }
+      );
       return { hasAccess: true, isOwner: true };
     }
 
@@ -536,13 +581,13 @@ export async function hasProjectAccess(
     logger.debug('User lookup result', 'SharingService', {
       projectId,
       userId,
-      foundUser: !!user
+      foundUser: !!user,
     });
 
     if (!user) {
       logger.debug('User not found in database', 'SharingService', {
         projectId,
-        userId
+        userId,
       });
       return { hasAccess: false, isOwner: false };
     }
@@ -551,32 +596,29 @@ export async function hasProjectAccess(
     logger.debug('Checking for project shares', 'SharingService', {
       projectId,
       userId,
-      userEmail: user.email
+      userEmail: user.email,
     });
 
     const share = await prisma.projectShare.findFirst({
       where: {
         projectId,
         status: 'accepted',
-        OR: [
-          { sharedWithId: userId },
-          { email: user.email }
-        ]
-      }
+        OR: [{ sharedWithId: userId }, { email: user.email }],
+      },
     });
 
     logger.debug('Share lookup result', 'SharingService', {
       projectId,
       userId,
       foundShare: !!share,
-      shareId: share?.id
+      shareId: share?.id,
     });
 
     if (share) {
       logger.debug('Found accepted share - granting access', 'SharingService', {
         projectId,
         userId,
-        shareId: share.id
+        shareId: share.id,
       });
       return { hasAccess: true, isOwner: false, shareId: share.id };
     }
@@ -584,27 +626,36 @@ export async function hasProjectAccess(
     // Let's also check all shares for this project to see what exists
     const allShares = await prisma.projectShare.findMany({
       where: {
-        projectId
-      }
+        projectId,
+      },
     });
 
     logger.debug('All shares for this project', 'SharingService', {
       projectId,
-      totalShares: allShares.length
+      totalShares: allShares.length,
     });
 
     // No need for separate ShareLink check - all accepted shares are already checked above
-    logger.debug('No access granted - no ownership or accepted shares found', 'SharingService', {
-      projectId,
-      userId
-    });
+    logger.debug(
+      'No access granted - no ownership or accepted shares found',
+      'SharingService',
+      {
+        projectId,
+        userId,
+      }
+    );
 
     return { hasAccess: false, isOwner: false };
   } catch (error) {
-    logger.error('Exception in hasProjectAccess:', error as Error, 'SharingService', {
-      projectId,
-      userId
-    });
+    logger.error(
+      'Exception in hasProjectAccess:',
+      error as Error,
+      'SharingService',
+      {
+        projectId,
+        userId,
+      }
+    );
     return { hasAccess: false, isOwner: false };
   }
 }
@@ -612,12 +663,14 @@ export async function hasProjectAccess(
 /**
  * Validate a share token and return share info
  */
-export async function validateShareToken(token: string): Promise<unknown | null> {
+export async function validateShareToken(
+  token: string
+): Promise<unknown | null> {
   try {
     const share = await prisma.projectShare.findFirst({
       where: {
         shareToken: token,
-        status: { in: ['pending', 'accepted'] }
+        status: { in: ['pending', 'accepted'] },
       },
       include: {
         project: {
@@ -625,13 +678,13 @@ export async function validateShareToken(token: string): Promise<unknown | null>
             user: {
               select: {
                 id: true,
-                email: true
-              }
-            }
-          }
+                email: true,
+              },
+            },
+          },
         },
-        sharedBy: true
-      }
+        sharedBy: true,
+      },
     });
 
     if (!share) {
@@ -642,16 +695,21 @@ export async function validateShareToken(token: string): Promise<unknown | null>
     if (share.tokenExpiry && new Date() > share.tokenExpiry) {
       await prisma.projectShare.update({
         where: { id: share.id },
-        data: { status: 'expired' }
+        data: { status: 'expired' },
       });
       return null;
     }
 
     return share;
   } catch (error) {
-    logger.error('Failed to validate share token:', error as Error, 'SharingService', {
-      token
-    });
+    logger.error(
+      'Failed to validate share token:',
+      error as Error,
+      'SharingService',
+      {
+        token,
+      }
+    );
     return null;
   }
 }
@@ -660,7 +718,10 @@ export async function validateShareToken(token: string): Promise<unknown | null>
  * Send share invitation email
  */
 async function sendShareInvitationEmail(
-  share: ProjectShare & { project: Project; sharedBy: User & { profile: Profile | null } },
+  share: ProjectShare & {
+    project: Project;
+    sharedBy: User & { profile: Profile | null };
+  },
   message?: string
 ): Promise<void> {
   try {
@@ -669,21 +730,21 @@ async function sendShareInvitationEmail(
     if (!frontendUrl || frontendUrl.trim() === '') {
       throw new Error('FRONTEND_URL environment variable is not configured');
     }
-    
+
     // Normalize frontend URL and encode token
     const normalizedUrl = frontendUrl.trim().replace(/\/+$/, '');
     const encodedToken = encodeURIComponent(share.shareToken);
     const acceptUrl = `${normalizedUrl}/share/accept/${encodedToken}`;
-    
+
     // Check if email exists (link shares may not have email)
     if (!share.email) {
       logger.warn('Cannot send email for link-only share', 'SharingService', {
         shareId: share.id,
-        isLinkShare: true
+        isLinkShare: true,
       });
       return; // Skip email sending for link-only shares
     }
-    
+
     // TODO: Use sharer's preferred language in future implementation
     // const sharerLocale = share.sharedBy.profile?.preferredLang || 'en';
 
@@ -691,21 +752,35 @@ async function sendShareInvitationEmail(
       to: share.email,
       subject: `${share.sharedBy.email} shared a project with you - SpheroSeg`,
       html: generateShareInvitationHTML(share, acceptUrl, message),
-      text: generateShareInvitationText(share, acceptUrl, message)
+      text: generateShareInvitationText(share, acceptUrl, message),
     };
 
     EmailService.sendEmail(emailOptions)
       .then(() => {
-        logger.info('Share invitation email sent successfully', 'SharingService', { shareId: share.id, email: share.email });
+        logger.info(
+          'Share invitation email sent successfully',
+          'SharingService',
+          { shareId: share.id, email: share.email }
+        );
       })
-      .catch((emailError) => {
-        logger.error('Failed to send share invitation email:', emailError as Error, 'SharingService', { shareId: share.id, email: share.email });
+      .catch(emailError => {
+        logger.error(
+          'Failed to send share invitation email:',
+          emailError as Error,
+          'SharingService',
+          { shareId: share.id, email: share.email }
+        );
       });
   } catch (error) {
-    logger.error('Failed to prepare share invitation email:', error as Error, 'SharingService', {
-      shareId: share.id,
-      email: share.email
-    });
+    logger.error(
+      'Failed to prepare share invitation email:',
+      error as Error,
+      'SharingService',
+      {
+        shareId: share.id,
+        email: share.email,
+      }
+    );
     throw error;
   }
 }
@@ -917,11 +992,15 @@ function generateShareInvitationHTML(
                         ${share.project.description ? `<div class="project-description">${escapeHtml(share.project.description)}</div>` : ''}
                     </div>
                     
-                    ${message ? `
+                    ${
+                      message
+                        ? `
                     <div class="message-box">
                         <div class="message-quote">"${escapeHtml(message)}"</div>
                     </div>
-                    ` : ''}
+                    `
+                        : ''
+                    }
                     
                     <p style="color: #4a5568; text-align: center; margin: 30px 0;">
                         Join SpheroSeg to start analyzing and collaborating on this project.

@@ -69,6 +69,7 @@ const Hero = () => {
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
             <Button
               asChild
+              variant="framed"
               size="lg"
               className="rounded-md text-base px-8 py-6"
             >

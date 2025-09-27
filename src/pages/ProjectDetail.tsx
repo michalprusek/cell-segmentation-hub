@@ -4,7 +4,6 @@ import React, {
   useRef,
   useCallback,
   useMemo,
-  startTransition,
 } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
@@ -15,11 +14,13 @@ import EmptyState from '@/components/project/EmptyState';
 import ProjectImages from '@/components/project/ProjectImages';
 import ProjectUploaderSection from '@/components/project/ProjectUploaderSection';
 import { QueueStatsPanel } from '@/components/project/QueueStatsPanel';
+import { ExportProgressPanel } from '@/components/project/ExportProgressPanel';
+import { useSharedAdvancedExport } from '@/pages/export/hooks/useSharedAdvancedExport';
 import { useProjectData } from '@/hooks/useProjectData';
 import { useImageFilter } from '@/hooks/useImageFilter';
 import { useProjectImageActions } from '@/hooks/useProjectImageActions';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
-import { useThumbnailUpdates } from '@/hooks/useThumbnailUpdates';
+// Removed useThumbnailUpdates - unified thumbnail system doesn't need it
 import { logger } from '@/lib/logger';
 import { useStatusReconciliation } from '@/hooks/useStatusReconciliation';
 import { usePagination } from '@/hooks/usePagination';
@@ -48,16 +49,13 @@ const ProjectDetail = () => {
   const [showUploader, setShowUploader] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [batchSubmitted, setBatchSubmitted] = useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [selectedImageIds, setSelectedImageIds] = useState<Set<string>>(
     new Set()
   );
   const [showDeleteDialog, setShowDeleteDialog] = useState<boolean>(false);
   const [isBatchDeleting, setIsBatchDeleting] = useState<boolean>(false);
-  const [shouldNavigateOnComplete, setShouldNavigateOnComplete] =
-    useState<boolean>(false);
-  const [navigationTargetImageId, setNavigationTargetImageId] = useState<
-    string | null
-  >(null);
+  // Navigation state variables removed - automatic navigation to segmentation editor disabled
 
   // Debouncing and deduplication for segmentation refresh
   const debounceTimeoutRef = useRef<{ [imageId: string]: NodeJS.Timeout }>({});
@@ -73,6 +71,133 @@ const ProjectDetail = () => {
   } = useProjectData(id, user?.id, {
     fetchAll: false,
   });
+
+  // Handle cancellation events from WebSocket - define early for useSegmentationQueue
+  const handleSegmentationCancelled = useCallback(
+    (data: { imageId?: string; batchId?: string; message?: string }) => {
+      if (!data.imageId) return;
+
+      logger.debug('Segmentation cancelled for image', 'ProjectDetail', {
+        imageId: data.imageId,
+        batchId: data.batchId,
+      });
+
+      // Update image state to no_segmentation
+      updateImages(prevImages =>
+        prevImages.map(img => {
+          if (img.id === data.imageId) {
+            return {
+              ...img,
+              segmentationStatus: 'no_segmentation',
+              segmentationResult: undefined,
+              segmentationData: undefined,
+              segmentationThumbnailPath: undefined,
+              segmentationThumbnailUrl: undefined,
+              thumbnail_url: img.url, // Reset to original image URL
+              updatedAt: new Date(),
+            };
+          }
+          return img;
+        })
+      );
+    },
+    [updateImages]
+  );
+
+  const handleBulkSegmentationCancelled = useCallback(
+    async (data: {
+      cancelledCount?: number;
+      affectedProjects?: string[];
+      affectedBatches?: string[];
+      message?: string;
+    }) => {
+      logger.info('Bulk segmentation cancelled', 'ProjectDetail', {
+        count: data.cancelledCount,
+        projects: data.affectedProjects,
+      });
+
+      // Check if current project is affected
+      if (data.affectedProjects?.includes(id)) {
+        // Refetch all images to get latest status
+        if (id && user?.id) {
+          try {
+            // Fetch all images with pagination
+            let allImages: any[] = [];
+            let page = 1;
+            let hasMore = true;
+            const limit = 50;
+
+            while (hasMore) {
+              const imagesResponse = await apiClient.getProjectImages(id, {
+                limit,
+                page,
+              });
+
+              if (
+                !imagesResponse.images ||
+                !Array.isArray(imagesResponse.images)
+              ) {
+                break;
+              }
+
+              allImages = [...allImages, ...imagesResponse.images];
+              hasMore = page * limit < imagesResponse.total;
+              page++;
+
+              if (page > 40) break; // Safety limit
+            }
+
+            const formattedImages = (allImages || []).map(img => {
+              let segmentationStatus =
+                img.segmentationStatus || img.segmentation_status;
+              if (segmentationStatus === 'segmented') {
+                segmentationStatus = 'completed';
+              }
+
+              // Find existing image to preserve thumbnails for images not affected by cancellation
+              const existingImage = images.find(
+                existing => existing.id === img.id
+              );
+
+              // Only clear thumbnails if the image was actually cancelled (status is no_segmentation)
+              const wasCancelled = segmentationStatus === 'no_segmentation';
+
+              return {
+                id: img.id,
+                name: img.name || `Image ${img.id}`, // Provide fallback for missing name
+                url: img.url || img.image_url,
+                thumbnail_url: img.thumbnail_url,
+                createdAt: new Date(img.created_at || img.createdAt),
+                updatedAt: new Date(img.updated_at || img.updatedAt),
+                segmentationStatus: segmentationStatus,
+                segmentationResult: wasCancelled
+                  ? undefined
+                  : existingImage?.segmentationResult,
+                // Only clear thumbnails for cancelled images, preserve for others
+                segmentationThumbnailPath: wasCancelled
+                  ? undefined
+                  : img.segmentationThumbnailPath ||
+                    existingImage?.segmentationThumbnailPath,
+                segmentationThumbnailUrl: wasCancelled
+                  ? undefined
+                  : img.segmentationThumbnailUrl ||
+                    existingImage?.segmentationThumbnailUrl,
+              };
+            });
+
+            updateImages(formattedImages);
+          } catch (error) {
+            logger.error('Failed to fetch images after cancellation', error);
+          }
+        }
+
+        // Reset batch submitted state
+        setBatchSubmitted(false);
+        // Navigation state cleanup removed
+      }
+    },
+    [id, user?.id, updateImages, images]
+  );
 
   // Optimized refresh function for real-time updates
   const _debouncedRefreshSegmentation = useCallback(
@@ -106,50 +231,108 @@ const ProjectDetail = () => {
     []
   );
 
-  // Queue management - must be declared before using queueStats
-  const { isConnected, queueStats, lastUpdate, requestQueueStats } =
-    useSegmentationQueue(id);
+  // Handle batch completion to refresh gallery
+  const handleBatchCompleted = useCallback(async () => {
+    if (!id || !user?.id) return;
 
-  // Handle thumbnail updates via WebSocket
-  useThumbnailUpdates({
-    projectId: id,
-    enabled: true,
-    onThumbnailUpdate: useCallback(
-      update => {
-        logger.debug('Thumbnail update received', 'ProjectDetail', {
-          imageId: update.imageId,
-          levelOfDetail: update.thumbnailData.levelOfDetail,
+    logger.info(
+      '🔄 Batch segmentation completed, refreshing image gallery...',
+      {
+        projectId: id,
+      }
+    );
+
+    try {
+      // Fetch updated images to refresh statuses and thumbnails
+      let allImages: any[] = [];
+      let page = 1;
+      let hasMore = true;
+      const limit = 50;
+
+      while (hasMore) {
+        const imagesResponse = await apiClient.getProjectImages(id, {
+          limit,
+          page,
         });
 
-        // Fetch updated image with new thumbnail URL
-        (async () => {
-          try {
-            const img = await apiClient.getImage(id, update.imageId);
-            if (img?.thumbnail_url) {
-              updateImagesRef.current(prevImages =>
-                prevImages.map(prevImg => {
-                  if (prevImg.id === update.imageId) {
-                    return {
-                      ...prevImg,
-                      thumbnail_url: `${img.thumbnail_url}?t=${Date.now()}`,
-                    };
-                  }
-                  return prevImg;
-                })
-              );
-            }
-          } catch (_error) {
-            logger.error(
-              'Failed to fetch updated image after thumbnail update',
-              error,
-              'ProjectDetail'
-            );
-          }
-        })();
-      },
-      [id]
-    ),
-  });
+        if (!imagesResponse.images || !Array.isArray(imagesResponse.images)) {
+          break;
+        }
+
+        allImages = [...allImages, ...imagesResponse.images];
+        hasMore = page * limit < imagesResponse.total;
+        page++;
+
+        if (page > 40) break; // Safety limit
+      }
+
+      const formattedImages = (allImages || []).map(img => {
+        let segmentationStatus =
+          img.segmentationStatus || img.segmentation_status;
+        if (segmentationStatus === 'segmented') {
+          segmentationStatus = 'completed';
+        }
+
+        // Find existing image to preserve segmentation thumbnails if not provided
+        const existingImage = images.find(existing => existing.id === img.id);
+
+        return {
+          id: img.id,
+          name: img.name || `Image ${img.id}`, // Provide fallback for missing name
+          url: img.url || img.image_url,
+          thumbnail_url: img.thumbnail_url,
+          createdAt: new Date(img.created_at || img.createdAt),
+          updatedAt: new Date(img.updated_at || img.updatedAt),
+          segmentationStatus: segmentationStatus,
+          segmentationResult:
+            img.segmentationResult || existingImage?.segmentationResult,
+          // CRITICAL: Preserve existing thumbnails if not provided by API
+          segmentationThumbnailPath:
+            img.segmentationThumbnailPath ||
+            existingImage?.segmentationThumbnailPath,
+          segmentationThumbnailUrl:
+            img.segmentationThumbnailUrl ||
+            existingImage?.segmentationThumbnailUrl,
+        };
+      });
+
+      updateImages(formattedImages);
+
+      logger.info('✅ Gallery refreshed successfully after batch completion', {
+        imageCount: formattedImages.length,
+        completedCount: formattedImages.filter(
+          img => img.segmentationStatus === 'completed'
+        ).length,
+      });
+    } catch (error) {
+      logger.error(
+        '❌ Failed to refresh gallery after batch completion:',
+        error
+      );
+    }
+  }, [id, user?.id, updateImages, images]);
+
+  // Queue management - must be declared before using queueStats
+  const {
+    isConnected,
+    queueStats,
+    lastUpdate,
+    parallelStats,
+    requestQueueStats,
+  } = useSegmentationQueue(
+    id,
+    handleSegmentationCancelled,
+    handleBulkSegmentationCancelled,
+    handleBatchCompleted
+  );
+
+  // Global queue stats for Cancel All button
+  const { queueStats: globalQueueStats } = useSegmentationQueue(undefined);
+
+  // Export progress tracking - use ONLY shared hook for SSOT
+  const exportHook = useSharedAdvancedExport(id || '', projectTitle);
+
+  // Thumbnail updates removed - unified system uses server-generated thumbnails only
 
   // Filtering and sorting with memoization
   const {
@@ -232,7 +415,7 @@ const ProjectDetail = () => {
                   }
                 : null,
             };
-          } catch (_error) {
+          } catch (error) {
             if (
               error &&
               typeof error === 'object' &&
@@ -266,7 +449,7 @@ const ProjectDetail = () => {
             return img;
           })
         );
-      } catch (_error) {
+      } catch (error) {
         logger.error('Error loading visible segmentation data:', error);
       }
     };
@@ -312,8 +495,7 @@ const ProjectDetail = () => {
           }
         );
         setBatchSubmitted(false);
-        setShouldNavigateOnComplete(false);
-        setNavigationTargetImageId(null);
+        // Navigation state cleanup removed
       }, 60000); // 60 second timeout for disconnection
 
       return () => clearTimeout(disconnectionTimeout);
@@ -342,6 +524,9 @@ const ProjectDetail = () => {
   const reconcileRef = useRef(reconcileImageStatuses);
   reconcileRef.current = reconcileImageStatuses;
 
+  // Separate ref for queue processing timeout to avoid overwriting the function ref
+  const queueProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Store updateImages function in ref to avoid dependency issues
   const updateImagesRef = useRef(updateImages);
   updateImagesRef.current = updateImages;
@@ -349,6 +534,70 @@ const ProjectDetail = () => {
   // Store refreshImageSegmentation function in ref to avoid dependency issues
   const refreshImageSegmentationRef = useRef(refreshImageSegmentation);
   refreshImageSegmentationRef.current = refreshImageSegmentation;
+
+  // Store fetchImages function to call after cancellation
+  const fetchImages = useCallback(async () => {
+    if (!id || !user?.id) return;
+
+    try {
+      // Fetch all images with pagination
+      let allImages: any[] = [];
+      let page = 1;
+      let hasMore = true;
+      const limit = 50;
+
+      while (hasMore) {
+        const imagesResponse = await apiClient.getProjectImages(id, {
+          limit,
+          page,
+        });
+
+        if (!imagesResponse.images || !Array.isArray(imagesResponse.images)) {
+          break;
+        }
+
+        allImages = [...allImages, ...imagesResponse.images];
+        hasMore = page * limit < imagesResponse.total;
+        page++;
+
+        if (page > 40) break; // Safety limit
+      }
+
+      const formattedImages = (allImages || []).map(img => {
+        let segmentationStatus =
+          img.segmentationStatus || img.segmentation_status;
+        if (segmentationStatus === 'segmented') {
+          segmentationStatus = 'completed';
+        }
+
+        // Find existing image to preserve segmentation thumbnails
+        const existingImage = images.find(existing => existing.id === img.id);
+
+        return {
+          id: img.id,
+          name: img.name || `Image ${img.id}`, // Provide fallback for missing name
+          url: img.url || img.image_url,
+          thumbnail_url: img.thumbnail_url,
+          createdAt: new Date(img.created_at || img.createdAt),
+          updatedAt: new Date(img.updated_at || img.updatedAt),
+          segmentationStatus: segmentationStatus,
+          segmentationResult:
+            img.segmentationResult || existingImage?.segmentationResult,
+          // CRITICAL: Preserve existing segmentation thumbnails if not provided by API
+          segmentationThumbnailPath:
+            img.segmentationThumbnailPath ||
+            existingImage?.segmentationThumbnailPath,
+          segmentationThumbnailUrl:
+            img.segmentationThumbnailUrl ||
+            existingImage?.segmentationThumbnailUrl,
+        };
+      });
+
+      updateImages(formattedImages);
+    } catch (error) {
+      logger.error('Failed to fetch images after cancellation', error);
+    }
+  }, [id, user?.id, updateImages, images]);
 
   // Batch WebSocket updates to prevent excessive re-renders during bulk operations
   const pendingUpdatesRef = useRef<Map<string, any>>(new Map());
@@ -388,6 +637,13 @@ const ProjectDetail = () => {
             thumbnail_url: update.clearSegmentationData
               ? img.url
               : img.thumbnail_url,
+            // Preserve segmentation thumbnails
+            segmentationThumbnailPath: update.clearSegmentationData
+              ? undefined
+              : img.segmentationThumbnailPath,
+            segmentationThumbnailUrl: update.clearSegmentationData
+              ? undefined
+              : img.segmentationThumbnailUrl,
           };
         }
         return img;
@@ -398,299 +654,352 @@ const ProjectDetail = () => {
     pendingUpdates.clear();
   }, []);
 
-  // Real-time image status updates with batching for bulk operations
-  useEffect(() => {
-    if (!lastUpdate || lastUpdate.projectId !== id) {
-      return;
-    }
+  // Debounced WebSocket update handler to prevent excessive re-renders
+  const debouncedUpdateTimeoutRef = useRef<NodeJS.Timeout>();
+  const processWebSocketUpdate = useCallback(
+    (update: typeof lastUpdate) => {
+      if (!update || update.projectId !== id) {
+        return;
+      }
 
-    // Real-time update processing
-    logger.debug('Real-time WebSocket update received', 'ProjectDetail', {
-      imageId: lastUpdate.imageId,
-      status: lastUpdate.status,
-      projectId: lastUpdate.projectId,
-    });
+      // Skip duplicate updates for the same image with the same status
+      if (
+        lastStatusRef.current &&
+        lastStatusRef.current[update.imageId] === update.status
+      ) {
+        logger.debug('⏭️ Skipping duplicate status update', 'ProjectDetail', {
+          imageId: update.imageId,
+          status: update.status,
+        });
+        return;
+      }
 
-    // Normalize status to match frontend expectations
-    let normalizedStatus = lastUpdate.status;
-    if (
-      lastUpdate.status === 'segmented' ||
-      lastUpdate.status === 'completed'
-    ) {
-      normalizedStatus = 'completed';
-    } else if (lastUpdate.status === 'no_segmentation') {
-      normalizedStatus = 'no_segmentation';
-    } else if (lastUpdate.status === 'failed') {
-      normalizedStatus = 'failed';
-    } else if (lastUpdate.status === 'queued') {
-      normalizedStatus = 'queued';
-    } else if (lastUpdate.status === 'processing') {
-      normalizedStatus = 'processing';
-    }
+      // Update last status tracking
+      if (!lastStatusRef.current) {
+        lastStatusRef.current = {};
+      }
+      lastStatusRef.current[update.imageId] = update.status;
 
-    // Determine if segmentation data should be cleared
-    const currentImage = images.find(img => img.id === lastUpdate.imageId);
-    const clearSegmentationData =
-      lastUpdate.status === 'queued' &&
-      currentImage &&
-      (currentImage.segmentationStatus === 'completed' ||
-        currentImage.segmentationStatus === 'segmented');
-
-    // Check if we're in bulk operation mode (more than 10 items in queue)
-    // Increased threshold to better detect bulk operations
-    const isBulkOperation =
-      queueStats && (queueStats.queued > 10 || queueStats.processing > 5);
-
-    if (isBulkOperation) {
-      // Batch the update
-      pendingUpdatesRef.current.set(lastUpdate.imageId, {
-        normalizedStatus,
-        clearSegmentationData,
+      logger.debug('Processing WebSocket update', 'ProjectDetail', {
+        imageId: update.imageId,
+        status: update.status,
+        projectId: update.projectId,
       });
 
-      // Clear existing timeout and set new one
-      if (batchUpdateTimeoutRef.current) {
-        clearTimeout(batchUpdateTimeoutRef.current);
+      // Normalize status to match frontend expectations
+      let normalizedStatus = update.status;
+      if (update.status === 'segmented' || update.status === 'completed') {
+        normalizedStatus = 'completed';
+      } else if (update.status === 'no_segmentation') {
+        normalizedStatus = 'no_segmentation';
+      } else if (update.status === 'failed') {
+        normalizedStatus = 'failed';
+      } else if (update.status === 'queued') {
+        normalizedStatus = 'queued';
+      } else if (update.status === 'processing') {
+        normalizedStatus = 'processing';
       }
 
-      // Longer batch timeout for bulk operations to reduce UI updates
-      const batchTimeout = queueStats.queued > 100 ? 1000 : 500;
-      batchUpdateTimeoutRef.current = setTimeout(
-        processBatchUpdates,
-        batchTimeout
-      );
-    } else {
-      // Apply update immediately for single operations
-      updateImagesRef.current(prevImages =>
-        prevImages.map(img => {
-          if (img.id === lastUpdate.imageId) {
-            logger.debug('Updating image status immediately', 'ProjectDetail', {
-              imageId: img.id,
-              fromStatus: img.segmentationStatus,
-              toStatus: normalizedStatus,
-            });
+      // Determine if segmentation data should be cleared
+      const currentImage = images.find(img => img.id === update.imageId);
+      const clearSegmentationData =
+        update.status === 'queued' &&
+        currentImage &&
+        (currentImage.segmentationStatus === 'completed' ||
+          currentImage.segmentationStatus === 'segmented');
 
-            return {
-              ...img,
-              segmentationStatus: normalizedStatus,
-              updatedAt: new Date(),
-              segmentationResult: clearSegmentationData
-                ? undefined
-                : img.segmentationResult,
-              segmentationData: clearSegmentationData
-                ? undefined
-                : img.segmentationData,
-              thumbnail_url: clearSegmentationData
-                ? img.url
-                : img.thumbnail_url,
-            };
-          }
-          return img;
-        })
-      );
-    }
+      // Check if we're in bulk operation mode (more than 10 items in queue)
+      // Increased threshold to better detect bulk operations
+      const isBulkOperation =
+        queueStats && (queueStats.queued > 10 || queueStats.processing > 5);
 
-    // For completed segmentation, refresh immediately to get polygon data and validate
-    // Skip refresh if backend already says no_segmentation
-    if (
-      (lastUpdate.status === 'segmented' ||
-        lastUpdate.status === 'completed') &&
-      lastUpdate.status !== 'no_segmentation'
-    ) {
-      // Batch refresh requests to avoid API flooding
       if (isBulkOperation) {
-        // In bulk mode, batch the refresh requests
-        if (!pendingRefreshRef.current) {
-          pendingRefreshRef.current = new Set();
-        }
-        pendingRefreshRef.current.add(lastUpdate.imageId);
+        // Batch the update
+        pendingUpdatesRef.current.set(update.imageId, {
+          normalizedStatus,
+          clearSegmentationData,
+        });
 
         // Clear existing timeout and set new one
-        if (refreshBatchTimeoutRef.current) {
-          clearTimeout(refreshBatchTimeoutRef.current);
+        if (batchUpdateTimeoutRef.current) {
+          clearTimeout(batchUpdateTimeoutRef.current);
         }
 
-        // Batch refresh after a delay
-        refreshBatchTimeoutRef.current = setTimeout(async () => {
-          const imageIdsToRefresh = Array.from(pendingRefreshRef.current || []);
-          pendingRefreshRef.current = null;
-
-          logger.debug('Batch refreshing segmentation data', 'ProjectDetail', {
-            count: imageIdsToRefresh.length,
-          });
-
-          // Process in smaller chunks to avoid overwhelming the API
-          const chunkSize = 10;
-          for (let i = 0; i < imageIdsToRefresh.length; i += chunkSize) {
-            const chunk = imageIdsToRefresh.slice(i, i + chunkSize);
-            await Promise.all(
-              chunk.map(imageId =>
-                refreshImageSegmentationRef.current(imageId).catch(error => {
-                  logger.error('Failed to refresh segmentation data', error);
-                })
-              )
-            );
-            // Small delay between chunks
-            if (i + chunkSize < imageIdsToRefresh.length) {
-              await new Promise(resolve => setTimeout(resolve, 100));
-            }
-          }
-        }, 2000); // 2 second delay for batching
+        // Longer batch timeout for bulk operations to reduce UI updates
+        const batchTimeout = queueStats.queued > 100 ? 1000 : 500;
+        batchUpdateTimeoutRef.current = setTimeout(
+          processBatchUpdates,
+          batchTimeout
+        );
       } else {
-        // Single operation - refresh immediately but only one call
-        (async () => {
-          logger.debug('Refreshing segmentation data', 'ProjectDetail', {
-            imageId: lastUpdate.imageId,
-          });
-
-          try {
-            // Only call refreshImageSegmentation which should fetch everything needed
-            // DO NOT make duplicate apiClient.getImage call
-            await refreshImageSegmentationRef.current(lastUpdate.imageId);
-
-            // Wait for state update
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // Get the current segmentation data from state after refresh
-            updateImagesRef.current(prevImages => {
-              const currentImg = prevImages.find(
-                i => i.id === lastUpdate.imageId
-              );
-              const hasPolygons =
-                currentImg?.segmentationResult?.polygons &&
-                currentImg.segmentationResult.polygons.length > 0;
-
-              logger.debug('Image polygon count', 'ProjectDetail', {
-                imageId: lastUpdate.imageId,
-                polygonCount: hasPolygons
-                  ? currentImg.segmentationResult.polygons.length
-                  : 0,
-              });
-
-              return prevImages.map(prevImg => {
-                if (prevImg.id === lastUpdate.imageId) {
-                  const finalStatus = hasPolygons
-                    ? 'completed'
-                    : 'no_segmentation';
-
-                  return {
-                    ...prevImg,
-                    segmentationStatus: finalStatus,
-                    // Keep the segmentation data that was already updated by refreshImageSegmentation
-                    // Force re-render by updating a timestamp
-                    lastSegmentationUpdate: Date.now(),
-                    // Keep existing thumbnail URL - it should be updated via WebSocket
-                    thumbnail_url: prevImg.thumbnail_url,
-                    updatedAt: new Date(),
-                  };
-                }
-                return prevImg;
-              });
-            });
-          } catch (_error) {
-            logger.error('Failed to refresh image data', error);
-
-            // Even if refresh fails, ensure correct status based on segmentation data
-            updateImagesRef.current(prevImages => {
-              const currentImg = prevImages.find(
-                i => i.id === lastUpdate.imageId
-              );
-              const hasPolygons =
-                currentImg?.segmentationResult?.polygons &&
-                currentImg.segmentationResult.polygons.length > 0;
-
-              return prevImages.map(prevImg => {
-                if (prevImg.id === lastUpdate.imageId) {
-                  return {
-                    ...prevImg,
-                    segmentationStatus: hasPolygons
-                      ? 'completed'
-                      : 'no_segmentation',
-                    updatedAt: new Date(),
-                  };
-                }
-                return prevImg;
-              });
-            });
-          }
-        })().catch(err => {
-          logger.error('Unhandled error in segmentation refresh IIFE', err);
-          // Ensure state is updated even on unhandled rejection
-          updateImagesRef.current(prevImages =>
-            prevImages.map(prevImg => {
-              if (prevImg.id === lastUpdate.imageId) {
-                return {
-                  ...prevImg,
-                  segmentationStatus: 'error',
-                  updatedAt: new Date(),
-                };
+        // Apply update immediately for single operations
+        updateImagesRef.current(prevImages =>
+          prevImages.map(img => {
+            if (img.id === update.imageId) {
+              // Only log significant status changes to reduce console spam
+              if (img.segmentationStatus !== normalizedStatus) {
+                logger.debug('Updating image status', 'ProjectDetail', {
+                  imageId: img.id,
+                  fromStatus: img.segmentationStatus,
+                  toStatus: normalizedStatus,
+                });
               }
-              return prevImg;
-            })
-          );
-        });
-      }
-    }
 
-    // Reset batch submitted state when queue becomes empty and navigate if needed
-    if (lastUpdate.status === 'segmented' || lastUpdate.status === 'failed') {
-      // Trigger status reconciliation after a short delay
-      const timeoutId = setTimeout(() => {
-        const currentQueueStats = queueStats;
-        if (
-          currentQueueStats &&
-          currentQueueStats.processing <= 1 &&
-          currentQueueStats.queued === 0
-        ) {
-          logger.info(
-            'Queue processing complete - resetting batch state',
-            'ProjectDetail',
-            {
-              projectId: id,
-              processing: currentQueueStats.processing,
-              queued: currentQueueStats.queued,
-              batchSubmitted,
+              return {
+                ...img,
+                segmentationStatus: normalizedStatus,
+                updatedAt: new Date(),
+                segmentationResult: clearSegmentationData
+                  ? undefined
+                  : img.segmentationResult,
+                segmentationData: clearSegmentationData
+                  ? undefined
+                  : img.segmentationData,
+                thumbnail_url: clearSegmentationData
+                  ? img.url
+                  : img.thumbnail_url,
+                // Preserve segmentation thumbnails
+                segmentationThumbnailPath: clearSegmentationData
+                  ? undefined
+                  : img.segmentationThumbnailPath,
+                segmentationThumbnailUrl: clearSegmentationData
+                  ? undefined
+                  : img.segmentationThumbnailUrl,
+              };
             }
-          );
-          setBatchSubmitted(false);
-          // Force reconciliation to catch any missed updates
-          reconcileRef.current();
+            return img;
+          })
+        );
+      }
 
-          // Navigate to segmentation editor if batch is complete and navigation was requested
-          if (shouldNavigateOnComplete && navigationTargetImageId) {
+      // For completed segmentation, refresh to get polygon data and validate
+      // Skip refresh if backend already says no_segmentation
+      if (
+        (update.status === 'segmented' || update.status === 'completed') &&
+        update.status !== 'no_segmentation'
+      ) {
+        // Batch refresh requests to avoid API flooding
+        if (isBulkOperation) {
+          // In bulk mode, batch the refresh requests
+          if (!pendingRefreshRef.current) {
+            pendingRefreshRef.current = new Set();
+          }
+          pendingRefreshRef.current.add(update.imageId);
+
+          // Clear existing timeout and set new one
+          if (refreshBatchTimeoutRef.current) {
+            clearTimeout(refreshBatchTimeoutRef.current);
+          }
+
+          // Batch refresh after a delay
+          refreshBatchTimeoutRef.current = setTimeout(async () => {
+            const imageIdsToRefresh = Array.from(
+              pendingRefreshRef.current || []
+            );
+            pendingRefreshRef.current = null;
+
+            logger.debug(
+              'Batch refreshing segmentation data',
+              'ProjectDetail',
+              {
+                count: imageIdsToRefresh.length,
+              }
+            );
+
+            // Process in smaller chunks to avoid overwhelming the API
+            const chunkSize = 10;
+            for (let i = 0; i < imageIdsToRefresh.length; i += chunkSize) {
+              const chunk = imageIdsToRefresh.slice(i, i + chunkSize);
+              await Promise.all(
+                chunk.map(imageId =>
+                  refreshImageSegmentationRef.current(imageId).catch(error => {
+                    logger.error('Failed to refresh segmentation data', error);
+                  })
+                )
+              );
+              // Small delay between chunks
+              if (i + chunkSize < imageIdsToRefresh.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+              }
+            }
+          }, 2000); // 2 second delay for batching
+        } else {
+          // Single operation - refresh immediately but only one call
+          (async () => {
+            logger.debug('Refreshing segmentation data', 'ProjectDetail', {
+              imageId: update.imageId,
+            });
+
+            try {
+              // Only call refreshImageSegmentation which should fetch everything needed
+              // DO NOT make duplicate apiClient.getImage call
+              await refreshImageSegmentationRef.current(update.imageId);
+
+              // Wait for state update
+              await new Promise(resolve => setTimeout(resolve, 200));
+
+              // Get the current segmentation data from state after refresh
+              updateImagesRef.current(prevImages => {
+                const currentImg = prevImages.find(
+                  i => i.id === update.imageId
+                );
+                const hasPolygons =
+                  currentImg?.segmentationResult?.polygons &&
+                  currentImg.segmentationResult.polygons.length > 0;
+
+                logger.debug('Image polygon count', 'ProjectDetail', {
+                  imageId: update.imageId,
+                  polygonCount: hasPolygons
+                    ? currentImg.segmentationResult.polygons.length
+                    : 0,
+                });
+
+                return prevImages.map(prevImg => {
+                  if (prevImg.id === update.imageId) {
+                    const finalStatus = hasPolygons
+                      ? 'completed'
+                      : 'no_segmentation';
+
+                    return {
+                      ...prevImg,
+                      segmentationStatus: finalStatus,
+                      // Keep the segmentation data that was already updated by refreshImageSegmentation
+                      // Force re-render by updating a timestamp
+                      lastSegmentationUpdate: Date.now(),
+                      // Keep existing thumbnail URL - it should be updated via WebSocket
+                      thumbnail_url: prevImg.thumbnail_url,
+                      // Preserve segmentation thumbnails
+                      segmentationThumbnailPath:
+                        prevImg.segmentationThumbnailPath,
+                      segmentationThumbnailUrl:
+                        prevImg.segmentationThumbnailUrl,
+                      updatedAt: new Date(),
+                    };
+                  }
+                  return prevImg;
+                });
+              });
+            } catch (error) {
+              logger.error('Failed to refresh image data', error);
+
+              // Even if refresh fails, ensure correct status based on segmentation data
+              updateImagesRef.current(prevImages => {
+                const currentImg = prevImages.find(
+                  i => i.id === update.imageId
+                );
+                const hasPolygons =
+                  currentImg?.segmentationResult?.polygons &&
+                  currentImg.segmentationResult.polygons.length > 0;
+
+                return prevImages.map(prevImg => {
+                  if (prevImg.id === update.imageId) {
+                    return {
+                      ...prevImg,
+                      segmentationStatus: hasPolygons
+                        ? 'completed'
+                        : 'no_segmentation',
+                      // Preserve segmentation thumbnails
+                      segmentationThumbnailPath:
+                        prevImg.segmentationThumbnailPath,
+                      segmentationThumbnailUrl:
+                        prevImg.segmentationThumbnailUrl,
+                      updatedAt: new Date(),
+                    };
+                  }
+                  return prevImg;
+                });
+              });
+            }
+          })().catch(err => {
+            logger.error('Unhandled error in segmentation refresh IIFE', err);
+            // Ensure state is updated even on unhandled rejection
+            updateImagesRef.current(prevImages =>
+              prevImages.map(prevImg => {
+                if (prevImg.id === lastUpdate.imageId) {
+                  return {
+                    ...prevImg,
+                    segmentationStatus: 'error',
+                    // Preserve segmentation thumbnails even on error
+                    segmentationThumbnailPath:
+                      prevImg.segmentationThumbnailPath,
+                    segmentationThumbnailUrl: prevImg.segmentationThumbnailUrl,
+                    updatedAt: new Date(),
+                  };
+                }
+                return prevImg;
+              })
+            );
+          });
+        }
+      }
+
+      // Reset batch submitted state when queue becomes empty and navigate if needed
+      if (update.status === 'segmented' || update.status === 'failed') {
+        // Trigger status reconciliation after a short delay
+        const timeoutId = setTimeout(() => {
+          const currentQueueStats = queueStats;
+          if (
+            currentQueueStats &&
+            currentQueueStats.processing <= 1 &&
+            currentQueueStats.queued === 0
+          ) {
             logger.info(
-              'Batch processing complete, navigating to segmentation editor',
+              'Queue processing complete - resetting batch state',
               'ProjectDetail',
               {
                 projectId: id,
-                imageId: navigationTargetImageId,
+                processing: currentQueueStats.processing,
+                queued: currentQueueStats.queued,
+                batchSubmitted,
               }
             );
-            // Use startTransition to ensure navigation works with React 18 concurrent features
-            startTransition(() => {
-              navigate(`/segmentation/${id}/${navigationTargetImageId}`);
-            });
-            setShouldNavigateOnComplete(false);
-            setNavigationTargetImageId(null);
-          }
-        }
-      }, 2000);
+            setBatchSubmitted(false);
+            // Force reconciliation to catch any missed updates
+            reconcileRef.current();
 
-      // Cleanup timeout if component unmounts
-      return () => clearTimeout(timeoutId);
+            // Automatic navigation to segmentation editor removed per user request
+            // Gallery refresh is handled by handleBatchCompleted callback
+          }
+        }, 2000);
+
+        // Store timeout for cleanup using the dedicated timeout ref
+        if (queueProcessingTimeoutRef.current) {
+          clearTimeout(queueProcessingTimeoutRef.current);
+        }
+        queueProcessingTimeoutRef.current = timeoutId;
+      }
+    },
+    [id, queueStats, batchSubmitted, navigate, images]
+  );
+
+  // Real-time image status updates - debounced handler
+  useEffect(() => {
+    // Defensive null checks and type safety
+    if (!lastUpdate || !lastUpdate.imageId) {
+      return;
     }
-  }, [
-    lastUpdate,
-    id,
-    queueStats,
-    setBatchSubmitted,
-    images,
-    processBatchUpdates,
-    shouldNavigateOnComplete,
-    navigationTargetImageId,
-    navigate,
-    batchSubmitted,
-  ]);
+
+    // Only process updates for current project (if projectId is available)
+    if (lastUpdate.projectId && lastUpdate.projectId !== id) {
+      return;
+    }
+
+    // Clear any existing debounce timeout
+    if (debouncedUpdateTimeoutRef.current) {
+      clearTimeout(debouncedUpdateTimeoutRef.current);
+    }
+
+    // Debounce WebSocket updates to prevent excessive re-renders
+    debouncedUpdateTimeoutRef.current = setTimeout(() => {
+      processWebSocketUpdate(lastUpdate);
+    }, 50); // 50ms debounce delay
+
+    return () => {
+      if (debouncedUpdateTimeoutRef.current) {
+        clearTimeout(debouncedUpdateTimeoutRef.current);
+      }
+    };
+  }, [lastUpdate, id, processWebSocketUpdate]);
 
   // Cleanup debounce timeouts on unmount
   useEffect(() => {
@@ -706,6 +1015,11 @@ const ProjectDetail = () => {
       // Clear batch update timeout
       if (batchUpdateTimeoutRef.current) {
         clearTimeout(batchUpdateTimeoutRef.current);
+      }
+
+      // Clear queue processing timeout
+      if (queueProcessingTimeoutRef.current) {
+        clearTimeout(queueProcessingTimeoutRef.current);
       }
     };
   }, []);
@@ -761,13 +1075,16 @@ const ProjectDetail = () => {
 
           return {
             id: img.id,
-            name: img.name,
+            name: img.name || `Image ${img.id}`, // Provide fallback for missing name
             url: img.url || img.image_url,
             thumbnail_url: img.thumbnail_url,
             createdAt: new Date(img.created_at || img.createdAt),
             updatedAt: new Date(img.updated_at || img.updatedAt),
             segmentationStatus: segmentationStatus,
             segmentationResult: undefined,
+            // Preserve segmentation thumbnails from backend
+            segmentationThumbnailPath: img.segmentationThumbnailPath,
+            segmentationThumbnailUrl: img.segmentationThumbnailUrl,
           };
         });
 
@@ -852,7 +1169,7 @@ const ProjectDetail = () => {
                       )
                     );
                   }
-                } catch (_error) {
+                } catch (error) {
                   // Silently fail for individual images - they'll be fetched later if needed
                   logger.debug(
                     `Could not fetch segmentation for image ${img.id}`,
@@ -871,7 +1188,7 @@ const ProjectDetail = () => {
           detail: { projectId: id, newImageCount: formattedImages.length },
         });
         window.dispatchEvent(event);
-      } catch (_error) {
+      } catch (error) {
         toast.error(t('toast.upload.failed'));
       }
     }
@@ -899,8 +1216,9 @@ const ProjectDetail = () => {
   );
 
   const handleSelectAll = useCallback(() => {
-    setSelectedImageIds(new Set(paginatedImages.map(img => img.id)));
-  }, [paginatedImages]);
+    // Select all filtered images in the project, not just current page
+    setSelectedImageIds(new Set(filteredImages.map(img => img.id)));
+  }, [filteredImages]);
 
   const handleDeselectAll = useCallback(() => {
     setSelectedImageIds(new Set());
@@ -908,14 +1226,14 @@ const ProjectDetail = () => {
 
   const handleSelectAllToggle = useCallback(() => {
     const allSelected =
-      paginatedImages.length > 0 &&
-      paginatedImages.every(img => selectedImageIds.has(img.id));
+      filteredImages.length > 0 &&
+      filteredImages.every(img => selectedImageIds.has(img.id));
     if (allSelected) {
       handleDeselectAll();
     } else {
       handleSelectAll();
     }
-  }, [paginatedImages, selectedImageIds, handleSelectAll, handleDeselectAll]);
+  }, [filteredImages, selectedImageIds, handleSelectAll, handleDeselectAll]);
 
   const handleBatchDeleteConfirm = async () => {
     if (!id || !user?.id || selectedImageIds.size === 0) {
@@ -958,7 +1276,7 @@ const ProjectDetail = () => {
           t('project.imagesDeleteFailed', { count: result.failedIds.length })
         );
       }
-    } catch (_error) {
+    } catch (error) {
       toast.error(t('errors.deleteImages'));
     } finally {
       setShowDeleteDialog(false);
@@ -973,12 +1291,43 @@ const ProjectDetail = () => {
   // Calculate selection state
   const selectedCount = selectedImageIds.size;
   const isAllSelected =
-    paginatedImages.length > 0 &&
-    paginatedImages.every(img => selectedImageIds.has(img.id));
+    filteredImages.length > 0 &&
+    filteredImages.every(img => selectedImageIds.has(img.id));
   const isPartiallySelected =
-    selectedCount > 0 && selectedCount < paginatedImages.length;
+    selectedCount > 0 && selectedCount < filteredImages.length;
 
   // Handle batch segmentation of all images without segmentation + selected images
+  const handleCancelSegmentation = async () => {
+    if (!id || !user?.id) {
+      toast.error(t('errors.noProjectOrUser'));
+      return;
+    }
+
+    setIsCancelling(true);
+
+    try {
+      const result = await apiClient.cancelAllUserSegmentations();
+
+      if (result.success && result.cancelledCount > 0) {
+        // Don't show toast - WebSocket events will handle UI updates
+        // The handleBulkSegmentationCancelled callback will:
+        // - Refetch images to show 'no_segmentation' status
+        // - Clear segmentation thumbnails
+        // - Reset batch submitted state
+        // - Update queue stats
+
+        logger.info('Cancellation request sent successfully', 'ProjectDetail', {
+          cancelledCount: result.cancelledCount,
+        });
+      }
+    } catch (error) {
+      logger.error('Failed to cancel segmentation', error);
+      toast.error(t('queue.cancelFailed'));
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const handleSegmentAll = async () => {
     if (!id || !user?.id) {
       toast.error(t('errors.noProjectOrUser'));
@@ -1024,11 +1373,7 @@ const ProjectDetail = () => {
       // Mark as submitted to prevent double clicks
       setBatchSubmitted(true);
 
-      // Set navigation flags to navigate to first image after batch completion
-      if (allImagesToProcess.length > 0) {
-        setShouldNavigateOnComplete(true);
-        setNavigationTargetImageId(allImagesToProcess[0].id);
-      }
+      // Navigation flags removed - user doesn't want automatic navigation to segmentation editor
 
       // Safety timeout to reset batchSubmitted state if WebSocket updates are missed
       // This prevents the button from getting permanently stuck in "adding to queue" state
@@ -1042,8 +1387,7 @@ const ProjectDetail = () => {
           }
         );
         setBatchSubmitted(false);
-        setShouldNavigateOnComplete(false);
-        setNavigationTargetImageId(null);
+        // Navigation state cleanup removed
       }, 30000); // 30 second safety timeout
 
       // Prepare image IDs for batch processing
@@ -1147,13 +1491,12 @@ const ProjectDetail = () => {
 
       // Refresh queue stats
       requestQueueStats();
-    } catch (_error) {
+    } catch (error) {
       toast.error(t('projects.errorAddingToQueue'));
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);
       // Reset navigation flags on error
-      setShouldNavigateOnComplete(false);
-      setNavigationTargetImageId(null);
+      // Navigation state cleanup removed
 
       // Dismiss progress toast if it exists
       toast.dismiss('batch-progress');
@@ -1234,6 +1577,8 @@ const ProjectDetail = () => {
               onSelectAllToggle={handleSelectAllToggle}
               onBatchDelete={handleBatchDelete}
               showSelectAll={true}
+              onExportingChange={() => {}} // No longer needed - hook handles state
+              onDownloadingChange={() => {}} // No longer needed - hook handles state
             />
 
             {/* Queue Stats Panel */}
@@ -1241,10 +1586,28 @@ const ProjectDetail = () => {
               stats={queueStats}
               isConnected={isConnected}
               onSegmentAll={handleSegmentAll}
+              onCancelSegmentation={handleCancelSegmentation}
               batchSubmitted={batchSubmitted || hasActiveQueue}
+              isCancelling={isCancelling}
               imagesToSegmentCount={imagesToSegmentCount}
               selectedImageIds={selectedImageIds}
               images={images}
+              parallelStats={parallelStats}
+              currentUserId={user?.id}
+              globalQueueStats={globalQueueStats}
+            />
+
+            {/* Export Progress Panel */}
+            <ExportProgressPanel
+              isExporting={exportHook.isExporting}
+              isDownloading={exportHook.isDownloading}
+              exportProgress={exportHook.exportProgress}
+              exportStatus={exportHook.exportStatus}
+              completedJobId={exportHook.completedJobId}
+              onCancelExport={exportHook.cancelExport}
+              onTriggerDownload={exportHook.triggerDownload}
+              onDismissExport={exportHook.dismissExport}
+              wsConnected={exportHook.wsConnected}
             />
 
             {loading ? (

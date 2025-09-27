@@ -12,7 +12,10 @@
 import nodemailer, { Transporter } from 'nodemailer';
 import SMTPTransport from 'nodemailer/lib/smtp-transport';
 import { logger } from '../utils/logger';
-import { generateSimplePasswordResetHTML, generateSimplePasswordResetText } from '../templates/passwordResetEmailSimple';
+import {
+  generateSimplePasswordResetHTML,
+  generateSimplePasswordResetText,
+} from '../templates/passwordResetEmailSimple';
 import { generateVerificationEmailHTML } from '../templates/verificationEmail';
 
 // Email delivery status tracking
@@ -40,17 +43,17 @@ function createUTIATransporter(): Transporter<SMTPTransport.SentMessageInfo> {
     auth: undefined,
     // Extended timeouts for UTIA's slow processing
     connectionTimeout: 30000, // 30 seconds to connect
-    greetingTimeout: 30000,   // 30 seconds for greeting
-    socketTimeout: 120000,    // 2 minutes for socket operations
+    greetingTimeout: 30000, // 30 seconds for greeting
+    socketTimeout: 120000, // 2 minutes for socket operations
     // Logging for debugging
     logger: process.env.NODE_ENV === 'development',
-    debug: process.env.SMTP_DEBUG === 'true'
+    debug: process.env.SMTP_DEBUG === 'true',
   };
 
   logger.info('Creating UTIA SMTP transporter', 'ReliableEmailService', {
     host: config.host,
     port: config.port,
-    requireTLS: config.requireTLS
+    requireTLS: config.requireTLS,
   });
 
   return nodemailer.createTransport(config);
@@ -70,7 +73,7 @@ async function sendEmailImmediate(
   const status: EmailDeliveryStatus = {
     success: false,
     timestamp: new Date(),
-    attempts: 0
+    attempts: 0,
   };
 
   try {
@@ -91,15 +94,15 @@ async function sendEmailImmediate(
       headers: {
         'X-Priority': '1',
         'X-MSMail-Priority': 'High',
-        'Importance': 'high'
-      }
+        Importance: 'high',
+      },
     };
 
     logger.info('Sending email immediately', 'ReliableEmailService', {
       to,
       subject,
       htmlLength: html.length,
-      textLength: text.length
+      textLength: text.length,
     });
 
     status.attempts++;
@@ -118,7 +121,7 @@ async function sendEmailImmediate(
       subject,
       messageId: result.messageId,
       sendTime: `${sendTime}ms`,
-      response: result.response
+      response: result.response,
     });
 
     // Close transporter connection
@@ -128,15 +131,15 @@ async function sendEmailImmediate(
     deliveryStatuses.set(trackingId, status);
 
     return status;
-
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    const errorMessage =
+      error instanceof Error ? error.message : 'Unknown error';
 
     logger.error('Email send failed', error as Error, 'ReliableEmailService', {
       to,
       subject,
       attempts: status.attempts,
-      errorMessage
+      errorMessage,
     });
 
     status.error = errorMessage;
@@ -156,13 +159,14 @@ export async function sendPasswordResetEmailReliable(
   resetToken: string,
   expiresAt: Date
 ): Promise<void> {
-  const frontendUrl = process.env.FRONTEND_URL || 'https://spherosegapp.utia.cas.cz';
+  const frontendUrl =
+    process.env.FRONTEND_URL || 'https://spherosegapp.utia.cas.cz';
   const resetUrl = `${frontendUrl}/reset-password?token=${resetToken}`;
 
   logger.info('Preparing password reset email', 'ReliableEmailService', {
     to: email,
     resetUrl,
-    expiresAt: expiresAt.toISOString()
+    expiresAt: expiresAt.toISOString(),
   });
 
   // Use SIMPLE template for UTIA compatibility
@@ -170,7 +174,7 @@ export async function sendPasswordResetEmailReliable(
     resetToken,
     userEmail: email,
     resetUrl,
-    expiresAt
+    expiresAt,
   };
 
   const html = generateSimplePasswordResetHTML(emailData);
@@ -178,7 +182,7 @@ export async function sendPasswordResetEmailReliable(
 
   logger.info('Generated simple email template', 'ReliableEmailService', {
     htmlLength: html.length,
-    textLength: text.length
+    textLength: text.length,
   });
 
   // Send immediately - no queue
@@ -196,7 +200,7 @@ export async function sendPasswordResetEmailReliable(
   logger.info('Password reset email delivered', 'ReliableEmailService', {
     to: email,
     messageId: status.messageId,
-    attempts: status.attempts
+    attempts: status.attempts,
   });
 }
 
@@ -207,19 +211,21 @@ export async function sendVerificationEmailReliable(
   email: string,
   verificationToken: string
 ): Promise<void> {
-  const frontendUrl = process.env.FRONTEND_URL || 'https://spherosegapp.utia.cas.cz';
+  const frontendUrl =
+    process.env.FRONTEND_URL || 'https://spherosegapp.utia.cas.cz';
   const verificationUrl = `${frontendUrl}/verify-email?token=${verificationToken}`;
 
   const htmlResult = generateVerificationEmailHTML({
     verificationUrl,
-    userEmail: email
+    userEmail: email,
   });
 
   // generateVerificationEmailHTML returns an object with html and subject
   const html = typeof htmlResult === 'string' ? htmlResult : htmlResult.html;
 
   // Create simple text version since template doesn't provide one
-  const text = `Ověření emailu - SpheroSeg\n\n` +
+  const text =
+    `Ověření emailu - SpheroSeg\n\n` +
     `Dobrý den,\n\n` +
     `Pro ověření vašeho emailu ${email} klikněte na následující odkaz:\n` +
     `${verificationUrl}\n\n` +
@@ -236,10 +242,14 @@ export async function sendVerificationEmailReliable(
   );
 
   if (!status.success) {
-    logger.warn('Verification email failed, will retry in background', 'ReliableEmailService', {
-      to: email,
-      error: status.error
-    });
+    logger.warn(
+      'Verification email failed, will retry in background',
+      'ReliableEmailService',
+      {
+        to: email,
+        error: status.error,
+      }
+    );
     // Could queue for retry here if needed
   }
 }
@@ -247,7 +257,9 @@ export async function sendVerificationEmailReliable(
 /**
  * Get delivery status for monitoring
  */
-export function getDeliveryStatus(trackingId: string): EmailDeliveryStatus | undefined {
+export function getDeliveryStatus(
+  trackingId: string
+): EmailDeliveryStatus | undefined {
   return deliveryStatuses.get(trackingId);
 }
 
@@ -278,7 +290,9 @@ setInterval(cleanupOldStatuses, 3600000);
 /**
  * Test email sending with simple content
  */
-export async function sendTestEmailReliable(to: string): Promise<EmailDeliveryStatus> {
+export async function sendTestEmailReliable(
+  to: string
+): Promise<EmailDeliveryStatus> {
   const html = `<html><body>
 <h2>Test Email</h2>
 <p>This is a test email from SpheroSeg.</p>
@@ -288,10 +302,5 @@ export async function sendTestEmailReliable(to: string): Promise<EmailDeliverySt
 
   const text = `Test Email\n\nThis is a test email from SpheroSeg.\nTimestamp: ${new Date().toISOString()}\n\nIf you received this, email service is working correctly.`;
 
-  return sendEmailImmediate(
-    to,
-    'Test Email - SpheroSeg',
-    html,
-    text
-  );
+  return sendEmailImmediate(to, 'Test Email - SpheroSeg', html, text);
 }

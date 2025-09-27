@@ -35,7 +35,7 @@ export async function initializeRedis(): Promise<void> {
     }
 
     logger.info('Initializing Redis connection...');
-    
+
     redisClient = createClient(redisConfig);
 
     // Set up event handlers
@@ -66,10 +66,10 @@ export async function initializeRedis(): Promise<void> {
 
     // Connect to Redis
     await redisClient.connect();
-    
+
     // Test the connection
     await redisClient.ping();
-    
+
     logger.info('✅ Redis connection established successfully');
   } catch (error) {
     logger.error('Failed to initialize Redis:', error);
@@ -86,12 +86,12 @@ export function getRedisClient(): RedisClientType | null {
     logger.warn('Redis client not initialized');
     return null;
   }
-  
+
   if (!isRedisConnected) {
     logger.warn('Redis client not connected');
     return null;
   }
-  
+
   return redisClient;
 }
 
@@ -120,15 +120,15 @@ export async function redisHealthCheck(): Promise<{
 
     // Perform a simple ping
     const pingResult = await redisClient.ping();
-    
+
     // Get some basic info
     const _info = await redisClient.info('server');
     const memoryInfo = await redisClient.info('memory');
-    
+
     // Parse memory usage
     const usedMemoryMatch = memoryInfo.match(/used_memory_human:([^\r\n]+)/);
     const usedMemory = usedMemoryMatch ? usedMemoryMatch[1] : 'unknown';
-    
+
     return {
       status: 'healthy',
       message: 'Redis is operational',
@@ -189,12 +189,12 @@ export async function executeRedisCommand<T>(
   fallback?: T
 ): Promise<T | undefined> {
   const client = getRedisClient();
-  
+
   if (!client) {
     logger.warn('Redis command skipped - client not available');
     return fallback;
   }
-  
+
   try {
     return await command(client);
   } catch (error) {

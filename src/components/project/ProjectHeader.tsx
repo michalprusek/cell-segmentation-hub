@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { ArrowLeft } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import DashboardHeader from '@/components/DashboardHeader';
 
@@ -25,11 +26,12 @@ const ProjectHeader = ({
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               className="mr-4"
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate(-1)}
             >
+              <ArrowLeft className="mr-2 h-4 w-4" />
               {t('common.back')}
             </Button>
             <div>

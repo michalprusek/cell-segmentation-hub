@@ -1,6 +1,6 @@
 /**
  * WebSocket Type Definitions
- * 
+ *
  * Comprehensive TypeScript interfaces for WebSocket events and real-time updates.
  */
 
@@ -18,40 +18,51 @@ export enum WebSocketEvent {
   CONNECT = 'connect',
   DISCONNECT = 'disconnect',
   CONNECTION_STATUS = 'connectionStatus',
-  
+
   // Authentication events
   AUTHENTICATE = 'authenticate',
   AUTHENTICATION_ERROR = 'authenticationError',
-  
+
   // Segmentation events
   SEGMENTATION_STATUS = 'segmentationStatus',
   SEGMENTATION_UPDATE = 'segmentationUpdate',
   SEGMENTATION_COMPLETED = 'segmentationCompleted',
   SEGMENTATION_FAILED = 'segmentationFailed',
   SEGMENTATION_PROGRESS = 'segmentationProgress',
-  
+
   // Queue events
   QUEUE_STATS = 'queueStats',
   QUEUE_POSITION = 'queuePosition',
   QUEUE_UPDATE = 'queueUpdate',
-  
+
   // Upload events
   UPLOAD_PROGRESS = 'uploadProgress',
   UPLOAD_COMPLETED = 'uploadCompleted',
   UPLOAD_FAILED = 'uploadFailed',
-  
+
   // Project events
   PROJECT_UPDATE = 'projectUpdate',
   PROJECT_DELETED = 'projectDeleted',
-  
+
+  // Dashboard events
+  DASHBOARD_UPDATE = 'dashboardUpdate',
+
   // Sharing events
   SHARE_RECEIVED = 'shareReceived',
   SHARE_ACCEPTED = 'shareAccepted',
   SHARE_REJECTED = 'shareRejected',
-  
+
+  // Export events
+  EXPORT_STARTED = 'export:started',
+  EXPORT_PROGRESS = 'export:progress',
+  EXPORT_COMPLETED = 'export:completed',
+  EXPORT_FAILED = 'export:failed',
+  EXPORT_CANCELLED = 'export:cancelled',
+  EXPORT_PHASE_CHANGED = 'export:phase-changed',
+
   // Error events
   ERROR = 'error',
-  VALIDATION_ERROR = 'validationError'
+  VALIDATION_ERROR = 'validationError',
 }
 
 // ============================================================================
@@ -141,7 +152,12 @@ export interface SegmentationFailedData {
   projectId: string;
   queueId: string;
   error: string;
-  errorCode?: 'TIMEOUT' | 'MODEL_ERROR' | 'INVALID_IMAGE' | 'OUT_OF_MEMORY' | 'UNKNOWN';
+  errorCode?:
+    | 'TIMEOUT'
+    | 'MODEL_ERROR'
+    | 'INVALID_IMAGE'
+    | 'OUT_OF_MEMORY'
+    | 'UNKNOWN';
   suggestion?: string;
   model: SegmentationModel;
   retryable: boolean;
@@ -294,6 +310,26 @@ export interface ProjectDeletedData {
 }
 
 // ============================================================================
+// Dashboard Events
+// ============================================================================
+
+/**
+ * Dashboard metrics update event
+ */
+export interface DashboardUpdateData {
+  userId: string;
+  metrics: {
+    totalProjects: number;
+    totalImages: number;
+    processedImages: number;
+    imagesUploadedToday: number;
+    storageUsed: string;
+    storageUsedBytes: number;
+  };
+  timestamp: Date;
+}
+
+// ============================================================================
 // Sharing Events
 // ============================================================================
 
@@ -373,6 +409,110 @@ export interface ValidationErrorData {
 }
 
 // ============================================================================
+// Export Events
+// ============================================================================
+
+/**
+ * Export started event data
+ */
+export interface ExportStartedData {
+  jobId: string;
+  projectId: string;
+  projectName?: string;
+  estimatedDuration?: number;
+  options: {
+    includeOriginalImages?: boolean;
+    includeVisualizations?: boolean;
+    annotationFormats?: string[];
+    metricsFormats?: string[];
+  };
+  timestamp: Date;
+}
+
+/**
+ * Export progress event data with enhanced context
+ */
+export interface ExportProgressData {
+  jobId: string;
+  progress: number; // 0-100
+  phase: 'processing' | 'downloading';
+  stage?:
+    | 'images'
+    | 'visualizations'
+    | 'annotations'
+    | 'metrics'
+    | 'compression';
+  message: string;
+  stageProgress?: {
+    current: number;
+    total: number;
+    currentItem?: string;
+  };
+  estimatedTimeRemaining?: number;
+  timestamp: Date;
+}
+
+/**
+ * Export phase change event
+ */
+export interface ExportPhaseChangeData {
+  jobId: string;
+  fromPhase: string;
+  toPhase: string;
+  progress: number;
+  message: string;
+  timestamp: Date;
+}
+
+/**
+ * Export completed event data
+ */
+export interface ExportCompletedData {
+  jobId: string;
+  projectId: string;
+  filePath: string;
+  fileSize?: number;
+  processingTime: number;
+  summary: {
+    totalImages: number;
+    includedFormats: string[];
+    exportOptions: Record<string, unknown>;
+  };
+  timestamp: Date;
+}
+
+/**
+ * Export failed event data
+ */
+export interface ExportFailedData {
+  jobId: string;
+  projectId: string;
+  error: string;
+  errorCode?:
+    | 'INSUFFICIENT_SPACE'
+    | 'PERMISSION_DENIED'
+    | 'TIMEOUT'
+    | 'UNKNOWN';
+  stage?: string;
+  recoverable: boolean;
+  retryable: boolean;
+  timestamp: Date;
+}
+
+/**
+ * Export cancelled event data
+ */
+export interface ExportCancelledData {
+  jobId: string;
+  projectId: string;
+  cancelledBy: 'user' | 'system' | 'timeout';
+  progress: number;
+  cleanupCompleted: boolean;
+  message: string;
+  timestamp: Date;
+}
+
+// ============================================================================
 // WebSocket Message Envelope
 // ============================================================================
 
@@ -407,6 +547,13 @@ export function getProjectRoom(projectId: string): string {
 }
 
 /**
+ * Generate room name for export-specific events
+ */
+export function getExportRoom(jobId: string): string {
+  return `export:${jobId}`;
+}
+
+/**
  * Generate room name for batch operations
  */
 export function getBatchRoom(batchId: string): string {
@@ -420,8 +567,12 @@ export function getBatchRoom(batchId: string): string {
 /**
  * Type guard for SegmentationStatusData
  */
-export function isSegmentationStatusData(data: unknown): data is SegmentationStatusData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isSegmentationStatusData(
+  data: unknown
+): data is SegmentationStatusData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -433,14 +584,25 @@ export function isSegmentationStatusData(data: unknown): data is SegmentationSta
 /**
  * Type guard for SegmentationUpdateData
  */
-export function isSegmentationUpdateData(data: unknown): data is SegmentationUpdateData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isSegmentationUpdateData(
+  data: unknown
+): data is SegmentationUpdateData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
     typeof d.projectId === 'string' &&
     typeof d.status === 'string' &&
-    ['queued', 'processing', 'completed', 'failed', 'cancelled', 'no_segmentation'].includes(d.status as string)
+    [
+      'queued',
+      'processing',
+      'completed',
+      'failed',
+      'cancelled',
+      'no_segmentation',
+    ].includes(d.status as string)
   );
 }
 
@@ -448,7 +610,9 @@ export function isSegmentationUpdateData(data: unknown): data is SegmentationUpd
  * Type guard for QueueStatsData
  */
 export function isQueueStatsData(data: unknown): data is QueueStatsData {
-  if (typeof data !== 'object' || data === null) {return false;}
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.queued === 'number' &&
@@ -460,8 +624,12 @@ export function isQueueStatsData(data: unknown): data is QueueStatsData {
 /**
  * Type guard for SegmentationCompletedData
  */
-export function isSegmentationCompletedData(data: unknown): data is SegmentationCompletedData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isSegmentationCompletedData(
+  data: unknown
+): data is SegmentationCompletedData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -477,8 +645,12 @@ export function isSegmentationCompletedData(data: unknown): data is Segmentation
 /**
  * Type guard for SegmentationFailedData
  */
-export function isSegmentationFailedData(data: unknown): data is SegmentationFailedData {
-  if (typeof data !== 'object' || data === null) {return false;}
+export function isSegmentationFailedData(
+  data: unknown
+): data is SegmentationFailedData {
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.imageId === 'string' &&
@@ -494,7 +666,9 @@ export function isSegmentationFailedData(data: unknown): data is SegmentationFai
  * Type guard for WebSocketMessage
  */
 export function isWebSocketMessage(data: unknown): data is WebSocketMessage {
-  if (typeof data !== 'object' || data === null) {return false;}
+  if (typeof data !== 'object' || data === null) {
+    return false;
+  }
   const d = data as Record<string, unknown>;
   return (
     typeof d.event === 'string' &&
@@ -517,5 +691,5 @@ export default {
   isSegmentationCompletedData,
   isSegmentationFailedData,
   isQueueStatsData,
-  isWebSocketMessage
+  isWebSocketMessage,
 };

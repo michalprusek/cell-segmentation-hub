@@ -38,15 +38,15 @@ def get_model_loader(request: Request):
 
 def validate_image(file: UploadFile) -> bool:
     """Validate if the uploaded file is a valid image"""
-    valid_extensions = {'.jpg', '.jpeg', '.png', '.tiff', '.bmp'}
+    valid_extensions = {'.jpg', '.jpeg', '.png', '.tiff', '.tif', '.bmp'}
     if not file.filename:
         return False
-    
+
     # Extract file extension more safely
     filename_parts = file.filename.split('.')
     if len(filename_parts) < 2:
         return False
-    
+
     ext = '.' + filename_parts[-1].lower()
     return ext in valid_extensions
 
@@ -127,8 +127,8 @@ async def segment_image(
         # Validate uploaded file
         if not validate_image(file):
             raise HTTPException(
-                status_code=400, 
-                detail="Invalid image file. Supported formats: PNG, JPG, JPEG, TIFF, BMP"
+                status_code=400,
+                detail="Invalid image file. Supported formats: PNG, JPG, JPEG, TIFF, TIF, BMP"
             )
         
         # Read image data and convert to PIL Image
@@ -239,7 +239,7 @@ async def batch_segment_images(
             if not validate_image(file):
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Invalid image file: {file.filename}. Supported formats: PNG, JPG, JPEG, TIFF, BMP"
+                    detail=f"Invalid image file: {file.filename}. Supported formats: PNG, JPG, JPEG, TIFF, TIF, BMP"
                 )
         
         # Read all images into memory first

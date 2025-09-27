@@ -25,6 +25,7 @@ make optimize-batch
 ```
 
 This will:
+
 - Test various batch sizes for both models
 - Find the "knee" of the latency/throughput curve
 - Save configuration to `backend/segmentation/config/production_batch_config.json`
@@ -38,6 +39,7 @@ make test-production
 ```
 
 This runs:
+
 - Single request latency tests
 - Burst load tests (simulating traffic spikes)
 - Sustained load tests (continuous traffic)
@@ -153,6 +155,7 @@ efficiency = throughput / sqrt(batch_size)
 ```
 
 This balances:
+
 - **Throughput**: Higher batch sizes generally improve throughput
 - **Latency**: Larger batches increase per-request latency
 - **Queue Time**: Waiting for batch to fill adds latency
@@ -160,16 +163,19 @@ This balances:
 ### Memory Optimization Tips
 
 1. **Use FP16**: Enables ~2x larger batch sizes
+
    ```python
    use_amp=True  # Automatic Mixed Precision
    ```
 
 2. **Channels Last Format**: Better memory access patterns
+
    ```python
    model = model.to(memory_format=torch.channels_last)
    ```
 
 3. **CuDNN Benchmark**: Auto-tunes for your specific GPU
+
    ```python
    torch.backends.cudnn.benchmark = True
    ```
@@ -200,6 +206,7 @@ queue = DynamicBatchQueue(
 ### Real-time Metrics
 
 The service tracks:
+
 - **Latency Percentiles**: P50, P95, P99
 - **Throughput**: Images per second
 - **Queue Size**: Current backlog
@@ -215,6 +222,7 @@ make test-production
 ```
 
 This generates:
+
 - Latency distribution plots
 - Percentile comparisons
 - Time series analysis
@@ -227,7 +235,7 @@ HRNet Summary:
   Single Request: P95=42.3ms ✓
   Burst Load: P95=85.7ms ✓
   Sustained Load: P95=93.2ms ✓
-  
+
 CBAM-ResUNet Summary:
   Single Request: P95=68.5ms ✓
   Burst Load: P95=94.3ms ✓
@@ -239,6 +247,7 @@ CBAM-ResUNet Summary:
 ### High Latency
 
 1. **Check batch size**: May be too large
+
    ```bash
    make show-batch-config
    ```
@@ -273,14 +282,17 @@ CBAM-ResUNet Summary:
 ## GPU-Specific Recommendations
 
 ### NVIDIA RTX A5000 (24GB)
+
 - HRNet: Batch size 12-16
 - CBAM-ResUNet: Batch size 4-6
 
 ### NVIDIA V100 (16GB)
+
 - HRNet: Batch size 8-12
 - CBAM-ResUNet: Batch size 2-4
 
 ### NVIDIA T4 (16GB)
+
 - HRNet: Batch size 6-8
 - CBAM-ResUNet: Batch size 2-3
 
@@ -319,6 +331,7 @@ model_configs = {
 ## Conclusion
 
 The production optimization system provides:
+
 - **2-3x throughput improvement** over single-image inference
 - **Consistent P95 latency** under 100ms
 - **Automatic adaptation** to load patterns

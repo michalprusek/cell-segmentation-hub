@@ -9,6 +9,13 @@ import sharp from 'sharp';
 import path from 'path';
 import { existsSync, promises as fs } from 'fs';
 import { ApiError } from '../middleware/error';
+import { WebSocketService } from './websocketService';
+import {
+  WebSocketEvent,
+  ProjectUpdateData,
+  DashboardUpdateData,
+} from '../types/websocket';
+import * as UserService from './userService';
 
 export interface UploadImageData {
   originalname: string;
@@ -53,6 +60,143 @@ export class ImageService {
   constructor(private prisma: PrismaClient) {}
 
   /**
+   * Get WebSocket service instance if available
+   */
+  private getWebSocketService(): WebSocketService | null {
+    try {
+      return WebSocketService.getInstance();
+    } catch {
+      // WebSocket service not initialized yet
+      return null;
+    }
+  }
+
+  /**
+   * Calculate and emit project statistics update via WebSocket
+   */
+  private async emitProjectStatsUpdate(
+    projectId: string,
+    userId: string,
+    operation: 'created' | 'updated' | 'deleted'
+  ): Promise<void> {
+    try {
+      const wsService = this.getWebSocketService();
+      if (!wsService) {
+        logger.debug(
+          'WebSocket service not available, skipping project stats update',
+          'ImageService'
+        );
+        return;
+      }
+
+      // Calculate current project statistics
+      const [imageCount, segmentedCount] = await Promise.all([
+        this.prisma.image.count({
+          where: { projectId },
+        }),
+        this.prisma.image.count({
+          where: {
+            projectId,
+            segmentationStatus: 'segmented',
+          },
+        }),
+      ]);
+
+      const projectUpdate: ProjectUpdateData = {
+        projectId,
+        userId,
+        operation,
+        updates: {
+          imageCount,
+          segmentedCount,
+        },
+        timestamp: new Date(),
+      };
+
+      // Emit to user who made the change
+      wsService.emitToUser(
+        userId,
+        WebSocketEvent.PROJECT_UPDATE,
+        projectUpdate
+      );
+
+      // Also emit to project room for other collaborators
+      wsService.broadcastProjectUpdate(projectId, projectUpdate);
+
+      // Emit dashboard metrics update for the user
+      await this.emitDashboardUpdate(userId);
+
+      logger.debug('Project stats update emitted', 'ImageService', {
+        projectId,
+        userId,
+        operation,
+        imageCount,
+        segmentedCount,
+      });
+    } catch (error) {
+      logger.error(
+        'Failed to emit project stats update',
+        error instanceof Error ? error : undefined,
+        'ImageService',
+        {
+          projectId,
+          userId,
+          operation,
+        }
+      );
+    }
+  }
+
+  /**
+   * Calculate and emit dashboard metrics update via WebSocket
+   */
+  private async emitDashboardUpdate(userId: string): Promise<void> {
+    try {
+      const wsService = this.getWebSocketService();
+      if (!wsService) {
+        logger.debug(
+          'WebSocket service not available, skipping dashboard update',
+          'ImageService'
+        );
+        return;
+      }
+
+      // Get comprehensive user statistics
+      const userStats = await UserService.getUserStats(userId);
+
+      const dashboardUpdate: DashboardUpdateData = {
+        userId,
+        metrics: {
+          totalProjects: userStats.totalProjects,
+          totalImages: userStats.totalImages,
+          processedImages: userStats.processedImages,
+          imagesUploadedToday: userStats.imagesUploadedToday,
+          storageUsed: userStats.storageUsed,
+          storageUsedBytes: userStats.storageUsedBytes,
+        },
+        timestamp: new Date(),
+      };
+
+      // Emit dashboard update to the specific user
+      wsService.emitDashboardUpdate(userId, dashboardUpdate);
+
+      logger.debug('Dashboard metrics update emitted', 'ImageService', {
+        userId,
+        metrics: dashboardUpdate.metrics,
+      });
+    } catch (error) {
+      logger.error(
+        'Failed to emit dashboard update',
+        error instanceof Error ? error : undefined,
+        'ImageService',
+        {
+          userId,
+        }
+      );
+    }
+  }
+
+  /**
    * Upload multiple images to a project with progress tracking
    */
   async uploadImagesWithProgress(
@@ -60,7 +204,13 @@ export class ImageService {
     userId: string,
     files: UploadImageData[],
     batchId: string,
-    onProgress: (filename: string, fileSize: number, progress: number, status: string, filesCompleted: number) => void
+    onProgress: (
+      filename: string,
+      fileSize: number,
+      progress: number,
+      status: string,
+      filesCompleted: number
+    ) => void
   ): Promise<ImageWithUrls[]> {
     const storage = getStorageProvider();
     const uploadedImages: ImageWithUrls[] = [];
@@ -79,35 +229,45 @@ export class ImageService {
                   { sharedWithId: userId, status: 'accepted' },
                   {
                     sharedWith: { id: userId },
-                    status: 'accepted'
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
+                    status: 'accepted',
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
     });
 
     if (!project) {
       throw ApiError.forbidden('Access denied to this project');
     }
 
-    logger.info('Starting image upload with progress tracking', 'ImageService', {
-      projectId,
-      userId,
-      batchId,
-      fileCount: files.length,
-      totalSize: files.reduce((sum, file) => sum + file.size, 0)
-    });
+    logger.info(
+      'Starting image upload with progress tracking',
+      'ImageService',
+      {
+        projectId,
+        userId,
+        batchId,
+        fileCount: files.length,
+        totalSize: files.reduce((sum, file) => sum + file.size, 0),
+      }
+    );
 
     // Process each file with progress updates
     for (let index = 0; index < files.length; index++) {
       const file = files[index];
-      
+
       try {
         // Emit progress - starting file upload
-        onProgress(file.originalname, file.size, 0, 'uploading', filesCompleted);
+        onProgress(
+          file.originalname,
+          file.size,
+          0,
+          'uploading',
+          filesCompleted
+        );
 
         // Generate unique storage key
         const storageKey = LocalStorageProvider.generateKey(
@@ -118,17 +278,29 @@ export class ImageService {
         );
 
         // Emit progress - uploading file (50% progress)
-        onProgress(file.originalname, file.size, 50, 'uploading', filesCompleted);
+        onProgress(
+          file.originalname,
+          file.size,
+          50,
+          'uploading',
+          filesCompleted
+        );
 
         // Upload to storage with thumbnail generation
         const uploadResult = await storage.upload(file.buffer, storageKey, {
           mimeType: file.mimetype,
           originalName: file.originalname,
-          generateThumbnail: true
+          generateThumbnail: true,
         });
 
         // Emit progress - processing file (75% progress)
-        onProgress(file.originalname, file.size, 75, 'processing', filesCompleted);
+        onProgress(
+          file.originalname,
+          file.size,
+          75,
+          'processing',
+          filesCompleted
+        );
 
         // Create database record
         const image = await this.prisma.image.create({
@@ -141,16 +313,16 @@ export class ImageService {
             width: uploadResult.width,
             height: uploadResult.height,
             mimeType: uploadResult.mimeType,
-            segmentationStatus: 'no_segmentation'
-          }
+            segmentationStatus: 'no_segmentation',
+          },
         });
 
         // Get URLs for response
         const originalUrl = await storage.getUrl(uploadResult.originalPath);
-        const thumbnailUrl = uploadResult.thumbnailPath 
+        const thumbnailUrl = uploadResult.thumbnailPath
           ? await storage.getUrl(uploadResult.thumbnailPath)
           : undefined;
-        
+
         // No segmentation thumbnail yet for newly uploaded images
         const segmentationThumbnailUrl = undefined;
 
@@ -159,32 +331,46 @@ export class ImageService {
           originalUrl,
           thumbnailUrl,
           segmentationThumbnailUrl,
-          displayUrl: this.getDisplayUrl(image.id)
+          displayUrl: this.getDisplayUrl(image.id),
         });
 
         filesCompleted++;
-        
+
         // Emit progress - file completed (100% progress)
-        onProgress(file.originalname, file.size, 100, 'completed', filesCompleted);
+        onProgress(
+          file.originalname,
+          file.size,
+          100,
+          'completed',
+          filesCompleted
+        );
 
-        logger.info('Image uploaded successfully with progress', 'ImageService', {
-          imageId: image.id,
-          filename: file.originalname,
-          size: uploadResult.fileSize,
-          progress: `${filesCompleted}/${files.length}`
-        });
-
+        logger.info(
+          'Image uploaded successfully with progress',
+          'ImageService',
+          {
+            imageId: image.id,
+            filename: file.originalname,
+            size: uploadResult.fileSize,
+            progress: `${filesCompleted}/${files.length}`,
+          }
+        );
       } catch (error) {
         // Emit progress - file failed
         onProgress(file.originalname, file.size, 0, 'failed', filesCompleted);
-        
-        logger.error('Failed to upload image', error instanceof Error ? error : undefined, 'ImageService', {
-          filename: file.originalname,
-          projectId,
-          userId,
-          batchId
-        });
-        
+
+        logger.error(
+          'Failed to upload image',
+          error instanceof Error ? error : undefined,
+          'ImageService',
+          {
+            filename: file.originalname,
+            projectId,
+            userId,
+            batchId,
+          }
+        );
+
         // Continue with other files, don't throw error
       }
     }
@@ -194,13 +380,22 @@ export class ImageService {
       throw ApiError.badRequest('Failed to upload any images');
     }
 
-    logger.info('Batch upload completed with progress tracking', 'ImageService', {
-      projectId,
-      userId,
-      batchId,
-      successCount: uploadedImages.length,
-      failedCount: files.length - uploadedImages.length
-    });
+    logger.info(
+      'Batch upload completed with progress tracking',
+      'ImageService',
+      {
+        projectId,
+        userId,
+        batchId,
+        successCount: uploadedImages.length,
+        failedCount: files.length - uploadedImages.length,
+      }
+    );
+
+    // Emit real-time project stats update for uploaded images
+    if (uploadedImages.length > 0) {
+      await this.emitProjectStatsUpdate(projectId, userId, 'updated');
+    }
 
     return uploadedImages;
   }
@@ -229,14 +424,14 @@ export class ImageService {
                   { sharedWithId: userId, status: 'accepted' },
                   {
                     sharedWith: { id: userId },
-                    status: 'accepted'
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
+                    status: 'accepted',
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
     });
 
     if (!project) {
@@ -247,7 +442,7 @@ export class ImageService {
       projectId,
       userId,
       fileCount: files.length,
-      totalSize: files.reduce((sum, file) => sum + file.size, 0)
+      totalSize: files.reduce((sum, file) => sum + file.size, 0),
     });
 
     // Process each file
@@ -265,7 +460,7 @@ export class ImageService {
         const uploadResult = await storage.upload(file.buffer, storageKey, {
           mimeType: file.mimetype,
           originalName: file.originalname,
-          generateThumbnail: true
+          generateThumbnail: true,
         });
 
         // Create database record
@@ -279,16 +474,16 @@ export class ImageService {
             width: uploadResult.width,
             height: uploadResult.height,
             mimeType: uploadResult.mimeType,
-            segmentationStatus: 'no_segmentation'
-          }
+            segmentationStatus: 'no_segmentation',
+          },
         });
 
         // Get URLs for response
         const originalUrl = await storage.getUrl(uploadResult.originalPath);
-        const thumbnailUrl = uploadResult.thumbnailPath 
+        const thumbnailUrl = uploadResult.thumbnailPath
           ? await storage.getUrl(uploadResult.thumbnailPath)
           : undefined;
-        
+
         // No segmentation thumbnail yet for newly uploaded images
         const segmentationThumbnailUrl = undefined;
 
@@ -297,22 +492,26 @@ export class ImageService {
           originalUrl,
           thumbnailUrl,
           segmentationThumbnailUrl,
-          displayUrl: this.getDisplayUrl(image.id)
+          displayUrl: this.getDisplayUrl(image.id),
         });
 
         logger.info('Image uploaded successfully', 'ImageService', {
           imageId: image.id,
           filename: file.originalname,
-          size: uploadResult.fileSize
+          size: uploadResult.fileSize,
         });
-
       } catch (error) {
-        logger.error('Failed to upload image', error instanceof Error ? error : undefined, 'ImageService', {
-          filename: file.originalname,
-          projectId,
-          userId
-        });
-        
+        logger.error(
+          'Failed to upload image',
+          error instanceof Error ? error : undefined,
+          'ImageService',
+          {
+            filename: file.originalname,
+            projectId,
+            userId,
+          }
+        );
+
         // Continue with other files, don't throw error
         // We'll handle partial failures gracefully
       }
@@ -320,14 +519,16 @@ export class ImageService {
 
     // Check if at least some images were uploaded
     if (uploadedImages.length === 0 && files.length > 0) {
-      throw new Error('Žádný soubor se nepodařilo nahrát. Zkontrolujte formát a velikost souborů.');
+      throw new Error(
+        'Žádný soubor se nepodařilo nahrát. Zkontrolujte formát a velikost souborů.'
+      );
     }
 
     logger.info('Image upload completed', 'ImageService', {
       projectId,
       userId,
       uploadedCount: uploadedImages.length,
-      failedCount: files.length - uploadedImages.length
+      failedCount: files.length - uploadedImages.length,
     });
 
     return uploadedImages;
@@ -344,7 +545,7 @@ export class ImageService {
     // Get user email for share checking
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true }
+      select: { email: true },
     });
 
     if (!user) {
@@ -361,17 +562,14 @@ export class ImageService {
             shares: {
               some: {
                 status: 'accepted',
-                OR: [
-                  { sharedWithId: userId },
-                  { email: user.email }
-                ]
-              }
-            }
-          }
-        ]
-      }
+                OR: [{ sharedWithId: userId }, { email: user.email }],
+              },
+            },
+          },
+        ],
+      },
     });
-    
+
     if (!project) {
       throw ApiError.forbidden('Access denied to this project');
     }
@@ -381,7 +579,7 @@ export class ImageService {
 
     // Build where clause
     const where: Prisma.ImageWhereInput = {
-      projectId
+      projectId,
     };
 
     if (status) {
@@ -400,20 +598,20 @@ export class ImageService {
       where,
       orderBy,
       skip,
-      take: limit
+      take: limit,
     });
 
     // Add URLs to images
     const storage = getStorageProvider();
     const imagesWithUrls: ImageWithUrls[] = await Promise.all(
-      images.map(async (image) => {
+      images.map(async image => {
         const originalUrl = await storage.getUrl(image.originalPath);
-        const thumbnailUrl = image.thumbnailPath 
+        const thumbnailUrl = image.thumbnailPath
           ? await storage.getUrl(image.thumbnailPath)
           : undefined;
-        
+
         // Include segmentation thumbnail URL if available
-        const segmentationThumbnailUrl = image.segmentationThumbnailPath 
+        const segmentationThumbnailUrl = image.segmentationThumbnailPath
           ? await storage.getUrl(image.segmentationThumbnailPath)
           : undefined;
 
@@ -422,7 +620,7 @@ export class ImageService {
           originalUrl,
           thumbnailUrl,
           segmentationThumbnailUrl,
-          displayUrl: this.getDisplayUrl(image.id)
+          displayUrl: this.getDisplayUrl(image.id),
         };
       })
     );
@@ -437,19 +635,22 @@ export class ImageService {
         total,
         totalPages,
         hasNext: page < totalPages,
-        hasPrev: page > 1
-      }
+        hasPrev: page > 1,
+      },
     };
   }
 
   /**
    * Get single image by ID with permission check
    */
-  async getImageById(imageId: string, userId: string): Promise<ImageWithUrls | null> {
+  async getImageById(
+    imageId: string,
+    userId: string
+  ): Promise<ImageWithUrls | null> {
     // Get user email for share checking
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true }
+      select: { email: true },
     });
 
     if (!user) {
@@ -467,17 +668,20 @@ export class ImageService {
                 some: {
                   OR: [
                     { sharedWithId: userId, status: 'accepted' },
-                    { email: user.email, status: { in: ['pending', 'accepted'] } }
-                  ]
-                }
-              }
-            }
-          ]
-        }
+                    {
+                      email: user.email,
+                      status: { in: ['pending', 'accepted'] },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
       },
       include: {
-        project: true
-      }
+        project: true,
+      },
     });
 
     if (!image) {
@@ -487,12 +691,12 @@ export class ImageService {
     // Add URLs
     const storage = getStorageProvider();
     const originalUrl = await storage.getUrl(image.originalPath);
-    const thumbnailUrl = image.thumbnailPath 
+    const thumbnailUrl = image.thumbnailPath
       ? await storage.getUrl(image.thumbnailPath)
       : undefined;
-    
+
     // Include segmentation thumbnail URL if available
-    const segmentationThumbnailUrl = image.segmentationThumbnailPath 
+    const segmentationThumbnailUrl = image.segmentationThumbnailPath
       ? await storage.getUrl(image.segmentationThumbnailPath)
       : undefined;
 
@@ -501,7 +705,7 @@ export class ImageService {
       originalUrl,
       thumbnailUrl,
       segmentationThumbnailUrl,
-      displayUrl: this.getDisplayUrl(image.id)
+      displayUrl: this.getDisplayUrl(image.id),
     };
   }
 
@@ -523,15 +727,15 @@ export class ImageService {
                     { sharedWithId: userId, status: 'accepted' },
                     {
                       sharedWith: { id: userId },
-                      status: 'accepted'
-                    }
-                  ]
-                }
-              }
-            }
-          ]
-        }
-      }
+                      status: 'accepted',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
     });
 
     if (!image) {
@@ -543,36 +747,49 @@ export class ImageService {
     try {
       // Delete from storage
       await storage.delete(image.originalPath);
-      
+
       if (image.thumbnailPath) {
         await storage.delete(image.thumbnailPath);
       }
 
       // Delete from database (this will also delete related segmentation data due to CASCADE)
       await this.prisma.image.delete({
-        where: { id: imageId }
+        where: { id: imageId },
       });
 
       logger.info('Image deleted successfully', 'ImageService', {
         imageId,
         filename: image.name,
-        userId
+        userId,
       });
 
+      // Emit real-time project stats update for deleted image
+      await this.emitProjectStatsUpdate(image.projectId, userId, 'updated');
     } catch (error) {
-      logger.error('Failed to delete image', error instanceof Error ? error : undefined, 'ImageService', {
-        imageId,
-        userId
-      });
-      
-      throw new Error(`Chyba při mazání obrázku: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      logger.error(
+        'Failed to delete image',
+        error instanceof Error ? error : undefined,
+        'ImageService',
+        {
+          imageId,
+          userId,
+        }
+      );
+
+      throw new Error(
+        `Chyba při mazání obrázku: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
   /**
    * Delete multiple images in batch with transaction
    */
-  async deleteBatch(imageIds: string[], userId: string, projectId: string): Promise<{
+  async deleteBatch(
+    imageIds: string[],
+    userId: string,
+    projectId: string
+  ): Promise<{
     deletedCount: number;
     failedIds: string[];
     errors: string[];
@@ -585,7 +802,7 @@ export class ImageService {
       imageIds,
       userId,
       projectId,
-      count: imageIds.length
+      count: imageIds.length,
     });
 
     // Verify project ownership or shared access first
@@ -601,14 +818,14 @@ export class ImageService {
                   { sharedWithId: userId, status: 'accepted' },
                   {
                     sharedWith: { id: userId },
-                    status: 'accepted'
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
+                    status: 'accepted',
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
     });
 
     if (!project) {
@@ -630,15 +847,15 @@ export class ImageService {
                     { sharedWithId: userId, status: 'accepted' },
                     {
                       sharedWith: { id: userId },
-                      status: 'accepted'
-                    }
-                  ]
-                }
-              }
-            }
-          ]
-        }
-      }
+                      status: 'accepted',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      },
     });
 
     if (imagesToDelete.length === 0) {
@@ -648,19 +865,19 @@ export class ImageService {
     const storage = getStorageProvider();
 
     // Process deletions in transaction for database operations
-    await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async tx => {
       for (const image of imagesToDelete) {
         try {
           // Delete from storage first
           await storage.delete(image.originalPath);
-          
+
           if (image.thumbnailPath) {
             await storage.delete(image.thumbnailPath);
           }
 
           // Delete from database (CASCADE will handle segmentation data)
           await tx.image.delete({
-            where: { id: image.id }
+            where: { id: image.id },
           });
 
           deletedCount++;
@@ -668,18 +885,23 @@ export class ImageService {
           logger.info('Image deleted in batch', 'ImageService', {
             imageId: image.id,
             filename: image.name,
-            userId
+            userId,
           });
-
         } catch (error) {
           failedIds.push(image.id);
-          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          const errorMsg =
+            error instanceof Error ? error.message : 'Unknown error';
           errors.push(`Image ${image.name}: ${errorMsg}`);
-          
-          logger.error('Failed to delete image in batch', error instanceof Error ? error : undefined, 'ImageService', {
-            imageId: image.id,
-            userId
-          });
+
+          logger.error(
+            'Failed to delete image in batch',
+            error instanceof Error ? error : undefined,
+            'ImageService',
+            {
+              imageId: image.id,
+              userId,
+            }
+          );
         }
       }
     });
@@ -687,23 +909,30 @@ export class ImageService {
     // Check for images that weren't found
     const foundIds = imagesToDelete.map(img => img.id);
     const notFoundIds = imageIds.filter(id => !foundIds.includes(id));
-    
+
     if (notFoundIds.length > 0) {
       failedIds.push(...notFoundIds);
-      errors.push(...notFoundIds.map(id => `Image ${id}: Not found or no permission`));
+      errors.push(
+        ...notFoundIds.map(id => `Image ${id}: Not found or no permission`)
+      );
     }
 
     logger.info('Batch delete operation completed', 'ImageService', {
       deletedCount,
       failedCount: failedIds.length,
       userId,
-      projectId
+      projectId,
     });
+
+    // Emit real-time project stats update for batch deleted images
+    if (deletedCount > 0) {
+      await this.emitProjectStatsUpdate(projectId, userId, 'updated');
+    }
 
     return {
       deletedCount,
       failedIds,
-      errors
+      errors,
     };
   }
 
@@ -724,14 +953,14 @@ export class ImageService {
                   { sharedWithId: userId, status: 'accepted' },
                   {
                     sharedWith: { id: userId },
-                    status: 'accepted'
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
+                    status: 'accepted',
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      },
     });
 
     if (!project) {
@@ -744,8 +973,8 @@ export class ImageService {
       select: {
         fileSize: true,
         segmentationStatus: true,
-        mimeType: true
-      }
+        mimeType: true,
+      },
     });
 
     const totalImages = images.length;
@@ -757,7 +986,7 @@ export class ImageService {
       queued: 0,
       processing: 0,
       segmented: 0,
-      failed: 0
+      failed: 0,
     };
 
     // Count by MIME type
@@ -779,7 +1008,7 @@ export class ImageService {
       totalImages,
       totalSize,
       byStatus,
-      byMimeType
+      byMimeType,
     };
   }
 
@@ -788,17 +1017,22 @@ export class ImageService {
    */
   async updateSegmentationStatus(
     imageId: string,
-    status: 'no_segmentation' | 'queued' | 'processing' | 'segmented' | 'failed',
+    status:
+      | 'no_segmentation'
+      | 'queued'
+      | 'processing'
+      | 'segmented'
+      | 'failed',
     userId?: string
   ): Promise<void> {
     let where: Prisma.ImageWhereInput = { id: imageId };
-    
+
     // Add user permission check if userId is provided
     if (userId) {
       // Get user email for share checking
       const user = await this.prisma.user.findUnique({
         where: { id: userId },
-        select: { email: true }
+        select: { email: true },
       });
 
       if (!user) {
@@ -815,15 +1049,12 @@ export class ImageService {
               shares: {
                 some: {
                   status: 'accepted',
-                  OR: [
-                    { sharedWithId: userId },
-                    { email: user.email }
-                  ]
-                }
-              }
-            }
-          ]
-        }
+                  OR: [{ sharedWithId: userId }, { email: user.email }],
+                },
+              },
+            },
+          ],
+        },
       };
     }
 
@@ -835,20 +1066,34 @@ export class ImageService {
 
     await this.prisma.image.update({
       where: { id: imageId },
-      data: { segmentationStatus: status }
+      data: { segmentationStatus: status },
     });
 
     logger.info('Image segmentation status updated', 'ImageService', {
       imageId,
       status,
-      userId
+      userId,
     });
+
+    // Emit real-time project stats update when segmentation status changes
+    // This is especially important for 'segmented' status changes that affect segmentedCount
+    if (
+      userId &&
+      (status === 'segmented' ||
+        status === 'failed' ||
+        status === 'no_segmentation')
+    ) {
+      await this.emitProjectStatsUpdate(image.projectId, userId, 'updated');
+    }
   }
 
   /**
    * Get browser-compatible image data by converting unsupported formats
    */
-  async getBrowserCompatibleImage(imageId: string, userId?: string): Promise<{
+  async getBrowserCompatibleImage(
+    imageId: string,
+    userId?: string
+  ): Promise<{
     buffer: Buffer;
     mimeType: string;
     filename: string;
@@ -863,15 +1108,15 @@ export class ImageService {
     if (!image) {
       throw ApiError.forbidden('Access denied to this project');
     }
-    
+
     // Check if conversion is needed
     const browserSupportedTypes = [
       'image/jpeg',
-      'image/jpg', 
+      'image/jpg',
       'image/png',
       'image/gif',
       'image/webp',
-      'image/bmp'
+      'image/bmp',
     ];
 
     // If already browser-compatible, return original
@@ -880,44 +1125,50 @@ export class ImageService {
       return {
         buffer: originalBuffer,
         mimeType: image.mimeType,
-        filename: image.name
+        filename: image.name,
       };
     }
 
     // Check for cached converted version
     const convertedKey = `converted/${imageId}.png`;
-    const convertedPath = path.join(process.env.UPLOAD_DIR || './uploads', convertedKey);
-    
+    const convertedPath = path.join(
+      process.env.UPLOAD_DIR || './uploads',
+      convertedKey
+    );
+
     if (existsSync(convertedPath)) {
       // Periodically clean up old converted files (don't await to avoid blocking)
-      this.cleanupConvertedCache().catch(error => 
+      this.cleanupConvertedCache().catch(error =>
         logger.error('Background cleanup failed', error)
       );
-      
-      logger.info('Serving cached converted image', 'ImageService', { imageId, originalType: image.mimeType });
+
+      logger.info('Serving cached converted image', 'ImageService', {
+        imageId,
+        originalType: image.mimeType,
+      });
       const cachedBuffer = await fs.readFile(convertedPath);
       return {
         buffer: cachedBuffer,
         mimeType: 'image/png',
-        filename: image.name.replace(/\.[^.]+$/, '.png')
+        filename: image.name.replace(/\.[^.]+$/, '.png'),
       };
     }
 
     // Convert unsupported format to PNG
-    logger.info('Converting image for browser compatibility', 'ImageService', { 
-      imageId, 
+    logger.info('Converting image for browser compatibility', 'ImageService', {
+      imageId,
       originalType: image.mimeType,
-      targetType: 'image/png'
+      targetType: 'image/png',
     });
 
     try {
       const originalBuffer = await this.getImageBuffer(image.originalPath);
-      
+
       // Convert using Sharp
       const convertedBuffer = await sharp(originalBuffer)
         .png({
           quality: 90,
-          compressionLevel: 6
+          compressionLevel: 6,
         })
         .toBuffer();
 
@@ -932,21 +1183,27 @@ export class ImageService {
         imageId,
         originalSize: originalBuffer.length,
         convertedSize: convertedBuffer.length,
-        originalType: image.mimeType
+        originalType: image.mimeType,
       });
 
       return {
         buffer: convertedBuffer,
         mimeType: 'image/png',
-        filename: image.name.replace(/\.[^.]+$/, '.png')
+        filename: image.name.replace(/\.[^.]+$/, '.png'),
       };
-
     } catch (error) {
-      logger.error('Failed to convert image', error instanceof Error ? error : undefined, 'ImageService', {
-        imageId,
-        originalType: image.mimeType
-      });
-      throw new Error(`Error converting image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      logger.error(
+        'Failed to convert image',
+        error instanceof Error ? error : undefined,
+        'ImageService',
+        {
+          imageId,
+          originalType: image.mimeType,
+        }
+      );
+      throw new Error(
+        `Error converting image: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -955,31 +1212,37 @@ export class ImageService {
    */
   private getDisplayUrl(imageId: string): string {
     const baseUrl = getBaseUrl();
-    
+
     if (!baseUrl) {
-      const missingVars = [
-        'API_BASE_URL', 'BACKEND_URL', 'PUBLIC_URL'
-      ].filter(varName => !process.env[varName]);
-      
+      const missingVars = ['API_BASE_URL', 'BACKEND_URL', 'PUBLIC_URL'].filter(
+        varName => !process.env[varName]
+      );
+
       logger.error(
-        `Base URL configuration missing. Environment: ${config.NODE_ENV}. Missing variables: ${missingVars.join(', ')}`, 
-        undefined, 
+        `Base URL configuration missing. Environment: ${config.NODE_ENV}. Missing variables: ${missingVars.join(', ')}`,
+        undefined,
         'ImageService'
       );
-      
+
       // Try fallback from DEFAULT_BASE_URL if configured
       if (process.env.DEFAULT_BASE_URL) {
-        logger.warn(`Using fallback DEFAULT_BASE_URL: ${process.env.DEFAULT_BASE_URL}`, undefined, 'ImageService');
+        logger.warn(
+          `Using fallback DEFAULT_BASE_URL: ${process.env.DEFAULT_BASE_URL}`,
+          undefined,
+          'ImageService'
+        );
         const fallbackBase = process.env.DEFAULT_BASE_URL.replace(/\/+$/, '');
         return `${fallbackBase}/api/images/${imageId}/display`;
       }
-      
-      throw new Error(`Base URL configuration required. Missing: ${missingVars.join(', ')}. Set one of: API_BASE_URL, BACKEND_URL, PUBLIC_URL, or DEFAULT_BASE_URL`);
+
+      throw new Error(
+        `Base URL configuration required. Missing: ${missingVars.join(', ')}. Set one of: API_BASE_URL, BACKEND_URL, PUBLIC_URL, or DEFAULT_BASE_URL`
+      );
     }
-    
+
     // Remove trailing slash for consistency
     const normalizedBase = baseUrl.replace(/\/+$/, '');
-    
+
     return `${normalizedBase}/api/images/${imageId}/display`;
   }
 
@@ -988,17 +1251,22 @@ export class ImageService {
    */
   private async getImageBuffer(imagePath: string): Promise<Buffer> {
     const storage = getStorageProvider();
-    
+
     if (storage instanceof LocalStorageProvider) {
       // For local storage, read file directly
-      const fullPath = path.join(process.env.UPLOAD_DIR || './uploads', imagePath);
+      const fullPath = path.join(
+        process.env.UPLOAD_DIR || './uploads',
+        imagePath
+      );
       if (!existsSync(fullPath)) {
         throw new Error('Image file not found');
       }
       return await fs.readFile(fullPath);
     } else {
       // For other storage providers, implement buffer retrieval
-      throw new Error('Buffer retrieval not implemented for this storage provider');
+      throw new Error(
+        'Buffer retrieval not implemented for this storage provider'
+      );
     }
   }
 
@@ -1007,34 +1275,45 @@ export class ImageService {
    */
   private async cleanupConvertedCache(retentionDays = 7): Promise<void> {
     try {
-      const convertedDir = path.join(process.env.UPLOAD_DIR || './uploads', 'converted');
-      
+      const convertedDir = path.join(
+        process.env.UPLOAD_DIR || './uploads',
+        'converted'
+      );
+
       // Skip if directory doesn't exist
       if (!existsSync(convertedDir)) {
         return;
       }
 
       const files = await fs.readdir(convertedDir);
-      const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+      const cutoffTime = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
 
       for (const file of files) {
         const filePath = path.join(convertedDir, file);
-        
+
         try {
           const stats = await fs.stat(filePath);
           if (stats.mtimeMs < cutoffTime) {
             await fs.unlink(filePath);
-            logger.info('Removed old converted file', 'ImageService', { 
-              file, 
-              ageInDays: Math.floor((Date.now() - stats.mtimeMs) / (24 * 60 * 60 * 1000)) 
+            logger.info('Removed old converted file', 'ImageService', {
+              file,
+              ageInDays: Math.floor(
+                (Date.now() - stats.mtimeMs) / (24 * 60 * 60 * 1000)
+              ),
             });
           }
         } catch (error) {
-          logger.error('Failed to process converted file during cleanup', error instanceof Error ? error : new Error(String(error)));
+          logger.error(
+            'Failed to process converted file during cleanup',
+            error instanceof Error ? error : new Error(String(error))
+          );
         }
       }
     } catch (error) {
-      logger.error('Failed to cleanup converted cache', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Failed to cleanup converted cache',
+        error instanceof Error ? error : new Error(String(error))
+      );
     }
   }
 
@@ -1048,13 +1327,20 @@ export class ImageService {
         'converted',
         `${imageId}.png`
       );
-      
+
       if (existsSync(convertedPath)) {
         await fs.unlink(convertedPath);
-        logger.info('Removed converted file for deleted image', 'ImageService', { imageId });
+        logger.info(
+          'Removed converted file for deleted image',
+          'ImageService',
+          { imageId }
+        );
       }
     } catch (error) {
-      logger.error('Failed to remove converted file', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Failed to remove converted file',
+        error instanceof Error ? error : new Error(String(error))
+      );
     }
   }
 }

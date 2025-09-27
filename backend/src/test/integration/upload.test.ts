@@ -1,8 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
+import {
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  afterAll,
+  vi,
+} from 'vitest';
 import request from 'supertest';
 import { app } from '../../app';
 import { prisma } from '../../db/index';
-import { UploadMockGenerator, MockRateLimiter, PerformanceMetrics } from '../utils/uploadMocks';
+import {
+  UploadMockGenerator,
+  MockRateLimiter,
+  PerformanceMetrics,
+} from '../utils/uploadMocks';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -10,12 +23,12 @@ import path from 'path';
 const TEST_USER = {
   email: 'test@example.com',
   password: 'testPassword123!',
-  username: 'testuser'
+  username: 'testuser',
 };
 
 const TEST_PROJECT = {
   name: 'Upload Test Project',
-  description: 'Project for testing large batch uploads'
+  description: 'Project for testing large batch uploads',
 };
 
 describe('Large Batch Upload Integration Tests', () => {
@@ -63,7 +76,7 @@ describe('Large Batch Upload Integration Tests', () => {
 
         const mockFiles = UploadMockGenerator.createMockFiles(filesInChunk, {
           namePrefix: `batch-chunk-${chunkIndex + 1}`,
-          fileSize: 1024 * 200 // 200KB each
+          fileSize: 1024 * 200, // 200KB each
         });
 
         const formData = new FormData();
@@ -80,9 +93,9 @@ describe('Large Batch Upload Integration Tests', () => {
 
         expect(response.body.success).toBe(true);
         expect(response.body.data.images).toHaveLength(filesInChunk);
-        
+
         uploadedImages.push(...response.body.data.images);
-        
+
         // Small delay between chunks to simulate real-world scenario
         await UploadMockGenerator.simulateNetworkDelay(100);
       }
@@ -97,7 +110,7 @@ describe('Large Batch Upload Integration Tests', () => {
 
       // Verify database entries
       const dbImages = await prisma.image.findMany({
-        where: { projectId, userId }
+        where: { projectId, userId },
       });
       expect(dbImages).toHaveLength(totalFiles);
     }, 60000); // 60 second timeout
@@ -119,7 +132,7 @@ describe('Large Batch Upload Integration Tests', () => {
         try {
           const mockFiles = UploadMockGenerator.createMockFiles(filesInChunk, {
             namePrefix: `large-batch-${chunkIndex + 1}`,
-            fileSize: 1024 * 150 // 150KB each to simulate real microscopy images
+            fileSize: 1024 * 150, // 150KB each to simulate real microscopy images
           });
 
           const formData = new FormData();
@@ -142,9 +155,8 @@ describe('Large Batch Upload Integration Tests', () => {
 
           // Respect rate limits
           await UploadMockGenerator.simulateNetworkDelay(200);
-
         } catch (_error) {
-//           console.error(`Chunk ${chunkIndex} failed:`, _error);
+          //           console.error(`Chunk ${chunkIndex} failed:`, _error);
           failedChunks.push(chunkIndex);
         }
       }
@@ -160,7 +172,7 @@ describe('Large Batch Upload Integration Tests', () => {
 
       // Verify all images are in database
       const dbImages = await prisma.image.findMany({
-        where: { projectId, userId }
+        where: { projectId, userId },
       });
       expect(dbImages).toHaveLength(totalFiles);
     }, 600000); // 10 minute timeout for this large test
@@ -168,7 +180,7 @@ describe('Large Batch Upload Integration Tests', () => {
     it('should maintain database consistency during large batch uploads', async () => {
       const totalFiles = 50;
       const mockFiles = UploadMockGenerator.createMockFiles(totalFiles, {
-        fileSize: 1024 * 300 // 300KB each
+        fileSize: 1024 * 300, // 300KB each
       });
 
       const formData = new FormData();
@@ -179,7 +191,7 @@ describe('Large Batch Upload Integration Tests', () => {
 
       // Start database transaction monitoring
       const initialImageCount = await prisma.image.count({
-        where: { projectId }
+        where: { projectId },
       });
 
       const response = await request(app)
@@ -194,18 +206,18 @@ describe('Large Batch Upload Integration Tests', () => {
 
       // Verify database consistency
       const finalImageCount = await prisma.image.count({
-        where: { projectId }
+        where: { projectId },
       });
       expect(finalImageCount - initialImageCount).toBe(totalFiles);
 
       // Verify all images have required fields
       const uploadedImages = await prisma.image.findMany({
-        where: { 
+        where: {
           projectId,
           createdAt: {
-            gte: new Date(Date.now() - 60000) // Created in last minute
-          }
-        }
+            gte: new Date(Date.now() - 60000), // Created in last minute
+          },
+        },
       });
 
       uploadedImages.forEach(image => {
@@ -248,7 +260,8 @@ describe('Large Batch Upload Integration Tests', () => {
       if (process.env.STORAGE_TYPE === 'local') {
         for (const image of uploadedImages) {
           const thumbnailPath = path.join(uploadDir, image.thumbnailPath);
-          const thumbnailExists = await fs.access(thumbnailPath)
+          const thumbnailExists = await fs
+            .access(thumbnailPath)
             .then(() => true)
             .catch(() => false);
           expect(thumbnailExists).toBe(true);
@@ -263,29 +276,35 @@ describe('Large Batch Upload Integration Tests', () => {
       const concurrentRequests = 15;
       const filesPerRequest = 5;
 
-      const requests = Array.from({ length: concurrentRequests }, async (_, i) => {
-        if (!rateLimiter.isAllowed()) {
-          throw new Error('Rate limit exceeded');
+      const requests = Array.from(
+        { length: concurrentRequests },
+        async (_, i) => {
+          if (!rateLimiter.isAllowed()) {
+            throw new Error('Rate limit exceeded');
+          }
+
+          const mockFiles = UploadMockGenerator.createMockFiles(
+            filesPerRequest,
+            {
+              namePrefix: `concurrent-${i}`,
+            }
+          );
+
+          const formData = new FormData();
+          mockFiles.forEach(file => {
+            const blob = new Blob([file.buffer], { type: file.mimetype });
+            formData.append('images', blob, file.originalname);
+          });
+
+          return request(app)
+            .post(`/api/projects/${projectId}/images`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send(formData);
         }
-
-        const mockFiles = UploadMockGenerator.createMockFiles(filesPerRequest, {
-          namePrefix: `concurrent-${i}`
-        });
-
-        const formData = new FormData();
-        mockFiles.forEach(file => {
-          const blob = new Blob([file.buffer], { type: file.mimetype });
-          formData.append('images', blob, file.originalname);
-        });
-
-        return request(app)
-          .post(`/api/projects/${projectId}/images`)
-          .set('Authorization', `Bearer ${authToken}`)
-          .send(formData);
-      });
+      );
 
       const results = await Promise.allSettled(requests);
-      
+
       const successful = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
 
@@ -300,26 +319,32 @@ describe('Large Batch Upload Integration Tests', () => {
       const concurrentUploads = 5;
       const filesPerUpload = 20;
 
-      const uploadPromises = Array.from({ length: concurrentUploads }, async (_, i) => {
-        const mockFiles = UploadMockGenerator.createMockFiles(filesPerUpload, {
-          namePrefix: `memory-test-${i}`,
-          fileSize: 1024 * 500 // 500KB each
-        });
+      const uploadPromises = Array.from(
+        { length: concurrentUploads },
+        async (_, i) => {
+          const mockFiles = UploadMockGenerator.createMockFiles(
+            filesPerUpload,
+            {
+              namePrefix: `memory-test-${i}`,
+              fileSize: 1024 * 500, // 500KB each
+            }
+          );
 
-        const formData = new FormData();
-        mockFiles.forEach(file => {
-          const blob = new Blob([file.buffer], { type: file.mimetype });
-          formData.append('images', blob, file.originalname);
-        });
+          const formData = new FormData();
+          mockFiles.forEach(file => {
+            const blob = new Blob([file.buffer], { type: file.mimetype });
+            formData.append('images', blob, file.originalname);
+          });
 
-        return request(app)
-          .post(`/api/projects/${projectId}/images`)
-          .set('Authorization', `Bearer ${authToken}`)
-          .send(formData);
-      });
+          return request(app)
+            .post(`/api/projects/${projectId}/images`)
+            .set('Authorization', `Bearer ${authToken}`)
+            .send(formData);
+        }
+      );
 
       const results = await Promise.allSettled(uploadPromises);
-      
+
       // Check memory usage
       memoryTracker.assertMemoryWithinLimits(150); // 150MB limit
 
@@ -343,7 +368,7 @@ describe('Large Batch Upload Integration Tests', () => {
         const filesInChunk = endIndex - startIndex;
 
         const mockFiles = UploadMockGenerator.createMockFiles(filesInChunk, {
-          namePrefix: `recovery-test-${chunk}`
+          namePrefix: `recovery-test-${chunk}`,
         });
 
         // Randomly fail 30% of chunks to simulate network issues
@@ -381,19 +406,19 @@ describe('Large Batch Upload Integration Tests', () => {
 
       // Verify database state is consistent
       const dbImages = await prisma.image.findMany({
-        where: { projectId, userId }
+        where: { projectId, userId },
       });
       expect(dbImages.length).toBe(successfulUploads);
     });
 
     it('should handle storage service interruptions', async () => {
       const totalFiles = 30;
-      
+
       // Mock storage service failure
       const _originalStorageWrite = vi.fn();
-      
+
       const mockFiles = UploadMockGenerator.createMockFiles(totalFiles, {
-        fileSize: 1024 * 100
+        fileSize: 1024 * 100,
       });
 
       const formData = new FormData();
@@ -415,9 +440,9 @@ describe('Large Batch Upload Integration Tests', () => {
             projectId,
             userId,
             createdAt: {
-              gte: new Date(Date.now() - 60000) // Last minute
-            }
-          }
+              gte: new Date(Date.now() - 60000), // Last minute
+            },
+          },
         });
 
         // Should not have partial uploads in database
@@ -431,10 +456,13 @@ describe('Large Batch Upload Integration Tests', () => {
 
       // Create mix of valid and invalid files
       const mockValidFiles = UploadMockGenerator.createMockFiles(validFiles);
-      const mockInvalidFiles = UploadMockGenerator.createInvalidFiles().slice(0, invalidFiles);
+      const mockInvalidFiles = UploadMockGenerator.createInvalidFiles().slice(
+        0,
+        invalidFiles
+      );
 
       const allFiles = [...mockValidFiles, ...mockInvalidFiles];
-      
+
       const formData = new FormData();
       allFiles.forEach(file => {
         if (file.buffer) {
@@ -458,9 +486,9 @@ describe('Large Batch Upload Integration Tests', () => {
           projectId,
           userId,
           createdAt: {
-            gte: new Date(Date.now() - 60000)
-          }
-        }
+            gte: new Date(Date.now() - 60000),
+          },
+        },
       });
       expect(dbImages.length).toBe(0);
     });
@@ -469,14 +497,15 @@ describe('Large Batch Upload Integration Tests', () => {
   describe('Performance Benchmarks', () => {
     it('should meet performance benchmarks for large uploads', async () => {
       const benchmarkSizes = [10, 25, 50];
-      const results: { size: number; duration: number; throughput: number }[] = [];
+      const results: { size: number; duration: number; throughput: number }[] =
+        [];
 
       for (const size of benchmarkSizes) {
         const metrics = new PerformanceMetrics();
-        
+
         const mockFiles = UploadMockGenerator.createMockFiles(size, {
           fileSize: 1024 * 200, // 200KB each
-          namePrefix: `benchmark-${size}`
+          namePrefix: `benchmark-${size}`,
         });
 
         const formData = new FormData();
@@ -499,7 +528,7 @@ describe('Large Batch Upload Integration Tests', () => {
 
         // Cleanup for next test
         await prisma.image.deleteMany({
-          where: { projectId, userId }
+          where: { projectId, userId },
         });
       }
 
@@ -512,9 +541,11 @@ describe('Large Batch Upload Integration Tests', () => {
       // Throughput should scale reasonably
       const smallBatch = results.find(r => r.size === 10)!;
       const largeBatch = results.find(r => r.size === 50)!;
-      
+
       // Large batch should have better or similar throughput
-      expect(largeBatch.throughput).toBeGreaterThanOrEqual(smallBatch.throughput * 0.5);
+      expect(largeBatch.throughput).toBeGreaterThanOrEqual(
+        smallBatch.throughput * 0.5
+      );
     });
   });
 
@@ -551,25 +582,29 @@ describe('Large Batch Upload Integration Tests', () => {
     return {
       token: accessToken,
       user,
-      project: projectResponse.body.data
+      project: projectResponse.body.data,
     };
   }
 
   async function cleanupTestData(userId: string, projectId: string) {
     // Delete uploaded images
     await prisma.image.deleteMany({
-      where: { userId, projectId }
+      where: { userId, projectId },
     });
 
     // Delete test project
-    await prisma.project.delete({
-      where: { id: projectId }
-    }).catch(() => {}); // Ignore if already deleted
+    await prisma.project
+      .delete({
+        where: { id: projectId },
+      })
+      .catch(() => {}); // Ignore if already deleted
 
     // Delete test user
-    await prisma.user.delete({
-      where: { id: userId }
-    }).catch(() => {}); // Ignore if already deleted
+    await prisma.user
+      .delete({
+        where: { id: userId },
+      })
+      .catch(() => {}); // Ignore if already deleted
 
     // Cleanup uploaded files from filesystem
     if (uploadDir) {

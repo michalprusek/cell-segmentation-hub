@@ -91,22 +91,24 @@ export function trackDatabaseQuery(
 ): void {
   try {
     const status = success ? 'success' : 'failure';
-    
+
     dbQueryTotal.inc({
       operation,
       model,
       status,
     });
-    
+
     dbQueryDuration.observe(
       { operation, model, status },
       duration / 1000 // Convert ms to seconds
     );
-    
+
     // Track slow queries
     if (duration > 1000) {
       dbSlowQueries.inc({ operation, model });
-      logger.warn(`Slow query detected: ${operation} on ${model} took ${duration}ms`);
+      logger.warn(
+        `Slow query detected: ${operation} on ${model} took ${duration}ms`
+      );
     }
   } catch (error) {
     logger.error('Failed to track database query metric:', error);
@@ -116,10 +118,13 @@ export function trackDatabaseQuery(
 /**
  * Track database transaction
  */
-export function trackDatabaseTransaction(duration: number, success: boolean): void {
+export function trackDatabaseTransaction(
+  duration: number,
+  success: boolean
+): void {
   try {
     const status = success ? 'success' : 'failure';
-    
+
     dbTransactionDuration.observe(
       { status },
       duration / 1000 // Convert ms to seconds
@@ -169,7 +174,7 @@ export function updateDatabaseSizeMetrics(
     for (const table of tables) {
       dbTableSize.set({ table_name: table.name }, table.size);
     }
-    
+
     for (const index of indexes) {
       dbIndexSize.set({ index_name: index.name }, index.size);
     }
@@ -184,10 +189,10 @@ export function updateDatabaseSizeMetrics(
 export function initializeDatabaseMetrics(): void {
   try {
     logger.info('Initializing database metrics collection...');
-    
+
     // Set initial values
     updateConnectionPoolMetrics(0, 0, 0);
-    
+
     // Initialize table size metrics with placeholder values
     updateDatabaseSizeMetrics(
       [
@@ -203,7 +208,7 @@ export function initializeDatabaseMetrics(): void {
         { name: 'ProjectImage_projectId_idx', size: 0 },
       ]
     );
-    
+
     logger.info('✅ Database metrics collection initialized');
   } catch (error) {
     logger.error('Failed to initialize database metrics collection:', error);
@@ -216,25 +221,31 @@ export function initializeDatabaseMetrics(): void {
 export async function getDatabaseMetricsSummary(): Promise<DatabaseMetricsSummary> {
   try {
     const metrics = await dbMetricsRegistry.getMetricsAsJSON();
-    
+
     const getMetricValue = (name: string): number => {
       const metric = metrics.find(m => m.name === name);
-      if (!metric || !metric.values) {return 0;}
-      
+      if (!metric || !metric.values) {
+        return 0;
+      }
+
       return metric.values.reduce((sum, v) => sum + (v.value || 0), 0);
     };
-    
+
     const getMetricAverage = (name: string): number => {
       const metric = metrics.find(m => m.name === name);
-      if (!metric || !metric.values) {return 0;}
-      
+      if (!metric || !metric.values) {
+        return 0;
+      }
+
       const values = metric.values.filter(v => v.value);
-      if (values.length === 0) {return 0;}
-      
+      if (values.length === 0) {
+        return 0;
+      }
+
       const sum = values.reduce((acc, v) => acc + (v.value || 0), 0);
       return sum / values.length;
     };
-    
+
     return {
       totalQueries: getMetricValue('db_queries_total'),
       totalSlowQueries: getMetricValue('db_slow_queries_total'),
@@ -259,13 +270,15 @@ export async function getDatabaseMetricsSummary(): Promise<DatabaseMetricsSummar
  */
 class DatabaseMetricsService {
   private isStarted = false;
-  
+
   /**
    * Start database metrics collection
    */
   public start(): void {
-    if (this.isStarted) {return;}
-    
+    if (this.isStarted) {
+      return;
+    }
+
     try {
       initializeDatabaseMetrics();
       this.isStarted = true;
@@ -274,13 +287,15 @@ class DatabaseMetricsService {
       logger.error('Failed to start database metrics service:', error);
     }
   }
-  
+
   /**
    * Stop database metrics collection
    */
   public stop(): void {
-    if (!this.isStarted) {return;}
-    
+    if (!this.isStarted) {
+      return;
+    }
+
     try {
       // Reset all metrics
       dbQueryTotal.reset();
@@ -292,42 +307,51 @@ class DatabaseMetricsService {
       dbConnectionPoolWaitCount.reset();
       dbTableSize.reset();
       dbIndexSize.reset();
-      
+
       this.isStarted = false;
       logger.info('Database metrics service stopped');
     } catch (error) {
       logger.error('Failed to stop database metrics service:', error);
     }
   }
-  
+
   /**
    * Track a database query
    */
-  public trackQuery(operation: string, model: string, duration: number, success: boolean): void {
+  public trackQuery(
+    operation: string,
+    model: string,
+    duration: number,
+    success: boolean
+  ): void {
     trackDatabaseQuery(operation, model, duration, success);
   }
-  
+
   /**
    * Track a database transaction
    */
   public trackTransaction(duration: number, success: boolean): void {
     trackDatabaseTransaction(duration, success);
   }
-  
+
   /**
    * Track a connection error
    */
   public trackConnectionError(errorType: string): void {
     trackConnectionError(errorType);
   }
-  
+
   /**
    * Update connection pool metrics
    */
-  public updateConnectionPool(active: number, idle: number, waiting: number): void {
+  public updateConnectionPool(
+    active: number,
+    idle: number,
+    waiting: number
+  ): void {
     updateConnectionPoolMetrics(active, idle, waiting);
   }
-  
+
   /**
    * Get metrics summary
    */

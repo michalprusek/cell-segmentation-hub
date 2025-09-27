@@ -127,3 +127,6 @@ real-*-measurements-*.json
 
 .eslintcache
 .github/workflows/ci-cd.yml
+
+# Serena AI memory files (development artifacts)
+.serena/memories/

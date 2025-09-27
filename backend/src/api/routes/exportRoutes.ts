@@ -4,7 +4,11 @@ import { validationResult, body, param } from 'express-validator';
 import { ExportController } from '../controllers/exportController';
 
 // Validation middleware for express-validator
-const validateRequest = (req: Request, res: Response, next: NextFunction): void => {
+const validateRequest = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
     res.status(400).json({ errors: errors.array() });
@@ -36,10 +40,7 @@ router.post(
 router.get(
   '/projects/:projectId/export/:jobId/status',
   authenticate,
-  [
-    param('projectId').isUUID(),
-    param('jobId').isUUID(),
-  ],
+  [param('projectId').isUUID(), param('jobId').isUUID()],
   validateRequest,
   exportController.getExportStatus
 );
@@ -48,10 +49,7 @@ router.get(
 router.get(
   '/projects/:projectId/export/:jobId/download',
   authenticate,
-  [
-    param('projectId').isUUID(),
-    param('jobId').isUUID(),
-  ],
+  [param('projectId').isUUID(), param('jobId').isUUID()],
   validateRequest,
   exportController.downloadExport
 );
@@ -60,10 +58,7 @@ router.get(
 router.post(
   '/projects/:projectId/export/:jobId/cancel',
   authenticate,
-  [
-    param('projectId').isUUID(),
-    param('jobId').isUUID(),
-  ],
+  [param('projectId').isUUID(), param('jobId').isUUID()],
   validateRequest,
   exportController.cancelExport
 );
@@ -72,18 +67,12 @@ router.post(
 router.get(
   '/projects/:projectId/export/history',
   authenticate,
-  [
-    param('projectId').isUUID(),
-  ],
+  [param('projectId').isUUID()],
   validateRequest,
   exportController.getExportHistory
 );
 
 // Get available export formats
-router.get(
-  '/export/formats',
-  authenticate,
-  exportController.getExportFormats
-);
+router.get('/export/formats', authenticate, exportController.getExportFormats);
 
 export { router as exportRoutes };

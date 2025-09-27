@@ -134,7 +134,7 @@ export const ExportImageCard: React.FC<ExportImageCardProps> = ({
                   Math.min(fallbackIndex, candidateUrls.length - 1)
                 ] || ''
               }
-              alt={image.name || 'Image'}
+              alt={image.name ? image.name.normalize('NFC') : 'Image'}
               className={cn(
                 'w-full h-full object-cover transition-opacity duration-200',
                 isSelected ? 'opacity-90' : 'opacity-100'
@@ -199,9 +199,9 @@ export const ExportImageCard: React.FC<ExportImageCardProps> = ({
         <div className="absolute bottom-0 left-0 right-0 p-2 text-white z-10">
           <h4
             className="font-medium text-xs truncate mb-0.5"
-            title={image.name || 'Image'}
+            title={image.name ? image.name.normalize('NFC') : 'Image'}
           >
-            {image.name || 'Image'}
+            {image.name ? image.name.normalize('NFC') : 'Image'}
           </h4>
           <p className="text-xs opacity-80">
             {image.updatedAt && format(new Date(image.updatedAt), 'dd.MM.yyyy')}

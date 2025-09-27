@@ -51,7 +51,11 @@ export interface StorageProvider {
    * @param options Upload options
    * @returns Promise with upload result
    */
-  upload(buffer: Buffer, key: string, options?: UploadOptions): Promise<UploadResult>;
+  upload(
+    buffer: Buffer,
+    key: string,
+    options?: UploadOptions
+  ): Promise<UploadResult>;
 
   /**
    * Delete a file from storage
@@ -107,7 +111,7 @@ export const SUPPORTED_MIME_TYPES = [
   'image/tiff',
   'image/tif',
   'image/webp',
-  'image/gif'
+  'image/gif',
 ] as const;
 
 /**
@@ -121,7 +125,7 @@ export const SUPPORTED_EXTENSIONS = [
   '.tiff',
   '.tif',
   '.webp',
-  '.gif'
+  '.gif',
 ] as const;
 
 /**
@@ -129,7 +133,7 @@ export const SUPPORTED_EXTENSIONS = [
  */
 export const DEFAULT_THUMBNAIL_SIZE = {
   width: 300,
-  height: 300
+  height: 300,
 };
 
 /**
@@ -142,15 +146,18 @@ export const MAX_FILE_SIZE = 10 * 1024 * 1024;
  */
 export const fileUploadSchema = z.object({
   originalname: z.string(),
-  mimetype: z.string().refine(
-    (value) => (SUPPORTED_MIME_TYPES as readonly string[]).includes(value),
-    {
-      message: 'Nepodporovaný formát souboru. Podporované: JPG, PNG, BMP, TIFF, WEBP, GIF'
-    }
-  ),
+  mimetype: z
+    .string()
+    .refine(
+      value => (SUPPORTED_MIME_TYPES as readonly string[]).includes(value),
+      {
+        message:
+          'Nepodporovaný formát souboru. Podporované: JPG, PNG, BMP, TIFF, WEBP, GIF',
+      }
+    ),
   size: z.number().max(MAX_FILE_SIZE, {
-    message: `Soubor je příliš velký. Maximální velikost: ${MAX_FILE_SIZE / (1024 * 1024)}MB`
-  })
+    message: `Soubor je příliš velký. Maximální velikost: ${MAX_FILE_SIZE / (1024 * 1024)}MB`,
+  }),
 });
 
 export type FileUploadData = z.infer<typeof fileUploadSchema>;

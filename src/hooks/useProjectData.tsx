@@ -4,10 +4,12 @@ import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/useLanguage';
 import { useAuth } from '@/contexts/useAuth';
-import apiClient, { SegmentationResultData } from '@/lib/api';
+import apiClient, {
+  SegmentationResultData as _SegmentationResultData,
+} from '@/lib/api';
 import {
-  getErrorMessage,
-  type SegmentationData,
+  getErrorMessage as _getErrorMessage,
+  type SegmentationData as _SegmentationData,
   type ProjectImage,
 } from '@/types';
 import { getLocalizedErrorMessage } from '@/lib/errorUtils';
@@ -41,20 +43,18 @@ const enrichImagesWithSegmentation = async (
           return status === 'completed' || status === 'segmented';
         });
 
-  logger.debug(
-    `📊 Enriching images with segmentation data: ${images.length} total images, ${imagesToEnrich.length} to enrich (${fetchAll ? 'all' : `visible ${startIndex}-${endIndex}`})`
-  );
+  // Reduce logging verbosity - only log summary
+  if (imagesToEnrich.length > 0) {
+    logger.debug(
+      `📊 Enriching ${imagesToEnrich.length} images with segmentation data (${fetchAll ? 'all' : `visible ${startIndex}-${endIndex}`})`
+    );
+  }
 
   if (imagesToEnrich.length === 0) {
-    logger.debug('ℹ️ No completed images found for segmentation enrichment');
     return images;
   }
 
   try {
-    logger.debug(
-      `🔄 Fetching segmentation data for ${imagesToEnrich.length} images using batch API...`
-    );
-
     // Use the new batch API endpoint for massive performance improvement
     // This reduces 640 individual API calls to just 1-2 batch calls
     const imageIds = imagesToEnrich.map(img => img.id);
@@ -68,12 +68,15 @@ const enrichImagesWithSegmentation = async (
       );
     }
 
-    logger.debug(
-      `✅ Batch fetch complete: received ${Object.keys(batchResults).length} results`
-    );
+    // Log only summary, not individual images
+    const resultCount = Object.keys(batchResults).length;
+    if (resultCount > 0) {
+      logger.debug(`✅ Batch fetch complete: received ${resultCount} results`);
+    }
 
     // Transform batch results into the expected format
     const segmentationResults = [];
+    const polygonCounts: number[] = [];
 
     for (const img of imagesToEnrich) {
       const segmentationData = batchResults[img.id];
@@ -84,9 +87,7 @@ const enrichImagesWithSegmentation = async (
         typeof segmentationData === 'object' &&
         segmentationData.polygons
       ) {
-        logger.debug(
-          `✅ Segmentation data for ${img.id.slice(0, 8)}: ${segmentationData.polygons?.length || 0} polygons`
-        );
+        polygonCounts.push(segmentationData.polygons?.length || 0);
 
         segmentationResults.push({
           imageId: img.id,
@@ -108,9 +109,6 @@ const enrichImagesWithSegmentation = async (
           },
         });
       } else {
-        logger.debug(
-          `ℹ️ No segmentation found for image ${img.id.slice(0, 8)}`
-        );
         segmentationResults.push({
           imageId: img.id,
           result: null,
@@ -128,18 +126,21 @@ const enrichImagesWithSegmentation = async (
       }
     });
 
-    logger.debug(
-      `📈 Successfully enriched ${successfulEnrichments} out of ${imagesToEnrich.length} images with segmentation data`
-    );
+    // Log aggregated statistics instead of individual images
+    if (successfulEnrichments > 0) {
+      const totalPolygons = polygonCounts.reduce(
+        (sum, count) => sum + count,
+        0
+      );
+      const avgPolygons = Math.round(totalPolygons / polygonCounts.length);
+      logger.debug(
+        `📈 Enriched ${successfulEnrichments}/${imagesToEnrich.length} images | Total polygons: ${totalPolygons} | Avg: ${avgPolygons}/image`
+      );
+    }
 
     // Enrich images with segmentation results
     const enrichedImages = images.map(img => {
       const segmentationResult = segmentationMap.get(img.id);
-      if (segmentationResult) {
-        logger.debug(
-          `🎯 Image ${img.id.slice(0, 8)} enriched with ${segmentationResult.polygons?.length || 0} polygons`
-        );
-      }
       return {
         ...img,
         segmentationResult: segmentationResult || img.segmentationResult,
@@ -178,6 +179,13 @@ export const useProjectData = (
 
   // Store images without segmentation data
   const [imagesBase, setImagesBase] = useState<ProjectImage[]>([]);
+
+  // Track if initial enrichment has been done to prevent duplicates
+  const initialEnrichmentDone = useRef(false);
+  const enrichmentInProgress = useRef(false);
+
+  // Debounced enrichment function to prevent rapid re-fetching
+  const debouncedEnrichRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -257,7 +265,7 @@ export const useProjectData = (
 
           return {
             id: img.id,
-            name: img.name,
+            name: img.name || `Image ${img.id}`, // Provide fallback for missing name
             url: img.url || img.image_url, // Use url field that's already mapped in api.ts
             width: img.width,
             height: img.height,
@@ -276,16 +284,20 @@ export const useProjectData = (
         setImagesBase(formattedImages);
 
         // Initial enrichment for visible range only
-        const enrichedImages = await enrichImagesWithSegmentation(
-          formattedImages,
-          {
-            fetchAll: options?.fetchAll || false,
-            startIndex: options?.visibleRange?.start,
-            endIndex: options?.visibleRange?.end,
-          }
-        );
-
-        setImages(enrichedImages);
+        if (!enrichmentInProgress.current) {
+          enrichmentInProgress.current = true;
+          const enrichedImages = await enrichImagesWithSegmentation(
+            formattedImages,
+            {
+              fetchAll: options?.fetchAll || false,
+              startIndex: options?.visibleRange?.start,
+              endIndex: options?.visibleRange?.end,
+            }
+          );
+          setImages(enrichedImages);
+          initialEnrichmentDone.current = true;
+          enrichmentInProgress.current = false;
+        }
       } catch (error: unknown) {
         logger.error('Error fetching project:', error);
 
@@ -327,13 +339,27 @@ export const useProjectData = (
     fetchData();
   }, [projectId, userId, t]);
 
-  // Update segmentation data when visible range changes
+  // Update segmentation data when visible range changes with debouncing
   useEffect(() => {
-    if (!imagesBase.length || loading) return;
+    // Skip if initial load is still happening or no base images
+    if (!imagesBase.length || loading || !initialEnrichmentDone.current) return;
     if (!options?.visibleRange) return;
 
-    const enrichVisibleImages = async () => {
-      logger.debug('Enriching visible images', {
+    // Skip if enrichment is already in progress
+    if (enrichmentInProgress.current) return;
+
+    // Clear existing debounce timer
+    if (debouncedEnrichRef.current) {
+      clearTimeout(debouncedEnrichRef.current);
+    }
+
+    // Debounce enrichment to prevent rapid re-fetching during scrolling
+    debouncedEnrichRef.current = setTimeout(async () => {
+      if (enrichmentInProgress.current) return;
+
+      enrichmentInProgress.current = true;
+
+      logger.debug('Enriching visible images after debounce', {
         start: options.visibleRange?.start,
         end: options.visibleRange?.end,
       });
@@ -345,9 +371,15 @@ export const useProjectData = (
       });
 
       setImages(enrichedImages);
-    };
+      enrichmentInProgress.current = false;
+    }, 300); // 300ms debounce for scroll events
 
-    enrichVisibleImages();
+    // Cleanup function
+    return () => {
+      if (debouncedEnrichRef.current) {
+        clearTimeout(debouncedEnrichRef.current);
+      }
+    };
   }, [
     options?.visibleRange?.start,
     options?.visibleRange?.end,

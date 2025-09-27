@@ -9,13 +9,13 @@ export class RedisClient {
     // Redis is optional - if not configured, operations will be no-ops
     if (process.env.REDIS_URL) {
       this.client = createClient({
-        url: process.env.REDIS_URL
+        url: process.env.REDIS_URL,
       });
-      
+
       this.client.on('error', (err: Error) => {
         logger.error('Redis Client Error', err);
       });
-      
+
       this.connect();
     }
   }
@@ -24,13 +24,17 @@ export class RedisClient {
     if (!this.client) {
       return;
     }
-    
+
     try {
       await this.client.connect();
       this.connected = true;
       logger.info('Redis connected');
     } catch (error) {
-      logger.warn('Redis connection failed, continuing without cache:', 'RedisClient', { error: error instanceof Error ? error.message : String(error) });
+      logger.warn(
+        'Redis connection failed, continuing without cache:',
+        'RedisClient',
+        { error: error instanceof Error ? error.message : String(error) }
+      );
     }
   }
 
@@ -41,7 +45,11 @@ export class RedisClient {
     try {
       return await this.client.get(key);
     } catch (error) {
-      logger.error('Redis get error:', error instanceof Error ? error : new Error(String(error)), 'RedisClient');
+      logger.error(
+        'Redis get error:',
+        error instanceof Error ? error : new Error(String(error)),
+        'RedisClient'
+      );
       return null;
     }
   }
@@ -57,7 +65,11 @@ export class RedisClient {
         await this.client.set(key, value);
       }
     } catch (error) {
-      logger.error('Redis set error:', error instanceof Error ? error : new Error(String(error)), 'RedisClient');
+      logger.error(
+        'Redis set error:',
+        error instanceof Error ? error : new Error(String(error)),
+        'RedisClient'
+      );
     }
   }
 
@@ -68,7 +80,11 @@ export class RedisClient {
     try {
       await this.client.del(key);
     } catch (error) {
-      logger.error('Redis delete error:', error instanceof Error ? error : new Error(String(error)), 'RedisClient');
+      logger.error(
+        'Redis delete error:',
+        error instanceof Error ? error : new Error(String(error)),
+        'RedisClient'
+      );
     }
   }
 

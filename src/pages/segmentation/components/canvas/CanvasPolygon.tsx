@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import { Polygon, Point } from '@/lib/segmentation';
 import PolygonVertices from './PolygonVertices';
 import PolygonContextMenu from '../context-menu/PolygonContextMenu';
-import { VertexDragState } from '@/pages/segmentation/types';
+import { VertexDragState, EditMode } from '@/pages/segmentation/types';
 import { calculateBoundingBox } from '@/lib/polygonGeometry';
 
 interface CanvasPolygonProps {
@@ -22,6 +22,7 @@ interface CanvasPolygonProps {
   onEditPolygon?: (id: string) => void;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
+  editMode?: EditMode;
 }
 
 const CanvasPolygon = React.memo(
@@ -41,8 +42,9 @@ const CanvasPolygon = React.memo(
     onEditPolygon,
     onDeleteVertex,
     onDuplicateVertex,
+    editMode,
   }: CanvasPolygonProps) => {
-    const { id, points, type = 'external' } = polygon;
+    const { id, points, type = 'external', parent_id } = polygon;
 
     // Calculate bounding box for viewport culling (cached)
     const boundingBox = useMemo(() => calculateBoundingBox(points), [points]);
@@ -114,9 +116,12 @@ const CanvasPolygon = React.memo(
 
     const strokeWidth = getStrokeWidth();
 
+    // Determine if polygon is internal based on parent_id or type
+    const isInternal = parent_id || type === 'internal';
+
     // Determine path color based on polygon type and selection status
     const getPathColor = () => {
-      if (type === 'internal') {
+      if (isInternal) {
         return isSelected ? '#0b84da' : '#0ea5e9';
       } else {
         return isSelected ? '#e11d48' : '#ef4444';
@@ -178,10 +183,7 @@ const CanvasPolygon = React.memo(
       >
         <g
           data-testid={id}
-          className={cn(
-            'polygon-group',
-            type === 'internal' ? 'internal' : 'external'
-          )}
+          className={cn('polygon-group', isInternal ? 'internal' : 'external')}
           tabIndex={0}
           role="button"
           aria-label={`Polygon ${id} - ${type} polygon with ${points.length} vertices`}
@@ -193,13 +195,11 @@ const CanvasPolygon = React.memo(
             d={pathString || 'M0,0'}
             className={cn(
               'polygon-path cursor-pointer transition-colors',
-              type === 'internal' ? 'polygon-internal' : 'polygon-external',
+              isInternal ? 'polygon-internal' : 'polygon-external',
               isSelected && 'polygon-selected'
             )}
             fill={
-              type === 'internal'
-                ? 'rgba(14, 165, 233, 0.1)'
-                : 'rgba(239, 68, 68, 0.1)'
+              isInternal ? 'rgba(14, 165, 233, 0.1)' : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
             strokeWidth={Math.max(strokeWidth, 0.5)}
@@ -234,6 +234,7 @@ const CanvasPolygon = React.memo(
               isUndoRedoInProgress={isUndoRedoInProgress}
               onDeleteVertex={onDeleteVertex}
               onDuplicateVertex={onDuplicateVertex}
+              editMode={editMode}
             />
           )}
         </g>

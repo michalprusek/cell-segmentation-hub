@@ -64,11 +64,13 @@ class PrismaPool {
   public async initialize(): Promise<void> {
     const maxRetries = 5;
     const retryDelay = 5000; // 5 seconds
-    
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
-        logger.info(`Initializing Prisma connection pool (attempt ${attempt}/${maxRetries})`);
-        
+        logger.info(
+          `Initializing Prisma connection pool (attempt ${attempt}/${maxRetries})`
+        );
+
         // Create initial connections
         const initialConnections = Math.min(5, this.config.connectionLimit);
         for (let i = 0; i < initialConnections; i++) {
@@ -78,16 +80,21 @@ class PrismaPool {
         // Start health check interval
         this.startHealthCheck();
 
-        logger.info(`✅ Prisma pool initialized with ${this.clients.length} connections`);
+        logger.info(
+          `✅ Prisma pool initialized with ${this.clients.length} connections`
+        );
         return; // Success
       } catch (error) {
-        logger.error(`Failed to initialize Prisma pool (attempt ${attempt}/${maxRetries}):`, error);
-        
+        logger.error(
+          `Failed to initialize Prisma pool (attempt ${attempt}/${maxRetries}):`,
+          error
+        );
+
         if (attempt === maxRetries) {
           throw error;
         }
-        
-        logger.info(`Retrying in ${retryDelay/1000} seconds...`);
+
+        logger.info(`Retrying in ${retryDelay / 1000} seconds...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       }
     }
@@ -106,26 +113,30 @@ class PrismaPool {
     if (this.config.enablePoolLogging) {
       clientConfig.log = ['query', 'info', 'warn', 'error'];
     }
+     
     const client = new PrismaClient(clientConfig as any);
 
     try {
       // Test the connection
       await client.$connect();
-      
+
       this.clients.push(client);
       this.idleClients.push(client);
       this.stats.totalConnections++;
       this.stats.idleConnections++;
-      
+
       if (this.config.enablePoolLogging) {
-        logger.debug(`Created new database connection (total: ${this.clients.length})`);
+        logger.debug(
+          `Created new database connection (total: ${this.clients.length})`
+        );
       }
-      
+
       return client;
     } catch (error) {
       logger.error('Failed to create database connection:', error);
       this.stats.errors++;
-      this.stats.lastError = error instanceof Error ? error.message : 'Unknown error';
+      this.stats.lastError =
+        error instanceof Error ? error.message : 'Unknown error';
       throw error;
     }
   }
@@ -171,7 +182,7 @@ class PrismaPool {
 
     return new Promise((resolve, reject) => {
       this.stats.waitingRequests++;
-      
+
       const timeout = setTimeout(() => {
         const index = this.waitQueue.indexOf(resolve);
         if (index > -1) {
@@ -241,7 +252,7 @@ class PrismaPool {
    * Execute a query with a pooled connection
    */
   async executeQuery<T>(
-    operation: () => Promise<T>, 
+    operation: () => Promise<T>,
     _options?: { operationType?: string; operationName?: string }
   ): Promise<T> {
     const client = await this.acquire();
@@ -271,7 +282,17 @@ class PrismaPool {
    * Execute a transaction with a pooled connection
    */
   async executeTransaction<T>(
-    operation: (prisma: Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>) => Promise<T>,
+    operation: (
+      prisma: Omit<
+        PrismaClient,
+        | '$connect'
+        | '$disconnect'
+        | '$on'
+        | '$transaction'
+        | '$use'
+        | '$extends'
+      >
+    ) => Promise<T>,
     _operationName?: string
   ): Promise<T> {
     const client = await this.acquire();
@@ -316,19 +337,23 @@ class PrismaPool {
   /**
    * Public health check method
    */
-  public async healthCheck(): Promise<{ healthy: boolean; message: string; stats: PoolStats }> {
+  public async healthCheck(): Promise<{
+    healthy: boolean;
+    message: string;
+    stats: PoolStats;
+  }> {
     try {
       await this.internalHealthCheck();
       return {
         healthy: this.isHealthy(),
         message: 'Pool is healthy',
-        stats: this.getStats()
+        stats: this.getStats(),
       };
     } catch (error) {
       return {
         healthy: false,
         message: error instanceof Error ? error.message : 'Health check failed',
-        stats: this.getStats()
+        stats: this.getStats(),
       };
     }
   }
@@ -356,7 +381,7 @@ class PrismaPool {
         this.idleClients.splice(index, 1);
         this.stats.idleConnections--;
       }
-      
+
       const clientIndex = this.clients.indexOf(client);
       if (clientIndex > -1) {
         this.clients.splice(clientIndex, 1);
@@ -417,7 +442,7 @@ class PrismaPool {
     }
 
     // Disconnect all clients
-    const disconnectPromises = this.clients.map(client => 
+    const disconnectPromises = this.clients.map(client =>
       client.$disconnect().catch(error => {
         logger.error('Error disconnecting client:', error);
       })
@@ -428,7 +453,7 @@ class PrismaPool {
     this.clients = [];
     this.activeClients.clear();
     this.idleClients = [];
-    
+
     logger.info('✅ Prisma connection pool shut down successfully');
   }
 
@@ -436,9 +461,9 @@ class PrismaPool {
    * Check if pool is healthy
    */
   isHealthy(): boolean {
-    return !this.isShuttingDown && 
-           this.clients.length > 0 && 
-           this.stats.errors < 10; // Threshold for errors
+    return (
+      !this.isShuttingDown && this.clients.length > 0 && this.stats.errors < 10
+    ); // Threshold for errors
   }
 }
 
