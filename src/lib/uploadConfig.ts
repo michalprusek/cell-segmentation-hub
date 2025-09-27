@@ -1,22 +1,25 @@
 /**
  * Upload configuration that matches backend limits
- * Centralized configuration for upload limits across the application
+ * Uses centralized constants from SSOT (Single Source of Truth)
+ * @module uploadConfig
  */
 
+import { FILE_LIMITS, RETRY_ATTEMPTS, TIMEOUTS } from './constants';
+
 export const UPLOAD_CONFIG = {
-  // File limits
-  MAX_FILE_SIZE_MB: 20, // 20MB per file (optimized for better performance)
-  MAX_FILE_SIZE_BYTES: 20 * 1024 * 1024, // 20MB in bytes
+  // File limits - using centralized constants
+  MAX_FILE_SIZE_MB: FILE_LIMITS.MAX_FILE_SIZE_MB,
+  MAX_FILE_SIZE_BYTES: FILE_LIMITS.MAX_FILE_SIZE_BYTES,
 
-  // Chunk limits
-  FILES_PER_CHUNK: 100, // Max files per chunk (matches backend MAX_FILES_PER_REQUEST)
-  MAX_SIZE_PER_CHUNK_MB: 500, // 500MB per chunk (matches nginx client_max_body_size)
-  MAX_SIZE_PER_CHUNK_BYTES: 500 * 1024 * 1024, // 500MB in bytes
+  // Chunk limits - using centralized constants
+  FILES_PER_CHUNK: FILE_LIMITS.CHUNK_SIZE_FILES,
+  MAX_SIZE_PER_CHUNK_MB: FILE_LIMITS.MAX_TOTAL_SIZE_MB,
+  MAX_SIZE_PER_CHUNK_BYTES: FILE_LIMITS.MAX_TOTAL_SIZE_BYTES,
 
-  // Total limits
-  MAX_TOTAL_FILES: 10000, // Maximum files per project (matches backend MAX_TOTAL_FILES)
+  // Total limits - using centralized constants
+  MAX_TOTAL_FILES: FILE_LIMITS.MAX_FILES_PER_BATCH,
 
-  // Supported file types
+  // Supported file types - mapped from centralized formats
   SUPPORTED_FILE_TYPES: [
     'image/jpeg',
     'image/jpg',
@@ -26,10 +29,10 @@ export const UPLOAD_CONFIG = {
     'image/bmp',
   ],
 
-  // Upload behavior
+  // Upload behavior - using centralized constants
   MAX_CONCURRENT_CHUNKS: 2, // Number of chunks to upload in parallel
-  RETRY_ATTEMPTS: 3, // Number of retry attempts for failed chunks
-  RETRY_DELAY_MS: 2000, // Delay between retries
+  RETRY_ATTEMPTS: RETRY_ATTEMPTS.UPLOAD,
+  RETRY_DELAY_MS: TIMEOUTS.RETRY_SHORT,
 
   // Average file sizes for estimation (in MB)
   AVG_FILE_SIZES: {
