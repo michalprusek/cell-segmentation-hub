@@ -4,6 +4,7 @@
  */
 
 import { logger } from './logger';
+import { TIMEOUTS, RETRY_ATTEMPTS, HTTP_STATUS } from './constants';
 
 export interface RetryConfig {
   maxAttempts?: number;
@@ -28,22 +29,22 @@ export interface RetryResult<T> {
 export const DEFAULT_RETRY_CONFIG: Required<
   Omit<RetryConfig, 'signal' | 'onRetry'>
 > = {
-  maxAttempts: 3,
-  initialDelay: 1000,
-  maxDelay: 30000,
+  maxAttempts: RETRY_ATTEMPTS.API,
+  initialDelay: TIMEOUTS.RETRY_INITIAL,
+  maxDelay: TIMEOUTS.RETRY_MAX,
   backoffFactor: 2,
   shouldRetry: (error: unknown, attempt: number) => {
     // Don't retry on client errors (4xx) except 429 (rate limit)
     if (error && typeof error === 'object' && 'status' in error) {
-      const status = (error as any).status;
-      if (status >= 400 && status < 500 && status !== 429) {
+      const status = (error as { status?: number }).status;
+      if (status && status >= 400 && status < 500 && status !== 429) {
         return false;
       }
     }
 
     // Don't retry on abort
     if (error && typeof error === 'object' && 'name' in error) {
-      const name = (error as any).name;
+      const name = (error as { name?: string }).name;
       if (name === 'AbortError' || name === 'CanceledError') {
         return false;
       }
@@ -58,45 +59,51 @@ export const DEFAULT_RETRY_CONFIG: Required<
  */
 export const RETRY_CONFIGS = {
   api: {
-    maxAttempts: 3,
-    initialDelay: 1000,
-    maxDelay: 10000,
+    maxAttempts: RETRY_ATTEMPTS.API,
+    initialDelay: TIMEOUTS.RETRY_INITIAL,
+    maxDelay: TIMEOUTS.API_REQUEST_LONG,
     backoffFactor: 2,
   },
   upload: {
-    maxAttempts: 5,
-    initialDelay: 2000,
-    maxDelay: 60000,
+    maxAttempts: RETRY_ATTEMPTS.UPLOAD,
+    initialDelay: TIMEOUTS.RETRY_SHORT,
+    maxDelay: TIMEOUTS.FILE_UPLOAD,
     backoffFactor: 2,
   },
   websocket: {
-    maxAttempts: Infinity,
-    initialDelay: 1000,
-    maxDelay: 30000,
+    maxAttempts: RETRY_ATTEMPTS.WEBSOCKET,
+    initialDelay: TIMEOUTS.RETRY_INITIAL,
+    maxDelay: TIMEOUTS.RETRY_MAX,
     backoffFactor: 1.5,
   },
   dynamicImport: {
-    maxAttempts: 3,
+    maxAttempts: RETRY_ATTEMPTS.API,
     initialDelay: 500,
-    maxDelay: 5000,
+    maxDelay: TIMEOUTS.API_REQUEST,
     backoffFactor: 2,
   },
   imageLoad: {
-    maxAttempts: 3,
-    initialDelay: 1000,
-    maxDelay: 10000,
+    maxAttempts: RETRY_ATTEMPTS.API,
+    initialDelay: TIMEOUTS.RETRY_INITIAL,
+    maxDelay: TIMEOUTS.API_REQUEST_LONG,
     backoffFactor: 2,
   },
   auth: {
-    maxAttempts: 2,
+    maxAttempts: RETRY_ATTEMPTS.AUTH,
     initialDelay: 500,
-    maxDelay: 2000,
+    maxDelay: TIMEOUTS.RETRY_SHORT,
     backoffFactor: 2,
   },
 } as const;
 
 /**
- * Calculate delay for exponential backoff
+ * Calculate delay for exponential backoff with configurable parameters
+ * @param attempt - The current attempt number (1-indexed)
+ * @param config - Configuration object containing delay parameters
+ * @returns Calculated delay in milliseconds, capped at maxDelay
+ * @example
+ * // First attempt: 1000ms, Second: 2000ms, Third: 4000ms (capped at maxDelay)
+ * calculateBackoffDelay(1, { initialDelay: 1000, maxDelay: 5000, backoffFactor: 2 })
  */
 export function calculateBackoffDelay(
   attempt: number,
@@ -109,6 +116,12 @@ export function calculateBackoffDelay(
 
 /**
  * Add jitter to delay to avoid thundering herd problem
+ * @param delay - Base delay in milliseconds
+ * @param jitterFactor - Percentage of delay to use as maximum jitter (0.1 = 10%)
+ * @returns Delay with random jitter added
+ * @example
+ * // Adds 0-100ms of jitter to a 1000ms delay
+ * addJitter(1000, 0.1) // Returns between 1000-1100ms
  */
 export function addJitter(delay: number, jitterFactor = 0.1): number {
   const jitter = delay * jitterFactor * Math.random();
@@ -116,7 +129,15 @@ export function addJitter(delay: number, jitterFactor = 0.1): number {
 }
 
 /**
- * Sleep utility with cancellation support
+ * Sleep utility with cancellation support via AbortSignal
+ * @param ms - Milliseconds to sleep
+ * @param signal - Optional AbortSignal to cancel the sleep
+ * @returns Promise that resolves after the specified time or rejects if aborted
+ * @throws {DOMException} Throws 'AbortError' if the signal is aborted
+ * @example
+ * const controller = new AbortController();
+ * await sleep(5000, controller.signal); // Sleep for 5 seconds
+ * controller.abort(); // Cancel the sleep early
  */
 export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -137,7 +158,18 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /**
- * Core retry function with exponential backoff
+ * Core retry function with exponential backoff and configurable parameters
+ * @param fn - The async function to retry
+ * @param config - Configuration for retry behavior
+ * @returns Result object containing data or error with attempt count
+ * @example
+ * const result = await retryWithBackoff(
+ *   () => fetch('/api/data'),
+ *   { maxAttempts: 3, initialDelay: 1000 }
+ * );
+ * if (result.success) {
+ *   logger.debug('Success after', result.attempts, 'attempts');
+ * }
  */
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
@@ -222,7 +254,18 @@ export async function retryWithBackoff<T>(
 }
 
 /**
- * Retry with timeout wrapper
+ * Retry with timeout wrapper - aborts if operation exceeds timeout
+ * @param fn - The async function to retry
+ * @param timeoutMs - Maximum time allowed for all retry attempts
+ * @param config - Configuration for retry behavior
+ * @returns Result object containing data or error with attempt count
+ * @example
+ * // Retry up to 3 times but abort if total time exceeds 10 seconds
+ * const result = await retryWithTimeout(
+ *   () => complexOperation(),
+ *   10000,
+ *   { maxAttempts: 3 }
+ * );
  */
 export async function retryWithTimeout<T>(
   fn: () => Promise<T>,
@@ -245,7 +288,16 @@ export async function retryWithTimeout<T>(
 }
 
 /**
- * Create a retryable version of a function
+ * Create a retryable version of any async function
+ * @param fn - The async function to make retryable
+ * @param config - Configuration for retry behavior
+ * @returns New function with same signature but automatic retry capability
+ * @example
+ * const fetchWithRetry = makeRetryable(
+ *   fetch,
+ *   { maxAttempts: 3, initialDelay: 1000 }
+ * );
+ * const response = await fetchWithRetry('/api/data');
  */
 export function makeRetryable<T extends (...args: any[]) => Promise<any>>(
   fn: T,
@@ -263,7 +315,17 @@ export function makeRetryable<T extends (...args: any[]) => Promise<any>>(
 }
 
 /**
- * Detect if an error is retryable
+ * Detect if an error is retryable based on type and status code
+ * @param error - The error to evaluate
+ * @returns True if the error should trigger a retry attempt
+ * @example
+ * try {
+ *   await apiCall();
+ * } catch (error) {
+ *   if (isRetryableError(error)) {
+ *     // Retry the operation
+ *   }
+ * }
  */
 export function isRetryableError(error: unknown): boolean {
   if (!error) return false;
@@ -275,7 +337,7 @@ export function isRetryableError(error: unknown): boolean {
 
   // Timeout errors
   if (error && typeof error === 'object' && 'name' in error) {
-    const errorName = (error as any).name;
+    const errorName = (error as { name?: string }).name;
     if (errorName === 'TimeoutError' || errorName === 'NetworkError') {
       return true;
     }
@@ -283,9 +345,14 @@ export function isRetryableError(error: unknown): boolean {
 
   // HTTP errors that are retryable
   if (error && typeof error === 'object' && 'status' in error) {
-    const status = (error as any).status;
-    // Retry on 429 (rate limit), 503 (service unavailable), 504 (gateway timeout)
-    if (status === 429 || status === 503 || status === 504) {
+    const status = (error as { status?: number }).status;
+    // Retry on rate limit, bad gateway, service unavailable, gateway timeout
+    if (
+      status === HTTP_STATUS.TOO_MANY_REQUESTS ||
+      status === HTTP_STATUS.BAD_GATEWAY ||
+      status === HTTP_STATUS.SERVICE_UNAVAILABLE ||
+      status === HTTP_STATUS.GATEWAY_TIMEOUT
+    ) {
       return true;
     }
   }
@@ -305,7 +372,20 @@ export function isRetryableError(error: unknown): boolean {
 }
 
 /**
- * Circuit breaker for preventing repeated failures
+ * Circuit breaker for preventing repeated failures and cascading errors
+ * Tracks failure counts per operation and blocks requests when threshold exceeded
+ * @example
+ * const breaker = new CircuitBreaker(3, 60000); // 3 failures, 1 minute timeout
+ * if (breaker.isOpen('api-endpoint')) {
+ *   throw new Error('Circuit breaker is open');
+ * }
+ * try {
+ *   const result = await apiCall();
+ *   breaker.recordSuccess('api-endpoint');
+ * } catch (error) {
+ *   breaker.recordFailure('api-endpoint');
+ *   throw error;
+ * }
  */
 export class CircuitBreaker {
   private failures = new Map<string, { count: number; lastFailure: number }>();
