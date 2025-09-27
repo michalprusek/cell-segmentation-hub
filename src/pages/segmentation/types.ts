@@ -1,4 +1,4 @@
-import type { SegmentationResult, Point, Polygon } from '@/lib/segmentation';
+import type { SegmentationResult, Point } from '@/lib/segmentation';
 
 // Enhanced EditMode enum inspired by SpheroSeg
 export enum EditMode {

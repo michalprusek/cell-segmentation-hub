@@ -1,7 +1,9 @@
 // Set up test environment before any imports
 process.env.NODE_ENV = 'test';
-process.env.JWT_ACCESS_SECRET = 'test-access-secret-for-testing-only-32-characters-long';
-process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-for-testing-only-32-characters-long';
+process.env.JWT_ACCESS_SECRET =
+  'test-access-secret-for-testing-only-32-characters-long';
+process.env.JWT_REFRESH_SECRET =
+  'test-refresh-secret-for-testing-only-32-characters-long';
 process.env.JWT_ACCESS_EXPIRY = '15m';
 process.env.JWT_REFRESH_EXPIRY = '7d';
 
@@ -12,45 +14,45 @@ jest.mock('../../utils/config', () => ({
       accessSecret: 'test-access-secret-for-testing-only-32-characters-long',
       refreshSecret: 'test-refresh-secret-for-testing-only-32-characters-long',
       accessExpiry: '15m',
-      refreshExpiry: '7d'
+      refreshExpiry: '7d',
     },
     storage: {
       type: 'local',
       uploadDir: './test-uploads',
-      maxFileSize: 10485760
-    }
-  }
+      maxFileSize: 10485760,
+    },
+  },
 }));
 
 // Mock dependencies before imports
 jest.mock('../../db', () => ({
   prisma: {
     user: {
-      findUnique: jest.fn()
+      findUnique: jest.fn(),
     },
     profile: {
-      upsert: jest.fn()
-    }
-  }
+      upsert: jest.fn(),
+    },
+  },
 }));
 jest.mock('../../storage/index');
 jest.mock('sharp', () => {
   return jest.fn(() => ({
     resize: jest.fn().mockReturnThis(),
     jpeg: jest.fn().mockReturnThis(),
-    toBuffer: jest.fn().mockResolvedValue(Buffer.from('processed-image'))
+    toBuffer: jest.fn().mockResolvedValue(Buffer.from('processed-image')),
   }));
 });
 jest.mock('uuid', () => ({
-  v4: () => 'mock-uuid'
+  v4: () => 'mock-uuid',
 }));
 jest.mock('../../utils/logger', () => ({
   logger: {
     info: jest.fn(),
     error: jest.fn(),
     warn: jest.fn(),
-    debug: jest.fn()
-  }
+    debug: jest.fn(),
+  },
 }));
 
 // Now import modules after environment is set up
@@ -72,7 +74,7 @@ describe('AuthService - Avatar Upload', () => {
     destination: '',
     filename: '',
     path: '',
-    stream: null as any
+    stream: null as any,
   };
 
   const mockUser = {
@@ -106,20 +108,20 @@ describe('AuthService - Avatar Upload', () => {
       consentToMLTraining: true,
       consentToAlgorithmImprovement: true,
       consentToFeatureDevelopment: true,
-      consentUpdatedAt: new Date()
-    }
+      consentUpdatedAt: new Date(),
+    },
   };
 
   const mockStorage = {
     upload: jest.fn(),
     getUrl: jest.fn(),
-    delete: jest.fn()
+    delete: jest.fn(),
   };
 
   const mockSharpInstance = {
     resize: jest.fn().mockReturnThis(),
     jpeg: jest.fn().mockReturnThis(),
-    toBuffer: jest.fn()
+    toBuffer: jest.fn(),
   };
 
   beforeEach(() => {
@@ -136,31 +138,34 @@ describe('AuthService - Avatar Upload', () => {
     it('should successfully upload and process an avatar', async () => {
       // Setup mocks
       const processedBuffer = Buffer.from('processed-image');
-      
+
       // Override the global sharp mock for this test
       const mockSharpInstance = {
         resize: jest.fn().mockReturnThis(),
         jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockResolvedValue(processedBuffer)
+        toBuffer: jest.fn().mockResolvedValue(processedBuffer),
       };
       (sharp as any).mockImplementation(() => mockSharpInstance);
-      
+
       (prisma.user.findUnique as any).mockResolvedValue(mockUser);
-      
+
       mockStorage.upload.mockResolvedValue({
         originalPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         thumbnailPath: null,
-        url: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg'
+        url: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
       });
-      
-      mockStorage.getUrl.mockResolvedValue('http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg');
-      
+
+      mockStorage.getUrl.mockResolvedValue(
+        'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg'
+      );
+
       (prisma.profile.upsert as any).mockResolvedValue({
         ...mockUser.profile,
-        avatarUrl: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
+        avatarUrl:
+          'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         avatarPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         avatarMimeType: 'image/jpeg',
-        avatarSize: processedBuffer.length
+        avatarSize: processedBuffer.length,
       });
 
       // Execute
@@ -168,19 +173,20 @@ describe('AuthService - Avatar Upload', () => {
 
       // Verify
       expect(result).toEqual({
-        avatarUrl: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
-        message: 'Avatar uploaded successfully'
+        avatarUrl:
+          'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
+        message: 'Avatar uploaded successfully',
       });
 
       // Verify Sharp was called correctly
       expect(sharp).toHaveBeenCalledWith(mockFile.buffer);
       expect(mockSharpInstance.resize).toHaveBeenCalledWith(300, 300, {
         fit: 'cover',
-        position: 'center'
+        position: 'center',
       });
       expect(mockSharpInstance.jpeg).toHaveBeenCalledWith({
         quality: 85,
-        progressive: true
+        progressive: true,
       });
 
       // Verify storage upload was called with processed buffer
@@ -190,7 +196,7 @@ describe('AuthService - Avatar Upload', () => {
         {
           mimeType: 'image/jpeg',
           originalName: 'test-avatar.png',
-          maxSize: 5 * 1024 * 1024
+          maxSize: 5 * 1024 * 1024,
         }
       );
 
@@ -198,18 +204,20 @@ describe('AuthService - Avatar Upload', () => {
       expect(prisma.profile.upsert).toHaveBeenCalledWith({
         where: { userId: mockUserId },
         update: {
-          avatarUrl: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
+          avatarUrl:
+            'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
           avatarPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
           avatarMimeType: 'image/jpeg',
           avatarSize: processedBuffer.length,
         },
         create: {
           userId: mockUserId,
-          avatarUrl: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
+          avatarUrl:
+            'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
           avatarPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
           avatarMimeType: 'image/jpeg',
-          avatarSize: processedBuffer.length
-        }
+          avatarSize: processedBuffer.length,
+        },
       });
     });
 
@@ -219,86 +227,97 @@ describe('AuthService - Avatar Upload', () => {
         ...mockUser,
         profile: {
           ...mockUser.profile,
-          avatarPath: 'avatars/test-user-id/old-avatar.jpg'
-        }
+          avatarPath: 'avatars/test-user-id/old-avatar.jpg',
+        },
       };
 
       const processedBuffer = Buffer.from('processed-image');
-      
+
       // Override the global sharp mock for this test
       const mockSharpInstance = {
         resize: jest.fn().mockReturnThis(),
         jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockResolvedValue(processedBuffer)
+        toBuffer: jest.fn().mockResolvedValue(processedBuffer),
       };
       (sharp as any).mockImplementation(() => mockSharpInstance);
-      
+
       (prisma.user.findUnique as any).mockResolvedValue(userWithAvatar);
-      
+
       mockStorage.upload.mockResolvedValue({
         originalPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         thumbnailPath: null,
-        url: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg'
+        url: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
       });
-      
-      mockStorage.getUrl.mockResolvedValue('http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg');
+
+      mockStorage.getUrl.mockResolvedValue(
+        'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg'
+      );
       mockStorage.delete.mockResolvedValue(undefined);
-      
+
       (prisma.profile.upsert as any).mockResolvedValue({
         ...userWithAvatar.profile,
-        avatarUrl: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
+        avatarUrl:
+          'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         avatarPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         avatarMimeType: 'image/jpeg',
-        avatarSize: processedBuffer.length
+        avatarSize: processedBuffer.length,
       });
 
       // Execute
       await authService.uploadAvatar(mockUserId, mockFile);
 
       // Verify old avatar was deleted
-      expect(mockStorage.delete).toHaveBeenCalledWith('avatars/test-user-id/old-avatar.jpg');
+      expect(mockStorage.delete).toHaveBeenCalledWith(
+        'avatars/test-user-id/old-avatar.jpg'
+      );
     });
 
     it('should reject invalid file types', async () => {
       const invalidFile = {
         ...mockFile,
-        mimetype: 'text/plain'
+        mimetype: 'text/plain',
       };
 
-      await expect(authService.uploadAvatar(mockUserId, invalidFile))
-        .rejects.toThrow(ApiError);
+      await expect(
+        authService.uploadAvatar(mockUserId, invalidFile)
+      ).rejects.toThrow(ApiError);
     });
 
     it('should reject files that are too large', async () => {
       const largeFile = {
         ...mockFile,
-        size: 6 * 1024 * 1024 // 6MB (over 5MB limit)
+        size: 6 * 1024 * 1024, // 6MB (over 5MB limit)
       };
 
-      await expect(authService.uploadAvatar(mockUserId, largeFile))
-        .rejects.toThrow(ApiError);
+      await expect(
+        authService.uploadAvatar(mockUserId, largeFile)
+      ).rejects.toThrow(ApiError);
     });
 
     it('should handle user not found', async () => {
       (prisma.user.findUnique as any).mockResolvedValue(null);
 
-      await expect(authService.uploadAvatar(mockUserId, mockFile))
-        .rejects.toThrow(ApiError);
+      await expect(
+        authService.uploadAvatar(mockUserId, mockFile)
+      ).rejects.toThrow(ApiError);
     });
 
     it('should handle image processing failure gracefully', async () => {
       (prisma.user.findUnique as any).mockResolvedValue(mockUser);
-      
+
       // Override the global sharp mock for this test to fail
       const failingSharpInstance = {
         resize: jest.fn().mockReturnThis(),
         jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockRejectedValue(new Error('Image processing failed'))
+        toBuffer: jest
+          .fn()
+          .mockRejectedValue(new Error('Image processing failed')),
       };
       (sharp as any).mockImplementation(() => failingSharpInstance);
 
-      await expect(authService.uploadAvatar(mockUserId, mockFile))
-        .rejects.toThrow(ApiError);
+      await expect(
+        authService.uploadAvatar(mockUserId, mockFile)
+      ).rejects.toThrow(ApiError);
     });
 
     it('should accept all supported image formats', async () => {
@@ -309,45 +328,48 @@ describe('AuthService - Avatar Upload', () => {
         'image/webp',
         'image/bmp',
         'image/tiff',
-        'image/tif'
+        'image/tif',
       ];
 
       const processedBuffer = Buffer.from('processed-image');
-      
+
       // Override the global sharp mock for this test
       const mockSharpInstance = {
         resize: jest.fn().mockReturnThis(),
         jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockResolvedValue(processedBuffer)
+        toBuffer: jest.fn().mockResolvedValue(processedBuffer),
       };
       (sharp as any).mockImplementation(() => mockSharpInstance);
-      
+
       (prisma.user.findUnique as any).mockResolvedValue(mockUser);
-      
+
       mockStorage.upload.mockResolvedValue({
         originalPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         thumbnailPath: null,
-        url: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg'
+        url: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
       });
-      
-      mockStorage.getUrl.mockResolvedValue('http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg');
-      
+
+      mockStorage.getUrl.mockResolvedValue(
+        'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg'
+      );
+
       (prisma.profile.upsert as any).mockResolvedValue({
         ...mockUser.profile,
-        avatarUrl: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
+        avatarUrl:
+          'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         avatarPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         avatarMimeType: 'image/jpeg',
-        avatarSize: processedBuffer.length
+        avatarSize: processedBuffer.length,
       });
 
       for (const format of supportedFormats) {
         // Reset mocks before each iteration
         jest.clearAllMocks();
-        
+
         const file = { ...mockFile, mimetype: format };
-        
+
         const result = await authService.uploadAvatar(mockUserId, file);
-        
+
         expect(result).toHaveProperty('avatarUrl');
         expect(result).toHaveProperty('message');
       }
@@ -355,31 +377,34 @@ describe('AuthService - Avatar Upload', () => {
 
     it('should always convert images to JPEG format', async () => {
       const processedBuffer = Buffer.from('processed-image');
-      
+
       // Override the global sharp mock for this test
       const mockSharpInstance = {
         resize: jest.fn().mockReturnThis(),
         jpeg: jest.fn().mockReturnThis(),
-        toBuffer: jest.fn().mockResolvedValue(processedBuffer)
+        toBuffer: jest.fn().mockResolvedValue(processedBuffer),
       };
       (sharp as any).mockImplementation(() => mockSharpInstance);
-      
+
       (prisma.user.findUnique as any).mockResolvedValue(mockUser);
-      
+
       mockStorage.upload.mockResolvedValue({
         originalPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         thumbnailPath: null,
-        url: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg'
+        url: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
       });
-      
-      mockStorage.getUrl.mockResolvedValue('http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg');
-      
+
+      mockStorage.getUrl.mockResolvedValue(
+        'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg'
+      );
+
       (prisma.profile.upsert as any).mockResolvedValue({
         ...mockUser.profile,
-        avatarUrl: 'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
+        avatarUrl:
+          'http://localhost:3001/uploads/avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         avatarPath: 'avatars/test-user-id/avatar-test-user-id-mock-uuid.jpg',
         avatarMimeType: 'image/jpeg',
-        avatarSize: processedBuffer.length
+        avatarSize: processedBuffer.length,
       });
 
       const pngFile = { ...mockFile, mimetype: 'image/png' };
@@ -390,7 +415,7 @@ describe('AuthService - Avatar Upload', () => {
         expect.any(Buffer),
         expect.stringMatching(/\.jpg$/),
         expect.objectContaining({
-          mimeType: 'image/jpeg'
+          mimeType: 'image/jpeg',
         })
       );
 
@@ -398,8 +423,8 @@ describe('AuthService - Avatar Upload', () => {
       expect(prisma.profile.upsert).toHaveBeenCalledWith(
         expect.objectContaining({
           update: expect.objectContaining({
-            avatarMimeType: 'image/jpeg'
-          })
+            avatarMimeType: 'image/jpeg',
+          }),
         })
       );
     });

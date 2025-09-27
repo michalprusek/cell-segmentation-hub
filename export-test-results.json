@@ -1,0 +1,113 @@
+{
+  "timestamp": "2025-09-22T13:53:43.859Z",
+  "consoleLogs": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "timestamp": "2025-09-22T13:53:37.540Z"
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected.",
+      "timestamp": "2025-09-22T13:53:37.577Z"
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold",
+      "timestamp": "2025-09-22T13:53:37.640Z"
+    },
+    {
+      "type": "log",
+      "text": "[2025-09-22T13:53:37.656Z] [DEBUG] ExportStateManager initialized ",
+      "timestamp": "2025-09-22T13:53:37.659Z"
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "timestamp": "2025-09-22T13:53:40.564Z"
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected.",
+      "timestamp": "2025-09-22T13:53:40.576Z"
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold",
+      "timestamp": "2025-09-22T13:53:40.643Z"
+    },
+    {
+      "type": "log",
+      "text": "[2025-09-22T13:53:40.655Z] [DEBUG] ExportStateManager initialized ",
+      "timestamp": "2025-09-22T13:53:40.662Z"
+    },
+    {
+      "type": "log",
+      "text": "🔍 Initial signal state: false",
+      "timestamp": "2025-09-22T13:53:43.535Z"
+    },
+    {
+      "type": "log",
+      "text": "🔴 After abort: true",
+      "timestamp": "2025-09-22T13:53:43.535Z"
+    }
+  ],
+  "networkLogs": [
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5174/src/lib/exportStateManager.ts",
+      "timestamp": "2025-09-22T13:53:37.491Z"
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5174/src/contexts/exports.ts",
+      "timestamp": "2025-09-22T13:53:37.495Z"
+    },
+    {
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5174/src/lib/exportStateManager.ts",
+      "timestamp": "2025-09-22T13:53:37.546Z"
+    },
+    {
+      "type": "response",
+      "status": 200,
+      "url": "http://localhost:5174/src/contexts/exports.ts",
+      "timestamp": "2025-09-22T13:53:37.553Z"
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5174/src/lib/exportStateManager.ts",
+      "timestamp": "2025-09-22T13:53:40.576Z"
+    },
+    {
+      "type": "request",
+      "method": "GET",
+      "url": "http://localhost:5174/src/contexts/exports.ts",
+      "timestamp": "2025-09-22T13:53:40.577Z"
+    },
+    {
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5174/src/lib/exportStateManager.ts",
+      "timestamp": "2025-09-22T13:53:40.599Z"
+    },
+    {
+      "type": "response",
+      "status": 304,
+      "url": "http://localhost:5174/src/contexts/exports.ts",
+      "timestamp": "2025-09-22T13:53:40.623Z"
+    }
+  ],
+  "summary": {
+    "totalLogs": 10,
+    "errors": 0,
+    "abortLogs": 1,
+    "cancelLogs": 0,
+    "exportRequests": 4,
+    "cancelRequests": 0
+  }
+}

@@ -14,15 +14,15 @@ FROM build-deps AS deps
 WORKDIR /app
 
 # Copy package files only for better caching
-COPY backend/package*.json ./
-COPY backend/tsconfig*.json ./
+COPY package*.json ./
+COPY tsconfig*.json ./
 
 # Install dependencies with cache mount
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit || npm install
 
 # Copy Prisma schema and generate client
-COPY backend/prisma ./prisma
+COPY prisma ./prisma
 RUN npx prisma generate
 
 # Stage 4: Builder with TypeScript compilation
@@ -30,7 +30,7 @@ FROM deps AS builder
 WORKDIR /app
 
 # Copy source code
-COPY backend/src ./src
+COPY src ./src
 
 # Build TypeScript (optional - can use tsx in runtime)
 RUN npx tsc --project tsconfig.prod.json || true
@@ -58,7 +58,7 @@ RUN addgroup -g 1001 -S nodejs && \
 WORKDIR /app
 
 # Copy package files and install production dependencies only
-COPY backend/package*.json ./
+COPY package*.json ./
 
 # Install production deps with cache mount
 RUN --mount=type=cache,target=/root/.npm \
@@ -77,7 +77,7 @@ RUN npx prisma generate
 
 # Copy source code
 COPY --from=builder /app/src ./src
-COPY backend/tsconfig*.json ./
+COPY tsconfig*.json ./
 
 # Create necessary directories with correct permissions
 RUN mkdir -p uploads logs data && \

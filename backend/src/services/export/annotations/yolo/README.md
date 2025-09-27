@@ -18,6 +18,7 @@ yolo/
 ## YOLO Format Overview
 
 ### Segmentation Format
+
 Each `.txt` file contains polygon annotations in normalized coordinates:
 
 ```
@@ -27,6 +28,7 @@ Each `.txt` file contains polygon annotations in normalized coordinates:
 ```
 
 ### Classes Configuration
+
 ```yaml
 # classes.txt
 cell
@@ -34,6 +36,7 @@ cell_hole
 ```
 
 ### Dataset Configuration
+
 ```yaml
 # data.yaml
 path: /path/to/dataset
@@ -41,7 +44,7 @@ train: images/train
 val: images/val
 test: images/test
 
-nc: 2  # number of classes
+nc: 2 # number of classes
 names: ['cell', 'cell_hole']
 ```
 
@@ -60,24 +63,24 @@ Configure labels to match YOLO classes:
 
 ```yaml
 # Label 1: Primary cell detection
-- name: "cell"
-  color: "#00FF00"
-  type: "polygon"  # For segmentation
+- name: 'cell'
+  color: '#00FF00'
+  type: 'polygon' # For segmentation
   # OR type: "rectangle" for detection only
   attributes:
-    - name: "cell_id"
-      type: "text"
-    - name: "quality"
-      type: "select"
-      values: ["good", "fair", "poor"]
+    - name: 'cell_id'
+      type: 'text'
+    - name: 'quality'
+      type: 'select'
+      values: ['good', 'fair', 'poor']
 
-# Label 2: Cell holes/internal structures  
-- name: "cell_hole"
-  color: "#FF0000" 
-  type: "polygon"
+# Label 2: Cell holes/internal structures
+- name: 'cell_hole'
+  color: '#FF0000'
+  type: 'polygon'
   attributes:
-    - name: "parent_cell"
-      type: "text"
+    - name: 'parent_cell'
+      type: 'text'
 ```
 
 ### 3. Convert YOLO to COCO for CVAT Import
@@ -92,7 +95,7 @@ from pathlib import Path
 
 def yolo_to_coco(yolo_dir, image_dir, output_file):
     """Convert YOLO segmentation to COCO format for CVAT import"""
-    
+
     coco_data = {
         "info": {
             "description": "Cell Segmentation - YOLO converted",
@@ -107,14 +110,14 @@ def yolo_to_coco(yolo_dir, image_dir, output_file):
         "images": [],
         "annotations": []
     }
-    
+
     # Load class names
     with open(f"{yolo_dir}/classes.txt") as f:
         classes = [line.strip() for line in f]
-    
+
     image_id = 1
     annotation_id = 1
-    
+
     # Process each image
     for img_file in Path(image_dir).glob("*.jpg"):
         # Add image info
@@ -125,7 +128,7 @@ def yolo_to_coco(yolo_dir, image_dir, output_file):
             "height": 1080
         }
         coco_data["images"].append(img_info)
-        
+
         # Process annotations
         label_file = f"{yolo_dir}/labels/{img_file.stem}.txt"
         if os.path.exists(label_file):
@@ -134,17 +137,17 @@ def yolo_to_coco(yolo_dir, image_dir, output_file):
                     parts = line.strip().split()
                     if len(parts) < 6:  # Skip invalid lines
                         continue
-                        
+
                     class_id = int(parts[0]) + 1  # COCO uses 1-based IDs
                     coords = list(map(float, parts[1:]))
-                    
+
                     # Convert normalized to absolute coordinates
                     segmentation = []
                     for i in range(0, len(coords), 2):
                         x = coords[i] * img_info["width"]
                         y = coords[i+1] * img_info["height"]
                         segmentation.extend([x, y])
-                    
+
                     annotation = {
                         "id": annotation_id,
                         "image_id": image_id,
@@ -156,9 +159,9 @@ def yolo_to_coco(yolo_dir, image_dir, output_file):
                     }
                     coco_data["annotations"].append(annotation)
                     annotation_id += 1
-        
+
         image_id += 1
-    
+
     # Save COCO file
     with open(output_file, 'w') as f:
         json.dump(coco_data, f, indent=2)
@@ -189,6 +192,7 @@ if __name__ == "__main__":
 ### 4. Import to CVAT
 
 1. **Run conversion**:
+
    ```bash
    python convert_yolo_to_coco.py
    ```
@@ -265,25 +269,28 @@ warmup_bias_lr: 0.1
 ## Label Mapping
 
 | SpheroSeg Export | YOLO Class ID | Class Name |
-|------------------|---------------|------------|
+| ---------------- | ------------- | ---------- |
 | External polygon | 0             | cell       |
 | Internal polygon | 1             | cell_hole  |
 
 ## Best Practices
 
 ### Data Preparation
+
 - ✅ **Normalize coordinates** (0.0 to 1.0 range)
 - ✅ **Consistent image sizes** for better training
 - ✅ **Balanced dataset** with various cell types
 - ✅ **Train/Val/Test split** (70/20/10 ratio)
 
 ### Training Tips
+
 - 🎯 **Start with pre-trained weights** (YOLOv8n-seg.pt)
 - 📊 **Monitor validation metrics** during training
 - 🔄 **Use data augmentation** for robustness
 - ⚡ **Adjust batch size** based on GPU memory
 
 ### Quality Assurance
+
 - 👀 **Visual inspection** of predictions
 - 📈 **Confusion matrix** analysis
 - 🎲 **Cross-validation** on different datasets
@@ -292,6 +299,7 @@ warmup_bias_lr: 0.1
 ## Integration Examples
 
 ### Real-time Detection
+
 ```python
 from ultralytics import YOLO
 
@@ -310,6 +318,7 @@ for r in results:
 ```
 
 ### Batch Processing
+
 ```python
 # Process entire directory
 results = model('path/to/images/*.jpg', save=True, save_txt=True)
@@ -318,11 +327,13 @@ results = model('path/to/images/*.jpg', save=True, save_txt=True)
 ## Troubleshooting
 
 ### Common Issues
+
 - **"Invalid coordinates"**: Check normalization (0.0-1.0 range)
 - **"Class ID out of range"**: Verify classes.txt matches data.yaml
 - **"Empty annotations"**: Ensure polygon has minimum 3 points
 
 ### Performance Tips
+
 - Use appropriate image size (640x640 for YOLOv8)
 - Balance precision vs speed with model size (n/s/m/l/x)
 - Monitor GPU utilization during training

@@ -11,7 +11,10 @@ import { EmailServiceOptions } from './emailService';
 import { retryService, RetryService } from '../utils/retryService';
 
 // Helper function to parse email timeout values - optimized defaults
-export function parseEmailTimeout(envVar: string, defaultValue = 15000): number {
+export function parseEmailTimeout(
+  envVar: string,
+  defaultValue = 15000
+): number {
   return getNumericEnvVar(envVar, defaultValue);
 }
 
@@ -30,7 +33,7 @@ export const DEFAULT_EMAIL_RETRY_CONFIG: EmailRetryConfig = {
   initialDelay: getNumericEnvVar('EMAIL_RETRY_INITIAL_DELAY', 1000),
   maxDelay: getNumericEnvVar('EMAIL_RETRY_MAX_DELAY', 10000),
   backoffFactor: parseFloat(process.env.EMAIL_RETRY_BACKOFF_FACTOR || '2'),
-  globalTimeout: getNumericEnvVar('EMAIL_GLOBAL_TIMEOUT', 30000)
+  globalTimeout: getNumericEnvVar('EMAIL_GLOBAL_TIMEOUT', 30000),
 };
 
 /**
@@ -41,18 +44,21 @@ export function isRetriableEmailError(error: Error): boolean {
   if (RetryService.isCommonRetriableError(error)) {
     return true;
   }
-  
+
   const message = error.message.toLowerCase();
-  
+
   // Do not retry authentication or permanent email errors
-  if (message.includes('auth') || 
-      message.includes('550') || // User not found
-      message.includes('551') || // User not local
-      message.includes('553') || // Mailbox name not allowed
-      message.includes('554')) { // Transaction failed
+  if (
+    message.includes('auth') ||
+    message.includes('550') || // User not found
+    message.includes('551') || // User not local
+    message.includes('553') || // Mailbox name not allowed
+    message.includes('554')
+  ) {
+    // Transaction failed
     return false;
   }
-  
+
   // Default to retriable for unknown errors
   return true;
 }
@@ -61,28 +67,35 @@ export function isRetriableEmailError(error: Error): boolean {
  * Send email with timeout wrapper - optimized for quick failures
  */
 export async function sendMailWithTimeout(
-  transporter: { sendMail: (options: SendMailOptions) => Promise<SMTPTransport.SentMessageInfo> },
+  transporter: {
+    sendMail: (
+      options: SendMailOptions
+    ) => Promise<SMTPTransport.SentMessageInfo>;
+  },
   mailOptions: SendMailOptions
 ): Promise<SMTPTransport.SentMessageInfo> {
   // Parse timeout from environment - use 60s default for slow server-side processing
   const EMAIL_TIMEOUT = parseEmailTimeout('EMAIL_TIMEOUT', 60000);
-  
+
   // Create an AbortController for better timeout handling
   const controller = new AbortController();
-  
+
   return new Promise<SMTPTransport.SentMessageInfo>((resolve, reject) => {
     const timeoutId = setTimeout(() => {
       controller.abort();
-      reject(new Error(`Email send timeout after ${EMAIL_TIMEOUT/1000} seconds`));
+      reject(
+        new Error(`Email send timeout after ${EMAIL_TIMEOUT / 1000} seconds`)
+      );
     }, EMAIL_TIMEOUT);
-    
+
     // Add signal to mail options if supported
     const mailOptionsWithSignal = {
       ...mailOptions,
       // Note: nodemailer doesn't support AbortSignal directly, but this prepares for future updates
     };
-    
-    transporter.sendMail(mailOptionsWithSignal)
+
+    transporter
+      .sendMail(mailOptionsWithSignal)
       .then((result: SMTPTransport.SentMessageInfo) => {
         clearTimeout(timeoutId);
         if (!controller.signal.aborted) {
@@ -102,27 +115,38 @@ export async function sendMailWithTimeout(
  * Send email with retry logic using exponential backoff and fail-safe timeout
  */
 export async function sendEmailWithRetry(
-  transporter: { sendMail: (options: SendMailOptions) => Promise<SMTPTransport.SentMessageInfo> },
+  transporter: {
+    sendMail: (
+      options: SendMailOptions
+    ) => Promise<SMTPTransport.SentMessageInfo>;
+  },
   config: Record<string, unknown>,
   options: EmailServiceOptions,
   retryConfig: EmailRetryConfig = DEFAULT_EMAIL_RETRY_CONFIG
 ): Promise<SMTPTransport.SentMessageInfo> {
-  const globalTimeout = retryConfig.globalTimeout || getNumericEnvVar('EMAIL_GLOBAL_TIMEOUT', 30000);
+  const globalTimeout =
+    retryConfig.globalTimeout ||
+    getNumericEnvVar('EMAIL_GLOBAL_TIMEOUT', 30000);
   const startTime = Date.now();
-  
+
   const emailOperation = async (): Promise<SMTPTransport.SentMessageInfo> => {
     // Check if we're approaching global timeout
     const elapsedTime = Date.now() - startTime;
-    if (elapsedTime >= globalTimeout - 5000) { // 5s buffer
-      logger.warn('Email operation approaching global timeout, aborting', 'EmailRetryService', {
-        to: options.to,
-        subject: options.subject,
-        elapsedTime,
-        globalTimeout
-      });
+    if (elapsedTime >= globalTimeout - 5000) {
+      // 5s buffer
+      logger.warn(
+        'Email operation approaching global timeout, aborting',
+        'EmailRetryService',
+        {
+          to: options.to,
+          subject: options.subject,
+          elapsedTime,
+          globalTimeout,
+        }
+      );
       throw new Error('Email operation timeout - queued for background retry');
     }
-    
+
     if (!transporter || !config) {
       throw new Error('Email service not properly initialized.');
     }
@@ -134,22 +158,22 @@ export async function sendEmailWithRetry(
       subject: options.subject,
       html: options.html,
       text: options.text,
-      attachments: options.attachments
+      attachments: options.attachments,
     };
-    
+
     const result = await sendMailWithTimeout(transporter, mailOptions);
-    
+
     const totalTime = Date.now() - startTime;
     logger.info('Email sent successfully', 'EmailRetryService', {
       to: options.to,
       subject: options.subject,
       messageId: result.messageId,
-      totalTime
+      totalTime,
     });
-    
+
     return result;
   };
-  
+
   return retryService.executeWithRetry(
     emailOperation,
     {
@@ -157,7 +181,7 @@ export async function sendEmailWithRetry(
       initialDelay: retryConfig.initialDelay,
       maxDelay: retryConfig.maxDelay,
       backoffFactor: retryConfig.backoffFactor,
-      operationName: `Email to ${options.to}`
+      operationName: `Email to ${options.to}`,
     },
     isRetriableEmailError
   );
@@ -188,15 +212,20 @@ const emailMetrics: EmailMetrics = {
 /**
  * Update email metrics after send attempt
  */
-export function updateEmailMetrics(success: boolean, retries = 0, error?: Error): void {
+export function updateEmailMetrics(
+  success: boolean,
+  retries = 0,
+  error?: Error
+): void {
   if (success) {
     emailMetrics.sent++;
     emailMetrics.lastSuccess = new Date();
     if (retries > 0) {
       emailMetrics.retried++;
       // Update running average of retries
-      emailMetrics.avgRetries = 
-        (emailMetrics.avgRetries * (emailMetrics.retried - 1) + retries) / emailMetrics.retried;
+      emailMetrics.avgRetries =
+        (emailMetrics.avgRetries * (emailMetrics.retried - 1) + retries) /
+        emailMetrics.retried;
     }
   } else {
     emailMetrics.failed++;
@@ -204,7 +233,7 @@ export function updateEmailMetrics(success: boolean, retries = 0, error?: Error)
       emailMetrics.lastError = error.message;
     }
   }
-  
+
   // Log metrics periodically
   if ((emailMetrics.sent + emailMetrics.failed) % 100 === 0) {
     logger.info('Email metrics checkpoint', 'EmailRetryService', emailMetrics);
@@ -240,37 +269,45 @@ export function queueEmailForRetry(options: EmailServiceOptions): string {
     id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     options,
     createdAt: new Date(),
-    attempts: 0
+    attempts: 0,
   };
-  
+
   emailQueue.push(queuedEmail);
-  
+
   logger.info('Email queued for background retry', 'EmailRetryService', {
     id: queuedEmail.id,
     to: options.to,
     subject: options.subject,
-    queueLength: emailQueue.length
+    queueLength: emailQueue.length,
   });
-  
+
   // Start processing queue if not already running
   if (!queueProcessing) {
-    logger.info('Starting email queue processing immediately', 'EmailRetryService', {
-      queueLength: emailQueue.length
-    });
-    
+    logger.info(
+      'Starting email queue processing immediately',
+      'EmailRetryService',
+      {
+        queueLength: emailQueue.length,
+      }
+    );
+
     // Use setImmediate to ensure the queue starts processing in next tick
     setImmediate(() => {
       processEmailQueue().catch(error => {
-        logger.error('Error processing email queue:', error as Error, 'EmailRetryService');
+        logger.error(
+          'Error processing email queue:',
+          error as Error,
+          'EmailRetryService'
+        );
         queueProcessing = false; // Reset flag on error
       });
     });
   } else {
     logger.info('Email queue processing already running', 'EmailRetryService', {
-      queueLength: emailQueue.length
+      queueLength: emailQueue.length,
     });
   }
-  
+
   return queuedEmail.id;
 }
 
@@ -279,128 +316,154 @@ export function queueEmailForRetry(options: EmailServiceOptions): string {
  */
 async function processEmailQueue(): Promise<void> {
   if (queueProcessing) {
-    logger.info('Email queue processing already running, skipping', 'EmailRetryService');
+    logger.info(
+      'Email queue processing already running, skipping',
+      'EmailRetryService'
+    );
     return;
   }
   queueProcessing = true;
-  
-  logger.info('Starting email queue processing', 'EmailRetryService', { 
-    queueLength: emailQueue.length 
+
+  logger.info('Starting email queue processing', 'EmailRetryService', {
+    queueLength: emailQueue.length,
   });
-  
+
   while (emailQueue.length > 0) {
     const queuedEmail = emailQueue.shift();
     if (!queuedEmail) {
       continue;
     }
-    
+
     try {
       queuedEmail.attempts++;
-      
+
       logger.info('Processing queued email', 'EmailRetryService', {
         id: queuedEmail.id,
         to: queuedEmail.options.to,
         subject: queuedEmail.options.subject,
-        attempt: queuedEmail.attempts
+        attempt: queuedEmail.attempts,
       });
-      
+
       // For UTIA SMTP, use extended timeout configuration
       const isUTIA = process.env.SMTP_HOST === 'mail.utia.cas.cz';
-      
+
       // Don't modify environment variables - pass timeout config directly
-      const timeoutConfig = isUTIA ? {
-        timeout: 300000, // 5 minutes for UTIA
-        socketTimeout: 300000
-      } : {
-        timeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'),
-        socketTimeout: parseInt(process.env.SMTP_SOCKET_TIMEOUT_MS || '60000')
-      };
-      
+      const timeoutConfig = isUTIA
+        ? {
+            timeout: 300000, // 5 minutes for UTIA
+            socketTimeout: 300000,
+          }
+        : {
+            timeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'),
+            socketTimeout: parseInt(
+              process.env.SMTP_SOCKET_TIMEOUT_MS || '60000'
+            ),
+          };
+
       if (isUTIA) {
-        logger.info('Using extended timeouts for UTIA SMTP background processing', 'EmailRetryService', {
-          emailTimeout: '300s',
-          socketTimeout: '300s'
-        });
+        logger.info(
+          'Using extended timeouts for UTIA SMTP background processing',
+          'EmailRetryService',
+          {
+            emailTimeout: '300s',
+            socketTimeout: '300s',
+          }
+        );
       }
-      
+
       try {
         // Import the email service dynamically to avoid circular dependency
         const { sendEmail } = await import('./emailService');
-        
+
         logger.info('Sending email from queue', 'EmailRetryService', {
           id: queuedEmail.id,
           to: queuedEmail.options.to,
           attempt: queuedEmail.attempts,
-          timeoutConfig
+          timeoutConfig,
         });
-        
+
         // Send email without queuing (allowQueue = false to prevent infinite loop)
         await sendEmail(queuedEmail.options, false);
-        
-        logger.info('Queued email processed successfully', 'EmailRetryService', {
-          id: queuedEmail.id,
-          to: queuedEmail.options.to,
-          subject: queuedEmail.options.subject,
-          attempt: queuedEmail.attempts,
-          isUTIA
-        });
-        
+
+        logger.info(
+          'Queued email processed successfully',
+          'EmailRetryService',
+          {
+            id: queuedEmail.id,
+            to: queuedEmail.options.to,
+            subject: queuedEmail.options.subject,
+            attempt: queuedEmail.attempts,
+            isUTIA,
+          }
+        );
       } catch (sendError) {
         // Log detailed error for debugging
-        logger.error('Failed to send email from queue:', sendError as Error, 'EmailRetryService', {
-          id: queuedEmail.id,
-          to: queuedEmail.options.to,
-          attempt: queuedEmail.attempts,
-          errorMessage: (sendError as Error).message,
-          errorStack: (sendError as Error).stack
-        });
+        logger.error(
+          'Failed to send email from queue:',
+          sendError as Error,
+          'EmailRetryService',
+          {
+            id: queuedEmail.id,
+            to: queuedEmail.options.to,
+            attempt: queuedEmail.attempts,
+            errorMessage: (sendError as Error).message,
+            errorStack: (sendError as Error).stack,
+          }
+        );
         throw sendError;
       }
-      
     } catch (error) {
       queuedEmail.lastError = (error as Error).message;
-      
+
       // For UTIA SMTP, be more persistent with retries
       const maxRetries = process.env.SMTP_HOST === 'mail.utia.cas.cz' ? 5 : 3;
-      
+
       if (queuedEmail.attempts < maxRetries) {
         logger.warn('Queued email failed, will retry', 'EmailRetryService', {
           id: queuedEmail.id,
           attempt: queuedEmail.attempts,
           maxRetries,
           error: queuedEmail.lastError,
-          willRetryIn: `${Math.min(queuedEmail.attempts * 60, 600)} seconds`
+          willRetryIn: `${Math.min(queuedEmail.attempts * 60, 600)} seconds`,
         });
-        
+
         // Re-queue with exponential backoff delay
         const delay = Math.min(queuedEmail.attempts * 60000, 600000); // 1-10 minute delay
         setTimeout(() => {
           emailQueue.push(queuedEmail);
-          
+
           // Restart queue processing if it stopped
           if (!queueProcessing) {
             processEmailQueue().catch(err => {
-              logger.error('Error restarting email queue processing:', err as Error, 'EmailRetryService');
+              logger.error(
+                'Error restarting email queue processing:',
+                err as Error,
+                'EmailRetryService'
+              );
             });
           }
         }, delay);
-        
       } else {
-        logger.error('Queued email permanently failed after all retries:', new Error(queuedEmail.lastError || 'Unknown error'), 'EmailRetryService', {
-          id: queuedEmail.id,
-          to: queuedEmail.options.to,
-          subject: queuedEmail.options.subject,
-          attempts: queuedEmail.attempts,
-          maxRetries
-        });
+        logger.error(
+          'Queued email permanently failed after all retries:',
+          new Error(queuedEmail.lastError || 'Unknown error'),
+          'EmailRetryService',
+          {
+            id: queuedEmail.id,
+            to: queuedEmail.options.to,
+            subject: queuedEmail.options.subject,
+            attempts: queuedEmail.attempts,
+            maxRetries,
+          }
+        );
       }
     }
-    
+
     // Longer delay between processing UTIA queue items to avoid overwhelming server
     const delay = process.env.SMTP_HOST === 'mail.utia.cas.cz' ? 5000 : 1000;
     await new Promise(resolve => setTimeout(resolve, delay));
   }
-  
+
   queueProcessing = false;
   logger.info('Email queue processing completed', 'EmailRetryService');
 }
@@ -408,7 +471,11 @@ async function processEmailQueue(): Promise<void> {
 /**
  * Get queue status for monitoring
  */
-export function getQueueStatus(): { length: number; processing: boolean; emails: Array<{id: string; to: string; subject: string; attempts: number}> } {
+export function getQueueStatus(): {
+  length: number;
+  processing: boolean;
+  emails: Array<{ id: string; to: string; subject: string; attempts: number }>;
+} {
   return {
     length: emailQueue.length,
     processing: queueProcessing,
@@ -416,8 +483,8 @@ export function getQueueStatus(): { length: number; processing: boolean; emails:
       id: email.id,
       to: email.options.to,
       subject: email.options.subject,
-      attempts: email.attempts
-    }))
+      attempts: email.attempts,
+    })),
   };
 }
 
@@ -427,14 +494,17 @@ export function getQueueStatus(): { length: number; processing: boolean; emails:
 export async function forceProcessQueue(): Promise<void> {
   logger.info('Force processing email queue requested', 'EmailRetryService', {
     queueLength: emailQueue.length,
-    currentlyProcessing: queueProcessing
+    currentlyProcessing: queueProcessing,
   });
-  
+
   if (queueProcessing) {
-    logger.warn('Email queue already processing, cannot force', 'EmailRetryService');
+    logger.warn(
+      'Email queue already processing, cannot force',
+      'EmailRetryService'
+    );
     return;
   }
-  
+
   await processEmailQueue();
 }
 

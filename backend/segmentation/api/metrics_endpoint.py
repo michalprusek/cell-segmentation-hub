@@ -22,6 +22,7 @@ class MetricsRequest(BaseModel):
 class MetricsResponse(BaseModel):
     Area: float
     Perimeter: float
+    PerimeterWithHoles: float
     EquivalentDiameter: float
     Circularity: float
     FeretDiameterMax: float
@@ -34,6 +35,9 @@ class MetricsResponse(BaseModel):
     Convexity: float
     Solidity: float
     Sphericity: float
+    Extent: float
+    BoundingBoxWidth: float
+    BoundingBoxHeight: float
 
 @router.post("/calculate-metrics", response_model=MetricsResponse)
 async def calculate_metrics(request: MetricsRequest):
@@ -44,36 +48,50 @@ async def calculate_metrics(request: MetricsRequest):
     try:
         # Convert contour to numpy array
         contour = np.array(request.contour, dtype=np.float32)
-        
+
         if len(contour.shape) == 2:
             contour = contour.reshape((-1, 1, 2))
-        
-        # Calculate metrics for main contour
-        metrics = calculate_all(contour)
-        
-        # If there are holes, subtract their areas
+
+        # Process hole contours if provided
+        hole_contours = []
         if request.holes:
-            total_hole_area = 0
             for hole in request.holes:
                 hole_contour = np.array(hole, dtype=np.float32)
                 if len(hole_contour.shape) == 2:
                     hole_contour = hole_contour.reshape((-1, 1, 2))
-                hole_area = cv2.contourArea(hole_contour)
-                total_hole_area += hole_area
-            
-            # Adjust area by subtracting hole areas
-            metrics["Area"] -= total_hole_area
-            
-            # Recalculate metrics that depend on area
+                hole_contours.append(hole_contour)
+
+        # Calculate all metrics with hole support
+        metrics = calculate_all(contour, hole_contours if hole_contours else None)
+
+        # If there are holes, adjust the area
+        if hole_contours:
+            total_hole_area = sum(cv2.contourArea(hole) for hole in hole_contours)
+            metrics["Area"] = max(0, metrics["Area"] - total_hole_area)
+
+            # Recalculate area-dependent metrics with adjusted area
             if metrics["Area"] > 0:
                 metrics["EquivalentDiameter"] = np.sqrt(4 * metrics["Area"] / np.pi)
-                metrics["Circularity"] = (4 * np.pi * metrics["Area"]) / (metrics["Perimeter"] ** 2) if metrics["Perimeter"] > 0 else 0
-                metrics["Sphericity"] = np.pi * np.sqrt(4 * metrics["Area"] / np.pi) / metrics["Perimeter"] if metrics["Perimeter"] > 0 else 0
+                # Circularity and compactness use perimeter WITH holes
+                perimeter_with_holes = metrics["PerimeterWithHoles"]
+                metrics["Circularity"] = min(1.0, (4 * np.pi * metrics["Area"]) / (perimeter_with_holes ** 2)) if perimeter_with_holes > 0 else 0
+                metrics["Compactness"] = (perimeter_with_holes ** 2) / (4 * np.pi * metrics["Area"]) if metrics["Area"] > 0 else 0
+                metrics["Sphericity"] = np.pi * np.sqrt(4 * metrics["Area"] / np.pi) / perimeter_with_holes if perimeter_with_holes > 0 else 0
+                # Solidity needs recalculation with adjusted area
+                hull = cv2.convexHull(contour)
+                hull_area = cv2.contourArea(hull)
+                metrics["Solidity"] = metrics["Area"] / hull_area if hull_area > 0 else 0
+                # Extent needs recalculation
+                bbox_area = metrics["BoundingBoxWidth"] * metrics["BoundingBoxHeight"]
+                metrics["Extent"] = metrics["Area"] / bbox_area if bbox_area > 0 else 0
             else:
                 # Set safe values when area is non-positive
                 metrics["EquivalentDiameter"] = 0
                 metrics["Circularity"] = 0
+                metrics["Compactness"] = 0
                 metrics["Sphericity"] = 0
+                metrics["Solidity"] = 0
+                metrics["Extent"] = 0
         
         return MetricsResponse(**metrics)
         
@@ -95,6 +113,7 @@ async def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[Metric
             results.append(MetricsResponse(
                 Area=0,
                 Perimeter=0,
+                PerimeterWithHoles=0,
                 EquivalentDiameter=0,
                 Circularity=0,
                 FeretDiameterMax=0,
@@ -106,7 +125,10 @@ async def batch_calculate_metrics(polygons: List[MetricsRequest]) -> List[Metric
                 Compactness=0,
                 Convexity=0,
                 Solidity=0,
-                Sphericity=0
+                Sphericity=0,
+                Extent=0,
+                BoundingBoxWidth=0,
+                BoundingBoxHeight=0
             ))
     
     return results

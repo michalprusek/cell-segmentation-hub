@@ -4,8 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
-import { Link } from 'react-router-dom';
-import { Clock, Edit, Mail, MapPin, Loader2, Camera } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  Clock,
+  Edit,
+  Mail,
+  MapPin,
+  Loader2,
+  Camera,
+  ArrowLeft,
+} from 'lucide-react';
 import { useAuth, useLanguage } from '@/contexts/exports';
 // Note: Profile functionality now handled by AuthContext and Settings page
 import AvatarUploadButton from '@/components/profile/AvatarUploadButton';
@@ -36,6 +44,7 @@ interface ActivityItem {
 const Profile = () => {
   const { user, profile, refreshProfile } = useAuth();
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [projectCount, setProjectCount] = useState(0);
@@ -287,6 +296,16 @@ const Profile = () => {
     fetchData();
   }, [user, profile, t]);
 
+  // Update avatar in profileData when profile changes
+  useEffect(() => {
+    if (profile?.avatarUrl && profileData) {
+      setProfileData(prev => ({
+        ...prev,
+        avatar: profile.avatarUrl || '/placeholder.svg',
+      }));
+    }
+  }, [profile?.avatarUrl]);
+
   // Clean up object URLs on unmount or when avatar image changes
   useEffect(() => {
     const currentUrl = avatarImageSrc;
@@ -430,17 +449,31 @@ const Profile = () => {
 
       // Upload to server
       const result = await apiClient.uploadAvatar(croppedFile);
+      logger.info('Avatar upload result:', result);
 
-      // Update profile data locally
-      if (profileData) {
-        setProfileData({
-          ...profileData,
+      // Update local profile data immediately with the new avatar URL
+      if (result.avatarUrl && profileData) {
+        setProfileData(prevData => ({
+          ...prevData,
           avatar: result.avatarUrl,
-        });
+        }));
+        logger.info(
+          'Updated local profile data with avatar:',
+          result.avatarUrl
+        );
       }
 
-      // Refresh global profile state
-      await refreshProfile();
+      // Then refresh global profile state
+      try {
+        await refreshProfile();
+        logger.info('Profile refreshed successfully');
+      } catch (refreshError) {
+        logger.error(
+          'Failed to refresh profile after avatar upload:',
+          refreshError
+        );
+        // Don't fail the whole operation if refresh fails
+      }
 
       toast.success(t('profile.avatar.uploadSuccess'));
     } catch (error) {
@@ -485,23 +518,33 @@ const Profile = () => {
       <DashboardHeader />
 
       <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-start mb-8">
-          <h1 className="text-2xl font-bold dark:text-white">
+        <div className="mb-6 flex items-center">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mr-4"
+            onClick={() => navigate(-1)}
+          >
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {t('common.back')}
+          </Button>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             {t('profile.title')}
           </h1>
-          <div className="flex space-x-2">
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="dark:border-gray-700 dark:text-gray-300"
-            >
-              <Link to="/settings">
-                <Edit className="h-4 w-4 mr-2" />
-                {t('profile.editProfile')}
-              </Link>
-            </Button>
-          </div>
+        </div>
+
+        <div className="flex justify-end mb-8">
+          <Button
+            asChild
+            variant="outline"
+            size="sm"
+            className="dark:border-gray-700 dark:text-gray-300"
+          >
+            <Link to="/settings">
+              <Edit className="h-4 w-4 mr-2" />
+              {t('profile.editProfile')}
+            </Link>
+          </Button>
         </div>
 
         {profileData && (
@@ -513,9 +556,16 @@ const Profile = () => {
                   <div className="flex flex-col items-center text-center">
                     <div className="relative mb-4">
                       <div className="w-24 h-24 rounded-full overflow-hidden border-2 border-blue-100 dark:border-blue-900 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                        {profile?.avatarUrl || profileData.avatar ? (
+                        {profileData?.avatar &&
+                        profileData.avatar !== '/placeholder.svg' ? (
                           <img
-                            src={profile?.avatarUrl || profileData.avatar}
+                            src={profileData.avatar}
+                            alt={profileData.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : profile?.avatarUrl ? (
+                          <img
+                            src={profile.avatarUrl}
                             alt={profileData.name}
                             className="w-full h-full object-cover"
                           />

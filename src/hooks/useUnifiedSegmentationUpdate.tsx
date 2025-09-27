@@ -6,11 +6,12 @@ import { toast } from 'sonner';
 import apiClient from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { thumbnailCache } from '@/lib/thumbnailCache';
+import { performanceMonitor } from '@/lib/performanceMonitor';
 import WebSocketManager from '@/services/webSocketManager';
 import type {
   QueueStats,
   SegmentationUpdate,
-  WebSocketEventMap,
+  WebSocketEventMap as _WebSocketEventMap,
 } from '@/types/websocket';
 
 interface ThumbnailUpdateData {
@@ -77,13 +78,15 @@ export const useUnifiedSegmentationUpdate = ({
    * Fetch full segmentation data for a completed image
    */
   const fetchSegmentationData = useCallback(
-    async (imageId: string): Promise<any> => {
+    async (imageId: string, retryCount: number = 0): Promise<any> => {
       if (pendingFetchesRef.current.has(imageId)) {
         logger.debug(
           `🔄 Segmentation fetch already in progress for ${imageId.slice(0, 8)}`
         );
         return null;
       }
+
+      const startTime = performance.now();
 
       try {
         pendingFetchesRef.current.add(imageId);
@@ -94,6 +97,8 @@ export const useUnifiedSegmentationUpdate = ({
         const segmentationData =
           await apiClient.getSegmentationResults(imageId);
 
+        const duration = performance.now() - startTime;
+
         if (segmentationData) {
           logger.debug(
             `✅ Successfully fetched segmentation data for ${imageId.slice(0, 8)}`,
@@ -102,14 +107,40 @@ export const useUnifiedSegmentationUpdate = ({
               dimensions: `${segmentationData.imageWidth}x${segmentationData.imageHeight}`,
             }
           );
+
+          // Record successful database fetch with timing
+          performanceMonitor.recordDatabaseFetch(
+            imageId,
+            duration,
+            true,
+            retryCount
+          );
+        } else {
+          // Record unsuccessful fetch
+          performanceMonitor.recordDatabaseFetch(
+            imageId,
+            duration,
+            false,
+            retryCount
+          );
         }
 
         return segmentationData;
       } catch (error) {
+        const duration = performance.now() - startTime;
         logger.warn(
           `⚠️ Failed to fetch segmentation data for ${imageId.slice(0, 8)}:`,
           error
         );
+
+        // Record failed fetch
+        performanceMonitor.recordDatabaseFetch(
+          imageId,
+          duration,
+          false,
+          retryCount
+        );
+
         return null;
       } finally {
         pendingFetchesRef.current.delete(imageId);
@@ -131,7 +162,6 @@ export const useUnifiedSegmentationUpdate = ({
         return;
       }
 
-      // ENHANCED DEBUG LOGGING
       logger.warn(
         `🔵 UNIFIED HOOK Processing update for ${update.imageId.slice(0, 8)}`,
         {
@@ -145,6 +175,14 @@ export const useUnifiedSegmentationUpdate = ({
           timestamp: new Date().toISOString(),
         }
       );
+
+      // Record WebSocket timing for race condition detection
+      if (update.status === 'completed' || update.status === 'segmented') {
+        performanceMonitor.recordWebSocketUpdate(update.imageId, {
+          status: update.status,
+          hasResult: !!update.segmentationResult,
+        });
+      }
 
       setLastUpdate(update);
 
@@ -162,14 +200,36 @@ export const useUnifiedSegmentationUpdate = ({
         (update.status === 'completed' || update.status === 'segmented') &&
         !update.segmentationResult
       ) {
-        const segmentationData = await fetchSegmentationData(update.imageId);
+        logger.info(
+          `🔍 Fetching segmentation results for ${update.imageId.slice(0, 8)} (status: ${update.status})`
+        );
+        const segmentationData = await fetchSegmentationData(update.imageId, 0);
         if (segmentationData) {
+          logger.info(
+            `✅ Got segmentation results for ${update.imageId.slice(0, 8)}:`,
+            {
+              polygonCount: segmentationData.polygons?.length || 0,
+              hasData: true,
+            }
+          );
           unifiedUpdate.segmentationResult = segmentationData;
+        } else {
+          logger.warn(
+            `⚠️ No segmentation data returned for ${update.imageId.slice(0, 8)}`
+          );
         }
       }
 
       // Trigger callback with unified update FIRST
       if (onImageUpdate) {
+        logger.info(
+          `📤 Calling onImageUpdate for ${unifiedUpdate.imageId.slice(0, 8)}:`,
+          {
+            status: unifiedUpdate.status,
+            hasSegmentationResult: !!unifiedUpdate.segmentationResult,
+            polygonCount: unifiedUpdate.segmentationResult?.polygons?.length,
+          }
+        );
         onImageUpdate(unifiedUpdate);
       }
 

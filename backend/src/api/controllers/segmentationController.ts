@@ -27,23 +27,30 @@ class SegmentationController {
   /**
    * Validate required route parameters
    */
-  private validateParams(params: Record<string, string | undefined>, required: string[], res: Response): boolean {
+  private validateParams(
+    params: Record<string, string | undefined>,
+    required: string[],
+    res: Response
+  ): boolean {
     for (const param of required) {
       if (!params[param]) {
-        ResponseHelper.validationError(res, `Missing required parameter: ${param}`);
+        ResponseHelper.validationError(
+          res,
+          `Missing required parameter: ${param}`
+        );
         return false;
       }
     }
     return true;
   }
 
-
-
-
   /**
    * Get segmentation results for an image
    */
-  getSegmentationResults = async (req: Request, res: Response): Promise<void> => {
+  getSegmentationResults = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
     try {
       const { imageId } = req.params;
       const userId = this.validateUser(req, res);
@@ -56,35 +63,55 @@ class SegmentationController {
         return;
       }
 
-      logger.debug('Controller: Fetching segmentation results', 'SegmentationController', {
+      logger.debug(
+        'Controller: Fetching segmentation results',
+        'SegmentationController',
+        {
+          imageId,
+          userId,
+        }
+      );
+
+      const results = await this.segmentationService.getSegmentationResults(
         imageId,
         userId
-      });
-
-      const results = await this.segmentationService.getSegmentationResults(imageId, userId);
+      );
 
       if (results) {
-        logger.debug('Controller: Segmentation results found', 'SegmentationController', {
-          imageId,
-          polygonCount: results.polygons?.length || 0,
-          hasResults: !!results
-        });
+        logger.debug(
+          'Controller: Segmentation results found',
+          'SegmentationController',
+          {
+            imageId,
+            polygonCount: results.polygons?.length || 0,
+            hasResults: !!results,
+          }
+        );
         ResponseHelper.success(res, results, 'Výsledky segmentace načteny');
       } else {
-        logger.debug('Controller: No segmentation results found', 'SegmentationController', {
-          imageId,
-          userId
-        });
+        logger.debug(
+          'Controller: No segmentation results found',
+          'SegmentationController',
+          {
+            imageId,
+            userId,
+          }
+        );
         ResponseHelper.notFound(res, 'Výsledky segmentace nenalezeny');
       }
-
     } catch (error) {
-      logger.error('Failed to get segmentation results', error instanceof Error ? error : undefined, 'SegmentationController', {
-        imageId: req.params.imageId,
-        userId: req.user?.id
-      });
-      
-      const errorMessage = error instanceof Error ? error.message : 'Chyba při načítání výsledků';
+      logger.error(
+        'Failed to get segmentation results',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        {
+          imageId: req.params.imageId,
+          userId: req.user?.id,
+        }
+      );
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Chyba při načítání výsledků';
       ResponseHelper.internalError(res, error as Error, errorMessage);
     }
   };
@@ -92,44 +119,54 @@ class SegmentationController {
   /**
    * Update segmentation results for an image
    */
-  updateSegmentationResults = async (req: Request, res: Response): Promise<void> => {
+  updateSegmentationResults = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
     try {
       const { imageId } = req.params;
       const { polygons, imageWidth, imageHeight } = req.body;
-      
+
       // Validate user authentication
       const userId = this.validateUser(req, res);
       if (!userId) {
         return;
       }
-      
+
       // Validate required parameters
       if (!this.validateParams(req.params, ['imageId'], res)) {
         return;
       }
-      
+
       if (!polygons || !Array.isArray(polygons)) {
         ResponseHelper.validationError(res, 'Polygony musí být pole');
         return;
       }
 
       const result = await this.segmentationService.updateSegmentationResults(
-        imageId as string, 
-        polygons, 
-        userId, 
-        imageWidth, 
+        imageId as string,
+        polygons,
+        userId,
+        imageWidth,
         imageHeight
       );
 
       ResponseHelper.success(res, result, 'Výsledky segmentace aktualizovány');
-
     } catch (error) {
-      logger.error('Failed to update segmentation results', error instanceof Error ? error : undefined, 'SegmentationController', {
-        imageId: req.params.imageId,
-        userId: req.user?.id
-      });
-      
-      const errorMessage = error instanceof Error ? error.message : 'Chyba při aktualizaci výsledků';
+      logger.error(
+        'Failed to update segmentation results',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        {
+          imageId: req.params.imageId,
+          userId: req.user?.id,
+        }
+      );
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Chyba při aktualizaci výsledků';
       ResponseHelper.internalError(res, error as Error, errorMessage);
     }
   };
@@ -137,32 +174,43 @@ class SegmentationController {
   /**
    * Delete segmentation results for an image
    */
-  deleteSegmentationResults = async (req: Request, res: Response): Promise<void> => {
+  deleteSegmentationResults = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
     try {
       const { imageId } = req.params;
-      
+
       // Validate user authentication
       const userId = this.validateUser(req, res);
       if (!userId) {
         return;
       }
-      
+
       // Validate required parameters
       if (!this.validateParams(req.params, ['imageId'], res)) {
         return;
       }
 
-      await this.segmentationService.deleteSegmentationResults(imageId as string, userId);
+      await this.segmentationService.deleteSegmentationResults(
+        imageId as string,
+        userId
+      );
 
       ResponseHelper.success(res, undefined, 'Výsledky segmentace smazány');
-
     } catch (error) {
-      logger.error('Failed to delete segmentation results', error instanceof Error ? error : undefined, 'SegmentationController', {
-        imageId: req.params.imageId,
-        userId: req.user?.id
-      });
-      
-      const errorMessage = error instanceof Error ? error.message : 'Chyba při mazání výsledků';
+      logger.error(
+        'Failed to delete segmentation results',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        {
+          imageId: req.params.imageId,
+          userId: req.user?.id,
+        }
+      );
+
+      const errorMessage =
+        error instanceof Error ? error.message : 'Chyba při mazání výsledků';
       ResponseHelper.internalError(res, error as Error, errorMessage);
     }
   };
@@ -172,8 +220,13 @@ class SegmentationController {
    */
   batchSegment = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { imageIds, model = 'hrnet', threshold = 0.5, detectHoles = true } = req.body;
-      
+      const {
+        imageIds,
+        model = 'hrnet',
+        threshold = 0.5,
+        detectHoles = true,
+      } = req.body;
+
       // Validate user authentication
       const userId = this.validateUser(req, res);
       if (!userId) {
@@ -182,7 +235,10 @@ class SegmentationController {
 
       // Validate parameters
       if (!Array.isArray(imageIds) || imageIds.length === 0) {
-        ResponseHelper.validationError(res, 'Musíte zadat alespoň jeden obrázek');
+        ResponseHelper.validationError(
+          res,
+          'Musíte zadat alespoň jeden obrázek'
+        );
         return;
       }
 
@@ -192,12 +248,18 @@ class SegmentationController {
       }
 
       if (threshold < 0.1 || threshold > 0.9) {
-        ResponseHelper.validationError(res, 'Threshold musí být mezi 0.1 a 0.9');
+        ResponseHelper.validationError(
+          res,
+          'Threshold musí být mezi 0.1 a 0.9'
+        );
         return;
       }
 
       if (imageIds.length > 50) {
-        ResponseHelper.validationError(res, 'Můžete zpracovat maximálně 50 obrázků najednou');
+        ResponseHelper.validationError(
+          res,
+          'Můžete zpracovat maximálně 50 obrázků najednou'
+        );
         return;
       }
 
@@ -206,7 +268,7 @@ class SegmentationController {
         model,
         threshold,
         detectHoles,
-        userId
+        userId,
       });
 
       const result = await this.segmentationService.batchProcess(
@@ -218,13 +280,20 @@ class SegmentationController {
       );
 
       ResponseHelper.success(res, result, 'Dávkové zpracování dokončeno');
-
     } catch (error) {
-      logger.error('Batch segmentation failed', error instanceof Error ? error : undefined, 'SegmentationController', {
-        userId: req.user?.id
-      });
-      
-      const errorMessage = error instanceof Error ? error.message : 'Chyba při dávkovém zpracování';
+      logger.error(
+        'Batch segmentation failed',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        {
+          userId: req.user?.id,
+        }
+      );
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : 'Chyba při dávkovém zpracování';
       ResponseHelper.internalError(res, error as Error, errorMessage);
     }
   };
@@ -233,10 +302,13 @@ class SegmentationController {
    * Batch fetch segmentation results for multiple images
    * This is a critical performance optimization for large projects
    */
-  batchGetSegmentationResults = async (req: Request, res: Response): Promise<void> => {
+  batchGetSegmentationResults = async (
+    req: Request,
+    res: Response
+  ): Promise<void> => {
     try {
       const { imageIds } = req.body;
-      
+
       // Validate user authentication
       const userId = this.validateUser(req, res);
       if (!userId) {
@@ -245,35 +317,50 @@ class SegmentationController {
 
       // Validate parameters
       if (!Array.isArray(imageIds) || imageIds.length === 0) {
-        ResponseHelper.validationError(res, 'Image IDs must be provided as an array');
+        ResponseHelper.validationError(
+          res,
+          'Image IDs must be provided as an array'
+        );
         return;
       }
 
       // Limit batch size to prevent memory issues
       if (imageIds.length > 1000) {
-        ResponseHelper.validationError(res, 'Maximum 1000 images per batch request');
+        ResponseHelper.validationError(
+          res,
+          'Maximum 1000 images per batch request'
+        );
         return;
       }
 
       // Fetch all segmentation results in a single efficient query
-      const results = await this.segmentationService.getBatchSegmentationResults(
-        imageIds,
-        userId
+      const results =
+        await this.segmentationService.getBatchSegmentationResults(
+          imageIds,
+          userId
+        );
+
+      ResponseHelper.success(
+        res,
+        results,
+        'Batch segmentation results fetched'
+      );
+    } catch (error) {
+      logger.error(
+        'Failed to batch fetch segmentation results',
+        error instanceof Error ? error : undefined,
+        'SegmentationController',
+        {
+          imageCount: req.body.imageIds?.length,
+          userId: req.user?.id,
+        }
       );
 
-      ResponseHelper.success(res, results, 'Batch segmentation results fetched');
-
-    } catch (error) {
-      logger.error('Failed to batch fetch segmentation results', error instanceof Error ? error : undefined, 'SegmentationController', {
-        imageCount: req.body.imageIds?.length,
-        userId: req.user?.id
-      });
-      
-      const errorMessage = error instanceof Error ? error.message : 'Error fetching batch results';
+      const errorMessage =
+        error instanceof Error ? error.message : 'Error fetching batch results';
       ResponseHelper.internalError(res, error as Error, errorMessage);
     }
   };
-
 }
 
 export const segmentationController = new SegmentationController();

@@ -1,6 +1,7 @@
 import React from 'react';
 import { EditMode, InteractionState, TransformState } from '../../types';
 import { Point, Polygon } from '@/lib/segmentation';
+import { calculateVertexRadius, defaultConfig } from './CanvasVertex';
 
 interface CanvasTemporaryGeometryLayerProps {
   transform: TransformState;
@@ -28,7 +29,8 @@ const CanvasTemporaryGeometryLayer: React.FC<
   polygons,
 }) => {
   const strokeWidth = Math.max(1, 2 / transform.zoom);
-  const vertexRadius = Math.max(3, 5 / transform.zoom);
+  // Use the same vertex radius calculation as regular vertices for consistency
+  const vertexRadius = calculateVertexRadius(transform.zoom, defaultConfig);
 
   const renderCreatePolygonPreview = () => {
     if (editMode !== EditMode.CreatePolygon || tempPoints.length === 0) {
@@ -47,8 +49,8 @@ const CanvasTemporaryGeometryLayer: React.FC<
           cy={point.y}
           r={vertexRadius}
           fill={isFirstPoint ? '#3b82f6' : '#4ade80'}
-          stroke="#fff"
-          strokeWidth={strokeWidth}
+          stroke="none"
+          strokeWidth={0}
           style={{ opacity: 0.8 }}
         />
       );
@@ -148,8 +150,8 @@ const CanvasTemporaryGeometryLayer: React.FC<
           cy={point.y}
           r={vertexRadius}
           fill="#ffcc00"
-          stroke="#fff"
-          strokeWidth={strokeWidth}
+          stroke="none"
+          strokeWidth={0}
           style={{ opacity: 0.9 }}
         />
       );
@@ -206,8 +208,8 @@ const CanvasTemporaryGeometryLayer: React.FC<
           cy={point.y}
           r={vertexRadius}
           fill="#60a5fa"
-          stroke="#fff"
-          strokeWidth={strokeWidth}
+          stroke="none"
+          strokeWidth={0}
           style={{ opacity: 0.8 }}
         />
       );

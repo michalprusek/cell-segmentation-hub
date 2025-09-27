@@ -4,6 +4,8 @@ export default {
     loading: 'Loading...',
     save: 'Save',
     cancel: 'Cancel',
+    cancelling: 'Cancelling...',
+    dismiss: 'Dismiss',
     delete: 'Delete',
     edit: 'Edit',
     create: 'Create',
@@ -73,6 +75,20 @@ export default {
     untitledImage: 'Untitled Image',
     rename: 'Rename',
     redirectingToDashboard: 'Redirecting to dashboard...',
+
+    // Retry mechanism
+    retry: 'Retry',
+    retrying: 'Retrying...',
+    retryAttempt: 'Retry attempt {{attempt}} of {{max}}',
+    retryingIn: 'Retrying in {{seconds}} seconds...',
+    nextRetryIn: 'Next retry in {{seconds}}s',
+    operationFailed: 'Operation failed',
+    unexpectedError: 'An unexpected error occurred',
+    failedToLoad: 'Failed to load',
+    loadingFailed: 'Loading failed. Please try again.',
+    networkError: 'Network error. Please check your connection.',
+    refreshPage: 'Refresh Page',
+    tryAgainLater: 'Please try again later',
   },
 
   landing: {
@@ -313,8 +329,10 @@ export default {
     uploadImages: 'Upload Images',
     dragDrop: 'Drag & drop images here',
     clickToSelect: 'or click to select files',
-    acceptedFormats: 'Accepted formats: JPEG, PNG, TIFF, BMP (max 10MB)',
+    acceptedFormats:
+      'Accepted formats: JPEG, PNG, TIFF, BMP (max 20MB per file)',
     uploadProgress: 'Upload Progress',
+    readyToUpload: 'Ready to Upload',
     uploadingTo: 'Select a project first',
     currentProject: 'current project',
     autoSegment: 'Auto-segment images after upload',
@@ -763,7 +781,6 @@ export default {
     // Reset Password page specific
     enterNewPassword: 'Enter your new password',
     newPassword: 'New Password',
-    confirmPassword: 'Confirm Password',
     confirmPasswordPlaceholder: 'Confirm your password',
     passwordRequirements: 'Password must be at least 8 characters long',
     resettingPassword: 'Resetting password...',
@@ -868,6 +885,44 @@ export default {
     emptyMessage:
       'No images in queue. Upload images and add them to the queue for segmentation.',
     addingToQueue: 'Adding to queue...',
+    cancelSegmentation: 'Cancel Segmentation',
+    segmentationCancelled: '{{count}} segmentation cancelled',
+    segmentationCancelled_other: '{{count}} segmentations cancelled',
+    cancelFailed: 'Failed to cancel segmentation',
+    // Cancel All functionality
+    cancelAll: 'Cancel All',
+    cancelAllTooltip: 'Cancel all {{count}} segmentation task(s)',
+    confirmCancelAll: 'Cancel All Segmentations?',
+    confirmCancelAllDescription:
+      'You are about to cancel {{count}} segmentation task(s) across all your projects.',
+    processingTasks: '{{count}} task(s) currently processing',
+    queuedTasks: '{{count}} task(s) queued',
+    cancelAllWarning:
+      'This action cannot be undone. Cancelled tasks will need to be resubmitted.',
+    confirmCancelAllButton: 'Yes, Cancel {{count}} Task(s)',
+    cancellingAllSegmentations: 'Cancelling all segmentations...',
+    allSegmentationsCancelled:
+      'Successfully cancelled {{count}} segmentation(s)',
+    affectedProjects: 'Affected {{count}} project(s)',
+    cancelAllFailed: 'Failed to cancel segmentations',
+    cancelAllError: 'Error cancelling segmentations',
+    cancelling: 'Cancelling...',
+    // Parallel processing
+    processingSlots: 'Processing Slots',
+    parallel: 'parallel',
+    users: 'users',
+    active: 'active',
+    you: 'You',
+    yourSlot: 'Your slot: #{{slot}}',
+    concurrentUsers: 'Also processing: {{users}}',
+    availableSlots: '{{count}} slot available',
+    availableSlots_other: '{{count}} slots available',
+    yourPosition: 'Your position',
+    estimatedWait: 'Est. wait',
+    allSlotsActive:
+      'All processing slots are active - maximum parallel processing capacity reached',
+    slotAvailable:
+      'Processing slot available! Position #{{position}} (~{{waitTime}}m wait)',
   },
   toast: {
     // Generic messages
@@ -908,6 +963,10 @@ export default {
     // Upload actions
     upload: {
       failed: 'Failed to refresh images after upload',
+      cancelUpload: 'Cancel Upload',
+      uploadCancelled: 'Upload cancelled',
+      uploadCancelledSuccess: 'Upload cancelled successfully',
+      redirectingToGallery: 'Redirecting to image gallery...',
     },
     // Segmentation actions
     segmentation: {
@@ -952,6 +1011,8 @@ export default {
     selected: '{{count}} image selected',
     selected_other: '{{count}} images selected',
     deleteSelected: 'Delete Selected',
+    imagesDeleted: '{{count}} image deleted',
+    imagesDeleted_other: '{{count}} images deleted',
   },
   export: {
     // Dialog headers
@@ -973,6 +1034,8 @@ export default {
     selectedImages: 'Selected Images',
     imagesSelected: '{{count}} of {{total}} images selected',
     selectAll: 'Select All',
+    allSelected: 'All {{count}} images selected',
+    selectAllProject: 'Select All {{count}} images',
     selectNone: 'Select None',
     imageSelection: 'Image Selection',
     chooseImages: 'Choose which images to include in the export',
@@ -1021,7 +1084,9 @@ export default {
     packaging: 'Creating package...',
     completed: 'Export completed',
     downloading: 'Downloading...',
+    cancelling: 'Cancelling...',
     cancelled: 'Export cancelled',
+    cancelExport: 'Cancel Export',
     // Connection status
     connected: 'Connected',
     disconnected: 'Disconnected',
@@ -1051,6 +1116,12 @@ export default {
       excel: 'Excel Format',
       json: 'JSON Format',
     },
+    // Progress panel specific
+    title: 'Export Progress',
+    readyToDownload: 'Export ready for download',
+    fallbackMode: 'Polling mode',
+    fallbackMessage:
+      'Using polling for progress updates due to connection issues',
   },
   // Export dialog
   // Standalone image action messages (used without prefix)
@@ -1890,6 +1961,7 @@ export default {
     reloadingSegmentation: 'Reloading segmentation...',
     segmenting: 'Segmenting...',
     waitingInQueue: 'Waiting in queue...',
+    retryingLoad: 'Having trouble loading. Retrying...',
     error: {
       title: 'Segmentation Error',
       description:
@@ -1897,6 +1969,7 @@ export default {
       errorDetails: 'Error Details',
       tryAgain: 'Try Again',
       unsavedChanges: 'Unsaved changes',
+      imageLoadFailed: 'Failed to load image. Please refresh to try again.',
     },
     export: {
       exportAllMetrics: 'Export all metrics as XLSX',

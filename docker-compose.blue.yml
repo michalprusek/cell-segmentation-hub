@@ -51,10 +51,22 @@ services:
       - ENABLE_TRACING=false
       # Database password from shell environment
       - DB_PASSWORD=${DB_PASSWORD}
+      # Parallel processing configuration
+      - QUEUE_MAX_CONCURRENT_BATCHES=4
+      - QUEUE_PARALLEL_PROCESSING_ENABLED=true
+      - DATABASE_CONNECTION_POOL_SIZE=50
+      - WS_PARALLEL_PROCESSING_ENABLED=true
     volumes:
       - ./backend/uploads/blue:/app/uploads
       - ./backend/data/blue:/app/data
     restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
       interval: 30s
@@ -95,7 +107,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Blue ML Service (port 4008)
+  # Blue ML Service (port 4008) - Enhanced for 4-way parallel processing
   blue-ml:
     build:
       context: .
@@ -115,6 +127,14 @@ services:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres-blue:5432/spheroseg_blue
       - REDIS_URL=redis://redis-blue:6379
+      # 4-way parallel processing configuration
+      - ML_INFERENCE_WORKERS=4
+      - ML_ENABLE_PARALLEL_INFERENCE=true
+      - ML_MAX_CONCURRENT_USERS=4
+      - ML_MEMORY_LIMIT_GB=20
+      - ML_ENABLE_CUDA_STREAMS=true
+      - GPU_MEMORY_WARNING_THRESHOLD=90
+      - GPU_MEMORY_CRITICAL_THRESHOLD=95
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ./backend/uploads/blue/blue:/app/uploads
@@ -122,9 +142,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
+          memory: 12G    # Increased from 8G for 4-way processing
+          cpus: '4.0'    # Explicit CPU allocation
         reservations:
-          memory: 2G
+          memory: 6G     # Increased from 2G
           devices:
             - driver: nvidia
               count: 1

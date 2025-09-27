@@ -12,8 +12,8 @@ export const isTiffFile = (file: File): boolean => {
   return (
     file.type === 'image/tiff' ||
     file.type === 'image/tif' ||
-    file.name.toLowerCase().endsWith('.tiff') ||
-    file.name.toLowerCase().endsWith('.tif')
+    file.name?.toLowerCase().endsWith('.tiff') ||
+    file.name?.toLowerCase().endsWith('.tif')
   );
 };
 
@@ -28,7 +28,11 @@ const convertTiffToCanvas = async (file: File): Promise<HTMLCanvasElement> => {
       const arrayBuffer = e.target?.result as ArrayBuffer;
 
       if (!arrayBuffer) {
-        reject(new Error('Failed to read TIFF file'));
+        reject(
+          new Error(
+            `Failed to read TIFF file: ${file.name} - FileReader error occurred`
+          )
+        );
         return;
       }
 
@@ -37,7 +41,11 @@ const convertTiffToCanvas = async (file: File): Promise<HTMLCanvasElement> => {
         const ifds = UTIF.decode(arrayBuffer);
 
         if (!ifds || ifds.length === 0) {
-          reject(new Error('No images found in TIFF file'));
+          reject(
+            new Error(
+              `No images found in TIFF file: ${file.name} - The file may be corrupted or not a valid TIFF`
+            )
+          );
           return;
         }
 
@@ -55,7 +63,11 @@ const convertTiffToCanvas = async (file: File): Promise<HTMLCanvasElement> => {
         const ctx = canvas.getContext('2d');
 
         if (!ctx) {
-          reject(new Error('Failed to get canvas context'));
+          reject(
+            new Error(
+              `Failed to get canvas context for TIFF file: ${file.name}`
+            )
+          );
           return;
         }
 
@@ -73,11 +85,18 @@ const convertTiffToCanvas = async (file: File): Promise<HTMLCanvasElement> => {
 
         resolve(canvas);
       } catch (error) {
-        reject(new Error(`Failed to parse TIFF: ${error}`));
+        reject(
+          new Error(
+            `Failed to parse TIFF file '${file.name}': ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          )
+        );
       }
     };
 
-    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.onerror = () =>
+      reject(new Error(`Failed to read file: ${file.name} - FileReader error`));
     reader.readAsArrayBuffer(file);
   });
 };
@@ -93,7 +112,12 @@ export const convertImageToDataUrl = async (file: File): Promise<string> => {
       const canvas = await convertTiffToCanvas(file);
       return canvas.toDataURL('image/png');
     } catch (error) {
-      logger.error('Failed to convert TIFF', error);
+      logger.error('Failed to convert TIFF', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type,
+        error: error instanceof Error ? error.message : String(error),
+      });
       throw error;
     }
   }
@@ -130,10 +154,17 @@ export const convertImageToDataUrl = async (file: File): Promise<string> => {
         if (e.target?.result) {
           resolve(e.target.result as string);
         } else {
-          reject(new Error('Failed to read file'));
+          reject(
+            new Error(
+              `Failed to read file: ${file.name} - No result from FileReader`
+            )
+          );
         }
       };
-      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onerror = () =>
+        reject(
+          new Error(`Failed to read file: ${file.name} - FileReader error`)
+        );
       reader.readAsDataURL(file);
     };
 
@@ -164,7 +195,11 @@ export const createImagePreviewUrl = async (file: File): Promise<string> => {
             if (typeof reader.result === 'string') {
               resolve(reader.result);
             } else {
-              reject(new Error('FileReader did not return a string'));
+              reject(
+                new Error(
+                  `FileReader did not return a string for file: ${file.name}`
+                )
+              );
             }
           };
           reader.onerror = () =>

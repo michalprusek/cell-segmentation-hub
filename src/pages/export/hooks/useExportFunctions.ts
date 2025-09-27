@@ -2,12 +2,12 @@ import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import { ProjectImage, SpheroidMetric, PolygonData } from '@/types';
-import { calculateMetrics } from '@/pages/segmentation/utils/metricCalculations';
 import { logger } from '@/lib/logger';
 import { useLanguage } from '@/contexts/useLanguage';
 import { isPolygonInsidePolygon } from '@/lib/polygonGeometry';
 import { createExcelExport } from '@/services/excelExportService';
 import { downloadJSON } from '@/lib/downloadUtils';
+import { lazyLoadMetricCalculations } from '@/lib/lazyImports';
 
 export const useExportFunctions = (
   images: ProjectImage[],
@@ -59,7 +59,7 @@ export const useExportFunctions = (
     return Object.values(selectedImages).filter(Boolean).length;
   };
 
-  const calculateObjectMetrics = (polygons: PolygonData[]) => {
+  const calculateObjectMetrics = async (polygons: PolygonData[]) => {
     if (!polygons || polygons.length === 0) return null;
 
     // Get external polygons
@@ -68,6 +68,9 @@ export const useExportFunctions = (
 
     // Get all internal polygons
     const allInternalPolygons = polygons.filter(p => p.type === 'internal');
+
+    // Lazy load metric calculations only when needed
+    const { calculateMetrics } = await lazyLoadMetricCalculations();
 
     // Calculate metrics for each external polygon
     return externalPolygons.map((polygon, index) => {
@@ -106,9 +109,9 @@ export const useExportFunctions = (
       // Collect all metrics from all selected images
       const allMetrics: SpheroidMetric[] = [];
 
-      imagesToExport.forEach(image => {
+      for (const image of imagesToExport) {
         if (image.segmentationResult && image.segmentationResult.polygons) {
-          const imageMetrics = calculateObjectMetrics(
+          const imageMetrics = await calculateObjectMetrics(
             image.segmentationResult.polygons
           );
 
@@ -139,7 +142,7 @@ export const useExportFunctions = (
             });
           }
         }
-      });
+      }
 
       if (allMetrics.length === 0) {
         toast.error(

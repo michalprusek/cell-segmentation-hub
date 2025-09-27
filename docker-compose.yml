@@ -42,16 +42,16 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: docker/frontend.optimized.Dockerfile
+      dockerfile: docker/frontend.Dockerfile
     container_name: spheroseg-frontend
     environment:
       - VITE_API_URL=http://localhost:3001
       - VITE_API_BASE_URL=http://localhost:3001/api
-      - VITE_ML_SERVICE_URL=http://localhost:3001/api/ml
+      - VITE_ML_SERVICE_URL=/api/ml
       - VITE_WS_URL=ws://localhost:3001
       - NODE_ENV=development
     ports:
-      - "3000:5173"
+      - "5174:5174"  # Frontend accessible on port 5174 (host networking)
     volumes:
       - ./src:/app/src
       - ./public:/app/public
@@ -82,10 +82,10 @@ services:
       - JWT_ACCESS_SECRET=b75d09c9e67acfe64cf2ff2ebe704648b2b6deba44b1eea6bed51a66b325fd41
       - JWT_REFRESH_SECRET=b1e6ae77c4da116fe524c057879c0779a7fe5f3cc26a59bbc1ab3ef482bc0a3d
       - SEGMENTATION_SERVICE_URL=http://localhost:8000
-      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173
-      - WS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173
-      - CORS_ORIGIN=http://localhost:3000,http://localhost:4173,http://localhost:5173
-      - FRONTEND_URL=http://localhost:5173
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173,http://localhost:5174
+      - WS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:4173,http://localhost:5173,http://localhost:5174
+      - CORS_ORIGIN=http://localhost:3000,http://localhost:4173,http://localhost:5173,http://localhost:5174
+      - FRONTEND_URL=http://localhost:5174
       - API_BASE_URL=http://localhost:3001
       - BACKEND_URL=http://localhost:3001
       - PUBLIC_URL=http://localhost:3001

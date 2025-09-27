@@ -15,7 +15,9 @@ const yamlCandidates = [
   path.join(process.cwd(), 'api/openapi.yml'),
 ];
 
-const resolvedYamlPath = yamlCandidates.find(candidate => fs.existsSync(candidate));
+const resolvedYamlPath = yamlCandidates.find(candidate =>
+  fs.existsSync(candidate)
+);
 
 // Construct apiGlobs that include both .ts and .js variants
 const apiGlobs = [
@@ -69,7 +71,7 @@ export function setupSwagger(app: Express): void {
   try {
     // OpenAPI YAML specification path (for future use)
     // const openApiYamlPath = path.join(__dirname, '../api/openapi.yaml');
-    
+
     // Generování specifikací z JSDoc komentářů
     const specs = swaggerJsdoc(swaggerOptions);
 
@@ -81,7 +83,9 @@ export function setupSwagger(app: Express): void {
         filter: true,
         showRequestDuration: true,
         tryItOutEnabled: true,
-        requestInterceptor: (req: Record<string, unknown>): Record<string, unknown> => {
+        requestInterceptor: (
+          req: Record<string, unknown>
+        ): Record<string, unknown> => {
           // Note: CORS headers should be configured on server responses, not requests
           return req;
         },
@@ -105,8 +109,13 @@ export function setupSwagger(app: Express): void {
         res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
         res.send(specs);
       } catch (error) {
-        logger.error('Failed to serve OpenAPI JSON:', error instanceof Error ? error : undefined);
-        res.status(500).json({ error: 'Failed to generate OpenAPI specification' });
+        logger.error(
+          'Failed to serve OpenAPI JSON:',
+          error instanceof Error ? error : undefined
+        );
+        res
+          .status(500)
+          .json({ error: 'Failed to generate OpenAPI specification' });
       }
     });
 
@@ -118,15 +127,19 @@ export function setupSwagger(app: Express): void {
         res.setHeader('Cache-Control', 'public, max-age=300'); // Cache for 5 minutes
         res.send(postmanCollection);
       } catch (error) {
-        logger.error('Failed to generate Postman collection:', error instanceof Error ? error : undefined);
-        res.status(500).json({ error: 'Failed to generate Postman collection' });
+        logger.error(
+          'Failed to generate Postman collection:',
+          error instanceof Error ? error : undefined
+        );
+        res
+          .status(500)
+          .json({ error: 'Failed to generate Postman collection' });
       }
     });
 
     logger.info('✅ Swagger UI configured at /api-docs');
     logger.info('📄 OpenAPI JSON available at /api-docs/openapi.json');
     logger.info('📮 Postman collection available at /api-docs/postman.json');
-
   } catch (error) {
     logger.error('❌ Failed to setup Swagger UI:', error as Error);
   }
@@ -189,12 +202,18 @@ interface OpenAPISpec {
   servers?: Array<{
     url?: string;
   }>;
-  paths?: Record<string, Record<string, {
-    tags?: string[];
-    summary?: string;
-    description?: string;
-    security?: Array<Record<string, string[]>>;
-  }>>;
+  paths?: Record<
+    string,
+    Record<
+      string,
+      {
+        tags?: string[];
+        summary?: string;
+        description?: string;
+        security?: Array<Record<string, string[]>>;
+      }
+    >
+  >;
   security?: Array<Record<string, string[]>>;
 }
 
@@ -206,7 +225,8 @@ function convertToPostman(openApiSpec: OpenAPISpec): PostmanCollection {
     info: {
       name: openApiSpec.info?.title || 'API Collection',
       description: openApiSpec.info?.description || '',
-      schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
+      schema:
+        'https://schema.getpostman.com/json/collection/v2.1.0/collection.json',
     },
     auth: {
       type: 'bearer',
@@ -235,7 +255,7 @@ function convertToPostman(openApiSpec: OpenAPISpec): PostmanCollection {
 
   // Vytvoří folders podle tags
   const folders: Record<string, PostmanFolder> = {};
-  
+
   if (openApiSpec.paths) {
     Object.entries(openApiSpec.paths).forEach(([path, pathItem]) => {
       Object.entries(pathItem).forEach(([method, operation]) => {
@@ -244,7 +264,7 @@ function convertToPostman(openApiSpec: OpenAPISpec): PostmanCollection {
         }
 
         const tag = operation.tags?.[0] || 'Default';
-        
+
         if (!folders[tag]) {
           folders[tag] = {
             name: tag,
@@ -269,16 +289,26 @@ function convertToPostman(openApiSpec: OpenAPISpec): PostmanCollection {
         };
 
         // Compute effective security by merging/inheriting from operation, pathItem, and root document
-        const pathItemSecurity = 'security' in pathItem ? pathItem.security : undefined;
-        const effectiveSecurity = operation.security || pathItemSecurity || openApiSpec.security;
-        if (effectiveSecurity && Array.isArray(effectiveSecurity) && effectiveSecurity.length > 0) {
+        const pathItemSecurity =
+          'security' in pathItem ? pathItem.security : undefined;
+        const effectiveSecurity =
+          operation.security || pathItemSecurity || openApiSpec.security;
+        if (
+          effectiveSecurity &&
+          Array.isArray(effectiveSecurity) &&
+          effectiveSecurity.length > 0
+        ) {
           // Check if any security requirement includes bearerAuth or similar JWT auth
-          const requiresAuth = effectiveSecurity.some((secReq: Record<string, string[]>) => 
-            Object.keys(secReq).some(key => 
-              key === 'bearerAuth' || key.toLowerCase().includes('bearer') || key.toLowerCase().includes('jwt')
-            )
+          const requiresAuth = effectiveSecurity.some(
+            (secReq: Record<string, string[]>) =>
+              Object.keys(secReq).some(
+                key =>
+                  key === 'bearerAuth' ||
+                  key.toLowerCase().includes('bearer') ||
+                  key.toLowerCase().includes('jwt')
+              )
           );
-          
+
           if (requiresAuth) {
             postmanRequest.request.auth = {
               type: 'bearer',

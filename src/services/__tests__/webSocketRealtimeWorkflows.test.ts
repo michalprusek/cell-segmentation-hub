@@ -809,7 +809,7 @@ describe('WebSocket Real-time Workflows', () => {
         // The important thing is the system continues to function after
         try {
           handler(data);
-        } catch (error) {
+        } catch (_error) {
           // Malformed data causing errors is acceptable
         }
       });

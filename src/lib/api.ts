@@ -3,6 +3,12 @@ import { Profile, UpdateProfile } from '@/types';
 import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import {
+  retryWithBackoff,
+  makeRetryable,
+  RETRY_CONFIGS,
+  sleep,
+} from '@/lib/retryUtils';
+import {
   chunkFiles,
   processChunksWithConcurrency,
   DEFAULT_CHUNKING_CONFIG,
@@ -51,54 +57,26 @@ export interface ProjectImage {
   name: string;
   project_id: string;
   user_id: string;
+  url?: string;
   image_url: string;
   thumbnail_url?: string;
+  displayUrl?: string;
+  width?: number | null;
+  height?: number | null;
+  segmentationThumbnailPath?: string;
   segmentationThumbnailUrl?: string; // New field for segmentation thumbnails
-  segmentation_status: 'pending' | 'processing' | 'completed' | 'failed';
+  segmentation_status:
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'failed'
+    | 'no_segmentation';
   created_at: string;
   updated_at: string;
 }
 
-// Utility function for exponential backoff with retry logic
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const exponentialBackoff = async <T>(
-  fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelay: number = 1000,
-  maxDelay: number = 10000
-): Promise<T> => {
-  let lastError: Error;
-
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn();
-    } catch (error: unknown) {
-      lastError = error as Error;
-
-      // Don't retry if it's not a rate limit error or if it's the last attempt
-      const errorWithResponse = error as { response?: { status: number } };
-      if (
-        errorWithResponse.response?.status !== 429 ||
-        attempt === maxRetries
-      ) {
-        throw error;
-      }
-
-      // Calculate delay with exponential backoff
-      const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
-      const jitter = Math.random() * 0.1 * delay; // Add 10% jitter
-      const finalDelay = delay + jitter;
-
-      logger.warn(
-        `🔄 Rate limited (429), retrying in ${Math.round(finalDelay)}ms (attempt ${attempt + 1}/${maxRetries + 1})`
-      );
-      await sleep(finalDelay);
-    }
-  }
-
-  throw lastError!;
-};
+// Using unified retry system from retryUtils
+// Legacy exponentialBackoff replaced with retryWithBackoff for consistency
 
 export interface SegmentationRequest {
   imageId: string;
@@ -219,38 +197,74 @@ class ApiClient {
           originalRequest.url?.includes('/auth/register') ||
           originalRequest.url?.includes('/auth/refresh');
 
-        // Check if error is due to missing authentication token
+        // Check if this is a refresh token request to avoid infinite loops
+        const isRefreshRequest = originalRequest.url?.includes('/auth/refresh');
+
+        // Check if error is due to missing, expired, or invalid authentication token
+        // Handle ALL 401 errors uniformly for immediate logout
         if (
           error.response?.status === 401 &&
-          error.response?.data?.message === 'Chybí autentizační token'
+          !isRefreshRequest &&
+          !originalRequest._retry
         ) {
-          // Token is missing - immediately logout the user
-          logger.debug('🔒 Missing authentication token - logging out user');
+          // Determine the specific auth issue
+          const errorMessage = error.response?.data?.message || '';
+          const isMissingToken =
+            errorMessage === 'Chybí autentizační token' ||
+            errorMessage.toLowerCase().includes('missing') ||
+            errorMessage.toLowerCase().includes('no token');
+          const isExpiredToken = errorMessage.toLowerCase().includes('expired');
+          const isInvalidToken = errorMessage.toLowerCase().includes('invalid');
+
+          // Token is missing, expired, or invalid - immediately logout the user
+          logger.debug(
+            '🔒 Authentication error (401) - forcing immediate logout',
+            {
+              errorMessage,
+              isMissingToken,
+              isExpiredToken,
+              isInvalidToken,
+            }
+          );
+
+          // Clear all authentication data immediately
           this.clearTokensFromStorage();
 
-          // Emit event to notify the app about missing token
+          // Emit appropriate event to notify the app
           if (typeof window !== 'undefined') {
             // Import dynamically to avoid circular dependencies
-            import('./authEvents').then(({ authEventEmitter }) => {
-              authEventEmitter.emit({
-                type: 'token_missing',
-                data: {
-                  message: 'Authentication required',
-                  description:
-                    'Your session has expired. Please sign in again.',
-                },
-              });
-            });
+            import('./authEvents')
+              .then(({ authEventEmitter }) => {
+                const eventType = isMissingToken
+                  ? 'token_missing'
+                  : isExpiredToken
+                    ? 'token_expired'
+                    : 'token_invalid';
 
-            // Only redirect if not already on sign-in page
+                authEventEmitter.emit({
+                  type: eventType,
+                  data: {
+                    message: 'Authentication required',
+                    description:
+                      'Your session has ended. Please sign in again.',
+                  },
+                });
+              })
+              .catch(err => {
+                logger.error('Failed to emit auth event', err);
+              });
+
+            // Force immediate redirect with page refresh if not already on auth pages
             if (
               window.location.pathname !== '/sign-in' &&
               window.location.pathname !== '/sign-up' &&
-              !window.location.pathname.startsWith('/public')
+              !window.location.pathname.startsWith('/public') &&
+              !window.location.pathname.startsWith('/share')
             ) {
+              // Use replace() to force page refresh and prevent back navigation
               setTimeout(() => {
-                window.location.href = '/sign-in';
-              }, 100); // Small delay to allow event to be processed
+                window.location.replace('/sign-in');
+              }, 50); // Minimal delay to allow event emission
             }
           }
 
@@ -272,17 +286,85 @@ class ApiClient {
             originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
             return this.instance(originalRequest);
           } catch (refreshError) {
-            // Refresh failed, logout user
-            logger.debug('🔄 Token refresh failed, clearing tokens');
+            // Refresh failed, force immediate logout
+            logger.debug('🔄 Token refresh failed, forcing immediate logout');
             this.clearTokensFromStorage();
-            // Don't force redirect here, let the app handle it naturally
+
+            // Force immediate redirect with page refresh
+            if (typeof window !== 'undefined') {
+              // Import and emit token expired event
+              import('./authEvents')
+                .then(({ authEventEmitter }) => {
+                  authEventEmitter.emit({
+                    type: 'token_expired',
+                    data: {
+                      message: 'Session expired',
+                      description:
+                        'Your session has expired. Please sign in again.',
+                    },
+                  });
+                })
+                .catch(err => {
+                  logger.error('Failed to emit token expired event', err);
+                });
+
+              // Force redirect with refresh if not on auth pages
+              if (
+                window.location.pathname !== '/sign-in' &&
+                window.location.pathname !== '/sign-up' &&
+                !window.location.pathname.startsWith('/public')
+              ) {
+                setTimeout(() => {
+                  window.location.replace('/sign-in');
+                }, 50);
+              }
+            }
+
             return Promise.reject(refreshError);
           }
         }
 
-        // Handle rate limiting with exponential backoff
-        if (error.response?.status === 429) {
-          return exponentialBackoff(() => this.instance(originalRequest));
+        // Handle retryable errors (429, 502, 503, 504) with unified retry system
+        const retryableStatuses = [429, 502, 503, 504];
+        if (
+          error.response?.status &&
+          retryableStatuses.includes(error.response.status)
+        ) {
+          const status = error.response.status;
+          const result = await retryWithBackoff(
+            () => this.instance(originalRequest),
+            {
+              ...RETRY_CONFIGS.api,
+              shouldRetry: (err, attempt) => {
+                const errorWithResponse = err as {
+                  response?: { status: number };
+                };
+                return (
+                  retryableStatuses.includes(
+                    errorWithResponse.response?.status || 0
+                  ) && attempt < 3
+                );
+              },
+              onRetry: (err, attempt, nextDelay) => {
+                const statusText =
+                  {
+                    429: 'Rate limited',
+                    502: 'Bad gateway',
+                    503: 'Service unavailable',
+                    504: 'Gateway timeout',
+                  }[status] || 'Server error';
+
+                logger.warn(
+                  `🔄 ${statusText} (${status}), retrying in ${Math.round(nextDelay)}ms (attempt ${attempt}/3)`
+                );
+              },
+            }
+          );
+
+          if (result.success) {
+            return result.data;
+          }
+          throw result.error;
         }
 
         return Promise.reject(error);
@@ -634,6 +716,14 @@ class ApiClient {
     thumbnailUrl = thumbnailUrl ? ensureAbsoluteUrl(thumbnailUrl) : imageUrl;
     displayUrl = ensureAbsoluteUrl(displayUrl);
 
+    // Get segmentation thumbnail fields
+    const segmentationThumbnailPath = image.segmentationThumbnailPath as
+      | string
+      | undefined;
+    const segmentationThumbnailUrl = segmentationThumbnailPath
+      ? ensureAbsoluteUrl(segmentationThumbnailPath)
+      : (image.segmentationThumbnailUrl as string | undefined);
+
     return {
       id: image.id as string,
       name: image.name as string,
@@ -648,6 +738,8 @@ class ApiClient {
       segmentation_status: this.mapSegmentationStatus(
         image.segmentationStatus || image.segmentation_status
       ),
+      segmentationThumbnailPath: segmentationThumbnailPath,
+      segmentationThumbnailUrl: segmentationThumbnailUrl,
       created_at: (image.createdAt as string) || (image.created_at as string),
       updated_at: (image.updatedAt as string) || (image.updated_at as string),
     };
@@ -963,7 +1055,21 @@ class ApiClient {
   ): Promise<ProjectImage[]> {
     const formData = new FormData();
     files.forEach(file => {
-      formData.append('images', file);
+      // Normalize filename to NFC to ensure diacritics are properly composed
+      // This prevents issues with decomposed Unicode (NFD) filenames
+      const normalizedName = file.name.normalize('NFC');
+
+      // If the filename needs normalization, create a new File with the normalized name
+      // Otherwise, use the original file
+      if (normalizedName !== file.name) {
+        const normalizedFile = new File([file], normalizedName, {
+          type: file.type,
+          lastModified: file.lastModified,
+        });
+        formData.append('images', normalizedFile);
+      } else {
+        formData.append('images', file);
+      }
     });
 
     const response = await this.instance.post(
@@ -1020,7 +1126,8 @@ class ApiClient {
     projectId: string,
     files: File[],
     onProgress?: (progressPercent: number) => void,
-    onChunkProgress?: (progress: ChunkProgress) => void
+    onChunkProgress?: (progress: ChunkProgress) => void,
+    signal?: AbortSignal
   ): Promise<ChunkedUploadResult<ProjectImage[]>> {
     logger.info(
       `Starting chunked upload of ${files.length} files to project ${projectId}`
@@ -1093,6 +1200,11 @@ class ApiClient {
     const result = await processChunksWithConcurrency(
       chunks,
       async (chunk: File[], chunkIndex: number) => {
+        // Check if upload was cancelled
+        if (signal?.aborted) {
+          throw new Error('Upload cancelled by user');
+        }
+
         logger.debug(
           `Processing chunk ${chunkIndex + 1}/${chunks.length} with ${chunk.length} files`
         );
@@ -1100,7 +1212,21 @@ class ApiClient {
         // Create FormData for this chunk
         const formData = new FormData();
         chunk.forEach(file => {
-          formData.append('images', file);
+          // Normalize filename to NFC to ensure diacritics are properly composed
+          // This prevents issues with decomposed Unicode (NFD) filenames
+          const normalizedName = file.name.normalize('NFC');
+
+          // If the filename needs normalization, create a new File with the normalized name
+          // Otherwise, use the original file
+          if (normalizedName !== file.name) {
+            const normalizedFile = new File([file], normalizedName, {
+              type: file.type,
+              lastModified: file.lastModified,
+            });
+            formData.append('images', normalizedFile);
+          } else {
+            formData.append('images', file);
+          }
         });
 
         const response = await this.instance.post(
@@ -1110,6 +1236,7 @@ class ApiClient {
             headers: {
               'Content-Type': 'multipart/form-data',
             },
+            signal: signal, // Add abort signal support
             timeout: 300000, // 5 minutes timeout for chunk uploads (100 files)
             onUploadProgress: progressEvent => {
               if (progressEvent.total) {
@@ -1517,7 +1644,16 @@ class ApiClient {
 
   // User profile methods
   async getUserProfile(): Promise<Profile> {
-    const response = await this.instance.get('/auth/profile');
+    // Add cache-busting to ensure fresh data after avatar upload
+    const response = await this.instance.get('/auth/profile', {
+      headers: {
+        'Cache-Control': 'no-cache',
+        Pragma: 'no-cache',
+      },
+      params: {
+        _t: Date.now(), // Cache buster parameter
+      },
+    });
     return this.extractData(response);
   }
 
@@ -1632,6 +1768,21 @@ class ApiClient {
 
   async removeFromQueue(queueId: string): Promise<void> {
     await this.instance.delete(`/queue/items/${queueId}`);
+  }
+
+  async cancelAllUserSegmentations(): Promise<{
+    success: boolean;
+    cancelledCount: number;
+    affectedProjects: string[];
+    affectedBatches: string[];
+  }> {
+    const response = await this.instance.post('/queue/cancel-all-user');
+    return this.extractData<{
+      success: boolean;
+      cancelledCount: number;
+      affectedProjects: string[];
+      affectedBatches: string[];
+    }>(response);
   }
 
   // Generic HTTP methods for custom endpoints

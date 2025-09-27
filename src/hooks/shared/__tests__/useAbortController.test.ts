@@ -94,7 +94,7 @@ describe('useAbortController', () => {
     it('should check if controller is aborted', () => {
       const { result } = renderHook(() => useAbortController('test'));
 
-      const controller = result.current.getController('key1');
+      const _controller = result.current.getController('key1');
 
       expect(result.current.isAborted('key1')).toBe(false);
 

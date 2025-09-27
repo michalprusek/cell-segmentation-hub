@@ -17,7 +17,7 @@ dotenv.config();
 const SEGMENTATION_MODELS = {
   hrnet: { id: 'hrnet', name: 'HRNetV2' },
   resunet_advanced: { id: 'resunet_advanced', name: 'ResUNet Advanced' },
-  resunet_small: { id: 'resunet_small', name: 'ResUNet Small' }
+  resunet_small: { id: 'resunet_small', name: 'ResUNet Small' },
 };
 
 const prisma = new PrismaClient();
@@ -29,31 +29,39 @@ async function seedDatabase(): Promise<void> {
     // Create admin user
     let adminEmail = process.env.ADMIN_EMAIL;
     let adminPasswordRaw = process.env.ADMIN_PASSWORD;
-    
+
     // In production, abort if credentials are not provided
     if (process.env.NODE_ENV === 'production') {
       if (!adminEmail || !adminPasswordRaw) {
-        logger.error('ADMIN_EMAIL and ADMIN_PASSWORD must be set in production environment', undefined, 'Seed');
+        logger.error(
+          'ADMIN_EMAIL and ADMIN_PASSWORD must be set in production environment',
+          undefined,
+          'Seed'
+        );
         process.exit(1);
       }
     } else {
       // In development, use secure defaults
       if (!adminEmail || !adminPasswordRaw) {
         const finalEmail = adminEmail || 'admin@example.com';
-        const finalPassword = adminPasswordRaw || crypto.randomBytes(16).toString('hex');
-        
-        logger.info('Development mode: Using temporary admin credentials', 'Seed');
+        const finalPassword =
+          adminPasswordRaw || crypto.randomBytes(16).toString('hex');
+
+        logger.info(
+          'Development mode: Using temporary admin credentials',
+          'Seed'
+        );
         logger.info(`Admin email: ${finalEmail}`, 'Seed');
         if (!adminPasswordRaw) {
           logger.info(`Generated temporary password: ${finalPassword}`, 'Seed');
         }
-        
+
         // Reassign for use below
         adminEmail = finalEmail;
         adminPasswordRaw = finalPassword;
       }
     }
-    
+
     const adminPassword = await bcrypt.hash(adminPasswordRaw, 12);
 
     const existingAdmin = await prisma.user.findUnique({
@@ -124,9 +132,9 @@ async function seedDatabase(): Promise<void> {
       // Ensure we have the full user with profile
       testUser = await prisma.user.findUnique({
         where: { email: testEmail },
-        include: { profile: true }
+        include: { profile: true },
       });
-      
+
       // Create profile if missing
       if (!testUser?.profile) {
         await prisma.profile.create({
@@ -139,14 +147,14 @@ async function seedDatabase(): Promise<void> {
             preferredLang: 'cs',
             preferredTheme: 'dark',
             emailNotifications: false,
-          }
+          },
         });
         testUser = await prisma.user.findUnique({
           where: { email: testEmail },
-          include: { profile: true }
+          include: { profile: true },
         });
       }
-      
+
       logger.info('Test user already exists', 'Seed', { email: testEmail });
     }
 
@@ -154,7 +162,7 @@ async function seedDatabase(): Promise<void> {
     if (!testUser) {
       throw new Error('Test user not found');
     }
-    
+
     const existingProjects = await prisma.project.findMany({
       where: { userId: testUser.id },
     });
@@ -184,9 +192,13 @@ async function seedDatabase(): Promise<void> {
         });
       }
 
-      logger.info('Sample projects created', 'Seed', { count: sampleProjects.length });
+      logger.info('Sample projects created', 'Seed', {
+        count: sampleProjects.length,
+      });
     } else {
-      logger.info('Sample projects already exist', 'Seed', { count: existingProjects.length });
+      logger.info('Sample projects already exist', 'Seed', {
+        count: existingProjects.length,
+      });
     }
 
     // Create some access requests for testing
@@ -230,7 +242,6 @@ async function seedDatabase(): Promise<void> {
       // accessRequests: requestCount,
       segmentationModels: Object.keys(SEGMENTATION_MODELS).length,
     });
-
   } catch (error) {
     logger.error('Database seeding failed:', error as Error, 'Seed');
     throw error;
@@ -241,11 +252,10 @@ async function seedDatabase(): Promise<void> {
 
 // Run seeding if this file is executed directly
 if (isMainModule) {
-  seedDatabase()
-    .catch((error) => {
-      logger.error('Seeding failed:', error as Error, 'Seed');
-      process.exit(1);
-    });
+  seedDatabase().catch(error => {
+    logger.error('Seeding failed:', error as Error, 'Seed');
+    process.exit(1);
+  });
 }
 
 export default seedDatabase;

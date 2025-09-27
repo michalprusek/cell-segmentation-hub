@@ -129,25 +129,32 @@ const Dashboard = () => {
   }, [user, processPendingShareInvitation]);
 
   useEffect(() => {
-    // Poslouchej události pro aktualizaci seznamu projektů
-    const handleProjectCreated = () => fetchProjects();
-    const handleProjectDeleted = () => fetchProjects();
-    const handleProjectUnshared = () => fetchProjects();
-    const handleImageUpdated = () => fetchProjects();
-    const handleImageDeleted = () => fetchProjects();
+    // Create a single debounced fetch handler to prevent rapid multiple calls
+    const debouncedFetchProjects = (() => {
+      let timeoutId: NodeJS.Timeout;
+      return () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          fetchProjects();
+        }, 300); // Wait 300ms after last event before fetching
+      };
+    })();
 
-    window.addEventListener('project-created', handleProjectCreated);
-    window.addEventListener('project-deleted', handleProjectDeleted);
-    window.addEventListener('project-unshared', handleProjectUnshared);
-    window.addEventListener('project-images-updated', handleImageUpdated);
-    window.addEventListener('project-image-deleted', handleImageDeleted);
+    // Use the same debounced handler for all events
+    const handleProjectUpdate = debouncedFetchProjects;
+
+    window.addEventListener('project-created', handleProjectUpdate);
+    window.addEventListener('project-deleted', handleProjectUpdate);
+    window.addEventListener('project-unshared', handleProjectUpdate);
+    window.addEventListener('project-images-updated', handleProjectUpdate);
+    window.addEventListener('project-image-deleted', handleProjectUpdate);
 
     return () => {
-      window.removeEventListener('project-created', handleProjectCreated);
-      window.removeEventListener('project-deleted', handleProjectDeleted);
-      window.removeEventListener('project-unshared', handleProjectUnshared);
-      window.removeEventListener('project-images-updated', handleImageUpdated);
-      window.removeEventListener('project-image-deleted', handleImageDeleted);
+      window.removeEventListener('project-created', handleProjectUpdate);
+      window.removeEventListener('project-deleted', handleProjectUpdate);
+      window.removeEventListener('project-unshared', handleProjectUpdate);
+      window.removeEventListener('project-images-updated', handleProjectUpdate);
+      window.removeEventListener('project-image-deleted', handleProjectUpdate);
     };
   }, [fetchProjects]);
 
