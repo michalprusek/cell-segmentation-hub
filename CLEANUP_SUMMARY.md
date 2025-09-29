@@ -132,10 +132,10 @@ Production blue environment was using **deprecated Dockerfiles** instead of opti
 
 ### Short-term (Next Sprint - 20-30 hours total)
 
-1. **Delete duplicate WebSocket manager** (1-2 hours, low risk)
-2. **Consolidate email services** (8-12 hours, needs extensive testing)
-3. **Standardize validation to Zod** (2-3 hours, safe)
-4. **Create shared WebSocket types** (4-6 hours, risky)
+1. ✅ **Delete duplicate WebSocket manager** (DONE - 1 hour)
+2. ✅ **Consolidate email services** (DONE - deleted reliableEmailService, 433 lines cleaned)
+3. **Standardize validation to Zod** (2-3 hours, safe) - TODO
+4. **Create shared WebSocket types** (4-6 hours, risky) - TODO
 
 ### Long-term (Next Month)
 
