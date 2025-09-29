@@ -3,15 +3,15 @@ import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import { webSocketEventEmitter } from '@/lib/websocketEvents';
 import type {
-  // WebSocketEventMap,
   SegmentationUpdate,
   QueueStats,
-  // SegmentationStatusMessage,
-  // QueueStatsMessage,
   SegmentationCompletedMessage,
   SegmentationFailedMessage,
-  // WebSocketConnectionOptions,
-  // IWebSocketManager,
+  WebSocketEventMap as _WebSocketEventMap,
+  SegmentationStatusMessage as _SegmentationStatusMessage,
+  QueueStatsMessage as _QueueStatsMessage,
+  WebSocketConnectionOptions as _WebSocketConnectionOptions,
+  IWebSocketManager as _IWebSocketManager,
 } from '@/types/websocket';
 
 // Define internal message types for backward compatibility
@@ -36,14 +36,6 @@ interface WebSocketManagerWithHandler {
 
 // Define specific event listener types for backward compatibility
 type EventListener<T = any> = (data: T) => void;
-type EventListener =
-  | SegmentationUpdateListener
-  | QueueStatsUpdateListener
-  | NotificationListener
-  | SystemMessageListener
-  | ConnectionListener
-  | DisconnectionListener
-  | ConnectionErrorListener;
 
 interface EventListenerRegistry {
   [event: string]: Set<EventListener>;
@@ -278,7 +270,7 @@ class WebSocketManager {
     });
 
     // Data events
-    // Backend emits 'segmentation-update' (kebab-case), we need to listen for that exact event name
+    // Backend emits 'segmentationUpdate', we need to listen for that
     this.socket.on('segmentation-update', (update: SegmentationUpdate) => {
       // ENHANCED DEBUG LOGGING
       logger.warn('🔴 SEGMENTATION UPDATE RECEIVED:', {
@@ -573,5 +565,5 @@ if (typeof window !== 'undefined') {
   )._beforeUnloadHandler = handleBeforeUnload;
 }
 
-// Export the manager
+// Export the WebSocket manager
 export default WebSocketManager;

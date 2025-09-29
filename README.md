@@ -4,69 +4,113 @@ Advanced cell segmentation platform powered by deep learning models. Complete sy
 
 ## 🚀 Quick Start
 
-### Development Environment
+### Prerequisites
+
+- **Docker** (version 20.10+) and **Docker Compose** v2
+- **Git**
+- **8GB+ RAM** recommended
+- **(Optional) NVIDIA GPU** for ML service acceleration
+
+### Start Development Environment
 
 ```bash
+# Clone the repository
 git clone https://github.com/your-org/cell-segmentation-hub.git
 cd cell-segmentation-hub
 
-# Start development environment
-docker compose up -d
+# Start all services with Docker
+make dev
 ```
 
-Development services will be available at:
+**That's it!** 🎉 All services will start automatically.
 
-- **Frontend**: http://localhost:3000
+Access the application:
+
+- **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3001
 - **ML Service**: http://localhost:8000
-- **Grafana**: http://localhost:3030
+- **Grafana Dashboard**: http://localhost:3030
+- **Prometheus**: http://localhost:9090
+- **MailHog (Email Testing)**: http://localhost:8025
 
-### Production & Staging Deployment
+### Development Commands
 
-This project supports parallel production and staging environments:
-
-#### Staging Environment
-
-```bash
-# Deploy staging environment
-./scripts/deploy-staging.sh
-
-# Manage staging environment
-./scripts/staging-manager.sh start
-./scripts/staging-manager.sh status
-./scripts/staging-manager.sh logs -f
-```
-
-Staging URL: https://staging.spherosegapp.utia.cas.cz
-
-#### Production Environment
+This project uses **Makefile** for all common tasks:
 
 ```bash
-# Setup SSL certificates (run once)
-./scripts/init-letsencrypt-staging.sh
+# Starting & Stopping
+make dev              # Start development environment
+make up               # Start all services
+make down             # Stop all services
+make restart          # Restart all services
 
-# Deploy production environment
-./scripts/deploy-production.sh
+# Monitoring
+make logs-f           # Follow logs from all services
+make logs-fe          # View frontend logs
+make logs-be          # View backend logs
+make logs-ml          # View ML service logs
+make health           # Check health of all services
+make status           # Show container status
+
+# Development
+make shell-fe         # Open shell in frontend container
+make shell-be         # Open shell in backend container
+make shell-ml         # Open shell in ML service container
+
+# Testing & Quality
+make test             # Run all tests in Docker
+make test-e2e         # Run end-to-end tests
+make lint             # Run linting
+make type-check       # TypeScript type checking
+
+# Building
+make build-optimized  # Build with optimization (auto cleanup)
+make build-clean      # Clean rebuild without cache
+
+# Monitoring & Metrics
+make prometheus       # Open Prometheus dashboard
+make grafana          # Open Grafana dashboard
+make metrics          # View metrics endpoint
+
+# Cleanup
+make clean            # Clean Docker resources
+make deep-clean       # Aggressive cleanup
+make docker-usage     # Show Docker disk usage
 ```
+
+See all available commands: `make help`
+
+---
+
+## 🚀 Production Deployment
+
+For production deployment instructions, see:
+- **[Deployment Guide](./docs/deployment/README.md)** - Complete production setup
+- **[Blue-Green Deployment](./docs/deployment/blue-green.md)** - Zero-downtime deployments
+- **[STAGING.md](./STAGING.md)** - Staging environment setup
 
 Production URL: https://spherosegapp.utia.cas.cz
 
-📖 **Detailed staging setup**: See [STAGING.md](./STAGING.md)
+---
 
-### Manual Setup
+## 🛠️ Manual Setup (Alternative)
+
+**⚠️ Note:** Docker is the recommended approach. Use manual setup only for specific debugging needs.
 
 ```bash
 # 1. Backend API
 cd backend
-npm install && npm run dev          # http://localhost:3001
+npm install
+npm run dev          # http://localhost:3001
 
 # 2. Python ML Service
 cd backend/segmentation
 pip install -r requirements.txt
-python api/main.py                  # http://localhost:8000
+python main.py       # http://localhost:8000
 
 # 3. Frontend
-npm install && npm run dev          # http://localhost:8082
+npm install
+npm run dev          # http://localhost:5173
 ```
 
 ## 📚 Documentation
@@ -86,9 +130,8 @@ Complete REST API reference
 
 - [API Overview](./docs/api/README.md) - General API information
 - [Authentication](./docs/api/authentication.md) - User auth and JWT tokens
-- [Projects](./docs/api/projects.md) - Project management endpoints
-- [Images](./docs/api/images.md) - Image upload and management
-- [Segmentation](./docs/api/segmentation.md) - ML segmentation services
+
+**Interactive API Documentation**: http://localhost:3001/api-docs (when running locally)
 
 ### 💻 [Development](./docs/development/)
 
@@ -102,7 +145,6 @@ Developer setup and contribution guide
 Production deployment guides
 
 - [Deployment Guide](./docs/deployment/README.md) - Production setup with Docker
-- [Docker Configuration](./docs/deployment/docker.md) - Container deployment
 
 ### 📖 [User Guide](./docs/guides/)
 
@@ -116,22 +158,31 @@ Technical reference materials
 
 - [Database Schema](./docs/reference/database-schema.md) - Complete database structure
 - [ML Models](./docs/reference/ml-models.md) - Available segmentation models
-- [Claude Instructions](./docs/reference/claude-instructions.md) - AI assistant guidelines
 
 ## 🏗️ System Overview
 
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   React Client  │───▶│  Node.js API    │───▶│  Python ML      │
-│   Port: 8082    │    │  Port: 3001     │    │  Port: 8000     │
+│   Port: 5173    │    │  Port: 3001     │    │  Port: 8000     │
+│   (Vite + React)│    │  (Express)      │    │  (FastAPI)      │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
        │                        │                        │
        │                        ▼                        ▼
        │               ┌─────────────────┐    ┌─────────────────┐
-       │               │   SQLite DB     │    │  PyTorch Models │
+       │               │  PostgreSQL DB  │    │  PyTorch Models │
        └──────────────▶│   Prisma ORM    │    │  HRNet, ResUNet │
+                       │   + Redis       │    │  + GPU (CUDA)   │
                        └─────────────────┘    └─────────────────┘
 ```
+
+**Architecture Highlights:**
+- **Frontend**: React 18 + TypeScript + Vite (hot reload)
+- **Backend**: Node.js + Express + Prisma ORM
+- **Database**: PostgreSQL (production) / SQLite (development)
+- **ML Service**: Python + FastAPI + PyTorch + CUDA
+- **Caching**: Redis for session and queue management
+- **Monitoring**: Prometheus + Grafana for metrics
 
 ## 🤖 AI Models
 
@@ -193,93 +244,115 @@ Developed at **ÚTIA AV ČR** (Institute of Information Theory and Automation, C
 
 ## 🚀 Getting Started
 
-1. **📖 Read the [Getting Started Guide](./docs/development/getting-started.md)** - Complete setup instructions
-2. **🏗️ Understand the [Architecture](./docs/architecture/README.md)** - System design overview
-3. **🔌 Explore the [API](./docs/api/README.md)** - REST endpoints reference
-4. **👨‍💻 Start Developing** - Follow the development workflow
-5. **🚀 Deploy** - Use the [deployment guide](./docs/deployment/README.md) for production
+1. **⚡ Quick Start** - Run `make dev` and you're ready!
+2. **📖 Read the [Getting Started Guide](./docs/development/getting-started.md)** - Complete setup instructions
+3. **🏗️ Understand the [Architecture](./docs/architecture/README.md)** - System design overview
+4. **🔌 Explore the [API](http://localhost:3001/api-docs)** - Interactive API documentation
+5. **👨‍💻 Start Developing** - Use `make help` to see all commands
 
-## ⚡ Quick Commands
+## ⚡ Essential Commands
 
 ```bash
+# Start & Stop
+make dev                   # Start development environment
+make down                  # Stop all services
+make restart               # Restart services
+
+# Monitoring
+make logs-f                # Follow all logs
+make health                # Check service health
+make status                # Show container status
+
 # Development
-npm run dev                 # Start frontend
-npm run docker:dev         # Start all services with Docker
+make shell-be              # Access backend shell
+make test                  # Run tests
+make lint                  # Run linting
 
-# Build
-npm run build              # Build frontend
-npm run docker:build      # Build all Docker images
+# Database (from backend shell)
+npx prisma migrate dev     # Run migrations
+npx prisma studio          # Open database browser
 
-# Database
-cd backend
-npm run db:migrate         # Run database migrations
-npm run db:studio         # Open database browser
-
-# Health checks
+# Health Checks
 curl http://localhost:3001/health  # Backend
 curl http://localhost:8000/health  # ML Service
+curl http://localhost:5173         # Frontend
 ```
+
+**See all commands**: `make help`
 
 ## 🔧 Configuration
 
 ### Environment Variables
 
-Create `.env` files based on `.env.example`:
+The application uses `.env` files for configuration. Default development settings work out of the box!
+
+**For production**, create a `.env` file:
 
 ```bash
-# Copy and customize environment files
+# Copy example and customize
 cp .env.example .env
 ```
 
-#### Frontend
+**Key environment variables:**
 
 ```bash
-# Frontend environment variables
+# Backend API
+PORT=3001
+DATABASE_URL=postgresql://user:password@localhost:5432/spheroseg
+JWT_ACCESS_SECRET=your-secret-key-here
+JWT_REFRESH_SECRET=your-refresh-secret-here
+
+# Frontend (Vite)
 VITE_API_BASE_URL=http://localhost:3001/api
 VITE_ML_SERVICE_URL=http://localhost:8000
-```
 
-#### Backend API
-
-```bash
-# Backend API environment variables
-JWT_ACCESS_SECRET=your-super-secret-jwt-access-key-change-this-in-production
-JWT_REFRESH_SECRET=your-super-secret-jwt-refresh-key-change-this-in-production
-DATABASE_URL=file:./dev.db
-PORT=3001
-```
-
-#### ML Service
-
-```bash
-# ML Service environment variables
+# ML Service
 ML_SERVICE_PORT=8000
 MODEL_WEIGHTS_DIR=/app/weights
-DEFAULT_MODEL=resunet_small
+ENABLE_GPU=true
 ```
 
-> ⚠️ **Security Notice**: Never commit `.env` files with real secrets to version control. Always use secure, randomly generated keys in production.
+> ⚠️ **Security**: Never commit `.env` files with secrets! Use strong, random keys in production.
 
 ## 🛠️ Development Workflow
 
-1. **Setup Environment**: Follow [Getting Started Guide](./docs/development/getting-started.md)
-2. **Make Changes**: Edit code with hot reload enabled
-3. **Test Changes**: Use provided testing procedures
-4. **Review Code**: Follow coding standards and best practices
-5. **Deploy**: Use Docker for consistent deployments
+1. **Start Development**: `make dev` - All services start with hot reload
+2. **Make Changes**: Edit code - changes apply automatically
+3. **Test**: `make test` - Run tests in Docker
+4. **Quality Check**: `make lint && make type-check`
+5. **View Logs**: `make logs-f` - Monitor all services
+6. **Database**: `make shell-be` then run Prisma commands
+
+**Typical Development Session:**
+```bash
+make dev              # Start everything
+make logs-f           # Watch logs in another terminal
+# ... make your changes ...
+make test             # Run tests
+make lint             # Check code quality
+make down             # Stop when done
+```
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](./docs/development/contributing.md) for details on:
+Contributions are welcome! Here's how to get started:
 
-- Code style and standards
-- Testing requirements
-- Pull request process
-- Issue reporting
+1. **Fork and Clone**: Fork the repository and clone locally
+2. **Create Branch**: `git checkout -b feature/your-feature`
+3. **Make Changes**: Follow the development workflow above
+4. **Test**: Ensure all tests pass (`make test`)
+5. **Commit**: Use clear commit messages
+6. **Push and PR**: Push to your fork and create a pull request
+
+**Code Standards:**
+- TypeScript for frontend and backend
+- Python type hints for ML service
+- Run `make lint` before committing
+- Write tests for new features
 
 ## 📝 License
 
-MIT License - see [LICENSE](./LICENSE) file for details.
+This project is developed at ÚTIA AV ČR. For licensing information, please contact spheroseg@utia.cas.cz.
 
 ## 🆘 Support
 
