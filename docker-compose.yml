@@ -42,7 +42,7 @@ services:
   frontend:
     build:
       context: .
-      dockerfile: docker/frontend.Dockerfile
+      dockerfile: docker/frontend.optimized.Dockerfile
     container_name: spheroseg-frontend
     environment:
       - VITE_API_URL=http://localhost:3001
@@ -145,7 +145,7 @@ services:
   ml-service:
     build:
       context: .
-      dockerfile: docker/ml.Dockerfile
+      dockerfile: docker/ml.optimized.Dockerfile
     container_name: spheroseg-ml
     # GPU configuration for Docker Compose v2
     runtime: nvidia
