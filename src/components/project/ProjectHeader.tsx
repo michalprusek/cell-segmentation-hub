@@ -29,7 +29,7 @@ const ProjectHeader = ({
               variant="ghost"
               size="sm"
               className="mr-4"
-              onClick={() => navigate(-1)}
+              onClick={() => navigate('/dashboard')}
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
               {t('common.back')}
