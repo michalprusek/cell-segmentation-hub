@@ -2,6 +2,8 @@
 
 Advanced cell segmentation platform powered by deep learning models. Complete system with React frontend, Node.js backend, and Python ML microservice.
 
+> 📚 **Resources**: [Dataset, Paper & Supplementary Materials](https://staff.utia.cas.cz/novozada/spheroseg/)
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -24,11 +26,17 @@ make dev
 
 **That's it!** 🎉 All services will start automatically.
 
+> **Note on Model Weights**: The ML service requires model weights (~1.8 GB). On first start, the container will automatically download them from Google Drive. See [Model Weights Setup Guide](./docs/MODEL_WEIGHTS_SETUP.md) for manual download options.
+
 Access the application:
 
-- **Frontend**: http://localhost:5173
+- **Frontend**: http://localhost:5174
 - **Backend API**: http://localhost:3001
+- **API Documentation**: http://localhost:3001/api-docs
 - **ML Service**: http://localhost:8000
+
+Development tools:
+
 - **Grafana Dashboard**: http://localhost:3030
 - **Prometheus**: http://localhost:9090
 - **MailHog (Email Testing)**: http://localhost:8025
@@ -63,6 +71,11 @@ make test-e2e         # Run end-to-end tests
 make lint             # Run linting
 make type-check       # TypeScript type checking
 
+# Model Weights
+make download-weights # Download ML model weights (~1.8 GB)
+make check-weights    # Verify weights are present
+make weights-info     # Show weights information
+
 # Building
 make build-optimized  # Build with optimization (auto cleanup)
 make build-clean      # Clean rebuild without cache
@@ -82,14 +95,11 @@ See all available commands: `make help`
 
 ---
 
-## 🚀 Production Deployment
+## 📚 Next Steps
 
-For production deployment instructions, see:
-- **[Deployment Guide](./docs/deployment/README.md)** - Complete production setup
-- **[Blue-Green Deployment](./docs/deployment/blue-green.md)** - Zero-downtime deployments
-- **[STAGING.md](./STAGING.md)** - Staging environment setup
-
-Production URL: https://spherosegapp.utia.cas.cz
+- **[Documentation](./docs/)** - Complete documentation
+- **[Contributing Guidelines](#contributing)** - How to contribute
+- **[Architecture Overview](#system-overview)** - System architecture
 
 ---
 
@@ -140,12 +150,6 @@ Developer setup and contribution guide
 - [Getting Started](./docs/development/getting-started.md) - Local development setup
 - [Testing Guide](./docs/development/testing.md) - Testing procedures
 
-### 🚀 [Deployment](./docs/deployment/)
-
-Production deployment guides
-
-- [Deployment Guide](./docs/deployment/README.md) - Production setup with Docker
-
 ### 📖 [User Guide](./docs/guides/)
 
 End-user documentation
@@ -177,6 +181,7 @@ Technical reference materials
 ```
 
 **Architecture Highlights:**
+
 - **Frontend**: React 18 + TypeScript + Vite (hot reload)
 - **Backend**: Node.js + Express + Prisma ORM
 - **Database**: PostgreSQL (production) / SQLite (development)
@@ -193,25 +198,19 @@ Technical reference materials
 
 ### Performance Benchmarks
 
-| Model        | Inference Time | Throughput  | Batch Size  | P95 Latency | Best Use Case              |
-| ------------ | -------------- | ----------- | ----------- | ----------- | -------------------------- |
-| HRNet        | ~0.2s/image    | 5.5 img/sec | 8 (optimal) | <0.3s       | High-throughput processing |
-| CBAM-ResUNet | ~0.3s/image    | 3.0 img/sec | 2 (optimal) | <0.7s       | Maximum accuracy analysis  |
+| Model        | Inference Time | Throughput  | Best Use Case              |
+| ------------ | -------------- | ----------- | -------------------------- |
+| HRNet        | ~0.2s/image    | 5.5 img/sec | High-throughput processing |
+| CBAM-ResUNet | ~0.3s/image    | 3.0 img/sec | Maximum accuracy analysis  |
 
-### Production Configuration
-
-- **Dynamic Batching**: Enabled with 5ms queue delay for optimal GPU utilization
-- **GPU**: NVIDIA RTX A5000 (24GB VRAM)
-- **Max Batch Sizes**: HRNet (12), CBAM-ResUNet (4) for offline processing
-- **SLA Compliance**: All models maintain P95 latency under 1 second
+_Performance measured on NVIDIA GPU. CPU inference is also supported._
 
 ## 🏢 About
 
 Developed at **ÚTIA AV ČR** (Institute of Information Theory and Automation, Czech Academy of Sciences)
 
-- **Address**: Pod Vodárenskou věží 4, 182 08 Prague 8, Czech Republic
 - **Contact**: spheroseg@utia.cas.cz
-- **Website**: [www.utia.cas.cz](http://www.utia.cas.cz)
+- **Project Page**: [Dataset, Papers & Code](https://staff.utia.cas.cz/novozada/spheroseg/)
 
 ## 🔑 Key Features
 
@@ -284,23 +283,16 @@ curl http://localhost:5173         # Frontend
 
 ### Environment Variables
 
-The application uses `.env` files for configuration. Default development settings work out of the box!
+The application uses `.env` files for configuration. **Default development settings work out of the box!**
 
-**For production**, create a `.env` file:
+For local development, the `.env.development` file is automatically created when you run `make dev`.
 
-```bash
-# Copy example and customize
-cp .env.example .env
-```
-
-**Key environment variables:**
+**Key environment variables (for customization):**
 
 ```bash
 # Backend API
 PORT=3001
 DATABASE_URL=postgresql://user:password@localhost:5432/spheroseg
-JWT_ACCESS_SECRET=your-secret-key-here
-JWT_REFRESH_SECRET=your-refresh-secret-here
 
 # Frontend (Vite)
 VITE_API_BASE_URL=http://localhost:3001/api
@@ -309,10 +301,10 @@ VITE_ML_SERVICE_URL=http://localhost:8000
 # ML Service
 ML_SERVICE_PORT=8000
 MODEL_WEIGHTS_DIR=/app/weights
-ENABLE_GPU=true
+ENABLE_GPU=true  # Set to false for CPU-only mode
 ```
 
-> ⚠️ **Security**: Never commit `.env` files with secrets! Use strong, random keys in production.
+> ⚠️ **Security Note**: Never commit `.env` files with secrets to version control!
 
 ## 🛠️ Development Workflow
 
@@ -324,6 +316,7 @@ ENABLE_GPU=true
 6. **Database**: `make shell-be` then run Prisma commands
 
 **Typical Development Session:**
+
 ```bash
 make dev              # Start everything
 make logs-f           # Watch logs in another terminal
@@ -345,6 +338,7 @@ Contributions are welcome! Here's how to get started:
 6. **Push and PR**: Push to your fork and create a pull request
 
 **Code Standards:**
+
 - TypeScript for frontend and backend
 - Python type hints for ML service
 - Run `make lint` before committing

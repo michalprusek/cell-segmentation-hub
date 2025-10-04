@@ -58,14 +58,86 @@ RUN --mount=type=cache,target=/root/.cache/pip \
 # Copy application code
 COPY --chown=app:app backend/segmentation/ .
 
-# Download and cache models at build time (optional)
-# This increases image size but improves startup time
-# Comment out if you prefer to download models at runtime
-RUN python -c "import torch; \
-    from models.hrnet import HRNet; \
-    from models.resunet import ResUNet; \
-    model = HRNet(); \
-    model = ResUNet();" || true
+# Copy entrypoint script for automatic weight management
+COPY --chown=app:app <<'EOF' /app/docker-entrypoint.sh
+#!/bin/bash
+set -e
+
+echo "=== SpheroSeg ML Service Initialization ==="
+
+# Step 1: Check GPU availability
+echo "Checking compute devices..."
+python -c "
+import torch
+cuda = torch.cuda.is_available()
+print(f'CUDA available: {cuda}')
+if cuda:
+    print(f'GPU: {torch.cuda.get_device_name(0)}')
+    print(f'Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB')
+else:
+    print('Running in CPU mode')
+" || echo "Warning: Device check failed"
+
+# Step 2: Check/download model weights
+WEIGHTS_DIR="${WEIGHTS_DIR:-/app/weights}"
+echo "Weights directory: $WEIGHTS_DIR"
+
+REQUIRED_WEIGHTS=(
+    "hrnet_best_model.pth"
+    "cbam_resunet_new.pth"
+    "unet_spherohq_best.pth"
+)
+
+MISSING_WEIGHTS=0
+for weight in "${REQUIRED_WEIGHTS[@]}"; do
+    if [ ! -f "$WEIGHTS_DIR/$weight" ]; then
+        echo "⚠️  Missing: $weight"
+        MISSING_WEIGHTS=$((MISSING_WEIGHTS + 1))
+    else
+        SIZE=$(du -h "$WEIGHTS_DIR/$weight" 2>/dev/null | cut -f1 || echo "unknown")
+        echo "✓ Found: $weight ($SIZE)"
+    fi
+done
+
+# Step 3: Download missing weights if script is available
+if [ $MISSING_WEIGHTS -gt 0 ]; then
+    echo ""
+    echo "⚠️  $MISSING_WEIGHTS model weight(s) missing!"
+
+    if [ -f "/app/scripts/download_weights.py" ]; then
+        echo "Attempting automatic download..."
+        python /app/scripts/download_weights.py --weights-dir "$WEIGHTS_DIR" || {
+            echo ""
+            echo "❌ Automatic download failed!"
+            echo "Please provide model weights in: $WEIGHTS_DIR"
+            echo ""
+            echo "Options:"
+            echo "  1. Download manually and place in $WEIGHTS_DIR"
+            echo "  2. Update URLs in /app/scripts/download_weights.py"
+            echo "  3. Mount existing weights as volume: -v /path/to/weights:$WEIGHTS_DIR"
+            echo ""
+            exit 1
+        }
+    else
+        echo ""
+        echo "❌ Download script not found and weights are missing!"
+        echo "Please provide model weights in: $WEIGHTS_DIR"
+        echo "Mount as volume: -v /path/to/weights:$WEIGHTS_DIR"
+        echo ""
+        exit 1
+    fi
+fi
+
+echo ""
+echo "✅ All model weights present"
+echo "=== Starting ML Service ==="
+echo ""
+
+# Execute the main command
+exec "$@"
+EOF
+
+RUN chmod +x /app/docker-entrypoint.sh
 
 # Add labels for image management
 LABEL maintainer="Cell Segmentation Hub Team"
@@ -98,7 +170,8 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
-# Run with uvicorn for better performance
+# Use entrypoint for initialization, then run uvicorn
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
 
 # ============================================
