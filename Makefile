@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring
+.PHONY: help build up down restart logs logs-f logs-fe logs-be logs-ml clean status health-status health-check shell-fe shell-be shell-ml dev-setup reset start rebuild test test-ui test-e2e test-e2e-ui test-coverage lint lint-fix type-check dev prod generate-ssl-cert metrics prometheus grafana alerts prometheus-config-check test-alerts monitor-health monitor-setup restart-grafana restart-prometheus monitor-errors export-metrics monitor-resources clean-monitoring download-weights check-weights weights-info
 
 # Detect Docker Compose version  
 DOCKER_COMPOSE := docker compose
@@ -43,6 +43,11 @@ help:
 	@echo "  test        Run tests in containers"
 	@echo "  clean       Clean up Docker resources"
 	@echo "  reset       Reset everything (clean + rebuild)"
+	@echo ""
+	@echo "🤖 Model Weights Management:"
+	@echo "  download-weights  Download ML model weights (~1.8 GB)"
+	@echo "  check-weights     Verify model weights are present"
+	@echo "  weights-info      Show detailed weights information"
 	@echo ""
 
 # Build all services
@@ -514,3 +519,49 @@ show-batch-config:
 # Run batch optimization and testing
 optimize-all: optimize-batch test-production
 	@echo "✅ Full optimization and testing complete!"
+# ============================================
+# Model Weights Management
+# ============================================
+
+# Download ML model weights
+download-weights:
+	@echo "📥 Downloading ML model weights..."
+	@echo "This will download ~1.8 GB of model weights"
+	@if [ \! -d "backend/segmentation/weights" ]; then mkdir -p backend/segmentation/weights; fi
+	@cd backend/segmentation && python scripts/download_weights.py
+	@echo "✅ Weights download complete\!"
+
+# Check if model weights exist
+check-weights:
+	@echo "🔍 Checking model weights..."
+	@if [ -d "backend/segmentation/weights" ] && [ -n "$$(ls -A backend/segmentation/weights/*.pth 2>/dev/null)" ]; then \
+		echo "✅ Model weights found"; \
+		echo ""; \
+		du -sh backend/segmentation/weights; \
+	else \
+		echo "❌ Model weights missing\!"; \
+		echo ""; \
+		echo "Run: make download-weights"; \
+		echo "Or mount existing weights as volume"; \
+		exit 1; \
+	fi
+
+# Show detailed weights information
+weights-info:
+	@echo "🤖 Model Weights Information"
+	@echo "=============================="
+	@echo ""
+	@if [ -d "backend/segmentation/weights" ] && [ -n "$$(ls -A backend/segmentation/weights/*.pth 2>/dev/null)" ]; then \
+		echo "Weights directory: backend/segmentation/weights"; \
+		echo ""; \
+		echo "Available models:"; \
+		ls -lh backend/segmentation/weights/*.pth 2>/dev/null || true; \
+		echo ""; \
+		echo "Total size:"; \
+		du -sh backend/segmentation/weights 2>/dev/null || echo "Unknown"; \
+	else \
+		echo "❌ No weights found in backend/segmentation/weights/"; \
+		echo ""; \
+		echo "To download: make download-weights"; \
+	fi
+
