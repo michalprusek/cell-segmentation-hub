@@ -817,7 +817,7 @@ const ProjectDetail = () => {
             pendingRefreshRef.current = null;
 
             logger.debug(
-              'Batch refreshing segmentation data',
+              'Batch refreshing segmentation data (polygon data only, trusts backend status)',
               'ProjectDetail',
               {
                 count: imageIdsToRefresh.length,
@@ -835,6 +835,16 @@ const ProjectDetail = () => {
                   })
                 )
               );
+
+              // Trigger re-render for successfully loaded images in this chunk
+              updateImagesRef.current(prevImages =>
+                prevImages.map(img =>
+                  chunk.includes(img.id)
+                    ? { ...img, lastSegmentationUpdate: Date.now() }
+                    : img
+                )
+              );
+
               // Small delay between chunks
               if (i + chunkSize < imageIdsToRefresh.length) {
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -843,22 +853,31 @@ const ProjectDetail = () => {
           }, 2000); // 2 second delay for batching
         } else {
           // Single operation - refresh polygon data only, trust WebSocket status
-          // CRITICAL: Backend WebSocket status is SSOT - never downgrade based on polygon loading state
+          // CRITICAL: Backend WebSocket is SSOT for segmentation status.
+          // This fetch only enriches polygon data - status comes exclusively from WebSocket events.
+          // Do NOT modify segmentationStatus based on polygon presence/absence.
           (async () => {
-            logger.debug(
-              'Refreshing segmentation polygon data',
-              'ProjectDetail',
-              {
-                imageId: update.imageId,
-                backendStatus: update.status,
-                normalizedStatus: normalizedStatus,
-              }
-            );
+            logger.debug('Status from backend (SSOT)', 'ProjectDetail', {
+              imageId: update.imageId,
+              backendStatus: update.status,
+              normalizedStatus: normalizedStatus,
+              willFetchPolygons: true,
+            });
 
             try {
               // Fetch polygon data to enrich the image
               // DO NOT change status - backend WebSocket is SSOT
               await refreshImageSegmentationRef.current(update.imageId);
+
+              // Trigger re-render by updating timestamp
+              // This ensures UI updates when polygon data loads
+              updateImagesRef.current(prevImages =>
+                prevImages.map(img =>
+                  img.id === update.imageId
+                    ? { ...img, lastSegmentationUpdate: Date.now() }
+                    : img
+                )
+              );
 
               logger.info(
                 '✅ Segmentation data refreshed successfully',
