@@ -817,7 +817,7 @@ const ProjectDetail = () => {
             pendingRefreshRef.current = null;
 
             logger.debug(
-              'Batch refreshing segmentation data',
+              'Batch refreshing segmentation data (polygon data only, trusts backend status)',
               'ProjectDetail',
               {
                 count: imageIdsToRefresh.length,
@@ -835,6 +835,16 @@ const ProjectDetail = () => {
                   })
                 )
               );
+
+              // Trigger re-render for successfully loaded images in this chunk
+              updateImagesRef.current(prevImages =>
+                prevImages.map(img =>
+                  chunk.includes(img.id)
+                    ? { ...img, lastSegmentationUpdate: Date.now() }
+                    : img
+                )
+              );
+
               // Small delay between chunks
               if (i + chunkSize < imageIdsToRefresh.length) {
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -842,112 +852,55 @@ const ProjectDetail = () => {
             }
           }, 2000); // 2 second delay for batching
         } else {
-          // Single operation - refresh immediately but only one call
+          // Single operation - refresh polygon data only, trust WebSocket status
+          // CRITICAL: Backend WebSocket is SSOT for segmentation status.
+          // This fetch only enriches polygon data - status comes exclusively from WebSocket events.
+          // Do NOT modify segmentationStatus based on polygon presence/absence.
           (async () => {
-            logger.debug('Refreshing segmentation data', 'ProjectDetail', {
+            logger.debug('Status from backend (SSOT)', 'ProjectDetail', {
               imageId: update.imageId,
+              backendStatus: update.status,
+              normalizedStatus: normalizedStatus,
+              willFetchPolygons: true,
             });
 
             try {
-              // Only call refreshImageSegmentation which should fetch everything needed
-              // DO NOT make duplicate apiClient.getImage call
+              // Fetch polygon data to enrich the image
+              // DO NOT change status - backend WebSocket is SSOT
               await refreshImageSegmentationRef.current(update.imageId);
 
-              // Wait for state update
-              await new Promise(resolve => setTimeout(resolve, 200));
+              // Trigger re-render by updating timestamp
+              // This ensures UI updates when polygon data loads
+              updateImagesRef.current(prevImages =>
+                prevImages.map(img =>
+                  img.id === update.imageId
+                    ? { ...img, lastSegmentationUpdate: Date.now() }
+                    : img
+                )
+              );
 
-              // Get the current segmentation data from state after refresh
-              updateImagesRef.current(prevImages => {
-                const currentImg = prevImages.find(
-                  i => i.id === update.imageId
-                );
-                const hasPolygons =
-                  currentImg?.segmentationResult?.polygons &&
-                  currentImg.segmentationResult.polygons.length > 0;
-
-                logger.debug('Image polygon count', 'ProjectDetail', {
+              logger.info(
+                '✅ Segmentation data refreshed successfully',
+                'ProjectDetail',
+                {
                   imageId: update.imageId,
-                  polygonCount: hasPolygons
-                    ? currentImg.segmentationResult.polygons.length
-                    : 0,
-                });
-
-                return prevImages.map(prevImg => {
-                  if (prevImg.id === update.imageId) {
-                    const finalStatus = hasPolygons
-                      ? 'completed'
-                      : 'no_segmentation';
-
-                    return {
-                      ...prevImg,
-                      segmentationStatus: finalStatus,
-                      // Keep the segmentation data that was already updated by refreshImageSegmentation
-                      // Force re-render by updating a timestamp
-                      lastSegmentationUpdate: Date.now(),
-                      // Keep existing thumbnail URL - it should be updated via WebSocket
-                      thumbnail_url: prevImg.thumbnail_url,
-                      // Preserve segmentation thumbnails
-                      segmentationThumbnailPath:
-                        prevImg.segmentationThumbnailPath,
-                      segmentationThumbnailUrl:
-                        prevImg.segmentationThumbnailUrl,
-                      updatedAt: new Date(),
-                    };
-                  }
-                  return prevImg;
-                });
-              });
-            } catch (error) {
-              logger.error('Failed to refresh image data', error);
-
-              // Even if refresh fails, ensure correct status based on segmentation data
-              updateImagesRef.current(prevImages => {
-                const currentImg = prevImages.find(
-                  i => i.id === update.imageId
-                );
-                const hasPolygons =
-                  currentImg?.segmentationResult?.polygons &&
-                  currentImg.segmentationResult.polygons.length > 0;
-
-                return prevImages.map(prevImg => {
-                  if (prevImg.id === update.imageId) {
-                    return {
-                      ...prevImg,
-                      segmentationStatus: hasPolygons
-                        ? 'completed'
-                        : 'no_segmentation',
-                      // Preserve segmentation thumbnails
-                      segmentationThumbnailPath:
-                        prevImg.segmentationThumbnailPath,
-                      segmentationThumbnailUrl:
-                        prevImg.segmentationThumbnailUrl,
-                      updatedAt: new Date(),
-                    };
-                  }
-                  return prevImg;
-                });
-              });
-            }
-          })().catch(err => {
-            logger.error('Unhandled error in segmentation refresh IIFE', err);
-            // Ensure state is updated even on unhandled rejection
-            updateImagesRef.current(prevImages =>
-              prevImages.map(prevImg => {
-                if (prevImg.id === lastUpdate.imageId) {
-                  return {
-                    ...prevImg,
-                    segmentationStatus: 'error',
-                    // Preserve segmentation thumbnails even on error
-                    segmentationThumbnailPath:
-                      prevImg.segmentationThumbnailPath,
-                    segmentationThumbnailUrl: prevImg.segmentationThumbnailUrl,
-                    updatedAt: new Date(),
-                  };
+                  status: normalizedStatus, // Keep WebSocket status
                 }
-                return prevImg;
-              })
-            );
-          });
+              );
+            } catch (error) {
+              // Log error but DON'T change status
+              // Backend WebSocket status is still authoritative
+              logger.error(
+                '⚠️ Failed to fetch polygon data (status unchanged)',
+                error,
+                'ProjectDetail',
+                {
+                  imageId: update.imageId,
+                  keptStatus: normalizedStatus,
+                }
+              );
+            }
+          })();
         }
       }
 
