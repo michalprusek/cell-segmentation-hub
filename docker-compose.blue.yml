@@ -59,6 +59,7 @@ services:
     volumes:
       - ./backend/uploads/blue:/app/uploads
       - ./backend/data/blue:/app/data
+      - ./logs/blue/backend:/app/logs
     restart: always
     deploy:
       resources:
@@ -113,6 +114,7 @@ services:
       context: .
       dockerfile: docker/ml.optimized.Dockerfile
     container_name: blue-ml
+    runtime: nvidia
     ports:
       - "4008:8000"
     networks:
@@ -135,6 +137,8 @@ services:
       - ML_ENABLE_CUDA_STREAMS=true
       - GPU_MEMORY_WARNING_THRESHOLD=90
       - GPU_MEMORY_CRITICAL_THRESHOLD=95
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ./backend/uploads/blue/blue:/app/uploads
@@ -183,6 +187,8 @@ services:
       - ./backend/uploads:/app/uploads:ro
       # SSL certificates for production
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Persistent logs for IT audit trail
+      - ./logs/blue/nginx:/var/log/nginx
     ports:
       - "4080:80"
       - "4443:443"

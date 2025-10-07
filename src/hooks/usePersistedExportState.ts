@@ -13,20 +13,23 @@ interface ExportState {
 export function useMultiProjectExportState() {
   const states = useRef<Map<string, ExportState>>(new Map());
 
-  const getExportState = useCallback((projectId: string): ExportState | null => {
-    try {
-      const key = `exportState_${projectId}`;
-      const saved = localStorage.getItem(key);
-      if (saved) {
-        const state = JSON.parse(saved);
-        states.current.set(projectId, state);
-        return state;
+  const getExportState = useCallback(
+    (projectId: string): ExportState | null => {
+      try {
+        const key = `exportState_${projectId}`;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          const state = JSON.parse(saved);
+          states.current.set(projectId, state);
+          return state;
+        }
+      } catch (error) {
+        logger.error('Failed to load export state', error);
       }
-    } catch (error) {
-      logger.error('Failed to load export state', error);
-    }
-    return null;
-  }, []);
+      return null;
+    },
+    []
+  );
 
   const updateExportState = useCallback(
     (projectId: string, updates: Partial<ExportState>) => {
@@ -63,7 +66,10 @@ export function useMultiProjectExportState() {
         if (key?.startsWith('exportState_')) {
           const projectId = key.replace('exportState_', '');
           const state = getExportState(projectId);
-          if (state && (state.status === 'exporting' || state.status === 'processing')) {
+          if (
+            state &&
+            (state.status === 'exporting' || state.status === 'processing')
+          ) {
             activeStates.set(projectId, state);
           }
         }

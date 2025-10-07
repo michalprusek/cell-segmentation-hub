@@ -116,7 +116,16 @@ describe('useProjectData - Race Condition Handling', () => {
       };
 
       const mockSegmentationData = {
-        polygons: [{ points: [[0, 0], [100, 0], [100, 100], [0, 100]] }],
+        polygons: [
+          {
+            points: [
+              [0, 0],
+              [100, 0],
+              [100, 100],
+              [0, 100],
+            ],
+          },
+        ],
         imageWidth: 1024,
         imageHeight: 768,
       };
@@ -149,7 +158,8 @@ describe('useProjectData - Race Condition Handling', () => {
 
       // Trigger refresh
       await act(async () => {
-        const refreshPromise = result.current.refreshImageSegmentation(mockImageId);
+        const refreshPromise =
+          result.current.refreshImageSegmentation(mockImageId);
 
         // Advance timers for each retry
         vi.advanceTimersByTime(500); // First retry delay
@@ -212,7 +222,16 @@ describe('useProjectData - Race Condition Handling', () => {
       };
 
       const mockSegmentationData = {
-        polygons: [{ points: [[0, 0], [100, 0], [100, 100], [0, 100]] }],
+        polygons: [
+          {
+            points: [
+              [0, 0],
+              [100, 0],
+              [100, 100],
+              [0, 100],
+            ],
+          },
+        ],
         imageWidth: 1024,
         imageHeight: 768,
         modelUsed: 'hrnet',
@@ -313,7 +332,9 @@ describe('useProjectData - Race Condition Handling', () => {
       });
 
       // Status should remain 'no_segmentation' as set by backend
-      expect(result.current.images[0].segmentationStatus).toBe('no_segmentation');
+      expect(result.current.images[0].segmentationStatus).toBe(
+        'no_segmentation'
+      );
     });
   });
 });

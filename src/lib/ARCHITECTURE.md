@@ -7,6 +7,7 @@ The Cell Segmentation Hub is a modern web application for biomedical image segme
 ## Technology Stack
 
 ### Frontend
+
 - **React 18** - UI framework with concurrent features
 - **TypeScript 5** - Type-safe JavaScript
 - **Vite** - Fast build tool and dev server
@@ -15,6 +16,7 @@ The Cell Segmentation Hub is a modern web application for biomedical image segme
 - **Vitest** - Unit and integration testing
 
 ### Backend
+
 - **Node.js + Express** - REST API server
 - **TypeScript** - Type-safe backend code
 - **Prisma ORM** - Database abstraction
@@ -23,6 +25,7 @@ The Cell Segmentation Hub is a modern web application for biomedical image segme
 - **JWT** - Authentication tokens
 
 ### ML Service
+
 - **Python + FastAPI** - High-performance ML API
 - **PyTorch** - Deep learning framework
 - **HRNet/ResUNet** - Segmentation models
@@ -30,6 +33,7 @@ The Cell Segmentation Hub is a modern web application for biomedical image segme
 - **Uvicorn** - ASGI server
 
 ### Infrastructure
+
 - **Docker** - Containerization
 - **Nginx** - Reverse proxy and load balancer
 - **PostgreSQL** - Primary database
@@ -39,7 +43,9 @@ The Cell Segmentation Hub is a modern web application for biomedical image segme
 ## Architecture Patterns
 
 ### 1. Single Source of Truth (SSOT)
+
 All configuration constants are centralized in `/src/lib/constants.ts`:
+
 ```typescript
 export const TIMEOUTS = {
   RETRY_INITIAL: 1000,
@@ -50,26 +56,32 @@ export const TIMEOUTS = {
 ```
 
 ### 2. Retry Pattern with Exponential Backoff
+
 Robust error handling with configurable retry logic:
+
 ```typescript
 export async function retryWithBackoff<T>(
   fn: () => Promise<T>,
   config: RetryConfig = {}
-): Promise<RetryResult<T>>
+): Promise<RetryResult<T>>;
 ```
 
 ### 3. Circuit Breaker Pattern
+
 Prevents cascading failures in distributed systems:
+
 ```typescript
 export class CircuitBreaker {
-  recordFailure(key: string): void
-  recordSuccess(key: string): void
-  isOpen(key: string): boolean
+  recordFailure(key: string): void;
+  recordSuccess(key: string): void;
+  isOpen(key: string): boolean;
 }
 ```
 
 ### 4. Repository Pattern
+
 Database operations are abstracted through service layers:
+
 ```typescript
 class ImageService {
   async uploadImagesWithProgress(
@@ -78,45 +90,52 @@ class ImageService {
     files: UploadFile[],
     batchId: string,
     onProgress?: ProgressCallback
-  ): Promise<ImageWithUrls[]>
+  ): Promise<ImageWithUrls[]>;
 }
 ```
 
 ### 5. WebSocket Event-Driven Architecture
+
 Real-time updates using Socket.io:
+
 ```typescript
 export enum WebSocketEvent {
   SEGMENTATION_STATUS = 'segmentationStatus',
   EXPORT_PROGRESS = 'exportProgress',
-  QUEUE_UPDATE = 'queueUpdate'
+  QUEUE_UPDATE = 'queueUpdate',
 }
 ```
 
 ## Key Features
 
 ### 1. Batch Processing
+
 - Supports up to **10,000 images** per batch
 - Chunked uploads with progress tracking
 - Parallel ML processing with 4-way concurrency
 
 ### 2. Real-time Updates
+
 - WebSocket-based status updates
 - Queue position tracking
 - Export progress monitoring
 - Cross-tab synchronization
 
 ### 3. Export System
+
 - Multiple format support (COCO, YOLO, Excel, JSON)
 - Streaming exports for large datasets
 - Progress tracking with cancellation
 
 ### 4. Segmentation Pipeline
+
 - Three ML models (HRNet, CBAM-ResUNet, U-Net)
 - GPU acceleration with CUDA
 - Automatic retry on failures
 - Thumbnail generation for performance
 
 ### 5. Authentication & Security
+
 - JWT with refresh tokens
 - Email verification
 - Rate limiting per endpoint
@@ -126,6 +145,7 @@ export enum WebSocketEvent {
 ## Data Flow
 
 ### Image Upload Flow
+
 1. Frontend validates file (type, size)
 2. Chunked upload to backend
 3. Backend stores in filesystem/S3
@@ -134,6 +154,7 @@ export enum WebSocketEvent {
 6. WebSocket notification
 
 ### Segmentation Flow
+
 1. Image added to queue
 2. Queue worker picks up job
 3. ML service processes image
@@ -143,6 +164,7 @@ export enum WebSocketEvent {
 7. WebSocket notification
 
 ### Export Flow
+
 1. User selects images and format
 2. Export job created
 3. Background processing
@@ -153,6 +175,7 @@ export enum WebSocketEvent {
 ## Performance Optimizations
 
 ### Frontend
+
 - **Code splitting** - Lazy loading of routes
 - **Virtual scrolling** - For large image galleries
 - **Image lazy loading** - Load on demand
@@ -160,6 +183,7 @@ export enum WebSocketEvent {
 - **Debouncing** - Search and filter inputs
 
 ### Backend
+
 - **Connection pooling** - Database connections
 - **Redis caching** - Frequent queries
 - **Batch operations** - Bulk inserts/updates
@@ -167,6 +191,7 @@ export enum WebSocketEvent {
 - **Compression** - gzip for API responses
 
 ### ML Service
+
 - **GPU batch processing** - Process multiple images
 - **Model caching** - Keep models in memory
 - **Parallel inference** - 4-way concurrency
@@ -175,12 +200,14 @@ export enum WebSocketEvent {
 ## Error Handling
 
 ### Retry Strategies
+
 - **API calls**: 3 attempts, 2s backoff
 - **Uploads**: 5 attempts, 2s backoff
 - **WebSocket**: Infinite retries, 1.5x backoff
 - **ML processing**: 3 attempts, 5s backoff
 
 ### Error Recovery
+
 - Automatic reconnection for WebSockets
 - Queue job retry with exponential backoff
 - Transaction rollback on database errors
@@ -189,12 +216,14 @@ export enum WebSocketEvent {
 ## Monitoring & Logging
 
 ### Application Logs
+
 - Structured JSON logging
 - Log levels: ERROR, WARN, INFO, DEBUG
 - Context injection (userId, requestId)
 - Log rotation and archival
 
 ### Metrics
+
 - Response time percentiles
 - Error rates by endpoint
 - Queue depth and processing time
@@ -204,12 +233,14 @@ export enum WebSocketEvent {
 ## Security Measures
 
 ### Authentication
+
 - Bcrypt password hashing
 - JWT with short expiration
 - Refresh token rotation
 - Session invalidation on logout
 
 ### Data Protection
+
 - Input validation with Zod
 - SQL injection prevention (Prisma)
 - XSS protection (React)
@@ -217,6 +248,7 @@ export enum WebSocketEvent {
 - Rate limiting
 
 ### File Security
+
 - File type validation
 - Size limits (20MB per file)
 - Virus scanning (optional)
@@ -226,12 +258,14 @@ export enum WebSocketEvent {
 ## Deployment Architecture
 
 ### Blue-Green Deployment
+
 - Zero-downtime deployments
 - Instant rollback capability
 - A/B testing support
 - Gradual traffic shifting
 
 ### Container Architecture
+
 ```
 nginx-router (80/443)
   ├── blue-environment (4000-4008)
@@ -251,12 +285,14 @@ nginx-router (80/443)
 ## Scalability Considerations
 
 ### Horizontal Scaling
+
 - Stateless backend services
 - Redis for shared state
 - Database read replicas
 - CDN for static assets
 
 ### Vertical Scaling
+
 - GPU instances for ML
 - High-memory for image processing
 - SSD storage for databases
@@ -265,6 +301,7 @@ nginx-router (80/443)
 ## Future Enhancements
 
 ### Planned Features
+
 - Multi-GPU support
 - Kubernetes orchestration
 - GraphQL API
@@ -272,6 +309,7 @@ nginx-router (80/443)
 - Advanced ML models
 
 ### Performance Targets
+
 - <100ms API response time
 - <5s segmentation per image
 - 99.9% uptime SLA

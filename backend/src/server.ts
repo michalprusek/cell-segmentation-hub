@@ -164,6 +164,10 @@ app.use(
 // Request logging
 app.use(createRequestLogger('API'));
 
+// Access logging for IT security audit trail
+import { accessLogger } from './middleware/accessLogger';
+app.use(accessLogger);
+
 // Endpoint tracking middleware
 app.use(createEndpointTracker());
 

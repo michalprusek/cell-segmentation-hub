@@ -272,20 +272,14 @@ class WebSocketManager {
     // Data events
     // Backend emits 'segmentationUpdate', we need to listen for that
     this.socket.on('segmentation-update', (update: SegmentationUpdate) => {
-      // ENHANCED DEBUG LOGGING
-      logger.warn('🔴 SEGMENTATION UPDATE RECEIVED:', {
-        imageId: update.imageId,
-        status: update.status,
-        hasSegmentationResult: !!(update as any).segmentationResult,
-        segmentationResultKeys: (update as any).segmentationResult
-          ? Object.keys((update as any).segmentationResult)
-          : [],
-        polygonCount: (update as any).segmentationResult?.polygonCount,
-        timestamp: new Date().toISOString(),
-      });
-
-      if (process.env.NODE_ENV === 'development') {
-        logger.debug('Full segmentation update:', update);
+      // Development-only detailed logging
+      if (import.meta.env.DEV) {
+        logger.debug('Segmentation update received:', {
+          imageId: update.imageId,
+          status: update.status,
+          hasSegmentationResult: !!(update as any).segmentationResult,
+          polygonCount: (update as any).segmentationResult?.polygonCount,
+        });
       }
       // Keep emitting with hyphenated name for backward compatibility
       this.emitToListeners('segmentation-update', update);
@@ -293,7 +287,7 @@ class WebSocketManager {
 
     // Backend emits 'queueStats', we need to listen for that
     this.socket.on('queueStats', (stats: QueueStats) => {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         logger.debug('Queue stats update received:', stats);
       }
       // Keep emitting with hyphenated name for backward compatibility
@@ -304,7 +298,7 @@ class WebSocketManager {
     this.socket.on(
       'segmentationCompleted',
       (data: SegmentationCompletedMessage) => {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           logger.debug('Segmentation completed event received:', data);
         }
         // Convert to notification format for backward compatibility
@@ -318,7 +312,7 @@ class WebSocketManager {
 
     // Also listen for 'segmentationFailed' event from backend
     this.socket.on('segmentationFailed', (data: SegmentationFailedMessage) => {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         logger.debug('Segmentation failed event received:', data);
       }
       // Convert to system message for backward compatibility
@@ -330,14 +324,14 @@ class WebSocketManager {
     });
 
     this.socket.on('notification', (notification: Notification) => {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         logger.debug('Notification received:', notification);
       }
       this.emitToListeners('notification', notification);
     });
 
     this.socket.on('system-message', (message: SystemMessage) => {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         logger.debug('System message received:', message);
       }
       this.emitToListeners('system-message', message);

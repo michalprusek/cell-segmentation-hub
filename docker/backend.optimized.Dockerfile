@@ -14,15 +14,15 @@ FROM build-deps AS deps
 WORKDIR /app
 
 # Copy package files only for better caching
-COPY package*.json ./
-COPY tsconfig*.json ./
+COPY backend/package*.json ./
+COPY backend/tsconfig*.json ./
 
 # Install dependencies with cache mount
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefer-offline --no-audit || npm install
 
 # Copy Prisma schema and generate client
-COPY prisma ./prisma
+COPY backend/prisma ./prisma
 RUN npx prisma generate
 
 # Stage 4: Builder with TypeScript compilation
@@ -30,7 +30,7 @@ FROM deps AS builder
 WORKDIR /app
 
 # Copy source code
-COPY src ./src
+COPY backend/src ./src
 
 # Build TypeScript (optional - can use tsx in runtime)
 RUN npx tsc --project tsconfig.prod.json || true
@@ -58,14 +58,14 @@ RUN addgroup -g 1001 -S nodejs && \
 WORKDIR /app
 
 # Copy package files and install production dependencies only
-COPY package*.json ./
+COPY backend/package*.json ./
 
-# Install production deps with cache mount
+# Install production deps with cache mount (without dev deps but with scripts for canvas)
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --omit=dev --prefer-offline --no-audit || \
     npm install --omit=dev
 
-# Remove build dependencies after installation
+# Remove build dependencies after canvas compilation
 RUN apk del .build-deps
 
 # Install tsx for runtime TypeScript execution
