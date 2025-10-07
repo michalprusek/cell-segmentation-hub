@@ -20,7 +20,7 @@ COPY backend/segmentation/requirements.txt .
 # Build wheels for all dependencies (cached for reuse)
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip wheel --no-cache-dir --wheel-dir /wheels \
-    torch==2.0.1+cpu torchvision==0.15.2+cpu -f https://download.pytorch.org/whl/torch_stable.html && \
+    torch==2.0.1+cu118 torchvision==0.15.2+cu118 -f https://download.pytorch.org/whl/torch_stable.html && \
     pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 # Stage 2: Minimal runtime base
@@ -46,13 +46,16 @@ WORKDIR /app
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app
 
+# Copy requirements.txt (needed for pip install)
+COPY backend/segmentation/requirements.txt /app/requirements.txt
+
 # Copy and install wheels from builder
 COPY --from=wheel-builder /wheels /wheels
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip install --no-cache-dir --no-index --find-links /wheels \
     torch torchvision && \
     pip install --no-cache-dir --no-index --find-links /wheels \
-    fastapi uvicorn pillow opencv-python-headless numpy scipy scikit-image && \
+    -r /app/requirements.txt && \
     rm -rf /wheels
 
 # Copy application code

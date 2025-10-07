@@ -546,7 +546,10 @@ describe(
       it('should handle promise rejection with non-Error objects', async () => {
         const fn = vi
           .fn()
-          .mockRejectedValueOnce({ code: 'NETWORK_ERROR', message: 'Network failed' })
+          .mockRejectedValueOnce({
+            code: 'NETWORK_ERROR',
+            message: 'Network failed',
+          })
           .mockRejectedValueOnce('string error')
           .mockRejectedValueOnce(null)
           .mockResolvedValueOnce('success');
@@ -580,7 +583,7 @@ describe(
         const result = await retryWithBackoff(fn, {
           maxAttempts: 3,
           initialDelay: 10,
-          onRetry: (error) => errors.push(error),
+          onRetry: error => errors.push(error),
         });
 
         expect(result.success).toBe(false);
@@ -594,7 +597,9 @@ describe(
         const controller1 = new AbortController();
         const controller2 = new AbortController();
 
-        const fn = vi.fn(() => new Promise(resolve => setTimeout(resolve, 100)));
+        const fn = vi.fn(
+          () => new Promise(resolve => setTimeout(resolve, 100))
+        );
 
         const promise1 = retryWithBackoff(fn, {
           signal: controller1.signal,
@@ -635,12 +640,10 @@ describe(
       });
 
       it('should handle makeRetryable with complex function signatures', async () => {
-        const originalFn = vi.fn(
-          async (a: number, b: string, c?: boolean) => {
-            if (c) throw new Error('Optional param error');
-            return `${a}-${b}`;
-          }
-        );
+        const originalFn = vi.fn(async (a: number, b: string, c?: boolean) => {
+          if (c) throw new Error('Optional param error');
+          return `${a}-${b}`;
+        });
 
         const retryableFn = makeRetryable(originalFn, {
           maxAttempts: 2,
@@ -653,7 +656,9 @@ describe(
 
         // Test with optional param causing failure
         originalFn.mockClear();
-        originalFn.mockRejectedValueOnce(new Error('fail')).mockResolvedValueOnce('success');
+        originalFn
+          .mockRejectedValueOnce(new Error('fail'))
+          .mockResolvedValueOnce('success');
 
         const result2 = await retryableFn(1, 'retry', false);
         expect(result2).toBe('success');
@@ -662,7 +667,8 @@ describe(
 
       it('should handle extremely long-running operations with timeout', async () => {
         const fn = vi.fn(
-          () => new Promise(resolve => setTimeout(() => resolve('never'), 1000000))
+          () =>
+            new Promise(resolve => setTimeout(() => resolve('never'), 1000000))
         );
 
         const promise = retryWithTimeout(fn, 100, { maxAttempts: 1 });
@@ -708,7 +714,9 @@ describe(
 
         // Custom error messages
         expect(isRetryableError(new Error('ECONNREFUSED'))).toBe(false);
-        expect(isRetryableError(new Error('ChunkLoadError: Loading failed'))).toBe(true);
+        expect(
+          isRetryableError(new Error('ChunkLoadError: Loading failed'))
+        ).toBe(true);
       });
     });
   },

@@ -51,12 +51,19 @@ const ProjectImages = ({
     if (viewMode === 'grid') {
       return (
         <motion.div
-          className="grid justify-items-start"
+          className={cn(
+            'grid gap-4',
+            // Responsive grid: 1 column on mobile, auto-fill on tablet+
+            'grid-cols-1 sm:grid',
+            'sm:justify-items-start'
+          )}
           style={{
-            // Use auto-fill for constant gaps - doesn't stretch items to fill width
-            gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 250px))',
-            maxWidth: '100%',
-            gap: '16px', // Constant gap between all items
+            // Use auto-fill for constant gaps on tablet+ - doesn't stretch items
+            // On mobile, grid-cols-1 takes precedence
+            gridTemplateColumns:
+              window.innerWidth >= 640
+                ? 'repeat(auto-fill, minmax(250px, 250px))'
+                : undefined,
           }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}

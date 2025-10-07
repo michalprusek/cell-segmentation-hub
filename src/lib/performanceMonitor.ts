@@ -380,7 +380,9 @@ class PerformanceMonitor {
     if (raceStats.total > 0) {
       lines.push('\nRace Condition Statistics:');
       lines.push(`  Total: ${raceStats.total}`);
-      lines.push(`  Resolved: ${raceStats.resolved} (${Math.round(raceStats.resolved / raceStats.total * 100)}%)`);
+      lines.push(
+        `  Resolved: ${raceStats.resolved} (${Math.round((raceStats.resolved / raceStats.total) * 100)}%)`
+      );
       lines.push(`  Unresolved: ${raceStats.unresolved}`);
       lines.push(`  Average Time Diff: ${raceStats.averageTimeDiff}ms`);
       lines.push(`  Average Retries: ${raceStats.averageRetries}`);

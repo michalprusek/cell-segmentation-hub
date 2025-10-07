@@ -146,15 +146,14 @@ export const ImageCard = ({
         className={cn(
           'relative overflow-hidden rounded-lg cursor-pointer',
           'bg-gray-100 dark:bg-gray-800 group transition-all duration-300',
-          'hover:shadow-xl hover:scale-[1.02]'
+          'hover:shadow-xl hover:scale-[1.02]',
+          // Responsive width: full width on mobile, fixed 250px on tablet+
+          'w-full sm:w-[250px]',
+          // Maintain aspect ratio (3:2) instead of fixed height
+          'aspect-[3/2]',
+          // Minimum height to prevent too small cards
+          'min-h-[167px]'
         )}
-        style={{
-          // Fixed dimensions for stable rendering across viewport changes
-          width: '250px',
-          height: '167px', // Proportional height (250/280 * 192 = 171, rounded to 167)
-          minWidth: '250px',
-          minHeight: '167px',
-        }}
         onClick={() => onOpen(image.id)}
       >
         {/* Image preview with retry mechanism */}
@@ -230,7 +229,8 @@ export const ImageCard = ({
             checked={isSelected}
             onCheckedChange={handleSelectionChange}
             className={cn(
-              'h-5 w-5 border-2 rounded shadow-sm transition-all',
+              // Larger touch target on mobile (24px), standard on desktop (20px)
+              'h-6 w-6 sm:h-5 sm:w-5 border-2 rounded shadow-sm transition-all',
               isSelected
                 ? 'border-blue-500 bg-blue-500 data-[state=checked]:bg-blue-500 data-[state=checked]:text-white'
                 : 'border-white bg-white/80 backdrop-blur-sm hover:bg-white data-[state=unchecked]:bg-white/80'

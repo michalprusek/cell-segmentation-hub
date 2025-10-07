@@ -12,6 +12,12 @@ import { apiClient } from '@/lib/api';
 import { logger } from '@/lib/logger';
 import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { PageTransition } from '@/components/PageTransition';
+import {
+  PageContainer,
+  ResponsiveStack,
+  ContentCard,
+  FlexBetween,
+} from '@/components/layout';
 
 // Configuration for share propagation delay (in milliseconds)
 // This delay ensures database and cache have time to update after share acceptance
@@ -256,21 +262,27 @@ const Dashboard = () => {
       <div className="min-h-screen bg-gray-50">
         <DashboardHeader />
 
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-8">
+        <PageContainer>
+          <ResponsiveStack
+            direction="vertical"
+            breakpoint="md"
+            align="start"
+            justify="between"
+            className="mb-8"
+          >
             <div>
               <h1 className="text-2xl font-bold mb-1">
                 {t('common.dashboard')}
               </h1>
               <p className="text-gray-500">{t('dashboard.manageProjects')}</p>
             </div>
-          </div>
+          </ResponsiveStack>
 
           <div className="mb-8 animate-fade-in">{statsOverview}</div>
 
           <div className="animate-fade-in" style={{ animationDelay: '0.1s' }}>
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <div className="flex flex-col sm:flex-row items-center justify-between mb-6">
+            <ContentCard className="p-6">
+              <FlexBetween align="center" className="flex-col sm:flex-row mb-6">
                 <div>
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-1">
                     {t('dashboard.projectGallery')}
@@ -281,7 +293,7 @@ const Dashboard = () => {
                 </div>
 
                 {projectToolbar}
-              </div>
+              </FlexBetween>
 
               <ProjectsTab
                 projects={projects}
@@ -290,9 +302,9 @@ const Dashboard = () => {
                 onOpenProject={handleOpenProject}
                 onProjectUpdate={handleProjectUpdate}
               />
-            </div>
+            </ContentCard>
           </div>
-        </div>
+        </PageContainer>
       </div>
     </PageTransition>
   );

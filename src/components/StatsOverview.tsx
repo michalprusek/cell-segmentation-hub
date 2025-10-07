@@ -8,6 +8,7 @@ import { Microscope, Image, FileUp, HardDrive } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { useAuth, useLanguage } from '@/contexts/exports';
 import { getErrorMessage } from '@/types';
+import { StatsGrid } from '@/components/layout';
 
 interface StatCardProps {
   title: string;
@@ -251,11 +252,11 @@ const StatsOverview = () => {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <StatsGrid>
       {stats.map((stat, index) => (
         <StatCard key={index} {...stat} />
       ))}
-    </div>
+    </StatsGrid>
   );
 };
 

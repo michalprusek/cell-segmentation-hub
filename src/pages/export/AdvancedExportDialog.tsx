@@ -122,13 +122,13 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
 
       return (
         <Dialog open={open} onOpenChange={onClose}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[95vw] sm:max-w-2xl md:max-w-4xl max-h-[90vh] overflow-y-auto px-4 sm:px-6">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Package className="h-5 w-5" />
+              <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Package className="h-4 w-4 sm:h-5 sm:w-5" />
                 {t('export.advancedOptions')}
               </DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="text-xs sm:text-sm">
                 {t('export.configureSettings')}
               </DialogDescription>
             </DialogHeader>
@@ -138,12 +138,17 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
               onValueChange={setActiveTab}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="general">{t('export.general')}</TabsTrigger>
-                <TabsTrigger value="visualization">
+              <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-1 sm:gap-0 h-auto sm:h-10">
+                <TabsTrigger value="general" className="text-sm h-10 sm:h-auto">
+                  {t('export.general')}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="visualization"
+                  className="text-sm h-10 sm:h-auto"
+                >
                   {t('export.visualization')}
                 </TabsTrigger>
-                <TabsTrigger value="formats">
+                <TabsTrigger value="formats" className="text-sm h-10 sm:h-auto">
                   {t('export.formatsTab')}
                 </TabsTrigger>
               </TabsList>

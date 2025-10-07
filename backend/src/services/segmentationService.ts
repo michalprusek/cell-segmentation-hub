@@ -761,7 +761,8 @@ export class SegmentationService {
           if (
             polygon.type === 'internal' &&
             polygon.parentIds &&
-            (!Array.isArray(polygon.parentIds) || polygon.parentIds.some(id => typeof id !== 'string'))
+            (!Array.isArray(polygon.parentIds) ||
+              polygon.parentIds.some(id => typeof id !== 'string'))
           ) {
             logger.warn(
               'Internal polygon has invalid parentIds',
@@ -823,13 +824,19 @@ export class SegmentationService {
       // Validate parent_id references
       polygonsWithIds.forEach(polygon => {
         if (polygon.parent_id) {
-          const parentExists = polygonsWithIds.some(p => p.id === polygon.parent_id);
+          const parentExists = polygonsWithIds.some(
+            p => p.id === polygon.parent_id
+          );
           if (!parentExists) {
-            logger.warn('Polygon has invalid parent_id reference', 'SegmentationService', {
-              polygonId: polygon.id,
-              parentId: polygon.parent_id,
-              availableIds: polygonsWithIds.map(p => p.id)
-            });
+            logger.warn(
+              'Polygon has invalid parent_id reference',
+              'SegmentationService',
+              {
+                polygonId: polygon.id,
+                parentId: polygon.parent_id,
+                availableIds: polygonsWithIds.map(p => p.id),
+              }
+            );
             // Clear invalid parent_id
             delete polygon.parent_id;
           }
@@ -974,7 +981,7 @@ export class SegmentationService {
 
       // Track valid images and their original indices
       const validImageIndices: number[] = [];
-      
+
       // Add each valid image file to the form data
       for (let i = 0; i < images.length; i++) {
         const image = images[i];
@@ -991,7 +998,7 @@ export class SegmentationService {
           filename: image.name,
           contentType: image.mimeType || 'image/jpeg',
         });
-        
+
         // Track this valid image's original index
         validImageIndices.push(i);
       }
@@ -1039,7 +1046,7 @@ export class SegmentationService {
       }
 
       const batchResult = response.data;
-      
+
       // Pre-allocate results array with failed responses for all images
       const results: SegmentationResponse[] = images.map(image => ({
         success: false,
@@ -1049,35 +1056,34 @@ export class SegmentationService {
         confidence: null,
         processing_time: null,
         image_size: { width: image.width || 0, height: image.height || 0 },
-        error: 'Image skipped or invalid'
+        error: 'Image skipped or invalid',
       }));
 
       // Process each ML result and map it back to the correct original index
-      for (let resultIndex = 0; resultIndex < batchResult.results.length; resultIndex++) {
+      for (
+        let resultIndex = 0;
+        resultIndex < batchResult.results.length;
+        resultIndex++
+      ) {
         // Get the original image index for this result
         if (resultIndex >= validImageIndices.length) {
-          logger.warn(
-            'More results than valid images',
-            'SegmentationService',
-            { 
-              resultIndex, 
-              validImageCount: validImageIndices.length,
-              resultsCount: batchResult.results.length
-            }
-          );
+          logger.warn('More results than valid images', 'SegmentationService', {
+            resultIndex,
+            validImageCount: validImageIndices.length,
+            resultsCount: batchResult.results.length,
+          });
           break;
         }
-        
+
         const originalIndex = validImageIndices[resultIndex];
         const result = batchResult.results[resultIndex];
         const image = images[originalIndex];
 
         if (!image) {
-          logger.warn(
-            'Missing image for batch result',
-            'SegmentationService',
-            { originalIndex, resultIndex }
-          );
+          logger.warn('Missing image for batch result', 'SegmentationService', {
+            originalIndex,
+            resultIndex,
+          });
           continue;
         }
 
@@ -1140,7 +1146,7 @@ export class SegmentationService {
             confidence: null,
             processing_time: null,
             image_size: { width: image.width || 0, height: image.height || 0 },
-            error: result.error || 'No polygons found'
+            error: result.error || 'No polygons found',
           };
         }
       }
@@ -1253,7 +1259,9 @@ export class SegmentationService {
         area: polygon.area || 0, // Preserve area if available
         confidence: polygon.confidence || 0.8,
         type: (polygon as any).type || 'external', // Preserve original type or default to external
-        parentIds: (polygon as any).parent_id ? [(polygon as any).parent_id] : undefined, // Convert parent_id to parentIds array
+        parentIds: (polygon as any).parent_id
+          ? [(polygon as any).parent_id]
+          : undefined, // Convert parent_id to parentIds array
       })
     );
 
@@ -1329,7 +1337,10 @@ export class SegmentationService {
       type: polygon.type,
       area: polygon.area,
       confidence: polygon.confidence,
-      parent_id: polygon.parentIds && polygon.parentIds.length > 0 ? polygon.parentIds[0] : undefined,
+      parent_id:
+        polygon.parentIds && polygon.parentIds.length > 0
+          ? polygon.parentIds[0]
+          : undefined,
     }));
     const polygonsJson = JSON.stringify(dbPolygons);
 
@@ -1705,7 +1716,9 @@ export class SegmentationService {
           segmentation.imageId
         );
 
-        const parsedPolygons = polygonResult.isValid ? polygonResult.polygons : [];
+        const parsedPolygons = polygonResult.isValid
+          ? polygonResult.polygons
+          : [];
 
         // Convert Polygon[] to SegmentationPolygon[] with IDs - same as single method
         const polygons: SegmentationPolygon[] = parsedPolygons.map(
@@ -1715,7 +1728,9 @@ export class SegmentationService {
             area: polygon.area || 0, // Preserve area if available
             confidence: polygon.confidence || 0.8,
             type: (polygon as any).type || 'external', // Preserve original type or default to external
-            parentIds: (polygon as any).parent_id ? [(polygon as any).parent_id] : undefined, // Convert parent_id to parentIds array
+            parentIds: (polygon as any).parent_id
+              ? [(polygon as any).parent_id]
+              : undefined, // Convert parent_id to parentIds array
           })
         );
 

@@ -21,6 +21,7 @@ Authorization: Bearer <jwt_token>
 ```
 
 ### Login
+
 ```http
 POST /api/auth/login
 Content-Type: application/json
@@ -43,6 +44,7 @@ Response: 200 OK
 ```
 
 ### Register
+
 ```http
 POST /api/auth/register
 Content-Type: application/json
@@ -61,6 +63,7 @@ Response: 201 Created
 ```
 
 ### Refresh Token
+
 ```http
 POST /api/auth/refresh
 Content-Type: application/json
@@ -79,6 +82,7 @@ Response: 200 OK
 ## Projects
 
 ### Create Project
+
 ```http
 POST /api/projects
 Authorization: Bearer <token>
@@ -103,6 +107,7 @@ Response: 201 Created
 ```
 
 ### List Projects
+
 ```http
 GET /api/projects
 Authorization: Bearer <token>
@@ -129,6 +134,7 @@ Response: 200 OK
 ```
 
 ### Get Project Details
+
 ```http
 GET /api/projects/:projectId
 Authorization: Bearer <token>
@@ -156,6 +162,7 @@ Response: 200 OK
 ## Images
 
 ### Upload Images
+
 ```http
 POST /api/projects/:projectId/images/upload
 Authorization: Bearer <token>
@@ -181,6 +188,7 @@ Response: 200 OK
 ```
 
 ### Get Image
+
 ```http
 GET /api/images/:imageId
 Authorization: Bearer <token>
@@ -202,6 +210,7 @@ Response: 200 OK
 ```
 
 ### Delete Image
+
 ```http
 DELETE /api/images/:imageId
 Authorization: Bearer <token>
@@ -212,6 +221,7 @@ Response: 204 No Content
 ## Segmentation
 
 ### Start Segmentation
+
 ```http
 POST /api/segmentation/start
 Authorization: Bearer <token>
@@ -245,6 +255,7 @@ Response: 200 OK
 ```
 
 ### Get Segmentation Status
+
 ```http
 GET /api/segmentation/status/:imageId
 Authorization: Bearer <token>
@@ -260,6 +271,7 @@ Response: 200 OK
 ```
 
 ### Cancel Segmentation
+
 ```http
 POST /api/segmentation/cancel/:imageId
 Authorization: Bearer <token>
@@ -272,6 +284,7 @@ Response: 200 OK
 ```
 
 ### Get Segmentation Results
+
 ```http
 GET /api/segmentation/results/:imageId
 Authorization: Bearer <token>
@@ -299,6 +312,7 @@ Response: 200 OK
 ## Export
 
 ### Create Export Job
+
 ```http
 POST /api/export/create
 Authorization: Bearer <token>
@@ -325,6 +339,7 @@ Response: 200 OK
 ```
 
 ### Get Export Status
+
 ```http
 GET /api/export/status/:exportId
 Authorization: Bearer <token>
@@ -340,6 +355,7 @@ Response: 200 OK
 ```
 
 ### Download Export
+
 ```http
 GET /api/export/download/:exportId
 Authorization: Bearer <token>
@@ -352,6 +368,7 @@ Content-Disposition: attachment; filename="export.zip"
 ```
 
 ### Cancel Export
+
 ```http
 POST /api/export/cancel/:exportId
 Authorization: Bearer <token>
@@ -370,16 +387,17 @@ Connect to WebSocket for real-time updates:
 ```javascript
 const socket = io('http://localhost:3001', {
   auth: {
-    token: 'Bearer <jwt_token>'
-  }
+    token: 'Bearer <jwt_token>',
+  },
 });
 ```
 
 ### Events
 
 #### Segmentation Status
+
 ```javascript
-socket.on('segmentationStatus', (data) => {
+socket.on('segmentationStatus', data => {
   console.log(data);
   // {
   //   imageId: "uuid",
@@ -391,8 +409,9 @@ socket.on('segmentationStatus', (data) => {
 ```
 
 #### Export Progress
+
 ```javascript
-socket.on('exportProgress', (data) => {
+socket.on('exportProgress', data => {
   console.log(data);
   // {
   //   exportId: "uuid",
@@ -403,8 +422,9 @@ socket.on('exportProgress', (data) => {
 ```
 
 #### Queue Update
+
 ```javascript
-socket.on('queueUpdate', (data) => {
+socket.on('queueUpdate', data => {
   console.log(data);
   // {
   //   queueLength: 10,
@@ -425,6 +445,7 @@ Different endpoints have different rate limits:
 - **Download**: 10 req/s
 
 Rate limit headers:
+
 ```http
 X-RateLimit-Limit: 30
 X-RateLimit-Remaining: 25
@@ -434,6 +455,7 @@ X-RateLimit-Reset: 1704067200
 ## Error Responses
 
 ### Standard Error Format
+
 ```json
 {
   "error": {

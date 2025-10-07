@@ -252,9 +252,11 @@ export const PolygonValidator = {
     }
 
     // Add hierarchy support - preserve type field
-    if (polygonObj.type &&
-        typeof polygonObj.type === 'string' &&
-        ['external', 'internal'].includes(polygonObj.type as string)) {
+    if (
+      polygonObj.type &&
+      typeof polygonObj.type === 'string' &&
+      ['external', 'internal'].includes(polygonObj.type as string)
+    ) {
       validatedPolygon.type = polygonObj.type as 'external' | 'internal';
     }
 
@@ -264,7 +266,11 @@ export const PolygonValidator = {
     }
 
     // Add area if present
-    if (polygonObj.area && typeof polygonObj.area === 'number' && polygonObj.area >= 0) {
+    if (
+      polygonObj.area &&
+      typeof polygonObj.area === 'number' &&
+      polygonObj.area >= 0
+    ) {
       validatedPolygon.area = polygonObj.area;
     }
 

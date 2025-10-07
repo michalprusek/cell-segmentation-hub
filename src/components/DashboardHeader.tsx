@@ -85,18 +85,37 @@ const DashboardHeader = () => {
               setMlServiceStatus('error');
             }
           } else {
-            // Received HTML or other non-JSON content
-            logger.warn(
-              'ML service health endpoint returned non-JSON response'
-            );
-            setMlServiceStatus('error');
+            // Received HTML or other non-JSON content - only log in dev or on state transition
+            setMlServiceStatus(prev => {
+              if (import.meta.env.DEV && prev !== 'error') {
+                logger.warn(
+                  'ML service health endpoint returned non-JSON response'
+                );
+              }
+              return 'error';
+            });
           }
         } else {
-          setMlServiceStatus('error');
+          setMlServiceStatus(prev => {
+            if (import.meta.env.DEV && prev !== 'error') {
+              logger.warn(
+                'ML service health check failed with status:',
+                response.status
+              );
+            }
+            return 'error';
+          });
         }
       } catch (error) {
-        logger.warn('ML service status check failed:', error);
-        setMlServiceStatus('error');
+        setMlServiceStatus(prev => {
+          // Only log on state transition to avoid spam
+          if (prev !== 'error') {
+            if (import.meta.env.DEV) {
+              logger.warn('ML service status check failed:', error);
+            }
+          }
+          return 'error';
+        });
       }
     };
 

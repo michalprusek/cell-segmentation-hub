@@ -6,6 +6,7 @@ import NewProjectListItem from '@/components/NewProjectListItem';
 import { useLanguage } from '@/contexts/useLanguage';
 import { SkeletonProjectCard } from '@/components/ui/skeleton-variants';
 import { cn } from '@/lib/utils';
+import { ProjectsGrid } from '@/components/layout';
 
 export interface Project {
   id: string;
@@ -45,20 +46,32 @@ const ProjectsList = ({
     return (
       <div
         className={cn(
-          viewMode === 'grid'
-            ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6'
-            : 'flex flex-col space-y-3 w-full'
+          viewMode === 'grid' ? '' : 'flex flex-col space-y-3 w-full'
         )}
       >
-        {Array.from({ length: 6 }).map((_, index) => (
-          <div
-            key={index}
-            className="animate-in fade-in duration-500"
-            style={{ animationDelay: `${index * 75}ms` }}
-          >
-            <SkeletonProjectCard />
-          </div>
-        ))}
+        {viewMode === 'grid' ? (
+          <ProjectsGrid>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div
+                key={index}
+                className="animate-in fade-in duration-500"
+                style={{ animationDelay: `${index * 75}ms` }}
+              >
+                <SkeletonProjectCard />
+              </div>
+            ))}
+          </ProjectsGrid>
+        ) : (
+          Array.from({ length: 6 }).map((_, index) => (
+            <div
+              key={index}
+              className="animate-in fade-in duration-500"
+              style={{ animationDelay: `${index * 75}ms` }}
+            >
+              <SkeletonProjectCard />
+            </div>
+          ))
+        )}
       </div>
     );
   }
@@ -148,11 +161,7 @@ const ProjectsList = ({
     ? [...projectItems, <NewProjectCard key="new-project" />]
     : projectItems;
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {allItems}
-    </div>
-  );
+  return <ProjectsGrid>{allItems}</ProjectsGrid>;
 };
 
 export default ProjectsList;

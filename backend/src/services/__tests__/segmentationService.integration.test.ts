@@ -41,7 +41,9 @@ describe('SegmentationService - Integration Tests', () => {
 
     mockStorage = {
       getBuffer: vi.fn().mockResolvedValue(Buffer.from('test-image-data')),
-      uploadFile: vi.fn().mockResolvedValue({ url: 'https://storage.example.com/file' }),
+      uploadFile: vi
+        .fn()
+        .mockResolvedValue({ url: 'https://storage.example.com/file' }),
     };
     (getStorageProvider as any).mockReturnValue(mockStorage);
 
@@ -56,7 +58,7 @@ describe('SegmentationService - Integration Tests', () => {
         update: vi.fn(),
         findMany: vi.fn(),
       },
-      $transaction: vi.fn((callback) => callback(mockPrisma)),
+      $transaction: vi.fn(callback => callback(mockPrisma)),
     };
 
     mockWsEmitter = new MockWebSocketEmitter();
@@ -104,7 +106,16 @@ describe('SegmentationService - Integration Tests', () => {
           results: [
             {
               success: true,
-              polygons: [{ points: [[0, 0], [100, 0], [100, 100], [0, 100]] }],
+              polygons: [
+                {
+                  points: [
+                    [0, 0],
+                    [100, 0],
+                    [100, 100],
+                    [0, 100],
+                  ],
+                },
+              ],
               model_used: 'hrnet',
               confidence: 0.95,
               processing_time: 0.5,
@@ -112,7 +123,16 @@ describe('SegmentationService - Integration Tests', () => {
             },
             {
               success: true,
-              polygons: [{ points: [[50, 50], [150, 50], [150, 150], [50, 150]] }],
+              polygons: [
+                {
+                  points: [
+                    [50, 50],
+                    [150, 50],
+                    [150, 150],
+                    [50, 150],
+                  ],
+                },
+              ],
               model_used: 'hrnet',
               confidence: 0.98, // Last image result
               processing_time: 0.6,
@@ -127,7 +147,7 @@ describe('SegmentationService - Integration Tests', () => {
 
       // Simulate slow database write (500ms delay)
       let databaseWriteComplete = false;
-      mockPrisma.segmentationResult.create.mockImplementation(async (data) => {
+      mockPrisma.segmentationResult.create.mockImplementation(async data => {
         await new Promise(resolve => setTimeout(resolve, 500)); // Simulate delay
         databaseWriteComplete = true;
         return {
@@ -140,37 +160,43 @@ describe('SegmentationService - Integration Tests', () => {
 
       // Mock the findUnique to return null initially, then the result after DB write
       let findUniqueCallCount = 0;
-      mockPrisma.segmentationResult.findUnique.mockImplementation(async ({ where }) => {
-        findUniqueCallCount++;
+      mockPrisma.segmentationResult.findUnique.mockImplementation(
+        async ({ where }) => {
+          findUniqueCallCount++;
 
-        // First call: database write not complete yet
-        if (findUniqueCallCount === 1 && !databaseWriteComplete) {
+          // First call: database write not complete yet
+          if (findUniqueCallCount === 1 && !databaseWriteComplete) {
+            return null;
+          }
+
+          // Second call (after retry): database write complete
+          if (where.imageId === 'img3') {
+            return {
+              id: 'result-id-3',
+              imageId: 'img3',
+              polygons: mlResponse.data.results[1].polygons,
+              modelUsed: 'hrnet',
+              confidence: 0.98,
+            };
+          }
+
           return null;
         }
-
-        // Second call (after retry): database write complete
-        if (where.imageId === 'img3') {
-          return {
-            id: 'result-id-3',
-            imageId: 'img3',
-            polygons: mlResponse.data.results[1].polygons,
-            modelUsed: 'hrnet',
-            confidence: 0.98,
-          };
-        }
-
-        return null;
-      });
+      );
 
       // Act: Process batch segmentation
       const processingPromise = service.requestBatchSegmentation(images);
 
       // Simulate WebSocket update arriving immediately (before DB write)
-      mockWsEmitter.emitWithDelay('segmentation-update', {
-        imageId: 'img3',
-        projectId: 'project-1',
-        status: 'completed',
-      }, 100); // WebSocket update after 100ms
+      mockWsEmitter.emitWithDelay(
+        'segmentation-update',
+        {
+          imageId: 'img3',
+          projectId: 'project-1',
+          status: 'completed',
+        },
+        100
+      ); // WebSocket update after 100ms
 
       const results = await processingPromise;
 
@@ -202,7 +228,16 @@ describe('SegmentationService - Integration Tests', () => {
         data: {
           results: images.map((_, i) => ({
             success: true,
-            polygons: [{ points: [[i, i], [i + 100, i], [i + 100, i + 100], [i, i + 100]] }],
+            polygons: [
+              {
+                points: [
+                  [i, i],
+                  [i + 100, i],
+                  [i + 100, i + 100],
+                  [i, i + 100],
+                ],
+              },
+            ],
             model_used: 'hrnet',
             confidence: 0.9 + i * 0.01,
             processing_time: 0.5 + i * 0.1,
@@ -216,7 +251,7 @@ describe('SegmentationService - Integration Tests', () => {
 
       // Simulate varying database write delays
       const dbDelays = [100, 300, 200, 400, 600]; // Different delays for each image
-      mockPrisma.segmentationResult.create.mockImplementation(async (data) => {
+      mockPrisma.segmentationResult.create.mockImplementation(async data => {
         const imageIndex = parseInt(data.data.imageId.replace('img', ''));
         await new Promise(resolve => setTimeout(resolve, dbDelays[imageIndex]));
         return {
@@ -256,7 +291,16 @@ describe('SegmentationService - Integration Tests', () => {
           results: [
             {
               success: true,
-              polygons: [{ points: [[0, 0], [100, 0], [100, 100], [0, 100]] }],
+              polygons: [
+                {
+                  points: [
+                    [0, 0],
+                    [100, 0],
+                    [100, 100],
+                    [0, 100],
+                  ],
+                },
+              ],
               model_used: 'hrnet',
               confidence: 0.95,
               processing_time: 0.5,
@@ -287,7 +331,9 @@ describe('SegmentationService - Integration Tests', () => {
       expect(elapsed).toBeLessThan(2000); // Should timeout within 2 seconds
 
       // Verify retries were attempted
-      expect(mockPrisma.segmentationResult.findUnique.mock.calls.length).toBeGreaterThan(1);
+      expect(
+        mockPrisma.segmentationResult.findUnique.mock.calls.length
+      ).toBeGreaterThan(1);
 
       // Cleanup
       process.env.SEGMENTATION_RETRY_TIMEOUT = originalTimeout;
@@ -311,7 +357,16 @@ describe('SegmentationService - Integration Tests', () => {
           results: [
             {
               success: true,
-              polygons: [{ points: [[0, 0], [100, 0], [100, 100], [0, 100]] }],
+              polygons: [
+                {
+                  points: [
+                    [0, 0],
+                    [100, 0],
+                    [100, 100],
+                    [0, 100],
+                  ],
+                },
+              ],
               model_used: 'hrnet',
               confidence: 0.95,
               processing_time: 0.5,
