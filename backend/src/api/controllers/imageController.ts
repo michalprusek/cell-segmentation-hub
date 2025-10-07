@@ -123,10 +123,14 @@ export class ImageController {
               normalizedName = decoded;
             }
           } catch (e) {
-            logger.warn('Failed to decode potential double-encoded filename', undefined, {
-              filename: normalizedName,
-              error: e.message,
-            });
+            logger.warn(
+              'Failed to decode potential double-encoded filename',
+              undefined,
+              {
+                filename: normalizedName,
+                error: e.message,
+              }
+            );
           }
         }
 
@@ -880,8 +884,11 @@ export class ImageController {
                   imageHeight: image.segmentation.imageHeight,
                   levelOfDetail: levelOfDetail,
                   polygonCount: parsedPolygons.length,
-                  pointCount: parsedPolygons.reduce((sum: number, p: any) =>
-                    sum + (p.points?.length || p.coordinates?.length || 0), 0),
+                  pointCount: parsedPolygons.reduce(
+                    (sum: number, p: any) =>
+                      sum + (p.points?.length || p.coordinates?.length || 0),
+                    0
+                  ),
                   compressionRatio: 1.0,
                 };
               } catch (error) {

@@ -278,12 +278,11 @@ export function createMockAuthMiddleware(
     res: Record<string, unknown>,
     next: () => void
   ) => {
-     
     const response = res as any;
     if (!scenario.shouldSucceed) {
       return response.status(scenario.expectedStatus).json({
         success: false,
-         
+
         message: (scenario as any).expectedMessage,
         source: 'Auth',
       });

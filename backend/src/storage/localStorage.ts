@@ -311,15 +311,17 @@ export class LocalStorageProvider implements StorageProvider {
     // Enhanced sanitization to prevent path traversal attacks
     const sanitizePathComponent = (component: string): string => {
       // Remove any path traversal sequences and dangerous characters
-      return component
-        .replace(/\.\./g, '') // Remove parent directory references
-        .replace(/[/\\]/g, '') // Remove path separators
-        .replace(/^\.+/, '') // Remove leading dots
-        // Updated regex to preserve Unicode characters (including diacritics) while removing unsafe characters
-        // This allows letters from any language, numbers, spaces, dots, dashes, and underscores
-        .replace(/[^\p{L}\p{N}\s._-]/gu, '_') // Unicode-aware: Keep letters, numbers, space, dot, dash, underscore
-        .replace(/\s+/g, '_') // Replace spaces with underscores for filesystem compatibility
-        .substring(0, 255); // Limit length to prevent filesystem issues
+      return (
+        component
+          .replace(/\.\./g, '') // Remove parent directory references
+          .replace(/[/\\]/g, '') // Remove path separators
+          .replace(/^\.+/, '') // Remove leading dots
+          // Updated regex to preserve Unicode characters (including diacritics) while removing unsafe characters
+          // This allows letters from any language, numbers, spaces, dots, dashes, and underscores
+          .replace(/[^\p{L}\p{N}\s._-]/gu, '_') // Unicode-aware: Keep letters, numbers, space, dot, dash, underscore
+          .replace(/\s+/g, '_') // Replace spaces with underscores for filesystem compatibility
+          .substring(0, 255)
+      ); // Limit length to prevent filesystem issues
     };
 
     const sanitizedUserId = sanitizePathComponent(userId || 'unknown');
