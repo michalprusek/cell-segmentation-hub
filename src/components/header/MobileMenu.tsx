@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Bell,
   Settings as SettingsIcon,
@@ -7,11 +7,15 @@ import {
   LogOut,
   X,
   LayoutDashboard,
+  BookOpen,
+  Cpu,
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/useAuth';
 import { useLanguage } from '@/contexts/useLanguage';
+import { useLocalizedModels } from '@/hooks/useLocalizedModels';
 import { logger } from '@/lib/logger';
 import { toast } from 'sonner';
 
@@ -19,16 +23,57 @@ interface MobileMenuProps {
   isMenuOpen: boolean;
   setIsMenuOpen: (isOpen: boolean) => void;
   hasNotifications: boolean;
+  mlServiceStatus?: 'idle' | 'processing' | 'error';
+  isConnected?: boolean;
 }
 
 const MobileMenu = ({
   isMenuOpen,
   setIsMenuOpen,
   hasNotifications,
+  mlServiceStatus = 'idle',
+  isConnected = true,
 }: MobileMenuProps) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { signOut } = useAuth();
   const { t } = useLanguage();
+  const { getSelectedModelInfo } = useLocalizedModels();
+
+  // Determine current page for back navigation
+  const getCurrentPageInfo = () => {
+    const path = location.pathname;
+    if (path === '/dashboard') {
+      return { name: t('common.dashboard'), path: '/dashboard' };
+    } else if (path === '/settings') {
+      return { name: t('common.settings'), path: '/settings' };
+    } else if (path === '/profile') {
+      return { name: t('common.profile'), path: '/profile' };
+    } else if (path.startsWith('/project/')) {
+      return { name: t('common.project'), path };
+    }
+    return null;
+  };
+
+  const currentPageInfo = getCurrentPageInfo();
+
+  // Determine status dot color for model badge
+  const getStatusColor = () => {
+    if (!isConnected || mlServiceStatus === 'error') {
+      return 'bg-red-500'; // Red - error or disconnected
+    }
+    if (mlServiceStatus === 'processing') {
+      return 'bg-blue-500'; // Blue - processing
+    }
+    return 'bg-green-500'; // Green - idle and available
+  };
+
+  const getStatusTooltip = () => {
+    if (!isConnected) return t('status.disconnected');
+    if (mlServiceStatus === 'error') return t('status.error');
+    if (mlServiceStatus === 'processing') return t('status.processing');
+    return t('status.ready');
+  };
 
   const handleSignOut = async () => {
     try {
@@ -72,6 +117,62 @@ const MobileMenu = ({
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
             onClick={() => {
               setIsMenuOpen(false);
+              navigate('/dashboard');
+            }}
+          >
+            <LayoutDashboard className="h-5 w-5 mr-3 text-gray-500" />
+            <span>{t('common.dashboard')}</span>
+          </button>
+
+          {/* Documentation Link */}
+          <button
+            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            onClick={() => {
+              setIsMenuOpen(false);
+              navigate('/documentation', {
+                state: currentPageInfo
+                  ? {
+                      from: currentPageInfo.name,
+                      path: currentPageInfo.path,
+                    }
+                  : undefined,
+              });
+            }}
+          >
+            <BookOpen className="h-5 w-5 mr-3 text-gray-500" />
+            <span>{t('common.documentation', 'Documentation')}</span>
+          </button>
+
+          {/* Current Model Selection */}
+          <button
+            className="flex items-center justify-between w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            onClick={() => {
+              setIsMenuOpen(false);
+              navigate('/settings?tab=models');
+            }}
+            title={getStatusTooltip()}
+          >
+            <div className="flex items-center">
+              <Cpu className="h-5 w-5 mr-3 text-gray-500" />
+              <span>{t('settings.model', 'Model')}</span>
+            </div>
+            <Badge
+              variant="secondary"
+              className="flex items-center gap-2 text-xs"
+            >
+              <div
+                className={`w-2 h-2 ${getStatusColor()} rounded-full animate-pulse`}
+              ></div>
+              {getSelectedModelInfo().displayName}
+            </Badge>
+          </button>
+
+          <div className="border-t my-2 dark:border-gray-700"></div>
+
+          <button
+            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
+            onClick={() => {
+              setIsMenuOpen(false);
               navigate('/profile');
             }}
           >
@@ -87,16 +188,6 @@ const MobileMenu = ({
           >
             <SettingsIcon className="h-5 w-5 mr-3 text-gray-500" />
             <span>{t('common.settings')}</span>
-          </button>
-          <button
-            className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-            onClick={() => {
-              setIsMenuOpen(false);
-              navigate('/dashboard');
-            }}
-          >
-            <LayoutDashboard className="h-5 w-5 mr-3 text-gray-500" />
-            <span>{t('common.dashboard')}</span>
           </button>
           <button
             className="flex items-center w-full px-4 py-3 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"

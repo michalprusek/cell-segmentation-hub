@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Eye, EyeOff, Edit3, Trash2, MoreVertical } from 'lucide-react';
+import { Eye, EyeOff, Edit3, Trash2, MoreVertical, List } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Polygon } from '@/lib/segmentation';
 import { motion } from 'framer-motion';
 import { ensureValidPolygonId } from '@/lib/polygonIdUtils';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface PolygonListPanelProps {
   loading: boolean;
@@ -25,42 +27,41 @@ interface PolygonListPanelProps {
 }
 
 /**
- * Zjednodušený panel se seznamem polygonů
+ * Shared polygon list content component used in both mobile and desktop layouts
  */
-const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
+const PolygonListContent: React.FC<{
+  loading: boolean;
+  polygons: Polygon[];
+  selectedPolygonId: string | null;
+  onSelectPolygon: (id: string | null) => void;
+  hiddenPolygonIds: Set<string>;
+  onTogglePolygonVisibility?: (id: string) => void;
+  onRenamePolygon?: (id: string, name: string) => void;
+  onDeletePolygon?: (id: string) => void;
+  editingPolygonId: string | null;
+  setEditingPolygonId: (id: string | null) => void;
+  editingName: string;
+  setEditingName: (name: string) => void;
+  handleStartRename: (polygon: Polygon) => void;
+  handleSaveRename: () => void;
+  handleCancelRename: () => void;
+}> = ({
   loading,
   polygons,
   selectedPolygonId,
   onSelectPolygon,
-  hiddenPolygonIds = new Set(),
+  hiddenPolygonIds,
   onTogglePolygonVisibility,
-  onRenamePolygon,
   onDeletePolygon,
+  editingPolygonId,
+  editingName,
+  setEditingName,
+  handleStartRename,
+  handleSaveRename,
+  handleCancelRename,
 }) => {
   const { t } = useLanguage();
-  const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState<string>('');
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-
-  const handleStartRename = (polygon: Polygon) => {
-    setEditingPolygonId(polygon.id);
-    setEditingName(
-      polygon.name || `${t('common.polygon')} ${polygon.id.substring(0, 8)}`
-    );
-  };
-
-  const handleSaveRename = () => {
-    if (editingPolygonId && onRenamePolygon) {
-      onRenamePolygon(editingPolygonId, editingName);
-    }
-    setEditingPolygonId(null);
-    setEditingName('');
-  };
-
-  const handleCancelRename = () => {
-    setEditingPolygonId(null);
-    setEditingName('');
-  };
 
   // Determine if a polygon is internal based on parent_id or type
   const isInternalPolygon = (polygon: any) => {
@@ -103,7 +104,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (loading) {
     return (
-      <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
+      <div className="h-full flex items-center justify-center">
         <div className="text-gray-500">{t('common.loading')}</div>
       </div>
     );
@@ -111,7 +112,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (!polygons || polygons.length === 0) {
     return (
-      <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+      <div className="h-full flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('segmentation.status.polygons')}
@@ -130,7 +131,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   }
 
   return (
-    <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+    <>
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -274,6 +275,109 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
           })}
         </div>
       </div>
+    </>
+  );
+};
+
+/**
+ * Main PolygonListPanel component with responsive mobile/desktop layout
+ */
+const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
+  loading,
+  polygons,
+  selectedPolygonId,
+  onSelectPolygon,
+  hiddenPolygonIds = new Set(),
+  onTogglePolygonVisibility,
+  onRenamePolygon,
+  onDeletePolygon,
+}) => {
+  const { t } = useLanguage();
+  const isMobile = useIsMobile();
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [editingPolygonId, setEditingPolygonId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const handleStartRename = (polygon: Polygon) => {
+    setEditingPolygonId(polygon.id);
+    setEditingName(
+      polygon.name || `${t('common.polygon')} ${polygon.id.substring(0, 8)}`
+    );
+  };
+
+  const handleSaveRename = () => {
+    if (editingPolygonId && onRenamePolygon) {
+      onRenamePolygon(editingPolygonId, editingName);
+    }
+    setEditingPolygonId(null);
+    setEditingName('');
+  };
+
+  const handleCancelRename = () => {
+    setEditingPolygonId(null);
+    setEditingName('');
+  };
+
+  const contentProps = {
+    loading,
+    polygons,
+    selectedPolygonId,
+    onSelectPolygon,
+    hiddenPolygonIds,
+    onTogglePolygonVisibility,
+    onRenamePolygon,
+    onDeletePolygon,
+    editingPolygonId,
+    setEditingPolygonId,
+    editingName,
+    setEditingName,
+    handleStartRename,
+    handleSaveRename,
+    handleCancelRename,
+  };
+
+  // Mobile layout: bottom sheet drawer
+  if (isMobile) {
+    return (
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetTrigger asChild>
+          <Button
+            variant="default"
+            size="sm"
+            className="fixed bottom-4 right-4 z-40 rounded-full w-12 h-12 p-0 shadow-lg"
+          >
+            <List className="h-5 w-5" />
+            {polygons.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {polygons.length}
+              </span>
+            )}
+          </Button>
+        </SheetTrigger>
+        <SheetContent
+          side="bottom"
+          className="h-[70vh] p-0 dark:bg-gray-800"
+        >
+          <div className="h-full flex flex-col bg-white dark:bg-gray-800">
+            <SheetHeader className="p-4 border-b border-gray-200 dark:border-gray-700">
+              <SheetTitle className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {t('segmentation.status.polygonList')} ({polygons.length})
+              </SheetTitle>
+            </SheetHeader>
+            <div className="flex-1 overflow-hidden">
+              <PolygonListContent {...contentProps} />
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
+
+  // Desktop layout: fixed side panel
+  return (
+    <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+      <PolygonListContent {...contentProps} />
     </div>
   );
 };

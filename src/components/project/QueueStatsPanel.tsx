@@ -113,9 +113,9 @@ export const QueueStatsPanel = ({
     >
       <Card className="border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             {/* Left section - Queue stats */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100">
@@ -127,7 +127,7 @@ export const QueueStatsPanel = ({
               <Badge
                 variant={isConnected ? 'default' : 'destructive'}
                 className={cn(
-                  'text-xs',
+                  'text-xs w-fit',
                   isConnected
                     ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100'
                     : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100'
@@ -138,7 +138,7 @@ export const QueueStatsPanel = ({
 
               {/* Queue stats */}
               {stats ? (
-                <div className="flex items-center gap-3 text-sm">
+                <div className="flex items-center gap-3 text-sm flex-wrap">
                   <div className="flex items-center gap-1">
                     <Clock className="h-4 w-4 text-yellow-600" />
                     <span className="font-medium">{stats.queued}</span>
@@ -165,7 +165,7 @@ export const QueueStatsPanel = ({
             </div>
 
             {/* Right section - Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
               {onOpenSettings && (
                 <Button
                   variant="outline"

@@ -216,6 +216,8 @@ const DashboardHeader = () => {
             isMenuOpen={isMenuOpen}
             setIsMenuOpen={setIsMenuOpen}
             hasNotifications={false}
+            mlServiceStatus={mlServiceStatus}
+            isConnected={isConnected}
           />
         </div>
       </div>
