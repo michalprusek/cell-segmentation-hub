@@ -16,11 +16,98 @@ import { logger } from '../utils/logger';
 const LOG_DIR = process.env.LOG_DIR || '/app/logs';
 const ACCESS_LOG_PATH = path.join(LOG_DIR, 'access.log');
 
-// Store last logged entry for deduplication
-let lastLogEntry: string | null = null;
+// Time-windowed deduplication configuration
+const DEDUPLICATION_WINDOW_MS = 5000; // 5 seconds
+const MAX_DEDUP_CACHE_SIZE = 1000; // Limit memory usage
 
 // Health check endpoints to skip (reduces verbosity)
 const SKIP_ENDPOINTS = ['/health', '/api/health'];
+
+/**
+ * LRU Cache for time-windowed request deduplication
+ * Prevents duplicate log entries for identical requests within a time window
+ */
+class RequestDeduplicator {
+  private cache: Map<string, number>;
+  private cleanupInterval: NodeJS.Timeout;
+
+  constructor() {
+    this.cache = new Map();
+
+    // Periodic cleanup of expired entries (every 10 seconds)
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, 10000);
+
+    // Ensure cleanup on process exit
+    process.on('beforeExit', () => {
+      clearInterval(this.cleanupInterval);
+    });
+  }
+
+  /**
+   * Check if request should be logged (not a duplicate within time window)
+   */
+  shouldLog(deduplicationKey: string): boolean {
+    const now = Date.now();
+    const lastSeen = this.cache.get(deduplicationKey);
+
+    if (lastSeen && now - lastSeen < DEDUPLICATION_WINDOW_MS) {
+      // Duplicate within time window - skip logging
+      return false;
+    }
+
+    // Update timestamp for this request
+    this.cache.set(deduplicationKey, now);
+
+    // Enforce cache size limit (LRU behavior)
+    if (this.cache.size > MAX_DEDUP_CACHE_SIZE) {
+      // Remove oldest entries (first entries in Map)
+      const keysToDelete = Array.from(this.cache.keys()).slice(
+        0,
+        Math.floor(MAX_DEDUP_CACHE_SIZE * 0.2)
+      );
+      keysToDelete.forEach(key => this.cache.delete(key));
+    }
+
+    return true;
+  }
+
+  /**
+   * Remove expired entries from cache
+   */
+  private cleanup(): void {
+    const now = Date.now();
+    const entriesToDelete: string[] = [];
+
+    for (const [key, timestamp] of this.cache.entries()) {
+      if (now - timestamp >= DEDUPLICATION_WINDOW_MS) {
+        entriesToDelete.push(key);
+      }
+    }
+
+    entriesToDelete.forEach(key => this.cache.delete(key));
+
+    // Log cleanup stats in development
+    if (process.env.NODE_ENV === 'development' && entriesToDelete.length > 0) {
+      logger.debug(
+        `[AccessLogger] Cleaned ${entriesToDelete.length} expired deduplication entries`,
+        'RequestDeduplicator',
+        { cacheSize: this.cache.size }
+      );
+    }
+  }
+
+  /**
+   * Get current cache size (for monitoring)
+   */
+  getCacheSize(): number {
+    return this.cache.size;
+  }
+}
+
+// Initialize deduplicator
+const deduplicator = new RequestDeduplicator();
 
 // Ensure log directory exists
 function ensureLogDirectory(): void {
@@ -105,22 +192,24 @@ function getUsername(req: AuthRequest): string {
 }
 
 /**
- * Append log entry to access log file (only if not duplicate)
+ * Append log entry to access log file (only if not duplicate within time window)
  */
 function writeToAccessLog(logEntry: string, deduplicationKey: string): void {
-  // Check if this entry is duplicate of last entry
-  if (lastLogEntry === deduplicationKey) {
+  // Check if this entry is duplicate within time window
+  if (!deduplicator.shouldLog(deduplicationKey)) {
     // Skip duplicate - don't write to log
     return;
   }
 
   try {
     fs.appendFileSync(ACCESS_LOG_PATH, logEntry, { encoding: 'utf8' });
-    // Update last entry for next comparison
-    lastLogEntry = deduplicationKey;
   } catch (error) {
     // Log using logger if file write fails, but don't crash the server
-    logger.error('Failed to write to access log:', error);
+    logger.error(
+      'Failed to write to access log:',
+      error instanceof Error ? error : undefined,
+      'accessLogger'
+    );
   }
 }
 
@@ -203,11 +292,15 @@ export const accessLogger = (
 };
 
 /**
- * Export functions for testing
+ * Export functions and classes for testing
  */
 export const testExports = {
   formatAccessLog,
   getClientIP,
   getUsername,
+  getDeduplicationKey,
   ACCESS_LOG_PATH,
+  deduplicator,
+  DEDUPLICATION_WINDOW_MS,
+  MAX_DEDUP_CACHE_SIZE,
 };
