@@ -18,11 +18,13 @@
 #### Problem: Last Image in Batch Shows "No Segmentation"
 
 **Symptoms:**
+
 - The last image in a batch segmentation shows "no segmentation" status
 - Other images in the batch process correctly
 - Refreshing the page shows the correct segmentation results
 
 **Root Causes:**
+
 1. **Backend Array Index Misalignment**: When invalid images are skipped in a batch, the ML service returns fewer results than the number of images, causing index misalignment
 2. **Frontend Race Condition**: WebSocket updates arrive before the backend has finished writing to the database
 
@@ -31,6 +33,7 @@
 This issue has been fixed in the latest version with a two-part solution:
 
 1. **Backend Fix** (Applied in `/backend/src/services/segmentationService.ts`):
+
 ```typescript
 // Track valid image indices when building FormData
 const validImageIndices: number[] = [];
@@ -42,13 +45,18 @@ for (let i = 0; i < images.length; i++) {
 }
 
 // Map ML results back to original positions
-for (let resultIndex = 0; resultIndex < batchResult.results.length; resultIndex++) {
+for (
+  let resultIndex = 0;
+  resultIndex < batchResult.results.length;
+  resultIndex++
+) {
   const originalIndex = validImageIndices[resultIndex];
   results[originalIndex] = batchResult.results[resultIndex];
 }
 ```
 
 2. **Frontend Fix** (Applied in `/src/hooks/useProjectData.tsx`):
+
 ```typescript
 // Retry mechanism for race condition
 let segmentationData = await apiClient.getSegmentationResults(imageId);
@@ -61,6 +69,7 @@ if (!segmentationData) {
 ```
 
 **Prevention:**
+
 - Always ensure batch processing maintains proper index tracking
 - Implement retry mechanisms for timing-sensitive operations
 - Use performance monitoring to detect race conditions
@@ -68,15 +77,18 @@ if (!segmentationData) {
 #### Problem: Some Images in Batch Fail to Process
 
 **Symptoms:**
+
 - Random images in a batch show "failed" status
 - No clear pattern to which images fail
 
 **Possible Causes:**
+
 - Invalid image format or corrupted files
 - Images missing required metadata (width, height)
 - Insufficient memory for large batches
 
 **Solution:**
+
 1. Check image validity before processing
 2. Ensure all images have required metadata
 3. Process in smaller batches if memory issues occur
@@ -86,6 +98,7 @@ if (!segmentationData) {
 #### Problem: Real-time Updates Not Working
 
 **Symptoms:**
+
 - Segmentation status doesn't update in real-time
 - Export progress doesn't show
 - Queue position doesn't update
@@ -93,6 +106,7 @@ if (!segmentationData) {
 **Debugging Steps:**
 
 1. **Check WebSocket Connection:**
+
 ```javascript
 // In browser console
 const socket = window.__wsManager;
@@ -101,17 +115,20 @@ console.log('Room:', socket?.currentRoom);
 ```
 
 2. **Monitor WebSocket Events:**
+
 ```javascript
 // Enable debug logging
 localStorage.setItem('debug', 'websocket:*');
 ```
 
 3. **Check Network Tab:**
+
 - Look for WebSocket connection in Network tab
 - Should show status 101 (Switching Protocols)
 - Check for "socket.io" frames
 
 **Common Fixes:**
+
 - Ensure authentication token is valid
 - Check if WebSocket port (3001) is accessible
 - Verify nginx WebSocket configuration
@@ -122,6 +139,7 @@ localStorage.setItem('debug', 'websocket:*');
 #### Problem: Slow Batch Processing
 
 **Symptoms:**
+
 - Processing takes longer than expected
 - UI becomes unresponsive during large batch operations
 
@@ -138,6 +156,7 @@ performanceMonitor.getRaceConditionStats();
 ```
 
 **Optimization Tips:**
+
 1. **Batch Size**: Keep batches under 100 images for optimal performance
 2. **Image Size**: Resize large images before upload (max 4096x4096 recommended)
 3. **Concurrent Processing**: The ML service processes 4 images concurrently by default
@@ -155,6 +174,7 @@ console.log('Race conditions:', stats);
 ```
 
 **Indicators:**
+
 - `total`: Number of race conditions detected
 - `resolved`: Successfully handled with retry
 - `unresolved`: Failed even after retry
@@ -166,15 +186,19 @@ console.log('Race conditions:', stats);
 #### Problem: "Missing Authentication Token" Error
 
 **Symptoms:**
+
 - Sudden logout with Czech error message "Chybí autentizační token"
 - API calls failing with 401 status
 
 **Solution:**
+
 1. Clear browser storage:
+
 ```javascript
 localStorage.clear();
 sessionStorage.clear();
 ```
+
 2. Sign in again
 3. Check token expiration settings
 
@@ -379,5 +403,5 @@ location /socket.io/ {
 
 ---
 
-*Last Updated: September 2025*
-*Version: 1.2.0*
+_Last Updated: September 2025_
+_Version: 1.2.0_

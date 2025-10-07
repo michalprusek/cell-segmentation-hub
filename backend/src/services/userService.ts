@@ -82,7 +82,7 @@ export async function getUserProfile(
       isEmailVerified: user.emailVerified,
       language: user.profile?.preferredLang || 'cs',
       theme: user.profile?.preferredTheme || 'light',
-      avatarUrl: user.profile?.avatarUrl || null,  // Include avatar URL from profile
+      avatarUrl: user.profile?.avatarUrl || null, // Include avatar URL from profile
       createdAt: user.createdAt.toISOString(),
       lastLoginAt: undefined, // TODO: Track last login in sessions
       settings: {

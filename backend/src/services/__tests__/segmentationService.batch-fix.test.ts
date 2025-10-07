@@ -72,7 +72,16 @@ describe('SegmentationService - Batch Index Fix', () => {
           results: [
             {
               success: true,
-              polygons: [{ points: [[0, 0], [100, 0], [100, 100], [0, 100]] }],
+              polygons: [
+                {
+                  points: [
+                    [0, 0],
+                    [100, 0],
+                    [100, 100],
+                    [0, 100],
+                  ],
+                },
+              ],
               model_used: 'hrnet',
               threshold_used: 0.5,
               confidence: 0.95,
@@ -81,7 +90,16 @@ describe('SegmentationService - Batch Index Fix', () => {
             },
             {
               success: true,
-              polygons: [{ points: [[50, 50], [150, 50], [150, 150], [50, 150]] }],
+              polygons: [
+                {
+                  points: [
+                    [50, 50],
+                    [150, 50],
+                    [150, 150],
+                    [50, 150],
+                  ],
+                },
+              ],
               model_used: 'hrnet',
               threshold_used: 0.5,
               confidence: 0.92,
@@ -151,8 +169,22 @@ describe('SegmentationService - Batch Index Fix', () => {
             {
               success: true,
               polygons: [
-                { points: [[0, 0], [100, 0], [100, 100], [0, 100]] },
-                { points: [[200, 200], [300, 200], [300, 300], [200, 300]] },
+                {
+                  points: [
+                    [0, 0],
+                    [100, 0],
+                    [100, 100],
+                    [0, 100],
+                  ],
+                },
+                {
+                  points: [
+                    [200, 200],
+                    [300, 200],
+                    [300, 300],
+                    [200, 300],
+                  ],
+                },
               ],
               model_used: 'hrnet',
               threshold_used: 0.5,
@@ -190,20 +222,62 @@ describe('SegmentationService - Batch Index Fix', () => {
     it('should handle mixed valid/invalid images in large batch', async () => {
       // Arrange: 5 images with indices 1 and 3 invalid
       const images = [
-        { id: 'img0', name: 'img0.jpg', originalPath: 'path/0.jpg', width: 1024, height: 768 },
-        { id: 'img1', name: 'img1.jpg', originalPath: null, width: 1024, height: 768 }, // Invalid
-        { id: 'img2', name: 'img2.jpg', originalPath: 'path/2.jpg', width: 1024, height: 768 },
-        { id: 'img3', name: 'img3.jpg', originalPath: undefined, width: 1024, height: 768 }, // Invalid
-        { id: 'img4', name: 'img4.jpg', originalPath: 'path/4.jpg', width: 1024, height: 768 }, // Last image
+        {
+          id: 'img0',
+          name: 'img0.jpg',
+          originalPath: 'path/0.jpg',
+          width: 1024,
+          height: 768,
+        },
+        {
+          id: 'img1',
+          name: 'img1.jpg',
+          originalPath: null,
+          width: 1024,
+          height: 768,
+        }, // Invalid
+        {
+          id: 'img2',
+          name: 'img2.jpg',
+          originalPath: 'path/2.jpg',
+          width: 1024,
+          height: 768,
+        },
+        {
+          id: 'img3',
+          name: 'img3.jpg',
+          originalPath: undefined,
+          width: 1024,
+          height: 768,
+        }, // Invalid
+        {
+          id: 'img4',
+          name: 'img4.jpg',
+          originalPath: 'path/4.jpg',
+          width: 1024,
+          height: 768,
+        }, // Last image
       ];
 
       // ML service returns 3 results for valid images (0, 2, 4)
       const mlResponse = {
         data: {
           results: [
-            { success: true, polygons: [{ points: [[0, 0]] }], confidence: 0.91 },
-            { success: true, polygons: [{ points: [[1, 1]] }], confidence: 0.92 },
-            { success: true, polygons: [{ points: [[2, 2]] }], confidence: 0.93 },
+            {
+              success: true,
+              polygons: [{ points: [[0, 0]] }],
+              confidence: 0.91,
+            },
+            {
+              success: true,
+              polygons: [{ points: [[1, 1]] }],
+              confidence: 0.92,
+            },
+            {
+              success: true,
+              polygons: [{ points: [[2, 2]] }],
+              confidence: 0.93,
+            },
           ],
         },
       };

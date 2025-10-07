@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useLanguage } from '@/contexts/exports';
 import { toast } from 'sonner';
 import {
   RetryConfig,
@@ -57,7 +57,7 @@ export interface UseRetryReturn<T> extends UseRetryState<T> {
 export function useRetry<T>(
   options: UseRetryOptions<T> = {}
 ): UseRetryReturn<T> {
-  const { t } = useTranslation();
+  const { t } = useLanguage();
   const { getSignal, abort } = useAbortController();
 
   const {

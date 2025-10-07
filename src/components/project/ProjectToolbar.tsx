@@ -126,9 +126,9 @@ const ProjectToolbar = ({
   };
 
   return (
-    <div className="flex flex-wrap items-center justify-between mb-6 gap-4">
+    <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-between mb-6 gap-3 sm:gap-4">
       {/* Selection bar - left side */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
         {/* Select All checkbox - only show when showSelectAll is true */}
         {showSelectAll && (
           <label className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
@@ -165,10 +165,10 @@ const ProjectToolbar = ({
       </div>
 
       {/* Toolbar actions - right side */}
-      <div className="flex gap-2 items-center">
+      <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center w-full sm:w-auto">
         {/* Vyhledávací pole zobrazit pouze pokud je požadováno */}
         {showSearchBar && searchTerm !== undefined && onSearchChange && (
-          <div className="relative flex-grow max-w-md">
+          <div className="relative flex-grow w-full sm:w-auto sm:max-w-md">
             <svg
               xmlns="http://www.w3.org/2000/svg"
               width="16"
@@ -185,7 +185,7 @@ const ProjectToolbar = ({
               <path d="m21 21-4.3-4.3" />
             </svg>
             <input
-              className="pl-10 pr-4 w-full border rounded-md h-9 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
+              className="pl-10 pr-4 w-full border rounded-md h-10 sm:h-9 text-sm dark:bg-gray-800 dark:border-gray-700 dark:text-white"
               placeholder={t('dashboard.searchImagesPlaceholder')}
               value={searchTerm}
               onChange={onSearchChange}
@@ -198,7 +198,7 @@ const ProjectToolbar = ({
           <Button
             variant="outline"
             size="sm"
-            className="flex items-center h-9"
+            className="flex items-center h-10 sm:h-9 justify-center"
             onClick={onToggleUploader}
           >
             <svg
@@ -226,7 +226,7 @@ const ProjectToolbar = ({
           <Button
             variant="outline"
             size="sm"
-            className="flex items-center h-9"
+            className="flex items-center h-10 sm:h-9 justify-center"
             onClick={handleExport}
             disabled={isExporting || isDownloading}
           >
@@ -255,7 +255,7 @@ const ProjectToolbar = ({
             <Button
               variant="outline"
               size="sm"
-              className="flex items-center h-9"
+              className="flex items-center h-10 sm:h-9 justify-center"
             >
               <SlidersHorizontal className="mr-1 h-4 w-4" />
               {t('common.sort')}
@@ -298,11 +298,11 @@ const ProjectToolbar = ({
         </DropdownMenu>
 
         {/* View mode buttons */}
-        <div className="flex items-center h-9 border rounded-md bg-background">
+        <div className="flex items-center h-10 sm:h-9 border rounded-md bg-background">
           <Button
             variant={viewMode === 'grid' ? 'default' : 'ghost'}
             size="sm"
-            className="h-9 px-2.5 rounded-r-none"
+            className="h-10 sm:h-9 px-2.5 rounded-r-none min-w-[44px] justify-center"
             onClick={() => setViewMode('grid')}
           >
             <svg
@@ -325,7 +325,7 @@ const ProjectToolbar = ({
           <Button
             variant={viewMode === 'list' ? 'default' : 'ghost'}
             size="sm"
-            className="h-9 px-2.5 rounded-l-none"
+            className="h-10 sm:h-9 px-2.5 rounded-l-none min-w-[44px] justify-center"
             onClick={() => setViewMode('list')}
           >
             <svg
