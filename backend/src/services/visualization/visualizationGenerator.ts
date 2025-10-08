@@ -94,10 +94,12 @@ export class VisualizationGenerator {
       metrics.warningThresholdExceeded = true;
     }
 
+    // Declare tempPngPath outside try-catch so it's accessible in catch block
+    let tempPngPath: string | null = null;
+
     try {
       // Check if image is TIFF and convert to PNG if needed
       let imageToLoad = imagePath;
-      let tempPngPath: string | null = null;
       const ext = path.extname(imagePath).toLowerCase();
 
       if (ext === '.tiff' || ext === '.tif') {
