@@ -125,6 +125,71 @@ global.FileReader = vi.fn().mockImplementation(() => ({
   result: null,
 })) as any;
 
+// FormData polyfill for tests
+class FormDataPolyfill {
+  private data: Map<string, any> = new Map();
+
+  append(key: string, value: any, filename?: string): void {
+    if (value instanceof Blob && filename) {
+      this.data.set(key, { value, filename });
+    } else {
+      this.data.set(key, value);
+    }
+  }
+
+  get(key: string): any {
+    return this.data.get(key);
+  }
+
+  getAll(key: string): any[] {
+    const value = this.data.get(key);
+    return value !== undefined ? [value] : [];
+  }
+
+  has(key: string): boolean {
+    return this.data.has(key);
+  }
+
+  delete(key: string): void {
+    this.data.delete(key);
+  }
+
+  entries(): IterableIterator<[string, any]> {
+    return this.data.entries();
+  }
+
+  keys(): IterableIterator<string> {
+    return this.data.keys();
+  }
+
+  values(): IterableIterator<any> {
+    return this.data.values();
+  }
+
+  forEach(callback: (value: any, key: string, parent: FormDataPolyfill) => void): void {
+    this.data.forEach((value, key) => callback(value, key, this));
+  }
+}
+
+// @ts-ignore
+global.FormData = FormDataPolyfill;
+
+// Enhanced File polyfill with proper Blob inheritance
+class FilePolyfill extends Blob {
+  name: string;
+  lastModified: number;
+
+  constructor(parts: BlobPart[], name: string, options?: FilePropertyBag) {
+    super(parts, options);
+    this.name = name;
+    this.lastModified = options?.lastModified || Date.now();
+  }
+}
+
+// Override File with enhanced polyfill
+// @ts-ignore
+global.File = FilePolyfill;
+
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
@@ -241,6 +306,20 @@ beforeAll(() => {
 
 afterAll(() => {
   console.error = originalError;
+});
+
+// Global cleanup to prevent memory leaks
+afterEach(() => {
+  // Clear all timers to prevent accumulation
+  vi.clearAllTimers();
+
+  // Clean up any pending promises
+  vi.clearAllMocks();
+
+  // Force garbage collection hint by clearing large objects
+  if (global.gc) {
+    global.gc();
+  }
 });
 
 // Mock apiClient globally to prevent import errors

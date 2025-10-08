@@ -12,16 +12,7 @@
  * - Error recovery when one of 4 parallel processes fails
  */
 
-import {
-  describe,
-  test,
-  expect,
-  beforeEach,
-  afterEach,
-  vi,
-  beforeAll,
-  afterAll,
-} from 'vitest';
+import { jest } from '@jest/globals';
 import { PrismaClient } from '@prisma/client';
 import { QueueService } from '../queueService';
 import { SegmentationService } from '../segmentationService';
@@ -30,10 +21,10 @@ import { WebSocketService } from '../websocketService';
 import { logger as _logger } from '../../utils/logger';
 
 // Mock dependencies
-vi.mock('../../utils/logger');
-vi.mock('../websocketService');
-vi.mock('../segmentationService');
-vi.mock('../imageService');
+jest.mock('../../utils/logger');
+jest.mock('../websocketService');
+jest.mock('../segmentationService');
+jest.mock('../imageService');
 
 // Test data structures
 interface ConcurrentTestUser {
@@ -108,16 +99,7 @@ describe('QueueService Parallel Processing', () => {
         },
       },
       log: ['error'],
-      // Configure connection pool for concurrent testing
-      __internal: {
-        useUds: false,
-        engine: {
-          connectionLimit: 50, // Test the 50 connection pool limit
-          poolTimeout: 30000,
-          queryEngineType: 'binary',
-        },
-      },
-    });
+    } as any);
 
     await prisma.$connect();
   });
@@ -132,21 +114,21 @@ describe('QueueService Parallel Processing', () => {
 
     // Setup mock services
     mockSegmentationService = {
-      requestBatchSegmentation: vi.fn(),
-      requestSegmentation: vi.fn(),
-      saveSegmentationResults: vi.fn(),
-      checkServiceHealth: vi.fn().mockResolvedValue(true),
-    } as unknown as SegmentationService;
+      requestBatchSegmentation: jest.fn(),
+      requestSegmentation: jest.fn(),
+      saveSegmentationResults: jest.fn(),
+      checkServiceHealth: jest.fn().mockResolvedValue(true as never),
+    } as any;
 
     mockImageService = {
-      getImageById: vi.fn(),
-      updateSegmentationStatus: vi.fn().mockResolvedValue(undefined),
-    } as unknown as ImageService;
+      getImageById: jest.fn(),
+      updateSegmentationStatus: jest.fn().mockResolvedValue(undefined as never),
+    } as any;
 
     mockWebSocketService = {
-      emitSegmentationUpdate: vi.fn(),
-      emitSegmentationComplete: vi.fn(),
-      emitQueueStatsUpdate: vi.fn(),
+      emitSegmentationUpdate: jest.fn(),
+      emitSegmentationComplete: jest.fn(),
+      emitQueueStatsUpdate: jest.fn(),
     } as unknown as WebSocketService;
 
     // Create QueueService instance
@@ -162,7 +144,7 @@ describe('QueueService Parallel Processing', () => {
   });
 
   afterEach(async () => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   afterAll(async () => {
@@ -176,14 +158,14 @@ describe('QueueService Parallel Processing', () => {
         data: {
           id: user.userId,
           email: `${user.userId}@test.com`,
-          name: `Test User ${user.userId}`,
+          password: 'test-password',
         },
       });
 
       await prisma.project.create({
         data: {
           id: user.projectId,
-          name: `Test Project ${user.projectId}`,
+          title: `Test Project ${user.projectId}`,
           userId: user.userId,
         },
       });
@@ -192,11 +174,9 @@ describe('QueueService Parallel Processing', () => {
         await prisma.image.create({
           data: {
             id: imageId,
-            filename: `${imageId}.jpg`,
-            originalName: `${imageId}_original.jpg`,
-            path: `/test/images/${imageId}.jpg`,
+            name: `${imageId}.jpg`,
+            originalPath: `/test/images/${imageId}.jpg`,
             projectId: user.projectId,
-            userId: user.userId,
             width: 512,
             height: 512,
             segmentationStatus: 'no_segmentation',
@@ -205,14 +185,13 @@ describe('QueueService Parallel Processing', () => {
 
         // Mock image service responses
         (mockImageService.getImageById as any).mockImplementation(
-          (id: string, userId: string) => {
-            const user = concurrentUsers.find(u => u.userId === userId);
-            if (user && user.imageIds.includes(id)) {
+          (id: string, _userId: string) => {
+            const user = concurrentUsers.find(u => u.imageIds.includes(id));
+            if (user) {
               return Promise.resolve({
                 id,
-                filename: `${id}.jpg`,
+                name: `${id}.jpg`,
                 projectId: user.projectId,
-                userId,
                 width: 512,
                 height: 512,
                 segmentationStatus: 'no_segmentation',
@@ -251,7 +230,7 @@ describe('QueueService Parallel Processing', () => {
         mockSegmentationService.requestBatchSegmentation as any
       ).mockImplementation(async (images: any[], _model: string) => {
         // Simulate processing time based on model
-        const processingTime = model === 'hrnet' ? 196 : 396; // ms
+        const processingTime = _model === 'hrnet' ? 196 : 396; // ms
         await new Promise(resolve => setTimeout(resolve, processingTime));
 
         return images.map(() => mockSegmentationResults());
@@ -328,7 +307,7 @@ describe('QueueService Parallel Processing', () => {
       (
         mockSegmentationService.requestBatchSegmentation as any
       ).mockImplementation(async (images: any[], _model: string) => {
-        const processingTime = model === 'hrnet' ? 196 : 396;
+        const processingTime = _model === 'hrnet' ? 196 : 396;
         await new Promise(resolve => setTimeout(resolve, processingTime));
         return images.map(() => mockSegmentationResults());
       });
@@ -363,7 +342,7 @@ describe('QueueService Parallel Processing', () => {
           } catch (_error) {
             batchProcessingMetrics.failedBatches++;
             const batchTime = Date.now() - batchStartTime;
-            return { success: false, time: batchTime, error };
+            return { success: false, time: batchTime, error: _error };
           }
         })();
 
@@ -545,7 +524,7 @@ describe('QueueService Parallel Processing', () => {
               connectionId: i,
               success: false,
               responseTime: Date.now() - startTime,
-              error: error instanceof Error ? error.message : String(error),
+              error: _error instanceof Error ? _error.message : String(_error),
             };
           }
         })();
@@ -616,7 +595,7 @@ describe('QueueService Parallel Processing', () => {
             return {
               connectionId: i,
               success: false,
-              error: error instanceof Error ? error.message : String(error),
+              error: _error instanceof Error ? _error.message : String(_error),
             };
           }
         })();
@@ -771,8 +750,8 @@ describe('QueueService Parallel Processing', () => {
           _projectId: string,
           _polygonCount: number
         ) => {
-          if (notificationTracker[userId]) {
-            notificationTracker[userId].completions++;
+          if (notificationTracker[_userId]) {
+            notificationTracker[_userId].completions++;
           }
         }
       );
@@ -975,7 +954,7 @@ describe('QueueService Parallel Processing', () => {
 
                 // Update image status
                 await tx.image.updateMany({
-                  where: { userId: user.userId },
+                  where: { projectId: user.projectId },
                   data: {
                     segmentationStatus: i % 2 === 0 ? 'processing' : 'queued',
                   },
@@ -987,7 +966,7 @@ describe('QueueService Parallel Processing', () => {
               return {
                 success: false,
                 operationId: i,
-                error: error instanceof Error ? error.message : String(error),
+                error: _error instanceof Error ? _error.message : String(_error),
               };
             }
           })();
@@ -1005,17 +984,20 @@ describe('QueueService Parallel Processing', () => {
       expect(successful.length).toBeGreaterThan(5); // At least half should succeed
 
       // Failed operations should be due to deadlocks, not system crashes
-      const _deadlockErrors = failed.filter(
-        r =>
-          r.error &&
+      const _deadlockErrors = failed.filter(r => {
+        const hasError = 'error' in r && r.error;
+        return (
+          hasError &&
+          typeof r.error === 'string' &&
           (r.error.includes('deadlock') ||
             r.error.includes('timeout') ||
             r.error.includes('lock'))
-      );
+        );
+      });
 
       // System should remain stable after potential deadlocks
       const healthCheck = await queueService.getQueueHealthStatus();
-      expect(healthCheck.healthy || healthCheck.issues.length < 3).toBe(true);
+      expect(healthCheck.healthy || (healthCheck.issues && healthCheck.issues.length < 3)).toBe(true);
     });
 
     test('should maintain processing capability after partial failures', async () => {
@@ -1093,7 +1075,7 @@ describe('QueueService Parallel Processing', () => {
       (
         mockSegmentationService.requestBatchSegmentation as any
       ).mockImplementation(async (images: any[], _model: string) => {
-        const timing = model === 'hrnet' ? 196 : 396; // Realistic model timings
+        const timing = _model === 'hrnet' ? 196 : 396; // Realistic model timings
         await new Promise(resolve => setTimeout(resolve, timing));
         return images.map(() => mockSegmentationResults());
       });

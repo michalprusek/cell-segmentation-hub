@@ -294,6 +294,9 @@ export interface ProjectUpdateData {
     description?: string;
     imageCount?: number;
     segmentedCount?: number;
+    completionPercentage?: number;
+    lastActivity?: string | Date;
+    thumbnailUrl?: string;
   };
   timestamp: Date;
 }

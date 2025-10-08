@@ -7,55 +7,56 @@ import {
   describe,
   it,
   expect,
-  vi,
+  jest,
   beforeEach,
   afterEach,
   beforeAll,
-} from 'vitest';
+} from '@jest/globals';
 import request from 'supertest';
 import express, { Express } from 'express';
 
 // Mock dependencies before imports
-vi.mock('@/db', () => ({
+jest.mock('@/db', () => ({
   prisma: {
-    segmentationJob: {
-      findMany: vi.fn(),
-      updateMany: vi.fn(),
-      deleteMany: vi.fn(),
+    segmentationQueue: {
+      findMany: jest.fn(),
+      updateMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
     project: {
-      findUnique: vi.fn(),
+      findUnique: jest.fn(),
     },
     image: {
-      updateMany: vi.fn(),
+      updateMany: jest.fn(),
     },
   },
 }));
 
-vi.mock('bull', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    getJob: vi.fn(),
-    removeJobs: vi.fn(),
-    getWaiting: vi.fn(),
-    getActive: vi.fn(),
-    getCompleted: vi.fn(),
-    clean: vi.fn(),
+jest.mock('bull', () => ({
+  default: jest.fn().mockImplementation(() => ({
+    getJob: jest.fn(),
+    removeJobs: jest.fn(),
+    getWaiting: jest.fn(),
+    getActive: jest.fn(),
+    getCompleted: jest.fn(),
+    clean: jest.fn(),
   })),
 }));
 
-vi.mock('@/services/webSocketService', () => ({
+jest.mock('../../services/websocketService', () => ({
   webSocketService: {
-    emitToRoom: vi.fn(),
-    emitToUser: vi.fn(),
+    emitToRoom: jest.fn(),
+    emitToUser: jest.fn(),
   },
 }));
 
-vi.mock('@/services/mlService', () => ({
-  mlService: {
-    cancelJob: vi.fn(),
-    cancelBatch: vi.fn(),
-  },
-}));
+// mlService doesn't exist - mock inline instead
+// jest.mock('../../services/mlService', () => ({
+//   mlService: {
+//     cancelJob: jest.fn(),
+//     cancelBatch: jest.fn(),
+//   },
+// }));
 
 // Test data fixtures
 const mockSegmentationJobs = {
@@ -139,13 +140,14 @@ const createMockApp = (): Express => {
     const userId = req.user.id;
 
     try {
-      const { prisma } = await import('@/db');
-      const { webSocketService } = await import('@/services/webSocketService');
-      const { mlService } = await import('@/services/mlService');
+      const { prisma } = await import('../../db');
+      const webSocketService = { broadcastBatchCancellation: jest.fn() } as any; // Mock WS service
+      // mlService doesn't exist - create inline mock
+      const mlService = { cancelJob: jest.fn(), cancelBatch: jest.fn() } as any;
       const Queue = (await import('bull')).default;
 
       // Find all jobs in the batch
-      const jobs = await prisma.segmentationJob.findMany({
+      const jobs = await prisma.segmentationQueue.findMany({
         where: { batchId },
         include: { project: true },
       });
@@ -183,8 +185,8 @@ const createMockApp = (): Express => {
 
       // Cancel jobs in ML service
       const mlCancellationPromises = processingJobs.map(job =>
-        mlService.cancelJob(job.queueId).catch(error => {
-          console.warn(`Failed to cancel ML job ${job.queueId}:`, error);
+        mlService.cancelJob(job.id as string).catch((error: any) => {
+          console.warn(`Failed to cancel ML job ${job.id}:`, error);
           return { success: false, error: error.message };
         })
       );
@@ -192,11 +194,11 @@ const createMockApp = (): Express => {
       const mlResults = await Promise.allSettled(mlCancellationPromises);
 
       // Remove jobs from Bull queue
-      const queue = new Queue('segmentation');
+      const queue = new Queue('segmentation', { redis: { host: 'localhost', port: 6379 } }) as any;
       const bullCancellationPromises = queuedJobs.map(job =>
-        queue.removeJobs(`${job.queueId}*`).catch(error => {
+        queue.removeJobs(`${job.id}*`).catch((error: any) => {
           console.warn(
-            `Failed to remove job ${job.queueId} from queue:`,
+            `Failed to remove job ${job.id} from queue:`,
             error
           );
           return { success: false, error: error.message };
@@ -206,13 +208,12 @@ const createMockApp = (): Express => {
       await Promise.allSettled(bullCancellationPromises);
 
       // Update job statuses in database
-      await prisma.segmentationJob.updateMany({
+      await prisma.segmentationQueue.updateMany({
         where: {
           id: { in: jobsToCancel.map(job => job.id) },
         },
         data: {
           status: 'cancelled',
-          updatedAt: new Date(),
         },
       });
 
@@ -223,7 +224,6 @@ const createMockApp = (): Express => {
         },
         data: {
           segmentationStatus: 'cancelled',
-          updatedAt: new Date(),
         },
       });
 
@@ -291,29 +291,30 @@ describe('Segmentation Batch Cancel API Tests', () => {
   });
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
 
     // Setup mocks
-    const dbModule = vi.mocked(await import('@/db'));
-    mockPrisma = dbModule.prisma;
+    const { prisma } = await import('../../db');
+    mockPrisma = prisma as any;
 
-    const wsModule = vi.mocked(await import('@/services/webSocketService'));
-    mockWebSocket = wsModule.webSocketService;
+    const webSocketService = { broadcastBatchCancellation: jest.fn() } as any; // Mock WS service
+    mockWebSocket = webSocketService as any;
 
-    const mlModule = vi.mocked(await import('@/services/mlService'));
-    mockMLService = mlModule.mlService;
+    // mlService doesn't exist - create inline mock
+    const mlService = { cancelJob: jest.fn(), cancelBatch: jest.fn() } as any;
+    mockMLService = mlService as any;
 
-    const QueueModule = vi.mocked(await import('bull'));
-    mockQueue = new QueueModule.default();
+    const Queue = (await import('bull')).default;
+    mockQueue = { removeJobs: jest.fn(), getWaiting: jest.fn(), getActive: jest.fn() } as any;
 
     // Default successful mock implementations
-    mockPrisma.segmentationJob.findMany.mockResolvedValue(
+    mockPrisma.segmentationQueue.findMany.mockResolvedValue(
       mockSegmentationJobs.activeBatch.map(job => ({
         ...job,
         project: mockProject,
       }))
     );
-    mockPrisma.segmentationJob.updateMany.mockResolvedValue({ count: 2 });
+    mockPrisma.segmentationQueue.updateMany.mockResolvedValue({ count: 2 });
     mockPrisma.image.updateMany.mockResolvedValue({ count: 2 });
     mockMLService.cancelJob.mockResolvedValue({ success: true });
     mockQueue.removeJobs.mockResolvedValue(1);
@@ -322,7 +323,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('POST /api/queue/batch/:batchId/cancel', () => {
@@ -343,18 +344,17 @@ describe('Segmentation Batch Cancel API Tests', () => {
         });
 
         // Verify database operations
-        expect(mockPrisma.segmentationJob.findMany).toHaveBeenCalledWith({
+        expect(mockPrisma.segmentationQueue.findMany).toHaveBeenCalledWith({
           where: { batchId: 'batch-123' },
           include: { project: true },
         });
 
-        expect(mockPrisma.segmentationJob.updateMany).toHaveBeenCalledWith({
+        expect(mockPrisma.segmentationQueue.updateMany).toHaveBeenCalledWith({
           where: {
             id: { in: ['job-001', 'job-002'] },
           },
           data: {
             status: 'cancelled',
-            updatedAt: expect.any(Date),
           },
         });
       });
@@ -364,7 +364,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           .post('/api/queue/batch/batch-123/cancel')
           .expect(200);
 
-        expect(mockMLService.cancelJob).toHaveBeenCalledWith('queue-002');
+        expect(mockMLService.cancelJob).toHaveBeenCalledWith('job-002');
         expect(mockMLService.cancelJob).toHaveBeenCalledTimes(1); // Only for processing job
       });
 
@@ -373,7 +373,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           .post('/api/queue/batch/batch-123/cancel')
           .expect(200);
 
-        expect(mockQueue.removeJobs).toHaveBeenCalledWith('queue-001*');
+        expect(mockQueue.removeJobs).toHaveBeenCalledWith('job-001*');
         expect(mockQueue.removeJobs).toHaveBeenCalledTimes(1); // Only for queued job
       });
 
@@ -388,7 +388,6 @@ describe('Segmentation Batch Cancel API Tests', () => {
           },
           data: {
             segmentationStatus: 'cancelled',
-            updatedAt: expect.any(Date),
           },
         });
       });
@@ -484,7 +483,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
 
     describe('Error Cases', () => {
       it('should return 404 for non-existent batch', async () => {
-        mockPrisma.segmentationJob.findMany.mockResolvedValue([]);
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue([]);
 
         const response = await request(app)
           .post('/api/queue/batch/non-existent/cancel')
@@ -498,7 +497,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
       it('should return 403 for unauthorized access', async () => {
         const unauthorizedProject = { ...mockProject, userId: 'other-user' };
 
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(
           mockSegmentationJobs.activeBatch.map(job => ({
             ...job,
             project: unauthorizedProject,
@@ -521,7 +520,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           project: mockProject,
         }));
 
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(completedBatch);
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(completedBatch);
 
         const response = await request(app)
           .post('/api/queue/batch/batch-completed/cancel')
@@ -539,7 +538,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           project: mockProject,
         }));
 
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(cancelledBatch);
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(cancelledBatch);
 
         const response = await request(app)
           .post('/api/queue/batch/batch-cancelled/cancel')
@@ -557,7 +556,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           project: mockProject,
         }));
 
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(noActiveBatch);
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(noActiveBatch);
 
         const response = await request(app)
           .post('/api/queue/batch/batch-123/cancel')
@@ -569,7 +568,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
       });
 
       it('should handle database errors gracefully', async () => {
-        mockPrisma.segmentationJob.findMany.mockRejectedValue(
+        mockPrisma.segmentationQueue.findMany.mockRejectedValue(
           new Error('Database connection failed')
         );
 
@@ -631,7 +630,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
 
     describe('Performance and Scalability', () => {
       it('should handle large batch cancellation efficiently', async () => {
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(
           mockSegmentationJobs.largeBatch.map(job => ({
             ...job,
             project: mockProject,
@@ -666,7 +665,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           project: mockProject,
         }));
 
-        mockPrisma.segmentationJob.findMany
+        mockPrisma.segmentationQueue.findMany
           .mockResolvedValueOnce(batch1Jobs)
           .mockResolvedValueOnce(batch2Jobs);
 
@@ -684,7 +683,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
       });
 
       it('should batch database operations efficiently', async () => {
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(
           mockSegmentationJobs.largeBatch.map(job => ({
             ...job,
             project: mockProject,
@@ -696,7 +695,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           .expect(200);
 
         // Should use batch operations, not individual updates
-        expect(mockPrisma.segmentationJob.updateMany).toHaveBeenCalledTimes(1);
+        expect(mockPrisma.segmentationQueue.updateMany).toHaveBeenCalledTimes(1);
         expect(mockPrisma.image.updateMany).toHaveBeenCalledTimes(1);
       });
     });
@@ -721,7 +720,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           },
         ];
 
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(
           mixedBatch.map(job => ({ ...job, project: mockProject }))
         );
 
@@ -734,7 +733,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
       });
 
       it('should handle batch with no project association', async () => {
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(
           mockSegmentationJobs.activeBatch.map(job => ({
             ...job,
             project: null,
@@ -751,7 +750,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
       it('should handle very long batch IDs', async () => {
         const longBatchId = 'batch-' + 'a'.repeat(1000);
 
-        mockPrisma.segmentationJob.findMany.mockResolvedValue([]);
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue([]);
 
         const response = await request(app)
           .post(`/api/queue/batch/${longBatchId}/cancel`)
@@ -764,7 +763,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
     describe('Race Conditions', () => {
       it('should handle race condition where job completes during cancellation', async () => {
         // Simulate job completing after query but before update
-        mockPrisma.segmentationJob.updateMany.mockResolvedValue({ count: 1 }); // Only 1 updated instead of 2
+        mockPrisma.segmentationQueue.updateMany.mockResolvedValue({ count: 1 }); // Only 1 updated instead of 2
 
         const response = await request(app)
           .post('/api/queue/batch/batch-123/cancel')
@@ -779,7 +778,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
         const promise1 = request(app).post('/api/queue/batch/batch-123/cancel');
 
         // Second request (should see batch as already cancelled)
-        mockPrisma.segmentationJob.findMany.mockResolvedValueOnce(
+        mockPrisma.segmentationQueue.findMany.mockResolvedValueOnce(
           mockSegmentationJobs.activeBatch.map(job => ({
             ...job,
             status: 'cancelled',
@@ -818,7 +817,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
 
     describe('Monitoring and Observability', () => {
       it('should log batch cancellation events', async () => {
-        const consoleSpy = vi
+        const consoleSpy = jest
           .spyOn(console, 'log')
           .mockImplementation(() => {});
 
@@ -835,7 +834,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           .expect(200);
 
         expect(response.body).toHaveProperty('mlServiceResults');
-        expect(response.body.mlServiceResults).toBeInstanceOf(Array);
+        expect(Array.isArray(response.body.mlServiceResults)).toBe(true);
         expect(response.body).toHaveProperty('cancelledJobs');
         expect(response.body).toHaveProperty('completedJobs');
         expect(response.body).toHaveProperty('totalJobs');

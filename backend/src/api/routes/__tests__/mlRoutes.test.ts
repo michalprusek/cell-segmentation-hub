@@ -77,16 +77,16 @@ describe('ML Routes Authentication Tests', () => {
     jest.clearAllMocks();
 
     // Mock rate limiter to pass through
-    mockedApiLimiter.mockImplementation((req, res, next) => next());
+    mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => next());
 
     // Mock logger methods
     mockedLogger.info = jest.fn();
     mockedLogger.error = jest.fn();
 
     // Mock Prisma user findUnique
-    mockedPrisma.user = {
+    (mockedPrisma as any).user = {
       findUnique: jest.fn(),
-    } as any;
+    };
   });
 
   afterEach(() => {
@@ -133,9 +133,9 @@ describe('ML Routes Authentication Tests', () => {
       it('should handle health check errors gracefully', async () => {
         // Mock process.uptime to throw an error
         const originalUptime = process.uptime;
-        process.uptime = jest.fn().mockImplementation(() => {
+        (process as any).uptime = jest.fn().mockImplementation(() => {
           throw new Error('Uptime calculation failed');
-        });
+        }) as any;
 
         const response = await request(app).get('/api/ml/health').expect(500);
 
@@ -195,9 +195,9 @@ describe('ML Routes Authentication Tests', () => {
       it('should handle status check errors', async () => {
         // Force an error by mocking Date to throw
         const originalDate = Date;
-        global.Date = jest.fn().mockImplementation(() => {
+        (global as any).Date = (jest.fn().mockImplementation(() => {
           throw new Error('Date creation failed');
-        });
+        }) as any) as any;
 
         const response = await request(app).get('/api/ml/status').expect(500);
 
@@ -310,7 +310,7 @@ describe('ML Routes Authentication Tests', () => {
 
       it('should return 401 without authentication', async () => {
         // Mock authentication to fail
-        mockedAuthenticate.mockImplementation((req, res) => {
+        mockedAuthenticate.mockImplementation((req: any, res: any) => {
           res.status(401).json({
             success: false,
             message: 'Chybí autentizační token',
@@ -331,7 +331,7 @@ describe('ML Routes Authentication Tests', () => {
 
       it('should return 401 with invalid token', async () => {
         // Mock authentication to fail with invalid token
-        mockedAuthenticate.mockImplementation((req, res) => {
+        mockedAuthenticate.mockImplementation((req: any, res: any) => {
           res.status(401).json({
             success: false,
             message: 'Neplatný token',
@@ -355,7 +355,7 @@ describe('ML Routes Authentication Tests', () => {
 
       it('should return 401 with expired token', async () => {
         // Mock authentication to fail with expired token
-        mockedAuthenticate.mockImplementation((req, res) => {
+        mockedAuthenticate.mockImplementation((req: any, res: any) => {
           res.status(401).json({
             success: false,
             message: 'Token vypršel',
@@ -421,7 +421,7 @@ describe('ML Routes Authentication Tests', () => {
 
       it('should return 401 without authentication', async () => {
         // Mock authentication to fail
-        mockedAuthenticate.mockImplementation((req, res) => {
+        mockedAuthenticate.mockImplementation((req: any, res: any) => {
           res.status(401).json({
             success: false,
             message: 'Chybí autentizační token',
@@ -487,7 +487,7 @@ describe('ML Routes Authentication Tests', () => {
       const middlewareOrder: string[] = [];
 
       // Mock rate limiter to track execution
-      mockedApiLimiter.mockImplementation((req, res, next) => {
+      mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => {
         middlewareOrder.push('rateLimiter');
         next();
       });
@@ -510,7 +510,7 @@ describe('ML Routes Authentication Tests', () => {
       const middlewareOrder: string[] = [];
 
       // Mock rate limiter to track execution
-      mockedApiLimiter.mockImplementation((req, res, next) => {
+      mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => {
         middlewareOrder.push('rateLimiter');
         next();
       });
@@ -534,7 +534,7 @@ describe('ML Routes Authentication Tests', () => {
 
     it('should handle authentication failures gracefully', async () => {
       // Mock authentication to throw an error
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(500).json({
           success: false,
           message: 'Chyba autentizace',
@@ -556,7 +556,7 @@ describe('ML Routes Authentication Tests', () => {
 
     it('should ensure public endpoints remain accessible during auth service outages', async () => {
       // Mock authentication to fail completely
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(503).json({
           success: false,
           message: 'Authentication service unavailable',
@@ -592,7 +592,7 @@ describe('ML Routes Authentication Tests', () => {
     });
 
     it('should handle malformed Authorization headers', async () => {
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
@@ -669,7 +669,7 @@ describe('ML Routes Authentication Tests', () => {
     it('should ensure rate limiting applies to all endpoints', async () => {
       let rateLimiterCallCount = 0;
 
-      mockedApiLimiter.mockImplementation((req, res, next) => {
+      mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => {
         rateLimiterCallCount++;
         next();
       });
@@ -704,7 +704,7 @@ describe('ML Routes Authentication Tests', () => {
 
     it('should handle database connectivity issues during authentication', async () => {
       // Mock authentication to simulate database error
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(500).json({
           success: false,
           message: 'Database connection failed',
