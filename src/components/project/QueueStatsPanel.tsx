@@ -112,10 +112,10 @@ export const QueueStatsPanel = ({
       className={cn('mb-6', className)}
     >
       <Card className="border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
             {/* Left section - Queue stats */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4 w-full sm:w-auto">
               <div className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 <h3 className="font-semibold text-gray-900 dark:text-gray-100">
@@ -165,13 +165,13 @@ export const QueueStatsPanel = ({
             </div>
 
             {/* Right section - Actions */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               {onOpenSettings && (
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={onOpenSettings}
-                  className="gap-2"
+                  className="gap-2 flex-1 sm:flex-none h-10 sm:h-9 min-w-[44px]"
                 >
                   <Settings className="h-4 w-4" />
                   {t('common.settings')}
@@ -197,6 +197,7 @@ export const QueueStatsPanel = ({
                         })
                       : undefined
                   }
+                  className="flex-1 sm:flex-none h-10 sm:h-9 min-w-[44px]"
                 />
               ) : (
                 <Button
@@ -205,7 +206,7 @@ export const QueueStatsPanel = ({
                     !isConnected || totalToProcess === 0 || batchSubmitted
                   }
                   className={cn(
-                    'gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white',
+                    'gap-2 transition-all bg-blue-600 hover:bg-blue-700 text-white flex-1 sm:flex-none h-10 sm:h-9 min-w-[44px]',
                     (!isConnected || totalToProcess === 0 || batchSubmitted) &&
                       'bg-gray-400 hover:bg-gray-400 text-gray-700 cursor-not-allowed'
                   )}

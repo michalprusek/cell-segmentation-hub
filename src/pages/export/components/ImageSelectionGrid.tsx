@@ -165,12 +165,7 @@ export const ImageSelectionGrid: React.FC<ImageSelectionGridProps> = ({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="grid gap-4"
-                style={{
-                  gridTemplateColumns:
-                    'repeat(auto-fill, minmax(180px, max-content))',
-                  justifyContent: 'center',
-                }}
+                className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 sm:gap-4"
               >
                 {paginatedImages.map(image => (
                   <ExportImageCard

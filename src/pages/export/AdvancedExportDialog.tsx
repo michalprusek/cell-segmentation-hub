@@ -153,18 +153,18 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="general" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+              <TabsContent value="general" className="space-y-3 sm:space-y-4">
+                <Card className="p-3 sm:p-4">
+                  <CardHeader className="p-0 pb-3 sm:pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                       <FileImage className="h-4 w-4" />
                       {t('export.exportContents')}
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs sm:text-sm">
                       {t('export.selectContent')}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3 sm:space-y-4 p-0">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="original-images"
@@ -175,7 +175,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           })
                         }
                       />
-                      <Label htmlFor="original-images">
+                      <Label htmlFor="original-images" className="text-sm sm:text-base">
                         {t('export.includeOriginal')}
                       </Label>
                     </div>
@@ -190,7 +190,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           })
                         }
                       />
-                      <Label htmlFor="visualizations">
+                      <Label htmlFor="visualizations" className="text-sm sm:text-base">
                         {t('export.includeVisualizations')}
                       </Label>
                     </div>
@@ -205,26 +205,26 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           })
                         }
                       />
-                      <Label htmlFor="documentation">
+                      <Label htmlFor="documentation" className="text-sm sm:text-base">
                         {t('export.includeDocumentation')}
                       </Label>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                <Card className="p-3 sm:p-4">
+                  <CardHeader className="p-0 pb-3 sm:pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                       <Settings className="h-4 w-4" />
                       {t('export.scaleConversion')}
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs sm:text-sm">
                       {t('export.scaleDescription')}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="scale-input">
+                  <CardContent className="space-y-3 sm:space-y-4 p-0">
+                    <div className="space-y-2 sm:space-y-3">
+                      <Label htmlFor="scale-input" className="text-sm sm:text-base">
                         {t('export.pixelToMicrometerScale')} (
                         {t('export.scaleUnit')})
                       </Label>
@@ -271,17 +271,17 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                <Card className="p-3 sm:p-4">
+                  <CardHeader className="p-0 pb-3 sm:pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                       <FileImage className="h-4 w-4" />
                       {t('export.selectedImages')}
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs sm:text-sm">
                       {t('export.chooseImages')}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="p-0">
                     <ImageSelectionGrid
                       images={images}
                       selectedImageIds={
@@ -296,18 +296,18 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                 </Card>
               </TabsContent>
 
-              <TabsContent value="visualization" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+              <TabsContent value="visualization" className="space-y-3 sm:space-y-4">
+                <Card className="p-3 sm:p-4">
+                  <CardHeader className="p-0 pb-3 sm:pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                       <Palette className="h-4 w-4" />
                       {t('export.colorSettings')}
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs sm:text-sm">
                       {t('export.colorSettings')}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6">
+                  <CardContent className="space-y-4 sm:space-y-6 p-0">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="show-numbers"
@@ -323,13 +323,13 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           })
                         }
                       />
-                      <Label htmlFor="show-numbers">
+                      <Label htmlFor="show-numbers" className="text-sm sm:text-base">
                         {t('export.showNumbers')}
                       </Label>
                     </div>
 
                     <div className="space-y-2">
-                      <Label>{t('export.strokeColor')}</Label>
+                      <Label className="text-sm sm:text-base">{t('export.strokeColor')}</Label>
                       <div className="flex gap-2">
                         <Input
                           type="color"
@@ -350,7 +350,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                               },
                             })
                           }
-                          className="w-20"
+                          className="w-full sm:w-20 h-10 sm:h-9"
                         />
                         <Input
                           value={
@@ -376,7 +376,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     </div>
 
                     <div className="space-y-2">
-                      <Label>{t('export.backgroundColor')}</Label>
+                      <Label className="text-sm sm:text-base">{t('export.backgroundColor')}</Label>
                       <div className="flex gap-2">
                         <Input
                           type="color"
@@ -397,7 +397,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                               },
                             })
                           }
-                          className="w-20"
+                          className="w-full sm:w-20 h-10 sm:h-9"
                         />
                         <Input
                           value={
@@ -423,11 +423,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     </div>
 
                     <div className="space-y-2">
-                      <Label>
-                        {t('export.strokeWidth')}:{' '}
-                        {exportOptions.visualizationOptions?.strokeWidth || 2}px
-                      </Label>
+                      <div className="flex justify-between items-center">
+                        <Label className="text-sm">
+                          {t('export.strokeWidth')}
+                        </Label>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                          {exportOptions.visualizationOptions?.strokeWidth || 2}px
+                        </span>
+                      </div>
                       <Slider
+                        className="touch-manipulation"
                         value={[
                           exportOptions.visualizationOptions?.strokeWidth || 2,
                         ]}
@@ -446,11 +451,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     </div>
 
                     <div className="space-y-2">
-                      <Label>
-                        {t('export.fontSize')}:{' '}
-                        {exportOptions.visualizationOptions?.fontSize || 32}px
-                      </Label>
+                      <div className="flex justify-between items-center">
+                        <Label className="text-sm">
+                          {t('export.fontSize')}
+                        </Label>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                          {exportOptions.visualizationOptions?.fontSize || 32}px
+                        </span>
+                      </div>
                       <Slider
+                        className="touch-manipulation"
                         value={[
                           exportOptions.visualizationOptions?.fontSize || 32,
                         ]}
@@ -469,15 +479,19 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                     </div>
 
                     <div className="space-y-2">
-                      <Label>
-                        Transparency:{' '}
-                        {Math.round(
-                          (exportOptions.visualizationOptions?.transparency ||
-                            0.3) * 100
-                        )}
-                        %
-                      </Label>
+                      <div className="flex justify-between items-center">
+                        <Label className="text-sm">
+                          Transparency
+                        </Label>
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                          {Math.round(
+                            (exportOptions.visualizationOptions?.transparency ||
+                              0.3) * 100
+                          )}%
+                        </span>
+                      </div>
                       <Slider
+                        className="touch-manipulation"
                         value={[
                           (exportOptions.visualizationOptions?.transparency ||
                             0.3) * 100,
@@ -499,16 +513,16 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                 </Card>
               </TabsContent>
 
-              <TabsContent value="formats" className="space-y-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+              <TabsContent value="formats" className="space-y-3 sm:space-y-4">
+                <Card className="p-3 sm:p-4">
+                  <CardHeader className="p-0 pb-3 sm:pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                       <FileJson className="h-4 w-4" />
                       {t('export.formatsTab')}
                     </CardTitle>
-                    <CardDescription>{t('export.formatsTab')}</CardDescription>
+                    <CardDescription className="text-xs sm:text-sm">{t('export.formatsTab')}</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3 sm:space-y-4 p-0">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="coco-format"
@@ -524,7 +538,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           });
                         }}
                       />
-                      <Label htmlFor="coco-format">
+                      <Label htmlFor="coco-format" className="text-sm sm:text-base">
                         {t('export.includeCocoFormat')}
                       </Label>
                     </div>
@@ -544,7 +558,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           });
                         }}
                       />
-                      <Label htmlFor="yolo-format">
+                      <Label htmlFor="yolo-format" className="text-sm sm:text-base">
                         {t('export.exportFormats.yolo')}
                       </Label>
                     </div>
@@ -564,24 +578,24 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           });
                         }}
                       />
-                      <Label htmlFor="json-format">
+                      <Label htmlFor="json-format" className="text-sm sm:text-base">
                         {t('export.includeJsonMetadata')}
                       </Label>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                <Card className="p-3 sm:p-4">
+                  <CardHeader className="p-0 pb-3 sm:pb-4">
+                    <CardTitle className="flex items-center gap-2 text-sm sm:text-base">
                       <FileSpreadsheet className="h-4 w-4" />
                       {t('export.outputSettings')}
                     </CardTitle>
-                    <CardDescription>
+                    <CardDescription className="text-xs sm:text-sm">
                       {t('export.generateExcel')}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-3 sm:space-y-4 p-0">
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="excel-metrics"
@@ -597,7 +611,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           });
                         }}
                       />
-                      <Label htmlFor="excel-metrics">
+                      <Label htmlFor="excel-metrics" className="text-sm sm:text-base">
                         {t('export.exportFormats.excel')}
                       </Label>
                     </div>
@@ -615,7 +629,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           });
                         }}
                       />
-                      <Label htmlFor="csv-metrics">
+                      <Label htmlFor="csv-metrics" className="text-sm sm:text-base">
                         CSV (Comma-separated values)
                       </Label>
                     </div>
@@ -633,21 +647,21 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                           });
                         }}
                       />
-                      <Label htmlFor="json-metrics">
+                      <Label htmlFor="json-metrics" className="text-sm sm:text-base">
                         {t('export.exportFormats.json')}
                       </Label>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{t('export.completed')}</CardTitle>
-                    <CardDescription>
+                <Card className="p-3 sm:p-4">
+                  <CardHeader className="p-0 pb-3 sm:pb-4">
+                    <CardTitle className="text-sm sm:text-base">{t('export.completed')}</CardTitle>
+                    <CardDescription className="text-xs sm:text-sm">
                       {t('export.configureSettings')}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
+                  <CardContent className="space-y-2 text-sm p-0">
                     <div>
                       • Images:{' '}
                       {exportOptions.selectedImageIds?.length || images.length}
@@ -756,10 +770,10 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
               </div>
             )}
 
-            <DialogFooter>
+            <DialogFooter className="flex-col sm:flex-row gap-2">
               {/* Close dialog button - only shown when not exporting */}
               {!isExporting && (
-                <Button variant="outline" onClick={onClose}>
+                <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
                   {t('common.cancel')}
                 </Button>
               )}
@@ -773,6 +787,7 @@ export const AdvancedExportDialog: React.FC<AdvancedExportDialogProps> =
                 onPrimaryAction={handleExport}
                 primaryText={t('export.startExport')}
                 disabled={false}
+                className="w-full sm:w-auto"
               />
             </DialogFooter>
           </DialogContent>
