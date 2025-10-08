@@ -3,27 +3,67 @@
  * Tests WebSocket event emission and handling for cancel operations
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { Server as SocketIOServer } from 'socket.io';
 import { createServer } from 'http';
 import Client from 'socket.io-client';
 
-import { createWebSocketTestEnvironment as _createWebSocketTestEnvironment } from '@/test-utils/webSocketTestUtils';
-import { cancelTestUtils } from '@/test-utils/cancelTestHelpers';
-import {
-  uploadScenarios,
-  segmentationScenarios,
-  exportScenarios,
-} from '@/test-fixtures/cancelScenarios';
+// TODO: Create test utility files
+// import { createWebSocketTestEnvironment as _createWebSocketTestEnvironment } from '@/test-utils/webSocketTestUtils';
+// import { cancelTestUtils } from '@/test-utils/cancelTestHelpers';
+// import {
+//   uploadScenarios,
+//   segmentationScenarios,
+//   exportScenarios,
+// } from '@/test-fixtures/cancelScenarios';
+
+// Temporary mock fixtures until test utils are created
+const uploadScenarios = {
+  singleFileUpload: { operation: { id: 'upload-001', type: 'upload' as const } },
+  multipleFileUpload: { operations: [{ operation: { id: 'upload-002', type: 'upload' as const } }] },
+  largeFileUpload: { operation: { id: 'upload-003', type: 'upload' as const, metadata: { fileSize: 10485760, chunksTotal: 100 } } },
+};
+
+const segmentationScenarios = {
+  singleImageSegmentation: { operation: { id: 'seg-001', type: 'segmentation' as const } },
+  batchSegmentation: {
+    operations: [
+      { metadata: { imageId: 'img-001' } },
+      { metadata: { imageId: 'img-002' } },
+      { metadata: { imageId: 'img-003' } },
+    ],
+    queueStats: { completed: 3, total: 3 },
+  },
+  highVolumeSegmentation: { batchId: 'batch-high-volume', totalImages: 500 },
+};
+
+const exportScenarios = {
+  cocoExport: { operation: { id: 'export-001', type: 'export' as const, metadata: { format: 'coco' } } },
+  largeExport: { operation: { id: 'export-002', type: 'export' as const, metadata: { imageCount: 5000, exportSize: '2.5GB (estimated)' } } },
+  parallelExports: {
+    operations: [
+      { id: 'export-003', metadata: { projectId: 'project-1', format: 'coco' } },
+      { id: 'export-004', metadata: { projectId: 'project-2', format: 'yolo' } },
+    ],
+  },
+};
+
+const cancelTestUtils = {
+  createTestDataFactories: () => ({
+    uploadOperation: () => ({ id: 'upload-factory-001', type: 'upload' as const, progress: 50 }),
+    segmentationOperation: () => ({ id: 'seg-factory-001', type: 'segmentation' as const, progress: 75 }),
+    exportOperation: () => ({ id: 'export-factory-001', type: 'export' as const, progress: 25 }),
+  }),
+};
 
 // Mock dependencies
-vi.mock('@/db', () => ({
+jest.mock('@/db', () => ({
   prisma: {
     user: {
-      findUnique: vi.fn(),
+      findUnique: jest.fn(),
     },
     project: {
-      findUnique: vi.fn(),
+      findUnique: jest.fn(),
     },
   },
 }));
@@ -58,7 +98,7 @@ class WebSocketService {
   constructor(server: any, config: WebSocketServiceConfig) {
     this.io = new SocketIOServer(server, {
       cors: config.cors,
-      transports: config.transports,
+      transports: config.transports as any,
     });
 
     this.setupEventHandlers();
@@ -231,7 +271,7 @@ describe('WebSocket Service Cancel Integration', () => {
         origin: ['http://localhost:3000'],
         credentials: true,
       },
-      transports: ['websocket'],
+      transports: ['websocket'] as string[],
     });
 
     // Start server
@@ -245,7 +285,7 @@ describe('WebSocket Service Cancel Integration', () => {
 
     // Create client connection
     clientSocket = Client(serverAddress, {
-      transports: ['websocket'],
+      transports: ['websocket'] as string[],
       autoConnect: false,
     });
   });
@@ -257,7 +297,7 @@ describe('WebSocket Service Cancel Integration', () => {
 
     await wsService.close();
     server.close();
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('Connection and Authentication', () => {
@@ -745,7 +785,7 @@ describe('WebSocket Service Cancel Integration', () => {
 
       // Force connection error by connecting to wrong port
       const wrongClient = Client('http://localhost:99999', {
-        transports: ['websocket'],
+        transports: ['websocket'] as string[],
         timeout: 1000,
       });
 
@@ -782,7 +822,7 @@ describe('WebSocket Service Cancel Integration', () => {
 
       for (let i = 0; i < connectionCount; i++) {
         const client = Client(serverAddress, {
-          transports: ['websocket'],
+          transports: ['websocket'] as string[],
           autoConnect: false,
         });
 

@@ -216,7 +216,7 @@ describe('Dashboard Metrics Integration Tests', () => {
             timestamp: new Date(),
           };
 
-          wsService.broadcastProjectUpdate(updateData);
+          wsService.broadcastProjectUpdate(projectId, updateData);
 
           res.json({
             success: true,
@@ -255,7 +255,7 @@ describe('Dashboard Metrics Integration Tests', () => {
             timestamp: new Date(),
           };
 
-          wsService.broadcastProjectUpdate(updateData);
+          wsService.broadcastProjectUpdate(testProjectId, updateData);
 
           res.json({
             success: true,
@@ -302,7 +302,7 @@ describe('Dashboard Metrics Integration Tests', () => {
             polygonCount: segmentation.polygonCount,
           };
 
-          wsService.emitSegmentationUpdate(segmentationUpdate);
+          wsService.emitSegmentationUpdate(userId, segmentationUpdate);
 
           // Emit project update
           const projectUpdate: ProjectUpdateData = {
@@ -315,7 +315,7 @@ describe('Dashboard Metrics Integration Tests', () => {
             timestamp: new Date(),
           };
 
-          wsService.broadcastProjectUpdate(projectUpdate);
+          wsService.broadcastProjectUpdate(testProjectId, projectUpdate);
 
           res.json({
             success: true,
@@ -387,7 +387,7 @@ describe('Dashboard Metrics Integration Tests', () => {
         // Join project room
         clientSocket.emit('join', getProjectRoom(testProjectId));
 
-        let _projectUpdateReceived = false;
+        let projectUpdateReceived = false;
         let metricsBeforeUpload: any;
         let metricsAfterUpload: any;
 
@@ -398,7 +398,7 @@ describe('Dashboard Metrics Integration Tests', () => {
             expect(data.projectId).toBe(testProjectId);
             expect(data.operation).toBe('updated');
             expect(data.updates?.imageCount).toBe(1);
-            _projectUpdateReceived = true;
+            projectUpdateReceived = true;
 
             // Get updated metrics after WebSocket event
             request(app)
@@ -414,7 +414,7 @@ describe('Dashboard Metrics Integration Tests', () => {
                 expect(metricsAfterUpload.imagesUploadedToday).toBeGreaterThan(
                   metricsBeforeUpload.imagesUploadedToday
                 );
-                expect(_projectUpdateReceived).toBe(true);
+                expect(projectUpdateReceived).toBe(true);
 
                 done();
               })
@@ -491,7 +491,7 @@ describe('Dashboard Metrics Integration Tests', () => {
         clientSocket.emit('join', getProjectRoom(testProjectId));
 
         let segmentationEventReceived = false;
-        const _projectUpdateReceived = false;
+        let projectUpdateReceived = false;
 
         // Listen for segmentation completion
         clientSocket.on(
@@ -512,7 +512,7 @@ describe('Dashboard Metrics Integration Tests', () => {
           (data: ProjectUpdateData) => {
             expect(data.projectId).toBe(testProjectId);
             expect(data.updates?.segmentedCount).toBe(1);
-            _projectUpdateReceived = true;
+            projectUpdateReceived = true;
 
             checkCompletion();
           }
@@ -594,7 +594,7 @@ describe('Dashboard Metrics Integration Tests', () => {
       clientSocket.on('connect', async () => {
         clientSocket.emit('join', getProjectRoom(testProjectId));
 
-        const _projectUpdateReceived = false;
+        let projectUpdateReceived = false;
 
         clientSocket.on(
           WebSocketEvent.PROJECT_UPDATE,
@@ -602,7 +602,7 @@ describe('Dashboard Metrics Integration Tests', () => {
             expect(data.projectId).toBe(testProjectId);
             expect(data.operation).toBe('updated');
             expect(data.updates?.imageCount).toBe(2); // Decreased after deletion
-            _projectUpdateReceived = true;
+            projectUpdateReceived = true;
 
             // Verify metrics after deletion
             request(app)
