@@ -1119,8 +1119,8 @@ const SegmentationEditor = () => {
             />
 
             {/* Canvas Area */}
-            <div className="flex-1 flex overflow-hidden">
-              <div className="flex-1 p-2">
+            <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+              <div className="flex-1 lg:flex-1 p-2 min-h-0 h-[calc(100vh-300px)] lg:h-auto">
                 <CanvasContainer
                   ref={editor.canvasRef}
                   editMode={editor.editMode}

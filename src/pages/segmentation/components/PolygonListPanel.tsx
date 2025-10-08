@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Eye, EyeOff, Edit3, Trash2, MoreVertical } from 'lucide-react';
+import { Eye, EyeOff, Edit3, Trash2, MoreVertical, ChevronUp, ChevronDown } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -103,7 +103,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (loading) {
     return (
-      <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
+      <div className="w-full lg:w-72 h-64 lg:h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
         <div className="text-gray-500">{t('common.loading')}</div>
       </div>
     );
@@ -111,7 +111,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (!polygons || polygons.length === 0) {
     return (
-      <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+      <div className="w-full lg:w-72 h-64 lg:h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('segmentation.status.polygons')}
@@ -130,12 +130,56 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   }
 
   return (
-    <div className="w-72 h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+    <div className="w-full lg:w-72 h-64 lg:h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
-          {t('segmentation.status.polygonList')} ({polygons.length})
-        </h3>
+        <div className="flex items-center justify-between mb-2 lg:mb-0">
+          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+            {t('segmentation.status.polygonList')} ({polygons.length})
+          </h3>
+
+          {/* Mobile polygon navigation - only visible on mobile */}
+          {polygons.length > 0 && (
+            <div className="flex items-center gap-1 lg:hidden">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const currentIndex = polygons.findIndex(p => p.id === selectedPolygonId);
+                  if (currentIndex > 0) {
+                    onSelectPolygon(polygons[currentIndex - 1].id);
+                  }
+                }}
+                disabled={!selectedPolygonId || polygons.findIndex(p => p.id === selectedPolygonId) === 0}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronUp className="h-4 w-4" />
+              </Button>
+
+              <span className="text-xs text-gray-500 dark:text-gray-400 min-w-[3rem] text-center">
+                {selectedPolygonId
+                  ? `${polygons.findIndex(p => p.id === selectedPolygonId) + 1}/${polygons.length}`
+                  : `0/${polygons.length}`
+                }
+              </span>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const currentIndex = polygons.findIndex(p => p.id === selectedPolygonId);
+                  if (currentIndex < polygons.length - 1) {
+                    onSelectPolygon(polygons[currentIndex + 1].id);
+                  }
+                }}
+                disabled={!selectedPolygonId || polygons.findIndex(p => p.id === selectedPolygonId) === polygons.length - 1}
+                className="h-8 w-8 p-0"
+              >
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Polygon List */}
