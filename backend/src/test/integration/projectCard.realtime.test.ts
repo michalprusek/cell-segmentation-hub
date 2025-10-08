@@ -104,7 +104,7 @@ jest.mock('jsonwebtoken', () => ({
 
 // Mock sharing service
 jest.mock('../../services/sharingService', () => ({
-  hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: true }),
+  hasProjectAccess: jest.fn().mockResolvedValue({ hasAccess: true } as never),
 }));
 
 // Import after mocking

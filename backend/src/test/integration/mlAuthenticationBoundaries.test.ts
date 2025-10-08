@@ -40,7 +40,7 @@ import {
 
 // Mock rate limiter for cleaner test output
 jest.mock('../../middleware/rateLimiter', () => ({
-  apiLimiter: jest.fn((req, res, next) => next()),
+  apiLimiter: jest.fn((req, res, next) => next() as any),
 }));
 
 // Mock logger to prevent console noise during tests
@@ -530,7 +530,7 @@ describe('ML Authentication Boundaries Integration Tests', () => {
 
       (prisma.user.findUnique as jest.Mock) = jest
         .fn()
-        .mockRejectedValue(new Error('Database connection failed'));
+        .mockRejectedValue(new Error('Database connection failed') as any);
 
       const response = await request(app)
         .get('/api/ml/queue')

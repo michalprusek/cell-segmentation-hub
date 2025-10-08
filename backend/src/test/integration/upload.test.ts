@@ -1,13 +1,4 @@
-import {
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-  beforeAll,
-  afterAll,
-  vi,
-} from 'vitest';
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import { app } from '../../app';
 import { prisma } from '../../db/index';
@@ -415,7 +406,7 @@ describe('Large Batch Upload Integration Tests', () => {
       const totalFiles = 30;
 
       // Mock storage service failure
-      const _originalStorageWrite = vi.fn();
+      const _originalStorageWrite = jest.fn();
 
       const mockFiles = UploadMockGenerator.createMockFiles(totalFiles, {
         fileSize: 1024 * 100,

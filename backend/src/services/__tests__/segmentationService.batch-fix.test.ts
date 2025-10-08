@@ -3,14 +3,14 @@
  * Ensures that the last image in batch receives correct results even when some images are invalid
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { SegmentationService } from '../segmentationService';
 import { getStorageProvider } from '../../storage';
 import axios from 'axios';
 
-vi.mock('axios');
-vi.mock('../../storage');
-vi.mock('../../utils/logger');
+jest.mock('axios');
+jest.mock('../../storage');
+jest.mock('../../utils/logger');
 
 describe('SegmentationService - Batch Index Fix', () => {
   let service: SegmentationService;
@@ -19,13 +19,13 @@ describe('SegmentationService - Batch Index Fix', () => {
 
   beforeEach(() => {
     mockAxiosInstance = {
-      post: vi.fn(),
-      get: vi.fn(),
+      post: jest.fn(),
+      get: jest.fn(),
     };
     (axios.create as any).mockReturnValue(mockAxiosInstance);
 
     mockStorage = {
-      getBuffer: vi.fn().mockResolvedValue(Buffer.from('test-image-data')),
+      getBuffer: jest.fn().mockResolvedValue(Buffer.from('test-image-data')),
     };
     (getStorageProvider as any).mockReturnValue(mockStorage);
 
@@ -33,7 +33,7 @@ describe('SegmentationService - Batch Index Fix', () => {
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('requestBatchSegmentation with invalid images', () => {

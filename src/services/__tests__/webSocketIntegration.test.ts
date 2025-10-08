@@ -40,19 +40,114 @@ describe('WebSocket Integration Tests', () => {
   let wsManager: WebSocketManager;
 
   beforeEach(() => {
-    // Create comprehensive mock socket
+    // Create reactive mock socket with proper connection lifecycle simulation
+    let _connected = false;
+    const _eventHandlers = new Map<string, Function[]>();
+    const _ioEventHandlers = new Map<string, Function[]>();
+
     mockSocket = {
-      connected: false,
+      // Reactive connected property using getter
+      get connected() {
+        return _connected;
+      },
+
       id: 'socket-123',
-      connect: vi.fn(),
-      disconnect: vi.fn(),
-      on: vi.fn(),
-      off: vi.fn(),
+
+      // Connect method that sets connected=true AND triggers handlers
+      connect: vi.fn(() => {
+        _connected = true;
+        // Auto-call connect handlers
+        const connectHandlers = _eventHandlers.get('connect') || [];
+        connectHandlers.forEach(handler => handler());
+        return mockSocket;
+      }),
+
+      // Disconnect method that sets connected=false AND triggers handlers
+      disconnect: vi.fn(() => {
+        _connected = false;
+        const disconnectHandlers = _eventHandlers.get('disconnect') || [];
+        disconnectHandlers.forEach(handler => handler('manual'));
+        return mockSocket;
+      }),
+
+      // Event registration that stores handlers
+      on: vi.fn((event: string, handler: Function) => {
+        if (!_eventHandlers.has(event)) {
+          _eventHandlers.set(event, []);
+        }
+        _eventHandlers.get(event)!.push(handler);
+        return mockSocket;
+      }),
+
+      off: vi.fn((event: string, handler?: Function) => {
+        if (handler) {
+          const handlers = _eventHandlers.get(event) || [];
+          const index = handlers.indexOf(handler);
+          if (index > -1) {
+            handlers.splice(index, 1);
+          }
+        } else {
+          _eventHandlers.delete(event);
+        }
+        return mockSocket;
+      }),
+
+      // Emit helper to send events to server
       emit: vi.fn(),
-      removeAllListeners: vi.fn(),
+
+      removeAllListeners: vi.fn(() => {
+        _eventHandlers.clear();
+        return mockSocket;
+      }),
+
       io: {
-        on: vi.fn(),
-        off: vi.fn(),
+        on: vi.fn((event: string, handler: Function) => {
+          if (!_ioEventHandlers.has(event)) {
+            _ioEventHandlers.set(event, []);
+          }
+          _ioEventHandlers.get(event)!.push(handler);
+          return mockSocket.io;
+        }),
+
+        off: vi.fn((event: string, handler?: Function) => {
+          if (handler) {
+            const handlers = _ioEventHandlers.get(event) || [];
+            const index = handlers.indexOf(handler);
+            if (index > -1) {
+              handlers.splice(index, 1);
+            }
+          } else {
+            _ioEventHandlers.delete(event);
+          }
+          return mockSocket.io;
+        }),
+      },
+
+      // Helper methods for testing - trigger events manually
+      __triggerConnect: () => {
+        _connected = true;
+        const handlers = _eventHandlers.get('connect') || [];
+        handlers.forEach(handler => handler());
+      },
+
+      __triggerDisconnect: (reason = 'transport close') => {
+        _connected = false;
+        const handlers = _eventHandlers.get('disconnect') || [];
+        handlers.forEach(handler => handler(reason));
+      },
+
+      __triggerEvent: (event: string, ...args: any[]) => {
+        const handlers = _eventHandlers.get(event) || [];
+        handlers.forEach(handler => handler(...args));
+      },
+
+      __triggerIoEvent: (event: string, ...args: any[]) => {
+        const handlers = _ioEventHandlers.get(event) || [];
+        handlers.forEach(handler => handler(...args));
+      },
+
+      __setConnected: (value: boolean) => {
+        _connected = value;
       },
     };
 
@@ -72,12 +167,13 @@ describe('WebSocket Integration Tests', () => {
     const projectId = 'project-456';
 
     beforeEach(async () => {
+      // Start connection (io() gets called, event handlers registered)
       const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+
+      // Simulate successful connection immediately
+      mockSocket.__triggerConnect();
+
+      // Wait for connection to complete
       await connectPromise;
     });
 
@@ -101,22 +197,17 @@ describe('WebSocket Integration Tests', () => {
         projectId
       );
 
-      // Simulate initial queue stats response
+      // Simulate initial queue stats response (backend emits 'queueStats')
       const initialStats: QueueStats = {
         projectId,
         queued: 5,
         processing: 0,
         total: 5,
       };
-
-      const queueStatsHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'queue-stats-update'
-      )?.[1];
-      queueStatsHandler?.(initialStats);
-
+      mockSocket.__triggerEvent('queueStats', initialStats);
       expect(queueStatsListener).toHaveBeenCalledWith(initialStats);
 
-      // Simulate processing start
+      // Simulate processing start (backend emits 'segmentation-update')
       const processingUpdate: SegmentationUpdate = {
         imageId: 'image-1',
         projectId,
@@ -124,17 +215,11 @@ describe('WebSocket Integration Tests', () => {
         queueId: 'queue-item-1',
         progress: 0,
       };
-
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-      segmentationHandler?.(processingUpdate);
-
+      mockSocket.__triggerEvent('segmentation-update', processingUpdate);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(processingUpdate);
 
       // Simulate processing progress updates
       const progressUpdates = [25, 50, 75, 100];
-
       for (const progress of progressUpdates) {
         const progressUpdate: SegmentationUpdate = {
           imageId: 'image-1',
@@ -143,8 +228,7 @@ describe('WebSocket Integration Tests', () => {
           queueId: 'queue-item-1',
           progress,
         };
-
-        segmentationHandler?.(progressUpdate);
+        mockSocket.__triggerEvent('segmentation-update', progressUpdate);
         expect(segmentationUpdateListener).toHaveBeenCalledWith(progressUpdate);
       }
 
@@ -156,8 +240,7 @@ describe('WebSocket Integration Tests', () => {
         queueId: 'queue-item-1',
         progress: 100,
       };
-
-      segmentationHandler?.(completionUpdate);
+      mockSocket.__triggerEvent('segmentation-update', completionUpdate);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(completionUpdate);
 
       // Simulate completion notification
@@ -168,12 +251,7 @@ describe('WebSocket Integration Tests', () => {
         polygonCount: 15,
         timestamp: '2024-01-01T00:00:00Z',
       };
-
-      const notificationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'notification'
-      )?.[1];
-      notificationHandler?.(notification);
-
+      mockSocket.__triggerEvent('notification', notification);
       expect(notificationListener).toHaveBeenCalledWith(notification);
 
       // Simulate updated queue stats
@@ -183,8 +261,7 @@ describe('WebSocket Integration Tests', () => {
         processing: 0,
         total: 5,
       };
-
-      queueStatsHandler?.(updatedStats);
+      mockSocket.__triggerEvent('queueStats', updatedStats);
       expect(queueStatsListener).toHaveBeenCalledWith(updatedStats);
 
       // Verify all expected calls
@@ -203,13 +280,6 @@ describe('WebSocket Integration Tests', () => {
       // Join project and start processing
       wsManager.joinProject(projectId);
 
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-      const systemMessageHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'system-message'
-      )?.[1];
-
       // Simulate processing start
       const startUpdate: SegmentationUpdate = {
         imageId: 'image-2',
@@ -218,8 +288,7 @@ describe('WebSocket Integration Tests', () => {
         queueId: 'queue-item-2',
         progress: 0,
       };
-
-      segmentationHandler?.(startUpdate);
+      mockSocket.__triggerEvent('segmentation-update', startUpdate);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(startUpdate);
 
       // Simulate processing error
@@ -230,8 +299,7 @@ describe('WebSocket Integration Tests', () => {
         queueId: 'queue-item-2',
         error: 'Out of memory during segmentation',
       };
-
-      segmentationHandler?.(errorUpdate);
+      mockSocket.__triggerEvent('segmentation-update', errorUpdate);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(errorUpdate);
 
       // Simulate system error message
@@ -240,8 +308,7 @@ describe('WebSocket Integration Tests', () => {
         message: 'Processing failed for image-2: Out of memory',
         timestamp: '2024-01-01T00:05:00Z',
       };
-
-      systemMessageHandler?.(systemMessage);
+      mockSocket.__triggerEvent('system-message', systemMessage);
       expect(systemMessageListener).toHaveBeenCalledWith(systemMessage);
     });
 
@@ -254,13 +321,6 @@ describe('WebSocket Integration Tests', () => {
 
       wsManager.joinProject(projectId);
 
-      const queueStatsHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'queue-stats-update'
-      )?.[1];
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-
       // Initial batch stats
       const batchStats: QueueStats = {
         projectId,
@@ -268,8 +328,7 @@ describe('WebSocket Integration Tests', () => {
         processing: 0,
         total: 10,
       };
-
-      queueStatsHandler?.(batchStats);
+      mockSocket.__triggerEvent('queueStats', batchStats);
 
       // Simulate concurrent processing of multiple images
       const imageIds = ['img-1', 'img-2', 'img-3'];
@@ -283,7 +342,7 @@ describe('WebSocket Integration Tests', () => {
           queueId: `queue-${index + 1}`,
           progress: 0,
         };
-        segmentationHandler?.(startUpdate);
+        mockSocket.__triggerEvent('segmentation-update', startUpdate);
       });
 
       expect(segmentationUpdateListener).toHaveBeenCalledTimes(3);
@@ -299,7 +358,7 @@ describe('WebSocket Integration Tests', () => {
           queueId: `queue-${index + 1}`,
           progress: 100,
         };
-        segmentationHandler?.(completionUpdate);
+        mockSocket.__triggerEvent('segmentation-update', completionUpdate);
 
         // Update queue stats after each completion
         const updatedStats: QueueStats = {
@@ -308,7 +367,7 @@ describe('WebSocket Integration Tests', () => {
           processing: 0,
           total: 10,
         };
-        queueStatsHandler?.(updatedStats);
+        mockSocket.__triggerEvent('queueStats', updatedStats);
       });
 
       // Verify all processing completed
@@ -331,45 +390,27 @@ describe('WebSocket Integration Tests', () => {
 
       // Initial connection
       const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket.__triggerConnect();
       await connectPromise;
 
       // Start processing
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-
       const processingUpdate: SegmentationUpdate = {
         imageId: 'image-1',
         projectId: 'project-1',
         status: 'processing',
         progress: 50,
       };
-
-      segmentationHandler?.(processingUpdate);
+      mockSocket.__triggerEvent('segmentation-update', processingUpdate);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(processingUpdate);
 
       vi.clearAllMocks();
 
       // Simulate connection loss
-      mockSocket.connected = false;
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
-      disconnectHandler?.('transport close');
-
+      mockSocket.__triggerDisconnect('transport close');
       expect(disconnectListener).toHaveBeenCalledWith('transport close');
 
       // Simulate reconnection
-      const reconnectHandler = mockSocket.io.on.mock.calls.find(
-        call => call[0] === 'reconnect'
-      )?.[1];
-      mockSocket.connected = true;
-      reconnectHandler?.(2); // Reconnected after 2 attempts
+      mockSocket.__triggerIoEvent('reconnect', 2); // Reconnected after 2 attempts
 
       expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
         type: 'reconnected',
@@ -382,27 +423,18 @@ describe('WebSocket Integration Tests', () => {
         status: 'processing',
         progress: 75,
       };
-
-      segmentationHandler?.(continuedUpdate);
+      mockSocket.__triggerEvent('segmentation-update', continuedUpdate);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(continuedUpdate);
     });
 
     it('should handle message queuing during disconnection', async () => {
       // Connect initially
       const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket.__triggerConnect();
       await connectPromise;
 
       // Disconnect
-      mockSocket.connected = false;
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
-      disconnectHandler?.('transport close');
+      mockSocket.__triggerDisconnect('transport close');
 
       vi.clearAllMocks();
 
@@ -415,8 +447,7 @@ describe('WebSocket Integration Tests', () => {
       expect(mockSocket.emit).not.toHaveBeenCalled();
 
       // Reconnect
-      mockSocket.connected = true;
-      connectHandler?.(); // Simulate reconnection
+      mockSocket.__triggerConnect();
 
       // All queued messages should be flushed
       expect(mockSocket.emit).toHaveBeenCalledWith('join-project', 'project-1');
@@ -439,23 +470,13 @@ describe('WebSocket Integration Tests', () => {
 
       // Initial connection
       const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket.__triggerConnect();
       await connectPromise;
 
       // Simulate rapid disconnect/reconnect cycles
       for (let i = 0; i < 5; i++) {
-        mockSocket.connected = false;
-        disconnectHandler?.(`disconnect-${i}`);
-
-        mockSocket.connected = true;
-        connectHandler?.();
+        mockSocket.__triggerDisconnect(`disconnect-${i}`);
+        mockSocket.__triggerConnect();
       }
 
       expect(connectListener).toHaveBeenCalledTimes(6); // Initial + 5 reconnections
@@ -470,11 +491,7 @@ describe('WebSocket Integration Tests', () => {
 
     beforeEach(async () => {
       const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket.__triggerConnect();
       await connectPromise;
     });
 
@@ -492,13 +509,6 @@ describe('WebSocket Integration Tests', () => {
       expect(mockSocket.emit).toHaveBeenCalledWith('join-project', project1);
       expect(mockSocket.emit).toHaveBeenCalledWith('join-project', project2);
 
-      const queueStatsHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'queue-stats-update'
-      )?.[1];
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-
       // Simulate concurrent processing in both projects
       const project1Update: SegmentationUpdate = {
         imageId: 'image-1-1',
@@ -514,8 +524,8 @@ describe('WebSocket Integration Tests', () => {
         progress: 50,
       };
 
-      segmentationHandler?.(project1Update);
-      segmentationHandler?.(project2Update);
+      mockSocket.__triggerEvent('segmentation-update', project1Update);
+      mockSocket.__triggerEvent('segmentation-update', project2Update);
 
       expect(segmentationUpdateListener).toHaveBeenCalledWith(project1Update);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(project2Update);
@@ -535,8 +545,8 @@ describe('WebSocket Integration Tests', () => {
         total: 3,
       };
 
-      queueStatsHandler?.(project1Stats);
-      queueStatsHandler?.(project2Stats);
+      mockSocket.__triggerEvent('queueStats', project1Stats);
+      mockSocket.__triggerEvent('queueStats', project2Stats);
 
       expect(queueStatsListener).toHaveBeenCalledWith(project1Stats);
       expect(queueStatsListener).toHaveBeenCalledWith(project2Stats);
@@ -563,11 +573,7 @@ describe('WebSocket Integration Tests', () => {
         project2
       );
 
-      // Should only receive updates for project2
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-
+      // Should receive updates for project2
       const project2Update: SegmentationUpdate = {
         imageId: 'image-2-1',
         projectId: project2,
@@ -575,7 +581,7 @@ describe('WebSocket Integration Tests', () => {
         progress: 100,
       };
 
-      segmentationHandler?.(project2Update);
+      mockSocket.__triggerEvent('segmentation-update', project2Update);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(project2Update);
     });
   });
@@ -585,11 +591,7 @@ describe('WebSocket Integration Tests', () => {
 
     beforeEach(async () => {
       const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket.__triggerConnect();
       await connectPromise;
     });
 
@@ -600,25 +602,22 @@ describe('WebSocket Integration Tests', () => {
       wsManager.on('segmentation-update', segmentationUpdateListener);
       wsManager.on('queue-stats-update', queueStatsListener);
 
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-      const queueStatsHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'queue-stats-update'
-      )?.[1];
+      // Send malformed messages - should not throw
+      expect(() =>
+        mockSocket.__triggerEvent('segmentation-update', null)
+      ).not.toThrow();
+      expect(() =>
+        mockSocket.__triggerEvent('segmentation-update', undefined)
+      ).not.toThrow();
+      expect(() =>
+        mockSocket.__triggerEvent('segmentation-update', 'invalid-string')
+      ).not.toThrow();
+      expect(() =>
+        mockSocket.__triggerEvent('segmentation-update', {})
+      ).not.toThrow();
 
-      // Ensure handlers are defined
-      expect(segmentationHandler).toBeDefined();
-      expect(queueStatsHandler).toBeDefined();
-
-      // Send malformed messages
-      expect(() => segmentationHandler!(null)).not.toThrow();
-      expect(() => segmentationHandler!(undefined)).not.toThrow();
-      expect(() => segmentationHandler!('invalid-string')).not.toThrow();
-      expect(() => segmentationHandler!({})).not.toThrow();
-
-      expect(() => queueStatsHandler!(null)).not.toThrow();
-      expect(() => queueStatsHandler!({})).not.toThrow();
+      expect(() => mockSocket.__triggerEvent('queueStats', null)).not.toThrow();
+      expect(() => mockSocket.__triggerEvent('queueStats', {})).not.toThrow();
 
       // Send valid message after malformed ones
       const validUpdate: SegmentationUpdate = {
@@ -628,20 +627,13 @@ describe('WebSocket Integration Tests', () => {
         progress: 100,
       };
 
-      segmentationHandler!(validUpdate);
+      mockSocket.__triggerEvent('segmentation-update', validUpdate);
       expect(segmentationUpdateListener).toHaveBeenCalledWith(validUpdate);
     });
 
     it('should handle server disconnection during processing', async () => {
       const segmentationUpdateListener = vi.fn();
       wsManager.on('segmentation-update', segmentationUpdateListener);
-
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
 
       // Start processing
       const processingUpdate: SegmentationUpdate = {
@@ -651,11 +643,10 @@ describe('WebSocket Integration Tests', () => {
         progress: 25,
       };
 
-      segmentationHandler?.(processingUpdate);
+      mockSocket.__triggerEvent('segmentation-update', processingUpdate);
 
       // Server forcefully disconnects
-      mockSocket.connected = false;
-      disconnectHandler?.('io server disconnect');
+      mockSocket.__triggerDisconnect('io server disconnect');
 
       // Should emit connection lost event
       expect(webSocketEventEmitter.emit).toHaveBeenCalledWith({
@@ -677,10 +668,6 @@ describe('WebSocket Integration Tests', () => {
       wsManager.on('segmentation-update', errorListener);
       wsManager.on('segmentation-update', anotherGoodListener);
 
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
-
       const update: SegmentationUpdate = {
         imageId: 'image-1',
         projectId: 'project-1',
@@ -689,7 +676,9 @@ describe('WebSocket Integration Tests', () => {
       };
 
       // Should not throw despite error in middle listener
-      expect(() => segmentationHandler?.(update)).not.toThrow();
+      expect(() =>
+        mockSocket.__triggerEvent('segmentation-update', update)
+      ).not.toThrow();
 
       // Good listeners should still be called
       expect(goodListener).toHaveBeenCalledWith(update);
@@ -702,21 +691,13 @@ describe('WebSocket Integration Tests', () => {
 
     beforeEach(async () => {
       const connectPromise = wsManager.connect(mockUser);
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket.__triggerConnect();
       await connectPromise;
     });
 
     it('should handle high-frequency updates without memory leaks', async () => {
       const segmentationUpdateListener = vi.fn();
       wsManager.on('segmentation-update', segmentationUpdateListener);
-
-      const segmentationHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'segmentation-update'
-      )?.[1];
 
       // Send many rapid updates
       for (let i = 0; i < 1000; i++) {
@@ -726,7 +707,7 @@ describe('WebSocket Integration Tests', () => {
           status: 'processing',
           progress: i % 101,
         };
-        segmentationHandler?.(update);
+        mockSocket.__triggerEvent('segmentation-update', update);
       }
 
       expect(segmentationUpdateListener).toHaveBeenCalledTimes(1000);
@@ -742,7 +723,7 @@ describe('WebSocket Integration Tests', () => {
           status: 'processing',
           progress: i,
         };
-        segmentationHandler?.(update);
+        mockSocket.__triggerEvent('segmentation-update', update);
       }
 
       // Listener should not be called after removal
@@ -751,11 +732,7 @@ describe('WebSocket Integration Tests', () => {
 
     it('should handle large message queue without performance degradation', async () => {
       // Disconnect to queue messages
-      mockSocket.connected = false;
-      const disconnectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'disconnect'
-      )?.[1];
-      disconnectHandler?.('transport close');
+      mockSocket.__triggerDisconnect('transport close');
 
       // Queue many messages
       for (let i = 0; i < 500; i++) {
@@ -766,11 +743,7 @@ describe('WebSocket Integration Tests', () => {
 
       // Reconnect and measure performance
       const startTime = performance.now();
-      mockSocket.connected = true;
-      const connectHandler = mockSocket.on.mock.calls.find(
-        call => call[0] === 'connect'
-      )?.[1];
-      connectHandler?.();
+      mockSocket.__triggerConnect();
       const endTime = performance.now();
 
       // All messages should be flushed

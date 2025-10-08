@@ -4,8 +4,6 @@
  * Tests for TypeScript type safety and Zod validation in queue endpoints
  */
 
-import { describe, it, expect } from 'vitest';
-// Unused imports removed: beforeEach, vi, Request, Response
 import { z } from 'zod';
 import {
   addImageToQueueSchema,

@@ -46,6 +46,22 @@ const useAbortController = (
   const childControllersRef = React.useRef<Set<AbortController>>(new Set());
   const timeoutRef = React.useRef<NodeJS.Timeout>();
 
+  // Define abort callback BEFORE it's used in useEffect
+  const abort = React.useCallback(
+    (reason?: any) => {
+      if (!controller.signal.aborted) {
+        controller.abort(reason);
+
+        // Clear timeout if exists
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current);
+          timeoutRef.current = undefined;
+        }
+      }
+    },
+    [controller]
+  );
+
   // Setup timeout if specified
   React.useEffect(() => {
     if (timeout && timeout > 0) {
@@ -81,21 +97,6 @@ const useAbortController = (
       controller.signal.removeEventListener('abort', handleAbort);
     };
   }, [controller, onAbort]);
-
-  const abort = React.useCallback(
-    (reason?: any) => {
-      if (!controller.signal.aborted) {
-        controller.abort(reason);
-
-        // Clear timeout if exists
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = undefined;
-        }
-      }
-    },
-    [controller]
-  );
 
   const createChildController = React.useCallback(() => {
     const childController = new AbortController();

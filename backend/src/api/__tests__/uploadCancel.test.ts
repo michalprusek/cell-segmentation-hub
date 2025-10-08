@@ -3,47 +3,38 @@
  * Tests POST /api/uploads/:uploadId/cancel functionality
  */
 
-import {
-  describe,
-  it,
-  expect,
-  vi,
-  beforeEach,
-  afterEach,
-  beforeAll,
-  _afterAll,
-} from 'vitest';
+import { jest } from '@jest/globals';
 import request from 'supertest';
 import express, { Express } from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 
 // Mock dependencies before imports
-vi.mock('@/db', () => ({
+jest.mock('@/db', () => ({
   prisma: {
     upload: {
-      findUnique: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
+      findUnique: jest.fn(),
+      update: jest.fn(),
+      delete: jest.fn(),
     },
     uploadChunk: {
-      deleteMany: vi.fn(),
+      deleteMany: jest.fn(),
     },
   },
 }));
 
-vi.mock('@/redis', () => ({
+jest.mock('@/redis', () => ({
   redisClient: {
-    del: vi.fn(),
-    get: vi.fn(),
-    set: vi.fn(),
+    del: jest.fn(),
+    get: jest.fn(),
+    set: jest.fn(),
   },
 }));
 
-vi.mock('@/services/webSocketService', () => ({
+jest.mock('@/services/webSocketService', () => ({
   webSocketService: {
-    emitToRoom: vi.fn(),
-    emitToUser: vi.fn(),
+    emitToRoom: jest.fn(),
+    emitToUser: jest.fn(),
   },
 }));
 
@@ -211,16 +202,16 @@ describe('Upload Cancel API Tests', () => {
   });
 
   beforeEach(async () => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
 
     // Setup mocks
-    const dbModule = vi.mocked(await import('@/db'));
+    const dbModule = jest.mocked(await import('@/db'));
     mockPrisma = dbModule.prisma;
 
-    const redisModule = vi.mocked(await import('@/redis'));
+    const redisModule = jest.mocked(await import('@/redis'));
     mockRedis = redisModule.redisClient;
 
-    const wsModule = vi.mocked(await import('@/services/webSocketService'));
+    const wsModule = jest.mocked(await import('@/services/webSocketService'));
     mockWebSocket = wsModule.webSocketService;
 
     // Default successful mock implementations
@@ -236,7 +227,7 @@ describe('Upload Cancel API Tests', () => {
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('POST /api/uploads/:uploadId/cancel', () => {
@@ -480,8 +471,8 @@ describe('Upload Cancel API Tests', () => {
     describe('File Cleanup', () => {
       it('should clean up temporary files', async () => {
         // Mock filesystem operations
-        const fsModule = vi.mocked(await import('fs/promises'));
-        fsModule.rm = vi.fn().mockResolvedValue(undefined);
+        const fsModule = jest.mocked(await import('fs/promises'));
+        fsModule.rm = jest.fn().mockResolvedValue(undefined);
 
         await request(app).post('/api/uploads/upload-123/cancel').expect(200);
 
@@ -491,8 +482,8 @@ describe('Upload Cancel API Tests', () => {
 
       it('should handle file cleanup errors gracefully', async () => {
         // Mock filesystem error
-        const fsModule = vi.mocked(await import('fs/promises'));
-        fsModule.rm = vi.fn().mockRejectedValue(new Error('Permission denied'));
+        const fsModule = jest.mocked(await import('fs/promises'));
+        fsModule.rm = jest.fn().mockRejectedValue(new Error('Permission denied'));
 
         // Should still succeed even if file cleanup fails
         const response = await request(app)
@@ -633,7 +624,7 @@ describe('Upload Cancel API Tests', () => {
 
     describe('Monitoring and Logging', () => {
       it('should log cancellation events', async () => {
-        const consoleSpy = vi
+        const consoleSpy = jest
           .spyOn(console, 'log')
           .mockImplementation(() => {});
 
@@ -644,7 +635,7 @@ describe('Upload Cancel API Tests', () => {
       });
 
       it('should log errors appropriately', async () => {
-        const consoleErrorSpy = vi
+        const consoleErrorSpy = jest
           .spyOn(console, 'error')
           .mockImplementation(() => {});
 

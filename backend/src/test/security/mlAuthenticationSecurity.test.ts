@@ -20,7 +20,7 @@ import { createTestUser, createTestTokens } from '../utils/jwtTestUtils';
 
 // Mock dependencies for controlled testing
 jest.mock('../../middleware/rateLimiter', () => ({
-  apiLimiter: jest.fn((req, res, next) => next()),
+  apiLimiter: jest.fn((req: any, res: any, next: any) => next()),
 }));
 
 jest.mock('../../utils/logger', () => ({
@@ -54,12 +54,13 @@ describe('ML Authentication Security Tests', () => {
     jest.clearAllMocks();
 
     // Default successful authentication mock
-    mockedAuthenticate.mockImplementation((req: any, res, next) => {
+    mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
       req.user = validUser;
       next();
-    });
+      return Promise.resolve();
+    } as any);
 
-    mockedApiLimiter.mockImplementation((req, res, next) => next());
+    mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => next() as any);
   });
 
   describe('OWASP A01: Broken Access Control', () => {
@@ -70,10 +71,11 @@ describe('ML Authentication Security Tests', () => {
         email: 'other@example.com',
       });
 
-      mockedAuthenticate.mockImplementation((req: any, res, next) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         req.user = otherUser;
         next();
-      });
+        return Promise.resolve();
+      } as any);
 
       // Attempt to access queue with different user credentials
       const response = await request(app)
@@ -97,10 +99,11 @@ describe('ML Authentication Security Tests', () => {
         },
       });
 
-      mockedAuthenticate.mockImplementation((req: any, res, next) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         req.user = regularUser;
         next();
-      });
+        return Promise.resolve();
+      } as any);
 
       // Regular user should not be able to access admin-level ML operations
       const response = await request(app)
@@ -124,13 +127,13 @@ describe('ML Authentication Security Tests', () => {
     });
 
     it('should not leak information in error responses', async () => {
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Chybí autentizační token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       const response = await request(app).get('/api/ml/queue').expect(401);
 
@@ -151,13 +154,13 @@ describe('ML Authentication Security Tests', () => {
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0.weak', // Weak signature
       ];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       for (const token of weakTokens) {
         const response = await request(app)
@@ -174,13 +177,13 @@ describe('ML Authentication Security Tests', () => {
       const tamperedPayload =
         'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJhZG1pbiIsImVtYWlsIjoiYWRtaW5AZXhhbXBsZS5jb20ifQ.signature';
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       const response = await request(app)
         .get('/api/ml/queue')
@@ -195,13 +198,13 @@ describe('ML Authentication Security Tests', () => {
       const rsaToken =
         'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySWQiOiJ0ZXN0In0.invalid';
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       const response = await request(app)
         .get('/api/ml/queue')
@@ -222,13 +225,13 @@ describe('ML Authentication Security Tests', () => {
         "' OR 1=1 --",
       ];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       for (const payload of sqlInjectionPayloads) {
         const response = await request(app)
@@ -249,13 +252,13 @@ describe('ML Authentication Security Tests', () => {
         '{"$gt": ""}',
       ];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       for (const payload of noSqlPayloads) {
         const response = await request(app)
@@ -276,13 +279,13 @@ describe('ML Authentication Security Tests', () => {
         '&& whoami',
       ];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       for (const payload of commandInjectionPayloads) {
         const response = await request(app)
@@ -299,7 +302,7 @@ describe('ML Authentication Security Tests', () => {
     it('should implement proper rate limiting on authentication', async () => {
       let rateLimitCalls = 0;
 
-      mockedApiLimiter.mockImplementation((req, res, next) => {
+      mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => {
         rateLimitCalls++;
         if (rateLimitCalls > 100) {
           return res.status(429).json({
@@ -309,7 +312,7 @@ describe('ML Authentication Security Tests', () => {
           });
         }
         next();
-      });
+      } as any);
 
       // Simulate rapid requests
       const promises = Array.from({ length: 10 }, () =>
@@ -351,13 +354,13 @@ describe('ML Authentication Security Tests', () => {
   describe('OWASP A05: Security Misconfiguration', () => {
     it('should not expose stack traces in production', async () => {
       // Mock an internal error
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(500).json({
           success: false,
           message: 'Chyba autentizace',
           source: 'Auth',
         });
-      });
+      } as any);
 
       const response = await request(app)
         .get('/api/ml/queue')
@@ -396,13 +399,13 @@ describe('ML Authentication Security Tests', () => {
         'undefined.undefined.undefined',
       ];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       for (const token of vulnerableTokens) {
         const response = await request(app)
@@ -426,13 +429,13 @@ describe('ML Authentication Security Tests', () => {
         'Bearer 0',
       ];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       for (const attempt of bypassAttempts) {
         const response = await request(app)
@@ -470,11 +473,11 @@ describe('ML Authentication Security Tests', () => {
             message: 'Neplatný token',
             source: 'Auth',
           });
-        })
+        } as any)
         .mockImplementationOnce((req: any, res, next) => {
           req.user = validUser;
           next();
-        });
+        } as any);
 
       // Failed attempt
       await request(app)
@@ -494,13 +497,13 @@ describe('ML Authentication Security Tests', () => {
 
   describe('OWASP A09: Security Logging Failures', () => {
     it('should log authentication failures without exposing sensitive data', async () => {
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       const response = await request(app)
         .get('/api/ml/queue')
@@ -520,13 +523,13 @@ describe('ML Authentication Security Tests', () => {
         'Bearer {{7*7}}',
       ];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       for (const token of suspiciousTokens) {
         await request(app)
@@ -548,13 +551,13 @@ describe('ML Authentication Security Tests', () => {
         'Bearer ftp://internal.server/file',
       ];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       for (const payload of ssrfPayloads) {
         const response = await request(app)
@@ -602,13 +605,13 @@ describe('ML Authentication Security Tests', () => {
         (_, i) => `invalid-token-${i}`
       );
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       const promises = attackTokens.map(token =>
         request(app)
@@ -628,13 +631,13 @@ describe('ML Authentication Security Tests', () => {
     it('should prevent information disclosure through error timing', async () => {
       const times: number[] = [];
 
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(401).json({
           success: false,
           message: 'Neplatný token',
           source: 'Auth',
         });
-      });
+      } as any);
 
       // Measure response times for different invalid tokens
       for (let i = 0; i < 10; i++) {
@@ -680,13 +683,13 @@ describe('ML Authentication Security Tests', () => {
     });
 
     it('should sanitize error messages', async () => {
-      mockedAuthenticate.mockImplementation((req, res) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any) => {
         res.status(500).json({
           success: false,
           message: 'Chyba autentizace',
           source: 'Auth',
         });
-      });
+      } as any);
 
       const response = await request(app)
         .get('/api/ml/queue')

@@ -3,17 +3,17 @@
  * Tests the complete flow including WebSocket updates and database writes
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
 import { SegmentationService } from '../segmentationService';
 import { PrismaClient } from '@prisma/client';
 import { getStorageProvider } from '../../storage';
 import axios from 'axios';
 import { EventEmitter } from 'events';
 
-vi.mock('axios');
-vi.mock('../../storage');
-vi.mock('@prisma/client');
-vi.mock('../../utils/logger');
+jest.mock('axios');
+jest.mock('../../storage');
+jest.mock('@prisma/client');
+jest.mock('../../utils/logger');
 
 // Mock WebSocket emitter for testing race conditions
 class MockWebSocketEmitter extends EventEmitter {
@@ -34,14 +34,14 @@ describe('SegmentationService - Integration Tests', () => {
   beforeEach(() => {
     // Setup mocks
     mockAxiosInstance = {
-      post: vi.fn(),
-      get: vi.fn(),
+      post: jest.fn(),
+      get: jest.fn(),
     };
     (axios.create as any).mockReturnValue(mockAxiosInstance);
 
     mockStorage = {
-      getBuffer: vi.fn().mockResolvedValue(Buffer.from('test-image-data')),
-      uploadFile: vi
+      getBuffer: jest.fn().mockResolvedValue(Buffer.from('test-image-data')),
+      uploadFile: jest
         .fn()
         .mockResolvedValue({ url: 'https://storage.example.com/file' }),
     };
@@ -50,15 +50,15 @@ describe('SegmentationService - Integration Tests', () => {
     // Mock Prisma for database operations
     mockPrisma = {
       segmentationResult: {
-        create: vi.fn(),
-        findUnique: vi.fn(),
-        update: vi.fn(),
+        create: jest.fn(),
+        findUnique: jest.fn(),
+        update: jest.fn(),
       },
       image: {
-        update: vi.fn(),
-        findMany: vi.fn(),
+        update: jest.fn(),
+        findMany: jest.fn(),
       },
-      $transaction: vi.fn(callback => callback(mockPrisma)),
+      $transaction: jest.fn(callback => callback(mockPrisma)),
     };
 
     mockWsEmitter = new MockWebSocketEmitter();
@@ -68,7 +68,7 @@ describe('SegmentationService - Integration Tests', () => {
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('Race Condition Handling', () => {
@@ -380,7 +380,7 @@ describe('SegmentationService - Integration Tests', () => {
       mockAxiosInstance.post.mockResolvedValueOnce(mlResponse);
 
       // Simulate WebSocket disconnection (no events emitted)
-      mockWsEmitter.emit = vi.fn().mockImplementation(() => {
+      mockWsEmitter.emit = jest.fn().mockImplementation(() => {
         throw new Error('WebSocket disconnected');
       });
 

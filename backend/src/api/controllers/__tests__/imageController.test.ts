@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 import { ImageController } from '../imageController';
@@ -9,39 +9,39 @@ import { authenticate } from '../../../middleware/auth';
 import { prisma } from '../../../db/index';
 
 // Mock dependencies
-vi.mock('../../../services/imageService');
-vi.mock('../../../services/thumbnailService');
-vi.mock('../../../middleware/auth');
-vi.mock('../../../db/index', () => ({
+jest.mock('../../../services/imageService');
+jest.mock('../../../services/thumbnailService');
+jest.mock('../../../middleware/auth');
+jest.mock('../../../db/index', () => ({
   prisma: {
     project: {
-      findFirst: vi.fn(),
-      findUnique: vi.fn(),
+      findFirst: jest.fn(),
+      findUnique: jest.fn(),
     },
     image: {
-      findMany: vi.fn(),
-      count: vi.fn(),
-      create: vi.fn(),
-      createMany: vi.fn(),
-      delete: vi.fn(),
-      deleteMany: vi.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
+      create: jest.fn(),
+      createMany: jest.fn(),
+      delete: jest.fn(),
+      deleteMany: jest.fn(),
     },
     segmentation: {
-      findUnique: vi.fn(),
+      findUnique: jest.fn(),
     },
   },
 }));
 
-const MockImageService = vi.mocked(ImageService);
+const MockImageService = jest.mocked(ImageService);
 // MockThumbnailService - kept for potential future use
-const mockAuthenticate = vi.mocked(authenticate);
+const mockAuthenticate = jest.mocked(authenticate);
 
 describe('ImageController - Large Batch Upload Tests', () => {
   let app: express.Application;
   let imageController: ImageController;
-  let mockImageService: ReturnType<typeof vi.mocked<typeof ImageService>>;
+  let mockImageService: ReturnType<typeof jest.mocked<typeof ImageService>>;
   let _mockThumbnailService: ReturnType<
-    typeof vi.mocked<typeof ThumbnailService>
+    typeof jest.mocked<typeof ThumbnailService>
   >;
 
   const mockUser = {
@@ -86,17 +86,17 @@ describe('ImageController - Large Batch Upload Tests', () => {
 
     // Setup mocks
     mockImageService = {
-      uploadImages: vi.fn(),
-      getProjectImages: vi.fn(),
-      getImageById: vi.fn(),
-      deleteImage: vi.fn(),
-      deleteBatch: vi.fn(),
-      getImageStats: vi.fn(),
-      getBrowserCompatibleImage: vi.fn(),
+      uploadImages: jest.fn(),
+      getProjectImages: jest.fn(),
+      getImageById: jest.fn(),
+      deleteImage: jest.fn(),
+      deleteBatch: jest.fn(),
+      getImageStats: jest.fn(),
+      getBrowserCompatibleImage: jest.fn(),
     };
 
     mockThumbnailService = {
-      generateThumbnail: vi.fn(),
+      generateThumbnail: jest.fn(),
     };
 
     MockImageService.prototype.uploadImages = mockImageService.uploadImages;
@@ -133,11 +133,11 @@ describe('ImageController - Large Batch Upload Tests', () => {
     );
 
     // Mock prisma
-    vi.mocked(prisma.project.findFirst).mockResolvedValue(mockProject);
+    jest.mocked(prisma.project.findFirst).mockResolvedValue(mockProject);
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
   describe('Upload Limits and Validation', () => {
@@ -297,7 +297,7 @@ describe('ImageController - Large Batch Upload Tests', () => {
     });
 
     it('should validate project ownership before upload', async () => {
-      vi.mocked(prisma.project.findFirst).mockResolvedValue(null);
+      jest.mocked(prisma.project.findFirst).mockResolvedValue(null);
 
       const response = await request(app)
         .post('/api/projects/invalid-project/images')
@@ -467,7 +467,7 @@ describe('ImageController - Large Batch Upload Tests', () => {
     });
 
     it('should clean up resources on upload failure', async () => {
-      const cleanupSpy = vi.fn();
+      const cleanupSpy = jest.fn();
 
       mockImageService.uploadImages.mockImplementation(async () => {
         cleanupSpy(); // Simulate cleanup call
@@ -594,7 +594,7 @@ describe('ImageController - Large Batch Upload Tests', () => {
       const progressEvents: number[] = [];
 
       // Mock WebSocket emission (would need actual WebSocket mock)
-      const mockEmitProgress = vi.fn((progress: number) => {
+      const mockEmitProgress = jest.fn((progress: number) => {
         progressEvents.push(progress);
       });
 

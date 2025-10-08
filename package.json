@@ -22,7 +22,7 @@
     "validate:types": "npm run type-check:all && npm run type-coverage",
     "precommit": "lint-staged",
     "preview": "vite preview",
-    "test": "vitest",
+    "test": "NODE_OPTIONS='--max-old-space-size=4096' vitest --run --reporter=verbose --maxWorkers=1 --pool=forks",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "playwright test",
