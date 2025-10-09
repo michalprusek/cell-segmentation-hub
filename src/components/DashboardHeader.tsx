@@ -14,6 +14,30 @@ import { useSegmentationQueue } from '@/hooks/useSegmentationQueue';
 import { logger } from '@/lib/logger';
 import { fetchWithRetry } from '@/lib/httpUtils';
 
+// TypeScript interface for ML health check response
+interface MLHealthData {
+  status: string;
+  uptime: number;
+  models: {
+    loaded: number;
+    failed: number;
+  };
+  memory: {
+    used: string;
+    available: string;
+  };
+  gpu: {
+    available: boolean;
+    utilization: string;
+  };
+}
+
+interface MLHealthResponse {
+  success: boolean;
+  data: MLHealthData;
+  message: string;
+}
+
 const DashboardHeader = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [mlServiceStatus, setMlServiceStatus] = useState<
@@ -77,9 +101,10 @@ const DashboardHeader = () => {
         if (response.ok) {
           const contentType = response.headers.get('content-type');
           if (contentType && contentType.includes('application/json')) {
-            const data = await response.json();
-            // Check if we got a successful response from ML health endpoint
-            if (data.status === 'healthy') {
+            const data: MLHealthResponse = await response.json();
+            // Backend wraps ML response in { success, data, message } format
+            // The actual ML status is in data.data.status
+            if (data.success && data.data?.status === 'healthy') {
               setMlServiceStatus('idle');
             } else {
               setMlServiceStatus('error');
