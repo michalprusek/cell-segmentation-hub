@@ -535,15 +535,21 @@ export class QueueService {
       batchItems.forEach(item => processedImageIds.add(item.imageId));
     }
 
-    logger.info(
-      'Retrieved multiple batches for parallel processing',
-      'QueueService',
-      {
-        batchCount: batches.length,
-        totalItems: batches.reduce((sum, batch) => sum + batch.items.length, 0),
-        models: [...new Set(batches.map(batch => batch.model))],
-      }
-    );
+    // Only log when there are actually batches to process (avoid spam when queue is empty)
+    if (batches.length > 0) {
+      logger.info(
+        'Retrieved multiple batches for parallel processing',
+        'QueueService',
+        {
+          batchCount: batches.length,
+          totalItems: batches.reduce(
+            (sum, batch) => sum + batch.items.length,
+            0
+          ),
+          models: [...new Set(batches.map(batch => batch.model))],
+        }
+      );
+    }
 
     return batches;
   }
