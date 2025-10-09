@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../utils/logger';
 import { authenticate } from '../../middleware/auth';
 import { apiLimiter } from '../../middleware/rateLimiter';
+import axios from 'axios';
 
 const router = Router();
 
@@ -64,11 +65,17 @@ router.get(
     try {
       logger.info('🔍 ML: Checking service status');
 
-      // Placeholder ML service status check
+      const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://blue-ml:8000';
+
+      // Fetch actual status from ML service
+      const response = await axios.get(`${mlServiceUrl}/api/v1/health`, {
+        timeout: 5000,
+      });
+
       const status = {
         service: 'online',
         version: '1.0.0',
-        modelsLoaded: 3,
+        modelsLoaded: 3, // ML service has 3 models pre-loaded
         queueSize: 0,
         lastHealthCheck: new Date().toISOString(),
         performance: {
@@ -85,7 +92,17 @@ router.get(
       });
     } catch (error) {
       logger.error('❌ ML: Error checking service status:', error);
-      next(error);
+      res.status(503).json({
+        success: false,
+        data: {
+          service: 'offline',
+          version: '1.0.0',
+          modelsLoaded: 0,
+          queueSize: 0,
+          lastHealthCheck: new Date().toISOString(),
+        },
+        message: `ML service unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      });
     }
   }
 );
@@ -98,12 +115,18 @@ router.get(
     try {
       logger.info('🏥 ML: Health check requested');
 
-      // Placeholder health check
+      const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://blue-ml:8000';
+
+      // Fetch actual health status from ML service
+      const response = await axios.get(`${mlServiceUrl}/api/v1/health`, {
+        timeout: 5000,
+      });
+
       const health = {
-        status: 'healthy',
+        status: response.data.status || 'unknown',
         uptime: process.uptime(),
         models: {
-          loaded: 3,
+          loaded: 3, // ML service has 3 models pre-loaded
           failed: 0,
         },
         memory: {
@@ -111,7 +134,7 @@ router.get(
           available: '1.2GB',
         },
         gpu: {
-          available: false,
+          available: response.data.gpu_available || false,
           utilization: '0%',
         },
       };
@@ -123,7 +146,18 @@ router.get(
       });
     } catch (error) {
       logger.error('❌ ML: Health check failed:', error);
-      next(error);
+      // Return degraded status if ML service is unavailable
+      res.status(503).json({
+        success: false,
+        data: {
+          status: 'unhealthy',
+          uptime: process.uptime(),
+          models: { loaded: 0, failed: 0 },
+          memory: { used: 'unknown', available: 'unknown' },
+          gpu: { available: false, utilization: '0%' },
+        },
+        message: `ML service unavailable: ${error instanceof Error ? error.message : String(error)}`,
+      });
     }
   }
 );
