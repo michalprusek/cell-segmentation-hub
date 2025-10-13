@@ -107,9 +107,9 @@ export interface EmailRetryConfig {
   globalTimeout?: number;
 }
 
-// Default retry configuration - optimized for 45s total timeout
+// Default retry configuration - optimized for UTIA SMTP
 export const DEFAULT_EMAIL_RETRY_CONFIG: EmailRetryConfig = {
-  maxRetries: getNumericEnvVar('EMAIL_MAX_RETRIES', 2),
+  maxRetries: getNumericEnvVar('EMAIL_MAX_RETRIES', 2), // 2 attempts total (1st + 1 retry)
   initialDelay: getNumericEnvVar('EMAIL_RETRY_INITIAL_DELAY', 1000),
   maxDelay: getNumericEnvVar('EMAIL_RETRY_MAX_DELAY', 10000),
   backoffFactor: parseFloat(process.env.EMAIL_RETRY_BACKOFF_FACTOR || '2'),

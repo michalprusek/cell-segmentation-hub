@@ -12,6 +12,7 @@ export interface ShareInvitationSimpleData {
   acceptUrl: string;
   expiresAt: Date;
   locale?: string;
+  message?: string;
 }
 
 interface ShareInvitationSimpleTranslations {
@@ -19,6 +20,7 @@ interface ShareInvitationSimpleTranslations {
   greeting: string;
   shared: string;
   project: string;
+  messageLabel: string;
   clickHere: string;
   orCopy: string;
   expires: string;
@@ -31,6 +33,7 @@ const translations: Record<string, ShareInvitationSimpleTranslations> = {
     greeting: 'Hello!',
     shared: 'shared a project with you',
     project: 'Project',
+    messageLabel: 'Message',
     clickHere: 'Accept invitation',
     orCopy: 'Or copy this link',
     expires: 'Expires',
@@ -41,6 +44,7 @@ const translations: Record<string, ShareInvitationSimpleTranslations> = {
     greeting: 'Dobrý den!',
     shared: 's vámi sdílel projekt',
     project: 'Projekt',
+    messageLabel: 'Zpráva',
     clickHere: 'Přijmout pozvánku',
     orCopy: 'Nebo zkopírujte odkaz',
     expires: 'Platnost',
@@ -51,6 +55,7 @@ const translations: Record<string, ShareInvitationSimpleTranslations> = {
     greeting: '¡Hola!',
     shared: 'compartió un proyecto contigo',
     project: 'Proyecto',
+    messageLabel: 'Mensaje',
     clickHere: 'Aceptar invitación',
     orCopy: 'O copia el enlace',
     expires: 'Expira',
@@ -61,6 +66,7 @@ const translations: Record<string, ShareInvitationSimpleTranslations> = {
     greeting: 'Hallo!',
     shared: 'hat ein Projekt mit Ihnen geteilt',
     project: 'Projekt',
+    messageLabel: 'Nachricht',
     clickHere: 'Einladung annehmen',
     orCopy: 'Oder kopieren Sie den Link',
     expires: 'Gültig bis',
@@ -71,6 +77,7 @@ const translations: Record<string, ShareInvitationSimpleTranslations> = {
     greeting: 'Bonjour !',
     shared: 'a partagé un projet avec vous',
     project: 'Projet',
+    messageLabel: 'Message',
     clickHere: 'Accepter l\'invitation',
     orCopy: 'Ou copiez le lien',
     expires: 'Expire',
@@ -81,6 +88,7 @@ const translations: Record<string, ShareInvitationSimpleTranslations> = {
     greeting: '您好！',
     shared: '与您共享了一个项目',
     project: '项目',
+    messageLabel: '消息',
     clickHere: '接受邀请',
     orCopy: '或复制链接',
     expires: '有效期至',
@@ -128,11 +136,16 @@ export function generateShareInvitationSimpleHTML(
   const formattedExpiry = formatDateShort(data.expiresAt, locale);
 
   // Ultra-minimal HTML - NO styles, NO fancy divs
+  const messageHtml = data.message
+    ? `<p><b>${t.messageLabel}:</b><br>${escapeHtml(data.message)}</p>`
+    : '';
+
   return `<html>
 <body>
 <h2>${t.greeting}</h2>
 <p>${safeEmail} ${t.shared}:</p>
 <p><b>${t.project}: ${safeProjectTitle}</b></p>
+${messageHtml}
 <p><a href="${safeUrl}">${t.clickHere}</a></p>
 <p>${t.orCopy}:<br>${safeUrl}</p>
 <p><b>${t.expires}: ${formattedExpiry}</b></p>
@@ -151,12 +164,14 @@ export function generateShareInvitationSimpleText(
   const t = translations[locale] || translations.en;
   const formattedExpiry = formatDateShort(data.expiresAt, locale);
 
+  const messageText = data.message ? `\n${t.messageLabel}: ${data.message}\n` : '';
+
   return `${t.greeting}
 
 ${data.sharedByEmail} ${t.shared}:
 
 ${t.project}: ${data.projectTitle}
-
+${messageText}
 ${t.clickHere}:
 ${data.acceptUrl}
 
