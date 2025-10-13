@@ -103,23 +103,44 @@ if command -v npx >/dev/null 2>&1 && [ -f "package.json" ]; then
 fi
 
 # 8. Check TypeScript (both frontend and backend)
-if [ -f "tsconfig.json" ] && command -v npx >/dev/null 2>&1; then
+# For Docker-first projects, try to run in Docker if containers are available
+if [ -f "tsconfig.json" ]; then
     echo "⏳ Checking frontend TypeScript..."
-    if ! npx tsc --noEmit; then
-        echo -e "${RED}❌ Error: Frontend TypeScript compilation failed${NC}"
-        exit 1
+    if docker compose ps frontend | grep -q "Up"; then
+        if ! docker compose exec -T frontend npx tsc --noEmit; then
+            echo -e "${RED}❌ Error: Frontend TypeScript compilation failed${NC}"
+            exit 1
+        fi
+    elif command -v npx >/dev/null 2>&1 && [ -w "node_modules" ] 2>/dev/null; then
+        if ! npx tsc --noEmit; then
+            echo -e "${RED}❌ Error: Frontend TypeScript compilation failed${NC}"
+            exit 1
+        fi
+    else
+        echo -e "${YELLOW}⚠️  Warning: Skipping frontend TypeScript check (Docker not running and no accessible node_modules)${NC}"
+        WARNINGS=$((WARNINGS + 1))
     fi
 fi
 
-if [ -f "backend/tsconfig.json" ] && command -v npx >/dev/null 2>&1; then
+if [ -f "backend/tsconfig.json" ]; then
     echo "⏳ Checking backend TypeScript..."
-    cd backend
-    if ! npx tsc --noEmit; then
-        echo -e "${RED}❌ Error: Backend TypeScript compilation failed${NC}"
+    if docker compose ps backend | grep -q "Up"; then
+        if ! docker compose exec -T backend npx tsc --noEmit; then
+            echo -e "${RED}❌ Error: Backend TypeScript compilation failed${NC}"
+            exit 1
+        fi
+    elif command -v npx >/dev/null 2>&1 && [ -w "backend/node_modules" ] 2>/dev/null; then
+        cd backend
+        if ! npx tsc --noEmit; then
+            echo -e "${RED}❌ Error: Backend TypeScript compilation failed${NC}"
+            cd ..
+            exit 1
+        fi
         cd ..
-        exit 1
+    else
+        echo -e "${YELLOW}⚠️  Warning: Skipping backend TypeScript check (Docker not running and no accessible node_modules)${NC}"
+        WARNINGS=$((WARNINGS + 1))
     fi
-    cd ..
 fi
 
 # 9. Check Python files (if changed)

@@ -4,26 +4,11 @@ import { logger } from '../utils/logger';
 import * as EmailService from './emailService';
 import { User, ProjectShare, Project, Profile } from '@prisma/client';
 import { ShareByEmailData, ShareByLinkData } from '../types/validation';
-
-/**
- * Escape HTML special characters to prevent XSS
- */
-function escapeHtml(str: string | null | undefined): string {
-  if (!str) {
-    return '';
-  }
-
-  const htmlEscapeMap: Record<string, string> = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#39;',
-    '/': '&#x2F;',
-  };
-
-  return str.replace(/[&<>"'/]/g, char => htmlEscapeMap[char] || char);
-}
+import {
+  generateShareInvitationSimpleHTML,
+  generateShareInvitationSimpleText,
+  getShareInvitationSimpleSubject,
+} from '../templates/shareInvitationEmailSimple';
 
 export interface ShareWithDetails extends ProjectShare {
   sharedWith?: User;
@@ -745,14 +730,26 @@ async function sendShareInvitationEmail(
       return; // Skip email sending for link-only shares
     }
 
-    // TODO: Use sharer's preferred language in future implementation
-    // const sharerLocale = share.sharedBy.profile?.preferredLang || 'en';
+    // Get user's preferred language from profile
+    const locale = share.sharedBy.profile?.preferredLang || 'en';
+
+    // Calculate expiry date (default 7 days if not set)
+    const expiresAt = share.tokenExpiry || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    // Prepare simple template data (hermes.utia.cas.cz has 1000 char limit)
+    const templateData = {
+      projectTitle: share.project.title,
+      sharedByEmail: share.sharedBy.email,
+      acceptUrl,
+      expiresAt,
+      locale,
+    };
 
     const emailOptions: EmailService.EmailServiceOptions = {
       to: share.email,
-      subject: `${share.sharedBy.email} shared a project with you - SpheroSeg`,
-      html: generateShareInvitationHTML(share, acceptUrl, message),
-      text: generateShareInvitationText(share, acceptUrl, message),
+      subject: getShareInvitationSimpleSubject(share.project.title, locale),
+      html: generateShareInvitationSimpleHTML(templateData),
+      text: generateShareInvitationSimpleText(templateData),
     };
 
     EmailService.sendEmail(emailOptions)
@@ -783,283 +780,4 @@ async function sendShareInvitationEmail(
     );
     throw error;
   }
-}
-
-/**
- * Generate HTML content for share invitation email
- */
-function generateShareInvitationHTML(
-  share: ProjectShare & { project: Project; sharedBy: User },
-  acceptUrl: string,
-  message?: string
-): string {
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-            body { 
-                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-                line-height: 1.6;
-                color: #1a202c;
-                background-color: #f7fafc;
-                margin: 0;
-                padding: 0;
-            }
-            .wrapper {
-                background-color: #f7fafc;
-                padding: 40px 20px;
-            }
-            .container { 
-                max-width: 600px;
-                margin: 0 auto;
-                background: white;
-                border-radius: 12px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
-                overflow: hidden;
-            }
-            .header { 
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                padding: 40px 30px;
-                text-align: center;
-            }
-            .header h1 {
-                margin: 0;
-                font-size: 28px;
-                font-weight: 600;
-                text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .header p {
-                margin: 10px 0 0 0;
-                opacity: 0.95;
-                font-size: 16px;
-            }
-            .content { 
-                padding: 40px 30px;
-            }
-            .greeting {
-                font-size: 18px;
-                color: #2d3748;
-                margin-bottom: 20px;
-            }
-            .project-card {
-                background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
-                border: 1px solid #e2e8f0;
-                border-radius: 10px;
-                padding: 25px;
-                margin: 30px 0;
-            }
-            .project-title {
-                font-size: 22px;
-                font-weight: 600;
-                color: #2d3748;
-                margin: 0 0 10px 0;
-            }
-            .project-description {
-                color: #4a5568;
-                margin: 10px 0;
-                line-height: 1.5;
-            }
-            .shared-by {
-                display: flex;
-                align-items: center;
-                gap: 12px;
-                margin-bottom: 25px;
-                padding: 15px;
-                background: #f8fafc;
-                border-radius: 8px;
-            }
-            .avatar {
-                width: 48px;
-                height: 48px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                color: white;
-                font-weight: 600;
-                font-size: 20px;
-            }
-            .shared-by-text {
-                flex: 1;
-            }
-            .shared-by-name {
-                font-weight: 600;
-                color: #2d3748;
-                font-size: 16px;
-            }
-            .shared-by-label {
-                color: #718096;
-                font-size: 14px;
-                margin-top: 2px;
-            }
-            .message-box {
-                background: #fef5e7;
-                border-left: 4px solid #f39c12;
-                padding: 20px;
-                margin: 25px 0;
-                border-radius: 6px;
-            }
-            .message-quote {
-                color: #2d3748;
-                font-style: italic;
-                font-size: 16px;
-                line-height: 1.6;
-            }
-            .button-container {
-                text-align: center;
-                margin: 35px 0;
-            }
-            .button { 
-                display: inline-block;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white !important;
-                padding: 14px 32px;
-                text-decoration: none;
-                border-radius: 8px;
-                font-weight: 600;
-                font-size: 16px;
-                box-shadow: 0 4px 14px rgba(102, 126, 234, 0.4);
-                transition: transform 0.2s, box-shadow 0.2s;
-            }
-            .button:hover {
-                transform: translateY(-2px);
-                box-shadow: 0 6px 20px rgba(102, 126, 234, 0.5);
-            }
-            .url-box {
-                background: #f8fafc;
-                border: 1px solid #e2e8f0;
-                padding: 12px;
-                border-radius: 6px;
-                word-break: break-all;
-                font-family: 'Monaco', 'Menlo', monospace;
-                font-size: 13px;
-                color: #4a5568;
-                margin: 15px 0;
-            }
-            .footer { 
-                border-top: 2px solid #f0f4f8;
-                padding: 30px;
-                text-align: center;
-                background: #fafbfc;
-            }
-            .footer-logo {
-                font-size: 20px;
-                font-weight: 600;
-                color: #667eea;
-                margin-bottom: 10px;
-            }
-            .footer-text {
-                font-size: 14px;
-                color: #718096;
-                line-height: 1.5;
-            }
-            .footer-links {
-                margin-top: 20px;
-            }
-            .footer-link {
-                color: #667eea;
-                text-decoration: none;
-                margin: 0 10px;
-                font-size: 14px;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="wrapper">
-            <div class="container">
-                <div class="header">
-                    <h1>🔬 Project Invitation</h1>
-                    <p>You've been invited to collaborate!</p>
-                </div>
-                <div class="content">
-                    <div class="greeting">Hello there! 👋</div>
-                    
-                    <div class="shared-by">
-                        <div class="avatar">${escapeHtml(share.sharedBy.email).charAt(0).toUpperCase()}</div>
-                        <div class="shared-by-text">
-                            <div class="shared-by-name">${escapeHtml(share.sharedBy.email)}</div>
-                            <div class="shared-by-label">invited you to collaborate</div>
-                        </div>
-                    </div>
-                    
-                    <div class="project-card">
-                        <div class="project-title">📁 ${escapeHtml(share.project.title)}</div>
-                        ${share.project.description ? `<div class="project-description">${escapeHtml(share.project.description)}</div>` : ''}
-                    </div>
-                    
-                    ${
-                      message
-                        ? `
-                    <div class="message-box">
-                        <div class="message-quote">"${escapeHtml(message)}"</div>
-                    </div>
-                    `
-                        : ''
-                    }
-                    
-                    <p style="color: #4a5568; text-align: center; margin: 30px 0;">
-                        Join SpheroSeg to start analyzing and collaborating on this project.
-                    </p>
-                    
-                    <div class="button-container">
-                        <a href="${acceptUrl}" class="button">Accept Invitation</a>
-                    </div>
-                    
-                    <p style="color: #718096; font-size: 14px; text-align: center;">
-                        Can't click the button? Copy this link to your browser:
-                    </p>
-                    <div class="url-box">${acceptUrl}</div>
-                    
-                    <p style="color: #a0aec0; font-size: 13px; text-align: center; margin-top: 25px;">
-                        This invitation link will remain active until you accept it or it's revoked by the sender.
-                    </p>
-                </div>
-                <div class="footer">
-                    <div class="footer-logo">SpheroSeg</div>
-                    <div class="footer-text">
-                        Advancing cell analysis through collaboration
-                    </div>
-                    <div class="footer-links">
-                        <a href="${process.env.FRONTEND_URL}" class="footer-link">Visit Platform</a>
-                        <a href="${process.env.FRONTEND_URL}/help" class="footer-link">Get Help</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </body>
-    </html>
-  `;
-}
-
-/**
- * Generate text content for share invitation email
- */
-function generateShareInvitationText(
-  share: ProjectShare & { project: Project; sharedBy: User },
-  acceptUrl: string,
-  message?: string
-): string {
-  return `
-Project Shared With You
-
-Hello!
-
-${share.sharedBy.email} has shared a project with you on SpheroSeg.
-
-Project: ${share.project.title}
-${share.project.description ? `Description: ${share.project.description}` : ''}
-
-${message ? `Message: "${message}"` : ''}
-
-Click this link to accept the invitation:
-${acceptUrl}
-
-Best regards,
-SpheroSeg Team
-  `.trim();
 }

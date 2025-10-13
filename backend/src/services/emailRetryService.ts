@@ -345,7 +345,7 @@ async function processEmailQueue(): Promise<void> {
       });
 
       // For UTIA SMTP, use extended timeout configuration
-      const isUTIA = process.env.SMTP_HOST === 'mail.utia.cas.cz';
+      const isUTIA = process.env.SMTP_HOST === 'hermes.utia.cas.cz';
 
       // Don't modify environment variables - pass timeout config directly
       const timeoutConfig = isUTIA
@@ -416,7 +416,7 @@ async function processEmailQueue(): Promise<void> {
       queuedEmail.lastError = (error as Error).message;
 
       // For UTIA SMTP, be more persistent with retries
-      const maxRetries = process.env.SMTP_HOST === 'mail.utia.cas.cz' ? 5 : 3;
+      const maxRetries = process.env.SMTP_HOST === 'hermes.utia.cas.cz' ? 5 : 3;
 
       if (queuedEmail.attempts < maxRetries) {
         logger.warn('Queued email failed, will retry', 'EmailRetryService', {
@@ -460,7 +460,7 @@ async function processEmailQueue(): Promise<void> {
     }
 
     // Longer delay between processing UTIA queue items to avoid overwhelming server
-    const delay = process.env.SMTP_HOST === 'mail.utia.cas.cz' ? 5000 : 1000;
+    const delay = process.env.SMTP_HOST === 'hermes.utia.cas.cz' ? 5000 : 1000;
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 
