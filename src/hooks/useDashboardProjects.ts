@@ -66,13 +66,16 @@ export const useDashboardProjects = ({
         // Check if request was aborted before making API calls
         if (controller.signal.aborted) return;
 
+        // Add cache-busting timestamp to prevent browser cache
+        const timestamp = Date.now();
+
         // Fetch owned projects first
-        const ownedResponse = await apiClient.getProjects();
+        const ownedResponse = await apiClient.getProjects({ _t: timestamp });
 
         // Try to fetch shared projects, but don't fail if it errors
         let sharedResponse = [];
         try {
-          const response = await apiClient.getSharedProjects();
+          const response = await apiClient.getSharedProjects({ _t: timestamp });
           // Handle both array and wrapped response formats
           if (Array.isArray(response)) {
             sharedResponse = response;
@@ -373,6 +376,18 @@ export const useDashboardProjects = ({
     );
   }, []);
 
+  // Handle optimistic updates for project properties (thumbnail, imageCount, etc.)
+  const updateProjectOptimistically = useCallback(
+    (projectId: string, updates: Partial<Project>) => {
+      setProjects(prevProjects =>
+        prevProjects.map(project =>
+          project.id === projectId ? { ...project, ...updates } : project
+        )
+      );
+    },
+    []
+  );
+
   // Handle refetch events from failed operations
   useEffect(() => {
     const handleRefetchNeeded = () => {
@@ -422,5 +437,6 @@ export const useDashboardProjects = ({
     fetchError,
     fetchProjects,
     removeProjectOptimistically,
+    updateProjectOptimistically,
   };
 };

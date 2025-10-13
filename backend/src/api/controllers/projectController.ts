@@ -116,6 +116,11 @@ export const getProjects = asyncHandler(
         queryParams
       );
 
+      // Prevent browser caching of project lists
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
+
       ResponseHelper.paginated(
         res,
         result.projects,

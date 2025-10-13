@@ -824,112 +824,46 @@ const ProjectDetail = () => {
             }
           }, 2000); // 2 second delay for batching
         } else {
-          // Single operation - refresh immediately but only one call
+          // Single operation - fetch polygon data for display enrichment
+          // IMPORTANT: Do NOT change status based on polygon loading
+          // Backend WebSocket status is the Single Source of Truth (SSOT)
           (async () => {
-            logger.debug('Refreshing segmentation data', 'ProjectDetail', {
-              imageId: update.imageId,
-            });
+            logger.debug(
+              'Fetching polygon data for display enrichment',
+              'ProjectDetail',
+              {
+                imageId: update.imageId,
+                backendStatus: update.status,
+                normalizedStatus: normalizedStatus,
+              }
+            );
 
             try {
-              // Only call refreshImageSegmentation which should fetch everything needed
-              // DO NOT make duplicate apiClient.getImage call
+              // Fetch polygons to show on image card (async, non-blocking)
+              // This is purely for UI enrichment - does NOT affect status
               await refreshImageSegmentationRef.current(update.imageId);
 
-              // Wait for state update
-              await new Promise(resolve => setTimeout(resolve, 200));
-
-              // Get the current segmentation data from state after refresh
-              updateImagesRef.current(prevImages => {
-                const currentImg = prevImages.find(
-                  i => i.id === update.imageId
-                );
-                const hasPolygons =
-                  currentImg?.segmentationResult?.polygons &&
-                  currentImg.segmentationResult.polygons.length > 0;
-
-                logger.debug('Image polygon count', 'ProjectDetail', {
+              logger.info(
+                '✅ Polygon data loaded successfully',
+                'ProjectDetail',
+                {
                   imageId: update.imageId,
-                  polygonCount: hasPolygons
-                    ? currentImg.segmentationResult.polygons.length
-                    : 0,
-                });
-
-                return prevImages.map(prevImg => {
-                  if (prevImg.id === update.imageId) {
-                    const finalStatus = hasPolygons
-                      ? 'completed'
-                      : 'no_segmentation';
-
-                    return {
-                      ...prevImg,
-                      segmentationStatus: finalStatus,
-                      // Keep the segmentation data that was already updated by refreshImageSegmentation
-                      // Force re-render by updating a timestamp
-                      lastSegmentationUpdate: Date.now(),
-                      // Keep existing thumbnail URL - it should be updated via WebSocket
-                      thumbnail_url: prevImg.thumbnail_url,
-                      // Preserve segmentation thumbnails
-                      segmentationThumbnailPath:
-                        prevImg.segmentationThumbnailPath,
-                      segmentationThumbnailUrl:
-                        prevImg.segmentationThumbnailUrl,
-                      updatedAt: new Date(),
-                    };
-                  }
-                  return prevImg;
-                });
-              });
-            } catch (error) {
-              logger.error('Failed to refresh image data', error);
-
-              // Even if refresh fails, ensure correct status based on segmentation data
-              updateImagesRef.current(prevImages => {
-                const currentImg = prevImages.find(
-                  i => i.id === update.imageId
-                );
-                const hasPolygons =
-                  currentImg?.segmentationResult?.polygons &&
-                  currentImg.segmentationResult.polygons.length > 0;
-
-                return prevImages.map(prevImg => {
-                  if (prevImg.id === update.imageId) {
-                    return {
-                      ...prevImg,
-                      segmentationStatus: hasPolygons
-                        ? 'completed'
-                        : 'no_segmentation',
-                      // Preserve segmentation thumbnails
-                      segmentationThumbnailPath:
-                        prevImg.segmentationThumbnailPath,
-                      segmentationThumbnailUrl:
-                        prevImg.segmentationThumbnailUrl,
-                      updatedAt: new Date(),
-                    };
-                  }
-                  return prevImg;
-                });
-              });
-            }
-          })().catch(err => {
-            logger.error('Unhandled error in segmentation refresh IIFE', err);
-            // Ensure state is updated even on unhandled rejection
-            updateImagesRef.current(prevImages =>
-              prevImages.map(prevImg => {
-                if (prevImg.id === lastUpdate.imageId) {
-                  return {
-                    ...prevImg,
-                    segmentationStatus: 'error',
-                    // Preserve segmentation thumbnails even on error
-                    segmentationThumbnailPath:
-                      prevImg.segmentationThumbnailPath,
-                    segmentationThumbnailUrl: prevImg.segmentationThumbnailUrl,
-                    updatedAt: new Date(),
-                  };
+                  statusKept: normalizedStatus, // Status stays what backend said
                 }
-                return prevImg;
-              })
-            );
-          });
+              );
+            } catch (error) {
+              // Log error but DON'T change status - backend status is SSOT
+              logger.error(
+                '⚠️ Failed to fetch polygons (status unchanged)',
+                error,
+                'ProjectDetail',
+                {
+                  imageId: update.imageId,
+                  keptStatus: normalizedStatus,
+                }
+              );
+            }
+          })();
         }
       }
 
@@ -1184,8 +1118,19 @@ const ProjectDetail = () => {
         });
 
         // Emit event to notify Dashboard about image count change
+        const firstImage = formattedImages[0];
+        const thumbnail =
+          firstImage?.thumbnailUrl ||
+          firstImage?.thumbnail_url ||
+          firstImage?.displayUrl ||
+          '/placeholder.svg';
+
         const event = new CustomEvent('project-images-updated', {
-          detail: { projectId: id, newImageCount: formattedImages.length },
+          detail: {
+            projectId: id,
+            imageCount: formattedImages.length,
+            thumbnail: thumbnail,
+          },
         });
         window.dispatchEvent(event);
       } catch (error) {

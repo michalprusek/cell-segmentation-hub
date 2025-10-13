@@ -77,38 +77,25 @@ export async function sendMailWithTimeout(
   // Parse timeout from environment - use 60s default for slow server-side processing
   const EMAIL_TIMEOUT = parseEmailTimeout('EMAIL_TIMEOUT', 60000);
 
-  // Create an AbortController for better timeout handling
-  const controller = new AbortController();
+  // Create timeout promise that ALWAYS rejects after timeout
+  const timeoutPromise = new Promise<SMTPTransport.SentMessageInfo>(
+    (_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            `Email send timeout after ${EMAIL_TIMEOUT / 1000} seconds (UTIA SMTP can be slow)`
+          )
+        );
+      }, EMAIL_TIMEOUT);
+    }
+  );
 
-  return new Promise<SMTPTransport.SentMessageInfo>((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-      reject(
-        new Error(`Email send timeout after ${EMAIL_TIMEOUT / 1000} seconds`)
-      );
-    }, EMAIL_TIMEOUT);
+  // Create email sending promise
+  const sendPromise = transporter.sendMail(mailOptions);
 
-    // Add signal to mail options if supported
-    const mailOptionsWithSignal = {
-      ...mailOptions,
-      // Note: nodemailer doesn't support AbortSignal directly, but this prepares for future updates
-    };
-
-    transporter
-      .sendMail(mailOptionsWithSignal)
-      .then((result: SMTPTransport.SentMessageInfo) => {
-        clearTimeout(timeoutId);
-        if (!controller.signal.aborted) {
-          resolve(result);
-        }
-      })
-      .catch((error: Error) => {
-        clearTimeout(timeoutId);
-        if (!controller.signal.aborted) {
-          reject(error);
-        }
-      });
-  });
+  // Race between sending and timeout - whichever finishes first wins
+  // This GUARANTEES timeout will fire even if nodemailer hangs
+  return Promise.race([sendPromise, timeoutPromise]);
 }
 
 /**

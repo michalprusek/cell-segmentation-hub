@@ -80,8 +80,24 @@ export async function shareProjectByEmail(
       },
     });
 
-    // Send email invitation
-    await sendShareInvitationEmail(share, data.message);
+    // Send email invitation (fire-and-forget to prevent blocking)
+    // Email is queued for background processing to avoid UTIA SMTP delays
+    sendShareInvitationEmail(share, data.message)
+      .then(() => {
+        logger.info('Share invitation email sent successfully', 'SharingService', {
+          shareId: share.id,
+          email: share.email,
+        });
+      })
+      .catch(emailError => {
+        logger.error(
+          'Failed to send share invitation email:',
+          emailError as Error,
+          'SharingService',
+          { shareId: share.id, email: share.email }
+        );
+        // Email failed but user already got response - share link is still valid
+      });
 
     logger.info(
       `Project shared via email: ${projectId} with ${data.email}`,
