@@ -23,10 +23,15 @@ if command -v npm >/dev/null 2>&1; then
         if [ $AUDIT_RESULT -gt 0 ]; then
             echo -e "${YELLOW}⚠️  Security vulnerabilities found in dependencies${NC}"
             echo "Run 'npm audit' for details"
-            read -p "Continue push anyway? (y/N) " -n 1 -r
-            echo
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                exit 1
+            # In non-interactive mode, just warn and continue
+            if [ -t 0 ]; then
+                read -p "Continue push anyway? (y/N) " -n 1 -r </dev/tty
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    exit 1
+                fi
+            else
+                echo -e "${YELLOW}⚠️  Continuing in non-interactive mode${NC}"
             fi
         fi
     }
@@ -63,10 +68,15 @@ if [ -f "vitest.config.ts" ] && command -v npm >/dev/null 2>&1; then
     # Run tests with coverage
     npm run test:coverage 2>/dev/null || {
         echo -e "${YELLOW}⚠️  Some tests are failing${NC}"
-        read -p "Push with failing tests? (y/N) " -n 1 -r
-        echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-            exit 1
+        # In non-interactive mode, just warn and continue
+        if [ -t 0 ]; then
+            read -p "Push with failing tests? (y/N) " -n 1 -r </dev/tty
+            echo
+            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                exit 1
+            fi
+        else
+            echo -e "${YELLOW}⚠️  Continuing in non-interactive mode${NC}"
         fi
     }
 fi
