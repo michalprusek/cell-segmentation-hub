@@ -852,46 +852,37 @@ const ProjectDetail = () => {
             }
           }, 2000); // 2 second delay for batching
         } else {
-          // Single operation - refresh polygon data only, trust WebSocket status
-          // CRITICAL: Backend WebSocket is SSOT for segmentation status.
-          // This fetch only enriches polygon data - status comes exclusively from WebSocket events.
-          // Do NOT modify segmentationStatus based on polygon presence/absence.
+          // Single operation - fetch polygon data for display enrichment
+          // IMPORTANT: Do NOT change status based on polygon loading
+          // Backend WebSocket status is the Single Source of Truth (SSOT)
           (async () => {
-            logger.debug('Status from backend (SSOT)', 'ProjectDetail', {
-              imageId: update.imageId,
-              backendStatus: update.status,
-              normalizedStatus: normalizedStatus,
-              willFetchPolygons: true,
-            });
+            logger.debug(
+              'Fetching polygon data for display enrichment',
+              'ProjectDetail',
+              {
+                imageId: update.imageId,
+                backendStatus: update.status,
+                normalizedStatus: normalizedStatus,
+              }
+            );
 
             try {
-              // Fetch polygon data to enrich the image
-              // DO NOT change status - backend WebSocket is SSOT
+              // Fetch polygons to show on image card (async, non-blocking)
+              // This is purely for UI enrichment - does NOT affect status
               await refreshImageSegmentationRef.current(update.imageId);
 
-              // Trigger re-render by updating timestamp
-              // This ensures UI updates when polygon data loads
-              updateImagesRef.current(prevImages =>
-                prevImages.map(img =>
-                  img.id === update.imageId
-                    ? { ...img, lastSegmentationUpdate: Date.now() }
-                    : img
-                )
-              );
-
               logger.info(
-                '✅ Segmentation data refreshed successfully',
+                '✅ Polygon data loaded successfully',
                 'ProjectDetail',
                 {
                   imageId: update.imageId,
-                  status: normalizedStatus, // Keep WebSocket status
+                  statusKept: normalizedStatus, // Status stays what backend said
                 }
               );
             } catch (error) {
-              // Log error but DON'T change status
-              // Backend WebSocket status is still authoritative
+              // Log error but DON'T change status - backend status is SSOT
               logger.error(
-                '⚠️ Failed to fetch polygon data (status unchanged)',
+                '⚠️ Failed to fetch polygons (status unchanged)',
                 error,
                 'ProjectDetail',
                 {
@@ -1155,8 +1146,19 @@ const ProjectDetail = () => {
         });
 
         // Emit event to notify Dashboard about image count change
+        const firstImage = formattedImages[0];
+        const thumbnail =
+          firstImage?.thumbnailUrl ||
+          firstImage?.thumbnail_url ||
+          firstImage?.displayUrl ||
+          '/placeholder.svg';
+
         const event = new CustomEvent('project-images-updated', {
-          detail: { projectId: id, newImageCount: formattedImages.length },
+          detail: {
+            projectId: id,
+            imageCount: formattedImages.length,
+            thumbnail: thumbnail,
+          },
         });
         window.dispatchEvent(event);
       } catch (error) {

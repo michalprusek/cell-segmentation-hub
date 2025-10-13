@@ -122,7 +122,7 @@ function getLocaleString(date: Date, locale: string): string {
  * - Minimal HTML structure
  * - No complex styling
  * - Plain text-like appearance
- * - Proven to work with mail.utia.cas.cz
+ * - Proven to work with hermes.utia.cas.cz
  */
 export const generateSimplePasswordResetHTML = (
   data: PasswordResetEmailData

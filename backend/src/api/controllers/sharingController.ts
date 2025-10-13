@@ -430,6 +430,11 @@ export const getSharedProjects = asyncHandler(
 
       // Handle case when no shares exist
       if (!shares || shares.length === 0) {
+        // Prevent browser caching even for empty results
+        res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
+
         ResponseHelper.success(res, [], 'No shared projects found');
         return;
       }
@@ -484,6 +489,11 @@ export const getSharedProjects = asyncHandler(
           sharedAt: share.createdAt,
           isShared: true,
         }));
+
+      // Prevent browser caching of shared project lists
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.set('Pragma', 'no-cache');
+      res.set('Expires', '0');
 
       ResponseHelper.success(
         res,

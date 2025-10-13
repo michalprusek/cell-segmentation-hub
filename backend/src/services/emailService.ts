@@ -15,6 +15,7 @@ import {
 } from '../templates/passwordResetEmailMultilang';
 import { generateVerificationEmailHTML } from '../templates/verificationEmail';
 import { escapeHtml, sanitizeUrl } from '../utils/escapeHtml';
+import { isUTIASmtpServer, SMTP_HOSTS } from '../constants/email';
 
 export interface EmailConfig {
   service: 'smtp' | 'sendgrid';
@@ -109,7 +110,7 @@ export function init(): void {
       // Configure TLS settings for UTIA SMTP (port 25 with STARTTLS)
       if (process.env.SMTP_IGNORE_TLS !== 'true') {
         // Special handling for UTIA SMTP server
-        if (config.smtp.host === 'mail.utia.cas.cz') {
+        if (config.smtp.host === SMTP_HOSTS.UTIA_BACKUP || config.smtp.host === SMTP_HOSTS.UTIA) {
           transportConfig.requireTLS = true; // Force STARTTLS for UTIA
           transportConfig.tls = {
             // UTIA server certificate validation - disable for production
@@ -151,11 +152,11 @@ export function init(): void {
         requireTLS: transportConfig.requireTLS,
         hasAuth: !!transportConfig.auth,
         authDisabled: process.env.SMTP_AUTH === 'false',
-        isUTIAConfig: config.smtp.host === 'mail.utia.cas.cz',
+        isUTIAConfig: isUTIASmtpServer(),
       });
 
       // For UTIA SMTP, initialize transporter in next tick to avoid blocking
-      if (config.smtp.host === 'mail.utia.cas.cz') {
+      if (isUTIASmtpServer()) {
         process.nextTick(() => {
           _transporter = nodemailer.createTransport(transportConfig);
           logger.info(
@@ -226,7 +227,7 @@ export async function sendEmail(
     }
 
     // For UTIA SMTP, auto-queue sharing emails to prevent blocking
-    if (process.env.SMTP_HOST === 'mail.utia.cas.cz' && allowQueue) {
+    if (isUTIASmtpServer() && allowQueue) {
       const isShareEmail =
         options.subject?.includes('shared a project with you') ||
         options.subject?.includes('Share invitation') ||
@@ -406,7 +407,7 @@ export async function sendPasswordResetEmail(
     };
 
     // For UTIA SMTP server with extreme delays (>2 min response), always queue password reset emails
-    if (process.env.SMTP_HOST === 'mail.utia.cas.cz') {
+    if (isUTIASmtpServer()) {
       logger.info(
         'Password reset email queued for background processing (UTIA SMTP)',
         'EmailService',
@@ -469,7 +470,7 @@ export async function sendVerificationEmail(
     };
 
     // For UTIA SMTP, always queue verification emails to prevent blocking
-    if (process.env.SMTP_HOST === 'mail.utia.cas.cz') {
+    if (isUTIASmtpServer()) {
       const queueId = queueEmailForRetry(emailOptions);
       logger.info(
         'Verification email queued for background processing (UTIA SMTP)',
