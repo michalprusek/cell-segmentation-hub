@@ -9,6 +9,86 @@ import { logger } from '../utils/logger';
 import { getNumericEnvVar } from '../utils/envValidator';
 import { EmailServiceOptions } from './emailService';
 import { retryService, RetryService } from '../utils/retryService';
+import {
+  EMAIL_RETRY,
+  EMAIL_TIMEOUTS,
+  getMaxRetryAttempts,
+  getQueueProcessingDelay,
+  isUTIASmtpServer,
+} from '../constants/email';
+
+// Track successfully sent emails to prevent duplicates
+interface SentEmailRecord {
+  to: string;
+  subject: string;
+  sentAt: Date;
+}
+
+// Keep records for 24 hours
+const sentEmails = new Map<string, SentEmailRecord>();
+
+/**
+ * Generate unique key for email deduplication
+ */
+function getEmailKey(to: string, subject: string): string {
+  return `${to.toLowerCase()}:${subject.toLowerCase()}`;
+}
+
+/**
+ * Check if email was already sent recently
+ */
+function wasEmailAlreadySent(to: string, subject: string): boolean {
+  const key = getEmailKey(to, subject);
+  const record = sentEmails.get(key);
+
+  if (!record) return false;
+
+  const age = Date.now() - record.sentAt.getTime();
+  if (age > EMAIL_RETRY.SENT_EMAIL_TTL) {
+    sentEmails.delete(key); // Expired, remove
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Record that email was sent successfully
+ */
+function recordEmailSent(to: string, subject: string): void {
+  const key = getEmailKey(to, subject);
+  sentEmails.set(key, {
+    to,
+    subject,
+    sentAt: new Date(),
+  });
+
+  logger.info('Email recorded as sent successfully', 'EmailRetryService', {
+    to,
+    subject,
+    key,
+  });
+}
+
+/**
+ * Cleanup old sent email records periodically
+ */
+setInterval(() => {
+  const now = Date.now();
+  let cleaned = 0;
+
+  for (const [key, record] of Array.from(sentEmails.entries())) {
+    const age = now - record.sentAt.getTime();
+    if (age > EMAIL_RETRY.SENT_EMAIL_TTL) {
+      sentEmails.delete(key);
+      cleaned++;
+    }
+  }
+
+  if (cleaned > 0) {
+    logger.info('Cleaned up old sent email records', 'EmailRetryService', { cleaned });
+  }
+}, EMAIL_RETRY.CLEANUP_INTERVAL);
 
 // Helper function to parse email timeout values - optimized defaults
 export function parseEmailTimeout(
@@ -242,7 +322,9 @@ interface QueuedEmail {
   options: EmailServiceOptions;
   createdAt: Date;
   attempts: number;
+  globalAttempts: number; // Track attempts across all cycles
   lastError?: string;
+  nextRetryAt?: Date; // Track when next retry is scheduled
 }
 
 const emailQueue: QueuedEmail[] = [];
@@ -252,16 +334,41 @@ let queueProcessing = false;
  * Add email to background queue
  */
 export function queueEmailForRetry(options: EmailServiceOptions): string {
+  // Check if this email was already sent successfully
+  const subject = options.subject || 'No subject';
+  if (wasEmailAlreadySent(options.to, subject)) {
+    logger.warn('Email already sent recently, skipping queue', 'EmailRetryService', {
+      to: options.to,
+      subject,
+    });
+    return 'duplicate-skipped';
+  }
+
+  // Check if already in queue
+  const existingInQueue = emailQueue.find(
+    email => email.options.to === options.to && email.options.subject === subject
+  );
+
+  if (existingInQueue) {
+    logger.warn('Email already in queue, skipping duplicate', 'EmailRetryService', {
+      to: options.to,
+      subject,
+      existingId: existingInQueue.id,
+    });
+    return existingInQueue.id;
+  }
+
   const queuedEmail: QueuedEmail = {
     id: `email_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     options,
     createdAt: new Date(),
     attempts: 0,
+    globalAttempts: 0, // Initialize global attempts
   };
 
   emailQueue.push(queuedEmail);
 
-  logger.info('Email queued for background retry', 'EmailRetryService', {
+  logger.info('Email added to retry queue', 'EmailRetryService', {
     id: queuedEmail.id,
     to: options.to,
     subject: options.subject,
@@ -282,7 +389,7 @@ export function queueEmailForRetry(options: EmailServiceOptions): string {
     setImmediate(() => {
       processEmailQueue().catch(error => {
         logger.error(
-          'Error processing email queue:',
+          'Error starting email queue processing:',
           error as Error,
           'EmailRetryService'
         );
@@ -303,136 +410,156 @@ export function queueEmailForRetry(options: EmailServiceOptions): string {
  */
 async function processEmailQueue(): Promise<void> {
   if (queueProcessing) {
-    logger.info(
-      'Email queue processing already running, skipping',
-      'EmailRetryService'
-    );
+    logger.warn('Queue processing already in progress, skipping', 'EmailRetryService');
     return;
   }
-  queueProcessing = true;
 
+  queueProcessing = true;
   logger.info('Starting email queue processing', 'EmailRetryService', {
     queueLength: emailQueue.length,
   });
 
+  const MAX_QUEUE_AGE_MS = EMAIL_RETRY.QUEUE_TTL; // 1 hour TTL for queued emails
+  const MAX_GLOBAL_ATTEMPTS = EMAIL_RETRY.MAX_GLOBAL_ATTEMPTS; // Maximum total attempts across all cycles
+
   while (emailQueue.length > 0) {
     const queuedEmail = emailQueue.shift();
-    if (!queuedEmail) {
-      continue;
+
+    if (!queuedEmail) continue;
+
+    // Check TTL - if email is too old, discard it
+    const ageMs = Date.now() - queuedEmail.createdAt.getTime();
+    if (ageMs > MAX_QUEUE_AGE_MS) {
+      logger.error(
+        'Email expired in queue (TTL exceeded)',
+        new Error(`Email TTL exceeded: ${Math.round(ageMs / 60000)} minutes old`),
+        'EmailRetryService',
+        {
+          id: queuedEmail.id,
+          to: queuedEmail.options.to,
+          ageMinutes: Math.round(ageMs / 60000),
+          maxAgeMinutes: Math.round(MAX_QUEUE_AGE_MS / 60000),
+        }
+      );
+      continue; // Skip this email, it's too old
+    }
+
+    // Check global attempts - prevent infinite retries
+    if (queuedEmail.globalAttempts >= MAX_GLOBAL_ATTEMPTS) {
+      logger.error(
+        'Email exceeded maximum global attempts',
+        new Error(`Email exceeded max attempts: ${queuedEmail.globalAttempts}`),
+        'EmailRetryService',
+        {
+          id: queuedEmail.id,
+          to: queuedEmail.options.to,
+          globalAttempts: queuedEmail.globalAttempts,
+          maxGlobalAttempts: MAX_GLOBAL_ATTEMPTS,
+        }
+      );
+      continue; // Skip this email, too many attempts
+    }
+
+    // Check if already sent (might have been sent in another process)
+    const subject = queuedEmail.options.subject || 'No subject';
+    if (wasEmailAlreadySent(queuedEmail.options.to, subject)) {
+      logger.info('Email already sent, removing from queue', 'EmailRetryService', {
+        id: queuedEmail.id,
+        to: queuedEmail.options.to,
+      });
+      continue; // Skip, already sent
     }
 
     try {
       queuedEmail.attempts++;
+      queuedEmail.globalAttempts++;
 
-      logger.info('Processing queued email', 'EmailRetryService', {
+      logger.info('Attempting to send queued email', 'EmailRetryService', {
         id: queuedEmail.id,
         to: queuedEmail.options.to,
-        subject: queuedEmail.options.subject,
         attempt: queuedEmail.attempts,
+        globalAttempt: queuedEmail.globalAttempts,
       });
 
-      // For UTIA SMTP, use extended timeout configuration
-      const isUTIA = process.env.SMTP_HOST === 'hermes.utia.cas.cz';
+      // Import the email service dynamically to avoid circular dependency
+      const { sendEmail } = await import('./emailService');
 
-      // Don't modify environment variables - pass timeout config directly
-      const timeoutConfig = isUTIA
-        ? {
-            timeout: 300000, // 5 minutes for UTIA
-            socketTimeout: 300000,
-          }
-        : {
-            timeout: parseInt(process.env.EMAIL_TIMEOUT || '60000'),
-            socketTimeout: parseInt(
-              process.env.SMTP_SOCKET_TIMEOUT_MS || '60000'
-            ),
-          };
+      // Send email without queuing (allowQueue = false to prevent infinite loop)
+      await sendEmail(queuedEmail.options, false);
 
-      if (isUTIA) {
-        logger.info(
-          'Using extended timeouts for UTIA SMTP background processing',
-          'EmailRetryService',
-          {
-            emailTimeout: '300s',
-            socketTimeout: '300s',
-          }
-        );
-      }
+      // SUCCESS! Record that email was sent
+      recordEmailSent(queuedEmail.options.to, subject);
 
-      try {
-        // Import the email service dynamically to avoid circular dependency
-        const { sendEmail } = await import('./emailService');
+      logger.info('Queued email sent successfully', 'EmailRetryService', {
+        id: queuedEmail.id,
+        to: queuedEmail.options.to,
+        attempts: queuedEmail.attempts,
+        globalAttempts: queuedEmail.globalAttempts,
+      });
 
-        logger.info('Sending email from queue', 'EmailRetryService', {
+      // Email successfully sent, don't re-queue
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      queuedEmail.lastError = errorMessage;
+
+      logger.error(
+        `Failed to send queued email (attempt ${queuedEmail.attempts}):`,
+        error as Error,
+        'EmailRetryService',
+        {
           id: queuedEmail.id,
           to: queuedEmail.options.to,
           attempt: queuedEmail.attempts,
-          timeoutConfig,
-        });
+          globalAttempt: queuedEmail.globalAttempts,
+        }
+      );
 
-        // Send email without queuing (allowQueue = false to prevent infinite loop)
-        await sendEmail(queuedEmail.options, false);
+      // Determine max retries based on SMTP host
+      const maxRetries = getMaxRetryAttempts();
 
-        logger.info(
-          'Queued email processed successfully',
-          'EmailRetryService',
-          {
-            id: queuedEmail.id,
-            to: queuedEmail.options.to,
-            subject: queuedEmail.options.subject,
-            attempt: queuedEmail.attempts,
-            isUTIA,
-          }
-        );
-      } catch (sendError) {
-        // Log detailed error for debugging
-        logger.error(
-          'Failed to send email from queue:',
-          sendError as Error,
-          'EmailRetryService',
-          {
-            id: queuedEmail.id,
-            to: queuedEmail.options.to,
-            attempt: queuedEmail.attempts,
-            errorMessage: (sendError as Error).message,
-            errorStack: (sendError as Error).stack,
-          }
-        );
-        throw sendError;
-      }
-    } catch (error) {
-      queuedEmail.lastError = (error as Error).message;
-
-      // For UTIA SMTP, be more persistent with retries
-      const maxRetries = process.env.SMTP_HOST === 'hermes.utia.cas.cz' ? 5 : 3;
-
-      if (queuedEmail.attempts < maxRetries) {
-        logger.warn('Queued email failed, will retry', 'EmailRetryService', {
-          id: queuedEmail.id,
-          attempt: queuedEmail.attempts,
-          maxRetries,
-          error: queuedEmail.lastError,
-          willRetryIn: `${Math.min(queuedEmail.attempts * 60, 600)} seconds`,
-        });
-
+      if (
+        queuedEmail.attempts < maxRetries &&
+        queuedEmail.globalAttempts < MAX_GLOBAL_ATTEMPTS
+      ) {
         // Re-queue with exponential backoff delay
-        const delay = Math.min(queuedEmail.attempts * 60000, 600000); // 1-10 minute delay
-        setTimeout(() => {
-          emailQueue.push(queuedEmail);
+        const delay = Math.min(queuedEmail.attempts * EMAIL_RETRY.INITIAL_DELAY, EMAIL_RETRY.MAX_DELAY);
+        queuedEmail.nextRetryAt = new Date(Date.now() + delay);
 
-          // Restart queue processing if it stopped
-          if (!queueProcessing) {
-            processEmailQueue().catch(err => {
-              logger.error(
-                'Error restarting email queue processing:',
-                err as Error,
-                'EmailRetryService'
-              );
+        logger.warn('Email will be retried', 'EmailRetryService', {
+          id: queuedEmail.id,
+          to: queuedEmail.options.to,
+          attempt: queuedEmail.attempts,
+          globalAttempt: queuedEmail.globalAttempts,
+          retryInSeconds: Math.round(delay / 1000),
+          nextRetryAt: queuedEmail.nextRetryAt.toISOString(),
+        });
+
+        setTimeout(() => {
+          // Double-check before re-queuing
+          if (!wasEmailAlreadySent(queuedEmail.options.to, subject)) {
+            emailQueue.push(queuedEmail);
+
+            // Restart queue processing if it stopped
+            if (!queueProcessing) {
+              processEmailQueue().catch(err => {
+                logger.error(
+                  'Error restarting email queue processing:',
+                  err as Error,
+                  'EmailRetryService'
+                );
+              });
+            }
+          } else {
+            logger.info('Email was sent during retry delay, not re-queuing', 'EmailRetryService', {
+              id: queuedEmail.id,
+              to: queuedEmail.options.to,
             });
           }
         }, delay);
       } else {
+        // Permanently failed - DO NOT RE-QUEUE
         logger.error(
-          'Queued email permanently failed after all retries:',
+          'Queued email permanently failed after all retries',
           new Error(queuedEmail.lastError || 'Unknown error'),
           'EmailRetryService',
           {
@@ -440,19 +567,24 @@ async function processEmailQueue(): Promise<void> {
             to: queuedEmail.options.to,
             subject: queuedEmail.options.subject,
             attempts: queuedEmail.attempts,
-            maxRetries,
+            globalAttempts: queuedEmail.globalAttempts,
+            lastError: queuedEmail.lastError,
           }
         );
+
+        // Email is already removed from queue by shift(), so nothing more to do
       }
     }
 
-    // Longer delay between processing UTIA queue items to avoid overwhelming server
-    const delay = process.env.SMTP_HOST === 'hermes.utia.cas.cz' ? 5000 : 1000;
-    await new Promise(resolve => setTimeout(resolve, delay));
+    // Delay between processing emails
+    const delayBetweenEmails = getQueueProcessingDelay();
+    await new Promise(resolve => setTimeout(resolve, delayBetweenEmails));
   }
 
   queueProcessing = false;
-  logger.info('Email queue processing completed', 'EmailRetryService');
+  logger.info('Email queue processing completed', 'EmailRetryService', {
+    remainingInQueue: emailQueue.length,
+  });
 }
 
 /**
@@ -461,7 +593,14 @@ async function processEmailQueue(): Promise<void> {
 export function getQueueStatus(): {
   length: number;
   processing: boolean;
-  emails: Array<{ id: string; to: string; subject: string; attempts: number }>;
+  emails: Array<{
+    id: string;
+    to: string;
+    subject: string;
+    attempts: number;
+    globalAttempts: number;
+    nextRetryAt?: string;
+  }>;
 } {
   return {
     length: emailQueue.length,
@@ -471,6 +610,8 @@ export function getQueueStatus(): {
       to: email.options.to,
       subject: email.options.subject,
       attempts: email.attempts,
+      globalAttempts: email.globalAttempts,
+      nextRetryAt: email.nextRetryAt?.toISOString(),
     })),
   };
 }
@@ -501,3 +642,13 @@ export async function forceProcessQueue(): Promise<void> {
 export function getQueuedEmails(): QueuedEmail[] {
   return [...emailQueue];
 }
+
+/**
+ * Export deduplication helpers for testing
+ */
+export const testHelpers = {
+  wasEmailAlreadySent,
+  recordEmailSent,
+  getEmailKey,
+  clearSentEmails: () => sentEmails.clear(),
+};
