@@ -33,6 +33,7 @@ const Dashboard = () => {
     fetchError,
     fetchProjects,
     removeProjectOptimistically,
+    updateProjectOptimistically,
   } = useDashboardProjects({
     sortField,
     sortDirection,
@@ -140,23 +141,45 @@ const Dashboard = () => {
       };
     })();
 
-    // Use the same debounced handler for all events
-    const handleProjectUpdate = debouncedFetchProjects;
+    // Handle image updates with optimistic UI updates
+    const handleImageUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      const detail = customEvent.detail;
 
-    window.addEventListener('project-created', handleProjectUpdate);
-    window.addEventListener('project-deleted', handleProjectUpdate);
-    window.addEventListener('project-unshared', handleProjectUpdate);
-    window.addEventListener('project-images-updated', handleProjectUpdate);
-    window.addEventListener('project-image-deleted', handleProjectUpdate);
+      if (!detail?.projectId) return;
+
+      // Update project immediately with new image count and thumbnail
+      const updates: Record<string, any> = {};
+
+      if (detail.imageCount !== undefined) {
+        updates.imageCount = detail.imageCount;
+      }
+      if (detail.remainingCount !== undefined) {
+        updates.imageCount = detail.remainingCount;
+      }
+      if (detail.thumbnail !== undefined) {
+        updates.thumbnail = detail.thumbnail;
+      }
+      if (detail.newThumbnail !== undefined) {
+        updates.thumbnail = detail.newThumbnail;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        updateProjectOptimistically(detail.projectId, updates);
+      }
+    };
+
+    // Listen for project-created events (not delete/unshare - those use direct callback)
+    window.addEventListener('project-created', debouncedFetchProjects);
+    window.addEventListener('project-images-updated', handleImageUpdate);
+    window.addEventListener('project-image-deleted', handleImageUpdate);
 
     return () => {
-      window.removeEventListener('project-created', handleProjectUpdate);
-      window.removeEventListener('project-deleted', handleProjectUpdate);
-      window.removeEventListener('project-unshared', handleProjectUpdate);
-      window.removeEventListener('project-images-updated', handleProjectUpdate);
-      window.removeEventListener('project-image-deleted', handleProjectUpdate);
+      window.removeEventListener('project-created', debouncedFetchProjects);
+      window.removeEventListener('project-images-updated', handleImageUpdate);
+      window.removeEventListener('project-image-deleted', handleImageUpdate);
     };
-  }, [fetchProjects]);
+  }, [fetchProjects, updateProjectOptimistically]);
 
   // Refresh projects when WebSocket reports segmentation completion
   useEffect(() => {
@@ -205,7 +228,12 @@ const Dashboard = () => {
 
   const handleProjectUpdate = useCallback(
     (projectId: string, action: string) => {
-      if (action === 'access-denied') {
+      // Remove project from UI immediately for delete, unshare, and access-denied actions
+      if (
+        action === 'delete' ||
+        action === 'unshare' ||
+        action === 'access-denied'
+      ) {
         removeProjectOptimistically(projectId);
       }
     },

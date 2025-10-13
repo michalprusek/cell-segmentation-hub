@@ -755,6 +755,7 @@ class ApiClient {
     page?: number;
     limit?: number;
     search?: string;
+    _t?: number; // Cache-busting timestamp
   }): Promise<{
     projects: Project[];
     total: number;
@@ -918,7 +919,9 @@ class ApiClient {
     await this.instance.delete(`/projects/${projectId}/shares/${shareId}`);
   }
 
-  async getSharedProjects(): Promise<
+  async getSharedProjects(params?: {
+    _t?: number; // Cache-busting timestamp
+  }): Promise<
     Array<{
       id: string;
       title: string;
@@ -930,7 +933,7 @@ class ApiClient {
       isShared: true;
     }>
   > {
-    const response = await this.instance.get('/shared/projects');
+    const response = await this.instance.get('/shared/projects', { params });
     return this.extractData(response);
   }
 
