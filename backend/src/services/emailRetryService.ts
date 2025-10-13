@@ -113,7 +113,9 @@ export const DEFAULT_EMAIL_RETRY_CONFIG: EmailRetryConfig = {
   initialDelay: getNumericEnvVar('EMAIL_RETRY_INITIAL_DELAY', 1000),
   maxDelay: getNumericEnvVar('EMAIL_RETRY_MAX_DELAY', 10000),
   backoffFactor: parseFloat(process.env.EMAIL_RETRY_BACKOFF_FACTOR || '2'),
-  globalTimeout: getNumericEnvVar('EMAIL_GLOBAL_TIMEOUT', 30000),
+  // Global timeout must be longer than individual send timeout + retries
+  // For UTIA: 300s per attempt * 2 attempts = 660s minimum
+  globalTimeout: getNumericEnvVar('EMAIL_GLOBAL_TIMEOUT', 660000), // 11 minutes for UTIA compatibility
 };
 
 /**
@@ -154,8 +156,11 @@ export async function sendMailWithTimeout(
   },
   mailOptions: SendMailOptions
 ): Promise<SMTPTransport.SentMessageInfo> {
-  // Parse timeout from environment - use 60s default for slow server-side processing
-  const EMAIL_TIMEOUT = parseEmailTimeout('EMAIL_TIMEOUT', 60000);
+  // Use appropriate timeout for current SMTP server
+  // For UTIA: 300s (5 minutes), For others: 30s
+  const EMAIL_TIMEOUT = isUTIASmtpServer() 
+    ? EMAIL_TIMEOUTS.UTIA_SEND 
+    : parseEmailTimeout('EMAIL_TIMEOUT', EMAIL_TIMEOUTS.SEND);
 
   // Create timeout promise that ALWAYS rejects after timeout
   const timeoutPromise = new Promise<SMTPTransport.SentMessageInfo>(
@@ -163,7 +168,7 @@ export async function sendMailWithTimeout(
       setTimeout(() => {
         reject(
           new Error(
-            `Email send timeout after ${EMAIL_TIMEOUT / 1000} seconds (UTIA SMTP can be slow)`
+            `Email send timeout after ${EMAIL_TIMEOUT / 1000} seconds${isUTIASmtpServer() ? ' (UTIA SMTP)' : ''}`
           )
         );
       }, EMAIL_TIMEOUT);

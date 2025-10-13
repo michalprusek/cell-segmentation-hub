@@ -406,31 +406,8 @@ export async function sendPasswordResetEmail(
       text: textContent,
     };
 
-    // For UTIA SMTP server with extreme delays (>2 min response), always queue password reset emails
-    if (isUTIASmtpServer()) {
-      logger.info(
-        'Password reset email queued for background processing (UTIA SMTP)',
-        'EmailService',
-        {
-          userEmail,
-          reason:
-            'UTIA server has >120s response delays after DATA transmission',
-        }
-      );
-
-      const queueId = queueEmailForRetry(emailOptions);
-
-      logger.info('Password reset email queued successfully', 'EmailService', {
-        userEmail,
-        queueId,
-        tokenExpiry: expiresAt,
-      });
-
-      // Return immediately to prevent 504 timeout errors
-      return;
-    }
-
-    // For other SMTP servers, attempt immediate send
+    // Send email directly (like share emails)
+    // If timeout occurs, sendEmail() will automatically queue it
     await sendEmail(emailOptions);
 
     logger.info('Password reset email sent', 'EmailService', { userEmail });
