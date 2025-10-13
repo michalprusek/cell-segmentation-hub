@@ -226,27 +226,20 @@ export async function sendEmail(
       return;
     }
 
-    // For UTIA SMTP, auto-queue sharing emails to prevent blocking
+    // For UTIA SMTP, auto-queue ALL emails to prevent blocking
+    // UTIA server can take 2-10 minutes to process emails, which causes timeouts
     if (isUTIASmtpServer() && allowQueue) {
-      const isShareEmail =
-        options.subject?.includes('shared a project with you') ||
-        options.subject?.includes('Share invitation') ||
-        options.html?.includes('share') ||
-        options.html?.includes('invitation');
-
-      if (isShareEmail) {
-        const queueId = queueEmailForRetry(options);
-        logger.info(
-          'Share email queued for background processing (UTIA SMTP)',
-          'EmailService',
-          {
-            to: options.to,
-            subject: options.subject,
-            queueId,
-          }
-        );
-        return;
-      }
+      const queueId = queueEmailForRetry(options);
+      logger.info(
+        'Email queued for background processing (UTIA SMTP)',
+        'EmailService',
+        {
+          to: options.to,
+          subject: options.subject,
+          queueId,
+        }
+      );
+      return;
     }
 
     ensureInitialized();

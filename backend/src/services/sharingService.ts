@@ -759,6 +759,7 @@ async function sendShareInvitationEmail(
       acceptUrl,
       expiresAt,
       locale,
+      message, // Include user's personal message
     };
 
     const emailOptions: EmailService.EmailServiceOptions = {
