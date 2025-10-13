@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Pre-push hook - runs heavier checks before pushing to remote
 # These checks are too slow for pre-commit but important for quality
