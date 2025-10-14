@@ -272,11 +272,6 @@ export const shareByEmailSchema = z.object({
     .email('Neplatná emailová adresa')
     .max(255, 'Email může mít maximálně 255 znaků')
     .trim(),
-  message: z
-    .string()
-    .max(500, 'Zpráva může mít maximálně 500 znaků')
-    .trim()
-    .optional(),
 });
 
 /**

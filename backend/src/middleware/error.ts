@@ -283,6 +283,22 @@ export class ApiError extends Error {
 }
 
 /**
+ * Custom UserNotFoundError class for email not registered errors
+ * This provides type-safe error detection instead of string matching
+ */
+export class UserNotFoundError extends ApiError {
+  constructor(message: string) {
+    super(message, 404, 'USER_NOT_FOUND');
+    this.name = 'UserNotFoundError';
+
+    // Maintain proper stack trace
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, UserNotFoundError);
+    }
+  }
+}
+
+/**
  * Middleware to handle 404 errors
  */
 export const notFoundHandler = (

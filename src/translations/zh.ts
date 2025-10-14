@@ -1627,8 +1627,6 @@ export default {
     shareByLink: '通过链接分享',
     emailAddress: '邮箱地址',
     enterEmailPlaceholder: '输入邮箱地址',
-    optionalMessage: '可选消息',
-    messagePlaceholder: '在邀请中添加个人消息...',
     sendInvitation: '发送邀请',
     sending: '发送中...',
     emailSent: '邮件邀请已发送！',
@@ -1666,7 +1664,6 @@ export default {
     resendFailed: '重新发送邀请失败',
     revokeAccess: '撤销访问权限',
     cancelInvitation: '取消邀请',
-    reminderMessage: '这是一个提醒，您已被邀请协作一个项目',
     revokeShareFailed: '撤销分享失败',
     failedToLoadShares: '加载分享失败',
     status: {

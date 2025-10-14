@@ -384,11 +384,11 @@ export function queueEmailForRetry(options: EmailServiceOptions): string {
 
   emailQueue.push(queuedEmail);
 
-  // FIXED: Record email as "pending send" to prevent duplicate queueing
-  // This prevents the same email from being queued multiple times if called repeatedly
-  recordEmailSent(options.to, subject);
+  // NOTE: Do NOT call recordEmailSent() here!
+  // Email should only be marked as sent AFTER successful SMTP transmission (line 511)
+  // Marking it here would cause the queue processor to skip it without sending
 
-  logger.info('Email added to retry queue and marked as pending', 'EmailRetryService', {
+  logger.info('Email added to retry queue', 'EmailRetryService', {
     id: queuedEmail.id,
     to: options.to,
     subject: options.subject,
