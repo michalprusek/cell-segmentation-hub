@@ -1750,9 +1750,6 @@ export default {
     shareByLink: 'Per Link teilen',
     emailAddress: 'E-Mail-Adresse',
     enterEmailPlaceholder: 'E-Mail-Adresse eingeben',
-    optionalMessage: 'Optionale Nachricht',
-    messagePlaceholder:
-      'Fügen Sie der Einladung eine persönliche Nachricht hinzu...',
     sendInvitation: 'Einladung senden',
     sending: 'Wird gesendet...',
     emailSent: 'E-Mail-Einladung gesendet!',
@@ -1791,8 +1788,6 @@ export default {
     resendFailed: 'Erneutes Senden der Einladung fehlgeschlagen',
     revokeAccess: 'Zugriff widerrufen',
     cancelInvitation: 'Einladung stornieren',
-    reminderMessage:
-      'Dies ist eine Erinnerung, dass Sie zur Zusammenarbeit an einem Projekt eingeladen wurden',
     revokeShareFailed: 'Widerrufen der Freigabe fehlgeschlagen',
     failedToLoadShares: 'Laden der Freigaben fehlgeschlagen',
     status: {

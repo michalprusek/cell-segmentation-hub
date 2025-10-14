@@ -1801,8 +1801,6 @@ export default {
     shareByLink: 'Sdílet odkazem',
     emailAddress: 'Emailová adresa',
     enterEmailPlaceholder: 'Zadejte emailovou adresu',
-    optionalMessage: 'Volitelná zpráva',
-    messagePlaceholder: 'Přidejte osobní zprávu k pozvánce...',
     sendInvitation: 'Odeslat pozvánku',
     sending: 'Odesílání...',
     emailSent: 'Email pozvánka byla odeslána!',
@@ -1862,8 +1860,6 @@ export default {
     resendFailed: 'Nepodařilo se odeslat pozvánku znovu',
     revokeAccess: 'Zrušit přístup',
     cancelInvitation: 'Zrušit pozvánku',
-    reminderMessage:
-      'Toto je připomínka, že jste byli pozváni ke spolupráci na projektu',
   },
   error: 'Chyba',
   segmentationEditor: {

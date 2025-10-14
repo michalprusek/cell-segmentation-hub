@@ -389,13 +389,10 @@ export async function requestPasswordReset(
     });
 
     if (!user) {
-      // Don't reveal if user exists - always return success
-      logger.info('User not found, returning generic message', 'AuthService', {
+      logger.info('User not found, throwing error', 'AuthService', {
         email: data.email,
       });
-      return {
-        message: 'Pokud email existuje, byl odeslán odkaz pro reset hesla.',
-      };
+      throw new Error('Email není registrován v systému.');
     }
 
     // Generate secure reset token
@@ -484,12 +481,21 @@ export async function requestPasswordReset(
 
     return response;
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
     logger.error(
       'Password reset request failed:',
       error as Error,
       'AuthService',
       { email: data.email }
     );
+    
+    // If it's the "user not found" error, re-throw it as-is so the controller can handle it
+    if (errorMessage.includes('není registrován')) {
+      throw error; // Re-throw the original error
+    }
+    
+    // For other errors, wrap in ApiError
     throw ApiError.internalError('Žádost o reset hesla se nezdařila');
   }
 }

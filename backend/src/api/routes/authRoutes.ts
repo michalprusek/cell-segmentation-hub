@@ -52,7 +52,6 @@ router.post(
 router.post(
   '/request-password-reset',
   passwordResetLimiter, // Strict rate limiting for password reset
-  validateBody(resetPasswordRequestSchema),
   authController.requestPasswordReset
 );
 
@@ -60,7 +59,6 @@ router.post(
 router.post(
   '/forgot-password',
   passwordResetLimiter, // Strict rate limiting for password reset
-  validateBody(resetPasswordRequestSchema),
   authController.requestPasswordReset
 );
 

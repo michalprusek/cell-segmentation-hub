@@ -1739,8 +1739,6 @@ export default {
     shareByLink: 'Partager par lien',
     emailAddress: 'Adresse e-mail',
     enterEmailPlaceholder: "Entrer l'adresse e-mail",
-    optionalMessage: 'Message optionnel',
-    messagePlaceholder: "Ajouter un message personnel à l'invitation...",
     sendInvitation: "Envoyer l'invitation",
     sending: 'Envoi en cours...',
     emailSent: 'Invitation par e-mail envoyée !',
@@ -1779,8 +1777,6 @@ export default {
     resendFailed: "Échec du renvoi de l'invitation",
     revokeAccess: "Révoquer l'accès",
     cancelInvitation: "Annuler l'invitation",
-    reminderMessage:
-      'Ceci est un rappel que vous avez été invité à collaborer sur un projet',
     revokeShareFailed: 'Échec de la révocation du partage',
     failedToLoadShares: 'Échec du chargement des partages',
     status: {
