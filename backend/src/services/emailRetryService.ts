@@ -226,11 +226,22 @@ export async function sendEmailWithRetry(
     const fromConfig = config.from as { name: string; email: string };
     const mailOptions: SendMailOptions = {
       from: `"${fromConfig.name}" <${fromConfig.email}>`,
+      replyTo: `"${fromConfig.name}" <${fromConfig.email}>`, // Explicit Reply-To for Gmail
       to: options.to,
       subject: options.subject,
       html: options.html,
       text: options.text,
       attachments: options.attachments,
+      headers: {
+        'X-Mailer': 'SpheroSeg Email System v1.0',
+        'X-Application': 'Cell Segmentation Hub',
+        'Return-Path': fromConfig.email,
+        'X-Priority': '3', // Normal priority
+        'Importance': 'Normal',
+        // Help Gmail categorize this as transactional email
+        'X-Entity-Type': 'TRANSACTIONAL',
+        'Precedence': 'bulk',
+      },
     };
 
     const result = await sendMailWithTimeout(transporter, mailOptions);
@@ -373,7 +384,11 @@ export function queueEmailForRetry(options: EmailServiceOptions): string {
 
   emailQueue.push(queuedEmail);
 
-  logger.info('Email added to retry queue', 'EmailRetryService', {
+  // FIXED: Record email as "pending send" to prevent duplicate queueing
+  // This prevents the same email from being queued multiple times if called repeatedly
+  recordEmailSent(options.to, subject);
+
+  logger.info('Email added to retry queue and marked as pending', 'EmailRetryService', {
     id: queuedEmail.id,
     to: options.to,
     subject: options.subject,

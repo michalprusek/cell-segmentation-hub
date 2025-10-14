@@ -527,6 +527,9 @@ const ProjectDetail = () => {
   // Separate ref for queue processing timeout to avoid overwriting the function ref
   const queueProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Safety timeout ref to allow cancellation when batch completes
+  const safetyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Store updateImages function in ref to avoid dependency issues
   const updateImagesRef = useRef(updateImages);
   updateImagesRef.current = updateImages;
@@ -663,22 +666,30 @@ const ProjectDetail = () => {
       }
 
       // Skip duplicate updates for the same image with the same status
+      // BUT allow updates if enough time has passed (5 seconds) to handle re-segmentation
+      const now = Date.now();
+      const lastUpdateTime = lastStatusRef.current?.[`${update.imageId}_time`];
+      const timeSinceLastUpdate = lastUpdateTime ? now - lastUpdateTime : Infinity;
+
       if (
         lastStatusRef.current &&
-        lastStatusRef.current[update.imageId] === update.status
+        lastStatusRef.current[update.imageId] === update.status &&
+        timeSinceLastUpdate < 5000 // Only skip if within 5 seconds
       ) {
         logger.debug('⏭️ Skipping duplicate status update', 'ProjectDetail', {
           imageId: update.imageId,
           status: update.status,
+          timeSinceLastUpdate,
         });
         return;
       }
 
-      // Update last status tracking
+      // Update last status tracking with timestamp
       if (!lastStatusRef.current) {
         lastStatusRef.current = {};
       }
       lastStatusRef.current[update.imageId] = update.status;
+      lastStatusRef.current[`${update.imageId}_time`] = now;
 
       logger.debug('Processing WebSocket update', 'ProjectDetail', {
         imageId: update.imageId,
@@ -916,6 +927,17 @@ const ProjectDetail = () => {
               }
             );
             setBatchSubmitted(false);
+
+            // Cancel safety timeout since batch completed normally
+            if (safetyTimeoutRef.current) {
+              clearTimeout(safetyTimeoutRef.current);
+              safetyTimeoutRef.current = null;
+              logger.debug(
+                'Safety timeout cancelled - batch completed normally',
+                'ProjectDetail'
+              );
+            }
+
             // Force reconciliation to catch any missed updates
             reconcileRef.current();
 
@@ -982,6 +1004,11 @@ const ProjectDetail = () => {
       // Clear queue processing timeout
       if (queueProcessingTimeoutRef.current) {
         clearTimeout(queueProcessingTimeoutRef.current);
+      }
+
+      // Clear safety timeout
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
       }
     };
   }, []);
@@ -1350,18 +1377,19 @@ const ProjectDetail = () => {
 
       // Safety timeout to reset batchSubmitted state if WebSocket updates are missed
       // This prevents the button from getting permanently stuck in "adding to queue" state
-      setTimeout(() => {
+      // Store in ref so it can be cancelled when batch completes normally
+      safetyTimeoutRef.current = setTimeout(() => {
         logger.warn(
           'Safety timeout triggered - resetting batchSubmitted state',
           'ProjectDetail',
           {
             projectId: id,
-            timeoutAfterMs: 30000,
+            timeoutAfterMs: 60000,
           }
         );
         setBatchSubmitted(false);
         // Navigation state cleanup removed
-      }, 30000); // 30 second safety timeout
+      }, 60000); // 60 second safety timeout (increased from 30s for large batches)
 
       // Prepare image IDs for batch processing
       const imageIdsWithoutSegmentation = imagesWithoutSegmentation.map(
@@ -1468,6 +1496,13 @@ const ProjectDetail = () => {
       toast.error(t('projects.errorAddingToQueue'));
       // Reset submitted state on error so user can try again
       setBatchSubmitted(false);
+
+      // Cancel safety timeout on error
+      if (safetyTimeoutRef.current) {
+        clearTimeout(safetyTimeoutRef.current);
+        safetyTimeoutRef.current = null;
+      }
+
       // Reset navigation flags on error
       // Navigation state cleanup removed
 
