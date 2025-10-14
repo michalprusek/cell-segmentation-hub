@@ -28,10 +28,11 @@ export const useSegmentationQueue = (
   projectId?: string,
   onSegmentationCancelled?: (data: any) => void,
   onBulkSegmentationCancelled?: (data: any) => void,
-  onBatchCompleted?: () => void
+  onBatchCompleted?: () => void,
+  disableEventHandlers?: boolean // NEW: Allow disabling event handlers for stats-only mode
 ) => {
   // Check if this hook should be disabled to avoid conflicts
-  const isDisabled = projectId === 'DISABLE_GLOBAL';
+  const isDisabled = projectId === 'DISABLE_GLOBAL' || disableEventHandlers === true;
 
   const { user, token } = useAuth();
   const { manager: contextManager, isConnected: contextIsConnected } =

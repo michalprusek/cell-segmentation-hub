@@ -226,21 +226,14 @@ export async function sendEmail(
       return;
     }
 
-    // For UTIA SMTP, auto-queue ALL emails to prevent blocking
-    // UTIA server can take 2-10 minutes to process emails, which causes timeouts
-    if (isUTIASmtpServer() && allowQueue) {
-      const queueId = queueEmailForRetry(options);
-      logger.info(
-        'Email queued for background processing (UTIA SMTP)',
-        'EmailService',
-        {
-          to: options.to,
-          subject: options.subject,
-          queueId,
-        }
-      );
-      return;
-    }
+    // REMOVED: Auto-queue for UTIA SMTP - now sending directly
+    // This may cause HTTP timeouts due to UTIA's 5-10 minute processing time
+
+    logger.info('Sending email directly (no queue)', 'EmailService', {
+      to: options.to,
+      subject: options.subject,
+      smtpHost: process.env.SMTP_HOST,
+    });
 
     ensureInitialized();
 
@@ -284,32 +277,8 @@ export async function sendEmail(
       authEnabled: process.env.SMTP_AUTH !== 'false',
     };
 
-    // Check if this is a timeout error and we should queue for background retry
-    if (
-      allowQueue &&
-      (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT'))
-    ) {
-      logger.warn(
-        'Email send timeout, queuing for background retry',
-        'EmailService',
-        errorContext
-      );
-
-      // Queue for background retry
-      const queueId = queueEmailForRetry(options);
-
-      logger.info(
-        'Email queued for background retry due to timeout',
-        'EmailService',
-        {
-          ...errorContext,
-          queueId,
-        }
-      );
-
-      // Return success to user to prevent 504 error
-      return;
-    }
+    // REMOVED: Auto-queue on timeout - now failing immediately
+    // Timeout errors will be thrown to the caller
 
     // Check for specific error types and provide helpful logging
     if (errorMessage.includes('ECONNREFUSED')) {
