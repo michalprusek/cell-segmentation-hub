@@ -87,12 +87,38 @@ export const authRateLimiter = createRateLimiter({
 export const authLimiter = authRateLimiter;
 
 /**
+ * Custom handler for password reset rate limit with Czech message
+ */
+const passwordResetRateLimitHandler = (req: Request, res: Response): void => {
+  logger.warn('Password reset rate limit exceeded', 'RateLimit', {
+    ip: req.ip,
+    userId: (req as Request & { user?: { id?: string } }).user?.id,
+    path: req.path,
+    method: req.method,
+  });
+
+  ResponseHelper.rateLimit(res, 'Příliš mnoho pokusů o reset hesla. Zkuste to prosím znovu za 10 minut.');
+};
+
+/**
  * Rate limiter for password reset requests
  */
-export const passwordResetRateLimiter = createRateLimiter({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3, // Limit each IP/user to 3 password reset requests per hour
-  message: 'Too many password reset requests, please try again later',
+export const passwordResetRateLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, // 10 minutes
+  max: 5, // Limit each IP/user to 5 password reset requests per 10 minutes
+  message: 'Příliš mnoho pokusů o reset hesla. Zkuste to prosím znovu za 10 minut.',
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: generateRateLimitKey,
+  handler: passwordResetRateLimitHandler,
+  skip: (req: Request) => {
+    return (
+      req.path === '/health' ||
+      req.path === '/api/health' ||
+      req.path === '/metrics' ||
+      req.path === '/api/ml/health'
+    );
+  },
 });
 
 // Export with shorter alias for compatibility

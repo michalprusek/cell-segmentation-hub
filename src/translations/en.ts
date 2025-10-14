@@ -1887,8 +1887,6 @@ export default {
     shareByLink: 'Share by link',
     emailAddress: 'Email address',
     enterEmailPlaceholder: 'Enter email address',
-    optionalMessage: 'Optional message',
-    messagePlaceholder: 'Add a personal message to the invitation...',
     sendInvitation: 'Send invitation',
     sending: 'Sending...',
     emailSent: 'Email invitation sent!',
@@ -1921,8 +1919,6 @@ export default {
     resendFailed: 'Failed to resend invitation',
     revokeAccess: 'Revoke access',
     cancelInvitation: 'Cancel invitation',
-    reminderMessage:
-      'This is a reminder that you have been invited to collaborate on a project',
     revokeShareFailed: 'Failed to revoke share',
     failedToLoadShares: 'Failed to load shares',
 

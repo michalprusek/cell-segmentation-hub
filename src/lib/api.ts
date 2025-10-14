@@ -868,7 +868,7 @@ class ApiClient {
   // Sharing methods
   async shareProjectByEmail(
     projectId: string,
-    data: { email: string; message?: string }
+    data: { email: string }
   ): Promise<{
     id: string;
     email: string;

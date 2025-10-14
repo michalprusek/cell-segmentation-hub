@@ -56,6 +56,26 @@ const ForgotPassword = () => {
     } catch (error: unknown) {
       logger.error('❌ Password reset request failed:', error);
 
+      // Check if it's an axios error with response
+      if (error && typeof error === 'object' && 'response' in error) {
+        const axiosError = error as { response?: { status?: number; data?: { message?: string; error?: string } } };
+
+        // Check for rate limit error (429)
+        if (axiosError.response?.status === 429) {
+          const errorMsg = axiosError.response.data?.error || axiosError.response.data?.message || 'Příliš mnoho pokusů. Zkuste to prosím později.';
+          toast.error(errorMsg);
+          return;
+        }
+
+        // Check if it's a 404 error (email not registered)
+        if (axiosError.response?.status === 404) {
+          const errorMsg = axiosError.response.data?.message || 'Email není registrován v systému.';
+          toast.error(errorMsg);
+          return;
+        }
+      }
+
+      // For other errors, use the general error handling
       const errorMessage = getLocalizedErrorMessage(
         error,
         t,

@@ -82,7 +82,6 @@ export function ShareDialog({
 
   // Email sharing state
   const [email, setEmail] = useState('');
-  const [message, setMessage] = useState('');
 
   // Link sharing state
   const [expiryHours, setExpiryHours] = useState<number | undefined>(undefined);
@@ -123,7 +122,6 @@ export function ShareDialog({
     try {
       await apiClient.shareProjectByEmail(projectId, {
         email: email.trim(),
-        message: message.trim() || undefined,
       });
 
       toast({
@@ -132,10 +130,23 @@ export function ShareDialog({
       });
 
       setEmail('');
-      setMessage('');
       await loadShares(); // Refresh shares list
     } catch (error: any) {
       logger.error('Failed to share project by email:', error);
+
+      // Check for rate limit error (429)
+      if (error?.response?.status === 429) {
+        const errorMessage =
+          error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          'Příliš mnoho pokusů. Zkuste to prosím později.';
+        toast({
+          title: t('error'),
+          description: errorMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
 
       const errorMessage =
         error?.response?.data?.message ||
@@ -156,7 +167,6 @@ export function ShareDialog({
     try {
       await apiClient.shareProjectByEmail(projectId, {
         email: emailToResend,
-        message: t('sharing.reminderMessage'),
       });
 
       toast({
@@ -167,6 +177,20 @@ export function ShareDialog({
       await loadShares(); // Refresh shares list
     } catch (error: any) {
       logger.error('Failed to resend invitation:', error);
+
+      // Check for rate limit error (429)
+      if (error?.response?.status === 429) {
+        const errorMessage =
+          error?.response?.data?.error ||
+          error?.response?.data?.message ||
+          'Příliš mnoho pokusů. Zkuste to prosím později.';
+        toast({
+          title: t('error'),
+          description: errorMessage,
+          variant: 'destructive',
+        });
+        return;
+      }
 
       const errorMessage =
         error?.response?.data?.message ||
@@ -348,17 +372,6 @@ export function ShareDialog({
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   disabled={loading}
-                />
-              </div>
-              <div>
-                <Label htmlFor="message">{t('sharing.optionalMessage')}</Label>
-                <Textarea
-                  id="message"
-                  placeholder={t('sharing.messagePlaceholder')}
-                  value={message}
-                  onChange={e => setMessage(e.target.value)}
-                  disabled={loading}
-                  rows={3}
                 />
               </div>
               <Button

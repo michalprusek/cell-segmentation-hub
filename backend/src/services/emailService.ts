@@ -226,12 +226,12 @@ export async function sendEmail(
       return;
     }
 
-    // For UTIA SMTP, auto-queue ALL emails to prevent blocking
-    // UTIA server can take 2-10 minutes to process emails, which causes timeouts
+    // For UTIA SMTP with allowQueue=true, queue immediately to prevent timeouts
+    // UTIA server can take 2-10 minutes to process emails, which causes HTTP timeouts
     if (isUTIASmtpServer() && allowQueue) {
       const queueId = queueEmailForRetry(options);
       logger.info(
-        'Email queued for background processing (UTIA SMTP)',
+        'Email queued for background processing (UTIA SMTP with allowQueue=true)',
         'EmailService',
         {
           to: options.to,
@@ -241,6 +241,13 @@ export async function sendEmail(
       );
       return;
     }
+
+    logger.info('Sending email directly', 'EmailService', {
+      to: options.to,
+      subject: options.subject,
+      smtpHost: process.env.SMTP_HOST,
+      allowQueue,
+    });
 
     ensureInitialized();
 
@@ -284,32 +291,8 @@ export async function sendEmail(
       authEnabled: process.env.SMTP_AUTH !== 'false',
     };
 
-    // Check if this is a timeout error and we should queue for background retry
-    if (
-      allowQueue &&
-      (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT'))
-    ) {
-      logger.warn(
-        'Email send timeout, queuing for background retry',
-        'EmailService',
-        errorContext
-      );
-
-      // Queue for background retry
-      const queueId = queueEmailForRetry(options);
-
-      logger.info(
-        'Email queued for background retry due to timeout',
-        'EmailService',
-        {
-          ...errorContext,
-          queueId,
-        }
-      );
-
-      // Return success to user to prevent 504 error
-      return;
-    }
+    // REMOVED: Auto-queue on timeout - now failing immediately
+    // Timeout errors will be thrown to the caller
 
     // Check for specific error types and provide helpful logging
     if (errorMessage.includes('ECONNREFUSED')) {
@@ -397,10 +380,12 @@ export async function sendPasswordResetEmail(
       subject: getPasswordResetSubject(locale),
       html: htmlContent,
       text: textContent,
+      allowQueue: true, // Allow queueing for UTIA SMTP (5-10 min delays)
     };
 
-    // Send email directly (like share emails)
-    // If timeout occurs, sendEmail() will automatically queue it
+    // Queue enabled to prevent HTTP timeouts with UTIA SMTP server
+    // UTIA server can take 5-10 minutes to process emails, causing user-facing timeouts
+    // With allowQueue=true, the email is queued immediately if SMTP is slow
     await sendEmail(emailOptions);
 
     logger.info('Password reset email sent', 'EmailService', { userEmail });

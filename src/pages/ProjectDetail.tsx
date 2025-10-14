@@ -326,8 +326,14 @@ const ProjectDetail = () => {
     handleBatchCompleted
   );
 
-  // Global queue stats for Cancel All button
-  const { queueStats: globalQueueStats } = useSegmentationQueue(undefined);
+  // Global queue stats for Cancel All button - STATS ONLY MODE (no event handlers to prevent double-counting)
+  const { queueStats: globalQueueStats } = useSegmentationQueue(
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    true // disableEventHandlers = true to prevent duplicate event processing
+  );
 
   // Export progress tracking - use ONLY shared hook for SSOT
   const exportHook = useSharedAdvancedExport(id || '', projectTitle);

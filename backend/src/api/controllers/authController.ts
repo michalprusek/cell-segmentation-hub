@@ -5,6 +5,7 @@ import * as UserService from '../../services/userService';
 import { ResponseHelper, asyncHandler } from '../../utils/response';
 import { prisma } from '../../db';
 import { logger } from '../../utils/logger';
+import { UserNotFoundError } from '../../middleware/error';
 import {
   loginSchema,
   registerSchema,
@@ -276,30 +277,48 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
  *       400:
  *         description: Nevalidní vstupní data
  */
-export const requestPasswordReset = asyncHandler(
-  async (req: Request, res: Response) => {
-    // Validate email using Zod schema
-    const validationResult = resetPasswordRequestSchema.safeParse(req.body);
-    if (!validationResult.success) {
-      const errors = validationResult.error.errors.map(err => ({
-        field: err.path.join('.'),
-        message: err.message,
-      }));
+export const requestPasswordReset = async (req: Request, res: Response) => {
+  // Validate email using Zod schema
+  const validationResult = resetPasswordRequestSchema.safeParse(req.body);
+  if (!validationResult.success) {
+    const errors = validationResult.error.errors.map(err => ({
+      field: err.path.join('.'),
+      message: err.message,
+    }));
+    const apiError = {
+      code: 'VALIDATION_ERROR' as const,
+      message: 'Validation failed',
+      details: { errors },
+    };
+    return ResponseHelper.error(res, apiError, 400);
+  }
+
+  const data: ResetPasswordRequestData = validationResult.data;
+
+  try {
+    const result = await AuthService.requestPasswordReset(data);
+    return ResponseHelper.success(res, result, result.message);
+  } catch (error) {
+    // Type-safe error handling using custom error class
+    if (error instanceof UserNotFoundError) {
       const apiError = {
-        code: 'VALIDATION_ERROR' as const,
-        message: 'Validation failed',
-        details: { errors },
+        code: 'USER_NOT_FOUND' as const,
+        message: error.message,
       };
-      return ResponseHelper.error(res, apiError, 400);
+      return ResponseHelper.error(res, apiError, 404);
     }
 
-    const data: ResetPasswordRequestData = validationResult.data;
-
-    const result = await AuthService.requestPasswordReset(data);
-
-    return ResponseHelper.success(res, result, result.message);
+    // For other errors, return 500
+    logger.error('Password reset request failed', error as Error, 'AuthController', {
+      email: data.email,
+    });
+    const apiError = {
+      code: 'INTERNAL_ERROR' as const,
+      message: 'Žádost o reset hesla se nezdařila',
+    };
+    return ResponseHelper.error(res, apiError, 500);
   }
-);
+};
 
 /**
  * @swagger
