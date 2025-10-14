@@ -6,7 +6,7 @@ import {
 } from '../auth/password';
 import { generateTokenPair, JwtPayload } from '../auth/jwt';
 import { logger } from '../utils/logger';
-import { ApiError } from '../middleware/error';
+import { ApiError, UserNotFoundError } from '../middleware/error';
 import * as EmailService from './emailService';
 import { getStorageProvider } from '../storage/index';
 import { v4 as uuidv4 } from 'uuid';
@@ -392,7 +392,7 @@ export async function requestPasswordReset(
       logger.info('User not found, throwing error', 'AuthService', {
         email: data.email,
       });
-      throw new Error('Email není registrován v systému.');
+      throw new UserNotFoundError('Email není registrován v systému.');
     }
 
     // Generate secure reset token
@@ -481,21 +481,19 @@ export async function requestPasswordReset(
 
     return response;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
+    // If it's a UserNotFoundError, re-throw it as-is so the controller can handle it
+    if (error instanceof UserNotFoundError) {
+      throw error; // Re-throw the original error for 404 handling in controller
+    }
+
+    // For other errors, log and wrap in ApiError
     logger.error(
       'Password reset request failed:',
       error as Error,
       'AuthService',
       { email: data.email }
     );
-    
-    // If it's the "user not found" error, re-throw it as-is so the controller can handle it
-    if (errorMessage.includes('není registrován')) {
-      throw error; // Re-throw the original error
-    }
-    
-    // For other errors, wrap in ApiError
+
     throw ApiError.internalError('Žádost o reset hesla se nezdařila');
   }
 }
