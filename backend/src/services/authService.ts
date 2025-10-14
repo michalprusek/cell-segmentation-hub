@@ -443,26 +443,24 @@ export async function requestPasswordReset(
       // This prevents the request from timing out due to slow SMTP server
       // Get user's preferred language or default to 'en'
       const userLocale = user.profile?.preferredLang || 'en';
-      EmailService.sendPasswordResetEmail(
+
+      // FIXED: Use void operator to explicitly indicate fire-and-forget
+      // EmailService handles deduplication, queueing, and retries internally
+      void EmailService.sendPasswordResetEmail(
         data.email,
         resetToken,
         resetTokenExpiry,
         userLocale
-      )
-        .then(() => {
-          logger.info('Password reset email sent successfully', 'AuthService', {
-            email: data.email,
-          });
-        })
-        .catch(emailError => {
-          logger.error(
-            'Failed to send password reset email:',
-            emailError as Error,
-            'AuthService',
-            { email: data.email }
-          );
-          // Email failed but user already got response - token is still valid
-        });
+      ).catch(emailError => {
+        logger.error(
+          'Failed to send/queue password reset email:',
+          emailError as Error,
+          'AuthService',
+          { email: data.email }
+        );
+        // Email failed but user already got response - token is still valid
+        // Email will be retried automatically via queue if it was queued
+      });
 
       // Log that email was queued
       logger.info('Password reset email queued for sending', 'AuthService', {

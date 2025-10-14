@@ -239,6 +239,25 @@ export const useSegmentationQueue = (
     }
   }, []);
 
+  // Store handlers in refs to prevent re-registration on every render
+  const handleSegmentationUpdateRef = useRef(handleSegmentationUpdate);
+  const handleQueueStatsUpdateRef = useRef(handleQueueStatsUpdate);
+  const handleNotificationRef = useRef(handleNotification);
+  const handleSystemMessageRef = useRef(handleSystemMessage);
+
+  // Update refs when handlers change (separate effect)
+  useEffect(() => {
+    handleSegmentationUpdateRef.current = handleSegmentationUpdate;
+    handleQueueStatsUpdateRef.current = handleQueueStatsUpdate;
+    handleNotificationRef.current = handleNotification;
+    handleSystemMessageRef.current = handleSystemMessage;
+  }, [
+    handleSegmentationUpdate,
+    handleQueueStatsUpdate,
+    handleNotification,
+    handleSystemMessage,
+  ]);
+
   // Update current project reference when projectId changes
   useEffect(() => {
     currentProjectRef.current = isDisabled ? undefined : projectId;
@@ -310,11 +329,29 @@ export const useSegmentationQueue = (
     const manager = contextManager || WebSocketManager.getInstance();
     wsManagerRef.current = manager;
 
-    // Register event listeners
-    manager.on('segmentation-update', handleSegmentationUpdate);
-    manager.on('queue-stats-update', handleQueueStatsUpdate);
-    manager.on('notification', handleNotification);
-    manager.on('system-message', handleSystemMessage);
+    // Create stable wrapper functions that call current ref
+    // This prevents event listener re-registration when handlers change
+    const stableSegmentationHandler = (update: SegmentationUpdate) => {
+      handleSegmentationUpdateRef.current(update);
+    };
+
+    const stableQueueStatsHandler = (stats: QueueStats) => {
+      handleQueueStatsUpdateRef.current(stats);
+    };
+
+    const stableNotificationHandler = (notification: Notification) => {
+      handleNotificationRef.current(notification);
+    };
+
+    const stableSystemMessageHandler = (message: SystemMessage) => {
+      handleSystemMessageRef.current(message);
+    };
+
+    // Register event listeners with stable wrapper functions
+    manager.on('segmentation-update', stableSegmentationHandler);
+    manager.on('queue-stats-update', stableQueueStatsHandler);
+    manager.on('notification', stableNotificationHandler);
+    manager.on('system-message', stableSystemMessageHandler);
 
     // Register cancellation event handlers if provided
     if (onSegmentationCancelled) {
@@ -336,10 +373,10 @@ export const useSegmentationQueue = (
       }
 
       if (manager) {
-        manager.off('segmentation-update', handleSegmentationUpdate);
-        manager.off('queue-stats-update', handleQueueStatsUpdate);
-        manager.off('notification', handleNotification);
-        manager.off('system-message', handleSystemMessage);
+        manager.off('segmentation-update', stableSegmentationHandler);
+        manager.off('queue-stats-update', stableQueueStatsHandler);
+        manager.off('notification', stableNotificationHandler);
+        manager.off('system-message', stableSystemMessageHandler);
 
         // Cleanup cancellation event handlers if provided
         if (onSegmentationCancelled) {
@@ -358,13 +395,9 @@ export const useSegmentationQueue = (
     token,
     contextManager,
     isDisabled,
-    handleSegmentationUpdate,
-    handleQueueStatsUpdate,
-    handleNotification,
-    handleSystemMessage,
     onSegmentationCancelled,
     onBulkSegmentationCancelled,
-  ]);
+  ]); // Handlers REMOVED from dependencies - refs are used instead
 
   // Join project room when projectId changes and connection is ready
   useEffect(() => {
