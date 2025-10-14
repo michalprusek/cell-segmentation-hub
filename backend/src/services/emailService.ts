@@ -226,13 +226,27 @@ export async function sendEmail(
       return;
     }
 
-    // REMOVED: Auto-queue for UTIA SMTP - now sending directly
-    // This may cause HTTP timeouts due to UTIA's 5-10 minute processing time
+    // For UTIA SMTP with allowQueue=true, queue immediately to prevent timeouts
+    // UTIA server can take 2-10 minutes to process emails, which causes HTTP timeouts
+    if (isUTIASmtpServer() && allowQueue) {
+      const queueId = queueEmailForRetry(options);
+      logger.info(
+        'Email queued for background processing (UTIA SMTP with allowQueue=true)',
+        'EmailService',
+        {
+          to: options.to,
+          subject: options.subject,
+          queueId,
+        }
+      );
+      return;
+    }
 
-    logger.info('Sending email directly (no queue)', 'EmailService', {
+    logger.info('Sending email directly', 'EmailService', {
       to: options.to,
       subject: options.subject,
       smtpHost: process.env.SMTP_HOST,
+      allowQueue,
     });
 
     ensureInitialized();
@@ -366,10 +380,12 @@ export async function sendPasswordResetEmail(
       subject: getPasswordResetSubject(locale),
       html: htmlContent,
       text: textContent,
+      allowQueue: true, // Allow queueing for UTIA SMTP (5-10 min delays)
     };
 
-    // Send email directly (like share emails)
-    // If timeout occurs, sendEmail() will automatically queue it
+    // Queue enabled to prevent HTTP timeouts with UTIA SMTP server
+    // UTIA server can take 5-10 minutes to process emails, causing user-facing timeouts
+    // With allowQueue=true, the email is queued immediately if SMTP is slow
     await sendEmail(emailOptions);
 
     logger.info('Password reset email sent', 'EmailService', { userEmail });

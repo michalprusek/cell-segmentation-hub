@@ -49,6 +49,9 @@ router.post(
   authController.logout
 );
 
+// Note: Validation happens inside controller instead of middleware
+// This allows custom error handling to return 404 for unregistered emails
+// instead of generic 400 validation error
 router.post(
   '/request-password-reset',
   passwordResetLimiter, // Strict rate limiting for password reset
