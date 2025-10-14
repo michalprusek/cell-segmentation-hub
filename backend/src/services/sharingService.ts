@@ -82,22 +82,39 @@ export async function shareProjectByEmail(
 
     // Send email invitation (fire-and-forget to prevent blocking)
     // Email is queued for background processing to avoid UTIA SMTP delays
-    sendShareInvitationEmail(share, data.message)
-      .then(() => {
-        logger.info('Share invitation email sent successfully', 'SharingService', {
-          shareId: share.id,
-          email: share.email,
-        });
-      })
-      .catch(emailError => {
-        logger.error(
-          'Failed to send share invitation email:',
-          emailError as Error,
-          'SharingService',
-          { shareId: share.id, email: share.email }
-        );
-        // Email failed but user already got response - share link is still valid
-      });
+    // FIXED: Call EmailService directly to avoid double wrapper causing duplicate sends
+    void EmailService.sendEmail({
+      to: share.email,
+      subject: getShareInvitationSimpleSubject(share.project.title, share.locale || 'en'),
+      html: generateShareInvitationSimpleHTML({
+        recipientEmail: share.email,
+        projectTitle: share.project.title,
+        projectDescription: share.project.description,
+        ownerName: share.sharedBy?.name || share.sharedBy?.email || 'Unknown',
+        acceptLink: `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`,
+        expiryDate: share.tokenExpiry ? new Date(share.tokenExpiry) : undefined,
+        locale: share.locale || 'en',
+        customMessage: data.message,
+      }),
+      text: generateShareInvitationSimpleText({
+        recipientEmail: share.email,
+        projectTitle: share.project.title,
+        projectDescription: share.project.description,
+        ownerName: share.sharedBy?.name || share.sharedBy?.email || 'Unknown',
+        acceptLink: `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`,
+        expiryDate: share.tokenExpiry ? new Date(share.tokenExpiry) : undefined,
+        locale: share.locale || 'en',
+        customMessage: data.message,
+      }),
+    }).catch(emailError => {
+      logger.error(
+        'Failed to send/queue share invitation email:',
+        emailError as Error,
+        'SharingService',
+        { shareId: share.id, email: share.email }
+      );
+      // Email failed but user already got response - share link is still valid
+    });
 
     logger.info(
       `Project shared via email: ${projectId} with ${data.email}`,
@@ -716,85 +733,15 @@ export async function validateShareToken(
 }
 
 /**
- * Send share invitation email
+ * REMOVED: sendShareInvitationEmail() helper function
+ *
+ * This function was causing duplicate emails due to double promise chain wrapper:
+ * 1. Outer call: sendShareInvitationEmail().then().catch() (line 85)
+ * 2. Inner call: EmailService.sendEmail().then().catch() (line 789)
+ *
+ * Combined with auto-queue for UTIA SMTP, this created a scenario where emails
+ * could be queued and sent multiple times, especially if SMTP timeouts occurred.
+ *
+ * FIX: Call EmailService.sendEmail() directly from shareProjectByEmail() (line 86)
+ * EmailService handles all queueing, retries, logging, and deduplication internally.
  */
-async function sendShareInvitationEmail(
-  share: ProjectShare & {
-    project: Project;
-    sharedBy: User & { profile: Profile | null };
-  },
-  message?: string
-): Promise<void> {
-  try {
-    // Validate FRONTEND_URL is configured
-    const frontendUrl = process.env.FRONTEND_URL;
-    if (!frontendUrl || frontendUrl.trim() === '') {
-      throw new Error('FRONTEND_URL environment variable is not configured');
-    }
-
-    // Normalize frontend URL and encode token
-    const normalizedUrl = frontendUrl.trim().replace(/\/+$/, '');
-    const encodedToken = encodeURIComponent(share.shareToken);
-    const acceptUrl = `${normalizedUrl}/share/accept/${encodedToken}`;
-
-    // Check if email exists (link shares may not have email)
-    if (!share.email) {
-      logger.warn('Cannot send email for link-only share', 'SharingService', {
-        shareId: share.id,
-        isLinkShare: true,
-      });
-      return; // Skip email sending for link-only shares
-    }
-
-    // Get user's preferred language from profile
-    const locale = share.sharedBy.profile?.preferredLang || 'en';
-
-    // Calculate expiry date (default 7 days if not set)
-    const expiresAt = share.tokenExpiry || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-
-    // Prepare simple template data (hermes.utia.cas.cz has 1000 char limit)
-    const templateData = {
-      projectTitle: share.project.title,
-      sharedByEmail: share.sharedBy.email,
-      acceptUrl,
-      expiresAt,
-      locale,
-      message, // Include user's personal message
-    };
-
-    const emailOptions: EmailService.EmailServiceOptions = {
-      to: share.email,
-      subject: getShareInvitationSimpleSubject(share.project.title, locale),
-      html: generateShareInvitationSimpleHTML(templateData),
-      text: generateShareInvitationSimpleText(templateData),
-    };
-
-    EmailService.sendEmail(emailOptions)
-      .then(() => {
-        logger.info(
-          'Share invitation email sent successfully',
-          'SharingService',
-          { shareId: share.id, email: share.email }
-        );
-      })
-      .catch(emailError => {
-        logger.error(
-          'Failed to send share invitation email:',
-          emailError as Error,
-          'SharingService',
-          { shareId: share.id, email: share.email }
-        );
-      });
-  } catch (error) {
-    logger.error(
-      'Failed to prepare share invitation email:',
-      error as Error,
-      'SharingService',
-      {
-        shareId: share.id,
-        email: share.email,
-      }
-    );
-    throw error;
-  }
-}
