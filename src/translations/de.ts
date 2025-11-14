@@ -87,7 +87,7 @@ export default {
       description1:
         'Unsere Plattform wurde von Bc. Michal Průšek, Student an der Fakultät für Kernwissenschaften und Physikalisches Ingenieurwesen (FJFI) an der Tschechischen Technischen Universität Prag, unter der Leitung von Ing. Adam Novozámský, Ph.D. entwickelt.',
       description2:
-        'Dieses Projekt ist eine Zusammenarbeit mit Forschern vom Institut für Biochemie und Mikrobiologie an der UCT Prag (VŠCHT Praha).',
+        'Dieses Projekt ist eine Zusammenarbeit mit der Gruppe von Ing. Silvie Rimpelová, Ph.D. vom Institut für Biochemie und Mikrobiologie der UCT Prag (VŠCHT Praha).',
       description3:
         'Wir kombinieren modernste KI-Modelle mit einer intuitiven Benutzeroberfläche, um Forschern leistungsstarke Werkzeuge für die mikroskopische Bildanalyse zur Verfügung zu stellen, mit Fokus auf Sphäroid-Segmentierung mit unvergleichlicher Präzision.',
       contactText: 'Für Anfragen kontaktieren Sie uns bitte unter',

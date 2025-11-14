@@ -87,7 +87,7 @@ export default {
       description1:
         '我们的平台由捷克技术大学布拉格核科学与物理工程学院（FJFI）的学生Bc. Michal Průšek开发，在Ing. Adam Novozámský博士的指导下完成。',
       description2:
-        '该项目是与UCT布拉格（VŠCHT Praha）生物化学与微生物学研究所研究人员的合作。',
+        '该项目是与布拉格化工大学生物化学和微生物学研究所 Ing. Silvie Rimpelová 博士团队合作的项目（VŠCHT Praha）。',
       description3:
         '我们将尖端的AI模型与直观的界面相结合，为研究人员提供强大的显微图像分析工具，专注于以无与伦比的精度进行球状体分割。',
       contactText: '如有疑问，请联系我们',

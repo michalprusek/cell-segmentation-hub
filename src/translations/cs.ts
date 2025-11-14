@@ -87,7 +87,7 @@ export default {
       description1:
         'Naše platforma byla vyvinuta Bc. Michalem Průškem, studentem Fakulty jaderné a fyzikálně inženýrské ČVUT v Praze, pod vedením Ing. Adama Novozámského, Ph.D.',
       description2:
-        'Tento projekt je ve spolupráci s výzkumníky z Ústavu biochemie a mikrobiologie UCT Praha (VŠCHT Praha).',
+        'Tento projekt je ve spolupráci se skupinou Ing. Silvie Rimpelové, Ph.D. z Ústavu biochemie a mikrobiologie VŠCHT Praha.',
       description3:
         'Kombinujeme nejmodernější AI modely s intuitivním rozhraním a poskytujeme výzkumníkům mocné nástroje pro analýzu mikroskopických obrázků se zaměřením na segmentaci sféroidů s bezkonkurenční přesností.',
       contactText: 'Pro dotazy nás prosím kontaktujte na',

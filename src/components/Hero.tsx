@@ -4,32 +4,68 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 
-const Hero = () => {
+const SHOWCASE_IMAGES = [
+  {
+    src: '/lovable-uploads/026f6ae6-fa28-487c-8263-f49babd99dd3.png',
+    alt: 'Spheroid microscopy image',
+  },
+  {
+    src: '/lovable-uploads/19687f60-a78f-49e3-ada7-8dfc6a5fab4e.png',
+    alt: 'Spheroid microscopy image with analysis',
+  },
+  {
+    src: '/lovable-uploads/3d7a9b1c-4e2f-4a8d-9c3e-5f8b2a1d6c4e.png',
+    alt: 'Spheroid microscopy image detailed',
+  },
+];
+
+function Hero() {
   const { t } = useLanguage();
   const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(entry => {
-          if (entry.isIntersecting) {
-            entry.target.classList.add('active');
-          }
-        });
-      },
-      { threshold: 0.1 }
-    );
+    // Feature detection for IntersectionObserver
+    if (typeof IntersectionObserver === 'undefined') {
+      console.warn('IntersectionObserver not supported, hero animations disabled');
 
-    const currentRef = heroRef.current;
-    if (currentRef) {
-      observer.observe(currentRef);
+      // Fallback: immediately show hero content
+      if (heroRef.current) {
+        heroRef.current.classList.add('active');
+      }
+
+      return;
     }
 
-    return () => {
+    try {
+      const observer = new IntersectionObserver(
+        entries => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('active');
+            }
+          });
+        },
+        { threshold: 0.1 }
+      );
+
+      const currentRef = heroRef.current;
       if (currentRef) {
-        observer.unobserve(currentRef);
+        observer.observe(currentRef);
       }
-    };
+
+      return () => {
+        if (currentRef) {
+          observer.unobserve(currentRef);
+        }
+      };
+    } catch (error) {
+      console.error('Failed to initialize hero animation observer', error);
+
+      // Fallback on error: show content immediately
+      if (heroRef.current) {
+        heroRef.current.classList.add('active');
+      }
+    }
   }, []);
 
   return (
@@ -88,30 +124,27 @@ const Hero = () => {
             </Button>
           </div>
 
-          <div className="pt-12 pb-8 max-w-5xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="relative glass-morphism rounded-2xl shadow-glass-lg overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10"></div>
-                <img
-                  src="/lovable-uploads/026f6ae6-fa28-487c-8263-f49babd99dd3.png"
-                  alt="Spheroid microscopy image"
-                  className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
-                />
-              </div>
-              <div className="relative glass-morphism rounded-2xl shadow-glass-lg overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10"></div>
-                <img
-                  src="/lovable-uploads/19687f60-a78f-49e3-ada7-8dfc6a5fab4e.png"
-                  alt="Spheroid microscopy image with analysis"
-                  className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
-                />
-              </div>
+          <div className="pt-12 pb-8 max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {SHOWCASE_IMAGES.map((image, index) => (
+                <div
+                  key={index}
+                  className="relative glass-morphism rounded-2xl shadow-glass-lg overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 to-purple-500/10" />
+                  <img
+                    src={image.src}
+                    alt={image.alt}
+                    className="w-full h-auto rounded-2xl transform hover:scale-[1.01] transition-transform duration-500"
+                  />
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </div>
     </div>
   );
-};
+}
 
 export default Hero;
