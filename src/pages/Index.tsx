@@ -1,38 +1,16 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import Navbar from '@/components/Navbar';
 import Hero from '@/components/Hero';
 import Features from '@/components/Features';
 import Footer from '@/components/Footer';
 import { useLanguage } from '@/contexts/useLanguage';
+import { useScrollAnimation } from '@/hooks/useScrollAnimation';
 
-const Index = () => {
+function Index() {
   const { t } = useLanguage();
 
-  useEffect(() => {
-    const observerOptions = {
-      threshold: 0.1,
-      rootMargin: '0px 0px -100px 0px',
-    };
-
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach(entry => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('active');
-        }
-      });
-    }, observerOptions);
-
-    const animatedElements = document.querySelectorAll('.animate-on-scroll');
-    animatedElements.forEach(element => {
-      observer.observe(element);
-    });
-
-    return () => {
-      animatedElements.forEach(element => {
-        observer.unobserve(element);
-      });
-    };
-  }, []);
+  // Use custom hook for scroll animations with feature detection
+  useScrollAnimation('.animate-on-scroll');
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -132,6 +110,6 @@ const Index = () => {
       <Footer />
     </div>
   );
-};
+}
 
 export default Index;
