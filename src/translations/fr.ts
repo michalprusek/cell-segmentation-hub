@@ -87,7 +87,7 @@ export default {
       description1:
         "Notre plateforme a été développée par Bc. Michal Průšek, étudiant à la Faculté des Sciences Nucléaires et d'Ingénierie Physique (FJFI) de l'Université Technique Tchèque de Prague, sous la supervision d'Ing. Adam Novozámský, Ph.D.",
       description2:
-        "Ce projet est une collaboration avec des chercheurs de l'Institut de Biochimie et de Microbiologie de l'UCT Prague (VŠCHT Praha).",
+        "Ce projet est une collaboration avec le groupe d'Ing. Silvie Rimpelová, Ph.D. de l'Institut de Biochimie et de Microbiologie de l'UCT Prague (VŠCHT Praha).",
       description3:
         "Nous combinons des modèles d'IA de pointe avec une interface intuitive pour fournir aux chercheurs des outils puissants pour l'analyse d'images microscopiques, en nous concentrant sur la segmentation de sphéroïdes avec une précision inégalée.",
       contactText: 'Pour toute demande, veuillez nous contacter à',
