@@ -78,10 +78,10 @@ const Index = () => {
                   <p className="text-gray-700 leading-relaxed">
                     {t('landing.about.contactText')}{' '}
                     <a
-                      href="mailto:prusemic@cvut.cz"
+                      href="mailto:prusek@utia.cas.cz"
                       className="text-blue-600 hover:underline"
                     >
-                      prusemic@cvut.cz
+                      prusek@utia.cas.cz
                     </a>
                   </p>
                 </div>
