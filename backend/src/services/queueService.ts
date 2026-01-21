@@ -58,7 +58,7 @@ export class QueueService {
   };
   private websocketService: WebSocketService | null = null;
   private queueWorkerInstance: unknown = null; // Reference to QueueWorker for triggering
-  private maxConcurrentBatches = 4; // Support 4-way parallel processing
+  private maxConcurrentBatches = 4; // Max concurrent batches (each batch=1 image due to BATCH_LIMITS)
   private activeBatches: Map<string, Date> = new Map(); // Track active batch processing
   private processingStats: ParallelProcessingStats = {
     activeStreams: 0,
@@ -766,6 +766,7 @@ export class QueueService {
         const image = imageData[i];
 
         if (!item || !image || !result) {
+          logger.warn(`Batch processing: skipping index ${i} - missing ${!item ? 'item' : !image ? 'image' : 'result'}`);
           continue;
         }
 

@@ -109,15 +109,15 @@ services:
       timeout: 5s
       retries: 5
 
-  # Blue ML Service (port 4008) - Enhanced for 4-way parallel processing
+  # Blue ML Service (port 4008) - 2-way parallel processing with 8GB GPU limit
   blue-ml:
     build:
       context: .
       dockerfile: docker/ml.optimized.Dockerfile
     container_name: blue-ml
     runtime: nvidia
-    # Override CMD to use 4 workers to match backend's maxSockets
-    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--limit-concurrency", "100", "--timeout-keep-alive", "30"]
+    # 2 workers to match ML_INFERENCE_WORKERS and stay within 8GB GPU memory limit
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--limit-concurrency", "100", "--timeout-keep-alive", "30"]
     ports:
       - "4008:8000"
     networks:

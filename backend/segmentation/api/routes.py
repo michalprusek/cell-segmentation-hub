@@ -225,10 +225,12 @@ async def batch_segment_images(
     """Batch segmentation endpoint for processing multiple images using optimized batch processing"""
     start_time = time.time()
 
-    # Debug logging for request details
+    # Debug logging for request details (limit to first 10 files to avoid log spam)
     logger.info(f"Batch segment request received: {len(files)} files, model={model}, threshold={threshold}")
-    for i, f in enumerate(files):
+    for i, f in enumerate(files[:10]):
         logger.debug(f"  File {i}: {f.filename}, content_type={f.content_type}")
+    if len(files) > 10:
+        logger.debug(f"  ... and {len(files) - 10} more files")
 
     try:
         # Get batch size limits from loader configuration

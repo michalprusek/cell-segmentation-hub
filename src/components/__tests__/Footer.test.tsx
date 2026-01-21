@@ -222,4 +222,16 @@ describe('Footer', () => {
     const headings = screen.getAllByRole('heading');
     expect(headings.length).toBe(2); // Resources and Legal headings
   });
+
+  it('has security attributes on external links', () => {
+    render(<Footer />);
+
+    // Check ÚTIA external link has security attributes
+    const utiaLink = screen.getByRole('link', { name: 'ÚTIA AV ČR' });
+    expect(utiaLink).toHaveAttribute('rel', 'noopener noreferrer');
+
+    // Check author external link has security attributes
+    const authorLink = screen.getByRole('link', { name: 'Michal Průšek' });
+    expect(authorLink).toHaveAttribute('rel', 'noopener noreferrer');
+  });
 });

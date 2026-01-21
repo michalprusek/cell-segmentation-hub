@@ -13,25 +13,41 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
-# Configure GPU memory limit and priority BEFORE any CUDA operations
-# This is a HARD limit that prevents PyTorch from allocating more GPU memory
-# SpheroSeg has HIGH priority - other apps (maptimize) should wait
+# Configure GPU memory limit BEFORE any CUDA operations
+# This sets a per-process memory fraction - PyTorch will raise OOM if exceeded
+# Note: This does not provide priority over other GPU processes; it limits this process's allocation
+# Primary PYTORCH_CUDA_ALLOC_CONF config is via env var in docker-compose (set before Python starts)
+_gpu_initialized = False
+_gpu_memory_limit_gb = 0.0
+_gpu_priority = "normal"
+
 if torch.cuda.is_available():
-    _gpu_memory_limit_gb = float(os.getenv("ML_MEMORY_LIMIT_GB", "8"))
-    _total_gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
-    _memory_fraction = min(_gpu_memory_limit_gb / _total_gpu_memory_gb, 1.0)
-    torch.cuda.set_per_process_memory_fraction(_memory_fraction, device=0)
+    try:
+        _gpu_memory_limit_gb = float(os.getenv("ML_MEMORY_LIMIT_GB", "8"))
+        _total_gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        _memory_fraction = min(_gpu_memory_limit_gb / _total_gpu_memory_gb, 1.0)
+        torch.cuda.set_per_process_memory_fraction(_memory_fraction, device=0)
 
-    # GPU Priority settings for SpheroSeg
-    _gpu_priority = os.getenv("ML_GPU_PRIORITY", "high")
-    if _gpu_priority == "high":
-        # Enable aggressive memory cleanup for high priority
-        torch.cuda.empty_cache()
-        # Set CUDA allocator for better memory reuse
-        os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:512,garbage_collection_threshold:0.6")
+        # GPU memory management settings
+        _gpu_priority = os.getenv("ML_GPU_PRIORITY", "high")
+        if _gpu_priority == "high":
+            # Enable aggressive memory cleanup
+            torch.cuda.empty_cache()
+            # Fallback allocator config (primary is via env var set before Python starts)
+            os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:512,garbage_collection_threshold:0.6")
 
-    print(f"GPU memory limit set: {_gpu_memory_limit_gb:.1f}GB / {_total_gpu_memory_gb:.1f}GB ({_memory_fraction:.1%})")
-    print(f"GPU priority: {_gpu_priority}")
+        _gpu_initialized = True
+        # Note: Using print here because logger isn't configured yet. Will log properly after logger setup.
+        print(f"[GPU Init] Memory limit: {_gpu_memory_limit_gb:.1f}GB / {_total_gpu_memory_gb:.1f}GB ({_memory_fraction:.1%}), Priority: {_gpu_priority}")
+    except ValueError as e:
+        print(f"[GPU Init ERROR] Invalid ML_MEMORY_LIMIT_GB value '{os.getenv('ML_MEMORY_LIMIT_GB')}': {e}")
+        print("[GPU Init] Continuing without GPU memory limit - may cause OOM errors")
+    except RuntimeError as e:
+        print(f"[GPU Init ERROR] CUDA initialization failed: {e}")
+        print("[GPU Init] Falling back to CPU mode")
+    except Exception as e:
+        print(f"[GPU Init ERROR] Unexpected error: {e}")
+        print("[GPU Init] Falling back to CPU mode")
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -51,6 +67,14 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Log GPU initialization status (now that logger is available)
+if _gpu_initialized:
+    logger.info(f"GPU configured: {_gpu_memory_limit_gb:.1f}GB limit, priority={_gpu_priority}")
+elif torch.cuda.is_available():
+    logger.warning("GPU available but initialization failed - running in degraded mode")
+else:
+    logger.info("No GPU available - running in CPU mode")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -153,11 +177,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": exc.errors()}
     )
 
-# HTTP exception handler - logs 400 errors with details
+# HTTP exception handler - logs all client/server errors (4xx/5xx)
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    if exc.status_code == 400:
-        logger.error(f"HTTP 400 on {request.url.path}: {exc.detail}")
+    if exc.status_code >= 400:
+        log_level = logger.error if exc.status_code >= 500 else logger.warning
+        log_level(f"HTTP {exc.status_code} on {request.url.path}: {exc.detail}")
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail}
