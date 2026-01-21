@@ -13,6 +13,42 @@ parent_dir = os.path.dirname(current_dir)
 if parent_dir not in sys.path:
     sys.path.insert(0, parent_dir)
 
+# Configure GPU memory limit BEFORE any CUDA operations
+# This sets a per-process memory fraction - PyTorch will raise OOM if exceeded
+# Note: This does not provide priority over other GPU processes; it limits this process's allocation
+# Primary PYTORCH_CUDA_ALLOC_CONF config is via env var in docker-compose (set before Python starts)
+_gpu_initialized = False
+_gpu_memory_limit_gb = 0.0
+_gpu_priority = "normal"
+
+if torch.cuda.is_available():
+    try:
+        _gpu_memory_limit_gb = float(os.getenv("ML_MEMORY_LIMIT_GB", "8"))
+        _total_gpu_memory_gb = torch.cuda.get_device_properties(0).total_memory / (1024**3)
+        _memory_fraction = min(_gpu_memory_limit_gb / _total_gpu_memory_gb, 1.0)
+        torch.cuda.set_per_process_memory_fraction(_memory_fraction, device=0)
+
+        # GPU memory management settings
+        _gpu_priority = os.getenv("ML_GPU_PRIORITY", "high")
+        if _gpu_priority == "high":
+            # Enable aggressive memory cleanup
+            torch.cuda.empty_cache()
+            # Fallback allocator config (primary is via env var set before Python starts)
+            os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "max_split_size_mb:512,garbage_collection_threshold:0.6")
+
+        _gpu_initialized = True
+        # Note: Using print here because logger isn't configured yet. Will log properly after logger setup.
+        print(f"[GPU Init] Memory limit: {_gpu_memory_limit_gb:.1f}GB / {_total_gpu_memory_gb:.1f}GB ({_memory_fraction:.1%}), Priority: {_gpu_priority}")
+    except ValueError as e:
+        print(f"[GPU Init ERROR] Invalid ML_MEMORY_LIMIT_GB value '{os.getenv('ML_MEMORY_LIMIT_GB')}': {e}")
+        print("[GPU Init] Continuing without GPU memory limit - may cause OOM errors")
+    except RuntimeError as e:
+        print(f"[GPU Init ERROR] CUDA initialization failed: {e}")
+        print("[GPU Init] Falling back to CPU mode")
+    except Exception as e:
+        print(f"[GPU Init ERROR] Unexpected error: {e}")
+        print("[GPU Init] Falling back to CPU mode")
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -31,6 +67,14 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Log GPU initialization status (now that logger is available)
+if _gpu_initialized:
+    logger.info(f"GPU configured: {_gpu_memory_limit_gb:.1f}GB limit, priority={_gpu_priority}")
+elif torch.cuda.is_available():
+    logger.warning("GPU available but initialization failed - running in degraded mode")
+else:
+    logger.info("No GPU available - running in CPU mode")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -100,19 +144,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Debug middleware to log all requests BEFORE they reach routes
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests for debugging"""
+    content_type = request.headers.get("content-type", "")
+    content_length = request.headers.get("content-length", "0")
+
+    if "batch-segment" in str(request.url.path):
+        logger.info(f"BATCH REQUEST: {request.method} {request.url.path} Content-Type: {content_type[:50]}... Content-Length: {content_length}")
+
+    try:
+        response = await call_next(request)
+        if "batch-segment" in str(request.url.path) and response.status_code == 400:
+            logger.error(f"BATCH 400 ERROR: {request.method} {request.url.path} - Response status: {response.status_code}")
+        return response
+    except Exception as e:
+        logger.error(f"BATCH EXCEPTION: {request.method} {request.url.path} - {type(e).__name__}: {e}")
+        raise
+
 # Include routes
 app.include_router(router, prefix="/api/v1")
 app.include_router(metrics_router)
 app.include_router(monitoring_router, prefix="/api/v1")
 
+# Request validation error handler - logs 422 errors with details
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"Validation error on {request.url.path}: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()}
+    )
+
+# HTTP exception handler - logs all client/server errors (4xx/5xx)
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    if exc.status_code >= 400:
+        log_level = logger.error if exc.status_code >= 500 else logger.warning
+        log_level(f"HTTP {exc.status_code} on {request.url.path}: {exc.detail}")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail}
+    )
+
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    # Re-raise HTTPException and RequestValidationError to preserve status codes
-    if isinstance(exc, (HTTPException, RequestValidationError)):
-        raise exc
-    
-    logger.exception(f"Unhandled exception: {exc}")
+    logger.exception(f"Unhandled exception on {request.url.path}: {exc}")
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(
@@ -157,10 +236,16 @@ async def health():
             device_count = 0
             device_name = "CPU"
         
+        # Count loaded models
+        models_loaded = 0
+        if hasattr(app.state, 'model_loader') and hasattr(app.state.model_loader, 'loaded_models'):
+            loaded_models = app.state.model_loader.loaded_models
+            models_loaded = sum(1 for model in loaded_models.values() if model is not None)
+
         return HealthResponse(
             status="healthy",
             timestamp=datetime.now().isoformat(),
-            models_loaded=len([name for name in app.state.model_loader.loaded_models.keys() if app.state.model_loader.loaded_models[name] is not None]) if hasattr(app.state, 'model_loader') and hasattr(app.state.model_loader, 'loaded_models') else 0,
+            models_loaded=models_loaded,
             gpu_available=gpu_available
         )
     except Exception as e:

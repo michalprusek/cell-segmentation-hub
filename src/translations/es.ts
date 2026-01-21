@@ -1814,8 +1814,8 @@ export default {
     termsOfService: 'Términos de servicio',
     privacyPolicy: 'Política de privacidad',
     contactUs: 'Contáctanos',
-    copyright:
-      '© {{year}} SpheroSeg. Desarrollado en ÚTIA AV ČR (Instituto de Teoría de la Información y Automatización, Academia de Ciencias de la República Checa).',
+    developedAt: 'Desarrollado en',
+    designBy: 'Diseño por',
   },
   sharing: {
     processingInvitation: 'Procesando invitación...',

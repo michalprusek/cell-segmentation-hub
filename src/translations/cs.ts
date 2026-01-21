@@ -1788,8 +1788,8 @@ export default {
     termsOfService: 'Podmínky služby',
     privacyPolicy: 'Zásady ochrany osobních údajů',
     contactUs: 'Kontaktujte nás',
-    copyright:
-      '© {{year}} SpheroSeg. Vyvinuto na ÚTIA AV ČR (Ústav teorie informace a automatizace, Akademie věd České republiky).',
+    developedAt: 'Vyvinuto na',
+    designBy: 'Design',
   },
   sharing: {
     processingInvitation: 'Zpracování pozvánky...',

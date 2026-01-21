@@ -52,26 +52,26 @@ class BatchConfig:
                 self.config = json.load(f)
                 logger.info(f"Loaded batch configuration from {config_path}")
         else:
-            # Default fallback configuration
+            # Default fallback configuration - batch_size=1 to stay within 8GB GPU limit
             self.config = {
                 "batch_configurations": {
                     "hrnet": {
-                        "optimal_batch_size": 4,
-                        "max_safe_batch_size": 8,
+                        "optimal_batch_size": 1,
+                        "max_safe_batch_size": 2,
                         "expected_throughput": 2.5,
-                        "memory_limit_mb": 8000
+                        "memory_limit_mb": 4000
                     },
                     "cbam_resunet": {
-                        "optimal_batch_size": 4,
-                        "max_safe_batch_size": 8,
+                        "optimal_batch_size": 1,
+                        "max_safe_batch_size": 1,
                         "expected_throughput": 2.0,
-                        "memory_limit_mb": 10000
+                        "memory_limit_mb": 4000
                     },
                     "unet_spherohq": {
-                        "optimal_batch_size": 4,
-                        "max_safe_batch_size": 6,
+                        "optimal_batch_size": 1,
+                        "max_safe_batch_size": 2,
                         "expected_throughput": 2.2,
-                        "memory_limit_mb": 6000
+                        "memory_limit_mb": 4000
                     }
                 }
             }

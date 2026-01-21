@@ -125,7 +125,8 @@ export class QueueWorker {
   }
 
   /**
-   * Process the queue using 4-way parallel batch processing for better performance
+   * Process the queue with concurrent batch dispatching for better performance.
+   * Note: BATCH_LIMITS=1 means single-image processing; concurrency is at queue level.
    */
   private async processQueue(): Promise<void> {
     // Prevent overlapping executions
