@@ -53,8 +53,8 @@ export interface QueueItem {
 export class QueueService {
   private static instance: QueueService;
   private batchSizes: BatchConfig = {
-    hrnet: 6, // Reduced for concurrent processing
-    cbam_resunet: 4,
+    hrnet: 1, // Single image processing - batch endpoint has issues
+    cbam_resunet: 1, // Single image processing - batch endpoint has issues
   };
   private websocketService: WebSocketService | null = null;
   private queueWorkerInstance: unknown = null; // Reference to QueueWorker for triggering
@@ -560,10 +560,14 @@ export class QueueService {
   private async getNextBatchExcluding(
     excludeImageIds: Set<string>
   ): Promise<SegmentationQueue[]> {
-    // Model batch size limits (reduced for concurrent processing)
+    // Model batch size limits - SET TO 1 to always use single-image processing
+    // This bypasses the buggy batch-segment endpoint and uses the reliable /segment endpoint
+    // The 400 Bad Request errors from batch-segment are caused by Node.js form-data library
+    // encoding issues with Python FastAPI. Single-image processing is more reliable.
     const BATCH_LIMITS = {
-      hrnet: 6, // Reduced from 8 for parallel processing
-      cbam_resunet: 4, // Batch size of 4 for CBAM-ResUNet
+      hrnet: 1, // Always process one at a time for reliability
+      cbam_resunet: 1, // Always process one at a time for reliability
+      unet_spherohq: 1, // Always process one at a time for reliability
     };
 
     // Get the highest priority item first, excluding specified image IDs
@@ -1430,18 +1434,6 @@ export class QueueService {
    * @param userId User ID requesting cancellation
    * @returns Number of cancelled queue items
    */
-  /**
-   * Cancel batch processing for a specific user and batch
-   * @param batchId Batch ID to cancel
-   * @param userId User ID requesting cancellation
-   * @returns Number of cancelled queue items
-   */
-  /**
-   * Cancel batch processing for a specific user and batch
-   * @param batchId Batch ID to cancel
-   * @param userId User ID requesting cancellation
-   * @returns Number of cancelled queue items
-   */
   async cancelBatch(batchId: string, userId: string): Promise<number> {
     try {
       logger.info('Cancelling batch', 'QueueService', { batchId, userId });
@@ -1568,7 +1560,6 @@ export class QueueService {
       }
 
       // Group by status to handle differently
-      const _queuedOnly = queuedItems.filter(item => item.status === 'queued');
       const processingItems = queuedItems.filter(
         item => item.status === 'processing'
       );

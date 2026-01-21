@@ -52,7 +52,8 @@ services:
       # Database password from shell environment
       - DB_PASSWORD=${DB_PASSWORD}
       # Parallel processing configuration
-      - QUEUE_MAX_CONCURRENT_BATCHES=4
+      # Sequential processing to prevent 400 errors from concurrent multipart requests
+      - QUEUE_MAX_CONCURRENT_BATCHES=1
       - QUEUE_PARALLEL_PROCESSING_ENABLED=true
       - DATABASE_CONNECTION_POOL_SIZE=50
       - WS_PARALLEL_PROCESSING_ENABLED=true
@@ -115,6 +116,8 @@ services:
       dockerfile: docker/ml.optimized.Dockerfile
     container_name: blue-ml
     runtime: nvidia
+    # Override CMD to use 4 workers to match backend's maxSockets
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--limit-concurrency", "100", "--timeout-keep-alive", "30"]
     ports:
       - "4008:8000"
     networks:
@@ -129,16 +132,20 @@ services:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres-blue:5432/spheroseg_blue
       - REDIS_URL=redis://redis-blue:6379
-      # 4-way parallel processing configuration
-      - ML_INFERENCE_WORKERS=4
+      # 2-way parallel processing - reduced to fit 8GB GPU limit
+      - ML_INFERENCE_WORKERS=2
       - ML_ENABLE_PARALLEL_INFERENCE=true
-      - ML_MAX_CONCURRENT_USERS=4
-      - ML_MEMORY_LIMIT_GB=20
+      - ML_MAX_CONCURRENT_USERS=2
+      - ML_MEMORY_LIMIT_GB=8
       - ML_ENABLE_CUDA_STREAMS=true
       - GPU_MEMORY_WARNING_THRESHOLD=90
       - GPU_MEMORY_CRITICAL_THRESHOLD=95
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # High priority GPU settings for SpheroSeg
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
+      - CUDA_LAUNCH_BLOCKING=0
+      - ML_GPU_PRIORITY=high
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ./backend/uploads/blue/blue:/app/uploads
@@ -146,10 +153,10 @@ services:
     deploy:
       resources:
         limits:
-          memory: 12G    # Increased from 8G for 4-way processing
+          memory: 8G     # Reduced to match GPU limit
           cpus: '4.0'    # Explicit CPU allocation
         reservations:
-          memory: 6G     # Increased from 2G
+          memory: 4G     # Reduced proportionally
           devices:
             - driver: nvidia
               count: 1

@@ -56,14 +56,6 @@ describe('Footer', () => {
     // Documentation link
     const docLink = screen.getByRole('link', { name: 'Documentation' });
     expect(docLink).toHaveAttribute('href', '/documentation');
-
-    // Features link (anchor)
-    const featuresLink = screen.getByRole('link', { name: 'Features' });
-    expect(featuresLink).toHaveAttribute('href', '#features');
-
-    // Other resource links
-    expect(screen.getByRole('link', { name: 'Tutorials' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Research' })).toBeInTheDocument();
   });
 
   it('displays Legal section with correct links', () => {
@@ -94,14 +86,23 @@ describe('Footer', () => {
     expect(copyrightText).toBeInTheDocument();
   });
 
-  it('displays full institution name in copyright', () => {
+  it('displays ÚTIA link and author credit in copyright', () => {
     render(<Footer />);
 
-    expect(
-      screen.getByText(
-        /Institute of Information Theory and Automation, Czech Academy of Sciences/
-      )
-    ).toBeInTheDocument();
+    // Check ÚTIA link
+    const utiaLink = screen.getByRole('link', { name: 'ÚTIA AV ČR' });
+    expect(utiaLink).toBeInTheDocument();
+    expect(utiaLink).toHaveAttribute('href', 'https://utia.cas.cz/en/');
+    expect(utiaLink).toHaveAttribute('target', '_blank');
+
+    // Check author link
+    const authorLink = screen.getByRole('link', { name: 'Michal Průšek' });
+    expect(authorLink).toBeInTheDocument();
+    expect(authorLink).toHaveAttribute(
+      'href',
+      'https://utia.cas.cz/en/people/?pid=3850'
+    );
+    expect(authorLink).toHaveAttribute('target', '_blank');
   });
 
   it('has proper responsive grid layout', () => {

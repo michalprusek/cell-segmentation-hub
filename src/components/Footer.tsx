@@ -94,7 +94,25 @@ const Footer = () => {
 
         <div className="mt-12 pt-8 border-t border-gray-200">
           <p className="text-gray-500 text-center">
-            {t('footer.copyright', { year: new Date().getFullYear() })}
+            © {new Date().getFullYear()} SpheroSeg. {t('footer.developedAt')}{' '}
+            <a
+              href="https://utia.cas.cz/en/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              ÚTIA AV ČR
+            </a>
+            . {t('footer.designBy')}{' '}
+            <a
+              href="https://utia.cas.cz/en/people/?pid=3850"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline"
+            >
+              Michal Průšek
+            </a>
+            .
           </p>
         </div>
       </div>

@@ -1723,7 +1723,7 @@ export default {
     termsOfService: '服务条款',
     privacyPolicy: '隐私政策',
     contactUs: '联系我们',
-    copyright:
-      '© {{year}} SpheroSeg. 由ÚTIA AV ČR（信息理论与自动化研究所，捷克科学院）开发。',
+    developedAt: '开发于',
+    designBy: '设计',
   },
 };
