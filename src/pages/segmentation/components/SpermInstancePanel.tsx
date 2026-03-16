@@ -10,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Polygon } from '@/lib/segmentation';
+import { calculatePolylineLength } from '../utils/metricCalculations';
 
 interface SpermInstancePanelProps {
   polygons: Polygon[];
@@ -46,6 +47,10 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
   const [expandedInstances, setExpandedInstances] = useState<Set<string>>(
     new Set()
   );
+  // Track manually created instances that don't yet have polylines
+  const [pendingInstances, setPendingInstances] = useState<Set<string>>(
+    new Set()
+  );
 
   // Get only polylines from polygons
   const polylines = useMemo(
@@ -66,14 +71,12 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
     return groups;
   }, [polylines]);
 
-  // Get all existing instance IDs (sorted)
-  const instanceIds = useMemo(
-    () =>
-      Array.from(instanceGroups.keys())
-        .filter(id => id !== 'unassigned')
-        .sort(),
-    [instanceGroups]
-  );
+  // Get all instance IDs: from actual polylines + pending (manually created)
+  const instanceIds = useMemo(() => {
+    const fromData = Array.from(instanceGroups.keys()).filter(id => id !== 'unassigned');
+    const all = new Set([...fromData, ...pendingInstances]);
+    return Array.from(all).sort();
+  }, [instanceGroups, pendingInstances]);
 
   // Get next available instance number
   const nextInstanceNumber = useMemo(() => {
@@ -89,6 +92,8 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
 
   const handleCreateInstance = useCallback(() => {
     const newId = `sperm_${nextInstanceNumber}`;
+    setPendingInstances(prev => new Set([...prev, newId]));
+    setExpandedInstances(prev => new Set([...prev, newId]));
     onInstanceIdChange(newId);
   }, [nextInstanceNumber, onInstanceIdChange]);
 
@@ -270,7 +275,7 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
                           : t('sperm.unclassified')}
                       </span>
                       <span className="text-gray-400">
-                        {polyline.points.length} pts
+                        {Math.round(calculatePolylineLength(polyline.points))} px
                       </span>
                     </button>
                   ))}
@@ -303,6 +308,9 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
                 <div className="w-2 h-2 rounded-full bg-violet-500" />
                 <span className="flex-1 text-left">
                   {polyline.name || polyline.id.substring(0, 8)}
+                </span>
+                <span className="text-gray-400">
+                  {Math.round(calculatePolylineLength(polyline.points))} px
                 </span>
               </button>
             ))}

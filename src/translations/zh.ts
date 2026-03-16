@@ -1751,6 +1751,7 @@ export default {
     setAsHead: '设为头部',
     setAsMidpiece: '设为中段',
     setAsTail: '设为尾部',
+    assignTo: '分配给',
     export: {
       description: '将精子形态学测量结果（头部、中段和尾部长度）导出到 Excel。',
       calibration: '校准系数',

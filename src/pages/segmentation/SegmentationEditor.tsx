@@ -136,6 +136,7 @@ const SegmentationEditor = () => {
   const [hiddenPolygonIds, setHiddenPolygonIds] = useState<Set<string>>(
     new Set()
   );
+  const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
     height: 600,
@@ -1047,6 +1048,18 @@ const SegmentationEditor = () => {
     [editor.polygons]
   );
 
+  // Handler for changing a polyline's instanceId (assign to sperm) from context menu
+  const handleChangeInstanceId = useCallback(
+    (polygonId: string, instanceId: string) => {
+      const currentPolygons = editor.getPolygons();
+      const updatedPolygons = currentPolygons.map(p =>
+        p.id === polygonId ? { ...p, instanceId } : p
+      );
+      editor.updatePolygons(updatedPolygons);
+    },
+    [editor.getPolygons, editor.updatePolygons]
+  );
+
   // Handler for changing a polyline's partClass from the context menu
   const handleChangePartClass = useCallback(
     (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => {
@@ -1258,6 +1271,7 @@ const SegmentationEditor = () => {
                                 isUndoRedoInProgress={
                                   editor.isUndoRedoInProgress
                                 }
+                                isHovered={polygon.id === hoveredPolygonId}
                                 editMode={editor.editMode}
                                 onSelectPolygon={editor.handlePolygonClick}
                                 onDeletePolygon={
@@ -1268,9 +1282,11 @@ const SegmentationEditor = () => {
                                 }
                                 onEditPolygon={handleEditPolygonFromContextMenu}
                                 onChangePartClass={handleChangePartClass}
+                                onChangeInstanceId={handleChangeInstanceId}
                                 onDeleteVertex={
                                   handleDeleteVertexFromContextMenu
                                 }
+                                onHover={setHoveredPolygonId}
                               />
                             ))}
                           </>

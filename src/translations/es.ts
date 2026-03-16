@@ -1933,6 +1933,7 @@ export default {
     setAsHead: 'Establecer como cabeza',
     setAsMidpiece: 'Establecer como pieza media',
     setAsTail: 'Establecer como cola',
+    assignTo: 'Asignar a',
     export: {
       description:
         'Exportar mediciones de morfología espermática (longitudes de cabeza, pieza media y cola) a Excel.',
