@@ -375,7 +375,9 @@ const CanvasPolygon = React.memo(
       prevProps.vertexDragState?.vertexIndex ===
         nextProps.vertexDragState?.vertexIndex &&
       sameDragOffset &&
-      prevProps.onChangePartClass === nextProps.onChangePartClass
+      prevProps.onChangePartClass === nextProps.onChangePartClass &&
+      prevProps.onChangeInstanceId === nextProps.onChangeInstanceId &&
+      prevProps.availableInstanceIds === nextProps.availableInstanceIds
     );
   }
 );
