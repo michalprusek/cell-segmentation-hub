@@ -61,16 +61,15 @@ const ProjectDetail = () => {
   const debounceTimeoutRef = useRef<{ [imageId: string]: NodeJS.Timeout }>({});
   const lastStatusRef = useRef<{ [imageId: string]: string }>({});
 
-  // Fetch project data - simplified without visible range for now
+  // Fetch project data — images loaded with lod:'low' (metadata only, no polygons).
+  // Segmentation editor loads full polygon data independently when opened.
   const {
     projectTitle,
     images,
     loading,
     updateImages,
     refreshImageSegmentation,
-  } = useProjectData(id, user?.id, {
-    fetchAll: false,
-  });
+  } = useProjectData(id, user?.id);
 
   // Handle cancellation events from WebSocket - define early for useSegmentationQueue
   const handleSegmentationCancelled = useCallback(
@@ -375,95 +374,6 @@ const ProjectDetail = () => {
     () => filteredImages.slice(paginatedIndices.start, paginatedIndices.end),
     [filteredImages, paginatedIndices]
   );
-
-  // Lazy-load segmentation data for visible images only
-  useEffect(() => {
-    const loadVisibleSegmentationData = async () => {
-      if (!paginatedImages.length) return;
-
-      const imagesToEnrich = paginatedImages.filter(img => {
-        const status = img.segmentationStatus;
-        return (
-          (status === 'completed' || status === 'segmented') &&
-          !img.segmentationResult // Only fetch if not already loaded
-        );
-      });
-
-      if (imagesToEnrich.length === 0) return;
-
-      try {
-        // Fetch segmentation data for visible images only
-        const segmentationPromises = imagesToEnrich.map(async img => {
-          try {
-            const segmentationData = await apiClient.getSegmentationResults(
-              img.id
-            );
-            return {
-              imageId: img.id,
-              segmentationData: segmentationData
-                ? {
-                    polygons: segmentationData.polygons || [],
-                    imageWidth:
-                      segmentationData.imageWidth || img.width || null,
-                    imageHeight:
-                      segmentationData.imageHeight || img.height || null,
-                    modelUsed: segmentationData.modelUsed,
-                    confidence: segmentationData.confidence,
-                    processingTime: segmentationData.processingTime,
-                    levelOfDetail: 'medium',
-                    polygonCount: segmentationData.polygons?.length || 0,
-                    pointCount:
-                      segmentationData.polygons?.reduce(
-                        (sum, p) => sum + p.points.length,
-                        0
-                      ) || 0,
-                    compressionRatio: 1.0,
-                  }
-                : null,
-            };
-          } catch (error) {
-            if (
-              error &&
-              typeof error === 'object' &&
-              'response' in error &&
-              (error as { response?: { status?: number } }).response?.status ===
-                404
-            ) {
-              // 404 is normal for images without segmentation
-              return null;
-            }
-            logger.error(
-              `Failed to fetch segmentation for image ${img.id}:`,
-              error
-            );
-            return null;
-          }
-        });
-
-        const results = await Promise.all(segmentationPromises);
-
-        // Update only the images that have new segmentation data
-        updateImages(prevImages =>
-          prevImages.map(img => {
-            const result = results.find(r => r?.imageId === img.id);
-            if (result?.segmentationData) {
-              return {
-                ...img,
-                segmentationResult: result.segmentationData,
-              };
-            }
-            return img;
-          })
-        );
-      } catch (error) {
-        logger.error('Error loading visible segmentation data:', error);
-      }
-    };
-
-    // Debounce the loading to avoid excessive API calls during rapid pagination
-    const timeoutId = setTimeout(loadVisibleSegmentationData, 300);
-    return () => clearTimeout(timeoutId);
-  }, [paginatedImages, updateImages]);
 
   // Memoized calculations for heavy operations
   const imagesToSegmentCount = useMemo(

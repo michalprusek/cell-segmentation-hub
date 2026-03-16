@@ -1,5 +1,5 @@
 // Define types locally to avoid circular dependency
-export type ModelType = 'hrnet' | 'cbam_resunet' | 'unet_spherohq';
+export type ModelType = 'hrnet' | 'cbam_resunet' | 'unet_spherohq' | 'sperm';
 
 export interface ModelPerformance {
   avgTimePerImage: number; // seconds
@@ -62,12 +62,24 @@ export function getLocalizedModelInfo(
         batchSize: 4,
       },
     },
+    sperm: {
+      id: 'sperm',
+      size: 'medium',
+      defaultThreshold: 0.5,
+      performance: {
+        avgTimePerImage: 0.3,
+        throughput: 3.3,
+        p95Latency: 0.45,
+        batchSize: 1,
+      },
+    },
   };
 
   const keyMap: Record<ModelType, string> = {
     hrnet: 'hrnet',
     cbam_resunet: 'cbam',
     unet_spherohq: 'unet_spherohq',
+    sperm: 'sperm',
   };
 
   const baseModel = baseModels[modelId];
@@ -85,7 +97,7 @@ export function getLocalizedModelInfo(
  * Get all localized models
  */
 export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
-  const modelIds: ModelType[] = ['hrnet', 'cbam_resunet', 'unet_spherohq'];
+  const modelIds: ModelType[] = ['hrnet', 'cbam_resunet', 'unet_spherohq', 'sperm'];
   return modelIds.map(id => getLocalizedModelInfo(id, t));
 }
 
@@ -142,6 +154,21 @@ export const BASIC_MODEL_INFO: Record<
       throughput: 5.5,
       p95Latency: 0.286,
       batchSize: 4,
+    },
+  },
+  sperm: {
+    id: 'sperm',
+    name: 'Sperm Segmentation',
+    displayName: 'Sperm Segmentation',
+    description:
+      'Sperm morphology model with skeleton extraction for head/midpiece/tail measurement',
+    size: 'medium',
+    defaultThreshold: 0.5,
+    performance: {
+      avgTimePerImage: 0.3,
+      throughput: 3.3,
+      p95Latency: 0.45,
+      batchSize: 1,
     },
   },
 };

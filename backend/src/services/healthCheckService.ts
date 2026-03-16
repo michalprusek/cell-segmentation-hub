@@ -6,6 +6,7 @@
 import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 import axios from 'axios';
+import * as v8 from 'v8';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Server as SocketIOServer } from 'socket.io';
@@ -630,8 +631,9 @@ export class HealthCheckService {
     // Check memory usage
     const memoryUsage = health.metrics?.memoryUsage;
     if (memoryUsage) {
+      const heapStatsReadiness = v8.getHeapStatistics();
       const usedMemoryPercent =
-        (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
+        (memoryUsage.heapUsed / heapStatsReadiness.heap_size_limit) * 100;
       if (usedMemoryPercent > 90) {
         issues.push(`High memory usage: ${usedMemoryPercent.toFixed(1)}%`);
       }
@@ -653,8 +655,9 @@ export class HealthCheckService {
       // For now, we'll provide basic health status based on system resources
 
       const memoryUsage = process.memoryUsage();
+      const heapStats = v8.getHeapStatistics();
       const memoryUsedPercent =
-        (memoryUsage.heapUsed / memoryUsage.heapTotal) * 100;
+        (memoryUsage.heapUsed / heapStats.heap_size_limit) * 100;
 
       // Check if system has enough resources for parallel processing
       const hasCapacity = memoryUsedPercent < 80; // Less than 80% memory usage

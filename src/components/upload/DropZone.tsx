@@ -8,13 +8,11 @@ import UPLOAD_CONFIG from '@/lib/uploadConfig';
 interface DropZoneProps {
   disabled: boolean;
   onDrop: (acceptedFiles: File[]) => void;
-  isDragActive: boolean;
 }
 
 const DropZone: React.FC<DropZoneProps> = ({
   disabled,
   onDrop,
-  isDragActive,
 }) => {
   const { t } = useLanguage();
 
@@ -119,7 +117,7 @@ const DropZone: React.FC<DropZoneProps> = ({
     }
   };
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop: handleDrop,
     accept: {
       'image/jpeg': [],

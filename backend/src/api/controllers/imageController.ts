@@ -878,17 +878,22 @@ export class ImageController {
                   }
                 }
 
+                const polygonCount = parsedPolygons.length;
+                const pointCount = parsedPolygons.reduce(
+                  (sum: number, p: any) =>
+                    sum + (p.points?.length || p.coordinates?.length || 0),
+                  0
+                );
+
+                // For 'low' LOD, only return counts — skip the heavy polygon data.
+                // The grid view uses server-generated thumbnail images, not raw polygons.
                 thumbnailData = {
-                  polygons: parsedPolygons,
+                  polygons: levelOfDetail === 'low' ? [] : parsedPolygons,
                   imageWidth: image.segmentation.imageWidth,
                   imageHeight: image.segmentation.imageHeight,
                   levelOfDetail: levelOfDetail,
-                  polygonCount: parsedPolygons.length,
-                  pointCount: parsedPolygons.reduce(
-                    (sum: number, p: any) =>
-                      sum + (p.points?.length || p.coordinates?.length || 0),
-                    0
-                  ),
+                  polygonCount,
+                  pointCount,
                   compressionRatio: 1.0,
                 };
               } catch (error) {

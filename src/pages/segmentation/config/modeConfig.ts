@@ -23,6 +23,7 @@ export const MODE_BEHAVIOR_CONFIG = {
     EditMode.AddPoints,
     EditMode.Slice,
     EditMode.CreatePolygon, // Added after UX evaluation - prevents interruption during creation
+    EditMode.CreatePolyline, // Same reasoning as CreatePolygon
   ] as const,
 
   /**
@@ -48,6 +49,7 @@ export const MODE_BEHAVIOR_CONFIG = {
     EditMode.Slice,
     EditMode.AddPoints,
     EditMode.CreatePolygon,
+    EditMode.CreatePolyline,
   ] as const,
 
   /**
@@ -56,6 +58,7 @@ export const MODE_BEHAVIOR_CONFIG = {
    */
   INTERACTIVE_POINT_PLACEMENT_MODES: [
     EditMode.CreatePolygon,
+    EditMode.CreatePolyline,
     EditMode.AddPoints,
     EditMode.Slice,
   ] as const,

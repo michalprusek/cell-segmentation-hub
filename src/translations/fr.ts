@@ -400,6 +400,11 @@ export default {
           description:
             "Meilleures performances sur l'ensemble de données SpheroHQ - optimisé pour la segmentation de sphéroïdes avec vitesse et précision équilibrées (~0.25s/image, 10 img/s)",
         },
+        sperm: {
+          name: 'Segmentation de spermatozoïdes',
+          description:
+            "Modèle de morphologie spermatique avec extraction de squelette pour mesurer la tête, la pièce intermédiaire et la queue",
+        },
       },
     },
     confidenceThreshold: 'Seuil de confiance',
@@ -635,6 +640,7 @@ export default {
       addPoints: 'Ajouter des points',
       create: 'Créer',
       createPolygon: 'Créer un polygone',
+      createPolyline: 'Créer une polyligne',
       slice: 'Découper',
       delete: 'Supprimer',
       deletePolygon: 'Supprimer le polygone',
@@ -645,6 +651,7 @@ export default {
       edit: 'Déplacer et modifier les sommets',
       addPoints: 'Ajouter des points entre les sommets',
       create: 'Créer de nouveaux polygones',
+      createPolyline: 'Cliquer pour placer des points, double-cliquer pour terminer la polyligne',
       slice: 'Diviser les polygones avec une ligne',
       delete: 'Supprimer les polygones',
     },
@@ -684,6 +691,7 @@ export default {
       polygonList: 'Liste des Polygones',
       external: 'External',
       internal: 'Internal',
+      polyline: 'Polyligne',
     },
     shortcuts: {
       buttonText: 'Raccourcis',
@@ -1072,6 +1080,7 @@ export default {
     noData: "Aucune donnée disponible pour l'exportation",
     segmentationData: 'Données de segmentation',
     spheroidMetrics: 'Métriques des sphéroïdes',
+    spermMetrics: 'Métriques des spermatozoïdes',
     cocoFormat: 'Format COCO',
     cocoFormatTitle: 'Export format COCO',
     downloadJson: 'Télécharger JSON',
@@ -1664,6 +1673,8 @@ export default {
       'Cette action est irréversible. Le polygone sera définitivement supprimé de la segmentation.',
     duplicateVertex: 'Dupliquer le sommet',
     deleteVertex: 'Supprimer le sommet',
+    editPolyline: 'Modifier la polyligne',
+    deletePolyline: 'Supprimer la polyligne',
   },
   websocket: {
     reconnecting: 'Reconnexion au serveur...',
@@ -1839,5 +1850,28 @@ export default {
     contactUs: 'Nous contacter',
     developedAt: 'Développé à',
     designBy: 'Design par',
+  },
+  sperm: {
+    instancePanel: 'Instances de spermatozoïdes',
+    instance: 'Spermatozoïde',
+    newInstance: 'Nouvelle instance',
+    unassigned: 'Non assigné',
+    unclassified: 'Non classifié',
+    part: {
+      head: 'Tête',
+      midpiece: 'Pièce intermédiaire',
+      tail: 'Queue',
+    },
+    setAsHead: 'Définir comme tête',
+    setAsMidpiece: 'Définir comme pièce intermédiaire',
+    setAsTail: 'Définir comme queue',
+    export: {
+      description:
+        'Exporter les mesures de morphologie spermatique (longueurs de la tête, de la pièce intermédiaire et de la queue) vers Excel.',
+      calibration: 'Facteur de calibration',
+      instances: 'instances',
+      polylines: 'polylignes',
+      button: 'Exporter les métriques des spermatozoïdes',
+    },
   },
 };
