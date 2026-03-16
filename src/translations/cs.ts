@@ -1905,6 +1905,7 @@ export default {
     setAsHead: 'Nastavit jako hlavu',
     setAsMidpiece: 'Nastavit jako střední část',
     setAsTail: 'Nastavit jako bičík',
+    assignTo: 'Přiřadit k',
     export: {
       description:
         'Exportovat měření morfologie spermií (délky hlavy, středního dílu a bičíku) do Excelu.',

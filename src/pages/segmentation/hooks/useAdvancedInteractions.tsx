@@ -375,11 +375,13 @@ export const useAdvancedInteractions = ({
    * Handle Create Polyline double-click to finalize
    */
   const handleCreatePolylineDoubleClick = useCallback(() => {
-    // Double-click fires two click events first, each adding a point.
-    // Remove the last duplicate point before finalizing.
-    const cleanedPoints = tempPoints.length > 2 ? tempPoints.slice(0, -1) : tempPoints;
-    if (cleanedPoints.length >= 2) {
-      const newPolyline = createPolygon(cleanedPoints);
+    // React 18 automatic batching: the double-click's preceding click events
+    // call setTempPoints, but both closures capture the same pre-render tempPoints.
+    // The second click's setState overwrites the first (same base array), so only
+    // one point is added — no duplicate to remove. tempPoints here reflects the
+    // state from the last committed render, excluding in-flight click updates.
+    if (tempPoints.length >= 2) {
+      const newPolyline = createPolygon(tempPoints);
       // Override with polyline-specific fields, including active part class and instance
       const polyline: Polygon = {
         ...newPolyline,
