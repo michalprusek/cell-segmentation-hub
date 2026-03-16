@@ -1058,28 +1058,26 @@ const SegmentationEditor = () => {
     return Array.from(ids).sort();
   }, [editor.polygons, activeInstanceId]);
 
-  // Handler for changing a polyline's instanceId (assign to sperm) from context menu
-  const handleChangeInstanceId = useCallback(
-    (polygonId: string, instanceId: string) => {
+  // Generic handler for updating a single field on a polygon by ID
+  const handleUpdatePolygonField = useCallback(
+    (polygonId: string, updates: Partial<Polygon>) => {
       const currentPolygons = editor.getPolygons();
       const updatedPolygons = currentPolygons.map(p =>
-        p.id === polygonId ? { ...p, instanceId } : p
+        p.id === polygonId ? { ...p, ...updates } : p
       );
       editor.updatePolygons(updatedPolygons);
     },
     [editor.getPolygons, editor.updatePolygons]
   );
 
-  // Handler for changing a polyline's partClass from the context menu
+  const handleChangeInstanceId = useCallback(
+    (polygonId: string, instanceId: string) => handleUpdatePolygonField(polygonId, { instanceId }),
+    [handleUpdatePolygonField]
+  );
+
   const handleChangePartClass = useCallback(
-    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => {
-      const currentPolygons = editor.getPolygons();
-      const updatedPolygons = currentPolygons.map(p =>
-        p.id === polygonId ? { ...p, partClass } : p
-      );
-      editor.updatePolygons(updatedPolygons);
-    },
-    [editor.getPolygons, editor.updatePolygons]
+    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => handleUpdatePolygonField(polygonId, { partClass }),
+    [handleUpdatePolygonField]
   );
 
   // Convert new EditMode to legacy booleans for compatibility
