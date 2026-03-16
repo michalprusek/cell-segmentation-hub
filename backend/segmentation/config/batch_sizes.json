@@ -47,6 +47,20 @@
         "expected_concurrent_throughput": 2.04
       },
       "note": "Reduced for 8GB GPU limit"
+    },
+    "sperm": {
+      "optimal_batch_size": 1,
+      "max_safe_batch_size": 2,
+      "expected_throughput": 3.3,
+      "memory_limit_mb": 2000,
+      "p95_latency_ms": 450.0,
+      "production_optimized": true,
+      "concurrent_processing": {
+        "max_concurrent_users": 2,
+        "memory_per_user_mb": 2000,
+        "expected_concurrent_throughput": 6.6
+      },
+      "note": "Sperm segmentation model - estimates pending benchmarking"
     }
   },
   "dynamic_batching": {
@@ -55,14 +69,14 @@
     "timeout_ms": 50
   },
   "parallel_processing": {
-    "enabled": true,
-    "max_concurrent_users": 2,
-    "cuda_streams": 2,
+    "enabled": false,
+    "max_concurrent_users": 1,
+    "cuda_streams": 1,
     "memory_pressure_threshold": 0.85,
     "emergency_cleanup_threshold": 0.90,
     "total_memory_budget_gb": 8.0,
     "memory_safety_margin_gb": 1.0,
-    "description": "Configuration optimized for 8GB GPU limit - supports 2 concurrent users to leave 16GB for other applications"
+    "description": "Sequential processing - single worker for 8GB GPU limit, leaves 16GB for other applications"
   },
   "memory_reserve_percent": 15,
   "detailed_results": {

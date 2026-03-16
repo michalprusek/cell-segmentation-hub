@@ -126,6 +126,7 @@ const EnhancedSegmentationEditor: React.FC<EnhancedSegmentationEditorProps> = ({
           onMouseDown={editor.handleMouseDown}
           onMouseMove={editor.handleMouseMove}
           onMouseUp={editor.handleMouseUp}
+          onDoubleClick={editor.handleCreatePolylineDoubleClick}
           loading={false}
         >
           <CanvasContent transform={editor.transform}>

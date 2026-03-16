@@ -19,7 +19,16 @@ export interface Polygon {
   points: Array<{ x: number; y: number }>;
   type: 'external' | 'internal';
   id?: string;
+  geometry?: 'polygon' | 'polyline';
+  partClass?: 'head' | 'midpiece' | 'tail';
+  instanceId?: string;
 }
+
+const POLYLINE_COLORS: Record<string, string> = {
+  head: '#22c55e',      // green
+  midpiece: '#f59e0b',  // orange
+  tail: '#06b6d4',      // cyan
+};
 
 export enum VisualizationResult {
   SUCCESS = 'success',
@@ -140,10 +149,13 @@ export class VisualizationGenerator {
       // Reset any transformations before drawing polygons
       ctx.resetTransform();
 
-      // Draw polygons - reset polygon numbering for each image
+      // Draw polygons and polylines - reset numbering for each image
       let polygonNumber = 1;
       for (const polygon of polygons) {
-        if (polygon.type === 'external') {
+        if (polygon.geometry === 'polyline') {
+          // Polylines don't get numbers
+          await this.drawPolygon(ctx, polygon, mergedOptions);
+        } else if (polygon.type === 'external') {
           await this.drawPolygon(ctx, polygon, mergedOptions, polygonNumber);
           polygonNumber++;
         } else {
@@ -241,53 +253,66 @@ export class VisualizationGenerator {
     options: VisualizationOptions,
     polygonNumber?: number
   ): Promise<void> {
-    if (!polygon.points || polygon.points.length < 3) {
+    const isPolyline = polygon.geometry === 'polyline';
+    const minPoints = isPolyline ? 2 : 3;
+    if (!polygon.points || polygon.points.length < minPoints) {
       return;
     }
 
-    const color =
-      polygon.type === 'external'
+    // Polylines use part-class colors; polygons use type-based colors
+    const color = isPolyline
+      ? (POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7')
+      : polygon.type === 'external'
         ? options.polygonColors?.external || '#00FF00'
         : options.polygonColors?.internal || '#FF0000';
 
-    // Set stroke style
     ctx.strokeStyle = color;
-    ctx.lineWidth = options.strokeWidth || 2;
+    ctx.lineWidth = isPolyline ? (options.strokeWidth || 2) * 2 : (options.strokeWidth || 2);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
 
-    // Set fill style with transparency
-    const fillColor = this.hexToRgba(color, options.transparency || 0.3);
-    ctx.fillStyle = fillColor;
-
-    // Begin path
     ctx.beginPath();
     if (polygon.points?.[0]) {
       ctx.moveTo(polygon.points[0].x, polygon.points[0].y);
     }
 
-    // Draw polygon
     for (let i = 1; i < polygon.points.length; i++) {
       const point = polygon.points[i];
       if (point && typeof point.x === 'number' && typeof point.y === 'number') {
         ctx.lineTo(point.x, point.y);
       }
     }
-    ctx.closePath();
 
-    // Fill and stroke
-    ctx.fill();
-    ctx.stroke();
+    if (isPolyline) {
+      // Open path — no closePath, no fill
+      ctx.stroke();
 
-    // Draw polygon number if it's an external polygon
-    if (
-      options.showNumbers &&
-      polygonNumber !== undefined &&
-      polygon.type === 'external'
-    ) {
-      this.drawPolygonNumber(ctx, polygon, polygonNumber, options);
+      // Draw endpoint circles
+      const first = polygon.points[0];
+      const last = polygon.points[polygon.points.length - 1];
+      if (first && last) {
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(first.x, first.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(last.x, last.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    } else {
+      ctx.closePath();
+      // Fill with transparency
+      ctx.fillStyle = this.hexToRgba(color, options.transparency || 0.3);
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw polygon number
+      if (options.showNumbers && polygonNumber !== undefined && polygon.type === 'external') {
+        this.drawPolygonNumber(ctx, polygon, polygonNumber, options);
+      }
+      // Draw vertices
+      this.drawVertices(ctx, polygon, color);
     }
-
-    // Draw vertices
-    this.drawVertices(ctx, polygon, color);
   }
 
   private drawPolygonNumber(

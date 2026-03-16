@@ -31,6 +31,15 @@ from models.hrnet import HRNetV2
 from models.cbam_resunet import ResUNetCBAM
 from models.unet import UNet
 
+# Optional sperm model import
+_sperm_import_error = None
+try:
+    from models.sperm import SpermModel
+except ImportError as e:
+    logger.warning(f"Could not import SpermModel: {e}. Sperm segmentation will not be available.")
+    SpermModel = None
+    _sperm_import_error = e
+
 # Import the new inference executor
 from .inference_executor import (
     InferenceExecutor, 
@@ -123,6 +132,12 @@ class ModelLoader:
             'pretrained_path': 'weights/unet_spherohq_best.pth',
             'finetuned_path': 'weights/unet_spherohq_best.pth',
             'config_path': None
+        },
+        'sperm': {
+            'class': SpermModel,  # Will be None if sperm.py not yet copied
+            'pretrained_path': 'sperm_final/best_model.pth',
+            'finetuned_path': 'sperm_final/best_model.pth',
+            'config_path': None
         }
     }
     
@@ -198,8 +213,19 @@ class ModelLoader:
                 model = ResUNetCBAM(in_channels=3, out_channels=1, features=[64, 128, 256, 512], use_instance_norm=True, dropout_rate=0.0)  # No dropout for inference!
             elif model_name == 'unet_spherohq':
                 # UNet optimized for SpheroHQ dataset
-                model = UNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512, 1024], 
+                model = UNet(in_channels=3, out_channels=1, features=[64, 128, 256, 512, 1024],
                            use_instance_norm=True, dropout_rate=0.0, use_deep_supervision=False)
+            elif model_name == 'sperm':
+                # Sperm segmentation model — uses its own pipeline (Mask2Former + graph assembly)
+                if SpermModel is None:
+                    raise ImportError(
+                        f"Sperm model architecture not available: {_sperm_import_error}"
+                    )
+                model = SpermModel()
+                model.load_weights(str(weights_full_path), self.device)
+                self.loaded_models[model_name] = model
+                logger.info(f"Successfully loaded sperm pipeline model from: {weights_full_path}")
+                return model
             else:
                 raise ValueError(f"Unknown model architecture: {model_name}")
             
@@ -569,7 +595,7 @@ class ModelLoader:
                     "batch_size": 1  # Single image processing
                 }
             }
-            
+
             return result
             
         finally:
@@ -577,7 +603,107 @@ class ModelLoader:
             self.is_processing = False
             self.current_model = None
     
-    def predict_batch(self, images: List[Image.Image], model_name: str, batch_size: Optional[int] = None, 
+    def predict_sperm(self, image: Image.Image, threshold: float = 0.3,
+                      score_threshold: float = 0.95, timeout: Optional[float] = None) -> Dict[str, Any]:
+        """Run the sperm-specific pipeline (Mask2Former + graph assembly + polyline extraction).
+
+        Unlike predict() which uses a standard segmentation pipeline, this method
+        uses the complete sperm_final pipeline which produces:
+        - Instance masks per sperm part (head/midpiece/tail)
+        - Graph-assembled sperm groupings
+        - Connected polylines per sperm
+
+        Returns format compatible with the standard predict() response but with
+        additional 'polylines' field.
+        """
+        import time as _time
+
+        if 'sperm' not in self.loaded_models:
+            raise ValueError("Sperm model not loaded. Load it first with load_model('sperm')")
+
+        sperm_model = self.loaded_models['sperm']
+        original_size = image.size  # (width, height)
+
+        self.is_processing = True
+        self.current_model = 'sperm'
+        start_time = _time.time()
+
+        try:
+            # Convert PIL to BGR numpy (sperm pipeline expects BGR)
+            img_rgb = np.array(image.convert('RGB'))
+            img_bgr = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2BGR)
+
+            # Run the full sperm pipeline
+            result = sperm_model.predict(
+                img_bgr,
+                mask_threshold=threshold,
+                score_threshold=score_threshold,
+            )
+
+            sperm_list = result.get('sperm_list', [])
+            polylines_list = result.get('polylines', [])
+            processing_time = _time.time() - start_time
+
+            # Convert to polyline-only format (no mask polygons for sperm model)
+            polylines = []
+            polyline_counter = 1
+
+            for sperm_idx, (sperm, polys) in enumerate(zip(sperm_list, polylines_list)):
+                instance_id = f"sperm_{sperm_idx + 1}"
+
+                for part_key in ['head', 'midpiece', 'tail']:
+                    poly_pts = polys.get(part_key, [])
+                    if len(poly_pts) >= 2:
+                        points = [{"x": float(pt[0]), "y": float(pt[1])} for pt in poly_pts]
+                        score = 0.9
+                        part = sperm.get(part_key)
+                        if part is not None and isinstance(part, dict):
+                            score = float(part.get('score', 0.9))
+                        else:
+                            logger.debug(f"Using default confidence 0.9 for {part_key} (part data unavailable)")
+                        polylines.append({
+                            "id": f"polyline_{polyline_counter}",
+                            "points": points,
+                            "type": "external",
+                            "class": "sperm",
+                            "geometry": "polyline",
+                            "partClass": part_key,
+                            "instanceId": instance_id,
+                            "confidence": score,
+                            "vertices_count": len(points),
+                        })
+                        polyline_counter += 1
+
+            logger.info(f"Sperm pipeline: {len(sperm_list)} sperm, {len(polylines)} polylines in {processing_time:.2f}s")
+
+            return {
+                "model_used": "sperm",
+                "threshold_used": threshold,
+                "image_size": {"width": original_size[0], "height": original_size[1]},
+                "polygons": [],
+                "polylines": polylines,
+                "processing_info": {
+                    "device": str(self.device),
+                    "num_sperm": len(sperm_list),
+                    "num_polylines": len(polylines),
+                    "processing_time_s": processing_time,
+                    "batch_size": 1,
+                }
+            }
+
+        except Exception as e:
+            processing_time = _time.time() - start_time
+            logger.error(
+                f"Sperm pipeline failed after {processing_time:.2f}s: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+            raise
+
+        finally:
+            self.is_processing = False
+            self.current_model = None
+
+    def predict_batch(self, images: List[Image.Image], model_name: str, batch_size: Optional[int] = None,
                      threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> List[Dict[str, Any]]:
         """
         Perform batch segmentation on multiple images with automatic batching

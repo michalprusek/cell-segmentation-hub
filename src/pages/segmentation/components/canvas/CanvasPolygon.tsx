@@ -20,6 +20,7 @@ interface CanvasPolygonProps {
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
+  onChangePartClass?: (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => void;
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
   editMode?: EditMode;
@@ -40,6 +41,7 @@ const CanvasPolygon = React.memo(
     onDeletePolygon,
     onSlicePolygon,
     onEditPolygon,
+    onChangePartClass,
     onDeleteVertex,
     onDuplicateVertex,
     editMode,
@@ -48,6 +50,9 @@ const CanvasPolygon = React.memo(
 
     // Calculate bounding box for viewport culling (cached)
     const boundingBox = useMemo(() => calculateBoundingBox(points), [points]);
+
+    // Determine if this is a polyline (open path)
+    const isPolyline = polygon.geometry === 'polyline';
 
     // Validate points without simplification to preserve full polygon detail
     const validPoints = useMemo(() => {
@@ -63,14 +68,16 @@ const CanvasPolygon = React.memo(
           !isNaN(p.y)
       );
 
-      // Return filtered points only if we have enough for a valid polygon
-      return filtered.length >= 3 ? filtered : [];
-    }, [points]);
+      // Polylines need at least 2 points, polygons need at least 3
+      const minPoints = isPolyline ? 2 : 3;
+      return filtered.length >= minPoints ? filtered : [];
+    }, [points, isPolyline]);
 
     // Generate SVG path string from valid points (no simplification)
     // Apply drag offset to the dragged vertex
     const pathString = useMemo(() => {
-      if (!validPoints || validPoints.length < 3) {
+      const minPoints = isPolyline ? 2 : 3;
+      if (!validPoints || validPoints.length < minPoints) {
         return '';
       }
 
@@ -93,9 +100,10 @@ const CanvasPolygon = React.memo(
         });
       }
 
-      const path = `M${pointsToRender.map(p => `${p.x},${p.y}`).join(' L')} Z`;
+      // Polylines: open path (no Z). Polygons: closed path (Z).
+      const path = `M${pointsToRender.map(p => `${p.x},${p.y}`).join(' L')}${isPolyline ? '' : ' Z'}`;
       return path;
-    }, [validPoints, vertexDragState, id]);
+    }, [validPoints, vertexDragState, id, isPolyline]);
 
     // For the path stroke width, we need to adjust based on zoom level
     // When zoomed in, the stroke appears thicker so we need to make it thinner
@@ -119,8 +127,21 @@ const CanvasPolygon = React.memo(
     // Determine if polygon is internal based on parent_id or type
     const isInternal = parent_id || type === 'internal';
 
-    // Determine path color based on polygon type and selection status
+    // Determine path color based on polygon type, polyline partClass, and selection status
     const getPathColor = () => {
+      if (isPolyline) {
+        // Part-class-based colors for sperm polylines
+        switch (polygon.partClass) {
+          case 'head':
+            return isSelected ? '#16a34a' : '#22c55e'; // green
+          case 'midpiece':
+            return isSelected ? '#d97706' : '#f59e0b'; // orange
+          case 'tail':
+            return isSelected ? '#0891b2' : '#06b6d4'; // cyan
+          default:
+            return isSelected ? '#9333ea' : '#a855f7'; // purple (unclassified polyline)
+        }
+      }
       if (isInternal) {
         return isSelected ? '#0b84da' : '#0ea5e9';
       } else {
@@ -153,6 +174,10 @@ const CanvasPolygon = React.memo(
       () => onEditPolygon?.(id),
       [onEditPolygon, id]
     );
+    const handleChangePartClass = useCallback(
+      (partClass: 'head' | 'midpiece' | 'tail') => onChangePartClass?.(id, partClass),
+      [onChangePartClass, id]
+    );
 
     const handleDoubleClick = useCallback(
       (e: React.MouseEvent) => {
@@ -180,6 +205,8 @@ const CanvasPolygon = React.memo(
         onDelete={handleDelete}
         onSlice={handleSlice}
         onEdit={handleEdit}
+        isPolyline={isPolyline}
+        onChangePartClass={isPolyline ? handleChangePartClass : undefined}
       >
         <g
           data-testid={id}
@@ -190,33 +217,63 @@ const CanvasPolygon = React.memo(
           onKeyDown={handleKeyDown}
           style={{ outline: 'none' }}
         >
-          {/* Polygon path - render even if path is empty for testing */}
+          {/* Polygon/Polyline path - render even if path is empty for testing */}
           <path
             d={pathString || 'M0,0'}
             className={cn(
               'polygon-path cursor-pointer transition-colors',
-              isInternal ? 'polygon-internal' : 'polygon-external',
+              isPolyline ? 'polyline-path' : isInternal ? 'polygon-internal' : 'polygon-external',
               isSelected && 'polygon-selected'
             )}
             fill={
-              isInternal ? 'rgba(14, 165, 233, 0.1)' : 'rgba(239, 68, 68, 0.1)'
+              isPolyline
+                ? 'none'
+                : isInternal
+                  ? 'rgba(14, 165, 233, 0.1)'
+                  : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
-            strokeWidth={Math.max(strokeWidth, 0.5)}
+            strokeWidth={Math.max(isPolyline ? strokeWidth * 1.5 : strokeWidth, 0.5)}
             strokeOpacity={pathString ? 1 : 0}
             strokeLinecap="round"
             strokeLinejoin="round"
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
             filter={
-              isSelected
+              isSelected && !isPolyline
                 ? `url(#${type === 'internal' ? 'blue' : 'red'}-glow)`
                 : ''
             }
             vectorEffect="non-scaling-stroke"
             shapeRendering="geometricPrecision"
-            pointerEvents="all"
+            pointerEvents={isPolyline ? 'stroke' : 'all'}
           />
+
+          {/* Polyline endpoint markers (small circles at start and end) */}
+          {isPolyline && validPoints.length >= 2 && (
+            <>
+              <circle
+                cx={validPoints[0].x}
+                cy={validPoints[0].y}
+                r={Math.max(3 / zoom, 1.5)}
+                fill={pathColor}
+                stroke="white"
+                strokeWidth={Math.max(1 / zoom, 0.3)}
+                opacity={0.9}
+                pointerEvents="none"
+              />
+              <circle
+                cx={validPoints[validPoints.length - 1].x}
+                cy={validPoints[validPoints.length - 1].y}
+                r={Math.max(3 / zoom, 1.5)}
+                fill={pathColor}
+                stroke="white"
+                strokeWidth={Math.max(1 / zoom, 0.3)}
+                opacity={0.9}
+                pointerEvents="none"
+              />
+            </>
+          )}
 
           {/* Render vertices using separate component for performance */}
           {!hideVertices && (
@@ -269,6 +326,8 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.id === nextProps.polygon.id &&
       samePoints &&
       prevProps.polygon.type === nextProps.polygon.type &&
+      prevProps.polygon.geometry === nextProps.polygon.geometry &&
+      prevProps.polygon.partClass === nextProps.polygon.partClass &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
@@ -285,7 +344,8 @@ const CanvasPolygon = React.memo(
         nextProps.vertexDragState?.polygonId &&
       prevProps.vertexDragState?.vertexIndex ===
         nextProps.vertexDragState?.vertexIndex &&
-      sameDragOffset
+      sameDragOffset &&
+      prevProps.onChangePartClass === nextProps.onChangePartClass
     );
   }
 );

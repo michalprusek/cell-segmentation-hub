@@ -21,6 +21,7 @@ interface UseKeyboardShortcutsProps {
 
   // Optional callbacks
   onEscape?: () => void;
+  onEnter?: () => void;
   onKeyDown?: (key: string, event: KeyboardEvent) => void;
   onShowHelp?: () => void;
 }
@@ -44,6 +45,7 @@ export const useKeyboardShortcuts = ({
   handleResetView,
   handleDeletePolygon,
   onEscape,
+  onEnter,
   onKeyDown,
   onShowHelp,
 }: UseKeyboardShortcutsProps) => {
@@ -119,6 +121,13 @@ export const useKeyboardShortcuts = ({
           if (!isCtrlPressed.current) {
             event.preventDefault();
             setEditMode(EditMode.CreatePolygon);
+          }
+          break;
+
+        case 'p':
+          if (!isCtrlPressed.current) {
+            event.preventDefault();
+            setEditMode(EditMode.CreatePolyline);
           }
           break;
 
@@ -206,6 +215,14 @@ export const useKeyboardShortcuts = ({
           }
           break;
 
+        // Enter - finalize polyline creation
+        case 'enter':
+          if (editMode === EditMode.CreatePolyline && onEnter) {
+            event.preventDefault();
+            onEnter();
+          }
+          break;
+
         // Cancel/Escape
         case 'escape':
           event.preventDefault();
@@ -258,6 +275,7 @@ export const useKeyboardShortcuts = ({
       handleResetView,
       handleDeletePolygon,
       onEscape,
+      onEnter,
       onKeyDown,
       onShowHelp,
     ]
@@ -305,6 +323,7 @@ function cycleEditMode(
   const allModes = [
     EditMode.View,
     EditMode.CreatePolygon,
+    EditMode.CreatePolyline,
     EditMode.Slice, // Slice mode available always
     EditMode.DeletePolygon,
   ];
@@ -354,6 +373,8 @@ export const getShortcutForMode = (mode: EditMode): string => {
       return 'A';
     case EditMode.CreatePolygon:
       return 'N';
+    case EditMode.CreatePolyline:
+      return 'P';
     case EditMode.Slice:
       return 'S';
     case EditMode.DeletePolygon:

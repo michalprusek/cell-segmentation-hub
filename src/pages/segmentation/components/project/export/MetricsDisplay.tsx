@@ -37,9 +37,9 @@ const MetricsDisplay: React.FC<MetricsDisplayProps> = ({ segmentation }) => {
     downloadJSON(data, baseFilename);
   };
 
-  // Get external polygons for metrics
+  // Get external polygons for metrics (exclude polylines)
   const externalPolygons = segmentation.polygons.filter(
-    polygon => polygon.type === 'external'
+    polygon => polygon.type === 'external' && (polygon as any).geometry !== 'polyline'
   );
 
   // Get all internal polygons

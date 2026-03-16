@@ -418,6 +418,9 @@ export interface PolygonData {
   points: Array<{ x: number; y: number }>;
   type: 'external' | 'internal';
   class: string;
+  geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
+  partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
+  instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
 }
 
 export interface SegmentationData {
@@ -502,6 +505,18 @@ export interface SpheroidMetric {
   boundingBoxHeight: number; // Renamed from lengthMinorDiameter for clarity
   solidity: number;
   // sphericity removed - it's a 3D metric, not applicable to 2D
+}
+
+// Sperm morphology metrics for polyline-based measurements
+export interface SpermMetric {
+  imageName: string;
+  instanceId: string;
+  headLengthPx: number;
+  headLengthUm?: number;
+  midpieceLengthPx: number;
+  midpieceLengthUm?: number;
+  tailLengthPx: number;
+  tailLengthUm?: number;
 }
 
 // Type guard for ApiError

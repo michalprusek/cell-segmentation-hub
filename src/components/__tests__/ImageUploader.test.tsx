@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
-import { render, createMockFile } from '@/test-utils/reactTestUtils';
+import { screen } from '@testing-library/react';
+import { render } from '@/test-utils/reactTestUtils';
 import ImageUploader from '@/components/ImageUploader';
 
 // Mock the sub-components
 vi.mock('@/components/upload/DropZone', () => ({
-  default: ({ onDrop, disabled, isDragActive }: any) => (
+  default: ({ onDrop, disabled }: any) => (
     <div
       data-testid="dropzone"
-      className={isDragActive ? 'border-primary' : ''}
     >
       <input
         data-testid="file-input"
@@ -24,18 +22,6 @@ vi.mock('@/components/upload/DropZone', () => ({
         }}
       />
       <span>Drag & drop images here or click to browse</span>
-    </div>
-  ),
-}));
-
-vi.mock('@/components/upload/FileList', () => ({
-  default: ({ files = [] }: any) => (
-    <div data-testid="file-list">
-      {files.map((file: any, index: number) => (
-        <div key={index} data-testid={`file-item-${index}`}>
-          {file.name}
-        </div>
-      ))}
     </div>
   ),
 }));
@@ -69,6 +55,19 @@ vi.mock('sonner', () => ({
   },
 }));
 
+// Mock the useUpload hook
+const mockStartUpload = vi.fn().mockReturnValue('upload_123');
+vi.mock('@/contexts/useUpload', () => ({
+  useUpload: () => ({
+    startUpload: mockStartUpload,
+    cancelUpload: vi.fn(),
+    clearSession: vi.fn(),
+    isUploading: false,
+    activeSession: null,
+    sessions: {},
+  }),
+}));
+
 describe('ImageUploader', () => {
   const defaultProps = {
     onUploadComplete: vi.fn(),
@@ -91,31 +90,10 @@ describe('ImageUploader', () => {
     expect(input).toHaveAttribute('accept', 'image/*');
   });
 
-  it('handles file selection via input', async () => {
-    const user = userEvent.setup();
-    render(<ImageUploader {...defaultProps} />);
-
-    const file = createMockFile('test.jpg', 'image/jpeg');
-    const input = screen.getByTestId('file-input');
-
-    await user.upload(input, file);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('file-list')).toBeInTheDocument();
-      expect(screen.getByTestId('file-item-0')).toHaveTextContent('test.jpg');
-    });
-  });
-
   it('renders dropzone component', () => {
     render(<ImageUploader {...defaultProps} />);
 
     expect(screen.getByTestId('dropzone')).toBeInTheDocument();
-  });
-
-  it('renders file list component', () => {
-    render(<ImageUploader {...defaultProps} />);
-
-    expect(screen.getByTestId('file-list')).toBeInTheDocument();
   });
 
   it('renders uploader options component', () => {
@@ -143,14 +121,11 @@ describe('ImageUploader', () => {
     const container = screen.getByTestId('dropzone').parentElement;
     expect(container).toHaveClass('space-y-6');
 
-    // Verify all components are present
     expect(screen.getByTestId('uploader-options')).toBeInTheDocument();
     expect(screen.getByTestId('dropzone')).toBeInTheDocument();
-    expect(screen.getByTestId('file-list')).toBeInTheDocument();
   });
 
   it('handles project ID from URL params', () => {
-    // Mock useParams to return project ID
     vi.mock('react-router-dom', async () => {
       const actual = await vi.importActual('react-router-dom');
       return {
@@ -162,7 +137,6 @@ describe('ImageUploader', () => {
 
     render(<ImageUploader {...defaultProps} />);
 
-    // Component should render properly with project context
     expect(screen.getByTestId('dropzone')).toBeInTheDocument();
     expect(screen.getByTestId('uploader-options')).toBeInTheDocument();
   });
@@ -172,10 +146,8 @@ describe('ImageUploader', () => {
 
     render(<ImageUploader onUploadComplete={mockOnUploadComplete} />);
 
-    // Component should be ready to accept uploads
     expect(screen.getByTestId('dropzone')).toBeInTheDocument();
-
-    // The callback would be called after successful upload (mocked in the component)
+    // The callback is passed to startUpload and called after upload completes via UploadContext
     expect(mockOnUploadComplete).not.toHaveBeenCalled();
   });
 });

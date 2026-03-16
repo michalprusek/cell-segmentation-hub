@@ -40,8 +40,6 @@ services:
         condition: service_healthy
       redis-blue:
         condition: service_healthy
-      mailhog-blue:
-        condition: service_started
     environment:
       # Core settings that must be in environment section
       - NODE_ENV=production
@@ -116,8 +114,8 @@ services:
       dockerfile: docker/ml.optimized.Dockerfile
     container_name: blue-ml
     runtime: nvidia
-    # 2 workers to match ML_INFERENCE_WORKERS and stay within 8GB GPU memory limit
-    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--limit-concurrency", "100", "--timeout-keep-alive", "30"]
+    # 1 worker to free GPU memory for Maptimize
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "100", "--timeout-keep-alive", "30"]
     ports:
       - "4008:8000"
     networks:
@@ -132,10 +130,10 @@ services:
       - ENVIRONMENT=production
       - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres-blue:5432/spheroseg_blue
       - REDIS_URL=redis://redis-blue:6379
-      # 2-way parallel processing - reduced to fit 8GB GPU limit
-      - ML_INFERENCE_WORKERS=2
-      - ML_ENABLE_PARALLEL_INFERENCE=true
-      - ML_MAX_CONCURRENT_USERS=2
+      # Sequential processing - single worker for 8GB GPU limit safety
+      - ML_INFERENCE_WORKERS=1
+      - ML_ENABLE_PARALLEL_INFERENCE=false
+      - ML_MAX_CONCURRENT_USERS=1
       - ML_MEMORY_LIMIT_GB=8
       - ML_ENABLE_CUDA_STREAMS=true
       - GPU_MEMORY_WARNING_THRESHOLD=90
@@ -148,15 +146,16 @@ services:
       - ML_GPU_PRIORITY=high
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
+      - ./backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro
       - ./backend/uploads/blue/blue:/app/uploads
     restart: always
     deploy:
       resources:
         limits:
-          memory: 8G     # Reduced to match GPU limit
+          memory: 12G    # Increased for sperm model (2.1GB model + ConvNeXt backbone)
           cpus: '4.0'    # Explicit CPU allocation
         reservations:
-          memory: 4G     # Reduced proportionally
+          memory: 6G     # Increased for sperm model
           devices:
             - driver: nvidia
               count: 1
@@ -167,23 +166,6 @@ services:
       timeout: 10s
       retries: 3
 
-  # MailHog Email Testing Service
-  mailhog-blue:
-    image: mailhog/mailhog:latest
-    container_name: mailhog-blue
-    ports:
-      - "8026:8025"  # Web UI (changed from 8025 to 8026)
-      - "1026:1025"  # SMTP server (changed from 1025 to 1026)
-    networks:
-      - blue-network
-    restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Nginx Reverse Proxy (using unified config)
   nginx-blue:
     image: nginx:alpine
     container_name: nginx-blue
@@ -197,8 +179,8 @@ services:
       # Persistent logs for IT audit trail
       - ./logs/blue/nginx:/var/log/nginx
     ports:
-      - "4080:80"
-      - "4443:443"
+      - "4080:4080"
+      - "4443:4443"
     depends_on:
       - blue-frontend
       - blue-backend

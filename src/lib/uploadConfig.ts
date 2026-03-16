@@ -30,7 +30,7 @@ export const UPLOAD_CONFIG = {
   ],
 
   // Upload behavior - using centralized constants
-  MAX_CONCURRENT_CHUNKS: 2, // Number of chunks to upload in parallel
+  MAX_CONCURRENT_CHUNKS: 3, // Number of chunks to upload in parallel
   RETRY_ATTEMPTS: RETRY_ATTEMPTS.UPLOAD,
   RETRY_DELAY_MS: TIMEOUTS.RETRY_SHORT,
 
