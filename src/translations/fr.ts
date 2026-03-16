@@ -1865,6 +1865,7 @@ export default {
     setAsHead: 'Définir comme tête',
     setAsMidpiece: 'Définir comme pièce intermédiaire',
     setAsTail: 'Définir comme queue',
+    assignTo: 'Assigner à',
     export: {
       description:
         'Exporter les mesures de morphologie spermatique (longueurs de la tête, de la pièce intermédiaire et de la queue) vers Excel.',

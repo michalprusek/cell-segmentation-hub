@@ -1998,6 +1998,7 @@ export default {
     setAsHead: 'Set as Head',
     setAsMidpiece: 'Set as Midpiece',
     setAsTail: 'Set as Tail',
+    assignTo: 'Assign to',
     export: {
       description:
         'Export sperm morphology measurements (head, midpiece, tail lengths) to Excel.',

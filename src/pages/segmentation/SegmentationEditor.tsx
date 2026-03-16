@@ -136,6 +136,7 @@ const SegmentationEditor = () => {
   const [hiddenPolygonIds, setHiddenPolygonIds] = useState<Set<string>>(
     new Set()
   );
+  const [hoveredPolygonId, setHoveredPolygonId] = useState<string | null>(null);
   const [canvasDimensions, setCanvasDimensions] = useState({
     width: 800,
     height: 600,
@@ -1047,16 +1048,36 @@ const SegmentationEditor = () => {
     [editor.polygons]
   );
 
-  // Handler for changing a polyline's partClass from the context menu
-  const handleChangePartClass = useCallback(
-    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => {
+  // Compute available sperm instance IDs for context menu (from existing polylines + active)
+  const availableInstanceIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of editor.polygons) {
+      if (p.geometry === 'polyline' && p.instanceId) ids.add(p.instanceId);
+    }
+    ids.add(activeInstanceId); // Include the currently active instance
+    return Array.from(ids).sort();
+  }, [editor.polygons, activeInstanceId]);
+
+  // Generic handler for updating a single field on a polygon by ID
+  const handleUpdatePolygonField = useCallback(
+    (polygonId: string, updates: Partial<Polygon>) => {
       const currentPolygons = editor.getPolygons();
       const updatedPolygons = currentPolygons.map(p =>
-        p.id === polygonId ? { ...p, partClass } : p
+        p.id === polygonId ? { ...p, ...updates } : p
       );
       editor.updatePolygons(updatedPolygons);
     },
     [editor.getPolygons, editor.updatePolygons]
+  );
+
+  const handleChangeInstanceId = useCallback(
+    (polygonId: string, instanceId: string) => handleUpdatePolygonField(polygonId, { instanceId }),
+    [handleUpdatePolygonField]
+  );
+
+  const handleChangePartClass = useCallback(
+    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => handleUpdatePolygonField(polygonId, { partClass }),
+    [handleUpdatePolygonField]
   );
 
   // Convert new EditMode to legacy booleans for compatibility
@@ -1258,6 +1279,7 @@ const SegmentationEditor = () => {
                                 isUndoRedoInProgress={
                                   editor.isUndoRedoInProgress
                                 }
+                                isHovered={polygon.id === hoveredPolygonId}
                                 editMode={editor.editMode}
                                 onSelectPolygon={editor.handlePolygonClick}
                                 onDeletePolygon={
@@ -1268,9 +1290,12 @@ const SegmentationEditor = () => {
                                 }
                                 onEditPolygon={handleEditPolygonFromContextMenu}
                                 onChangePartClass={handleChangePartClass}
+                                onChangeInstanceId={handleChangeInstanceId}
+                                availableInstanceIds={availableInstanceIds}
                                 onDeleteVertex={
                                   handleDeleteVertexFromContextMenu
                                 }
+                                onHover={setHoveredPolygonId}
                               />
                             ))}
                           </>
