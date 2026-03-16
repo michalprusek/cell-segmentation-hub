@@ -29,6 +29,7 @@ interface PolygonContextMenuProps {
   onChangePartClass?: (partClass: 'head' | 'midpiece' | 'tail') => void;
   onChangeInstanceId?: (instanceId: string) => void;
   currentInstanceId?: string;
+  availableInstanceIds?: string[];
 }
 
 const PolygonContextMenu = ({
@@ -41,6 +42,7 @@ const PolygonContextMenu = ({
   onChangePartClass,
   onChangeInstanceId,
   currentInstanceId,
+  availableInstanceIds,
 }: PolygonContextMenuProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const { t } = useLanguage();
@@ -93,8 +95,8 @@ const PolygonContextMenu = ({
                 <Link className="inline h-3 w-3 mr-1" />
                 {t('sperm.assignTo')}
               </div>
-              {[1, 2, 3, 4, 5].map(n => {
-                const instanceId = `sperm_${n}`;
+              {(availableInstanceIds || ['sperm_1']).map(instanceId => {
+                const label = instanceId.match(/^sperm_(\d+)$/)?.[1] || instanceId;
                 const isCurrent = currentInstanceId === instanceId;
                 return (
                   <ContextMenuItem
@@ -103,7 +105,7 @@ const PolygonContextMenu = ({
                     className={`cursor-pointer ${isCurrent ? 'bg-violet-50 dark:bg-violet-900/20 font-medium' : ''}`}
                   >
                     <span className={`mr-2 inline-block rounded-full ${isCurrent ? 'bg-violet-500' : 'bg-gray-400'}`} style={{ width: 8, height: 8 }} />
-                    <span>{t('sperm.instance')} {n}</span>
+                    <span>{t('sperm.instance')} {label}</span>
                     {isCurrent && <span className="ml-auto text-violet-500 text-xs">✓</span>}
                   </ContextMenuItem>
                 );

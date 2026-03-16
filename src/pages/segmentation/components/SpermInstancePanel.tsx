@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Plus, Spline } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
@@ -77,6 +77,17 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
     const all = new Set([...fromData, ...pendingInstances]);
     return Array.from(all).sort();
   }, [instanceGroups, pendingInstances]);
+
+  // Clean up pending instances that now have real polylines
+  useEffect(() => {
+    setPendingInstances(prev => {
+      const updated = new Set(prev);
+      for (const id of prev) {
+        if (instanceGroups.has(id)) updated.delete(id);
+      }
+      return updated.size !== prev.size ? updated : prev;
+    });
+  }, [instanceGroups]);
 
   // Get next available instance number
   const nextInstanceNumber = useMemo(() => {

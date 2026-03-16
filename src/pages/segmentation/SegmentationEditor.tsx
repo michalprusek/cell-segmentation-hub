@@ -1048,6 +1048,16 @@ const SegmentationEditor = () => {
     [editor.polygons]
   );
 
+  // Compute available sperm instance IDs for context menu (from existing polylines + active)
+  const availableInstanceIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of editor.polygons) {
+      if (p.geometry === 'polyline' && p.instanceId) ids.add(p.instanceId);
+    }
+    ids.add(activeInstanceId); // Include the currently active instance
+    return Array.from(ids).sort();
+  }, [editor.polygons, activeInstanceId]);
+
   // Handler for changing a polyline's instanceId (assign to sperm) from context menu
   const handleChangeInstanceId = useCallback(
     (polygonId: string, instanceId: string) => {
@@ -1283,6 +1293,7 @@ const SegmentationEditor = () => {
                                 onEditPolygon={handleEditPolygonFromContextMenu}
                                 onChangePartClass={handleChangePartClass}
                                 onChangeInstanceId={handleChangeInstanceId}
+                                availableInstanceIds={availableInstanceIds}
                                 onDeleteVertex={
                                   handleDeleteVertexFromContextMenu
                                 }

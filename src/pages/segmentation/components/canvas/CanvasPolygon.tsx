@@ -22,6 +22,7 @@ interface CanvasPolygonProps {
   onEditPolygon?: (id: string) => void;
   onChangePartClass?: (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => void;
   onChangeInstanceId?: (polygonId: string, instanceId: string) => void;
+  availableInstanceIds?: string[];
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
   onDuplicateVertex?: (polygonId: string, vertexIndex: number) => void;
   onHover?: (polygonId: string | null) => void;
@@ -45,6 +46,7 @@ const CanvasPolygon = React.memo(
     onEditPolygon,
     onChangePartClass,
     onChangeInstanceId,
+    availableInstanceIds,
     onDeleteVertex,
     onDuplicateVertex,
     onHover,
@@ -155,6 +157,22 @@ const CanvasPolygon = React.memo(
 
     const pathColor = getPathColor();
 
+    // Compute hover-dependent stroke width multiplier
+    const hoverStrokeMultiplier = isPolyline
+      ? (isHovered ? 2.5 : 1.5)
+      : (isHovered ? 1.3 : 1);
+
+    // Compute SVG filter for glow effects
+    const getPathFilter = () => {
+      if (isSelected && !isPolyline) {
+        return `url(#${type === 'internal' ? 'blue' : 'red'}-glow)`;
+      }
+      if (isPolyline && (isSelected || isHovered)) {
+        return 'url(#blue-glow)';
+      }
+      return '';
+    };
+
     // Memoized click handlers
     const handleClick = useCallback(
       (e: React.MouseEvent) => {
@@ -219,6 +237,7 @@ const CanvasPolygon = React.memo(
         onChangePartClass={isPolyline ? handleChangePartClass : undefined}
         onChangeInstanceId={isPolyline ? handleChangeInstanceId : undefined}
         currentInstanceId={isPolyline ? polygon.instanceId : undefined}
+        availableInstanceIds={isPolyline ? availableInstanceIds : undefined}
       >
         <g
           data-testid={id}
@@ -227,8 +246,8 @@ const CanvasPolygon = React.memo(
           role="button"
           aria-label={`Polygon ${id} - ${type} polygon with ${points.length} vertices`}
           onKeyDown={handleKeyDown}
-          onMouseEnter={handleMouseEnter}
-          onMouseLeave={handleMouseLeave}
+          onMouseEnter={isPolyline ? handleMouseEnter : undefined}
+          onMouseLeave={isPolyline ? handleMouseLeave : undefined}
           style={{ outline: 'none' }}
         >
           {/* Polygon/Polyline path - render even if path is empty for testing */}
@@ -247,24 +266,13 @@ const CanvasPolygon = React.memo(
                   : 'rgba(239, 68, 68, 0.1)'
             }
             stroke={pathColor}
-            strokeWidth={Math.max(
-              isPolyline
-                ? strokeWidth * (isHovered ? 2.5 : 1.5)
-                : strokeWidth * (isHovered ? 1.3 : 1),
-              0.5
-            )}
-            strokeOpacity={pathString ? (isHovered && !isSelected ? 0.85 : 1) : 0}
+            strokeWidth={Math.max(strokeWidth * hoverStrokeMultiplier, 0.5)}
+            strokeOpacity={pathString ? 1 : 0}
             strokeLinecap="round"
             strokeLinejoin="round"
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
-            filter={
-              isSelected && !isPolyline
-                ? `url(#${type === 'internal' ? 'blue' : 'red'}-glow)`
-                : isPolyline && (isSelected || isHovered)
-                  ? 'url(#blue-glow)'
-                  : ''
-            }
+            filter={getPathFilter()}
             vectorEffect="non-scaling-stroke"
             shapeRendering="geometricPrecision"
             pointerEvents={isPolyline ? 'stroke' : 'all'}
@@ -349,6 +357,7 @@ const CanvasPolygon = React.memo(
       prevProps.polygon.type === nextProps.polygon.type &&
       prevProps.polygon.geometry === nextProps.polygon.geometry &&
       prevProps.polygon.partClass === nextProps.polygon.partClass &&
+      prevProps.polygon.instanceId === nextProps.polygon.instanceId &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.isHovered === nextProps.isHovered &&
       prevProps.isUndoRedoInProgress === nextProps.isUndoRedoInProgress &&
