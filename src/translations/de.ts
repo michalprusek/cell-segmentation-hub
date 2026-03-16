@@ -1883,6 +1883,7 @@ export default {
       instances: 'Instanzen',
       polylines: 'Polylinien',
       button: 'Spermien-Metriken exportieren',
+      failed: 'Export der Spermien-Metriken fehlgeschlagen',
     },
   },
 };

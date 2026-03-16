@@ -1872,6 +1872,7 @@ export default {
       instances: 'instances',
       polylines: 'polylignes',
       button: 'Exporter les métriques des spermatozoïdes',
+      failed: "Échec de l'export des métriques des spermatozoïdes",
     },
   },
 };

@@ -280,7 +280,12 @@ export const PolygonValidator = {
     if (polygonObj.geometry === 'polyline') {
       (validatedPolygon as any).geometry = 'polyline';
     }
-    if (polygonObj.partClass && typeof polygonObj.partClass === 'string') {
+    const validPartClasses = ['head', 'midpiece', 'tail'];
+    if (
+      polygonObj.partClass &&
+      typeof polygonObj.partClass === 'string' &&
+      validPartClasses.includes(polygonObj.partClass)
+    ) {
       (validatedPolygon as any).partClass = polygonObj.partClass;
     }
     if (polygonObj.instanceId && typeof polygonObj.instanceId === 'string') {

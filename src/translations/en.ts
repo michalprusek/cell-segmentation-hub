@@ -2005,6 +2005,7 @@ export default {
       instances: 'instances',
       polylines: 'polylines',
       button: 'Export Sperm Metrics',
+      failed: 'Failed to export sperm metrics',
     },
   },
 };

@@ -15,7 +15,7 @@
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | `simplify_eps` | 5.0 | RDP epsilon — removes pixel-level skeleton zigzag while preserving curvature |
-| `pts_per_100px` | 8.0 | Uniform resampling density — 8 points per 100px of arc length |
+| `pts_per_100px` | 16.0 | Uniform resampling density — 16 points per 100px of arc length |
 | `min_pts` | 2 | Minimum output points per polyline |
 | `min_branch_length` | 5 | Skeleton pruning — remove branches shorter than 5px |
 | Smoothing method | Uniform resample | NOT B-spline (causes overshoot outside mask) |

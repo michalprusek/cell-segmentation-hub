@@ -15,7 +15,6 @@ interface SpermInstancePanelProps {
   polygons: Polygon[];
   selectedPolygonId: string | null;
   onSelectPolygon: (id: string | null) => void;
-  onUpdatePolygon?: (id: string, updates: Partial<Polygon>) => void;
   activePartClass: 'head' | 'midpiece' | 'tail';
   onPartClassChange: (partClass: 'head' | 'midpiece' | 'tail') => void;
   activeInstanceId: string;
@@ -38,7 +37,6 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
   polygons,
   selectedPolygonId,
   onSelectPolygon,
-  onUpdatePolygon,
   activePartClass,
   onPartClassChange,
   activeInstanceId,

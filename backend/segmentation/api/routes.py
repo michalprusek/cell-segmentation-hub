@@ -157,13 +157,15 @@ async def segment_image(
         result["batch_size_used"] = getattr(loader, 'last_batch_size', 1)
         result["success"] = True
         
-        # Add warning metadata if no polygons detected
+        # Add warning metadata if no detections found (check both polygons and polylines)
         polygon_count = len(result.get('polygons', []))
-        if polygon_count == 0:
-            result["warning"] = "No polygons detected - image may not contain detectable cells or threshold may need adjustment"
-            logger.warning(f"Segmentation completed in {processing_time:.2f}s, but found 0 polygons - potential detection issue")
+        polyline_count = len(result.get('polylines', []))
+        total_detected = polygon_count + polyline_count
+        if total_detected == 0:
+            result["warning"] = "No polygons or polylines detected - image may not contain detectable structures or threshold may need adjustment"
+            logger.warning(f"Segmentation completed in {processing_time:.2f}s, but found 0 detections - potential detection issue")
         else:
-            logger.info(f"Segmentation completed in {processing_time:.2f}s, found {polygon_count} polygons")
+            logger.info(f"Segmentation completed in {processing_time:.2f}s, found {polygon_count} polygons, {polyline_count} polylines")
         
         return result
         

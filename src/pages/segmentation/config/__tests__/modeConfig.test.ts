@@ -255,6 +255,7 @@ describe('Integration with Production Code', () => {
     expect(simulateCanvasClick(EditMode.Slice, true)).toBe('no-action');
     expect(simulateCanvasClick(EditMode.AddPoints, true)).toBe('no-action');
     expect(simulateCanvasClick(EditMode.CreatePolygon, true)).toBe('no-action');
+    expect(simulateCanvasClick(EditMode.CreatePolyline, true)).toBe('no-action');
     expect(simulateCanvasClick(EditMode.View, true)).toBe('deselect-polygon');
     expect(simulateCanvasClick(EditMode.EditVertices, true)).toBe(
       'deselect-polygon'
@@ -274,9 +275,9 @@ describe('Integration with Production Code', () => {
       const oldResult = oldLogic(mode);
       const newResult = newLogic(mode);
 
-      // Allow expansion for CreatePolygon mode (intentional improvement)
-      if (mode === EditMode.CreatePolygon) {
-        expect(newResult).toBe(true); // New behavior: prevent deselection
+      // Allow expansion for new/modified modes (intentional improvements)
+      if (mode === EditMode.CreatePolygon || mode === EditMode.CreatePolyline) {
+        expect(newResult).toBe(true); // New behavior: prevent deselection during creation
       } else {
         expect(newResult).toBe(oldResult);
       }

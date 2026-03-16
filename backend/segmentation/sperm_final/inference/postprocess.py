@@ -252,7 +252,7 @@ def mask_to_polyline(
     cls: int,
     mask_threshold: float = 0.5,
     simplify_eps: float = 5.0,
-    pts_per_100px: float = 8.0,
+    pts_per_100px: float = 16.0,
     min_pts: int = 2,
 ) -> List[Tuple[float, float]]:
     """Convert instance mask to a smooth polyline.
@@ -348,7 +348,7 @@ def connect_sperm_polylines(
     sperm: dict,
     mask_threshold: float = 0.3,
     simplify_eps: float = 5.0,
-    pts_per_100px: float = 8.0,
+    pts_per_100px: float = 16.0,
 ) -> dict:
     """Generate connected polylines for a complete sperm (H+M+T).
 

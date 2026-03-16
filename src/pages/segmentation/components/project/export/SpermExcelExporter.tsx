@@ -7,6 +7,8 @@ import { SegmentationResult } from '@/lib/segmentation';
 import { calculatePolylineLength } from '../../../utils/metricCalculations';
 import { createExcelExport } from '@/services/excelExportService';
 import { useLanguage } from '@/contexts/exports';
+import { toast } from 'sonner';
+import { logger } from '@/lib/logger';
 
 interface SpermExcelExporterProps {
   segmentation: SegmentationResult | null;
@@ -133,7 +135,8 @@ const SpermExcelExporter: React.FC<SpermExcelExporterProps> = ({
       const filename = `sperm_metrics_${imageName || 'export'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       excelService.downloadFile(blob, filename);
     } catch (error) {
-      console.error('Failed to export sperm metrics:', error);
+      logger.error('[SpermExcelExporter] Failed to export sperm metrics:', error);
+      toast.error(t('sperm.export.failed') || 'Failed to export sperm metrics');
     } finally {
       setIsExporting(false);
     }
