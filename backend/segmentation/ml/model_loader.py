@@ -32,10 +32,13 @@ from models.cbam_resunet import ResUNetCBAM
 from models.unet import UNet
 
 # Optional sperm model import
+_sperm_import_error = None
 try:
     from models.sperm import SpermModel
-except ImportError:
+except ImportError as e:
+    logger.warning(f"Could not import SpermModel: {e}. Sperm segmentation will not be available.")
     SpermModel = None
+    _sperm_import_error = e
 
 # Import the new inference executor
 from .inference_executor import (
@@ -215,7 +218,9 @@ class ModelLoader:
             elif model_name == 'sperm':
                 # Sperm segmentation model — uses its own pipeline (Mask2Former + graph assembly)
                 if SpermModel is None:
-                    raise ImportError("Sperm model architecture not available. Please copy sperm.py to models/")
+                    raise ImportError(
+                        f"Sperm model architecture not available: {_sperm_import_error}"
+                    )
                 model = SpermModel()
                 model.load_weights(str(weights_full_path), self.device)
                 self.loaded_models[model_name] = model
@@ -635,8 +640,8 @@ class ModelLoader:
                 score_threshold=score_threshold,
             )
 
-            sperm_list = result['sperm_list']
-            polylines_list = result['polylines']
+            sperm_list = result.get('sperm_list', [])
+            polylines_list = result.get('polylines', [])
             processing_time = _time.time() - start_time
 
             # Convert to polyline-only format (no mask polygons for sperm model)
@@ -652,8 +657,10 @@ class ModelLoader:
                         points = [{"x": float(pt[0]), "y": float(pt[1])} for pt in poly_pts]
                         score = 0.9
                         part = sperm.get(part_key)
-                        if part is not None:
+                        if part is not None and isinstance(part, dict):
                             score = float(part.get('score', 0.9))
+                        else:
+                            logger.debug(f"Using default confidence 0.9 for {part_key} (part data unavailable)")
                         polylines.append({
                             "id": f"polyline_{polyline_counter}",
                             "points": points,
@@ -683,6 +690,14 @@ class ModelLoader:
                     "batch_size": 1,
                 }
             }
+
+        except Exception as e:
+            processing_time = _time.time() - start_time
+            logger.error(
+                f"Sperm pipeline failed after {processing_time:.2f}s: {type(e).__name__}: {e}",
+                exc_info=True
+            )
+            raise
 
         finally:
             self.is_processing = False

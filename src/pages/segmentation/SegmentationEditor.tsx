@@ -427,7 +427,7 @@ const SegmentationEditor = () => {
   // Sperm polyline state for SpermInstancePanel
   const [activePartClass, setActivePartClass] = useState<'head' | 'midpiece' | 'tail'>('head');
   const [activeInstanceId, setActiveInstanceId] = useState<string>('sperm_1');
-  const activePartClassRef = useRef<string>(activePartClass);
+  const activePartClassRef = useRef<'head' | 'midpiece' | 'tail'>(activePartClass);
   const activeInstanceIdRef = useRef<string>(activeInstanceId);
   activePartClassRef.current = activePartClass;
   activeInstanceIdRef.current = activeInstanceId;
@@ -1050,12 +1050,13 @@ const SegmentationEditor = () => {
   // Handler for changing a polyline's partClass from the context menu
   const handleChangePartClass = useCallback(
     (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => {
-      const updatedPolygons = editor.polygons.map(p =>
+      const currentPolygons = editor.getPolygons();
+      const updatedPolygons = currentPolygons.map(p =>
         p.id === polygonId ? { ...p, partClass } : p
       );
       editor.updatePolygons(updatedPolygons);
     },
-    [editor.polygons, editor.updatePolygons]
+    [editor.getPolygons, editor.updatePolygons]
   );
 
   // Convert new EditMode to legacy booleans for compatibility

@@ -33,7 +33,7 @@ interface UseAdvancedInteractionsProps {
   cursorPosition: Point | null;
   isShiftPressed?: () => boolean;
   isSpacePressed?: () => boolean;
-  activePartClassRef?: React.RefObject<string>;
+  activePartClassRef?: React.RefObject<'head' | 'midpiece' | 'tail'>;
   activeInstanceIdRef?: React.RefObject<string>;
 
   // State setters
@@ -375,13 +375,16 @@ export const useAdvancedInteractions = ({
    * Handle Create Polyline double-click to finalize
    */
   const handleCreatePolylineDoubleClick = useCallback(() => {
-    if (tempPoints.length >= 2) {
-      const newPolyline = createPolygon(tempPoints);
+    // Double-click fires two click events first, each adding a point.
+    // Remove the last duplicate point before finalizing.
+    const cleanedPoints = tempPoints.length > 2 ? tempPoints.slice(0, -1) : tempPoints;
+    if (cleanedPoints.length >= 2) {
+      const newPolyline = createPolygon(cleanedPoints);
       // Override with polyline-specific fields, including active part class and instance
       const polyline: Polygon = {
         ...newPolyline,
         geometry: 'polyline',
-        partClass: activePartClassRef?.current as 'head' | 'midpiece' | 'tail' | undefined,
+        partClass: activePartClassRef?.current || undefined,
         instanceId: activeInstanceIdRef?.current || undefined,
       };
       const currentPolygons = getPolygons();
@@ -962,13 +965,13 @@ function insertPointsBetweenVertices(
     idx = (idx + 1) % numPoints;
   }
 
-  // Calculate perimeters and choose the one with larger perimeter
-  // When adding points, the user expands the polygon outward,
-  // so the correct result is the candidate with the greater perimeter
+  // Calculate perimeters and choose the one with smaller perimeter.
+  // The candidate closer to the original polygon shape is the correct one,
+  // as adding points refines the boundary rather than replacing it.
   const perimeter1 = calculatePolygonPerimeter(candidate1Points);
   const perimeter2 = calculatePolygonPerimeter(candidate2Points);
 
-  return perimeter1 >= perimeter2 ? candidate1Points : candidate2Points;
+  return perimeter1 <= perimeter2 ? candidate1Points : candidate2Points;
 }
 
 /**

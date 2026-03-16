@@ -1940,6 +1940,7 @@ export default {
       instances: 'instancias',
       polylines: 'polilíneas',
       button: 'Exportar métricas de espermatozoides',
+      failed: 'Error al exportar métricas de espermatozoides',
     },
   },
 };

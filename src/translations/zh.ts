@@ -1757,6 +1757,7 @@ export default {
       instances: '实例',
       polylines: '折线',
       button: '导出精子指标',
+      failed: '导出精子指标失败',
     },
   },
 };

@@ -1912,6 +1912,7 @@ export default {
       instances: 'instancí',
       polylines: 'polylajn',
       button: 'Exportovat metriky spermií',
+      failed: 'Export metrik spermií selhal',
     },
   },
 };

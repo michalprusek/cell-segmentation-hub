@@ -44,7 +44,7 @@ interface UseEnhancedSegmentationEditorProps {
   onPolygonsChange?: (polygons: Polygon[]) => void;
   imageId?: string; // Add imageId to detect image changes
   isFromGallery?: boolean; // Add flag to trigger auto-reset
-  activePartClassRef?: React.RefObject<string>;
+  activePartClassRef?: React.RefObject<'head' | 'midpiece' | 'tail'>;
   activeInstanceIdRef?: React.RefObject<string>;
   // onPolygonSelection is now handled internally via usePolygonSelection for SSOT
 }
