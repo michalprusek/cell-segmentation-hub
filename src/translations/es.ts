@@ -387,6 +387,11 @@ export default {
           description:
             'Mejor rendimiento en el conjunto de datos SpheroHQ - optimizado para segmentación de esferoides con velocidad y precisión equilibradas (~0.25s/imagen, 10 img/s)',
         },
+        sperm: {
+          name: 'Segmentación de espermatozoides',
+          description:
+            'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
+        },
       },
     },
     confidenceThreshold: 'Umbral de Confianza',
@@ -634,6 +639,7 @@ export default {
       addPoints: 'Añadir puntos',
       create: 'Crear',
       createPolygon: 'Crear polígono',
+      createPolyline: 'Crear polilínea',
       slice: 'Cortar',
       delete: 'Eliminar',
       deletePolygon: 'Eliminar polígono',
@@ -644,6 +650,7 @@ export default {
       edit: 'Mover y modificar vértices',
       addPoints: 'Añadir puntos entre vértices',
       create: 'Crear nuevos polígonos',
+      createPolyline: 'Haz clic para colocar puntos, doble clic para finalizar la polilínea',
       slice: 'Dividir polígonos con una línea',
       delete: 'Eliminar polígonos',
     },
@@ -683,6 +690,7 @@ export default {
       polygonList: 'Lista de Polígonos',
       external: 'Externo',
       internal: 'Interno',
+      polyline: 'Polilínea',
     },
     shortcuts: {
       buttonText: 'Atajos',
@@ -1066,6 +1074,7 @@ export default {
     noData: 'No hay datos disponibles para exportar',
     segmentationData: 'Datos de segmentación',
     spheroidMetrics: 'Métricas de esferoides',
+    spermMetrics: 'Métricas de espermatozoides',
     cocoFormat: 'Formato COCO',
     cocoFormatTitle: 'Exportación de formato COCO',
     downloadJson: 'Descargar JSON',
@@ -1732,6 +1741,8 @@ export default {
       'Esta acción es irreversible. El polígono será eliminado permanentemente de la segmentación.',
     duplicateVertex: 'Duplicar vértice',
     deleteVertex: 'Eliminar vértice',
+    editPolyline: 'Editar polilínea',
+    deletePolyline: 'Eliminar polilínea',
   },
   websocket: {
     reconnecting: 'Reconectando al servidor...',
@@ -1906,6 +1917,30 @@ export default {
       exportAllMetrics: 'Exportar todas las métricas como XLSX',
       exportUnavailable: 'Exportación No Disponible',
       loading: 'Cargando...',
+    },
+  },
+  sperm: {
+    instancePanel: 'Instancias de espermatozoides',
+    instance: 'Espermatozoide',
+    newInstance: 'Nueva instancia',
+    unassigned: 'Sin asignar',
+    unclassified: 'Sin clasificar',
+    part: {
+      head: 'Cabeza',
+      midpiece: 'Pieza media',
+      tail: 'Cola',
+    },
+    setAsHead: 'Establecer como cabeza',
+    setAsMidpiece: 'Establecer como pieza media',
+    setAsTail: 'Establecer como cola',
+    export: {
+      description:
+        'Exportar mediciones de morfología espermática (longitudes de cabeza, pieza media y cola) a Excel.',
+      calibration: 'Factor de calibración',
+      instances: 'instancias',
+      polylines: 'polilíneas',
+      button: 'Exportar métricas de espermatozoides',
+      failed: 'Error al exportar métricas de espermatozoides',
     },
   },
 };

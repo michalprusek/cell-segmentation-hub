@@ -353,6 +353,25 @@ export const calculateMetrics = (
   };
 };
 
+/**
+ * Calculate the length of a polyline (open path).
+ * Unlike calculatePerimeter which closes the loop back to the first point,
+ * this only sums consecutive segment distances.
+ */
+export const calculatePolylineLength = (
+  points: Array<{ x: number; y: number }>
+): number => {
+  if (!points || points.length < 2) return 0;
+
+  let length = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const dx = points[i + 1].x - points[i].x;
+    const dy = points[i + 1].y - points[i].y;
+    length += Math.sqrt(dx * dx + dy * dy);
+  }
+  return length;
+};
+
 // Format number for display
 export const formatNumber = (value: number): string => {
   return value.toFixed(4);

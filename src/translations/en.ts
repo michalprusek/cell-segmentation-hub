@@ -417,6 +417,11 @@ export default {
           description:
             'Best performance on SpheroHQ dataset - optimized for spheroid segmentation with balanced speed and accuracy (~0.25s/image, 10 img/s)',
         },
+        sperm: {
+          name: 'Sperm Segmentation',
+          description:
+            'Sperm morphology model with skeleton extraction for head/midpiece/tail measurement',
+        },
       },
     },
     confidenceThreshold: 'Confidence Threshold',
@@ -511,6 +516,7 @@ export default {
       addPoints: 'Add points',
       create: 'Create',
       createPolygon: 'Create polygon',
+      createPolyline: 'Create Polyline',
       slice: 'Slice',
       delete: 'Delete',
       deletePolygon: 'Delete polygon',
@@ -606,6 +612,7 @@ export default {
       edit: 'Move and modify vertices',
       addPoints: 'Add points between vertices',
       create: 'Create new polygons',
+      createPolyline: 'Click to place points, double-click to finish polyline',
       slice: 'Split polygons with a line',
       delete: 'Remove polygons',
     },
@@ -645,6 +652,7 @@ export default {
       polygonList: 'Polygon List',
       external: 'External',
       internal: 'Internal',
+      polyline: 'Polyline',
     },
     loading: 'Loading segmentation...',
     noPolygons: 'No polygons found',
@@ -1108,6 +1116,7 @@ export default {
     noData: 'No data available for export',
     segmentationData: 'Segmentation Data',
     spheroidMetrics: 'Spheroid Metrics',
+    spermMetrics: 'Sperm Metrics',
     cocoFormat: 'COCO Format',
     cocoFormatTitle: 'COCO Format Export',
     downloadJson: 'Download JSON',
@@ -1780,6 +1789,8 @@ export default {
       'This action is irreversible. The polygon will be permanently removed from the segmentation.',
     duplicateVertex: 'Duplicate vertex',
     deleteVertex: 'Delete vertex',
+    editPolyline: 'Edit Polyline',
+    deletePolyline: 'Delete Polyline',
   },
 
   // Metrics display
@@ -1971,6 +1982,30 @@ export default {
       exportAllMetrics: 'Export all metrics as XLSX',
       exportUnavailable: 'Export Unavailable',
       loading: 'Loading...',
+    },
+  },
+  sperm: {
+    instancePanel: 'Sperm Instances',
+    instance: 'Sperm',
+    newInstance: 'New Instance',
+    unassigned: 'Unassigned',
+    unclassified: 'Unclassified',
+    part: {
+      head: 'Head',
+      midpiece: 'Midpiece',
+      tail: 'Tail',
+    },
+    setAsHead: 'Set as Head',
+    setAsMidpiece: 'Set as Midpiece',
+    setAsTail: 'Set as Tail',
+    export: {
+      description:
+        'Export sperm morphology measurements (head, midpiece, tail lengths) to Excel.',
+      calibration: 'Calibration Factor',
+      instances: 'instances',
+      polylines: 'polylines',
+      button: 'Export Sperm Metrics',
+      failed: 'Failed to export sperm metrics',
     },
   },
 };

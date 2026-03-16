@@ -6,6 +6,7 @@ import {
   Edit3,
   Plus,
   PenTool,
+  Spline,
   Scissors,
   Trash2,
   Undo,
@@ -73,6 +74,8 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
         return Plus;
       case EditMode.CreatePolygon:
         return PenTool;
+      case EditMode.CreatePolyline:
+        return Spline;
       case EditMode.Slice:
         return Scissors;
       case EditMode.DeletePolygon:
@@ -92,6 +95,8 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
         return 'bg-emerald-100 text-emerald-700 border-emerald-300';
       case EditMode.CreatePolygon:
         return 'bg-blue-100 text-blue-700 border-blue-300';
+      case EditMode.CreatePolyline:
+        return 'bg-violet-100 text-violet-700 border-violet-300';
       case EditMode.Slice:
         return 'bg-yellow-100 text-yellow-700 border-yellow-300';
       case EditMode.DeletePolygon:
@@ -111,6 +116,8 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
         return t('segmentation.mode.addPoints');
       case EditMode.CreatePolygon:
         return t('segmentation.mode.create');
+      case EditMode.CreatePolyline:
+        return t('segmentation.mode.createPolyline');
       case EditMode.Slice:
         return t('segmentation.mode.slice');
       case EditMode.DeletePolygon:
@@ -130,6 +137,8 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
         return t('segmentation.modeDescription.addPoints');
       case EditMode.CreatePolygon:
         return t('segmentation.modeDescription.create');
+      case EditMode.CreatePolyline:
+        return t('segmentation.modeDescription.createPolyline');
       case EditMode.Slice:
         return t('segmentation.modeDescription.slice');
       case EditMode.DeletePolygon:
@@ -205,6 +214,7 @@ const EnhancedEditorToolbar: React.FC<EnhancedEditorToolbarProps> = ({
           <ModeButton mode={EditMode.EditVertices} />
           <ModeButton mode={EditMode.AddPoints} />
           <ModeButton mode={EditMode.CreatePolygon} />
+          <ModeButton mode={EditMode.CreatePolyline} />
           <ModeButton mode={EditMode.Slice} />
           <ModeButton mode={EditMode.DeletePolygon} />
         </div>

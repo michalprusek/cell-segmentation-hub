@@ -1,0 +1,122 @@
+
+services:
+  # Node Exporter - system metrics (CPU, memory, disk, network)
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: spheroseg-node-exporter
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.rootfs=/rootfs"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    networks:
+      - blue-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: "0.5"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9100/metrics"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus metrics collector
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: spheroseg-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/blue-prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_monitoring_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.console.libraries=/etc/prometheus/console_libraries"
+      - "--web.console.templates=/etc/prometheus/consoles"
+      - "--web.enable-lifecycle"
+    depends_on:
+      node-exporter:
+        condition: service_healthy
+    networks:
+      - blue-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Grafana dashboard and visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: spheroseg-grafana
+    ports:
+      - "3030:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=SpH3r0s3g_M0n!t0r
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_USERS_ALLOW_ORG_CREATE=false
+      - GF_SERVER_ROOT_URL=http://cvat2.utia.cas.cz:3030
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
+      - GF_LOG_MODE=console
+      - GF_LOG_LEVEL=warn
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/api-monitoring.json
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=hermes.utia.cas.cz:25
+      - GF_SMTP_USER=
+      - GF_SMTP_PASSWORD=
+      - GF_SMTP_SKIP_VERIFY=true
+      - GF_SMTP_FROM_ADDRESS=grafana@utia.cas.cz
+      - GF_SMTP_FROM_NAME=Spheroseg Grafana
+      - GF_SMTP_STARTTLS_POLICY=NoStartTLS
+    volumes:
+      - grafana_monitoring_data:/var/lib/grafana
+      - ./docker/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./docker/grafana/alerting-production:/etc/grafana/provisioning/alerting:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    networks:
+      - blue-network
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.5"
+        reservations:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  blue-network:
+    external: true
+    name: spheroseg-blue
+
+volumes:
+  prometheus_monitoring_data:
+    name: spheroseg_prometheus_data
+  grafana_monitoring_data:
+    name: spheroseg_grafana_data

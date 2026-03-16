@@ -4,4 +4,10 @@ from .hrnet import HRNetV2
 from .cbam_resunet import ResUNetCBAM
 from .unet import UNet
 
-__all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet']
+# Sperm model: optional import (loaded only when weights file is present)
+try:
+    from .sperm import SpermModel
+except ImportError:
+    SpermModel = None
+
+__all__ = ['HRNetV2', 'ResUNetCBAM', 'UNet', 'SpermModel']

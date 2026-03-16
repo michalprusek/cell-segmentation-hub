@@ -318,6 +318,70 @@ const CanvasTemporaryGeometryLayer: React.FC<
     return elements;
   };
 
+  const renderCreatePolylinePreview = () => {
+    if (editMode !== EditMode.CreatePolyline || tempPoints.length === 0) {
+      return null;
+    }
+
+    const elements = [];
+
+    // Render existing temp points with partClass-aware color
+    tempPoints.forEach((point, index) => {
+      const isFirstPoint = index === 0;
+      elements.push(
+        <circle
+          key={`temp-polyline-vertex-${index}`}
+          cx={point.x}
+          cy={point.y}
+          r={vertexRadius}
+          fill={isFirstPoint ? '#a855f7' : '#c084fc'}
+          stroke="none"
+          strokeWidth={0}
+          style={{ opacity: 0.8 }}
+        />
+      );
+    });
+
+    // Render lines between temp points (solid purple for polylines)
+    for (let i = 0; i < tempPoints.length - 1; i++) {
+      const start = tempPoints[i];
+      const end = tempPoints[i + 1];
+      elements.push(
+        <line
+          key={`temp-polyline-line-${i}`}
+          x1={start.x}
+          y1={start.y}
+          x2={end.x}
+          y2={end.y}
+          stroke="#a855f7"
+          strokeWidth={strokeWidth * 1.5}
+          strokeDasharray={`${5 / transform.zoom} ${3 / transform.zoom}`}
+          style={{ opacity: 0.7 }}
+        />
+      );
+    }
+
+    // Render line from last point to cursor (no closing line - polylines are open)
+    if (cursorPosition && tempPoints.length > 0) {
+      const lastPoint = tempPoints[tempPoints.length - 1];
+      elements.push(
+        <line
+          key="cursor-polyline-preview-line"
+          x1={lastPoint.x}
+          y1={lastPoint.y}
+          x2={cursorPosition.x}
+          y2={cursorPosition.y}
+          stroke="#a855f7"
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${3 / transform.zoom} ${2 / transform.zoom}`}
+          style={{ opacity: 0.5 }}
+        />
+      );
+    }
+
+    return elements;
+  };
+
   const renderDragPreview = () => {
     // Drag preview disabled - no ghost circle shown
     return null;
@@ -326,6 +390,7 @@ const CanvasTemporaryGeometryLayer: React.FC<
   return (
     <g className="temporary-geometry-layer">
       {renderCreatePolygonPreview()}
+      {renderCreatePolylinePreview()}
       {renderSlicePreview()}
       {renderAddPointsPreview()}
       {renderDragPreview()}

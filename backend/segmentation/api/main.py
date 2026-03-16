@@ -54,6 +54,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from api.routes import router
 from api.models import ErrorResponse, HealthResponse
@@ -87,7 +88,8 @@ async def lifespan(app: FastAPI):
         logger.info("Model loader initialized")
         
         # Pre-load all models for faster first response
-        models_to_load = ["hrnet", "cbam_resunet", "unet_spherohq"]
+        # Note: 'sperm' is optional - only loaded if weights file exists
+        models_to_load = ["hrnet", "cbam_resunet", "unet_spherohq", "sperm"]
         loaded_count = 0
         
         for model_name in models_to_load:
@@ -251,6 +253,9 @@ async def health():
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+# Prometheus metrics - expose /metrics endpoint for Prometheus scraping
+Instrumentator().instrument(app).expose(app)
 
 if __name__ == "__main__":
     import uvicorn

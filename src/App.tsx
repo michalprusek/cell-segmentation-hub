@@ -18,6 +18,8 @@ import { toast } from 'sonner';
 import PageLoadingFallback from '@/components/PageLoadingFallback';
 import ExportStateManager from '@/lib/exportStateManager';
 import { ExportProvider } from '@/contexts/ExportContext';
+import { UploadProvider } from '@/contexts/UploadContext';
+import FloatingUploadProgress from '@/components/FloatingUploadProgress';
 
 // Lazy load components with automatic retry mechanism for chunk load failures
 const Index = lazyWithRetry(() => import('./pages/Index'), 'Index');
@@ -93,6 +95,7 @@ const App = () => (
       >
         <AuthProvider>
           <WebSocketProvider>
+            <UploadProvider>
             <ExportProvider>
               <ThemeProvider>
                 <LanguageProvider>
@@ -105,6 +108,7 @@ const App = () => (
                           className: 'animate-slide-in-right',
                         }}
                       />
+                      <FloatingUploadProgress />
                       <div className="app-container animate-fade-in">
                         <ErrorBoundary>
                           <Routes>
@@ -286,6 +290,7 @@ const App = () => (
                 </LanguageProvider>
               </ThemeProvider>
             </ExportProvider>
+            </UploadProvider>
           </WebSocketProvider>
         </AuthProvider>
       </BrowserRouter>
