@@ -139,7 +139,11 @@ async def segment_image(
         
         # Perform segmentation with timing
         inference_start = time.time()
-        result = loader.predict(image, model, threshold, detect_holes)
+        if model == 'sperm':
+            # Sperm model uses a separate pipeline (Mask2Former + graph assembly + polylines)
+            result = loader.predict_sperm(image, threshold=threshold)
+        else:
+            result = loader.predict(image, model, threshold, detect_holes)
         inference_time = time.time() - inference_start
         
         processing_time = time.time() - start_time

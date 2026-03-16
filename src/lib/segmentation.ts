@@ -18,6 +18,9 @@ export interface Polygon {
   confidence?: number;
   area?: number;
   parent_id?: string; // For internal polygons, references the parent external polygon
+  geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
+  partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
+  instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
 }
 
 // SegmentationResult type removed - use Polygon[] directly

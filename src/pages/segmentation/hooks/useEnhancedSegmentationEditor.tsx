@@ -44,6 +44,8 @@ interface UseEnhancedSegmentationEditorProps {
   onPolygonsChange?: (polygons: Polygon[]) => void;
   imageId?: string; // Add imageId to detect image changes
   isFromGallery?: boolean; // Add flag to trigger auto-reset
+  activePartClassRef?: React.RefObject<string>;
+  activeInstanceIdRef?: React.RefObject<string>;
   // onPolygonSelection is now handled internally via usePolygonSelection for SSOT
 }
 
@@ -61,6 +63,8 @@ export const useEnhancedSegmentationEditor = ({
   onPolygonsChange,
   imageId,
   isFromGallery = false,
+  activePartClassRef,
+  activeInstanceIdRef,
   // onPolygonSelection is now handled internally
 }: UseEnhancedSegmentationEditorProps) => {
   const { t } = useLanguage();
@@ -130,6 +134,22 @@ export const useEnhancedSegmentationEditor = ({
       canvasHeight
     )
   );
+
+  // Compute effective minimum zoom: must allow zooming back to the fit-to-view level.
+  // For large images the fit-to-view zoom can be well below MIN_ZOOM (0.5).
+  const effectiveMinZoom = useMemo(() => {
+    if (!imageWidth || !imageHeight || !canvasWidth || !canvasHeight) {
+      return EDITING_CONSTANTS.MIN_ZOOM;
+    }
+    const fitZoom = calculateCenteringTransform(
+      imageWidth,
+      imageHeight,
+      canvasWidth,
+      canvasHeight
+    ).zoom;
+    // Allow slightly more zoom-out than fit-to-view (×0.8) for breathing room
+    return Math.min(fitZoom * 0.8, EDITING_CONSTANTS.MIN_ZOOM);
+  }, [imageWidth, imageHeight, canvasWidth, canvasHeight]);
 
   // Refs (declare before using)
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -585,10 +605,10 @@ export const useEnhancedSegmentationEditor = ({
   const handleZoomIn = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
-      transformRef.current, // Use ref to avoid transform dependency
+      transformRef.current,
       center,
       EDITING_CONSTANTS.ZOOM_FACTOR,
-      EDITING_CONSTANTS.MIN_ZOOM,
+      effectiveMinZoom,
       EDITING_CONSTANTS.MAX_ZOOM,
       canvasWidth,
       canvasHeight
@@ -601,15 +621,15 @@ export const useEnhancedSegmentationEditor = ({
       canvasHeight
     );
     setTransform(constrainedTransform);
-  }, [canvasWidth, canvasHeight, imageWidth, imageHeight]); // Removed transform dependency
+  }, [canvasWidth, canvasHeight, imageWidth, imageHeight, effectiveMinZoom]);
 
   const handleZoomOut = useCallback(() => {
     const center = { x: canvasWidth / 2, y: canvasHeight / 2 };
     const newTransform = calculateFixedPointZoom(
-      transformRef.current, // Use ref to avoid transform dependency
+      transformRef.current,
       center,
       1 / EDITING_CONSTANTS.ZOOM_FACTOR,
-      EDITING_CONSTANTS.MIN_ZOOM,
+      effectiveMinZoom,
       EDITING_CONSTANTS.MAX_ZOOM,
       canvasWidth,
       canvasHeight
@@ -622,7 +642,7 @@ export const useEnhancedSegmentationEditor = ({
       canvasHeight
     );
     setTransform(constrainedTransform);
-  }, [canvasWidth, canvasHeight, imageWidth, imageHeight]); // Removed transform dependency
+  }, [canvasWidth, canvasHeight, imageWidth, imageHeight, effectiveMinZoom]);
 
   const handleResetView = useCallback(() => {
     const newTransform = calculateCenteringTransform(
@@ -668,11 +688,12 @@ export const useEnhancedSegmentationEditor = ({
       const polygon = polygons.find(p => p.id === polygonId);
       if (!polygon) return;
 
-      // Can't delete if polygon would have less than 3 vertices
-      if (polygon.points.length <= 3) {
+      // Polylines need at least 2 points, polygons need at least 3
+      const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
+      if (polygon.points.length <= minPoints) {
         toast.error(
           t('toast.segmentation.cannotDeleteVertex') ||
-            'Cannot delete vertex - polygon needs at least 3 points'
+            `Cannot delete vertex - ${polygon.geometry === 'polyline' ? 'polyline needs at least 2' : 'polygon needs at least 3'} points`
         );
         return;
       }
@@ -694,6 +715,12 @@ export const useEnhancedSegmentationEditor = ({
     },
     [polygons, updatePolygons, t]
   );
+
+  // Ref to hold the polyline finalization callback (set after interactions hook)
+  const polylineDoubleClickRef = useRef<(() => void) | null>(null);
+  const handleEnterPolyline = useCallback(() => {
+    polylineDoubleClickRef.current?.();
+  }, []);
 
   // Escape handler - always return to View mode
   const handleEscape = useCallback(() => {
@@ -734,6 +761,7 @@ export const useEnhancedSegmentationEditor = ({
     handleResetView,
     handleDeletePolygon,
     onEscape: handleEscape,
+    onEnter: handleEnterPolyline,
   });
 
   // Initialize hooks (moved after handlePan definition to avoid TDZ error)
@@ -819,7 +847,7 @@ export const useEnhancedSegmentationEditor = ({
         transformRef.current,
         mousePoint,
         zoomFactor,
-        EDITING_CONSTANTS.MIN_ZOOM,
+        effectiveMinZoom,
         EDITING_CONSTANTS.MAX_ZOOM,
         rect.width,
         rect.height
@@ -851,7 +879,7 @@ export const useEnhancedSegmentationEditor = ({
         throttledZoom.cancel();
       };
     }
-  }, [imageWidth, imageHeight, canvasWidth, canvasHeight]); // Removed transform from dependencies
+  }, [imageWidth, imageHeight, canvasWidth, canvasHeight, effectiveMinZoom]);
 
   // Enhanced pan handler with smooth continuous movement
   const handlePan = useCallback(
@@ -887,6 +915,8 @@ export const useEnhancedSegmentationEditor = ({
     cursorPosition,
     isShiftPressed: keyboardShortcuts.isShiftPressed,
     isSpacePressed: keyboardShortcuts.isSpacePressed,
+    activePartClassRef,
+    activeInstanceIdRef,
     setSelectedPolygonId,
     onPolygonSelection: polygonSelection.handlePolygonSelection, // Pass centralized selection handler
     setEditMode,
@@ -898,6 +928,9 @@ export const useEnhancedSegmentationEditor = ({
     getPolygons,
     handlePan,
   });
+
+  // Set ref so Enter key and double-click can finalize polylines
+  polylineDoubleClickRef.current = interactions.handleCreatePolylineDoubleClick;
 
   // Update interaction handlers to include pan handling
   const enhancedHandleMouseMove = useCallback(
@@ -1072,6 +1105,7 @@ export const useEnhancedSegmentationEditor = ({
     handleMouseDown: interactions.handleMouseDown,
     handleMouseMove: enhancedHandleMouseMove,
     handleMouseUp: interactions.handleMouseUp,
+    handleCreatePolylineDoubleClick: interactions.handleCreatePolylineDoubleClick,
 
     // Mode-specific handlers
     slicing,

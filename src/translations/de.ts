@@ -408,6 +408,11 @@ export default {
           description:
             'Beste Leistung auf SpheroHQ-Datensatz - optimiert für Sphäroid-Segmentierung mit ausgewogener Geschwindigkeit und Genauigkeit (~0.25s/Bild, 10 Bilder/s)',
         },
+        sperm: {
+          name: 'Spermien-Segmentierung',
+          description:
+            'Spermien-Morphologiemodell mit Skelettextraktion zur Messung von Kopf, Mittelstück und Schwanz',
+        },
       },
     },
     confidenceThreshold: 'Vertrauensschwelle',
@@ -641,6 +646,7 @@ export default {
       addPoints: 'Punkte hinzufügen',
       create: 'Erstellen',
       createPolygon: 'Polygon erstellen',
+      createPolyline: 'Polylinie erstellen',
       slice: 'Schneiden',
       delete: 'Löschen',
       deletePolygon: 'Polygon löschen',
@@ -651,6 +657,7 @@ export default {
       edit: 'Eckpunkte bewegen und modifizieren',
       addPoints: 'Punkte zwischen Eckpunkten hinzufügen',
       create: 'Neue Polygone erstellen',
+      createPolyline: 'Klicken zum Setzen von Punkten, Doppelklick zum Abschließen der Polylinie',
       slice: 'Polygone mit einer Linie teilen',
       delete: 'Polygone entfernen',
     },
@@ -690,6 +697,7 @@ export default {
       polygonList: 'Polygon-Liste',
       external: 'External',
       internal: 'Internal',
+      polyline: 'Polylinie',
     },
     shortcuts: {
       buttonText: 'Tastenkürzel',
@@ -1083,6 +1091,7 @@ export default {
     noData: 'Keine Daten für Export verfügbar',
     segmentationData: 'Segmentierungsdaten',
     spheroidMetrics: 'Sphäroid-Metriken',
+    spermMetrics: 'Spermien-Metriken',
     cocoFormat: 'COCO-Format',
     cocoFormatTitle: 'COCO-Format-Export',
     downloadJson: 'JSON herunterladen',
@@ -1675,6 +1684,8 @@ export default {
       'Diese Aktion ist unumkehrbar. Das Polygon wird dauerhaft aus der Segmentierung entfernt.',
     duplicateVertex: 'Eckpunkt duplizieren',
     deleteVertex: 'Eckpunkt löschen',
+    editPolyline: 'Polylinie bearbeiten',
+    deletePolyline: 'Polylinie löschen',
   },
   websocket: {
     reconnecting: 'Verbinde erneut mit Server...',
@@ -1850,5 +1861,28 @@ export default {
     contactUs: 'Kontaktieren Sie uns',
     developedAt: 'Entwickelt am',
     designBy: 'Design von',
+  },
+  sperm: {
+    instancePanel: 'Spermien-Instanzen',
+    instance: 'Spermium',
+    newInstance: 'Neue Instanz',
+    unassigned: 'Nicht zugewiesen',
+    unclassified: 'Nicht klassifiziert',
+    part: {
+      head: 'Kopf',
+      midpiece: 'Mittelstück',
+      tail: 'Schwanz',
+    },
+    setAsHead: 'Als Kopf festlegen',
+    setAsMidpiece: 'Als Mittelstück festlegen',
+    setAsTail: 'Als Schwanz festlegen',
+    export: {
+      description:
+        'Spermien-Morphologiemessungen (Kopf-, Mittelstück- und Schwanzlängen) nach Excel exportieren.',
+      calibration: 'Kalibrierungsfaktor',
+      instances: 'Instanzen',
+      polylines: 'Polylinien',
+      button: 'Spermien-Metriken exportieren',
+    },
   },
 };

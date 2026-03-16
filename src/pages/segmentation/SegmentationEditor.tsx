@@ -36,6 +36,7 @@ import { ensureBrowserCompatibleUrl } from '@/lib/tiffUtils';
 import VerticalToolbar from './components/VerticalToolbar';
 import TopToolbar from './components/TopToolbar';
 import PolygonListPanel from './components/PolygonListPanel';
+import SpermInstancePanel from './components/SpermInstancePanel';
 import KeyboardShortcutsHelp from './components/KeyboardShortcutsHelp';
 import SegmentationErrorBoundary from './components/SegmentationErrorBoundary';
 
@@ -278,7 +279,10 @@ const SegmentationEditor = () => {
 
     // Transform SegmentationPolygon[] to Polygon[] and filter out invalid polygons
     const polygons: Polygon[] = segmentationPolygons
-      .filter(segPoly => segPoly.points && segPoly.points.length >= 3)
+      .filter(segPoly => {
+        const minPoints = segPoly.geometry === 'polyline' ? 2 : 3;
+        return segPoly.points && segPoly.points.length >= minPoints;
+      })
       .map(segPoly => {
         const validPoints = segPoly.points
           .map(point => {
@@ -304,8 +308,9 @@ const SegmentationEditor = () => {
           })
           .filter((point): point is { x: number; y: number } => point !== null);
 
-        // Only include polygon if it still has at least 3 valid points
-        if (validPoints.length >= 3) {
+        // Only include polygon/polyline if it has enough valid points
+        const minValidPoints = segPoly.geometry === 'polyline' ? 2 : 3;
+        if (validPoints.length >= minValidPoints) {
           // CRITICAL: Validate and ensure polygon has a valid ID
           if (!validatePolygonId(segPoly.id)) {
             logPolygonIdIssue(
@@ -329,6 +334,9 @@ const SegmentationEditor = () => {
                 segPoly.parentIds && segPoly.parentIds.length > 0
                   ? segPoly.parentIds[0]
                   : undefined,
+              geometry: segPoly.geometry,
+              partClass: segPoly.partClass,
+              instanceId: segPoly.instanceId,
             };
           }
 
@@ -343,6 +351,9 @@ const SegmentationEditor = () => {
               segPoly.parentIds && segPoly.parentIds.length > 0
                 ? segPoly.parentIds[0]
                 : undefined,
+            geometry: segPoly.geometry,
+            partClass: segPoly.partClass,
+            instanceId: segPoly.instanceId,
           };
         }
 
@@ -413,6 +424,14 @@ const SegmentationEditor = () => {
     }
   }, [imageId]);
 
+  // Sperm polyline state for SpermInstancePanel
+  const [activePartClass, setActivePartClass] = useState<'head' | 'midpiece' | 'tail'>('head');
+  const [activeInstanceId, setActiveInstanceId] = useState<string>('sperm_1');
+  const activePartClassRef = useRef<string>(activePartClass);
+  const activeInstanceIdRef = useRef<string>(activeInstanceId);
+  activePartClassRef.current = activePartClass;
+  activeInstanceIdRef.current = activeInstanceId;
+
   // Initialize enhanced editor
   const editor = useEnhancedSegmentationEditor({
     initialPolygons,
@@ -422,6 +441,8 @@ const SegmentationEditor = () => {
     canvasHeight,
     imageId, // Pass imageId to track image changes
     isFromGallery: shouldAutoCenter.current, // Use our auto-center flag
+    activePartClassRef,
+    activeInstanceIdRef,
     onSave: async (polygons, targetImageId, targetDimensions, signal) => {
       const saveToImageId = targetImageId || imageId;
       if (!projectId || !saveToImageId) return;
@@ -490,6 +511,9 @@ const SegmentationEditor = () => {
           parentIds: polygon.parent_id ? [polygon.parent_id] : [], // Preserve parent_id as parentIds array
           confidence: polygon.confidence,
           area: polygon.area,
+          geometry: polygon.geometry,
+          partClass: polygon.partClass,
+          instanceId: polygon.instanceId,
         }));
 
         const updatedResult = await apiClient.updateSegmentationResults(
@@ -1017,6 +1041,23 @@ const SegmentationEditor = () => {
     [editor]
   );
 
+  // Check if any polylines exist to conditionally show SpermInstancePanel
+  const hasPolylines = useMemo(
+    () => editor.polygons.some(p => p.geometry === 'polyline'),
+    [editor.polygons]
+  );
+
+  // Handler for changing a polyline's partClass from the context menu
+  const handleChangePartClass = useCallback(
+    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => {
+      const updatedPolygons = editor.polygons.map(p =>
+        p.id === polygonId ? { ...p, partClass } : p
+      );
+      editor.updatePolygons(updatedPolygons);
+    },
+    [editor.polygons, editor.updatePolygons]
+  );
+
   // Convert new EditMode to legacy booleans for compatibility
   const legacyModes = useMemo(
     () => ({
@@ -1127,6 +1168,7 @@ const SegmentationEditor = () => {
                   onMouseDown={editor.handleMouseDown}
                   onMouseMove={editor.handleMouseMove}
                   onMouseUp={editor.handleMouseUp}
+                  onDoubleClick={editor.handleCreatePolylineDoubleClick}
                   loading={projectLoading}
                   // Legacy compatibility props
                   slicingMode={legacyModes.slicingMode}
@@ -1184,10 +1226,11 @@ const SegmentationEditor = () => {
                       {(() => {
                         const visiblePolygons = editor.polygons
                           .filter(polygon => !hiddenPolygonIds.has(polygon.id))
-                          .filter(
-                            polygon =>
-                              polygon.points && polygon.points.length >= 3
-                          );
+                          .filter(polygon => {
+                            if (!polygon.points) return false;
+                            const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
+                            return polygon.points.length >= minPoints;
+                          });
 
                         // Render polygons
                         return (
@@ -1223,6 +1266,7 @@ const SegmentationEditor = () => {
                                   handleSlicePolygonFromContextMenu
                                 }
                                 onEditPolygon={handleEditPolygonFromContextMenu}
+                                onChangePartClass={handleChangePartClass}
                                 onDeleteVertex={
                                   handleDeleteVertexFromContextMenu
                                 }
@@ -1258,17 +1302,30 @@ const SegmentationEditor = () => {
                 </CanvasContainer>
               </div>
 
-              {/* Right: Polygon List Panel */}
-              <PolygonListPanel
-                loading={projectLoading}
-                polygons={editor.polygons}
-                selectedPolygonId={editor.selectedPolygonId}
-                onSelectPolygon={editor.handlePolygonSelection}
-                hiddenPolygonIds={hiddenPolygonIds}
-                onTogglePolygonVisibility={handleTogglePolygonVisibility}
-                onRenamePolygon={handleRenamePolygon}
-                onDeletePolygon={handleDeletePolygonFromPanel}
-              />
+              {/* Right: Polygon List Panel + Sperm Instance Panel */}
+              <div className="flex flex-col w-full lg:w-72 h-64 lg:h-full">
+                <PolygonListPanel
+                  loading={projectLoading}
+                  polygons={editor.polygons}
+                  selectedPolygonId={editor.selectedPolygonId}
+                  onSelectPolygon={editor.handlePolygonSelection}
+                  hiddenPolygonIds={hiddenPolygonIds}
+                  onTogglePolygonVisibility={handleTogglePolygonVisibility}
+                  onRenamePolygon={handleRenamePolygon}
+                  onDeletePolygon={handleDeletePolygonFromPanel}
+                />
+                {hasPolylines && (
+                  <SpermInstancePanel
+                    polygons={editor.polygons}
+                    selectedPolygonId={editor.selectedPolygonId}
+                    onSelectPolygon={editor.handlePolygonSelection}
+                    activePartClass={activePartClass}
+                    onPartClassChange={setActivePartClass}
+                    activeInstanceId={activeInstanceId}
+                    onInstanceIdChange={setActiveInstanceId}
+                  />
+                )}
+              </div>
             </div>
           </div>
         </div>

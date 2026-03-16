@@ -6,6 +6,7 @@ interface CanvasContainerProps {
   onMouseDown: (e: React.MouseEvent) => void;
   onMouseMove: (e: React.MouseEvent) => void;
   onMouseUp: (e: React.MouseEvent) => void;
+  onDoubleClick?: (e: React.MouseEvent) => void;
   onWheel?: (e: React.WheelEvent) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   children: React.ReactNode;
@@ -26,6 +27,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
       onMouseDown,
       onMouseMove,
       onMouseUp,
+      onDoubleClick,
       onWheel,
       onContextMenu,
       children,
@@ -78,6 +80,8 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
           return 'border-emerald-500'; // Green for add points mode
         case EditMode.CreatePolygon:
           return 'border-blue-500'; // Blue for create polygon mode
+        case EditMode.CreatePolyline:
+          return 'border-violet-500'; // Violet for create polyline mode
         case EditMode.DeletePolygon:
           return 'border-orange-500'; // Orange for delete mode
         case EditMode.View:
@@ -101,6 +105,8 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
         case EditMode.AddPoints:
           return 'cell';
         case EditMode.CreatePolygon:
+          return 'crosshair';
+        case EditMode.CreatePolyline:
           return 'crosshair';
         case EditMode.Slice:
           return 'crosshair';
@@ -136,6 +142,7 @@ const CanvasContainer = React.forwardRef<HTMLDivElement, CanvasContainerProps>(
         onMouseMove={onMouseMove}
         onMouseUp={onMouseUp}
         onMouseLeave={onMouseUp}
+        onDoubleClick={onDoubleClick}
         onWheel={onWheel}
         onContextMenu={handleContextMenu}
         data-testid="canvas-container"

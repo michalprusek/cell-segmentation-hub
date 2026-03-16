@@ -770,7 +770,13 @@ export class QueueService {
           continue;
         }
 
-        if (result.polygons && result.polygons.length > 0) {
+        // Merge polylines into polygons (sperm model returns both)
+        const allPolygons = [
+          ...(result.polygons || []),
+          ...((result as any).polylines || []),
+        ];
+
+        if (allPolygons.length > 0) {
           // Success - save results and update image status
           // Prioritize image dimensions from ML service result, fallback to database
           const imageWidth = result.image_size?.width || image.width || null;
@@ -778,7 +784,7 @@ export class QueueService {
 
           await this.segmentationService.saveSegmentationResults(
             item.imageId,
-            result.polygons,
+            allPolygons,
             model,
             threshold,
             result.confidence || null,
@@ -814,7 +820,7 @@ export class QueueService {
               item.userId,
               item.imageId,
               item.projectId,
-              result.polygons.length
+              allPolygons.length
             );
           }
 
@@ -824,7 +830,7 @@ export class QueueService {
             {
               queueId: item.id,
               imageId: item.imageId,
-              polygonCount: result.polygons.length,
+              polygonCount: allPolygons.length,
             }
           );
         } else {

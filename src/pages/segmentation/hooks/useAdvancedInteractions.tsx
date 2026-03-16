@@ -33,6 +33,8 @@ interface UseAdvancedInteractionsProps {
   cursorPosition: Point | null;
   isShiftPressed?: () => boolean;
   isSpacePressed?: () => boolean;
+  activePartClassRef?: React.RefObject<string>;
+  activeInstanceIdRef?: React.RefObject<string>;
 
   // State setters
   setSelectedPolygonId: (id: string | null) => void; // DEPRECATED: Use onPolygonSelection instead
@@ -69,6 +71,8 @@ export const useAdvancedInteractions = ({
   cursorPosition,
   isShiftPressed: isShiftPressedCallback,
   isSpacePressed: isSpacePressedCallback,
+  activePartClassRef,
+  activeInstanceIdRef,
   setSelectedPolygonId, // DEPRECATED: Kept for backward compatibility
   onPolygonSelection, // Use this for new centralized selection
   setEditMode,
@@ -356,6 +360,40 @@ export const useAdvancedInteractions = ({
   );
 
   /**
+   * Handle Create Polyline mode clicks
+   * Click adds a point, double-click finalizes the polyline (minimum 2 points)
+   */
+  const handleCreatePolylineClick = useCallback(
+    (imagePoint: Point) => {
+      // Add point to temporary points
+      setTempPoints([...tempPoints, imagePoint]);
+    },
+    [tempPoints, setTempPoints]
+  );
+
+  /**
+   * Handle Create Polyline double-click to finalize
+   */
+  const handleCreatePolylineDoubleClick = useCallback(() => {
+    if (tempPoints.length >= 2) {
+      const newPolyline = createPolygon(tempPoints);
+      // Override with polyline-specific fields, including active part class and instance
+      const polyline: Polygon = {
+        ...newPolyline,
+        geometry: 'polyline',
+        partClass: activePartClassRef?.current as 'head' | 'midpiece' | 'tail' | undefined,
+        instanceId: activeInstanceIdRef?.current || undefined,
+      };
+      const currentPolygons = getPolygons();
+      updatePolygons([...currentPolygons, polyline]);
+
+      // Reset state
+      setTempPoints([]);
+      setEditMode(EditMode.View);
+    }
+  }, [tempPoints, getPolygons, updatePolygons, setTempPoints, setEditMode, activePartClassRef, activeInstanceIdRef]);
+
+  /**
    * Handle Delete Polygon mode clicks
    */
   const handleDeletePolygonClick = useCallback((imagePoint: Point) => {
@@ -403,6 +441,20 @@ export const useAdvancedInteractions = ({
         }
 
         // Not a vertex - proceed with existing step-by-step undo logic
+        // Special handling for polyline creation - step-by-step undo
+        if (editMode === EditMode.CreatePolyline) {
+          if (tempPoints.length > 0) {
+            // Remove last placed point
+            setTempPoints(tempPoints.slice(0, -1));
+          } else {
+            // No points - exit to View mode
+            setEditMode(EditMode.View);
+          }
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+
         // Special handling for slice mode - step-by-step undo
         if (editMode === EditMode.Slice) {
           if (tempPoints.length > 0) {
@@ -544,6 +596,9 @@ export const useAdvancedInteractions = ({
           case EditMode.CreatePolygon:
             handleCreatePolygonClick(imagePoint);
             break;
+          case EditMode.CreatePolyline:
+            handleCreatePolylineClick(imagePoint);
+            break;
           case EditMode.EditVertices:
             handleEditVerticesClick(imagePoint, e);
             break;
@@ -573,6 +628,7 @@ export const useAdvancedInteractions = ({
       canvasRef,
       handleAddPointsClick,
       handleCreatePolygonClick,
+      handleCreatePolylineClick,
       handleDeletePolygonClick,
       handleEditVerticesClick,
       handleSliceClick,
@@ -656,6 +712,7 @@ export const useAdvancedInteractions = ({
       if (
         isShiftCurrentlyPressed &&
         (editMode === EditMode.CreatePolygon ||
+          editMode === EditMode.CreatePolyline ||
           (editMode === EditMode.AddPoints && interactionState.isAddingPoints))
       ) {
         let referencePoint: Point | null = null;
@@ -831,6 +888,7 @@ export const useAdvancedInteractions = ({
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
+    handleCreatePolylineDoubleClick,
   };
 };
 
@@ -844,8 +902,9 @@ function insertPointsBetweenVertices(
   endVertexIndex: number,
   newPoints: Point[]
 ): Point[] | null {
-  // Note: This function handles both adding points and removing points (when newPoints is empty)
-  // using the same candidate selection logic for consistency
+  // This function inserts new points between two vertices of a polygon.
+  // It creates two candidate polygons and selects the one with the larger perimeter,
+  // because adding points expands the polygon boundary outward.
 
   const numPoints = originalPoints.length;
 
@@ -903,11 +962,13 @@ function insertPointsBetweenVertices(
     idx = (idx + 1) % numPoints;
   }
 
-  // Calculate perimeters and choose the one with smaller perimeter
+  // Calculate perimeters and choose the one with larger perimeter
+  // When adding points, the user expands the polygon outward,
+  // so the correct result is the candidate with the greater perimeter
   const perimeter1 = calculatePolygonPerimeter(candidate1Points);
   const perimeter2 = calculatePolygonPerimeter(candidate2Points);
 
-  return perimeter1 <= perimeter2 ? candidate1Points : candidate2Points;
+  return perimeter1 >= perimeter2 ? candidate1Points : candidate2Points;
 }
 
 /**

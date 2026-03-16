@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Eye, EyeOff, Edit3, Trash2, MoreVertical, ChevronUp, ChevronDown } from 'lucide-react';
+import { Eye, EyeOff, Edit3, Trash2, MoreVertical, ChevronUp, ChevronDown, Spline } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -67,7 +67,22 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
     return polygon.parent_id || polygon.type === 'internal';
   };
 
+  // Get display label for sperm instance IDs (e.g., "sperm_1" → "Sperm 1")
+  const getInstanceLabel = (instanceId: string) => {
+    const match = instanceId.match(/^sperm_(\d+)$/);
+    if (match) return `Sperm ${match[1]}`;
+    return instanceId;
+  };
+
   const getPolygonColor = (polygon: any) => {
+    if (polygon.geometry === 'polyline') {
+      switch (polygon.partClass) {
+        case 'head': return 'bg-green-500';
+        case 'midpiece': return 'bg-orange-500';
+        case 'tail': return 'bg-cyan-500';
+        default: return 'bg-violet-500';
+      }
+    }
     return isInternalPolygon(polygon) ? 'bg-blue-500' : 'bg-red-500';
   };
 
@@ -103,7 +118,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (loading) {
     return (
-      <div className="w-full lg:w-72 h-64 lg:h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
+      <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex items-center justify-center">
         <div className="text-gray-500">{t('common.loading')}</div>
       </div>
     );
@@ -111,7 +126,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
 
   if (!polygons || polygons.length === 0) {
     return (
-      <div className="w-full lg:w-72 h-64 lg:h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+      <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
         <div className="p-4 border-b border-gray-200 dark:border-gray-700">
           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('segmentation.status.polygons')}
@@ -130,7 +145,7 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   }
 
   return (
-    <div className="w-full lg:w-72 h-64 lg:h-full bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+    <div className="w-full flex-1 min-h-0 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between mb-2 lg:mb-0">
@@ -193,8 +208,10 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
             const isSelected = selectedPolygonId === polygon.id;
             const isHidden = hiddenPolygonIds.has(polygon.id);
             const isEditing = editingPolygonId === polygon.id;
-            const polygonName =
-              polygon.name || `${t('common.polygon')} ${index + 1}`;
+            const isPolyline = polygon.geometry === 'polyline';
+            const polygonName = isPolyline
+              ? `${polygon.partClass ? t(`sperm.part.${polygon.partClass}`) : t('segmentation.status.polyline')}${polygon.instanceId ? ` (${getInstanceLabel(polygon.instanceId)})` : ''}`
+              : polygon.name || `${t('common.polygon')} ${index + 1}`;
 
             return (
               <motion.div
@@ -206,7 +223,9 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                   relative group rounded-lg border transition-all duration-200 cursor-pointer
                   ${
                     isSelected
-                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                      ? isPolyline
+                        ? 'border-violet-500 bg-violet-50 dark:bg-violet-900/20'
+                        : 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                       : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                   }
                   ${isHidden ? 'opacity-50' : ''}
@@ -250,9 +269,13 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                         </span>
                         <span>•</span>
                         <span>
-                          {isInternalPolygon(polygon)
-                            ? t('segmentation.status.internal')
-                            : t('segmentation.status.external')}
+                          {polygon.geometry === 'polyline'
+                            ? (polygon.partClass
+                              ? t(`sperm.part.${polygon.partClass}`)
+                              : t('segmentation.status.polyline'))
+                            : isInternalPolygon(polygon)
+                              ? t('segmentation.status.internal')
+                              : t('segmentation.status.external')}
                         </span>
                         {polygon.area && (
                           <>

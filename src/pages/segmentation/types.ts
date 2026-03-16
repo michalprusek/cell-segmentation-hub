@@ -6,6 +6,7 @@ export enum EditMode {
   EditVertices = 'edit-vertices',
   AddPoints = 'add-points',
   CreatePolygon = 'create-polygon',
+  CreatePolyline = 'create-polyline',
   Slice = 'slice',
   DeletePolygon = 'delete-polygon',
 }

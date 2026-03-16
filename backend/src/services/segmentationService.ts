@@ -32,12 +32,15 @@ export interface SegmentationPoint {
 }
 
 export interface SegmentationPolygon {
-  id: string; // Add missing ID field
+  id: string;
   points: SegmentationPoint[];
   area: number;
   confidence: number;
   type: 'external' | 'internal';
   parentIds?: string[]; // For internal polygons, match frontend API interface
+  geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
+  partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
+  instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
 }
 
 export interface SegmentationRequest {
@@ -47,7 +50,8 @@ export interface SegmentationRequest {
     | 'cbam_resunet'
     | 'unet_spherohq'
     | 'resunet_advanced'
-    | 'resunet_small';
+    | 'resunet_small'
+    | 'sperm';
   threshold?: number;
   userId: string;
   detectHoles?: boolean;
@@ -56,6 +60,7 @@ export interface SegmentationRequest {
 export interface SegmentationResponse {
   success: boolean;
   polygons: SegmentationPolygon[];
+  polylines?: SegmentationPolygon[]; // Sperm model returns separate polylines
   model_used: string;
   threshold_used: number;
   processing_time: number | null;
@@ -696,8 +701,14 @@ export class SegmentationService {
         );
       }
 
-      // Validate and clean polygons before storage
-      const validPolygons = (segmentationResult.polygons || []).filter(
+      // Merge polylines into polygons array (sperm model returns both)
+      const allPolygons = [
+        ...(segmentationResult.polygons || []),
+        ...(segmentationResult.polylines || []),
+      ];
+
+      // Validate and clean polygons/polylines before storage
+      const validPolygons = allPolygons.filter(
         polygon => {
           // Validate polygon structure
           if (!polygon || typeof polygon !== 'object') {
@@ -709,13 +720,16 @@ export class SegmentationService {
             return false;
           }
 
-          // Validate points array
-          if (!Array.isArray(polygon.points) || polygon.points.length < 3) {
+          // Polylines need at least 2 points, polygons need at least 3
+          const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
+          if (!Array.isArray(polygon.points) || polygon.points.length < minPoints) {
             logger.warn(
-              'Polygon has insufficient points',
+              'Polygon/polyline has insufficient points',
               'SegmentationService',
               {
                 pointsLength: polygon.points?.length,
+                geometry: polygon.geometry,
+                minRequired: minPoints,
               }
             );
             return false;
@@ -809,6 +823,10 @@ export class SegmentationService {
           type: polygon.type,
           area: polygon.area || 0,
           confidence: polygon.confidence || 0.8,
+          // Preserve polyline fields for sperm model
+          ...(polygon.geometry && { geometry: polygon.geometry }),
+          ...(polygon.partClass && { partClass: polygon.partClass }),
+          ...(polygon.instanceId && { instanceId: polygon.instanceId }),
         };
 
         // Convert parentIds array to parent_id for database storage
@@ -1262,6 +1280,10 @@ export class SegmentationService {
         parentIds: (polygon as any).parent_id
           ? [(polygon as any).parent_id]
           : undefined, // Convert parent_id to parentIds array
+        // Preserve polyline fields (sperm model)
+        ...((polygon as any).geometry && { geometry: (polygon as any).geometry }),
+        ...((polygon as any).partClass && { partClass: (polygon as any).partClass }),
+        ...((polygon as any).instanceId && { instanceId: (polygon as any).instanceId }),
       })
     );
 
@@ -1341,6 +1363,10 @@ export class SegmentationService {
         polygon.parentIds && polygon.parentIds.length > 0
           ? polygon.parentIds[0]
           : undefined,
+      // Preserve polyline fields (sperm model)
+      ...(polygon.geometry && { geometry: polygon.geometry }),
+      ...(polygon.partClass && { partClass: polygon.partClass }),
+      ...(polygon.instanceId && { instanceId: polygon.instanceId }),
     }));
     const polygonsJson = JSON.stringify(dbPolygons);
 
@@ -1731,6 +1757,10 @@ export class SegmentationService {
             parentIds: (polygon as any).parent_id
               ? [(polygon as any).parent_id]
               : undefined, // Convert parent_id to parentIds array
+            // Preserve polyline fields (sperm model)
+            ...((polygon as any).geometry && { geometry: (polygon as any).geometry }),
+            ...((polygon as any).partClass && { partClass: (polygon as any).partClass }),
+            ...((polygon as any).instanceId && { instanceId: (polygon as any).instanceId }),
           })
         );
 

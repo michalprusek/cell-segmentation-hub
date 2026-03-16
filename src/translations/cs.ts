@@ -389,6 +389,11 @@ export default {
           description:
             'Nejlepší výkon na datové sadě SpheroHQ - optimalizováno pro segmentaci sféroidů s vyváženou rychlostí a přesností (~0.25s/obr., 10 obr./s)',
         },
+        sperm: {
+          name: 'Segmentace spermií',
+          description:
+            'Model morfologie spermií s extrakcí kostry pro měření hlavy, středního dílu a bičíku',
+        },
       },
     },
     confidenceThreshold: 'Práh Spolehlivosti',
@@ -496,6 +501,7 @@ export default {
       addPoints: 'Přidat body',
       create: 'Vytvořit',
       createPolygon: 'Vytvořit polygon',
+      createPolyline: 'Vytvořit polylajn',
       slice: 'Rozřezat',
       delete: 'Smazat',
       deletePolygon: 'Smazat polygon',
@@ -506,6 +512,7 @@ export default {
       edit: 'Přesunout a upravit vrcholy',
       addPoints: 'Přidat body mezi vrcholy',
       create: 'Vytvořit nové polygony',
+      createPolyline: 'Klikněte pro umístění bodů, dvojklikem dokončete polylajn',
       slice: 'Rozdělit polygony čarou',
       delete: 'Odstranit polygony',
     },
@@ -545,6 +552,7 @@ export default {
       polygonList: 'Seznam polygonů',
       external: 'Externí',
       internal: 'Interní',
+      polyline: 'Polylajn',
     },
     shortcuts: {
       buttonText: 'Zkratky',
@@ -1074,6 +1082,7 @@ export default {
     noData: 'Žádná data k exportu nejsou k dispozici',
     segmentationData: 'Data segmentace',
     spheroidMetrics: 'Metriky sféroidů',
+    spermMetrics: 'Metriky spermií',
     cocoFormat: 'Formát COCO',
     cocoFormatTitle: 'Export formátu COCO',
     downloadJson: 'Stáhnout JSON',
@@ -1714,6 +1723,8 @@ export default {
       'Tato akce je nevratná. Polygon bude trvale odstraněn ze segmentace.',
     duplicateVertex: 'Duplikovat bod',
     deleteVertex: 'Smazat bod',
+    editPolyline: 'Upravit polylajn',
+    deletePolyline: 'Smazat polylajn',
   },
   metrics: {
     info: 'Metriky jsou vyhodnocovány pouze pro externí polygony. Plochy interních polygonů (děr) jsou automaticky odečteny od příslušných externích polygonů.',
@@ -1878,6 +1889,29 @@ export default {
       exportAllMetrics: 'Exportovat všechny metriky jako XLSX',
       exportUnavailable: 'Export není k dispozici',
       loading: 'Načítání...',
+    },
+  },
+  sperm: {
+    instancePanel: 'Instance spermií',
+    instance: 'Spermie',
+    newInstance: 'Nová instance',
+    unassigned: 'Nepřiřazeno',
+    unclassified: 'Neklasifikováno',
+    part: {
+      head: 'Hlava',
+      midpiece: 'Střední část',
+      tail: 'Bičík',
+    },
+    setAsHead: 'Nastavit jako hlavu',
+    setAsMidpiece: 'Nastavit jako střední část',
+    setAsTail: 'Nastavit jako bičík',
+    export: {
+      description:
+        'Exportovat měření morfologie spermií (délky hlavy, středního dílu a bičíku) do Excelu.',
+      calibration: 'Kalibrační faktor',
+      instances: 'instancí',
+      polylines: 'polylajn',
+      button: 'Exportovat metriky spermií',
     },
   },
 };

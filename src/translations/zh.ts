@@ -357,6 +357,11 @@ export default {
           description:
             '在SpheroHQ数据集上表现最佳 - 专为球体分割优化，速度和精度平衡 (~0.25秒/图像, 10图像/秒)',
         },
+        sperm: {
+          name: '精子分割',
+          description:
+            '精子形态学模型，含骨架提取功能，用于测量头部、中段和尾部',
+        },
       },
     },
     confidenceThreshold: '置信度阈值',
@@ -577,6 +582,7 @@ export default {
       addPoints: '添加点',
       create: '创建',
       createPolygon: '创建多边形',
+      createPolyline: '创建折线',
       slice: '切割',
       delete: '删除',
       deletePolygon: '删除多边形',
@@ -587,6 +593,7 @@ export default {
       edit: '移动和修改顶点',
       addPoints: '在顶点之间添加点',
       create: '创建新多边形',
+      createPolyline: '单击放置点，双击完成折线',
       slice: '用线分割多边形',
       delete: '移除多边形',
     },
@@ -626,6 +633,7 @@ export default {
       polygonList: '多边形列表',
       external: 'External',
       internal: 'Internal',
+      polyline: '折线',
     },
     shortcuts: {
       buttonText: '快捷键',
@@ -980,6 +988,7 @@ export default {
     noData: '没有可用于导出的数据',
     segmentationData: '分割数据',
     spheroidMetrics: '球体指标',
+    spermMetrics: '精子指标',
     cocoFormat: 'COCO格式',
     cocoFormatTitle: 'COCO格式导出',
     downloadJson: '下载JSON',
@@ -1554,6 +1563,8 @@ export default {
     deletePolygonDescription: '此操作不可撤销。多边形将从分割中永久删除。',
     duplicateVertex: '复制顶点',
     deleteVertex: '删除顶点',
+    editPolyline: '编辑折线',
+    deletePolyline: '删除折线',
   },
   websocket: {
     reconnecting: '正在重新连接服务器...',
@@ -1725,5 +1736,27 @@ export default {
     contactUs: '联系我们',
     developedAt: '开发于',
     designBy: '设计',
+  },
+  sperm: {
+    instancePanel: '精子实例',
+    instance: '精子',
+    newInstance: '新实例',
+    unassigned: '未分配',
+    unclassified: '未分类',
+    part: {
+      head: '头部',
+      midpiece: '中段',
+      tail: '尾部',
+    },
+    setAsHead: '设为头部',
+    setAsMidpiece: '设为中段',
+    setAsTail: '设为尾部',
+    export: {
+      description: '将精子形态学测量结果（头部、中段和尾部长度）导出到 Excel。',
+      calibration: '校准系数',
+      instances: '实例',
+      polylines: '折线',
+      button: '导出精子指标',
+    },
   },
 };

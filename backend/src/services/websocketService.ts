@@ -112,6 +112,8 @@ export class WebSocketService {
       transports: ['websocket', 'polling'],
     });
 
+    // Expose io instance globally for health check service
+    (global as Record<string, unknown>).io = this.io;
     this.setupMiddleware();
     this.setupEventHandlers();
 

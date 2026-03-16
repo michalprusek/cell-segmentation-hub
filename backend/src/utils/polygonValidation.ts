@@ -202,8 +202,10 @@ export const PolygonValidator = {
 
     const polygonObj = polygon as Record<string, unknown>;
 
-    // Validate points array
-    if (!Array.isArray(polygonObj.points) || polygonObj.points.length < 3) {
+    // Polylines need at least 2 points, polygons need at least 3
+    const isPolyline = polygonObj.geometry === 'polyline';
+    const minPoints = isPolyline ? 2 : 3;
+    if (!Array.isArray(polygonObj.points) || polygonObj.points.length < minPoints) {
       return null;
     }
 
@@ -219,8 +221,8 @@ export const PolygonValidator = {
       }
     }
 
-    // Need at least 3 valid points to form a polygon
-    if (validPoints.length < 3) {
+    // Need minimum valid points (2 for polylines, 3 for polygons)
+    if (validPoints.length < minPoints) {
       return null;
     }
 
@@ -272,6 +274,17 @@ export const PolygonValidator = {
       polygonObj.area >= 0
     ) {
       validatedPolygon.area = polygonObj.area;
+    }
+
+    // Preserve polyline fields (sperm model)
+    if (polygonObj.geometry === 'polyline') {
+      (validatedPolygon as any).geometry = 'polyline';
+    }
+    if (polygonObj.partClass && typeof polygonObj.partClass === 'string') {
+      (validatedPolygon as any).partClass = polygonObj.partClass;
+    }
+    if (polygonObj.instanceId && typeof polygonObj.instanceId === 'string') {
+      (validatedPolygon as any).instanceId = polygonObj.instanceId;
     }
 
     return validatedPolygon;

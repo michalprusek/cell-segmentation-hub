@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { SegmentationResult } from '@/lib/segmentation';
 import LazyExcelExporter from './export/LazyExcelExporter';
 import MetricsDisplay from './export/MetricsDisplay';
 import CocoTab from './export/CocoTab';
+import SpermExcelExporter from './export/SpermExcelExporter';
 import { useLanguage } from '@/contexts/useLanguage';
 
 interface ProjectImageExportProps {
@@ -20,8 +21,24 @@ const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
   imageName,
   onClose,
 }) => {
-  const [activeTab, setActiveTab] = useState('metrics');
   const { t } = useLanguage();
+
+  // Classify content: polylines vs regular polygons
+  const hasPolylines = useMemo(
+    () => segmentation?.polygons?.some(p => p.geometry === 'polyline') ?? false,
+    [segmentation]
+  );
+  const hasPolygons = useMemo(
+    () =>
+      segmentation?.polygons?.some(
+        p => !p.geometry || p.geometry === 'polygon'
+      ) ?? false,
+    [segmentation]
+  );
+
+  // Default tab: sperm if only polylines, metrics if has polygons
+  const defaultTab = hasPolylines && !hasPolygons ? 'sperm' : 'metrics';
+  const [activeTab, setActiveTab] = useState(defaultTab);
 
   if (!segmentation) return null;
 
@@ -54,22 +71,40 @@ const ProjectImageExport: React.FC<ProjectImageExportProps> = ({
         >
           <div className="px-4 border-b dark:border-gray-700">
             <TabsList className="mt-2">
-              <TabsTrigger value="metrics">
-                {t('export.spheroidMetrics')}
-              </TabsTrigger>
+              {hasPolygons && (
+                <TabsTrigger value="metrics">
+                  {t('export.spheroidMetrics')}
+                </TabsTrigger>
+              )}
+              {hasPolylines && (
+                <TabsTrigger value="sperm">
+                  {t('export.spermMetrics')}
+                </TabsTrigger>
+              )}
               <TabsTrigger value="coco">{t('export.cocoFormat')}</TabsTrigger>
             </TabsList>
           </div>
 
-          <TabsContent value="metrics" className="flex-1 overflow-auto p-4">
-            <div className="mb-4 flex justify-end">
-              <LazyExcelExporter
+          {hasPolygons && (
+            <TabsContent value="metrics" className="flex-1 overflow-auto p-4">
+              <div className="mb-4 flex justify-end">
+                <LazyExcelExporter
+                  segmentation={segmentation}
+                  imageName={imageName}
+                />
+              </div>
+              <MetricsDisplay segmentation={segmentation} />
+            </TabsContent>
+          )}
+
+          {hasPolylines && (
+            <TabsContent value="sperm" className="flex-1 overflow-auto p-4">
+              <SpermExcelExporter
                 segmentation={segmentation}
                 imageName={imageName}
               />
-            </div>
-            <MetricsDisplay segmentation={segmentation} />
-          </TabsContent>
+            </TabsContent>
+          )}
 
           <TabsContent
             value="coco"

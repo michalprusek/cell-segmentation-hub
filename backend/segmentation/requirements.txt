@@ -18,3 +18,9 @@ Pillow==10.0.1
 numpy==1.24.3
 scipy==1.11.4
 scikit-image==0.22.0
+# Sperm model dependencies (Mask2Former + graph assembly)
+# ConvNeXtV2 backbone is implemented in pure PyTorch (no HF/timm needed)
+networkx>=3.0
+
+# Prometheus metrics
+prometheus-fastapi-instrumentator==6.1.0

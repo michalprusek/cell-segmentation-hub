@@ -5,6 +5,7 @@ import {
   Edit3,
   Plus,
   PenTool,
+  Spline,
   Scissors,
   Trash2,
   ZoomIn,
@@ -48,6 +49,8 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
         return Plus;
       case EditMode.CreatePolygon:
         return PenTool;
+      case EditMode.CreatePolyline:
+        return Spline;
       case EditMode.Slice:
         return Scissors;
       case EditMode.DeletePolygon:
@@ -67,6 +70,8 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
         return 'hover:bg-emerald-100 dark:hover:bg-emerald-900/30';
       case EditMode.CreatePolygon:
         return 'hover:bg-blue-100 dark:hover:bg-blue-900/30';
+      case EditMode.CreatePolyline:
+        return 'hover:bg-violet-100 dark:hover:bg-violet-900/30';
       case EditMode.Slice:
         return 'hover:bg-yellow-100 dark:hover:bg-yellow-900/30';
       case EditMode.DeletePolygon:
@@ -86,6 +91,8 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
         return 'bg-emerald-200 dark:bg-emerald-800 text-emerald-800 dark:text-emerald-200';
       case EditMode.CreatePolygon:
         return 'bg-blue-200 dark:bg-blue-800 text-blue-800 dark:text-blue-200';
+      case EditMode.CreatePolyline:
+        return 'bg-violet-200 dark:bg-violet-800 text-violet-800 dark:text-violet-200';
       case EditMode.Slice:
         return 'bg-yellow-200 dark:bg-yellow-800 text-yellow-800 dark:text-yellow-200';
       case EditMode.DeletePolygon:
@@ -105,6 +112,8 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
         return t('segmentation.mode.addPoints');
       case EditMode.CreatePolygon:
         return t('segmentation.mode.createPolygon');
+      case EditMode.CreatePolyline:
+        return t('segmentation.mode.createPolyline');
       case EditMode.Slice:
         return t('segmentation.mode.slice');
       case EditMode.DeletePolygon:
@@ -124,6 +133,8 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
         return 'A';
       case EditMode.CreatePolygon:
         return 'N';
+      case EditMode.CreatePolyline:
+        return 'P';
       case EditMode.Slice:
         return 'S';
       case EditMode.DeletePolygon:
@@ -201,8 +212,10 @@ const VerticalToolbar: React.FC<VerticalToolbarProps> = ({
     <div className="w-14 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col items-center py-4 gap-2">
       {/* Mode buttons */}
       <ModeButton mode={EditMode.View} />
+      <ModeButton mode={EditMode.EditVertices} />
       <ModeButton mode={EditMode.AddPoints} />
       <ModeButton mode={EditMode.CreatePolygon} />
+      <ModeButton mode={EditMode.CreatePolyline} />
       <ModeButton mode={EditMode.Slice} />
       <ModeButton mode={EditMode.DeletePolygon} />
 

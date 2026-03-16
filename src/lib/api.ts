@@ -92,6 +92,9 @@ export interface SegmentationPolygon {
   parentIds?: string[]; // For tracking hierarchy
   confidence?: number;
   area?: number;
+  geometry?: 'polygon' | 'polyline'; // absent = 'polygon' (backward compat)
+  partClass?: 'head' | 'midpiece' | 'tail'; // For sperm polyline parts
+  instanceId?: string; // Groups polylines into instances, e.g. 'sperm_1'
 }
 
 export interface SegmentationResultData {
@@ -200,53 +203,43 @@ class ApiClient {
         // Check if this is a refresh token request to avoid infinite loops
         const isRefreshRequest = originalRequest.url?.includes('/auth/refresh');
 
-        // Check if error is due to missing, expired, or invalid authentication token
-        // Handle ALL 401 errors uniformly for immediate logout
         if (
           error.response?.status === 401 &&
-          !isRefreshRequest &&
-          !originalRequest._retry
+          !originalRequest._retry &&
+          !isAuthEndpoint
         ) {
-          // Determine the specific auth issue
-          const errorMessage = error.response?.data?.message || '';
-          const isMissingToken =
-            errorMessage === 'Chybí autentizační token' ||
-            errorMessage.toLowerCase().includes('missing') ||
-            errorMessage.toLowerCase().includes('no token');
-          const isExpiredToken = errorMessage.toLowerCase().includes('expired');
-          const isInvalidToken = errorMessage.toLowerCase().includes('invalid');
+          // If we have a refresh token, try to refresh before logging out
+          if (this.refreshToken && !isRefreshRequest) {
+            originalRequest._retry = true;
 
-          // Token is missing, expired, or invalid - immediately logout the user
-          logger.debug(
-            '🔒 Authentication error (401) - forcing immediate logout',
-            {
-              errorMessage,
-              isMissingToken,
-              isExpiredToken,
-              isInvalidToken,
+            try {
+              logger.debug('🔄 Attempting token refresh...');
+              await this.refreshAccessToken();
+              // Retry the original request with new token
+              originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
+              return this.instance(originalRequest);
+            } catch (refreshError) {
+              logger.debug('🔄 Token refresh failed, forcing logout');
+              // Fall through to force logout below
             }
+          }
+
+          // No refresh token, or refresh failed - force logout
+          logger.debug(
+            '🔒 Authentication failed - logging out'
           );
 
-          // Clear all authentication data immediately
           this.clearTokensFromStorage();
 
-          // Emit appropriate event to notify the app
           if (typeof window !== 'undefined') {
-            // Import dynamically to avoid circular dependencies
             import('./authEvents')
               .then(({ authEventEmitter }) => {
-                const eventType = isMissingToken
-                  ? 'token_missing'
-                  : isExpiredToken
-                    ? 'token_expired'
-                    : 'token_invalid';
-
                 authEventEmitter.emit({
-                  type: eventType,
+                  type: 'token_expired',
                   data: {
-                    message: 'Authentication required',
+                    message: 'Session expired',
                     description:
-                      'Your session has ended. Please sign in again.',
+                      'Your session has expired. Please sign in again.',
                   },
                 });
               })
@@ -254,74 +247,19 @@ class ApiClient {
                 logger.error('Failed to emit auth event', err);
               });
 
-            // Force immediate redirect with page refresh if not already on auth pages
             if (
               window.location.pathname !== '/sign-in' &&
               window.location.pathname !== '/sign-up' &&
               !window.location.pathname.startsWith('/public') &&
               !window.location.pathname.startsWith('/share')
             ) {
-              // Use replace() to force page refresh and prevent back navigation
               setTimeout(() => {
                 window.location.replace('/sign-in');
-              }, 50); // Minimal delay to allow event emission
+              }, 50);
             }
           }
 
           return Promise.reject(error);
-        }
-
-        if (
-          error.response?.status === 401 &&
-          !originalRequest._retry &&
-          !isAuthEndpoint &&
-          this.refreshToken
-        ) {
-          originalRequest._retry = true;
-
-          try {
-            logger.debug('🔄 Attempting token refresh...');
-            await this.refreshAccessToken();
-            // Retry the original request with new token
-            originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
-            return this.instance(originalRequest);
-          } catch (refreshError) {
-            // Refresh failed, force immediate logout
-            logger.debug('🔄 Token refresh failed, forcing immediate logout');
-            this.clearTokensFromStorage();
-
-            // Force immediate redirect with page refresh
-            if (typeof window !== 'undefined') {
-              // Import and emit token expired event
-              import('./authEvents')
-                .then(({ authEventEmitter }) => {
-                  authEventEmitter.emit({
-                    type: 'token_expired',
-                    data: {
-                      message: 'Session expired',
-                      description:
-                        'Your session has expired. Please sign in again.',
-                    },
-                  });
-                })
-                .catch(err => {
-                  logger.error('Failed to emit token expired event', err);
-                });
-
-              // Force redirect with refresh if not on auth pages
-              if (
-                window.location.pathname !== '/sign-in' &&
-                window.location.pathname !== '/sign-up' &&
-                !window.location.pathname.startsWith('/public')
-              ) {
-                setTimeout(() => {
-                  window.location.replace('/sign-in');
-                }, 50);
-              }
-            }
-
-            return Promise.reject(refreshError);
-          }
         }
 
         // Handle retryable errors (429, 502, 503, 504) with unified retry system
