@@ -1876,6 +1876,7 @@ export default {
     setAsHead: 'Als Kopf festlegen',
     setAsMidpiece: 'Als Mittelstück festlegen',
     setAsTail: 'Als Schwanz festlegen',
+    assignTo: 'Zuweisen zu',
     export: {
       description:
         'Spermien-Morphologiemessungen (Kopf-, Mittelstück- und Schwanzlängen) nach Excel exportieren.',

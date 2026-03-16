@@ -6,7 +6,7 @@ import {
   ContextMenuTrigger,
   ContextMenuSeparator,
 } from '@/components/ui/context-menu';
-import { Trash, Scissors, Edit } from 'lucide-react';
+import { Trash, Scissors, Edit, Link } from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import {
   AlertDialog,
@@ -27,6 +27,8 @@ interface PolygonContextMenuProps {
   polygonId: string;
   isPolyline?: boolean;
   onChangePartClass?: (partClass: 'head' | 'midpiece' | 'tail') => void;
+  onChangeInstanceId?: (instanceId: string) => void;
+  currentInstanceId?: string;
 }
 
 const PolygonContextMenu = ({
@@ -37,6 +39,8 @@ const PolygonContextMenu = ({
   polygonId,
   isPolyline = false,
   onChangePartClass,
+  onChangeInstanceId,
+  currentInstanceId,
 }: PolygonContextMenuProps) => {
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
   const { t } = useLanguage();
@@ -80,6 +84,30 @@ const PolygonContextMenu = ({
                 <span className="mr-2 h-4 w-4 inline-block rounded-full bg-cyan-500" style={{ width: 12, height: 12 }} />
                 <span>{t('sperm.setAsTail')}</span>
               </ContextMenuItem>
+            </>
+          )}
+          {isPolyline && onChangeInstanceId && (
+            <>
+              <ContextMenuSeparator />
+              <div className="px-2 py-1.5 text-xs font-medium text-gray-500">
+                <Link className="inline h-3 w-3 mr-1" />
+                {t('sperm.assignTo')}
+              </div>
+              {[1, 2, 3, 4, 5].map(n => {
+                const instanceId = `sperm_${n}`;
+                const isCurrent = currentInstanceId === instanceId;
+                return (
+                  <ContextMenuItem
+                    key={instanceId}
+                    onClick={() => onChangeInstanceId(instanceId)}
+                    className={`cursor-pointer ${isCurrent ? 'bg-violet-50 dark:bg-violet-900/20 font-medium' : ''}`}
+                  >
+                    <span className={`mr-2 inline-block rounded-full ${isCurrent ? 'bg-violet-500' : 'bg-gray-400'}`} style={{ width: 8, height: 8 }} />
+                    <span>{t('sperm.instance')} {n}</span>
+                    {isCurrent && <span className="ml-auto text-violet-500 text-xs">✓</span>}
+                  </ContextMenuItem>
+                );
+              })}
             </>
           )}
           <ContextMenuSeparator />
