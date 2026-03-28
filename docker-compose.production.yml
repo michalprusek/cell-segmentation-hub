@@ -54,7 +54,7 @@ services:
       - DATABASE_CONNECTION_POOL_SIZE=50
       - WS_PARALLEL_PROCESSING_ENABLED=true
     volumes:
-      - ./backend/uploads:/app/uploads
+      - ./backend/uploads/blue:/app/uploads
       - ./backend/data:/app/data
       - ./logs/backend:/app/logs
     restart: always
@@ -145,7 +145,7 @@ services:
     volumes:
       - ./backend/segmentation/weights:/app/weights:ro
       - ./backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro
-      - ./backend/uploads:/app/uploads
+      - ./backend/uploads/blue:/app/uploads
     restart: always
     deploy:
       resources:
