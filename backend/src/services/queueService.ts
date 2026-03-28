@@ -1343,7 +1343,7 @@ export class QueueService {
       const stuckImages = await this.prisma.image.findMany({
         where: {
           segmentationStatus: 'processing',
-          segmentationQueue: { none: { status: { in: ['processing', 'queued'] } } },
+          queueEntries: { none: { status: { in: ['processing', 'queued'] } } },
         },
         select: { id: true, userId: true },
       });
