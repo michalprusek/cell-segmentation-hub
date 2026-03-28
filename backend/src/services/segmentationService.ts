@@ -205,6 +205,35 @@ export class SegmentationService {
           return Promise.reject(error);
         }
       );
+
+      // Retry interceptor for transient ML service connection errors
+      this.httpClient.interceptors.response.use(
+        response => response,
+        async (error) => {
+          const retryConfig = error.config;
+          if (!retryConfig) throw error;
+
+          retryConfig.__retryCount = retryConfig.__retryCount || 0;
+
+          const isTransient =
+            error.code === 'ECONNREFUSED' ||
+            error.code === 'ETIMEDOUT' ||
+            error.code === 'ENOTFOUND';
+
+          if (!isTransient || retryConfig.__retryCount >= 3) throw error;
+
+          retryConfig.__retryCount += 1;
+          const delay = Math.pow(2, retryConfig.__retryCount) * 1000;
+
+          logger.warn(
+            `ML service connection failed (${error.code}), retry ${retryConfig.__retryCount}/3 in ${delay}ms`,
+            'SegmentationService'
+          );
+
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return this.httpClient(retryConfig);
+        }
+      );
     }
   }
 
@@ -618,9 +647,9 @@ export class SegmentationService {
           `Segmentation service error: ${(axiosError.response?.data as Record<string, unknown>)?.detail || 'Internal ML service error'}`
         );
       } else if (axiosError.code === 'ECONNREFUSED') {
-        throw new Error('ML služba není dostupná - připojení odmítnuto');
+        throw new Error('ML service unavailable - connection refused');
       } else if (axiosError.code === 'ETIMEDOUT') {
-        throw new Error('ML služba neodpovídá - timeout');
+        throw new Error('ML service not responding - request timed out');
       } else {
         throw new Error(
           `Segmentation error: ${error instanceof Error ? error.message : 'Unknown error'}`

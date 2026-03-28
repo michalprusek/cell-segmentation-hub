@@ -616,6 +616,8 @@ class ApiClient {
       case 'completed':
       case 'failed':
         return statusStr;
+      case 'no_polygons':
+        return 'completed';
       default:
         // Log unexpected values and return safe default
         if (process.env.NODE_ENV === 'development') {
@@ -671,8 +673,8 @@ class ApiClient {
       image_url: imageUrl,
       thumbnail_url: thumbnailUrl,
       displayUrl: displayUrl, // Explicit display URL field
-      width: (image.width as number) || null,
-      height: (image.height as number) || null,
+      width: typeof image.width === 'number' ? image.width : null,
+      height: typeof image.height === 'number' ? image.height : null,
       segmentation_status: this.mapSegmentationStatus(
         image.segmentationStatus || image.segmentation_status
       ),

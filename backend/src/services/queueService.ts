@@ -773,7 +773,7 @@ export class QueueService {
         // Merge polylines into polygons (sperm model returns both)
         const allPolygons = [
           ...(result.polygons || []),
-          ...((result as any).polylines || []),
+          ...(result.polylines || []),
         ];
 
         if (allPolygons.length > 0) {

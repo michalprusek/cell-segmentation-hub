@@ -68,6 +68,12 @@ class SpermModel:
             score_threshold=score_threshold,
         )
 
+        if len(sperm_list) == 0:
+            logger.warning(
+                f"Sperm model: 0 detections. Image shape: {image_bgr.shape}, "
+                f"mask_threshold: {mask_threshold}"
+            )
+
         return {
             "sperm_list": sperm_list,
             "polylines": polylines_list,

@@ -9,6 +9,7 @@ interface ErrorBoundaryState {
 
 interface ErrorBoundaryProps {
   children: ReactNode;
+  fallback?: ReactNode;
 }
 
 class ErrorBoundaryClass extends Component<
@@ -30,6 +31,10 @@ class ErrorBoundaryClass extends Component<
 
   render() {
     if (this.state.hasError) {
+      // If a fallback prop is provided, render it instead of the default error display
+      if (this.props.fallback !== undefined) {
+        return this.props.fallback;
+      }
       return <ErrorDisplay error={this.state.error} />;
     }
 

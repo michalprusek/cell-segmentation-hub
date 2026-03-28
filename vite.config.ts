@@ -31,6 +31,7 @@ export default defineConfig({
     include: ['xlsx'],
   },
   build: {
+    sourcemap: 'hidden',
     commonjsOptions: {
       include: [/xlsx/, /node_modules/],
     },

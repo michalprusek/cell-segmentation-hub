@@ -108,7 +108,9 @@ const App = () => (
                           className: 'animate-slide-in-right',
                         }}
                       />
-                      <FloatingUploadProgress />
+                      <ErrorBoundary fallback={null}>
+                        <FloatingUploadProgress />
+                      </ErrorBoundary>
                       <div className="app-container animate-fade-in">
                         <ErrorBoundary>
                           <Routes>
