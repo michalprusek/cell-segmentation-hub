@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Production Safety
 
-**Check `.active-environment` before any deployment operation.** Blue (ports 4000-4008) is production, Green (ports 5000-5008) is staging. The active environment can change — never assume.
+**Never modify or deploy to production without explicit permission.** Production runs on `docker-compose.production.yml` with `.env.production`.
 
 ## Commands
 
@@ -146,26 +146,30 @@ docs/                         # Detailed documentation (see below)
 
 ## Deployment
 
-Blue-green deployment with zero downtime. See [`docs/BLUE-GREEN-DEPLOYMENT.md`](docs/BLUE-GREEN-DEPLOYMENT.md) for full details.
-
 ```bash
-cat .active-environment                      # Check which is active
-./scripts/switch-environment.sh blue|green   # Switch environments
+# Build and deploy
+make build-optimized                                    # Build all images
+docker compose -f docker-compose.production.yml up -d   # Deploy
+curl https://spherosegapp.utia.cas.cz/health            # Verify
+
+# Or use the make target
+make prod                                               # Build + deploy
 ```
 
-| Service | Blue | Green | Dev |
-|---------|------|-------|-----|
-| Frontend | 4000 | 5000 | 3000 |
-| Backend | 4001 | 5001 | 3001 |
-| ML | 4008 | 5008 | 8000 |
-| PostgreSQL | 4432 | 5432 | 5432 |
-| Redis | 4379 | 5379 | 6379 |
+| Service | Production | Dev |
+|---------|-----------|-----|
+| nginx (SSL) | 80/443 | - |
+| Frontend | 4000 | 3000 |
+| Backend | 4001 | 3001 |
+| ML | 4008 | 8000 |
+| PostgreSQL | 5432 (internal) | 5432 |
+| Redis | 6379 (internal) | 6379 |
 
-Databases are separate (`spheroseg_blue` vs `spheroseg_green`). Rollback reverts code, not data.
+Database: `spheroseg_blue` on PostgreSQL (container: `spheroseg-postgres`).
 
 ## Email
 
-UTIA mail server (`mail.utia.cas.cz:25`, STARTTLS, no auth). Delays of 2-10 minutes are normal — emails are queued for background processing. Config in `.env.common`.
+UTIA mail server (`hermes.utia.cas.cz:25`, STARTTLS, no auth). Delays of 2-10 minutes are normal — emails are queued for background processing. Config in `.env.production`.
 
 ## Documentation Index
 
@@ -179,7 +183,7 @@ UTIA mail server (`mail.utia.cas.cz:25`, STARTTLS, no auth). Delays of 2-10 minu
 | Testing guide | [`docs/testing-guide.md`](docs/testing-guide.md) |
 | i18n guide | [`docs/i18n-guide.md`](docs/i18n-guide.md) |
 | Git hooks | [`docs/hooks-guide.md`](docs/hooks-guide.md) |
-| Blue-green deployment | [`docs/BLUE-GREEN-DEPLOYMENT.md`](docs/BLUE-GREEN-DEPLOYMENT.md) |
+| Deployment | [`docs/superpowers/specs/2026-03-28-simplify-deployment-design.md`](docs/superpowers/specs/2026-03-28-simplify-deployment-design.md) |
 | Polygon rendering optimization | [`docs/polygon-rendering-optimization.md`](docs/polygon-rendering-optimization.md) |
 | API documentation | [`docs/api/README.md`](docs/api/README.md) |
 | Getting started | [`docs/development/getting-started.md`](docs/development/getting-started.md) |

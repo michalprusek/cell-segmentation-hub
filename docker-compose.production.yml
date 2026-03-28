@@ -1,0 +1,208 @@
+services:
+  # Frontend
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.optimized.Dockerfile
+      args:
+        - VITE_API_BASE_URL=/api
+        - VITE_ML_SERVICE_URL=/api/ml
+        - VITE_WS_URL=
+    container_name: spheroseg-frontend
+    ports:
+      - "4000:80"
+    networks:
+      - spheroseg-network
+    environment:
+      - NODE_ENV=production
+    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.optimized.Dockerfile
+    container_name: spheroseg-backend
+    env_file: .env.production
+    ports:
+      - "4001:3001"
+    networks:
+      - spheroseg-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Core settings that must be in environment section
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=3001
+      - UPLOAD_DIR=/app/uploads
+      - ENABLE_TRACING=false
+      # Database password from shell environment
+      - DB_PASSWORD=${DB_PASSWORD}
+      # Parallel processing configuration
+      # Sequential processing to prevent 400 errors from concurrent multipart requests
+      - QUEUE_MAX_CONCURRENT_BATCHES=1
+      - QUEUE_PARALLEL_PROCESSING_ENABLED=true
+      - DATABASE_CONNECTION_POOL_SIZE=50
+      - WS_PARALLEL_PROCESSING_ENABLED=true
+    volumes:
+      - ./backend/uploads:/app/uploads
+      - ./backend/data:/app/data
+      - ./logs/backend:/app/logs
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: spheroseg-postgres
+    networks:
+      - spheroseg-network
+    environment:
+      - POSTGRES_USER=spheroseg
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=spheroseg_blue
+    volumes:
+      - postgres_blue_data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U spheroseg -d spheroseg_blue"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: spheroseg-redis
+    networks:
+      - spheroseg-network
+    volumes:
+      - redis_blue_data:/data
+    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ML Service - 2-way parallel processing with 8GB GPU limit
+  ml:
+    build:
+      context: .
+      dockerfile: docker/ml.optimized.Dockerfile
+    container_name: spheroseg-ml
+    runtime: nvidia
+    # 1 worker to free GPU memory for Maptimize
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "100", "--timeout-keep-alive", "30"]
+    ports:
+      - "4008:8000"
+    networks:
+      - spheroseg-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres:5432/spheroseg_blue
+      - REDIS_URL=redis://redis:6379
+      # Sequential processing - single worker for 8GB GPU limit safety
+      - ML_INFERENCE_WORKERS=1
+      - ML_ENABLE_PARALLEL_INFERENCE=false
+      - ML_MAX_CONCURRENT_USERS=1
+      - ML_MEMORY_LIMIT_GB=8
+      - ML_ENABLE_CUDA_STREAMS=true
+      - GPU_MEMORY_WARNING_THRESHOLD=90
+      - GPU_MEMORY_CRITICAL_THRESHOLD=95
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      # High priority GPU settings for SpheroSeg
+      - PYTORCH_CUDA_ALLOC_CONF=max_split_size_mb:512,garbage_collection_threshold:0.6
+      - CUDA_LAUNCH_BLOCKING=0
+      - ML_GPU_PRIORITY=high
+    volumes:
+      - ./backend/segmentation/weights:/app/weights:ro
+      - ./backend/segmentation/sperm_final/best_model.pth:/app/sperm_final/best_model.pth:ro
+      - ./backend/uploads:/app/uploads
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 12G    # Increased for sperm model (2.1GB model + ConvNeXt backbone)
+          cpus: '4.0'    # Explicit CPU allocation
+        reservations:
+          memory: 6G     # Increased for sperm model
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    container_name: spheroseg-nginx
+    volumes:
+      - ./docker/nginx/nginx-main.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/nginx.production.conf:/etc/nginx/conf.d/nginx.active.conf:ro
+      - ./docker/nginx/snippets:/etc/nginx/snippets:ro
+      - ./backend/uploads:/app/uploads:ro
+      # SSL certificates for production
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      # Persistent logs for IT audit trail
+      - ./logs/nginx:/var/log/nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - frontend
+      - backend
+      - ml
+    networks:
+      - spheroseg-network
+      - maptimize-network
+    restart: always
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  spheroseg-network:
+    driver: bridge
+    name: spheroseg
+  maptimize-network:
+    external: true
+    name: maptimize-network
+
+volumes:
+  postgres_blue_data:
+    name: spheroseg_postgres_blue
+  redis_blue_data:
+    name: spheroseg_redis_blue
