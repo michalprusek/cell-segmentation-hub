@@ -306,7 +306,11 @@ def mask_to_polyline(
     # Estimate arc length from simplified path to determine output point count
     pts_arr = np.array(simplified, dtype=float)
     arc_len = float(np.linalg.norm(pts_arr[1:] - pts_arr[:-1], axis=1).sum())
-    n_output = max(min_pts, round(arc_len * pts_per_100px / 100.0))
+    # Head (cls=1): always 3 points (start, midpoint, end) for a clean arc
+    if cls == 1:
+        n_output = 3
+    else:
+        n_output = max(min_pts, round(arc_len * pts_per_100px / 100.0))
 
     # Uniform resampling along the simplified polyline — stable and follows
     # the RDP-simplified path exactly without B-spline overshoot
