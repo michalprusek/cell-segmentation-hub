@@ -810,7 +810,7 @@ export const uploadAvatar = asyncHandler(
           const uploadsDir = path.resolve(
             process.env.UPLOAD_DIR || './uploads'
           );
-          const tempDir = path.resolve('temp');
+          const tempDir = path.resolve(process.env.UPLOAD_DIR || './uploads', 'temp');
           if (
             resolvedFilePath.startsWith(uploadsDir + path.sep) ||
             resolvedFilePath.startsWith(tempDir + path.sep)

@@ -435,7 +435,7 @@ async def batch_segment_images(
         logger.error(f"Batch segmentation failed after {processing_time:.2f}s: {e}")
         raise HTTPException(
             status_code=500,
-            detail="Batch segmentation failed. Please check input and try again."
+            detail="Batch segmentation failed. Please try again later or contact support if the issue persists."
         )
 
 @router.get("/segment/{task_id}")

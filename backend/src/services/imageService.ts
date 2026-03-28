@@ -1144,7 +1144,13 @@ export class ImageService {
       !resolvedPath.startsWith(resolvedBase + path.sep) &&
       resolvedPath !== resolvedBase
     ) {
-      throw new Error('Invalid image path');
+      logger.warn('Path traversal attempt detected in image request', 'ImageService', {
+        imageId,
+        safeImageId,
+        resolvedPath,
+        resolvedBase,
+      });
+      throw new Error('Invalid image path: path traversal detected');
     }
 
     if (existsSync(convertedPath)) {

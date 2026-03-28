@@ -93,6 +93,7 @@ const FloatingUploadProgress: React.FC = () => {
   const {
     overallProgress,
     projectId,
+    projectName,
     chunkProgress,
     currentOperation,
     startedAt,
