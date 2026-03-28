@@ -20,17 +20,17 @@ router.get(
       const result = await testConnection();
       if (result) {
         return ResponseHelper.success(res, {
-            service: process.env.EMAIL_SERVICE,
-            host: process.env.SMTP_HOST,
-            port: process.env.SMTP_PORT,
-            from: process.env.FROM_EMAIL,
-          }, 'Email service is configured correctly');
+          service: process.env.EMAIL_SERVICE,
+          host: process.env.SMTP_HOST,
+          port: process.env.SMTP_PORT,
+          from: process.env.FROM_EMAIL,
+        }, 'Email service is configured correctly');
       } else {
         return ResponseHelper.internalError(res, undefined, 'Email service connection failed');
       }
     } catch (error) {
       logger.error('Email test connection failed:', error as Error);
-      return ResponseHelper.internalError(res, error as Error, 'Email service connection failed');
+      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Email service connection failed', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
     }
   }
 );
@@ -82,7 +82,7 @@ If you received this email, the configuration is working!`,
     return ResponseHelper.success(res, undefined, `Test email sent successfully to ${to}`);
   } catch (error) {
     logger.error('Failed to send test email:', error as Error);
-    return ResponseHelper.internalError(res, error as Error, 'Failed to send test email');
+    return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to send test email', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
   }
 });
 
@@ -149,15 +149,15 @@ If you received this email, the direct send configuration is working!`,
       const totalTime = Date.now() - startTime;
 
       return ResponseHelper.success(res, {
-          recipient: email,
-          sendTime: totalTime,
-          timestamp: new Date().toISOString(),
-          method: 'direct_send',
-          queueBypassed: true,
-        }, `Direct test email sent successfully to ${email}`);
+        recipient: email,
+        sendTime: totalTime,
+        timestamp: new Date().toISOString(),
+        method: 'direct_send',
+        queueBypassed: true,
+      }, `Direct test email sent successfully to ${email}`);
     } catch (error) {
       logger.error('Failed to send direct test email:', error as Error);
-      return ResponseHelper.internalError(res, error as Error, 'Failed to send direct test email');
+      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to send direct test email', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
     }
   }
 );
@@ -173,7 +173,7 @@ router.get(
       return ResponseHelper.success(res, status, `Queue has ${status.length} emails, processing: ${status.processing}`);
     } catch (error) {
       logger.error('Failed to get queue status:', error as Error);
-      return ResponseHelper.internalError(res, error as Error, 'Failed to get queue status');
+      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to get queue status', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
     }
   }
 );
@@ -196,7 +196,7 @@ router.post(
       return ResponseHelper.success(res, newStatus, 'Queue processing completed');
     } catch (error) {
       logger.error('Failed to force process queue:', error as Error);
-      return ResponseHelper.internalError(res, error as Error, 'Failed to force process queue');
+      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to force process queue', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
     }
   }
 );
@@ -210,19 +210,19 @@ router.get(
       const emails = getQueuedEmails();
 
       return ResponseHelper.success(res, {
-          emails: emails.map(email => ({
-            id: email.id,
-            to: email.options.to,
-            subject: email.options.subject,
-            createdAt: email.createdAt,
-            attempts: email.attempts,
-            lastError: email.lastError,
-          })),
-          count: emails.length,
-        });
+        emails: emails.map(email => ({
+          id: email.id,
+          to: email.options.to,
+          subject: email.options.subject,
+          createdAt: email.createdAt,
+          attempts: email.attempts,
+          lastError: email.lastError,
+        })),
+        count: emails.length,
+      });
     } catch (error) {
       logger.error('Failed to get queue emails:', error as Error);
-      return ResponseHelper.internalError(res, error as Error, 'Failed to get queue emails');
+      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to get queue emails', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
     }
   }
 );

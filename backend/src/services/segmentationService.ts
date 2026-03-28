@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import FormData from 'form-data';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent as HttpAgent } from 'http';
@@ -94,7 +94,6 @@ export interface ImageForSegmentation {
 export class SegmentationService {
   private httpClient: AxiosInstance;
   private pythonServiceUrl: string;
-  // Removed thumbnailService - using unified approach
   private segmentationThumbnailService: SegmentationThumbnailService;
   private thumbnailManager: ThumbnailManager;
   private concurrentRequestsPool: Map<string, Promise<SegmentationResponse>> =
@@ -105,7 +104,6 @@ export class SegmentationService {
     private prisma: PrismaClient,
     private imageService: ImageService
   ) {
-    // Unified thumbnail approach - no polygon service needed
     this.segmentationThumbnailService = new SegmentationThumbnailService(
       prisma
     );
@@ -334,7 +332,7 @@ export class SegmentationService {
   async requestSegmentation(
     request: SegmentationRequest
   ): Promise<SegmentationResponse> {
-    const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
     // Log request for debugging in development
     logger.debug('Segmentation request (dev mode)', 'SegmentationService', {
@@ -1672,7 +1670,7 @@ export class SegmentationService {
         where: {
           imageId: { in: Array.from(accessibleImageIds) },
         },
-        // Removed the problematic segmentationPolygons include
+        // JSON parsing is used instead of Prisma includes for polygon data
       });
 
       // Transform results into a map for easy lookup

@@ -64,15 +64,13 @@ router.get(
 
       const mlServiceUrl = process.env.SEGMENTATION_SERVICE_URL || process.env.ML_SERVICE_URL || 'http://ml:8000';
 
-      // Fetch actual status from ML service
-      const response = await axios.get(`${mlServiceUrl}/health`, {
-        timeout: 5000,
-      });
+      // Verify ML service is reachable
+      await axios.get(`${mlServiceUrl}/health`, { timeout: 5000 });
 
       const status = {
         service: 'online',
         version: '1.0.0',
-        modelsLoaded: 3, // ML service has 3 models pre-loaded
+        modelsLoaded: 3,
         queueSize: 0,
         lastHealthCheck: new Date().toISOString(),
         performance: {

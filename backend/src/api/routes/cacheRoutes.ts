@@ -115,11 +115,11 @@ router.get(
         .slice(0, parseInt(limit as string));
 
       return ResponseHelper.success(res, {
-          keys,
-          pattern: pattern as string,
-          total: keys.length,
-          limit: parseInt(limit as string),
-        }, 'Cache keys retrieved successfully');
+        keys,
+        pattern: pattern as string,
+        total: keys.length,
+        limit: parseInt(limit as string),
+      }, 'Cache keys retrieved successfully');
     } catch (error) {
       logger.error('❌ Cache: Error listing keys:', error);
       next(error);
@@ -205,10 +205,10 @@ router.post(
       const deletedCount = pattern ? 25 : 245;
 
       return ResponseHelper.success(res, {
-          pattern: pattern || 'all',
-          deletedKeys: deletedCount,
-          flushedAt: new Date().toISOString(),
-        }, `${deletedCount} cache keys flushed successfully`);
+        pattern: pattern || 'all',
+        deletedKeys: deletedCount,
+        flushedAt: new Date().toISOString(),
+      }, `${deletedCount} cache keys flushed successfully`);
     } catch (error) {
       logger.error('❌ Cache: Error flushing cache:', error);
       next(error);

@@ -4,7 +4,6 @@ import { ResponseHelper } from '../../utils/response';
 import { authenticate } from '../../middleware/auth';
 import { apiLimiter, authLimiter } from '../../middleware/rateLimiter';
 import { validateBody } from '../../middleware/validation';
-// validateParams unused - available for future use
 import { z } from 'zod';
 
 const router = Router();
@@ -427,11 +426,11 @@ router.put(
       logger.info(`🔄 RateLimit: Updating user tier: ${userId} -> ${tier}`);
 
       return ResponseHelper.success(res, {
-          userId,
-          tier,
-          updatedBy: adminId,
-          updatedAt: new Date().toISOString(),
-        }, 'User tier updated successfully');
+        userId,
+        tier,
+        updatedBy: adminId,
+        updatedAt: new Date().toISOString(),
+      }, 'User tier updated successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error updating user tier:', error);
       next(error);
@@ -451,11 +450,11 @@ router.put(
       logger.info(`🔄 RateLimit: Bulk updating ${users.length} user tiers`);
 
       return ResponseHelper.success(res, {
-          updatedCount: users.length,
-          reason,
-          updatedBy: adminId,
-          updatedAt: new Date().toISOString(),
-        }, `${users.length} user tiers updated successfully`);
+        updatedCount: users.length,
+        reason,
+        updatedBy: adminId,
+        updatedAt: new Date().toISOString(),
+      }, `${users.length} user tiers updated successfully`);
     } catch (error) {
       logger.error('❌ RateLimit: Error bulk updating user tiers:', error);
       next(error);
