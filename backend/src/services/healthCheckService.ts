@@ -51,13 +51,13 @@ export class HealthCheckService {
 
   constructor() {
     this.prisma = new PrismaClient();
-    this.mlServiceUrl = process.env.ML_SERVICE_URL || 'http://blue-ml:8000';
+    this.mlServiceUrl = process.env.SEGMENTATION_SERVICE_URL || process.env.ML_SERVICE_URL || 'http://ml:8000';
     this.initializeRedis();
   }
 
   private initializeRedis(): void {
     try {
-      const redisUrl = process.env.REDIS_URL || 'redis://redis-blue:6379';
+      const redisUrl = process.env.REDIS_URL || 'redis://redis:6379';
       this.redis = new Redis(redisUrl, {
         maxRetriesPerRequest: 3,
         retryStrategy: (times): number => Math.min(times * 50, 2000),
@@ -247,7 +247,7 @@ export class HealthCheckService {
     const startTime = Date.now();
 
     try {
-      const response = await axios.get(`${this.mlServiceUrl}/api/v1/health`, {
+      const response = await axios.get(`${this.mlServiceUrl}/health`, {
         timeout: 5000,
       });
 
