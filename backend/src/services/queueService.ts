@@ -1345,10 +1345,10 @@ export class QueueService {
           segmentationStatus: 'processing',
           queueEntries: { none: { status: { in: ['processing', 'queued'] } } },
         },
-        select: { id: true, userId: true },
+        select: { id: true, project: { select: { userId: true } } },
       });
       for (const img of stuckImages) {
-        await this.imageService.updateSegmentationStatus(img.id, 'no_segmentation', img.userId);
+        await this.imageService.updateSegmentationStatus(img.id, 'no_segmentation', img.project.userId);
         logger.warn('Reset orphaned image from processing to no_segmentation', 'QueueService', { imageId: img.id });
       }
 
