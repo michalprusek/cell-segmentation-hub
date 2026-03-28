@@ -1,30 +1,16 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import axios, { AxiosInstance, AxiosError, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosError } from 'axios';
 import FormData from 'form-data';
 import { v4 as uuidv4 } from 'uuid';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
-// Temporarily disabled for development setup
-// import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import { logger } from '../utils/logger';
 import { config } from '../utils/config';
 import { PolygonValidator } from '../utils/polygonValidation';
 import { ImageService } from './imageService';
-// Removed ThumbnailService - using unified approach with SegmentationThumbnailService only
 import { SegmentationThumbnailService } from './segmentationThumbnailService';
 import { ThumbnailManager } from './thumbnailManager';
 import { getStorageProvider } from '../storage/index';
-import {
-  CrossServiceTraceLinker,
-  RequestIdGenerator,
-  MockSpan,
-  // TraceCorrelatedLogger
-} from '../utils/traceCorrelation';
-import {
-  /* addSpanAttributes, */ addSpanEvent,
-  markSpanError,
-  injectTraceHeaders,
-} from '../middleware/tracing';
 
 export interface SegmentationPoint {
   x: number;
@@ -108,7 +94,6 @@ export interface ImageForSegmentation {
 export class SegmentationService {
   private httpClient: AxiosInstance;
   private pythonServiceUrl: string;
-  // Removed thumbnailService - using unified approach
   private segmentationThumbnailService: SegmentationThumbnailService;
   private thumbnailManager: ThumbnailManager;
   private concurrentRequestsPool: Map<string, Promise<SegmentationResponse>> =
@@ -119,7 +104,6 @@ export class SegmentationService {
     private prisma: PrismaClient,
     private imageService: ImageService
   ) {
-    // Unified thumbnail approach - no polygon service needed
     this.segmentationThumbnailService = new SegmentationThumbnailService(
       prisma
     );
@@ -348,9 +332,7 @@ export class SegmentationService {
   async requestSegmentation(
     request: SegmentationRequest
   ): Promise<SegmentationResponse> {
-    // Temporarily disabled tracing for development setup
-    // const tracer = trace.getTracer('segmentation-service', '1.0.0');
-    const requestId = RequestIdGenerator.generateRequestId();
+    const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
     // Log request for debugging in development
     logger.debug('Segmentation request (dev mode)', 'SegmentationService', {
@@ -382,18 +364,10 @@ export class SegmentationService {
         requestId,
       });
 
-      addSpanEvent('segmentation.request.start', {
-        image_id: imageId,
-        model_name: model,
-        user_id: userId,
-      });
-
       // Get image details and verify ownership
       const image = await this.imageService.getImageById(imageId, userId);
       if (!image) {
-        const error = new Error('Image not found or no access');
-        markSpanError(error);
-        throw error;
+        throw new Error('Image not found or no access');
       }
 
       // Update image status to processing
@@ -408,9 +382,7 @@ export class SegmentationService {
       const imageBuffer = await storage.getBuffer(image.originalPath);
 
       if (!imageBuffer) {
-        const error = new Error('Failed to load image from storage');
-        markSpanError(error);
-        throw error;
+        throw new Error('Failed to load image from storage');
       }
 
       // Prepare form data for Python service
@@ -444,72 +416,16 @@ export class SegmentationService {
       const response = await this.manageConcurrentRequest(
         requestId,
         async () => {
-          // Create service call span within try/finally scope
-          let mlCallSpan: MockSpan | null = null;
-          const mlCallStartTime = Date.now();
-          let response: AxiosResponse;
-
-          try {
-            mlCallSpan = CrossServiceTraceLinker.createServiceCallSpan({
-              targetService: 'ml-service',
-              operationName: 'segment',
-              method: 'POST',
-              endpoint: '/api/v1/segment',
-              requestId,
-            });
-
-            // Inject trace headers for cross-service correlation
-            const traceHeaders = injectTraceHeaders({});
-
-            // Make request to Python segmentation service
-            response = await this.httpClient.post('/api/v1/segment', formData, {
-              headers: {
-                ...formData.getHeaders(),
-                ...traceHeaders,
-                'x-request-id': requestId,
-                'x-user-id': userId,
-                'x-operation': 'segmentation_request',
-              },
-              maxBodyLength: Infinity,
-              maxContentLength: Infinity,
-            });
-
-            const mlCallDuration = Date.now() - mlCallStartTime;
-
-            if (mlCallSpan) {
-              mlCallSpan.setAttributes({
-                'http.response.status_code': response.status,
-                'ml.call.duration_ms': mlCallDuration,
-                'ml.call.success': true,
-                'response.size_bytes': JSON.stringify(response.data).length,
-              });
-              mlCallSpan.setStatus({ code: 'OK' });
-            }
-
-            return response;
-          } catch (mlError) {
-            const mlCallDuration = Date.now() - mlCallStartTime;
-
-            if (mlCallSpan) {
-              mlCallSpan.setAttributes({
-                'ml.call.duration_ms': mlCallDuration,
-                'ml.call.success': false,
-              });
-
-              mlCallSpan.setStatus({
-                code: 'ERROR',
-                message: (mlError as Error).message,
-              });
-            }
-
-            markSpanError(mlError as Error);
-
-            throw mlError;
-          } finally {
-            if (mlCallSpan) {
-              mlCallSpan.end();
-            }
-          }
+          return await this.httpClient.post('/api/v1/segment', formData, {
+            headers: {
+              ...formData.getHeaders(),
+              'x-request-id': requestId,
+              'x-user-id': userId,
+              'x-operation': 'segmentation_request',
+            },
+            maxBodyLength: Infinity,
+            maxContentLength: Infinity,
+          });
         }
       );
 
@@ -599,9 +515,6 @@ export class SegmentationService {
     } catch (error) {
       const totalDuration = Date.now() - startTime;
       const axiosError = error as AxiosError;
-
-      // Mark span as error
-      markSpanError(error as Error);
 
       // Update image status to failed
       try {
@@ -1757,7 +1670,7 @@ export class SegmentationService {
         where: {
           imageId: { in: Array.from(accessibleImageIds) },
         },
-        // Removed the problematic segmentationPolygons include
+        // JSON parsing is used instead of Prisma includes for polygon data
       });
 
       // Transform results into a map for easy lookup

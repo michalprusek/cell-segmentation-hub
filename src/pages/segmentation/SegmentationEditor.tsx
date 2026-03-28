@@ -22,7 +22,7 @@ import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
 import {
-  handleCancelledError /* , isCancelledError */,
+  handleCancelledError,
 } from '@/lib/errorUtils';
 import {
   generateSafePolygonKey,

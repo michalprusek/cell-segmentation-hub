@@ -3,6 +3,7 @@
  */
 
 import UPLOAD_CONFIG from './uploadConfig';
+import { sleep } from './retryUtils';
 
 export interface ChunkingConfig {
   chunkSize: number;
@@ -72,12 +73,6 @@ export function calculateOptimalChunkSize(
 
   return Math.max(1, optimalChunkSize);
 }
-
-/**
- * Sleep utility for retry delays
- */
-export const sleep = (ms: number): Promise<void> =>
-  new Promise(resolve => setTimeout(resolve, ms));
 
 /**
  * Process chunks with controlled concurrency and retry logic

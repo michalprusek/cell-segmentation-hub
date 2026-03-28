@@ -1,15 +1,3 @@
-// Initialize OpenTelemetry BEFORE any other imports
-// import { initializeTracing } from './config/tracing'; // Temporarily disabled - OpenTelemetry deps missing
-
-// Initialize tracing first (must be before any instrumented modules)
-// if (process.env.NODE_ENV !== 'test') {
-//   try {
-//     initializeTracing();
-//   } catch (error) {
-//     console.error('Failed to initialize OpenTelemetry tracing:', error);
-//   }
-// }
-
 import express from 'express';
 import { createServer } from 'http';
 import cors from 'cors';
@@ -45,17 +33,6 @@ import {
   initializeRateLimitingSystem,
   cleanupRateLimitingSystem,
 } from './monitoring/rateLimitingInitialization';
-// import {
-//   createTracingMiddleware,
-//   createErrorTracingMiddleware,
-//   createPerformanceTracingMiddleware,
-//   createContextPropagationMiddleware
-// } from './middleware/tracing'; // Temporarily disabled
-// import {
-//   initializeTraceCorrelation,
-//   shutdownTraceCorrelation
-// } from './utils/traceCorrelation'; // Temporarily disabled
-// import { shutdownTracing } from './config/tracing'; // Temporarily disabled
 
 const app = express();
 
@@ -156,11 +133,6 @@ app.use(
   })
 );
 
-// Distributed tracing middleware (MUST be early in the middleware stack)
-// app.use(createContextPropagationMiddleware()); // Temporarily disabled
-// app.use(createTracingMiddleware()); // Temporarily disabled
-// app.use(createPerformanceTracingMiddleware()); // Temporarily disabled
-
 // Request logging
 app.use(createRequestLogger('API'));
 
@@ -214,9 +186,6 @@ app.use('/uploads', express.static(config.UPLOAD_DIR || './uploads'));
 
 // 404 handler
 app.use(notFoundHandler);
-
-// Tracing error handler (must be before global error handler)
-// app.use(createErrorTracingMiddleware()); // Temporarily disabled
 
 // Global error handler
 app.use(errorHandler);
@@ -334,15 +303,6 @@ const startServer = async (): Promise<void> => {
       );
       logger.warn('Application continuing with basic rate limiting');
     }
-
-    // Initialize trace correlation system
-    // try {
-    //   initializeTraceCorrelation();
-    //   logger.info('🔗 Trace correlation system initialized');
-    // } catch (error) {
-    //   logger.error('Failed to initialize trace correlation system:', error as Error);
-    //   logger.warn('Application continuing without trace correlation');
-    // } // Temporarily disabled
 
     // Initialize storage directories
     try {
@@ -486,22 +446,6 @@ const startServer = async (): Promise<void> => {
         } catch (error) {
           logger.error('Error closing Redis connection:', error as Error);
         }
-
-        // Shutdown trace correlation system
-        // try {
-        //   shutdownTraceCorrelation();
-        //   logger.info('Trace correlation system shutdown');
-        // } catch (error) {
-        //   logger.error('Error shutting down trace correlation:', error as Error);
-        // } // Temporarily disabled
-
-        // Shutdown OpenTelemetry tracing
-        // try {
-        //   await shutdownTracing();
-        //   logger.info('OpenTelemetry tracing shutdown');
-        // } catch (error) {
-        //   logger.error('Error shutting down tracing:', error as Error);
-        // } // Temporarily disabled
 
         // Close database connections, queues, etc.
         await disconnectDatabase();

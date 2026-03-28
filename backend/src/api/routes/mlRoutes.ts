@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../utils/logger';
+import { ResponseHelper } from '../../utils/response';
 import { authenticate } from '../../middleware/auth';
 import { apiLimiter } from '../../middleware/rateLimiter';
 import axios from 'axios';
@@ -45,11 +46,7 @@ router.get(
         },
       ];
 
-      res.json({
-        success: true,
-        data: models,
-        message: 'Available ML models retrieved successfully',
-      });
+      return ResponseHelper.success(res, models, 'Available ML models retrieved successfully');
     } catch (error) {
       logger.error('❌ ML: Error fetching models:', error);
       next(error);
@@ -67,15 +64,13 @@ router.get(
 
       const mlServiceUrl = process.env.SEGMENTATION_SERVICE_URL || process.env.ML_SERVICE_URL || 'http://ml:8000';
 
-      // Fetch actual status from ML service
-      const response = await axios.get(`${mlServiceUrl}/health`, {
-        timeout: 5000,
-      });
+      // Verify ML service is reachable
+      await axios.get(`${mlServiceUrl}/health`, { timeout: 5000 });
 
       const status = {
         service: 'online',
         version: '1.0.0',
-        modelsLoaded: 3, // ML service has 3 models pre-loaded
+        modelsLoaded: 3,
         queueSize: 0,
         lastHealthCheck: new Date().toISOString(),
         performance: {
@@ -85,24 +80,20 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: status,
-        message: 'ML service status retrieved successfully',
-      });
+      return ResponseHelper.success(res, status, 'ML service status retrieved successfully');
     } catch (error) {
       logger.error('❌ ML: Error checking service status:', error);
-      res.status(503).json({
-        success: false,
-        data: {
+      return ResponseHelper.error(res, {
+        code: 'SERVICE_UNAVAILABLE',
+        message: `ML service unavailable: ${error instanceof Error ? error.message : String(error)}`,
+        details: {
           service: 'offline',
           version: '1.0.0',
           modelsLoaded: 0,
           queueSize: 0,
           lastHealthCheck: new Date().toISOString(),
         },
-        message: `ML service unavailable: ${error instanceof Error ? error.message : String(error)}`,
-      });
+      }, 503);
     }
   }
 );
@@ -139,25 +130,21 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: health,
-        message: 'ML service health check completed',
-      });
+      return ResponseHelper.success(res, health, 'ML service health check completed');
     } catch (error) {
       logger.error('❌ ML: Health check failed:', error);
       // Return degraded status if ML service is unavailable
-      res.status(503).json({
-        success: false,
-        data: {
+      return ResponseHelper.error(res, {
+        code: 'SERVICE_UNAVAILABLE',
+        message: `ML service unavailable: ${error instanceof Error ? error.message : String(error)}`,
+        details: {
           status: 'unhealthy',
           uptime: process.uptime(),
           models: { loaded: 0, failed: 0 },
           memory: { used: 'unknown', available: 'unknown' },
           gpu: { available: false, utilization: '0%' },
         },
-        message: `ML service unavailable: ${error instanceof Error ? error.message : String(error)}`,
-      });
+      }, 503);
     }
   }
 );
@@ -183,11 +170,7 @@ router.get(
         estimatedProcessingTime: '0s',
       };
 
-      res.json({
-        success: true,
-        data: queueStatus,
-        message: 'ML queue status retrieved successfully',
-      });
+      return ResponseHelper.success(res, queueStatus, 'ML queue status retrieved successfully');
     } catch (error) {
       logger.error('❌ ML: Error fetching queue status:', error);
       next(error);
@@ -204,11 +187,7 @@ router.post(
       logger.info(`🔥 ML: Warming up model: ${modelId}`);
 
       // Placeholder model warm-up
-      res.json({
-        success: true,
-        data: { modelId, status: 'warming-up' },
-        message: `Model ${modelId} warm-up initiated`,
-      });
+      return ResponseHelper.success(res, { modelId, status: 'warming-up' }, `Model ${modelId} warm-up initiated`);
     } catch (error) {
       logger.error('❌ ML: Error warming up model:', error);
       next(error);

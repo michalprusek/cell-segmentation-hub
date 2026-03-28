@@ -38,8 +38,7 @@ interface UseAdvancedInteractionsProps {
   activeInstanceIdRef?: React.RefObject<string>;
 
   // State setters
-  setSelectedPolygonId: (id: string | null) => void; // DEPRECATED: Use onPolygonSelection instead
-  onPolygonSelection?: (id: string | null) => void; // Centralized selection handler
+  onPolygonSelection: (id: string | null) => void; // Centralized selection handler
   setEditMode: (mode: EditMode) => void;
   setInteractionState: (state: InteractionState) => void;
   setTempPoints: (points: Point[]) => void;
@@ -74,8 +73,7 @@ export const useAdvancedInteractions = ({
   isSpacePressed: isSpacePressedCallback,
   activePartClassRef,
   activeInstanceIdRef,
-  setSelectedPolygonId, // DEPRECATED: Kept for backward compatibility
-  onPolygonSelection, // Use this for new centralized selection
+  onPolygonSelection,
   setEditMode,
   setInteractionState,
   setTempPoints,
@@ -97,12 +95,7 @@ export const useAdvancedInteractions = ({
       // Polygon selection is handled by CanvasPolygon onClick events which call stopPropagation()
       // So if this handler runs, it means we clicked on empty space
       if (selectedPolygonId) {
-        // Use centralized selection if available, otherwise fallback to direct call
-        if (onPolygonSelection) {
-          onPolygonSelection(null);
-        } else {
-          setSelectedPolygonId(null);
-        }
+        onPolygonSelection(null);
         return;
       }
 
@@ -117,7 +110,6 @@ export const useAdvancedInteractions = ({
       interactionState,
       selectedPolygonId,
       setInteractionState,
-      setSelectedPolygonId,
       onPolygonSelection,
     ]
   );
@@ -356,7 +348,6 @@ export const useAdvancedInteractions = ({
       getPolygons,
       setTempPoints,
       setInteractionState,
-      setSelectedPolygonId,
     ]
   );
 
@@ -467,11 +458,7 @@ export const useAdvancedInteractions = ({
             });
           } else if (selectedPolygonId) {
             // Polygon is selected but no slice points - deselect polygon but stay in slice mode
-            if (onPolygonSelection) {
-              onPolygonSelection(null);
-            } else {
-              setSelectedPolygonId(null);
-            }
+            onPolygonSelection(null);
             setInteractionState({
               ...interactionState,
               sliceStartPoint: null,
@@ -537,12 +524,7 @@ export const useAdvancedInteractions = ({
               if (e.shiftKey) {
                 // Only set selected polygon if it's not already selected
                 if (selectedPolygonId !== polygonId) {
-                  // Use centralized selection for polygon selection
-                  if (onPolygonSelection) {
-                    onPolygonSelection(polygonId);
-                  } else {
-                    setSelectedPolygonId(polygonId);
-                  }
+                  onPolygonSelection(polygonId);
                 }
                 setEditMode(EditMode.AddPoints);
                 setInteractionState({
@@ -634,7 +616,6 @@ export const useAdvancedInteractions = ({
       handleEditVerticesClick,
       handleSliceClick,
       handleViewModeClick,
-      setSelectedPolygonId,
       isSpacePressedCallback,
       isVertexTarget,
       onPolygonSelection,

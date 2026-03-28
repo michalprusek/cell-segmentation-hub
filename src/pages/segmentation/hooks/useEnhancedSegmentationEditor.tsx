@@ -917,7 +917,6 @@ export const useEnhancedSegmentationEditor = ({
     isSpacePressed: keyboardShortcuts.isSpacePressed,
     activePartClassRef,
     activeInstanceIdRef,
-    setSelectedPolygonId,
     onPolygonSelection: polygonSelection.handlePolygonSelection, // Pass centralized selection handler
     setEditMode,
     setInteractionState,
