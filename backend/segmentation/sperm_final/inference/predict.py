@@ -3,6 +3,7 @@
 Adapted from combined_pipeline.py:48-156.
 """
 
+import logging
 from typing import Dict, List, Tuple
 
 import cv2
@@ -12,6 +13,8 @@ import torch.nn.functional as F
 
 from sperm_final.config import ID_TO_CLASS, NUM_CLASSES
 from sperm_final.data.dataset import IMAGENET_MEAN, IMAGENET_STD
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -886,6 +889,13 @@ def predict_full_image_for_graph(
             probs = pred_logits.softmax(-1)
             scores, classes = probs[:, 1:].max(-1)
             classes = classes + 1
+
+            # Log top detection scores for debugging threshold issues
+            top_k = min(5, len(scores))
+            top_vals, top_idx = scores.topk(top_k)
+            above_half = [(f"{float(top_vals[i]):.3f}", int(classes[top_idx[i]])) for i in range(top_k) if float(top_vals[i]) > 0.3]
+            if above_half:
+                logger.info(f"Patch ({py},{px}): detections above 0.3: {above_half}, threshold={score_threshold}")
 
             for q in range(len(scores)):
                 score = float(scores[q])
