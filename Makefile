@@ -106,20 +106,20 @@ deep-clean:
 	@echo "🧹💪 Deep cleaning Docker resources..."
 	@scripts/docker-build-optimizer.sh --aggressive
 
-# Optimized build with automatic cleanup
+# Optimized build for production
 build-optimized:
-	@echo "🚀 Starting optimized build with cleanup..."
-	@scripts/smart-docker-build.sh --env $(ENV_FILE)
+	@echo "🚀 Building production images..."
+	$(DOCKER_COMPOSE) -f docker-compose.production.yml build --parallel
 
 # Build without cache (clean build)
 build-clean:
 	@echo "🔨 Clean build (no cache)..."
-	@scripts/smart-docker-build.sh --no-cache --env $(ENV_FILE)
+	$(DOCKER_COMPOSE) -f docker-compose.production.yml build --no-cache --parallel
 
-# Build specific service with optimization
+# Build specific service
 build-service:
 	@echo "🔨 Building service: $(SERVICE)..."
-	@scripts/smart-docker-build.sh --service $(SERVICE) --env $(ENV_FILE)
+	$(DOCKER_COMPOSE) -f docker-compose.production.yml build $(SERVICE)
 
 # Show Docker disk usage
 docker-usage:
@@ -271,84 +271,12 @@ dev:
 prod:
 	@echo "🚀 Starting production environment..."
 	@if [ ! -f .env.production ]; then \
-		echo "❌ .env.production not found! Creating from template..."; \
-		cp .env.production.template .env.production; \
-		echo "⚠️  CRITICAL: Edit .env.production with real production values!"; \
-		echo "🔐 Replace ALL placeholder secrets and URLs before continuing"; \
+		echo "❌ .env.production not found!"; \
 		exit 1; \
 	fi
-	@if [ ! -f docker/nginx/ssl/server.crt ] || [ ! -f docker/nginx/ssl/server.key ]; then \
-		echo "❌ SSL certificates not found!"; \
-		echo "📜 Please place SSL certificates in docker/nginx/ssl/"; \
-		echo "   Required files: server.crt and server.key"; \
-		echo "   For testing, run: make generate-ssl-cert"; \
-		exit 1; \
-	fi
-	@echo "🔍 Validating .env.production configuration..."
-	@bash -c '\
-		source .env.production 2>/dev/null; \
-		MISSING_VARS=""; \
-		PLACEHOLDER_FOUND=0; \
-		VALIDATION_FAILED=0; \
-		for var in JWT_ACCESS_SECRET JWT_REFRESH_SECRET DATABASE_URL GF_SECURITY_ADMIN_PASSWORD; do \
-			val=$${!var}; \
-			if [ -z "$$val" ]; then \
-				MISSING_VARS="$$MISSING_VARS $$var"; \
-			elif echo "$$val" | grep -qE "(TODO|REPLACE|your_value_here|xxx|GENERATE_|<.*>|change_me|dummy)"; then \
-				echo "❌ ERROR: $$var contains placeholder value: $$val"; \
-				PLACEHOLDER_FOUND=1; \
-			fi; \
-		done; \
-		if [ ! -z "$$MISSING_VARS" ]; then \
-			echo "❌ ERROR: Required variables missing:$$MISSING_VARS"; \
-			echo "📝 Please set all required variables in .env.production"; \
-			exit 1; \
-		fi; \
-		if [ $$PLACEHOLDER_FOUND -eq 1 ]; then \
-			echo "❌ ERROR: Placeholder values detected in .env.production"; \
-			echo "🔐 Replace all placeholder values with secure, production-ready secrets"; \
-			echo "💡 Generate JWT secrets with: openssl rand -hex 32"; \
-			exit 1; \
-		fi; \
-		if ! echo "$$DATABASE_URL" | grep -qE "^(postgres://|postgresql://)"; then \
-			if echo "$$DATABASE_URL" | grep -qE "(file:|sqlite:|localhost|127\\.0\\.0\\.1)"; then \
-				echo "❌ ERROR: DATABASE_URL uses insecure scheme or localhost for production"; \
-				echo "🔐 Production database must use postgres:// or postgresql:// with a remote host"; \
-				exit 1; \
-			fi; \
-		fi; \
-		if ! (echo "$$JWT_ACCESS_SECRET" | grep -qE "^[0-9a-fA-F]{64,}$$" || echo "$$JWT_ACCESS_SECRET" | grep -qE "^[A-Za-z0-9+/]{43,}=*$$" || [ "$${#JWT_ACCESS_SECRET}" -ge 32 ]) || \
-		   ! (echo "$$JWT_REFRESH_SECRET" | grep -qE "^[0-9a-fA-F]{64,}$$" || echo "$$JWT_REFRESH_SECRET" | grep -qE "^[A-Za-z0-9+/]{43,}=*$$" || [ "$${#JWT_REFRESH_SECRET}" -ge 32 ]); then \
-			echo "❌ ERROR: JWT secrets must be hexadecimal (64+ chars), base64, or at least 32 bytes"; \
-			echo "💡 Generate secure secrets with:"; \
-			echo "   Hex: openssl rand -hex 32"; \
-			echo "   Base64: openssl rand -base64 32"; \
-			exit 1; \
-		fi; \
-		if [ "$${#GF_SECURITY_ADMIN_PASSWORD}" -lt 12 ]; then \
-			echo "❌ ERROR: GF_SECURITY_ADMIN_PASSWORD must be at least 12 characters"; \
-			echo "💡 Use a password manager to generate a strong password"; \
-			exit 1; \
-		fi; \
-		if echo "$$GF_SECURITY_ADMIN_PASSWORD" | grep -qiE "^(admin|password|changeme|grafana|123456|default)$$"; then \
-			echo "❌ ERROR: GF_SECURITY_ADMIN_PASSWORD is a common weak password"; \
-			echo "💡 Use a password manager to generate a strong password"; \
-			exit 1; \
-		fi; \
-		if ! echo "$$GF_SECURITY_ADMIN_PASSWORD" | grep -q '[A-Z]' || \
-		   ! echo "$$GF_SECURITY_ADMIN_PASSWORD" | grep -q '[a-z]' || \
-		   ! echo "$$GF_SECURITY_ADMIN_PASSWORD" | grep -q '[0-9]' || \
-		   ! echo "$$GF_SECURITY_ADMIN_PASSWORD" | grep -q '[^A-Za-z0-9]'; then \
-			echo "❌ ERROR: GF_SECURITY_ADMIN_PASSWORD must contain uppercase, lowercase, digit, and symbol"; \
-			echo "💡 Use a password manager to generate a strong password"; \
-			exit 1; \
-		fi; \
-		echo "✅ Configuration validation passed"'
-	@echo "🔨 Building production images..."
-	@$(MAKE) ENV_FILE=.env.production build
-	@ENV_FILE=.env.production $(DOCKER_COMPOSE) -f docker-compose.production.yml up -d
+	$(DOCKER_COMPOSE) -f docker-compose.production.yml build --parallel
+	$(DOCKER_COMPOSE) -f docker-compose.production.yml up -d
 	@echo "🎉 Production environment started!"
-	@echo "🌐 Check your domain configuration"
 
 # Generate SSL certificates for testing
 generate-ssl-cert:
