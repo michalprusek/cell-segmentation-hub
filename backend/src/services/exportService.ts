@@ -11,8 +11,6 @@ import { FormatConverter } from './export/formatConverter';
 import { WebSocketService } from './websocketService';
 import * as SharingService from './sharingService';
 import { batchProcessor } from '../utils/batchProcessor';
-// import { Queue } from 'bull';
-// import { RedisClient } from '../redis/client';
 
 export interface ExportOptions {
   includeOriginalImages?: boolean;
@@ -81,13 +79,11 @@ export interface ExportJob {
   createdAt: Date;
   completedAt?: Date;
   options: ExportOptions;
-  bullJobId?: string;
   projectName?: string;
 }
 
 export class ExportService {
   private static instance: ExportService;
-  private exportQueue: unknown; // Queue - Bull queue type disabled
   private wsService: WebSocketService | null = null;
   private visualizationGenerator: VisualizationGenerator;
   private metricsCalculator: MetricsCalculator;
@@ -104,16 +100,10 @@ export class ExportService {
   private readonly MAX_JOBS = 1000; // Maximum number of jobs to keep in memory
 
   constructor() {
-    // Queue temporarily disabled - requires Redis configuration
-    // this.exportQueue = new Queue('export-queue', {
-    //   redis: RedisClient.getConfig(),
-    // });
     this.visualizationGenerator = new VisualizationGenerator();
     this.metricsCalculator = new MetricsCalculator();
     this.formatConverter = new FormatConverter();
     this.exportJobs = new Map();
-
-    // this.setupQueueHandlers();
     this.setupJobCleanup();
   }
 
@@ -179,43 +169,6 @@ export class ExportService {
     }
   }
 
-  private setupQueueHandlers(): void {
-    // Queue processing temporarily disabled
-    return;
-    /*
-    this.exportQueue.process(async (job) => {
-      const { jobId, projectId, userId, options } = job.data;
-      await this.processExportJob(jobId, projectId, userId, options);
-    });
-
-    this.exportQueue.on('progress', (job, progress) => {
-      const { jobId, userId } = job.data;
-      this.updateJobProgress(jobId, progress);
-      this.sendToUser(userId, 'export:progress', { jobId, progress });
-    });
-
-    this.exportQueue.on('completed', (job) => {
-      const { jobId, userId } = job.data;
-      const exportJob = this.exportJobs.get(jobId);
-      if (exportJob) {
-        exportJob.status = 'completed';
-        exportJob.completedAt = new Date();
-        this.sendToUser(userId, 'export:completed', { jobId });
-      }
-    });
-
-    this.exportQueue.on('failed', (job, error) => {
-      const { jobId, userId } = job.data;
-      logger.error(`Export job ${jobId} failed:`, error instanceof Error ? error : new Error(String(error)));
-      const exportJob = this.exportJobs.get(jobId);
-      if (exportJob) {
-        exportJob.status = 'failed';
-        exportJob.message = error.message;
-        this.sendToUser(userId, 'export:failed', { jobId, error: error.message });
-      }
-    });
-    */
-  }
 
   async startExportJob(
     projectId: string,
@@ -268,15 +221,7 @@ export class ExportService {
 
     this.exportJobs.set(jobId, job);
 
-    // Queue disabled - process directly
-    // await this.exportQueue.add('export', {
-    //   jobId,
-    //   projectId,
-    //   userId,
-    //   options,
-    // });
-
-    // Process export directly without queue
+    // Process export directly
     this.processExportJob(jobId, projectId, userId, options).catch(err => {
       logger.error(
         'Export job failed with unhandled error',
@@ -1882,58 +1827,6 @@ ${exportedFormats.map(format => `- ${format}/README.md`).join('\n')}
         userId,
         progress: job.progress,
       });
-
-      // Cancel the Bull queue job if bullJobId exists and queue is available
-      if (
-        job.bullJobId &&
-        this.exportQueue &&
-        typeof (
-          this.exportQueue as {
-            getJob: (id: string) => Promise<{
-              getState: () => Promise<string>;
-              remove: () => Promise<void>;
-            } | null>;
-          }
-        ).getJob === 'function'
-      ) {
-        try {
-          const queueJob = await (
-            this.exportQueue as {
-              getJob: (id: string) => Promise<{
-                getState: () => Promise<string>;
-                remove: () => Promise<void>;
-              } | null>;
-            }
-          ).getJob(job.bullJobId);
-          if (queueJob) {
-            const state = await queueJob.getState();
-            logger.info('Bull queue job state', 'ExportService', {
-              jobId,
-              bullJobId: job.bullJobId,
-              state,
-            });
-
-            // Try to remove job regardless of state (except completed)
-            if (state !== 'completed') {
-              await queueJob.remove();
-              logger.info('Bull queue job removed', 'ExportService', {
-                jobId,
-                bullJobId: job.bullJobId,
-              });
-            }
-          }
-        } catch (error) {
-          logger.error(
-            'Failed to cancel Bull queue job',
-            error instanceof Error ? error : undefined,
-            'ExportService',
-            {
-              jobId,
-              bullJobId: job.bullJobId,
-            }
-          );
-        }
-      }
 
       // Cleanup is handled automatically when job is removed
     }
