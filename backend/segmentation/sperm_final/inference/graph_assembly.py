@@ -655,12 +655,22 @@ def assemble_sperm_graph(
     if not instances:
         return []
 
-    # Cap instances to prevent combinatorial explosion in graph solver
-    MAX_INSTANCES = 100
-    if len(instances) > MAX_INSTANCES:
-        # Keep the highest-scoring instances
-        instances = sorted(instances, key=lambda x: -x['score'])[:MAX_INSTANCES]
-        logger.warning(f"Capped instances from {len(instances)} to {MAX_INSTANCES} (image too dense)")
+    # Cap instances to prevent combinatorial explosion in graph solver.
+    # Use balanced selection: equal per class so the solver can form complete sperm.
+    MAX_PER_CLASS = 15
+    total = len(instances)
+    if total > MAX_PER_CLASS * 3:
+        by_cls = {1: [], 2: [], 3: []}
+        for inst in instances:
+            if inst['cls'] in by_cls:
+                by_cls[inst['cls']].append(inst)
+        # Keep top MAX_PER_CLASS per class, sorted by score
+        capped = []
+        for cls_id in (1, 2, 3):
+            sorted_cls = sorted(by_cls.get(cls_id, []), key=lambda x: -x['score'])
+            capped.extend(sorted_cls[:MAX_PER_CLASS])
+        instances = capped
+        logger.warning(f"Capped from {total} to {len(instances)} instances ({MAX_PER_CLASS}/class)")
 
     cls_counts = {}
     for inst in instances:
