@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../utils/logger';
+import { ResponseHelper } from '../../utils/response';
 import { authenticate } from '../../middleware/auth';
 import { apiLimiter, authLimiter } from '../../middleware/rateLimiter';
 import { validateBody } from '../../middleware/validation';
@@ -52,11 +53,7 @@ router.get(
         lastChecked: new Date().toISOString(),
       };
 
-      res.json({
-        success: true,
-        data: dbHealth,
-        message: 'Database health status retrieved successfully',
-      });
+      return ResponseHelper.success(res, dbHealth, 'Database health status retrieved successfully');
     } catch (error) {
       logger.error('❌ Database: Health check failed:', error);
       next(error);
@@ -118,11 +115,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: metrics,
-        message: 'Database metrics retrieved successfully',
-      });
+      return ResponseHelper.success(res, metrics, 'Database metrics retrieved successfully');
     } catch (error) {
       logger.error('❌ Database: Error retrieving metrics:', error);
       next(error);
@@ -183,11 +176,7 @@ router.get(
         generatedAt: new Date().toISOString(),
       };
 
-      res.json({
-        success: true,
-        data: optimizationReport,
-        message: 'Database optimization report generated successfully',
-      });
+      return ResponseHelper.success(res, optimizationReport, 'Database optimization report generated successfully');
     } catch (error) {
       logger.error('❌ Database: Error generating optimization report:', error);
       next(error);
@@ -235,11 +224,7 @@ router.post(
         analyzedAt: new Date().toISOString(),
       };
 
-      res.json({
-        success: true,
-        data: analysis,
-        message: 'Query analysis completed successfully',
-      });
+      return ResponseHelper.success(res, analysis, 'Query analysis completed successfully');
     } catch (error) {
       logger.error('❌ Database: Error analyzing query:', error);
       next(error);
@@ -287,12 +272,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: poolConfig,
-        message:
-          'Database connection pool configuration retrieved successfully',
-      });
+      return ResponseHelper.success(res, poolConfig, 'Database connection pool configuration retrieved successfully');
     } catch (error) {
       logger.error('❌ Database: Error fetching pool configuration:', error);
       next(error);
@@ -309,11 +289,7 @@ if (process.env.NODE_ENV === 'development') {
       try {
         logger.warn('🔄 Database: Resetting metrics (development only)');
 
-        res.json({
-          success: true,
-          data: { resetAt: new Date().toISOString() },
-          message: 'Database metrics reset successfully',
-        });
+        return ResponseHelper.success(res, { resetAt: new Date().toISOString() }, 'Database metrics reset successfully');
       } catch (error) {
         logger.error('❌ Database: Error resetting metrics:', error);
         next(error);
@@ -354,11 +330,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: backupInfo,
-        message: 'Database backup information retrieved successfully',
-      });
+      return ResponseHelper.success(res, backupInfo, 'Database backup information retrieved successfully');
     } catch (error) {
       logger.error('❌ Database: Error fetching backup info:', error);
       next(error);

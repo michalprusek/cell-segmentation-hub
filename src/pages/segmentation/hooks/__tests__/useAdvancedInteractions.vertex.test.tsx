@@ -80,7 +80,6 @@ describe('useAdvancedInteractions - Vertex Deletion', () => {
     cursorPosition: null,
     isShiftPressed: vi.fn(() => false),
     isSpacePressed: vi.fn(() => false),
-    setSelectedPolygonId: vi.fn(),
     onPolygonSelection: vi.fn(),
     setEditMode: vi.fn(),
     setInteractionState: vi.fn(),

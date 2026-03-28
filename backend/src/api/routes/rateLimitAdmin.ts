@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../utils/logger';
+import { ResponseHelper } from '../../utils/response';
 import { authenticate } from '../../middleware/auth';
 import { apiLimiter, authLimiter } from '../../middleware/rateLimiter';
 import { validateBody } from '../../middleware/validation';
@@ -79,11 +80,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: status,
-        message: 'Rate limiting status retrieved successfully',
-      });
+      return ResponseHelper.success(res, status, 'Rate limiting status retrieved successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching status:', error);
       next(error);
@@ -139,11 +136,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: configurations,
-        message: 'Rate limiting configurations retrieved successfully',
-      });
+      return ResponseHelper.success(res, configurations, 'Rate limiting configurations retrieved successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching configurations:', error);
       next(error);
@@ -200,11 +193,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: violations,
-        message: 'Rate limiting violations retrieved successfully',
-      });
+      return ResponseHelper.success(res, violations, 'Rate limiting violations retrieved successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching violations:', error);
       next(error);
@@ -236,11 +225,7 @@ router.get(
         },
       ];
 
-      res.json({
-        success: true,
-        data: whitelist,
-        message: 'IP whitelist retrieved successfully',
-      });
+      return ResponseHelper.success(res, whitelist, 'IP whitelist retrieved successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching IP whitelist:', error);
       next(error);
@@ -267,11 +252,7 @@ router.post(
         expiresAt: expiresAt || null,
       };
 
-      res.json({
-        success: true,
-        data: whitelistEntry,
-        message: 'IP added to whitelist successfully',
-      });
+      return ResponseHelper.success(res, whitelistEntry, 'IP added to whitelist successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error adding IP to whitelist:', error);
       next(error);
@@ -305,11 +286,7 @@ router.get(
         },
       ];
 
-      res.json({
-        success: true,
-        data: whitelist,
-        message: 'User whitelist retrieved successfully',
-      });
+      return ResponseHelper.success(res, whitelist, 'User whitelist retrieved successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching user whitelist:', error);
       next(error);
@@ -336,11 +313,7 @@ router.post(
         expiresAt: expiresAt || null,
       };
 
-      res.json({
-        success: true,
-        data: whitelistEntry,
-        message: 'User added to whitelist successfully',
-      });
+      return ResponseHelper.success(res, whitelistEntry, 'User added to whitelist successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error adding user to whitelist:', error);
       next(error);
@@ -369,11 +342,7 @@ router.post(
           : null,
       };
 
-      res.json({
-        success: true,
-        data: blacklistEntry,
-        message: 'IP added to blacklist successfully',
-      });
+      return ResponseHelper.success(res, blacklistEntry, 'IP added to blacklist successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error adding IP to blacklist:', error);
       next(error);
@@ -402,11 +371,7 @@ router.post(
           : null,
       };
 
-      res.json({
-        success: true,
-        data: blacklistEntry,
-        message: 'User added to blacklist successfully',
-      });
+      return ResponseHelper.success(res, blacklistEntry, 'User added to blacklist successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error adding user to blacklist:', error);
       next(error);
@@ -442,11 +407,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: tierStats,
-        message: 'User tier statistics retrieved successfully',
-      });
+      return ResponseHelper.success(res, tierStats, 'User tier statistics retrieved successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching tier statistics:', error);
       next(error);
@@ -465,16 +426,12 @@ router.put(
 
       logger.info(`🔄 RateLimit: Updating user tier: ${userId} -> ${tier}`);
 
-      res.json({
-        success: true,
-        data: {
+      return ResponseHelper.success(res, {
           userId,
           tier,
           updatedBy: adminId,
           updatedAt: new Date().toISOString(),
-        },
-        message: 'User tier updated successfully',
-      });
+        }, 'User tier updated successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error updating user tier:', error);
       next(error);
@@ -493,16 +450,12 @@ router.put(
 
       logger.info(`🔄 RateLimit: Bulk updating ${users.length} user tiers`);
 
-      res.json({
-        success: true,
-        data: {
+      return ResponseHelper.success(res, {
           updatedCount: users.length,
           reason,
           updatedBy: adminId,
           updatedAt: new Date().toISOString(),
-        },
-        message: `${users.length} user tiers updated successfully`,
-      });
+        }, `${users.length} user tiers updated successfully`);
     } catch (error) {
       logger.error('❌ RateLimit: Error bulk updating user tiers:', error);
       next(error);
@@ -518,11 +471,7 @@ router.post(
       const { key } = req.body;
       logger.info(`🔄 RateLimit: Resetting rate limit for key: ${key}`);
 
-      res.json({
-        success: true,
-        data: { key, resetAt: new Date().toISOString() },
-        message: 'Rate limit reset successfully',
-      });
+      return ResponseHelper.success(res, { key, resetAt: new Date().toISOString() }, 'Rate limit reset successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error resetting rate limit:', error);
       next(error);
@@ -558,11 +507,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: metrics,
-        message: 'Rate limiting metrics retrieved successfully',
-      });
+      return ResponseHelper.success(res, metrics, 'Rate limiting metrics retrieved successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching metrics:', error);
       next(error);
@@ -585,11 +530,7 @@ router.post(
         cleanedAt: new Date().toISOString(),
       };
 
-      res.json({
-        success: true,
-        data: cleanup,
-        message: 'Rate limiting records cleaned up successfully',
-      });
+      return ResponseHelper.success(res, cleanup, 'Rate limiting records cleaned up successfully');
     } catch (error) {
       logger.error('❌ RateLimit: Error cleaning up records:', error);
       next(error);

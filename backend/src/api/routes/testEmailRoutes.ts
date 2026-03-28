@@ -7,6 +7,7 @@ import {
 } from '../../services/emailRetryService';
 import { authenticate } from '../../middleware/auth';
 import { logger } from '../../utils/logger';
+import { ResponseHelper } from '../../utils/response';
 
 const router = Router();
 
@@ -18,29 +19,18 @@ router.get(
     try {
       const result = await testConnection();
       if (result) {
-        res.json({
-          success: true,
-          message: 'Email service is configured correctly',
-          config: {
+        return ResponseHelper.success(res, {
             service: process.env.EMAIL_SERVICE,
             host: process.env.SMTP_HOST,
             port: process.env.SMTP_PORT,
             from: process.env.FROM_EMAIL,
-          },
-        });
+          }, 'Email service is configured correctly');
       } else {
-        res.status(500).json({
-          success: false,
-          message: 'Email service connection failed',
-        });
+        return ResponseHelper.internalError(res, undefined, 'Email service connection failed');
       }
     } catch (error) {
       logger.error('Email test connection failed:', error as Error);
-      res.status(500).json({
-        success: false,
-        message: 'Email service connection failed',
-        error: (error as Error).message,
-      });
+      return ResponseHelper.internalError(res, error as Error, 'Email service connection failed');
     }
   }
 );
@@ -52,11 +42,7 @@ router.post('/send-test', authenticate, async (req: Request, res: Response) => {
 
     // Validate email parameter
     if (!to || typeof to !== 'string') {
-      res.status(400).json({
-        success: false,
-        message: 'Valid recipient email is required',
-      });
-      return;
+      return ResponseHelper.badRequest(res, 'Valid recipient email is required');
     }
 
     // Trim and validate email format
@@ -64,11 +50,7 @@ router.post('/send-test', authenticate, async (req: Request, res: Response) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(email)) {
-      res.status(400).json({
-        success: false,
-        message: 'Invalid email format',
-      });
-      return;
+      return ResponseHelper.badRequest(res, 'Invalid email format');
     }
 
     await sendEmail({
@@ -86,7 +68,7 @@ router.post('/send-test', authenticate, async (req: Request, res: Response) => {
         <p>If you received this email, the configuration is working!</p>
       `,
       text: `Test Email from SpheroSeg Platform
-      
+
 This is a test email to verify that the email service is working correctly.
 
 Configuration:
@@ -97,17 +79,10 @@ Configuration:
 If you received this email, the configuration is working!`,
     });
 
-    res.json({
-      success: true,
-      message: `Test email sent successfully to ${to}`,
-    });
+    return ResponseHelper.success(res, undefined, `Test email sent successfully to ${to}`);
   } catch (error) {
     logger.error('Failed to send test email:', error as Error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to send test email',
-      error: (error as Error).message,
-    });
+    return ResponseHelper.internalError(res, error as Error, 'Failed to send test email');
   }
 });
 
@@ -121,11 +96,7 @@ router.post(
 
       // Validate email parameter
       if (!to || typeof to !== 'string') {
-        res.status(400).json({
-          success: false,
-          message: 'Valid recipient email is required',
-        });
-        return;
+        return ResponseHelper.badRequest(res, 'Valid recipient email is required');
       }
 
       // Trim and validate email format
@@ -133,11 +104,7 @@ router.post(
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
       if (!emailRegex.test(email)) {
-        res.status(400).json({
-          success: false,
-          message: 'Invalid email format',
-        });
-        return;
+        return ResponseHelper.badRequest(res, 'Invalid email format');
       }
 
       const startTime = Date.now();
@@ -181,28 +148,16 @@ If you received this email, the direct send configuration is working!`,
 
       const totalTime = Date.now() - startTime;
 
-      res.json({
-        success: true,
-        message: `Direct test email sent successfully to ${email}`,
-        details: {
+      return ResponseHelper.success(res, {
           recipient: email,
           sendTime: totalTime,
           timestamp: new Date().toISOString(),
           method: 'direct_send',
           queueBypassed: true,
-        },
-      });
+        }, `Direct test email sent successfully to ${email}`);
     } catch (error) {
       logger.error('Failed to send direct test email:', error as Error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to send direct test email',
-        error: (error as Error).message,
-        details: {
-          method: 'direct_send',
-          timestamp: new Date().toISOString(),
-        },
-      });
+      return ResponseHelper.internalError(res, error as Error, 'Failed to send direct test email');
     }
   }
 );
@@ -215,18 +170,10 @@ router.get(
     try {
       const status = getQueueStatus();
 
-      res.json({
-        success: true,
-        queue: status,
-        message: `Queue has ${status.length} emails, processing: ${status.processing}`,
-      });
+      return ResponseHelper.success(res, status, `Queue has ${status.length} emails, processing: ${status.processing}`);
     } catch (error) {
       logger.error('Failed to get queue status:', error as Error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get queue status',
-        error: (error as Error).message,
-      });
+      return ResponseHelper.internalError(res, error as Error, 'Failed to get queue status');
     }
   }
 );
@@ -246,18 +193,10 @@ router.post(
 
       const newStatus = getQueueStatus();
 
-      res.json({
-        success: true,
-        message: 'Queue processing completed',
-        queue: newStatus,
-      });
+      return ResponseHelper.success(res, newStatus, 'Queue processing completed');
     } catch (error) {
       logger.error('Failed to force process queue:', error as Error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to force process queue',
-        error: (error as Error).message,
-      });
+      return ResponseHelper.internalError(res, error as Error, 'Failed to force process queue');
     }
   }
 );
@@ -270,25 +209,20 @@ router.get(
     try {
       const emails = getQueuedEmails();
 
-      res.json({
-        success: true,
-        emails: emails.map(email => ({
-          id: email.id,
-          to: email.options.to,
-          subject: email.options.subject,
-          createdAt: email.createdAt,
-          attempts: email.attempts,
-          lastError: email.lastError,
-        })),
-        count: emails.length,
-      });
+      return ResponseHelper.success(res, {
+          emails: emails.map(email => ({
+            id: email.id,
+            to: email.options.to,
+            subject: email.options.subject,
+            createdAt: email.createdAt,
+            attempts: email.attempts,
+            lastError: email.lastError,
+          })),
+          count: emails.length,
+        });
     } catch (error) {
       logger.error('Failed to get queue emails:', error as Error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to get queue emails',
-        error: (error as Error).message,
-      });
+      return ResponseHelper.internalError(res, error as Error, 'Failed to get queue emails');
     }
   }
 );
