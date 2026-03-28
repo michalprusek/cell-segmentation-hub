@@ -12,6 +12,7 @@ import numpy as np
 import cv2
 from typing import Dict, List, Tuple, Any, Optional, Union
 import logging
+import threading
 from pathlib import Path
 import time
 import uuid
@@ -166,6 +167,11 @@ class ModelLoader:
         self.current_model = None
         self.queue_length = 0
         self.last_batch_size = 1  # Track last used batch size for reporting
+
+        # LRU model management — thread-safe tracking for auto-unloading
+        self._model_lock = threading.Lock()
+        self._last_used: Dict[str, float] = {}
+        self._models_in_use: Dict[str, int] = {}  # reference counting
         
         logger.info(f"ModelLoader initialized with device: {self.device}")
         logger.info(f"Batch processing enabled with config: {batch_config_path.exists()}")
@@ -276,14 +282,84 @@ class ModelLoader:
             raise
     
     def get_model(self, model_name: str) -> torch.nn.Module:
-        """Get a loaded model (load if not already loaded)"""
+        """Get a loaded model (load if not already loaded), with LRU auto-unloading."""
         logger.info(f"Getting model: {model_name}")
-        if model_name not in self.loaded_models:
-            logger.info(f"Model {model_name} not loaded, loading now...")
-            self.load_model(model_name)
-        else:
-            logger.info(f"Model {model_name} already loaded")
+        with self._model_lock:
+            self._last_used[model_name] = time.time()
+            if model_name in self.loaded_models:
+                logger.info(f"Model {model_name} already loaded")
+                self._models_in_use[model_name] = self._models_in_use.get(model_name, 0) + 1
+                return self.loaded_models[model_name]
+        # Not loaded — auto-unload LRU if needed, then load
+        self._auto_unload_if_needed(exclude=model_name)
+        self.load_model(model_name)
+        with self._model_lock:
+            self._models_in_use[model_name] = self._models_in_use.get(model_name, 0) + 1
         return self.loaded_models[model_name]
+
+    def release_model(self, model_name: str) -> None:
+        """Release a model reference after inference completes."""
+        with self._model_lock:
+            count = self._models_in_use.get(model_name, 0)
+            if count > 0:
+                self._models_in_use[model_name] = count - 1
+
+    def _auto_unload_if_needed(self, exclude: str = "") -> None:
+        """Unload least-recently-used model if GPU memory exceeds threshold.
+
+        Uses torch.cuda.mem_get_info() for device-wide visibility (includes
+        memory used by other processes like Maptimize).
+        Models currently in use (ref count > 0) are never evicted.
+        """
+        if not torch.cuda.is_available():
+            return
+
+        try:
+            memory_limit_gb = float(os.environ.get('ML_MEMORY_LIMIT_GB', '8'))
+        except (ValueError, TypeError):
+            logger.warning("Invalid ML_MEMORY_LIMIT_GB value, defaulting to 8")
+            memory_limit_gb = 8.0
+
+        with self._model_lock:
+            if len(self.loaded_models) < 1:
+                return
+
+            # Use device-wide memory info (visible across all processes)
+            free_bytes, total_bytes = torch.cuda.mem_get_info()
+            used_gb = (total_bytes - free_bytes) / (1024 ** 3)
+            total_gb = total_bytes / (1024 ** 3)
+
+            # Keep unloading until we're below 70% of our limit or no candidates left
+            while used_gb > memory_limit_gb * 0.7 and self.loaded_models:
+                # Find LRU model that is not in use and not the one being loaded
+                candidates = {
+                    name: ts for name, ts in self._last_used.items()
+                    if name in self.loaded_models
+                    and name != exclude
+                    and self._models_in_use.get(name, 0) == 0
+                }
+                if not candidates:
+                    logger.warning(
+                        f"GPU memory high ({used_gb:.1f}/{total_gb:.1f} GB) but no models can be evicted "
+                        f"(all in use or excluded)"
+                    )
+                    break
+
+                lru_model = min(candidates, key=candidates.get)
+                logger.info(
+                    f"Auto-unloading LRU model '{lru_model}' to free GPU memory "
+                    f"(device used: {used_gb:.1f}/{total_gb:.1f} GB, limit: {memory_limit_gb} GB)"
+                )
+                del self.loaded_models[lru_model]
+                self._last_used.pop(lru_model, None)
+                self._models_in_use.pop(lru_model, None)
+
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+                # Re-check memory after unload
+                free_bytes, total_bytes = torch.cuda.mem_get_info()
+                used_gb = (total_bytes - free_bytes) / (1024 ** 3)
     
     def preprocess_image(self, image: Image.Image, target_size: Tuple[int, int] = (1024, 1024)) -> torch.Tensor:
         """Preprocess single image for model inference - OPTIMIZED VERSION"""
@@ -422,10 +498,10 @@ class ModelLoader:
             original_size = image.size  # (width, height)
             logger.info(f"Starting prediction for {model_name}, image size: {original_size}, detect_holes: {detect_holes}")
             
-            # Get model
+            # Get model (increments ref count to prevent LRU eviction during inference)
             model = self.get_model(model_name)
             logger.info(f"Model {model_name} loaded successfully")
-            
+
             # Preprocess image
             input_tensor = self.preprocess_image(image)
             logger.info(f"Image preprocessed, tensor shape: {input_tensor.shape}, device: {input_tensor.device}")
@@ -599,10 +675,11 @@ class ModelLoader:
             return result
             
         finally:
-            # Reset processing state
+            # Reset processing state and release model ref
             self.is_processing = False
             self.current_model = None
-    
+            self.release_model(model_name)
+
     def predict_sperm(self, image: Image.Image, threshold: float = 0.3,
                       score_threshold: float = 0.95, timeout: Optional[float] = None) -> Dict[str, Any]:
         """Run the sperm-specific pipeline (Mask2Former + graph assembly + polyline extraction).
@@ -618,6 +695,8 @@ class ModelLoader:
         """
         import time as _time
 
+        # Ensure sperm model is loaded (with LRU eviction if needed)
+        self.get_model('sperm')
         if 'sperm' not in self.loaded_models:
             raise ValueError("Sperm model not loaded. Load it first with load_model('sperm')")
 
@@ -702,6 +781,7 @@ class ModelLoader:
         finally:
             self.is_processing = False
             self.current_model = None
+            self.release_model('sperm')
 
     def predict_batch(self, images: List[Image.Image], model_name: str, batch_size: Optional[int] = None,
                      threshold: float = 0.5, detect_holes: bool = True, timeout: Optional[float] = None) -> List[Dict[str, Any]]:
@@ -972,10 +1052,11 @@ class ModelLoader:
             return all_results
             
         finally:
-            # Reset processing state
+            # Reset processing state and release model ref
             self.is_processing = False
             self.current_model = None
-    
+            self.release_model(model_name)
+
     def get_available_models(self) -> List[str]:
         """Get list of available model names"""
         return list(self.AVAILABLE_MODELS.keys())
