@@ -163,7 +163,7 @@ const CanvasPolygon = React.memo(
       : (isHovered ? 1.3 : 1);
 
     // Compute SVG filter for glow effects
-    const getPathFilter = () => {
+    const pathFilter = (() => {
       if (isSelected && !isPolyline) {
         return `url(#${type === 'internal' ? 'blue' : 'red'}-glow)`;
       }
@@ -171,7 +171,7 @@ const CanvasPolygon = React.memo(
         return 'url(#blue-glow)';
       }
       return '';
-    };
+    })();
 
     // Memoized click handlers
     const handleClick = useCallback(
@@ -244,7 +244,7 @@ const CanvasPolygon = React.memo(
           className={cn('polygon-group', isInternal ? 'internal' : 'external')}
           tabIndex={0}
           role="button"
-          aria-label={`Polygon ${id} - ${type} polygon with ${points.length} vertices`}
+          aria-label={`${isPolyline ? 'Polyline' : 'Polygon'} ${id} - ${type} ${isPolyline ? 'polyline' : 'polygon'} with ${points.length} vertices`}
           onKeyDown={handleKeyDown}
           onMouseEnter={isPolyline ? handleMouseEnter : undefined}
           onMouseLeave={isPolyline ? handleMouseLeave : undefined}
@@ -272,7 +272,7 @@ const CanvasPolygon = React.memo(
             strokeLinejoin="round"
             onClick={handleClick}
             onDoubleClick={handleDoubleClick}
-            filter={getPathFilter()}
+            filter={pathFilter}
             vectorEffect="non-scaling-stroke"
             shapeRendering="geometricPrecision"
             pointerEvents={isPolyline ? 'stroke' : 'all'}
