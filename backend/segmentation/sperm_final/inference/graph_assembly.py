@@ -9,8 +9,11 @@ Handles containment via effective area discounting, crossing detection
 via skeleton junction analysis, and same-class fragment merging.
 """
 
+import logging
 from collections import deque
 from typing import Dict, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 import cv2
 import numpy as np
@@ -652,11 +655,22 @@ def assemble_sperm_graph(
     if not instances:
         return []
 
+    cls_counts = {}
+    for inst in instances:
+        c = {1: 'head', 2: 'midpiece', 3: 'tail'}.get(inst['cls'], f'cls{inst["cls"]}')
+        cls_counts[c] = cls_counts.get(c, 0) + 1
+    logger.info(f"Graph assembly input: {len(instances)} instances, parts: {cls_counts}")
+
     graph, features, effective_areas = build_assembly_graph(
         instances, mask_threshold, config
     )
     cost, flow_dict = solve_assembly(graph)
     paths = extract_flow_paths(flow_dict, len(instances))
+
+    logger.info(f"Graph assembly: {len(paths)} paths found, cost={cost:.1f}")
+
     sperm_list = paths_to_sperm(paths, instances, features, mask_threshold)
+
+    logger.info(f"Graph assembly result: {len(sperm_list)} complete sperm from {len(paths)} paths")
 
     return sperm_list

@@ -108,7 +108,7 @@ def _accumulate_soft_masks(
             b2 = acc["mask"] >= mask_threshold
             intersection = (b1 & b2).sum()
             union_area = (b1 | b2).sum()
-            if union_area > 0 and intersection / union_area > 0.5:
+            if union_area > 0 and intersection / union_area > 0.3:
                 # Average the soft masks
                 count = acc["_acc_count"]
                 acc["mask"] = (acc["mask"] * count + inst["mask"]) / (count + 1)

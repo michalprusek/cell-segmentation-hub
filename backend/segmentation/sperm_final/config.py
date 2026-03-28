@@ -106,17 +106,17 @@ class GraphAssemblyConfig:
     effective_area_discount: float = 0.9  # 0=ignore overlap, 1=full subtraction
 
     # Bbox pruning: skip cost computation for distant instance pairs
-    bbox_prune_gap: float = 200.0  # max bbox gap (pixels) to consider edge
+    bbox_prune_gap: float = 300.0  # max bbox gap (pixels) to consider edge
 
     # Cross-class connection costs (Head→Midpiece, Midpiece→Tail)
-    max_connection_dist: float = 150.0  # no edge beyond this distance
+    max_connection_dist: float = 200.0  # no edge beyond this distance
     w_dist: float = 3.0  # weight for endpoint distance
     w_angle: float = 5.0  # weight for tangent angle penalty (degrees → cost)
     tangent_n_pts: int = 8  # skeleton points for tangent estimation
 
     # Same-class merge costs
     merge_overlap_bonus: float = 200.0  # reward multiplier for overlapping fragments
-    max_merge_gap: float = 60.0  # no merge edge beyond this gap
+    max_merge_gap: float = 150.0  # no merge edge beyond this gap
     merge_w_gap: float = 3.0  # weight for gap distance
     merge_w_tangent: float = 5.0  # weight for tangent mismatch
-    merge_max_angle_diff: float = 30.0  # degrees, orientation guard for non-Head merge
+    merge_max_angle_diff: float = 45.0  # degrees, orientation guard for non-Head merge
