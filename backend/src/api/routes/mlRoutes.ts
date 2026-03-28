@@ -65,10 +65,10 @@ router.get(
     try {
       logger.info('🔍 ML: Checking service status');
 
-      const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://blue-ml:8000';
+      const mlServiceUrl = process.env.SEGMENTATION_SERVICE_URL || process.env.ML_SERVICE_URL || 'http://ml:8000';
 
       // Fetch actual status from ML service
-      const response = await axios.get(`${mlServiceUrl}/api/v1/health`, {
+      const response = await axios.get(`${mlServiceUrl}/health`, {
         timeout: 5000,
       });
 
@@ -115,10 +115,10 @@ router.get(
     try {
       logger.info('🏥 ML: Health check requested');
 
-      const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://blue-ml:8000';
+      const mlServiceUrl = process.env.SEGMENTATION_SERVICE_URL || process.env.ML_SERVICE_URL || 'http://ml:8000';
 
       // Fetch actual health status from ML service
-      const response = await axios.get(`${mlServiceUrl}/api/v1/health`, {
+      const response = await axios.get(`${mlServiceUrl}/health`, {
         timeout: 5000,
       });
 
