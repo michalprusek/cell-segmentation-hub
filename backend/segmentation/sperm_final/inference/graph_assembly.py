@@ -655,6 +655,13 @@ def assemble_sperm_graph(
     if not instances:
         return []
 
+    # Cap instances to prevent combinatorial explosion in graph solver
+    MAX_INSTANCES = 100
+    if len(instances) > MAX_INSTANCES:
+        # Keep the highest-scoring instances
+        instances = sorted(instances, key=lambda x: -x['score'])[:MAX_INSTANCES]
+        logger.warning(f"Capped instances from {len(instances)} to {MAX_INSTANCES} (image too dense)")
+
     cls_counts = {}
     for inst in instances:
         c = {1: 'head', 2: 'midpiece', 3: 'tail'}.get(inst['cls'], f'cls{inst["cls"]}')
