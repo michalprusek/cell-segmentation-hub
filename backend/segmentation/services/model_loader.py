@@ -1,6 +1,8 @@
 """Model loader service with lazy loading and singleton pattern"""
 
 import logging
+import os
+import time
 import torch
 import threading
 from pathlib import Path
@@ -32,6 +34,7 @@ class ModelManager:
         self._initialized = True
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.loaded_models: Dict[str, torch.nn.Module] = {}
+        self._last_used: Dict[str, float] = {}  # model_name -> timestamp
         self.model_configs = self._get_model_configs()
         self._model_locks = {}
         
@@ -110,16 +113,21 @@ class ModelManager:
         """Load model with lazy loading (thread-safe)"""
         if model_name not in self.model_configs:
             raise ValueError(f"Unknown model: {model_name}")
-        
+
         # Check if already loaded
         if model_name in self.loaded_models:
             logger.info(f"Model {model_name} already loaded")
+            self._last_used[model_name] = time.time()
             return self.loaded_models[model_name]
-        
+
+        # Free GPU memory if needed before loading a new model
+        self._auto_unload_if_needed()
+
         # Thread-safe loading
         with self._model_lock(model_name):
             # Double-check after acquiring lock
             if model_name in self.loaded_models:
+                self._last_used[model_name] = time.time()
                 return self.loaded_models[model_name]
             
             logger.info(f"Loading model: {model_name}")
@@ -170,7 +178,8 @@ class ModelManager:
                 
                 # Cache the loaded model
                 self.loaded_models[model_name] = model
-                
+                self._last_used[model_name] = time.time()
+
                 logger.info(f"Successfully loaded model: {model_name}")
                 return model
                 
@@ -232,12 +241,33 @@ class ModelManager:
             logger.error(f"Model validation failed for {model_name}: {e}")
             raise RuntimeError(f"Model validation failed: {str(e)}")
     
+    def _auto_unload_if_needed(self):
+        """Unload least-recently-used model if GPU memory is above threshold."""
+        if not torch.cuda.is_available() or len(self.loaded_models) < 2:
+            return
+
+        memory_limit_gb = float(os.environ.get('ML_MEMORY_LIMIT_GB', '8'))
+        allocated_gb = torch.cuda.memory_allocated() / (1024 ** 3)
+
+        # Unload LRU model if using more than 70% of memory limit
+        if allocated_gb > memory_limit_gb * 0.7:
+            # Find least recently used model
+            if self._last_used:
+                lru_model = min(self._last_used, key=self._last_used.get)
+                if lru_model in self.loaded_models:
+                    logger.info(f"Auto-unloading LRU model '{lru_model}' to free GPU memory "
+                               f"(allocated: {allocated_gb:.1f}GB, limit: {memory_limit_gb}GB)")
+                    self.unload_model(lru_model)
+                    if lru_model in self._last_used:
+                        del self._last_used[lru_model]
+
     def unload_model(self, model_name: str):
         """Unload model from memory"""
         if model_name in self.loaded_models:
             with self._model_lock(model_name):
                 if model_name in self.loaded_models:
                     del self.loaded_models[model_name]
+                    self._last_used.pop(model_name, None)
                     if self.device.type == 'cuda':
                         torch.cuda.empty_cache()
                     logger.info(f"Unloaded model: {model_name}")
@@ -247,6 +277,7 @@ class ModelManager:
         logger.info("Cleaning up model manager...")
         for model_name in list(self.loaded_models.keys()):
             self.unload_model(model_name)
+        self._last_used.clear()
         logger.info("Model manager cleaned up")
     
     def get_memory_usage(self) -> Dict[str, Any]:
