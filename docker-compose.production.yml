@@ -47,9 +47,8 @@ services:
       - ENABLE_TRACING=false
       # Database password from shell environment
       - DB_PASSWORD=${DB_PASSWORD}
-      # Parallel processing configuration
-      # Sequential processing to prevent 400 errors from concurrent multipart requests
-      - QUEUE_MAX_CONCURRENT_BATCHES=${QUEUE_MAX_CONCURRENT_BATCHES:-2}
+      # Queue processing — default 1 to prevent concurrent multipart request errors
+      - QUEUE_MAX_CONCURRENT_BATCHES=${QUEUE_MAX_CONCURRENT_BATCHES:-1}
       - QUEUE_PARALLEL_PROCESSING_ENABLED=true
       - DATABASE_CONNECTION_POOL_SIZE=50
       - WS_PARALLEL_PROCESSING_ENABLED=true

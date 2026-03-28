@@ -20,7 +20,7 @@ COPY backend/segmentation/requirements.txt .
 # Build wheels for all dependencies (cached for reuse)
 RUN --mount=type=cache,target=/root/.cache/pip \
     pip wheel --no-cache-dir --wheel-dir /wheels \
-    torch==2.4.1+cu124 torchvision==0.19.1+cu124 -f https://download.pytorch.org/whl/torch_stable.html && \
+    torch==2.4.1+cu124 torchvision==0.19.1+cu124 --index-url https://download.pytorch.org/whl/cu124 && \
     pip wheel --no-cache-dir --wheel-dir /wheels -r requirements.txt
 
 # Stage 2: Minimal runtime base
