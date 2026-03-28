@@ -1340,14 +1340,13 @@ export class QueueService {
       });
 
       // Also reset images stuck in 'processing' that have no active queue entry
-      const stuckImages = await this.prisma.$queryRaw<Array<{ id: string; userId: string }>>`
-        SELECT i.id, i."userId" FROM images i
-        WHERE i."segmentationStatus" = 'processing'
-        AND NOT EXISTS (
-          SELECT 1 FROM segmentation_queue sq
-          WHERE sq."imageId" = i.id AND sq.status IN ('processing', 'queued')
-        )
-      `;
+      const stuckImages = await this.prisma.image.findMany({
+        where: {
+          segmentationStatus: 'processing',
+          segmentationQueue: { none: { status: { in: ['processing', 'queued'] } } },
+        },
+        select: { id: true, userId: true },
+      });
       for (const img of stuckImages) {
         await this.imageService.updateSegmentationStatus(img.id, 'no_segmentation', img.userId);
         logger.warn('Reset orphaned image from processing to no_segmentation', 'QueueService', { imageId: img.id });
