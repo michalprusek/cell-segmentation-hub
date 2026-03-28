@@ -88,14 +88,14 @@ const PolygonContextMenu = ({
               </ContextMenuItem>
             </>
           )}
-          {isPolyline && onChangeInstanceId && (
+          {isPolyline && onChangeInstanceId && availableInstanceIds && availableInstanceIds.length > 0 && (
             <>
               <ContextMenuSeparator />
               <div className="px-2 py-1.5 text-xs font-medium text-gray-500">
                 <Link className="inline h-3 w-3 mr-1" />
                 {t('sperm.assignTo')}
               </div>
-              {(availableInstanceIds || ['sperm_1']).map(instanceId => {
+              {availableInstanceIds.map(instanceId => {
                 const label = instanceId.match(/^sperm_(\d+)$/)?.[1] || instanceId;
                 const isCurrent = currentInstanceId === instanceId;
                 return (

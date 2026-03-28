@@ -15,6 +15,7 @@ import {
   findClosestVertex,
   findClosestSegment,
   calculatePolygonArea,
+  calculatePolygonPerimeter,
   createPolygon,
 } from '@/lib/polygonGeometry';
 
@@ -360,8 +361,7 @@ export const useAdvancedInteractions = ({
   );
 
   /**
-   * Handle Create Polyline mode clicks
-   * Click adds a point, double-click finalizes the polyline (minimum 2 points)
+   * Handle Create Polyline mode clicks — adds a point to the in-progress polyline
    */
   const handleCreatePolylineClick = useCallback(
     (imagePoint: Point) => {
@@ -375,11 +375,7 @@ export const useAdvancedInteractions = ({
    * Handle Create Polyline double-click to finalize
    */
   const handleCreatePolylineDoubleClick = useCallback(() => {
-    // React 18 automatic batching: the double-click's preceding click events
-    // call setTempPoints, but both closures capture the same pre-render tempPoints.
-    // The second click's setState overwrites the first (same base array), so only
-    // one point is added — no duplicate to remove. tempPoints here reflects the
-    // state from the last committed render, excluding in-flight click updates.
+    // No duplicate point: React 18 batching means both click setState calls share the same base snapshot
     if (tempPoints.length >= 2) {
       const newPolyline = createPolygon(tempPoints);
       // Override with polyline-specific fields, including active part class and instance
@@ -907,9 +903,8 @@ function insertPointsBetweenVertices(
   endVertexIndex: number,
   newPoints: Point[]
 ): Point[] | null {
-  // This function inserts new points between two vertices of a polygon.
-  // It creates two candidate polygons and selects the one with the larger perimeter,
-  // because adding points expands the polygon boundary outward.
+  // Inserts new points between two vertices, creating two candidate polygons
+  // and selecting the one with the smaller perimeter (preserves original boundary).
 
   const numPoints = originalPoints.length;
 
@@ -932,13 +927,6 @@ function insertPointsBetweenVertices(
   const finalNewPoints = shouldReverseNewPoints
     ? [...newPoints].reverse()
     : newPoints;
-
-  // Calculate the two possible paths between vertices
-  // Path 1: Direct path from vertex1 to vertex2 (indices: vertex1 to vertex2)
-  const directPathLength = vertex2 - vertex1 - 1;
-
-  // Path 2: Wrapped path from vertex1 to vertex2 (going around the polygon)
-  const wrappedPathLength = numPoints - (vertex2 - vertex1) - 1;
 
   // Create two candidate polygons
   const candidate1Points: Point[] = []; // Replace direct path
@@ -976,16 +964,3 @@ function insertPointsBetweenVertices(
   return perimeter1 <= perimeter2 ? candidate1Points : candidate2Points;
 }
 
-/**
- * Helper function to calculate polygon perimeter
- */
-function calculatePolygonPerimeter(points: Point[]): number {
-  let perimeter = 0;
-  for (let i = 0; i < points.length; i++) {
-    const nextIndex = (i + 1) % points.length;
-    const dx = points[nextIndex].x - points[i].x;
-    const dy = points[nextIndex].y - points[i].y;
-    perimeter += Math.sqrt(dx * dx + dy * dy);
-  }
-  return perimeter;
-}
