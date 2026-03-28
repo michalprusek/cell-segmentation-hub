@@ -54,10 +54,8 @@ import EditorHeader from './components/EditorHeader';
 import StatusBar from './components/StatusBar';
 import EditorLayout from './components/layout/EditorLayout';
 
-/**
- * Migrated Segmentation Editor with Enhanced Features
- * Uses new SpheroSeg-inspired system while maintaining compatibility
- */
+const EMPTY_HOVERED_VERTEX = { polygonId: null, vertexIndex: null } as const;
+
 const SegmentationEditor = () => {
   const { projectId, imageId } = useParams<{
     projectId: string;
@@ -987,13 +985,6 @@ const SegmentationEditor = () => {
     });
   };
 
-  const handleRenamePolygon = (polygonId: string, name: string) => {
-    const updatedPolygons = editor.polygons.map(p =>
-      p.id === polygonId ? { ...p, name } : p
-    );
-    editor.updatePolygons(updatedPolygons);
-  };
-
   const handleDeletePolygonFromPanel = (polygonId: string) => {
     editor.handleDeletePolygon(polygonId);
     setHiddenPolygonIds(prev => {
@@ -1048,15 +1039,22 @@ const SegmentationEditor = () => {
     [editor.polygons]
   );
 
-  // Compute available sperm instance IDs for context menu (from existing polylines + active)
-  const availableInstanceIds = useMemo(() => {
+  // Compute available sperm instance IDs for context menu (from existing polylines + active).
+  // Two-stage memo: first derive a stable string key, then split into array only when key changes.
+  // This prevents new array references on unrelated polygon edits (e.g. vertex drags).
+  const availableInstanceKey = useMemo(() => {
     const ids = new Set<string>();
     for (const p of editor.polygons) {
       if (p.geometry === 'polyline' && p.instanceId) ids.add(p.instanceId);
     }
-    ids.add(activeInstanceId); // Include the currently active instance
-    return Array.from(ids).sort();
+    ids.add(activeInstanceId);
+    return Array.from(ids).sort().join(',');
   }, [editor.polygons, activeInstanceId]);
+
+  const availableInstanceIds = useMemo(
+    () => availableInstanceKey.split(',').filter(Boolean),
+    [availableInstanceKey]
+  );
 
   // Generic handler for updating a single field on a polygon by ID
   const handleUpdatePolygonField = useCallback(
@@ -1068,6 +1066,11 @@ const SegmentationEditor = () => {
       editor.updatePolygons(updatedPolygons);
     },
     [editor.getPolygons, editor.updatePolygons]
+  );
+
+  const handleRenamePolygon = useCallback(
+    (polygonId: string, name: string) => handleUpdatePolygonField(polygonId, { name }),
+    [handleUpdatePolygonField]
   );
 
   const handleChangeInstanceId = useCallback(
@@ -1269,10 +1272,7 @@ const SegmentationEditor = () => {
                                   polygon.id === editor.selectedPolygonId
                                 }
                                 hoveredVertex={
-                                  editor.hoveredVertex || {
-                                    polygonId: null,
-                                    vertexIndex: null,
-                                  }
+                                  editor.hoveredVertex || EMPTY_HOVERED_VERTEX
                                 }
                                 vertexDragState={editor.vertexDragState}
                                 zoom={editor.transform.zoom}
