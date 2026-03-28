@@ -80,6 +80,8 @@ const FloatingUploadProgress: React.FC = () => {
         return <XCircle className="h-4 w-4 text-red-500" />;
       case 'cancelled':
         return <XCircle className="h-4 w-4 text-yellow-500" />;
+      default:
+        return null;
     }
   }, [status]);
 
@@ -95,6 +97,8 @@ const FloatingUploadProgress: React.FC = () => {
         return 'Upload failed';
       case 'cancelled':
         return 'Upload cancelled';
+      default:
+        return '';
     }
   }, [status, successCount, totalFiles, failedCount]);
 
