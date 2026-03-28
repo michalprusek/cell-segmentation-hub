@@ -43,8 +43,14 @@ class SpermModel:
         self._device = device
         logger.info(f"Sperm model loaded from {weights_path}")
 
+    # Max dimension for inference — larger images are downscaled to prevent GPU OOM
+    MAX_INFERENCE_DIM = 2048
+
     def predict(self, image_bgr, mask_threshold=0.3, score_threshold=0.95):
         """Run the full sperm pipeline on a BGR image.
+
+        Large images (>MAX_INFERENCE_DIM px) are downscaled for inference,
+        then polyline coordinates are scaled back to the original resolution.
 
         Args:
             image_bgr: numpy array (H, W, 3) in BGR format
@@ -60,13 +66,32 @@ class SpermModel:
         if self._model is None:
             raise RuntimeError("Model not loaded. Call load_weights() first.")
 
+        import cv2 as _cv2
         from sperm_final.run_pipeline import process_image
+
+        # Downscale large images to prevent GPU OOM
+        h, w = image_bgr.shape[:2]
+        max_dim = max(h, w)
+        scale = 1.0
+        if max_dim > self.MAX_INFERENCE_DIM:
+            scale = self.MAX_INFERENCE_DIM / max_dim
+            new_w, new_h = int(w * scale), int(h * scale)
+            logger.info(f"Downscaling {w}x{h} → {new_w}x{new_h} for inference (scale={scale:.3f})")
+            image_bgr = _cv2.resize(image_bgr, (new_w, new_h), interpolation=_cv2.INTER_AREA)
 
         sperm_list, polylines_list = process_image(
             self._model, image_bgr, self._device,
             mask_threshold=mask_threshold,
             score_threshold=score_threshold,
         )
+
+        # Scale polyline coordinates back to original resolution
+        if scale != 1.0 and polylines_list:
+            inv_scale = 1.0 / scale
+            for polys in polylines_list:
+                for part_key in ('head', 'midpiece', 'tail'):
+                    pts = polys.get(part_key, [])
+                    polys[part_key] = [(x * inv_scale, y * inv_scale) for x, y in pts]
 
         if len(sperm_list) == 0:
             logger.warning(
