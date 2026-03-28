@@ -79,7 +79,11 @@ router.get(
         },
       };
 
-      return ResponseHelper.success(res, status, 'Rate limiting status retrieved successfully');
+      return ResponseHelper.success(
+        res,
+        status,
+        'Rate limiting status retrieved successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching status:', error);
       next(error);
@@ -135,7 +139,11 @@ router.get(
         },
       };
 
-      return ResponseHelper.success(res, configurations, 'Rate limiting configurations retrieved successfully');
+      return ResponseHelper.success(
+        res,
+        configurations,
+        'Rate limiting configurations retrieved successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching configurations:', error);
       next(error);
@@ -192,7 +200,11 @@ router.get(
         },
       };
 
-      return ResponseHelper.success(res, violations, 'Rate limiting violations retrieved successfully');
+      return ResponseHelper.success(
+        res,
+        violations,
+        'Rate limiting violations retrieved successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching violations:', error);
       next(error);
@@ -224,7 +236,11 @@ router.get(
         },
       ];
 
-      return ResponseHelper.success(res, whitelist, 'IP whitelist retrieved successfully');
+      return ResponseHelper.success(
+        res,
+        whitelist,
+        'IP whitelist retrieved successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching IP whitelist:', error);
       next(error);
@@ -251,7 +267,11 @@ router.post(
         expiresAt: expiresAt || null,
       };
 
-      return ResponseHelper.success(res, whitelistEntry, 'IP added to whitelist successfully');
+      return ResponseHelper.success(
+        res,
+        whitelistEntry,
+        'IP added to whitelist successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error adding IP to whitelist:', error);
       next(error);
@@ -285,7 +305,11 @@ router.get(
         },
       ];
 
-      return ResponseHelper.success(res, whitelist, 'User whitelist retrieved successfully');
+      return ResponseHelper.success(
+        res,
+        whitelist,
+        'User whitelist retrieved successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching user whitelist:', error);
       next(error);
@@ -312,7 +336,11 @@ router.post(
         expiresAt: expiresAt || null,
       };
 
-      return ResponseHelper.success(res, whitelistEntry, 'User added to whitelist successfully');
+      return ResponseHelper.success(
+        res,
+        whitelistEntry,
+        'User added to whitelist successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error adding user to whitelist:', error);
       next(error);
@@ -341,7 +369,11 @@ router.post(
           : null,
       };
 
-      return ResponseHelper.success(res, blacklistEntry, 'IP added to blacklist successfully');
+      return ResponseHelper.success(
+        res,
+        blacklistEntry,
+        'IP added to blacklist successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error adding IP to blacklist:', error);
       next(error);
@@ -370,7 +402,11 @@ router.post(
           : null,
       };
 
-      return ResponseHelper.success(res, blacklistEntry, 'User added to blacklist successfully');
+      return ResponseHelper.success(
+        res,
+        blacklistEntry,
+        'User added to blacklist successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error adding user to blacklist:', error);
       next(error);
@@ -406,7 +442,11 @@ router.get(
         },
       };
 
-      return ResponseHelper.success(res, tierStats, 'User tier statistics retrieved successfully');
+      return ResponseHelper.success(
+        res,
+        tierStats,
+        'User tier statistics retrieved successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching tier statistics:', error);
       next(error);
@@ -425,12 +465,16 @@ router.put(
 
       logger.info(`🔄 RateLimit: Updating user tier: ${userId} -> ${tier}`);
 
-      return ResponseHelper.success(res, {
-        userId,
-        tier,
-        updatedBy: adminId,
-        updatedAt: new Date().toISOString(),
-      }, 'User tier updated successfully');
+      return ResponseHelper.success(
+        res,
+        {
+          userId,
+          tier,
+          updatedBy: adminId,
+          updatedAt: new Date().toISOString(),
+        },
+        'User tier updated successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error updating user tier:', error);
       next(error);
@@ -449,12 +493,16 @@ router.put(
 
       logger.info(`🔄 RateLimit: Bulk updating ${users.length} user tiers`);
 
-      return ResponseHelper.success(res, {
-        updatedCount: users.length,
-        reason,
-        updatedBy: adminId,
-        updatedAt: new Date().toISOString(),
-      }, `${users.length} user tiers updated successfully`);
+      return ResponseHelper.success(
+        res,
+        {
+          updatedCount: users.length,
+          reason,
+          updatedBy: adminId,
+          updatedAt: new Date().toISOString(),
+        },
+        `${users.length} user tiers updated successfully`
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error bulk updating user tiers:', error);
       next(error);
@@ -470,7 +518,11 @@ router.post(
       const { key } = req.body;
       logger.info(`🔄 RateLimit: Resetting rate limit for key: ${key}`);
 
-      return ResponseHelper.success(res, { key, resetAt: new Date().toISOString() }, 'Rate limit reset successfully');
+      return ResponseHelper.success(
+        res,
+        { key, resetAt: new Date().toISOString() },
+        'Rate limit reset successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error resetting rate limit:', error);
       next(error);
@@ -506,7 +558,11 @@ router.get(
         },
       };
 
-      return ResponseHelper.success(res, metrics, 'Rate limiting metrics retrieved successfully');
+      return ResponseHelper.success(
+        res,
+        metrics,
+        'Rate limiting metrics retrieved successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error fetching metrics:', error);
       next(error);
@@ -529,7 +585,11 @@ router.post(
         cleanedAt: new Date().toISOString(),
       };
 
-      return ResponseHelper.success(res, cleanup, 'Rate limiting records cleaned up successfully');
+      return ResponseHelper.success(
+        res,
+        cleanup,
+        'Rate limiting records cleaned up successfully'
+      );
     } catch (error) {
       logger.error('❌ RateLimit: Error cleaning up records:', error);
       next(error);

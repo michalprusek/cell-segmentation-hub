@@ -26,7 +26,8 @@ const ExcelExporter: React.FC<ExcelExporterProps> = ({
     try {
       // Get only external polygons (exclude polylines — those have separate sperm metrics)
       const externalPolygons = segmentation.polygons.filter(
-        polygon => polygon.type === 'external' && polygon.geometry !== 'polyline'
+        polygon =>
+          polygon.type === 'external' && polygon.geometry !== 'polyline'
       );
 
       // Get all internal polygons

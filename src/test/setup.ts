@@ -6,7 +6,7 @@ import _React from 'react';
 
 // Force React to use development mode features in tests
 if (typeof window !== 'undefined') {
-  // @ts-expect-error - Internal React flag
+  // @ts-expect-error -- test mock override - Internal React flag
   window.__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
     ...window.__REACT_DEVTOOLS_GLOBAL_HOOK__,
     isDisabled: false,
@@ -166,12 +166,14 @@ class FormDataPolyfill {
     return this.data.values();
   }
 
-  forEach(callback: (value: any, key: string, parent: FormDataPolyfill) => void): void {
+  forEach(
+    callback: (value: any, key: string, parent: FormDataPolyfill) => void
+  ): void {
     this.data.forEach((value, key) => callback(value, key, this));
   }
 }
 
-// @ts-ignore
+// @ts-expect-error -- test mock override
 global.FormData = FormDataPolyfill;
 
 // Enhanced File polyfill with proper Blob inheritance
@@ -187,7 +189,7 @@ class FilePolyfill extends Blob {
 }
 
 // Override File with enhanced polyfill
-// @ts-ignore
+// @ts-expect-error -- test mock override
 global.File = FilePolyfill;
 
 // Mock window.matchMedia

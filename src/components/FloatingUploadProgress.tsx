@@ -21,7 +21,8 @@ const FloatingUploadProgress: React.FC = () => {
   const [visibleSessionId, setVisibleSessionId] = useState<string | null>(null);
 
   // Track which session to display (active or most recent completed)
-  const displaySession = activeSession ?? (visibleSessionId ? sessions[visibleSessionId] : null);
+  const displaySession =
+    activeSession ?? (visibleSessionId ? sessions[visibleSessionId] : null);
 
   // When a new upload starts, show it
   useEffect(() => {
@@ -34,7 +35,11 @@ const FloatingUploadProgress: React.FC = () => {
   // Auto-collapse completed sessions after 8 seconds
   useEffect(() => {
     if (!displaySession) return;
-    if (displaySession.status === 'completed' || displaySession.status === 'failed' || displaySession.status === 'cancelled') {
+    if (
+      displaySession.status === 'completed' ||
+      displaySession.status === 'failed' ||
+      displaySession.status === 'cancelled'
+    ) {
       setExpanded(false);
       const timer = setTimeout(() => {
         setVisibleSessionId(null);
@@ -44,33 +49,13 @@ const FloatingUploadProgress: React.FC = () => {
     }
   }, [displaySession?.status, displaySession?.id, clearSession]);
 
-  if (!displaySession) return null;
-
-  const { status, totalFiles, successCount, failedCount, overallProgress, projectId, projectName, chunkProgress, currentOperation, startedAt } = displaySession;
-
-  // Estimate remaining time
-  const elapsed = (Date.now() - startedAt) / 1000;
-  const estimatedTotal = overallProgress > 5 ? elapsed / (overallProgress / 100) : 0;
-  const remaining = Math.max(0, estimatedTotal - elapsed);
-  const remainingText = remaining > 60
-    ? `~${Math.ceil(remaining / 60)}m ${Math.round(remaining % 60)}s remaining`
-    : remaining > 0
-      ? `~${Math.round(remaining)}s remaining`
-      : '';
-
-  const handleClose = () => {
-    setVisibleSessionId(null);
-    if (displaySession.status !== 'uploading') {
-      clearSession(displaySession.id);
-    }
-  };
-
-  const handleViewProject = () => {
-    navigate(`/project/${projectId}`);
-    handleClose();
-  };
+  const status = displaySession?.status;
+  const totalFiles = displaySession?.totalFiles ?? 0;
+  const successCount = displaySession?.successCount ?? 0;
+  const failedCount = displaySession?.failedCount ?? 0;
 
   const statusIcon = useMemo(() => {
+    if (!status) return null;
     switch (status) {
       case 'uploading':
         return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />;
@@ -86,6 +71,7 @@ const FloatingUploadProgress: React.FC = () => {
   }, [status]);
 
   const statusLabel = useMemo(() => {
+    if (!status) return '';
     switch (status) {
       case 'uploading':
         return `Uploading ${successCount}/${totalFiles} files`;
@@ -101,6 +87,40 @@ const FloatingUploadProgress: React.FC = () => {
         return '';
     }
   }, [status, successCount, totalFiles, failedCount]);
+
+  if (!displaySession) return null;
+
+  const {
+    overallProgress,
+    projectId,
+    chunkProgress,
+    currentOperation,
+    startedAt,
+  } = displaySession;
+
+  // Estimate remaining time
+  const elapsed = (Date.now() - startedAt) / 1000;
+  const estimatedTotal =
+    overallProgress > 5 ? elapsed / (overallProgress / 100) : 0;
+  const remaining = Math.max(0, estimatedTotal - elapsed);
+  const remainingText =
+    remaining > 60
+      ? `~${Math.ceil(remaining / 60)}m ${Math.round(remaining % 60)}s remaining`
+      : remaining > 0
+        ? `~${Math.round(remaining)}s remaining`
+        : '';
+
+  const handleClose = () => {
+    setVisibleSessionId(null);
+    if (displaySession.status !== 'uploading') {
+      clearSession(displaySession.id);
+    }
+  };
+
+  const handleViewProject = () => {
+    navigate(`/project/${projectId}`);
+    handleClose();
+  };
 
   return (
     <AnimatePresence>
@@ -144,7 +164,11 @@ const FloatingUploadProgress: React.FC = () => {
               }}
               className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             >
-              {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              {expanded ? (
+                <ChevronDown className="h-4 w-4" />
+              ) : (
+                <ChevronUp className="h-4 w-4" />
+              )}
             </button>
           )}
 
@@ -189,12 +213,14 @@ const FloatingUploadProgress: React.FC = () => {
                 )}
 
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {successCount} of {totalFiles} files ({Math.round(overallProgress)}%)
+                  {successCount} of {totalFiles} files (
+                  {Math.round(overallProgress)}%)
                 </div>
 
                 {chunkProgress && (
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    Chunk {chunkProgress.chunkIndex + 1}/{chunkProgress.totalChunks}
+                    Chunk {chunkProgress.chunkIndex + 1}/
+                    {chunkProgress.totalChunks}
                     {remainingText && ` \u00B7 ${remainingText}`}
                   </div>
                 )}

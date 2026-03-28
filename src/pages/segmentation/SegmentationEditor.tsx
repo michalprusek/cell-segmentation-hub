@@ -21,9 +21,7 @@ import { Polygon } from '@/lib/segmentation';
 import apiClient, { SegmentationPolygon } from '@/lib/api';
 import { toast } from 'sonner';
 import { logger } from '@/lib/logger';
-import {
-  handleCancelledError,
-} from '@/lib/errorUtils';
+import { handleCancelledError } from '@/lib/errorUtils';
 import {
   generateSafePolygonKey,
   validatePolygonId,
@@ -424,9 +422,13 @@ const SegmentationEditor = () => {
   }, [imageId]);
 
   // Sperm polyline state for SpermInstancePanel
-  const [activePartClass, setActivePartClass] = useState<'head' | 'midpiece' | 'tail'>('head');
+  const [activePartClass, setActivePartClass] = useState<
+    'head' | 'midpiece' | 'tail'
+  >('head');
   const [activeInstanceId, setActiveInstanceId] = useState<string>('sperm_1');
-  const activePartClassRef = useRef<'head' | 'midpiece' | 'tail'>(activePartClass);
+  const activePartClassRef = useRef<'head' | 'midpiece' | 'tail'>(
+    activePartClass
+  );
   const activeInstanceIdRef = useRef<string>(activeInstanceId);
   activePartClassRef.current = activePartClass;
   activeInstanceIdRef.current = activeInstanceId;
@@ -1069,17 +1071,20 @@ const SegmentationEditor = () => {
   );
 
   const handleRenamePolygon = useCallback(
-    (polygonId: string, name: string) => handleUpdatePolygonField(polygonId, { name }),
+    (polygonId: string, name: string) =>
+      handleUpdatePolygonField(polygonId, { name }),
     [handleUpdatePolygonField]
   );
 
   const handleChangeInstanceId = useCallback(
-    (polygonId: string, instanceId: string) => handleUpdatePolygonField(polygonId, { instanceId }),
+    (polygonId: string, instanceId: string) =>
+      handleUpdatePolygonField(polygonId, { instanceId }),
     [handleUpdatePolygonField]
   );
 
   const handleChangePartClass = useCallback(
-    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => handleUpdatePolygonField(polygonId, { partClass }),
+    (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') =>
+      handleUpdatePolygonField(polygonId, { partClass }),
     [handleUpdatePolygonField]
   );
 
@@ -1253,7 +1258,8 @@ const SegmentationEditor = () => {
                           .filter(polygon => !hiddenPolygonIds.has(polygon.id))
                           .filter(polygon => {
                             if (!polygon.points) return false;
-                            const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
+                            const minPoints =
+                              polygon.geometry === 'polyline' ? 2 : 3;
                             return polygon.points.length >= minPoints;
                           });
 

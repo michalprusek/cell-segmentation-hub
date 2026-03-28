@@ -1130,11 +1130,22 @@ export class ImageService {
     }
 
     // Check for cached converted version
-    const convertedKey = `converted/${imageId}.png`;
+    // Sanitize imageId to prevent path traversal
+    const safeImageId = path.basename(imageId);
+    const convertedKey = `converted/${safeImageId}.png`;
     const convertedPath = path.join(
       process.env.UPLOAD_DIR || './uploads',
       convertedKey
     );
+    // Verify resolved path stays within upload directory
+    const resolvedPath = path.resolve(convertedPath);
+    const resolvedBase = path.resolve(process.env.UPLOAD_DIR || './uploads');
+    if (
+      !resolvedPath.startsWith(resolvedBase + path.sep) &&
+      resolvedPath !== resolvedBase
+    ) {
+      throw new Error('Invalid image path');
+    }
 
     if (existsSync(convertedPath)) {
       // Periodically clean up old converted files (don't await to avoid blocking)

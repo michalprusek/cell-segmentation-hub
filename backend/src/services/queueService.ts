@@ -766,7 +766,9 @@ export class QueueService {
         const image = imageData[i];
 
         if (!item || !image || !result) {
-          logger.warn(`Batch processing: skipping index ${i} - missing ${!item ? 'item' : !image ? 'image' : 'result'}`);
+          logger.warn(
+            `Batch processing: skipping index ${i} - missing ${!item ? 'item' : !image ? 'image' : 'result'}`
+          );
           continue;
         }
 
@@ -1332,10 +1334,7 @@ export class QueueService {
       const stuckItems = await this.prisma.segmentationQueue.findMany({
         where: {
           status: 'processing',
-          OR: [
-            { startedAt: { lt: cutoffTime } },
-            { startedAt: null },
-          ],
+          OR: [{ startedAt: { lt: cutoffTime } }, { startedAt: null }],
         },
       });
 
@@ -1348,8 +1347,16 @@ export class QueueService {
         select: { id: true, project: { select: { userId: true } } },
       });
       for (const img of stuckImages) {
-        await this.imageService.updateSegmentationStatus(img.id, 'no_segmentation', img.project.userId);
-        logger.warn('Reset orphaned image from processing to no_segmentation', 'QueueService', { imageId: img.id });
+        await this.imageService.updateSegmentationStatus(
+          img.id,
+          'no_segmentation',
+          img.project.userId
+        );
+        logger.warn(
+          'Reset orphaned image from processing to no_segmentation',
+          'QueueService',
+          { imageId: img.id }
+        );
       }
 
       let resetCount = 0;

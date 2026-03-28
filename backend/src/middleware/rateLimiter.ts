@@ -97,7 +97,10 @@ const passwordResetRateLimitHandler = (req: Request, res: Response): void => {
     method: req.method,
   });
 
-  ResponseHelper.rateLimit(res, 'Příliš mnoho pokusů o reset hesla. Zkuste to prosím znovu za 10 minut.');
+  ResponseHelper.rateLimit(
+    res,
+    'Příliš mnoho pokusů o reset hesla. Zkuste to prosím znovu za 10 minut.'
+  );
 };
 
 /**
@@ -106,7 +109,8 @@ const passwordResetRateLimitHandler = (req: Request, res: Response): void => {
 export const passwordResetRateLimiter = rateLimit({
   windowMs: 10 * 60 * 1000, // 10 minutes
   max: 5, // Limit each IP/user to 5 password reset requests per 10 minutes
-  message: 'Příliš mnoho pokusů o reset hesla. Zkuste to prosím znovu za 10 minut.',
+  message:
+    'Příliš mnoho pokusů o reset hesla. Zkuste to prosím znovu za 10 minut.',
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: generateRateLimitKey,

@@ -97,7 +97,12 @@ export function getLocalizedModelInfo(
  * Get all localized models
  */
 export function getAllLocalizedModels(t: (key: string) => string): ModelInfo[] {
-  const modelIds: ModelType[] = ['hrnet', 'cbam_resunet', 'unet_spherohq', 'sperm'];
+  const modelIds: ModelType[] = [
+    'hrnet',
+    'cbam_resunet',
+    'unet_spherohq',
+    'sperm',
+  ];
   return modelIds.map(id => getLocalizedModelInfo(id, t));
 }
 

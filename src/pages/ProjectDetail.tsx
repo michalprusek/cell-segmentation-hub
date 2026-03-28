@@ -585,7 +585,9 @@ const ProjectDetail = () => {
       // BUT allow updates if enough time has passed (5 seconds) to handle re-segmentation
       const now = Date.now();
       const lastUpdateTime = lastStatusRef.current?.[`${update.imageId}_time`];
-      const timeSinceLastUpdate = lastUpdateTime ? now - lastUpdateTime : Infinity;
+      const timeSinceLastUpdate = lastUpdateTime
+        ? now - lastUpdateTime
+        : Infinity;
 
       if (
         lastStatusRef.current &&

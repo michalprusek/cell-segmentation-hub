@@ -483,7 +483,9 @@ describe('Upload Cancel API Tests', () => {
       it('should handle file cleanup errors gracefully', async () => {
         // Mock filesystem error
         const fsModule = jest.mocked(await import('fs/promises'));
-        fsModule.rm = jest.fn().mockRejectedValue(new Error('Permission denied'));
+        fsModule.rm = jest
+          .fn()
+          .mockRejectedValue(new Error('Permission denied'));
 
         // Should still succeed even if file cleanup fails
         const response = await request(app)

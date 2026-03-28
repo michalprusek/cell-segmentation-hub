@@ -1104,7 +1104,8 @@ export const useEnhancedSegmentationEditor = ({
     handleMouseDown: interactions.handleMouseDown,
     handleMouseMove: enhancedHandleMouseMove,
     handleMouseUp: interactions.handleMouseUp,
-    handleCreatePolylineDoubleClick: interactions.handleCreatePolylineDoubleClick,
+    handleCreatePolylineDoubleClick:
+      interactions.handleCreatePolylineDoubleClick,
 
     // Mode-specific handlers
     slicing,

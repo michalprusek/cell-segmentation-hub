@@ -3,7 +3,14 @@
  * Tests the complete flow including WebSocket updates and database writes
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  jest,
+  beforeEach,
+  afterEach,
+} from '@jest/globals';
 import { SegmentationService } from '../segmentationService';
 import { PrismaClient } from '@prisma/client';
 import { getStorageProvider } from '../../storage';

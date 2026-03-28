@@ -6,9 +6,7 @@ import ImageUploader from '@/components/ImageUploader';
 // Mock the sub-components
 vi.mock('@/components/upload/DropZone', () => ({
   default: ({ onDrop, disabled }: any) => (
-    <div
-      data-testid="dropzone"
-    >
+    <div data-testid="dropzone">
       <input
         data-testid="file-input"
         type="file"

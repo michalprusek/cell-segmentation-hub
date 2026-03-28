@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import path from 'path';
 import { promises as fs } from 'fs';
 import * as AuthService from '../../services/authService';
 import * as UserService from '../../services/userService';
@@ -309,9 +310,14 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
     }
 
     // For other errors, return 500
-    logger.error('Password reset request failed', error as Error, 'AuthController', {
-      email: data.email,
-    });
+    logger.error(
+      'Password reset request failed',
+      error as Error,
+      'AuthController',
+      {
+        email: data.email,
+      }
+    );
     const apiError = {
       code: 'INTERNAL_ERROR' as const,
       message: 'Žádost o reset hesla se nezdařila',
@@ -799,9 +805,25 @@ export const uploadAvatar = asyncHandler(
       // Clean up temp file if it exists
       if ('path' in imageFile && imageFile.path) {
         try {
-          await fs.unlink(imageFile.path);
+          // Validate path stays within expected directory
+          const resolvedFilePath = path.resolve(imageFile.path);
+          const uploadsDir = path.resolve(
+            process.env.UPLOAD_DIR || './uploads'
+          );
+          const tempDir = path.resolve('temp');
+          if (
+            resolvedFilePath.startsWith(uploadsDir + path.sep) ||
+            resolvedFilePath.startsWith(tempDir + path.sep)
+          ) {
+            await fs.unlink(imageFile.path);
+          } else {
+            logger.warn(
+              'Skipped cleanup of file outside expected directory',
+              'authController',
+              { path: imageFile.path }
+            );
+          }
         } catch (err) {
-          // Log but don't fail the request
           logger.debug('Failed to cleanup temporary file', err, {
             context: 'authController',
           });

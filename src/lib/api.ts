@@ -225,9 +225,7 @@ class ApiClient {
           }
 
           // No refresh token, or refresh failed - force logout
-          logger.debug(
-            '🔒 Authentication failed - logging out'
-          );
+          logger.debug('🔒 Authentication failed - logging out');
 
           this.clearTokensFromStorage();
 

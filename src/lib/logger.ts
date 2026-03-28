@@ -64,37 +64,41 @@ class Logger {
 
   debug(message: string, data?: unknown): void {
     if (this.shouldLog('debug')) {
-      console.log(
-        this.formatMessage('debug', message),
-        data !== undefined ? data : ''
-      );
+      if (data !== undefined) {
+        console.log(this.formatMessage('debug', message), data);
+      } else {
+        console.log(this.formatMessage('debug', message));
+      }
     }
   }
 
   info(message: string, data?: unknown): void {
     if (this.shouldLog('info')) {
-      console.info(
-        this.formatMessage('info', message),
-        data !== undefined ? data : ''
-      );
+      if (data !== undefined) {
+        console.info(this.formatMessage('info', message), data);
+      } else {
+        console.info(this.formatMessage('info', message));
+      }
     }
   }
 
   warn(message: string, data?: unknown): void {
     if (this.shouldLog('warn')) {
-      console.warn(
-        this.formatMessage('warn', message),
-        data !== undefined ? data : ''
-      );
+      if (data !== undefined) {
+        console.warn(this.formatMessage('warn', message), data);
+      } else {
+        console.warn(this.formatMessage('warn', message));
+      }
     }
   }
 
   error(message: string, error?: unknown): void {
     if (this.shouldLog('error')) {
-      console.error(
-        this.formatMessage('error', message),
-        error !== undefined ? error : ''
-      );
+      if (error !== undefined) {
+        console.error(this.formatMessage('error', message), error);
+      } else {
+        console.error(this.formatMessage('error', message));
+      }
     }
   }
 
