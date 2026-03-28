@@ -108,7 +108,7 @@ async def get_status(loader = Depends(get_model_loader)):
             "current_model": None,
             "queue_length": 0,
             "available": False,
-            "error": str(e),
+            "error": "Internal service error",
             "timestamp": datetime.now().isoformat()
         }
 
@@ -435,7 +435,7 @@ async def batch_segment_images(
         logger.error(f"Batch segmentation failed after {processing_time:.2f}s: {e}")
         raise HTTPException(
             status_code=500,
-            detail=f"Batch segmentation failed: {str(e)}"
+            detail="Batch segmentation failed. Please try again later or contact support if the issue persists."
         )
 
 @router.get("/segment/{task_id}")

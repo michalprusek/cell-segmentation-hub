@@ -51,7 +51,10 @@ export class HealthCheckService {
 
   constructor() {
     this.prisma = new PrismaClient();
-    this.mlServiceUrl = process.env.SEGMENTATION_SERVICE_URL || process.env.ML_SERVICE_URL || 'http://ml:8000';
+    this.mlServiceUrl =
+      process.env.SEGMENTATION_SERVICE_URL ||
+      process.env.ML_SERVICE_URL ||
+      'http://ml:8000';
     this.initializeRedis();
   }
 

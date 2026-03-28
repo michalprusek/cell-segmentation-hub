@@ -10,10 +10,7 @@ interface DropZoneProps {
   onDrop: (acceptedFiles: File[]) => void;
 }
 
-const DropZone: React.FC<DropZoneProps> = ({
-  disabled,
-  onDrop,
-}) => {
+const DropZone: React.FC<DropZoneProps> = ({ disabled, onDrop }) => {
   const { t } = useLanguage();
 
   // Handle drop with file limit and size validation

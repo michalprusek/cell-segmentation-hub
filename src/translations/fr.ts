@@ -403,7 +403,7 @@ export default {
         sperm: {
           name: 'Segmentation de spermatozoïdes',
           description:
-            "Modèle de morphologie spermatique avec extraction de squelette pour mesurer la tête, la pièce intermédiaire et la queue",
+            'Modèle de morphologie spermatique avec extraction de squelette pour mesurer la tête, la pièce intermédiaire et la queue',
         },
       },
     },
@@ -651,7 +651,8 @@ export default {
       edit: 'Déplacer et modifier les sommets',
       addPoints: 'Ajouter des points entre les sommets',
       create: 'Créer de nouveaux polygones',
-      createPolyline: 'Cliquer pour placer des points, double-cliquer pour terminer la polyligne',
+      createPolyline:
+        'Cliquer pour placer des points, double-cliquer pour terminer la polyligne',
       slice: 'Diviser les polygones avec une ligne',
       delete: 'Supprimer les polygones',
     },

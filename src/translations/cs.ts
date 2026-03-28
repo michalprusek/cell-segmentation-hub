@@ -512,7 +512,8 @@ export default {
       edit: 'Přesunout a upravit vrcholy',
       addPoints: 'Přidat body mezi vrcholy',
       create: 'Vytvořit nové polygony',
-      createPolyline: 'Klikněte pro umístění bodů, dvojklikem dokončete polylajn',
+      createPolyline:
+        'Klikněte pro umístění bodů, dvojklikem dokončete polylajn',
       slice: 'Rozdělit polygony čarou',
       delete: 'Odstranit polygony',
     },

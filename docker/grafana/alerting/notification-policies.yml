@@ -49,7 +49,7 @@ contactPoints:
           subject: '[CRITICAL] SpheroSeg Alert: {{ .GroupLabels.alertname }}'
           message: |
             🚨 **CRITICAL ALERT** 🚨
-            
+
             {{ range .Alerts }}
             **Alert:** {{ .Annotations.summary }}
             **Description:** {{ .Annotations.description }}
@@ -57,7 +57,7 @@ contactPoints:
             **Service:** {{ .Labels.service }}
             **Time:** {{ .StartsAt }}
             {{ end }}
-            
+
             Please investigate immediately!
 
   - orgId: 1
@@ -70,7 +70,7 @@ contactPoints:
           subject: '[WARNING] SpheroSeg Alert: {{ .GroupLabels.alertname }}'
           message: |
             ⚠️ **WARNING ALERT** ⚠️
-            
+
             {{ range .Alerts }}
             **Alert:** {{ .Annotations.summary }}
             **Description:** {{ .Annotations.description }}

@@ -47,7 +47,7 @@ receivers:
         subject: '[CRITICAL] SpheroSeg Alert: {{ .GroupLabels.alertname }}'
         body: |
           🚨 **CRITICAL ALERT** 🚨
-          
+
           {{ range .Alerts }}
           **Alert:** {{ .Annotations.summary }}
           **Description:** {{ .Annotations.description }}
@@ -56,16 +56,16 @@ receivers:
           **Started:** {{ .StartsAt }}
           {{ if .EndsAt }}**Ended:** {{ .EndsAt }}{{ end }}
           {{ end }}
-          
+
           Please investigate immediately!
-          
+
   - name: 'warning-receiver'
     email_configs:
       - to: 'admin@spheroseg.local'
         subject: '[WARNING] SpheroSeg Alert: {{ .GroupLabels.alertname }}'
         body: |
           ⚠️ **WARNING ALERT** ⚠️
-          
+
           {{ range .Alerts }}
           **Alert:** {{ .Annotations.summary }}
           **Description:** {{ .Annotations.description }}

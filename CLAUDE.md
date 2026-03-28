@@ -51,15 +51,15 @@ npx prisma studio                # Visual DB browser
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind) |
-| Backend | Node.js + Express + TypeScript + Prisma |
+| Layer      | Technology                                                     |
+| ---------- | -------------------------------------------------------------- |
+| Frontend   | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind)    |
+| Backend    | Node.js + Express + TypeScript + Prisma                        |
 | ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm) |
-| Database | SQLite (dev) / PostgreSQL (prod) |
-| Real-time | Socket.io with auto-reconnect + exponential backoff |
-| Auth | JWT access + refresh tokens |
-| i18n | 6 languages (EN, CS, ES, DE, FR, ZH) via i18next |
+| Database   | SQLite (dev) / PostgreSQL (prod)                               |
+| Real-time  | Socket.io with auto-reconnect + exponential backoff            |
+| Auth       | JWT access + refresh tokens                                    |
+| i18n       | 6 languages (EN, CS, ES, DE, FR, ZH) via i18next               |
 
 ## Architecture
 
@@ -111,6 +111,7 @@ Controllers → Services → Prisma ORM → Storage (local filesystem / S3)
 ### Pre-commit Hooks (Husky)
 
 Commits are validated by `.husky/pre-commit`:
+
 - No `console.log` / `debugger` in production code
 - ESLint (0 warnings), Prettier formatting, TypeScript checking
 - **Conventional commits required**: `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`
@@ -156,14 +157,14 @@ curl https://spherosegapp.utia.cas.cz/health            # Verify
 make prod                                               # Build + deploy
 ```
 
-| Service | Production | Dev |
-|---------|-----------|-----|
-| nginx (SSL) | 80/443 | - |
-| Frontend | 4000 | 3000 |
-| Backend | 4001 | 3001 |
-| ML | 4008 | 8000 |
-| PostgreSQL | 5432 (internal) | 5432 |
-| Redis | 6379 (internal) | 6379 |
+| Service     | Production      | Dev  |
+| ----------- | --------------- | ---- |
+| nginx (SSL) | 80/443          | -    |
+| Frontend    | 4000            | 3000 |
+| Backend     | 4001            | 3001 |
+| ML          | 4008            | 8000 |
+| PostgreSQL  | 5432 (internal) | 5432 |
+| Redis       | 6379 (internal) | 6379 |
 
 Database: `spheroseg_blue` on PostgreSQL (container: `spheroseg-postgres`).
 
@@ -173,17 +174,17 @@ UTIA mail server (`hermes.utia.cas.cz:25`, STARTTLS, no auth). Delays of 2-10 mi
 
 ## Documentation Index
 
-| Topic | File |
-|-------|------|
-| Architecture overview | [`docs/architecture/README.md`](docs/architecture/README.md) |
-| Frontend architecture | [`docs/architecture/frontend.md`](docs/architecture/frontend.md) |
-| Backend architecture | [`docs/architecture/backend.md`](docs/architecture/backend.md) |
-| ML service | [`docs/architecture/ml-service.md`](docs/architecture/ml-service.md) |
-| Database schema | [`docs/reference/database-schema.md`](docs/reference/database-schema.md) |
-| Testing guide | [`docs/testing-guide.md`](docs/testing-guide.md) |
-| i18n guide | [`docs/i18n-guide.md`](docs/i18n-guide.md) |
-| Git hooks | [`docs/hooks-guide.md`](docs/hooks-guide.md) |
-| Deployment | [`docs/superpowers/specs/2026-03-28-simplify-deployment-design.md`](docs/superpowers/specs/2026-03-28-simplify-deployment-design.md) |
-| Polygon rendering optimization | [`docs/polygon-rendering-optimization.md`](docs/polygon-rendering-optimization.md) |
-| API documentation | [`docs/api/README.md`](docs/api/README.md) |
-| Getting started | [`docs/development/getting-started.md`](docs/development/getting-started.md) |
+| Topic                          | File                                                                                                                                 |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Architecture overview          | [`docs/architecture/README.md`](docs/architecture/README.md)                                                                         |
+| Frontend architecture          | [`docs/architecture/frontend.md`](docs/architecture/frontend.md)                                                                     |
+| Backend architecture           | [`docs/architecture/backend.md`](docs/architecture/backend.md)                                                                       |
+| ML service                     | [`docs/architecture/ml-service.md`](docs/architecture/ml-service.md)                                                                 |
+| Database schema                | [`docs/reference/database-schema.md`](docs/reference/database-schema.md)                                                             |
+| Testing guide                  | [`docs/testing-guide.md`](docs/testing-guide.md)                                                                                     |
+| i18n guide                     | [`docs/i18n-guide.md`](docs/i18n-guide.md)                                                                                           |
+| Git hooks                      | [`docs/hooks-guide.md`](docs/hooks-guide.md)                                                                                         |
+| Deployment                     | [`docs/superpowers/specs/2026-03-28-simplify-deployment-design.md`](docs/superpowers/specs/2026-03-28-simplify-deployment-design.md) |
+| Polygon rendering optimization | [`docs/polygon-rendering-optimization.md`](docs/polygon-rendering-optimization.md)                                                   |
+| API documentation              | [`docs/api/README.md`](docs/api/README.md)                                                                                           |
+| Getting started                | [`docs/development/getting-started.md`](docs/development/getting-started.md)                                                         |

@@ -49,7 +49,9 @@ const SpermExcelExporter: React.FC<SpermExcelExporterProps> = ({
       const workbook = excelService.createWorkbook();
       const sheet = workbook.addWorksheet('Sperm Metrics');
 
-      const calibrationFactor = calibration ? parseFloat(calibration) : undefined;
+      const calibrationFactor = calibration
+        ? parseFloat(calibration)
+        : undefined;
       const hasCalibration = calibrationFactor && calibrationFactor > 0;
 
       // Header row
@@ -135,7 +137,10 @@ const SpermExcelExporter: React.FC<SpermExcelExporterProps> = ({
       const filename = `sperm_metrics_${imageName || 'export'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
       excelService.downloadFile(blob, filename);
     } catch (error) {
-      logger.error('[SpermExcelExporter] Failed to export sperm metrics:', error);
+      logger.error(
+        '[SpermExcelExporter] Failed to export sperm metrics:',
+        error
+      );
       toast.error(t('sperm.export.failed') || 'Failed to export sperm metrics');
     } finally {
       setIsExporting(false);

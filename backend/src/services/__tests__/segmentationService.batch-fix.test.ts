@@ -3,7 +3,14 @@
  * Ensures that the last image in batch receives correct results even when some images are invalid
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  jest,
+  beforeEach,
+  afterEach,
+} from '@jest/globals';
 import { SegmentationService } from '../segmentationService';
 import { getStorageProvider } from '../../storage';
 import axios from 'axios';

@@ -58,18 +58,28 @@ const ForgotPassword = () => {
 
       // Check if it's an axios error with response
       if (error && typeof error === 'object' && 'response' in error) {
-        const axiosError = error as { response?: { status?: number; data?: { message?: string; error?: string } } };
+        const axiosError = error as {
+          response?: {
+            status?: number;
+            data?: { message?: string; error?: string };
+          };
+        };
 
         // Check for rate limit error (429)
         if (axiosError.response?.status === 429) {
-          const errorMsg = axiosError.response.data?.error || axiosError.response.data?.message || 'Příliš mnoho pokusů. Zkuste to prosím později.';
+          const errorMsg =
+            axiosError.response.data?.error ||
+            axiosError.response.data?.message ||
+            'Příliš mnoho pokusů. Zkuste to prosím později.';
           toast.error(errorMsg);
           return;
         }
 
         // Check if it's a 404 error (email not registered)
         if (axiosError.response?.status === 404) {
-          const errorMsg = axiosError.response.data?.message || 'Email není registrován v systému.';
+          const errorMsg =
+            axiosError.response.data?.message ||
+            'Email není registrován v systému.';
           toast.error(errorMsg);
           return;
         }

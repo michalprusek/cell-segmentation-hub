@@ -77,7 +77,9 @@ describe('ML Routes Authentication Tests', () => {
     jest.clearAllMocks();
 
     // Mock rate limiter to pass through
-    mockedApiLimiter.mockImplementation((req: any, res: any, next: any) => next());
+    mockedApiLimiter.mockImplementation((req: any, res: any, next: any) =>
+      next()
+    );
 
     // Mock logger methods
     mockedLogger.info = jest.fn();
@@ -195,9 +197,9 @@ describe('ML Routes Authentication Tests', () => {
       it('should handle status check errors', async () => {
         // Force an error by mocking Date to throw
         const originalDate = Date;
-        (global as any).Date = (jest.fn().mockImplementation(() => {
+        (global as any).Date = jest.fn().mockImplementation(() => {
           throw new Error('Date creation failed');
-        }) as any) as any;
+        }) as any as any;
 
         const response = await request(app).get('/api/ml/status').expect(500);
 

@@ -18,13 +18,13 @@ docker/nginx/nginx.production.conf  # Static, no template system
 
 ### Service Naming
 
-| Before | After |
-|--------|-------|
-| blue-frontend | frontend |
-| blue-backend | backend |
-| blue-ml | ml |
-| postgres-blue | postgres |
-| redis-blue | redis |
+| Before                  | After                      |
+| ----------------------- | -------------------------- |
+| blue-frontend           | frontend                   |
+| blue-backend            | backend                    |
+| blue-ml                 | ml                         |
+| postgres-blue           | postgres                   |
+| redis-blue              | redis                      |
 | nginx-blue + nginx-main | nginx (single, in compose) |
 
 ### Ports (unchanged externally)
@@ -55,6 +55,7 @@ docker/nginx/nginx.production.conf  # Static, no template system
 ### nginx-main Integration
 
 Currently nginx-main runs as a standalone `docker run` command. Move it into `docker-compose.production.yml` as the `nginx` service with:
+
 - SSL termination (Let's Encrypt certs at `/etc/letsencrypt/`)
 - Static nginx.production.conf (no template system)
 - Ports 80 and 443 exposed
@@ -63,12 +64,14 @@ Currently nginx-main runs as a standalone `docker run` command. Move it into `do
 ### Files to Delete
 
 **Docker compose:**
+
 - `docker-compose.green.yml`
 - `docker-compose.green.gpu.yml`
 - `docker-compose.active.yml`
 - `docker-compose.yml` (unused base)
 
 **Environment:**
+
 - `.env.blue` (merged into .env.production)
 - `.env.green`
 - `.env.common` (merged into .env.production)
@@ -76,6 +79,7 @@ Currently nginx-main runs as a standalone `docker run` command. Move it into `do
 - `.active-environment`
 
 **Nginx:**
+
 - `docker/nginx/nginx.template.conf`
 - `docker/nginx/nginx.green.conf`
 - `docker/nginx/nginx.active.conf` (symlink)
@@ -85,6 +89,7 @@ Currently nginx-main runs as a standalone `docker run` command. Move it into `do
 - `docker/nginx/spheroseg.conf`
 
 **Scripts (green/switch related):**
+
 - `scripts/switch-environment.sh`
 - `scripts/switch-blue-green.sh`
 - `scripts/switch-nginx-upstream.sh`
@@ -94,6 +99,7 @@ Currently nginx-main runs as a standalone `docker run` command. Move it into `do
 - `scripts/fix-green-uploads-immediate.sh`
 
 **Docs:**
+
 - `docs/BLUE-GREEN-DEPLOYMENT.md`
 
 ### Files to Modify

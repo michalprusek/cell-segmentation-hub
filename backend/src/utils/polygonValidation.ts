@@ -205,7 +205,10 @@ export const PolygonValidator = {
     // Polylines need at least 2 points, polygons need at least 3
     const isPolyline = polygonObj.geometry === 'polyline';
     const minPoints = isPolyline ? 2 : 3;
-    if (!Array.isArray(polygonObj.points) || polygonObj.points.length < minPoints) {
+    if (
+      !Array.isArray(polygonObj.points) ||
+      polygonObj.points.length < minPoints
+    ) {
       return null;
     }
 

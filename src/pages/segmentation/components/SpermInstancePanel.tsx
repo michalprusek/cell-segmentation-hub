@@ -73,7 +73,9 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
 
   // Get all instance IDs: from actual polylines + pending (manually created)
   const instanceIds = useMemo(() => {
-    const fromData = Array.from(instanceGroups.keys()).filter(id => id !== 'unassigned');
+    const fromData = Array.from(instanceGroups.keys()).filter(
+      id => id !== 'unassigned'
+    );
     const all = new Set([...fromData, ...pendingInstances]);
     return Array.from(all).sort();
   }, [instanceGroups, pendingInstances]);
@@ -222,11 +224,16 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
           const instancePolylines = instanceGroups.get(instanceId) || [];
 
           return (
-            <div key={instanceId} className="border-b border-gray-100 dark:border-gray-700 last:border-b-0">
+            <div
+              key={instanceId}
+              className="border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+            >
               {/* Instance header */}
               <button
                 className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors ${
-                  activeInstanceId === instanceId ? 'bg-violet-50 dark:bg-violet-900/20' : ''
+                  activeInstanceId === instanceId
+                    ? 'bg-violet-50 dark:bg-violet-900/20'
+                    : ''
                 }`}
                 onClick={() => {
                   toggleExpanded(instanceId);
@@ -286,7 +293,8 @@ const SpermInstancePanel: React.FC<SpermInstancePanelProps> = ({
                           : t('sperm.unclassified')}
                       </span>
                       <span className="text-gray-400">
-                        {Math.round(calculatePolylineLength(polyline.points))} px
+                        {Math.round(calculatePolylineLength(polyline.points))}{' '}
+                        px
                       </span>
                     </button>
                   ))}

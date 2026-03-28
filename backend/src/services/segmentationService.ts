@@ -193,7 +193,7 @@ export class SegmentationService {
       // Retry interceptor for transient ML service connection errors
       this.httpClient.interceptors.response.use(
         response => response,
-        async (error) => {
+        async error => {
           const retryConfig = error.config;
           if (!retryConfig) throw error;
 
@@ -650,89 +650,87 @@ export class SegmentationService {
       ];
 
       // Validate and clean polygons/polylines before storage
-      const validPolygons = allPolygons.filter(
-        polygon => {
-          // Validate polygon structure
-          if (!polygon || typeof polygon !== 'object') {
-            logger.warn(
-              'Invalid polygon structure detected',
-              'SegmentationService',
-              { polygon }
-            );
-            return false;
-          }
-
-          // Polylines need at least 2 points, polygons need at least 3
-          const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
-          if (!Array.isArray(polygon.points) || polygon.points.length < minPoints) {
-            logger.warn(
-              'Polygon/polyline has insufficient points',
-              'SegmentationService',
-              {
-                pointsLength: polygon.points?.length,
-                geometry: polygon.geometry,
-                minRequired: minPoints,
-              }
-            );
-            return false;
-          }
-
-          // Validate each point
-          const validPoints = polygon.points.every(point => {
-            return (
-              point !== null &&
-              point !== undefined &&
-              typeof point.x === 'number' &&
-              typeof point.y === 'number' &&
-              !isNaN(point.x) &&
-              !isNaN(point.y) &&
-              isFinite(point.x) &&
-              isFinite(point.y)
-            );
-          });
-
-          if (!validPoints) {
-            logger.warn('Polygon has invalid points', 'SegmentationService', {
-              points: polygon.points,
-            });
-            return false;
-          }
-
-          // Validate polygon type
-          if (
-            !polygon.type ||
-            !['external', 'internal'].includes(polygon.type)
-          ) {
-            logger.warn(
-              'Polygon has invalid or missing type',
-              'SegmentationService',
-              {
-                type: polygon.type,
-              }
-            );
-            return false;
-          }
-
-          // Validate parentIds for internal polygons
-          if (
-            polygon.type === 'internal' &&
-            polygon.parentIds &&
-            (!Array.isArray(polygon.parentIds) ||
-              polygon.parentIds.some(id => typeof id !== 'string'))
-          ) {
-            logger.warn(
-              'Internal polygon has invalid parentIds',
-              'SegmentationService',
-              {
-                parentIds: polygon.parentIds,
-              }
-            );
-            return false;
-          }
-
-          return true;
+      const validPolygons = allPolygons.filter(polygon => {
+        // Validate polygon structure
+        if (!polygon || typeof polygon !== 'object') {
+          logger.warn(
+            'Invalid polygon structure detected',
+            'SegmentationService',
+            { polygon }
+          );
+          return false;
         }
-      );
+
+        // Polylines need at least 2 points, polygons need at least 3
+        const minPoints = polygon.geometry === 'polyline' ? 2 : 3;
+        if (
+          !Array.isArray(polygon.points) ||
+          polygon.points.length < minPoints
+        ) {
+          logger.warn(
+            'Polygon/polyline has insufficient points',
+            'SegmentationService',
+            {
+              pointsLength: polygon.points?.length,
+              geometry: polygon.geometry,
+              minRequired: minPoints,
+            }
+          );
+          return false;
+        }
+
+        // Validate each point
+        const validPoints = polygon.points.every(point => {
+          return (
+            point !== null &&
+            point !== undefined &&
+            typeof point.x === 'number' &&
+            typeof point.y === 'number' &&
+            !isNaN(point.x) &&
+            !isNaN(point.y) &&
+            isFinite(point.x) &&
+            isFinite(point.y)
+          );
+        });
+
+        if (!validPoints) {
+          logger.warn('Polygon has invalid points', 'SegmentationService', {
+            points: polygon.points,
+          });
+          return false;
+        }
+
+        // Validate polygon type
+        if (!polygon.type || !['external', 'internal'].includes(polygon.type)) {
+          logger.warn(
+            'Polygon has invalid or missing type',
+            'SegmentationService',
+            {
+              type: polygon.type,
+            }
+          );
+          return false;
+        }
+
+        // Validate parentIds for internal polygons
+        if (
+          polygon.type === 'internal' &&
+          polygon.parentIds &&
+          (!Array.isArray(polygon.parentIds) ||
+            polygon.parentIds.some(id => typeof id !== 'string'))
+        ) {
+          logger.warn(
+            'Internal polygon has invalid parentIds',
+            'SegmentationService',
+            {
+              parentIds: polygon.parentIds,
+            }
+          );
+          return false;
+        }
+
+        return true;
+      });
 
       // Count polygon types for logging
       const externalCount = validPolygons.filter(
@@ -1223,9 +1221,15 @@ export class SegmentationService {
           ? [(polygon as any).parent_id]
           : undefined, // Convert parent_id to parentIds array
         // Preserve polyline fields (sperm model)
-        ...((polygon as any).geometry && { geometry: (polygon as any).geometry }),
-        ...((polygon as any).partClass && { partClass: (polygon as any).partClass }),
-        ...((polygon as any).instanceId && { instanceId: (polygon as any).instanceId }),
+        ...((polygon as any).geometry && {
+          geometry: (polygon as any).geometry,
+        }),
+        ...((polygon as any).partClass && {
+          partClass: (polygon as any).partClass,
+        }),
+        ...((polygon as any).instanceId && {
+          instanceId: (polygon as any).instanceId,
+        }),
       })
     );
 
@@ -1700,9 +1704,15 @@ export class SegmentationService {
               ? [(polygon as any).parent_id]
               : undefined, // Convert parent_id to parentIds array
             // Preserve polyline fields (sperm model)
-            ...((polygon as any).geometry && { geometry: (polygon as any).geometry }),
-            ...((polygon as any).partClass && { partClass: (polygon as any).partClass }),
-            ...((polygon as any).instanceId && { instanceId: (polygon as any).instanceId }),
+            ...((polygon as any).geometry && {
+              geometry: (polygon as any).geometry,
+            }),
+            ...((polygon as any).partClass && {
+              partClass: (polygon as any).partClass,
+            }),
+            ...((polygon as any).instanceId && {
+              instanceId: (polygon as any).instanceId,
+            }),
           })
         );
 

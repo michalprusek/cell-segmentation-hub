@@ -657,7 +657,8 @@ export default {
       edit: 'Eckpunkte bewegen und modifizieren',
       addPoints: 'Punkte zwischen Eckpunkten hinzufügen',
       create: 'Neue Polygone erstellen',
-      createPolyline: 'Klicken zum Setzen von Punkten, Doppelklick zum Abschließen der Polylinie',
+      createPolyline:
+        'Klicken zum Setzen von Punkten, Doppelklick zum Abschließen der Polylinie',
       slice: 'Polygone mit einer Linie teilen',
       delete: 'Polygone entfernen',
     },

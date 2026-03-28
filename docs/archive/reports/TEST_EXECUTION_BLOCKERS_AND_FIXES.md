@@ -11,6 +11,7 @@
 ### 1. Permission Issues with node_modules ⚠️
 
 **Problem:**
+
 ```bash
 EACCES: permission denied, mkdir 'node_modules/axe-playwright/node_modules'
 ```
@@ -18,6 +19,7 @@ EACCES: permission denied, mkdir 'node_modules/axe-playwright/node_modules'
 **Cause:** node_modules owned by root:root instead of cvat:cvat
 
 **Fix:**
+
 ```bash
 sudo chown -R cvat:cvat /home/cvat/cell-segmentation-hub/node_modules
 ```
@@ -29,6 +31,7 @@ sudo chown -R cvat:cvat /home/cvat/cell-segmentation-hub/node_modules
 ### 2. Missing package-lock.json (Backend) ⚠️
 
 **Problem:**
+
 ```bash
 npm error code EUSAGE
 npm error The `npm ci` command can only install with an existing package-lock.json
@@ -37,6 +40,7 @@ npm error The `npm ci` command can only install with an existing package-lock.js
 **Cause:** Backend package-lock.json not committed to repository
 
 **Fix:**
+
 ```bash
 cd /home/cvat/cell-segmentation-hub/backend
 npm install  # Generates package-lock.json
@@ -51,6 +55,7 @@ git commit -m "chore: Add missing package-lock.json for reproducible builds"
 ### 3. Missing Test Dependencies ⚠️
 
 **Problem:**
+
 ```bash
 sh: 1: vitest: not found
 ```
@@ -58,6 +63,7 @@ sh: 1: vitest: not found
 **Cause:** Test frameworks not installed in host environment
 
 **Fix:**
+
 ```bash
 # After fixing permissions, install dependencies
 cd /home/cvat/cell-segmentation-hub
@@ -80,6 +86,7 @@ npm install
 **Solutions:**
 
 **Option A: Use Test Environment (RECOMMENDED)**
+
 ```bash
 # Use dedicated test containers
 docker compose -f docker-compose.test.yml up -d test-database test-redis
@@ -89,6 +96,7 @@ docker compose -f docker-compose.test.yml run --rm test-ml pytest -v
 ```
 
 **Option B: Use Development Environment**
+
 ```bash
 # Ensure dev containers are running
 make up
@@ -99,6 +107,7 @@ make test-e2e
 ```
 
 **Option C: Run on Host After Fixing Dependencies**
+
 ```bash
 npm run test
 cd backend && npm run test
@@ -147,6 +156,7 @@ echo "  npm run test:e2e          # E2E tests"
 ```
 
 Save as `fix-test-blockers.sh` and run:
+
 ```bash
 chmod +x fix-test-blockers.sh
 ./fix-test-blockers.sh
@@ -176,6 +186,7 @@ npx playwright --version
 ```
 
 Expected output:
+
 ```
 ✅ node_modules owned by cvat:cvat
 ✅ backend/package-lock.json exists
@@ -189,12 +200,14 @@ Expected output:
 ## Test Execution Commands (After Fixes)
 
 ### Frontend Unit Tests (Vitest)
+
 ```bash
 cd /home/cvat/cell-segmentation-hub
 npm run test -- --run --reporter=verbose 2>&1 | tee test-results/frontend-unit.log
 ```
 
 **Expected:**
+
 - 500-800 tests
 - 15-20 minutes duration
 - 70-80% coverage
@@ -202,12 +215,14 @@ npm run test -- --run --reporter=verbose 2>&1 | tee test-results/frontend-unit.l
 ---
 
 ### Backend Unit Tests (Jest)
+
 ```bash
 cd /home/cvat/cell-segmentation-hub/backend
 npm run test -- --verbose --runInBand 2>&1 | tee ../test-results/backend-unit.log
 ```
 
 **Expected:**
+
 - 200-300 tests
 - 10-15 minutes duration
 - 70-80% coverage
@@ -215,36 +230,42 @@ npm run test -- --verbose --runInBand 2>&1 | tee ../test-results/backend-unit.lo
 ---
 
 ### Backend Integration Tests (Jest)
+
 ```bash
 cd /home/cvat/cell-segmentation-hub/backend
 npm run test:integration -- --verbose 2>&1 | tee ../test-results/backend-integration.log
 ```
 
 **Expected:**
+
 - 50-80 tests
 - 5-10 minutes duration
 
 ---
 
 ### ML Service Tests (Pytest)
+
 ```bash
 cd /home/cvat/cell-segmentation-hub/backend/segmentation
 pytest -v --tb=short --junitxml=../../test-results/ml-tests.xml 2>&1 | tee ../../test-results/ml-tests.log
 ```
 
 **Expected:**
+
 - 35-55 tests
 - 5-13 minutes duration
 
 ---
 
 ### E2E Tests (Playwright)
+
 ```bash
 cd /home/cvat/cell-segmentation-hub
 npm run test:e2e -- --reporter=list 2>&1 | tee test-results/e2e-tests.log
 ```
 
 **Expected:**
+
 - 80-120 tests
 - 20-40 minutes duration
 - Screenshots/videos on failure
@@ -285,12 +306,14 @@ docker compose -f docker-compose.test.yml down -v
 ```
 
 **Pros:**
+
 - ✅ No host dependencies needed
 - ✅ Isolated test environment
 - ✅ Reproducible across machines
 - ✅ Matches CI/CD environment
 
 **Cons:**
+
 - ❌ Longer build times
 - ❌ Requires fixing package-lock.json first
 - ❌ More disk space usage
@@ -304,6 +327,7 @@ docker compose -f docker-compose.test.yml down -v
 **After Fixes:** ✅ All 159+ test files ready to run
 
 **Fix Priority:**
+
 1. 🔴 Fix permissions (5 minutes)
 2. 🔴 Generate package-lock.json (10 minutes)
 3. 🟡 Install dependencies (15-30 minutes)

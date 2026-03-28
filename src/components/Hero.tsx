@@ -26,7 +26,9 @@ function Hero() {
   useEffect(() => {
     // Feature detection for IntersectionObserver
     if (typeof IntersectionObserver === 'undefined') {
-      console.warn('IntersectionObserver not supported, hero animations disabled');
+      console.warn(
+        'IntersectionObserver not supported, hero animations disabled'
+      );
 
       // Fallback: immediately show hero content
       if (heroRef.current) {

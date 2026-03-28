@@ -136,7 +136,9 @@ describe('API Client - Advanced Features', () => {
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
       expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
       expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
-      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
+      expect(sessionStorageMock.removeItem).toHaveBeenCalledWith(
+        'refreshToken'
+      );
     });
   });
 
@@ -154,7 +156,9 @@ describe('API Client - Advanced Features', () => {
       // Call the captured request interceptor
       const modifiedConfig = requestInterceptor(requestConfig);
 
-      expect(modifiedConfig.headers.Authorization).toBe('Bearer test-access-token');
+      expect(modifiedConfig.headers.Authorization).toBe(
+        'Bearer test-access-token'
+      );
     });
 
     it('should not add authorization header when not authenticated', () => {
@@ -209,7 +213,10 @@ describe('API Client - Advanced Features', () => {
       );
 
       // Verify new token was stored
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', 'new-token');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith(
+        'accessToken',
+        'new-token'
+      );
     });
 
     it('should not retry auth endpoints on 401', async () => {

@@ -86,7 +86,9 @@ setInterval(() => {
   }
 
   if (cleaned > 0) {
-    logger.info('Cleaned up old sent email records', 'EmailRetryService', { cleaned });
+    logger.info('Cleaned up old sent email records', 'EmailRetryService', {
+      cleaned,
+    });
   }
 }, EMAIL_RETRY.CLEANUP_INTERVAL);
 
@@ -158,8 +160,8 @@ export async function sendMailWithTimeout(
 ): Promise<SMTPTransport.SentMessageInfo> {
   // Use appropriate timeout for current SMTP server
   // For UTIA: 300s (5 minutes), For others: 30s
-  const EMAIL_TIMEOUT = isUTIASmtpServer() 
-    ? EMAIL_TIMEOUTS.UTIA_SEND 
+  const EMAIL_TIMEOUT = isUTIASmtpServer()
+    ? EMAIL_TIMEOUTS.UTIA_SEND
     : parseEmailTimeout('EMAIL_TIMEOUT', EMAIL_TIMEOUTS.SEND);
 
   // Create timeout promise that ALWAYS rejects after timeout
@@ -237,10 +239,10 @@ export async function sendEmailWithRetry(
         'X-Application': 'Cell Segmentation Hub',
         'Return-Path': fromConfig.email,
         'X-Priority': '3', // Normal priority
-        'Importance': 'Normal',
+        Importance: 'Normal',
         // Help Gmail categorize this as transactional email
         'X-Entity-Type': 'TRANSACTIONAL',
-        'Precedence': 'bulk',
+        Precedence: 'bulk',
       },
     };
 
@@ -353,24 +355,33 @@ export function queueEmailForRetry(options: EmailServiceOptions): string {
   // Check if this email was already sent successfully
   const subject = options.subject || 'No subject';
   if (wasEmailAlreadySent(options.to, subject)) {
-    logger.warn('Email already sent recently, skipping queue', 'EmailRetryService', {
-      to: options.to,
-      subject,
-    });
+    logger.warn(
+      'Email already sent recently, skipping queue',
+      'EmailRetryService',
+      {
+        to: options.to,
+        subject,
+      }
+    );
     return 'duplicate-skipped';
   }
 
   // Check if already in queue
   const existingInQueue = emailQueue.find(
-    email => email.options.to === options.to && email.options.subject === subject
+    email =>
+      email.options.to === options.to && email.options.subject === subject
   );
 
   if (existingInQueue) {
-    logger.warn('Email already in queue, skipping duplicate', 'EmailRetryService', {
-      to: options.to,
-      subject,
-      existingId: existingInQueue.id,
-    });
+    logger.warn(
+      'Email already in queue, skipping duplicate',
+      'EmailRetryService',
+      {
+        to: options.to,
+        subject,
+        existingId: existingInQueue.id,
+      }
+    );
     return existingInQueue.id;
   }
 
@@ -430,7 +441,10 @@ export function queueEmailForRetry(options: EmailServiceOptions): string {
  */
 async function processEmailQueue(): Promise<void> {
   if (queueProcessing) {
-    logger.warn('Queue processing already in progress, skipping', 'EmailRetryService');
+    logger.warn(
+      'Queue processing already in progress, skipping',
+      'EmailRetryService'
+    );
     return;
   }
 
@@ -452,7 +466,9 @@ async function processEmailQueue(): Promise<void> {
     if (ageMs > MAX_QUEUE_AGE_MS) {
       logger.error(
         'Email expired in queue (TTL exceeded)',
-        new Error(`Email TTL exceeded: ${Math.round(ageMs / 60000)} minutes old`),
+        new Error(
+          `Email TTL exceeded: ${Math.round(ageMs / 60000)} minutes old`
+        ),
         'EmailRetryService',
         {
           id: queuedEmail.id,
@@ -483,10 +499,14 @@ async function processEmailQueue(): Promise<void> {
     // Check if already sent (might have been sent in another process)
     const subject = queuedEmail.options.subject || 'No subject';
     if (wasEmailAlreadySent(queuedEmail.options.to, subject)) {
-      logger.info('Email already sent, removing from queue', 'EmailRetryService', {
-        id: queuedEmail.id,
-        to: queuedEmail.options.to,
-      });
+      logger.info(
+        'Email already sent, removing from queue',
+        'EmailRetryService',
+        {
+          id: queuedEmail.id,
+          to: queuedEmail.options.to,
+        }
+      );
       continue; // Skip, already sent
     }
 
@@ -519,7 +539,8 @@ async function processEmailQueue(): Promise<void> {
 
       // Email successfully sent, don't re-queue
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
       queuedEmail.lastError = errorMessage;
 
       logger.error(
@@ -542,7 +563,10 @@ async function processEmailQueue(): Promise<void> {
         queuedEmail.globalAttempts < MAX_GLOBAL_ATTEMPTS
       ) {
         // Re-queue with exponential backoff delay
-        const delay = Math.min(queuedEmail.attempts * EMAIL_RETRY.INITIAL_DELAY, EMAIL_RETRY.MAX_DELAY);
+        const delay = Math.min(
+          queuedEmail.attempts * EMAIL_RETRY.INITIAL_DELAY,
+          EMAIL_RETRY.MAX_DELAY
+        );
         queuedEmail.nextRetryAt = new Date(Date.now() + delay);
 
         logger.warn('Email will be retried', 'EmailRetryService', {
@@ -570,10 +594,14 @@ async function processEmailQueue(): Promise<void> {
               });
             }
           } else {
-            logger.info('Email was sent during retry delay, not re-queuing', 'EmailRetryService', {
-              id: queuedEmail.id,
-              to: queuedEmail.options.to,
-            });
+            logger.info(
+              'Email was sent during retry delay, not re-queuing',
+              'EmailRetryService',
+              {
+                id: queuedEmail.id,
+                to: queuedEmail.options.to,
+              }
+            );
           }
         }, delay);
       } else {

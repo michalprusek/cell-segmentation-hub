@@ -1,3 +1,4 @@
+/* eslint-disable no-unexpected-multiline */
 import request from 'supertest';
 import express from 'express';
 import {
