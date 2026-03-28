@@ -49,8 +49,7 @@
         "maxSizeMB": 5000,
         "variants": {
           "cpu": "docker/ml.optimized.Dockerfile",
-          "gpu": "docker/ml-gpu.Dockerfile",
-          "cuda12": "docker/ml-cuda12.Dockerfile"
+          "gpu": "docker/ml-gpu.Dockerfile"
         },
         "buildArgs": {
           "PYTORCH_VERSION": "2.0.1",

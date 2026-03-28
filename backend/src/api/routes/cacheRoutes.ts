@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { logger } from '../../utils/logger';
+import { ResponseHelper } from '../../utils/response';
 import { authenticate } from '../../middleware/auth';
 import { apiLimiter, authLimiter } from '../../middleware/rateLimiter';
 import { validateBody, validateParams } from '../../middleware/validation';
@@ -45,11 +46,7 @@ router.get(
         lastChecked: new Date().toISOString(),
       };
 
-      res.json({
-        success: true,
-        data: cacheHealth,
-        message: 'Cache health status retrieved successfully',
-      });
+      return ResponseHelper.success(res, cacheHealth, 'Cache health status retrieved successfully');
     } catch (error) {
       logger.error('❌ Cache: Health check failed:', error);
       next(error);
@@ -91,11 +88,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: stats,
-        message: 'Cache statistics retrieved successfully',
-      });
+      return ResponseHelper.success(res, stats, 'Cache statistics retrieved successfully');
     } catch (error) {
       logger.error('❌ Cache: Error retrieving stats:', error);
       next(error);
@@ -121,16 +114,12 @@ router.get(
         .filter(key => pattern === '*' || key.includes(pattern as string))
         .slice(0, parseInt(limit as string));
 
-      res.json({
-        success: true,
-        data: {
-          keys,
-          pattern: pattern as string,
-          total: keys.length,
-          limit: parseInt(limit as string),
-        },
-        message: 'Cache keys retrieved successfully',
-      });
+      return ResponseHelper.success(res, {
+        keys,
+        pattern: pattern as string,
+        total: keys.length,
+        limit: parseInt(limit as string),
+      }, 'Cache keys retrieved successfully');
     } catch (error) {
       logger.error('❌ Cache: Error listing keys:', error);
       next(error);
@@ -158,11 +147,7 @@ router.get(
         lastAccessed: new Date().toISOString(),
       };
 
-      res.json({
-        success: true,
-        data: cacheData,
-        message: 'Cache value retrieved successfully',
-      });
+      return ResponseHelper.success(res, cacheData, 'Cache value retrieved successfully');
     } catch (error) {
       logger.error('❌ Cache: Error getting cache value:', error);
       next(error);
@@ -180,11 +165,7 @@ router.post(
       logger.info(`💾 Cache: Setting value for key: ${key}, TTL: ${ttl}s`);
 
       // Placeholder cache set operation
-      res.json({
-        success: true,
-        data: { key, ttl, size: value.length + ' bytes' },
-        message: 'Cache value set successfully',
-      });
+      return ResponseHelper.success(res, { key, ttl, size: value.length + ' bytes' }, 'Cache value set successfully');
     } catch (error) {
       logger.error('❌ Cache: Error setting cache value:', error);
       next(error);
@@ -202,11 +183,7 @@ router.delete(
       logger.info(`🗑️ Cache: Deleting key: ${key}`);
 
       // Placeholder cache delete operation
-      res.json({
-        success: true,
-        data: { key, deleted: true },
-        message: 'Cache key deleted successfully',
-      });
+      return ResponseHelper.success(res, { key, deleted: true }, 'Cache key deleted successfully');
     } catch (error) {
       logger.error('❌ Cache: Error deleting cache key:', error);
       next(error);
@@ -227,15 +204,11 @@ router.post(
       // Placeholder cache flush operation (should be restricted in production)
       const deletedCount = pattern ? 25 : 245;
 
-      res.json({
-        success: true,
-        data: {
-          pattern: pattern || 'all',
-          deletedKeys: deletedCount,
-          flushedAt: new Date().toISOString(),
-        },
-        message: `${deletedCount} cache keys flushed successfully`,
-      });
+      return ResponseHelper.success(res, {
+        pattern: pattern || 'all',
+        deletedKeys: deletedCount,
+        flushedAt: new Date().toISOString(),
+      }, `${deletedCount} cache keys flushed successfully`);
     } catch (error) {
       logger.error('❌ Cache: Error flushing cache:', error);
       next(error);
@@ -263,11 +236,7 @@ router.get(
         },
       };
 
-      res.json({
-        success: true,
-        data: sessionInfo,
-        message: 'Session information retrieved successfully',
-      });
+      return ResponseHelper.success(res, sessionInfo, 'Session information retrieved successfully');
     } catch (error) {
       logger.error('❌ Cache: Error fetching session info:', error);
       next(error);
@@ -289,11 +258,7 @@ router.post(
         cleanedAt: new Date().toISOString(),
       };
 
-      res.json({
-        success: true,
-        data: cleanupResult,
-        message: 'Expired sessions cleaned up successfully',
-      });
+      return ResponseHelper.success(res, cleanupResult, 'Expired sessions cleaned up successfully');
     } catch (error) {
       logger.error('❌ Cache: Error cleaning up sessions:', error);
       next(error);
