@@ -1328,13 +1328,30 @@ export class QueueService {
       const cutoffTime = new Date();
       cutoffTime.setMinutes(cutoffTime.getMinutes() - maxProcessingMinutes);
 
-      // First, get all stuck items to handle retry logic properly
+      // Find stuck items: processing with old startedAt OR processing with null startedAt (never started)
       const stuckItems = await this.prisma.segmentationQueue.findMany({
         where: {
           status: 'processing',
-          startedAt: { lt: cutoffTime },
+          OR: [
+            { startedAt: { lt: cutoffTime } },
+            { startedAt: null },
+          ],
         },
       });
+
+      // Also reset images stuck in 'processing' that have no active queue entry
+      const stuckImages = await this.prisma.$queryRaw<Array<{ id: string; userId: string }>>`
+        SELECT i.id, i."userId" FROM images i
+        WHERE i."segmentationStatus" = 'processing'
+        AND NOT EXISTS (
+          SELECT 1 FROM segmentation_queue sq
+          WHERE sq."imageId" = i.id AND sq.status IN ('processing', 'queued')
+        )
+      `;
+      for (const img of stuckImages) {
+        await this.imageService.updateSegmentationStatus(img.id, 'no_segmentation', img.userId);
+        logger.warn('Reset orphaned image from processing to no_segmentation', 'QueueService', { imageId: img.id });
+      }
 
       let resetCount = 0;
       let failedCount = 0;
