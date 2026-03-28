@@ -255,7 +255,9 @@ describe('Integration with Production Code', () => {
     expect(simulateCanvasClick(EditMode.Slice, true)).toBe('no-action');
     expect(simulateCanvasClick(EditMode.AddPoints, true)).toBe('no-action');
     expect(simulateCanvasClick(EditMode.CreatePolygon, true)).toBe('no-action');
-    expect(simulateCanvasClick(EditMode.CreatePolyline, true)).toBe('no-action');
+    expect(simulateCanvasClick(EditMode.CreatePolyline, true)).toBe(
+      'no-action'
+    );
     expect(simulateCanvasClick(EditMode.View, true)).toBe('deselect-polygon');
     expect(simulateCanvasClick(EditMode.EditVertices, true)).toBe(
       'deselect-polygon'

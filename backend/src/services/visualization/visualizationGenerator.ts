@@ -25,9 +25,9 @@ export interface Polygon {
 }
 
 const POLYLINE_COLORS: Record<string, string> = {
-  head: '#22c55e',      // green
-  midpiece: '#f59e0b',  // orange
-  tail: '#06b6d4',      // cyan
+  head: '#22c55e', // green
+  midpiece: '#f59e0b', // orange
+  tail: '#06b6d4', // cyan
 };
 
 export enum VisualizationResult {
@@ -261,13 +261,15 @@ export class VisualizationGenerator {
 
     // Polylines use part-class colors; polygons use type-based colors
     const color = isPolyline
-      ? (POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7')
+      ? POLYLINE_COLORS[polygon.partClass || ''] || '#a855f7'
       : polygon.type === 'external'
         ? options.polygonColors?.external || '#00FF00'
         : options.polygonColors?.internal || '#FF0000';
 
     ctx.strokeStyle = color;
-    ctx.lineWidth = isPolyline ? (options.strokeWidth || 2) * 2 : (options.strokeWidth || 2);
+    ctx.lineWidth = isPolyline
+      ? (options.strokeWidth || 2) * 2
+      : options.strokeWidth || 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
@@ -307,7 +309,11 @@ export class VisualizationGenerator {
       ctx.stroke();
 
       // Draw polygon number
-      if (options.showNumbers && polygonNumber !== undefined && polygon.type === 'external') {
+      if (
+        options.showNumbers &&
+        polygonNumber !== undefined &&
+        polygon.type === 'external'
+      ) {
         this.drawPolygonNumber(ctx, polygon, polygonNumber, options);
       }
       // Draw vertices

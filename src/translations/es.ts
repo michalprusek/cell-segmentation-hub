@@ -650,7 +650,8 @@ export default {
       edit: 'Mover y modificar vértices',
       addPoints: 'Añadir puntos entre vértices',
       create: 'Crear nuevos polígonos',
-      createPolyline: 'Haz clic para colocar puntos, doble clic para finalizar la polilínea',
+      createPolyline:
+        'Haz clic para colocar puntos, doble clic para finalizar la polilínea',
       slice: 'Dividir polígonos con una línea',
       delete: 'Eliminar polígonos',
     },

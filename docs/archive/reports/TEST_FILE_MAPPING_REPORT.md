@@ -11,13 +11,13 @@
 
 ### Test Distribution
 
-| Category | Test Files | Test Count | Coverage Status |
-|----------|-----------|------------|-----------------|
-| Frontend (React/TypeScript) | 98 | 1,969 | ✅ Excellent |
-| Backend (Node.js/TypeScript) | 35 | 554 | ✅ Very Good |
-| ML Service (Python/FastAPI) | 7 | 81 | ⚠️ Moderate |
-| E2E Tests (Playwright) | 19 | 265 | ✅ Good |
-| **TOTAL** | **159** | **2,869** | **✅ Excellent Overall** |
+| Category                     | Test Files | Test Count | Coverage Status          |
+| ---------------------------- | ---------- | ---------- | ------------------------ |
+| Frontend (React/TypeScript)  | 98         | 1,969      | ✅ Excellent             |
+| Backend (Node.js/TypeScript) | 35         | 554        | ✅ Very Good             |
+| ML Service (Python/FastAPI)  | 7          | 81         | ⚠️ Moderate              |
+| E2E Tests (Playwright)       | 19         | 265        | ✅ Good                  |
+| **TOTAL**                    | **159**    | **2,869**  | **✅ Excellent Overall** |
 
 ### Key Findings
 
@@ -37,212 +37,222 @@
 
 ### 1.1 Component Tests (42 files)
 
-#### Main Components (/src/components/__tests__)
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| AuthToastProvider.test.tsx | 12 | 0 | ✅ |
-| DashboardActions.test.tsx | 20 | 0 | ✅ |
-| DashboardHeader.test.tsx | 21 | 0 | ✅ |
-| ErrorBoundary.test.tsx | 18 | 0 | ✅ |
-| Features.test.tsx | 30 | 0 | ✅ |
-| Footer.test.tsx | 20 | 0 | ✅ |
-| Hero.test.tsx | 30 | 0 | ✅ |
-| ImageUploader.test.tsx | 12 | 0 | ✅ |
-| ImageUploader.cancel.test.tsx | 21 | 0 | ✅ |
-| LanguageSwitcher.test.tsx | 16 | 0 | ✅ |
-| Navbar.test.tsx | 21 | 0 | ✅ |
-| NewProject.test.tsx | 20 | 1 | ⚠️ Has skipped test |
-| NewProjectCard.test.tsx | 18 | 0 | ✅ |
-| NewProjectListItem.test.tsx | 24 | 0 | ✅ |
-| ProjectCallbackChain.test.tsx | 9 | 0 | ✅ |
-| ProjectCard.test.tsx | 13 | 0 | ✅ |
-| ProjectListItem.test.tsx | 29 | 0 | ✅ |
-| ProjectsList.test.tsx | 28 | 0 | ✅ |
-| ProtectedRoute.test.tsx | 10 | 0 | ✅ |
-| StatsOverview.test.tsx | 15 | 0 | ✅ |
-| ThemeSwitcher.test.tsx | 24 | 0 | ✅ |
+#### Main Components (/src/components/**tests**)
+
+| File                          | Tests | Skipped | Status              |
+| ----------------------------- | ----- | ------- | ------------------- |
+| AuthToastProvider.test.tsx    | 12    | 0       | ✅                  |
+| DashboardActions.test.tsx     | 20    | 0       | ✅                  |
+| DashboardHeader.test.tsx      | 21    | 0       | ✅                  |
+| ErrorBoundary.test.tsx        | 18    | 0       | ✅                  |
+| Features.test.tsx             | 30    | 0       | ✅                  |
+| Footer.test.tsx               | 20    | 0       | ✅                  |
+| Hero.test.tsx                 | 30    | 0       | ✅                  |
+| ImageUploader.test.tsx        | 12    | 0       | ✅                  |
+| ImageUploader.cancel.test.tsx | 21    | 0       | ✅                  |
+| LanguageSwitcher.test.tsx     | 16    | 0       | ✅                  |
+| Navbar.test.tsx               | 21    | 0       | ✅                  |
+| NewProject.test.tsx           | 20    | 1       | ⚠️ Has skipped test |
+| NewProjectCard.test.tsx       | 18    | 0       | ✅                  |
+| NewProjectListItem.test.tsx   | 24    | 0       | ✅                  |
+| ProjectCallbackChain.test.tsx | 9     | 0       | ✅                  |
+| ProjectCard.test.tsx          | 13    | 0       | ✅                  |
+| ProjectListItem.test.tsx      | 29    | 0       | ✅                  |
+| ProjectsList.test.tsx         | 28    | 0       | ✅                  |
+| ProtectedRoute.test.tsx       | 10    | 0       | ✅                  |
+| StatsOverview.test.tsx        | 15    | 0       | ✅                  |
+| ThemeSwitcher.test.tsx        | 24    | 0       | ✅                  |
 
 **Subtotal:** 21 test files, 411 tests
 
-#### Project Components (/src/components/project/__tests__)
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| ImageCard.test.tsx | 23 | 0 | ✅ |
-| ProcessingSlots.test.tsx | 8 | 0 | ✅ |
-| QueueStatsPanel.cancel.test.tsx | 25 | 0 | ✅ |
-| QueueStatsPanel.parallel.test.tsx | 9 | 0 | ✅ |
+#### Project Components (/src/components/project/**tests**)
+
+| File                              | Tests | Skipped | Status |
+| --------------------------------- | ----- | ------- | ------ |
+| ImageCard.test.tsx                | 23    | 0       | ✅     |
+| ProcessingSlots.test.tsx          | 8     | 0       | ✅     |
+| QueueStatsPanel.cancel.test.tsx   | 25    | 0       | ✅     |
+| QueueStatsPanel.parallel.test.tsx | 9     | 0       | ✅     |
 
 **Subtotal:** 4 test files, 65 tests
 
-#### Settings Components (/src/components/settings/__tests__)
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| DeleteAccountDialog.test.tsx | 14 | 0 | ✅ |
+#### Settings Components (/src/components/settings/**tests**)
+
+| File                         | Tests | Skipped | Status |
+| ---------------------------- | ----- | ------- | ------ |
+| DeleteAccountDialog.test.tsx | 14    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 14 tests
 
-#### UI Components (/src/components/ui/__tests__)
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| cancel-button.test.tsx | 30 | 0 | ✅ |
-| universal-cancel-button.test.tsx | 30 | 0 | ✅ |
+#### UI Components (/src/components/ui/**tests**)
+
+| File                             | Tests | Skipped | Status |
+| -------------------------------- | ----- | ------- | ------ |
+| cancel-button.test.tsx           | 30    | 0       | ✅     |
+| universal-cancel-button.test.tsx | 30    | 0       | ✅     |
 
 **Subtotal:** 2 test files, 60 tests
 
 ### 1.2 Context Tests (4 files)
 
-| File | Tests | Skipped | Assertions | Notes |
-|------|-------|---------|------------|-------|
-| AuthContext.test.tsx | 21 | 0 | 56 | ⚠️ High assertion count |
-| ThemeContext.test.tsx | 24 | 0 | - | ✅ |
-| ThemeContext.simple.test.tsx | 6 | 0 | - | ✅ |
-| WebSocketContext.test.tsx | 21 | 0 | - | ✅ |
+| File                         | Tests | Skipped | Assertions | Notes                   |
+| ---------------------------- | ----- | ------- | ---------- | ----------------------- |
+| AuthContext.test.tsx         | 21    | 0       | 56         | ⚠️ High assertion count |
+| ThemeContext.test.tsx        | 24    | 0       | -          | ✅                      |
+| ThemeContext.simple.test.tsx | 6     | 0       | -          | ✅                      |
+| WebSocketContext.test.tsx    | 21    | 0       | -          | ✅                      |
 
 **Subtotal:** 4 test files, 72 tests
 
 ### 1.3 Hook Tests (13 files)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| useAbortController.test.ts | 22 | 0 | ✅ |
-| useAbortController.unit.test.ts | 11 | 0 | ✅ |
-| useAbortController.enhanced.test.tsx | 42 | 0 | ✅ |
-| useDebounce.test.ts | 15 | 0 | ✅ |
-| useOperationManager.test.tsx | 38 | 0 | ✅ |
-| useOperationManager.integration.test.ts | 23 | 0 | ✅ |
-| useProjectData.test.tsx | 26 | 0 | ✅ |
-| useProjectData.race-condition.test.tsx | 6 | 0 | ✅ Race conditions |
-| useSegmentationQueue.test.tsx | 13 | 0 | ✅ |
-| useSegmentationQueue.simple.test.tsx | 6 | 0 | ✅ |
-| useSegmentationQueue.parallel.test.tsx | 13 | 0 | ✅ |
-| useWebSocketToasts.test.ts | 25 | 0 | ✅ |
+| File                                    | Tests | Skipped | Status             |
+| --------------------------------------- | ----- | ------- | ------------------ |
+| useAbortController.test.ts              | 22    | 0       | ✅                 |
+| useAbortController.unit.test.ts         | 11    | 0       | ✅                 |
+| useAbortController.enhanced.test.tsx    | 42    | 0       | ✅                 |
+| useDebounce.test.ts                     | 15    | 0       | ✅                 |
+| useOperationManager.test.tsx            | 38    | 0       | ✅                 |
+| useOperationManager.integration.test.ts | 23    | 0       | ✅                 |
+| useProjectData.test.tsx                 | 26    | 0       | ✅                 |
+| useProjectData.race-condition.test.tsx  | 6     | 0       | ✅ Race conditions |
+| useSegmentationQueue.test.tsx           | 13    | 0       | ✅                 |
+| useSegmentationQueue.simple.test.tsx    | 6     | 0       | ✅                 |
+| useSegmentationQueue.parallel.test.tsx  | 13    | 0       | ✅                 |
+| useWebSocketToasts.test.ts              | 25    | 0       | ✅                 |
 
 **Subtotal:** 13 test files, 240 tests
 
 ### 1.4 Library/Utility Tests (21 files)
 
-| File | Tests | Skipped | Notes |
-|------|-------|---------|-------|
-| api.test.ts | 81 | 0 | ✅ Comprehensive |
-| api-advanced.test.ts | 47 | 0 | ✅ |
-| api-chunked-upload.test.ts | 16 | 0 | ✅ |
-| api.integration.test.ts | 26 | 0 | ✅ |
-| api-segmentation.test.ts | 53 | 0 | ✅ |
-| apiSimple.test.ts | 37 | 0 | ✅ |
-| constants.test.ts | 33 | 0 | ✅ |
-| coordinateUtils.test.ts | 23 | 0 | ✅ |
-| errorUtils.test.ts | 56 | 0 | ✅ |
-| errorUtils.race-condition.test.ts | 19 | 0 | ✅ Race conditions |
-| httpUtils.test.ts | 23 | 0 | ✅ |
-| imageProcessingService.test.ts | 18 | 0 | ✅ |
-| performanceMonitor.test.ts | 54 | 0 | ✅ |
-| performanceUtils.test.ts | 46 | 0 | ✅ |
-| polygonGeometry.test.ts | 67 | 0 | ✅ |
-| polygonIdUtils.test.ts | 17 | 0 | ✅ |
-| polygonIdUtils.reactkeys.test.ts | 21 | 0 | ✅ |
-| polygonSlicing.test.ts | 42 | 0 | ✅ |
-| retryUtils.test.ts | 52 | 0 | ✅ |
-| segmentation.test.ts | 47 | 0 | ✅ |
-| utils.test.ts | 23 | 0 | ✅ |
-| websocketEvents.test.ts | 36 | 0 | ✅ |
+| File                              | Tests | Skipped | Notes              |
+| --------------------------------- | ----- | ------- | ------------------ |
+| api.test.ts                       | 81    | 0       | ✅ Comprehensive   |
+| api-advanced.test.ts              | 47    | 0       | ✅                 |
+| api-chunked-upload.test.ts        | 16    | 0       | ✅                 |
+| api.integration.test.ts           | 26    | 0       | ✅                 |
+| api-segmentation.test.ts          | 53    | 0       | ✅                 |
+| apiSimple.test.ts                 | 37    | 0       | ✅                 |
+| constants.test.ts                 | 33    | 0       | ✅                 |
+| coordinateUtils.test.ts           | 23    | 0       | ✅                 |
+| errorUtils.test.ts                | 56    | 0       | ✅                 |
+| errorUtils.race-condition.test.ts | 19    | 0       | ✅ Race conditions |
+| httpUtils.test.ts                 | 23    | 0       | ✅                 |
+| imageProcessingService.test.ts    | 18    | 0       | ✅                 |
+| performanceMonitor.test.ts        | 54    | 0       | ✅                 |
+| performanceUtils.test.ts          | 46    | 0       | ✅                 |
+| polygonGeometry.test.ts           | 67    | 0       | ✅                 |
+| polygonIdUtils.test.ts            | 17    | 0       | ✅                 |
+| polygonIdUtils.reactkeys.test.ts  | 21    | 0       | ✅                 |
+| polygonSlicing.test.ts            | 42    | 0       | ✅                 |
+| retryUtils.test.ts                | 52    | 0       | ✅                 |
+| segmentation.test.ts              | 47    | 0       | ✅                 |
+| utils.test.ts                     | 23    | 0       | ✅                 |
+| websocketEvents.test.ts           | 36    | 0       | ✅                 |
 
 **Subtotal:** 21 test files, 737 tests
 
 ### 1.5 Segmentation Editor Tests (23 files)
 
 #### Canvas Component Tests
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| CanvasContainer.test.tsx | 34 | 0 | ✅ |
-| CanvasContainerSimple.test.tsx | 31 | 0 | ✅ |
-| CanvasPolygon.test.tsx | 37 | 0 | ✅ |
-| CanvasPolygonSimple.test.tsx | 19 | 0 | ✅ |
-| CanvasVertex.test.tsx | 43 | 0 | ✅ |
+
+| File                           | Tests | Skipped | Status |
+| ------------------------------ | ----- | ------- | ------ |
+| CanvasContainer.test.tsx       | 34    | 0       | ✅     |
+| CanvasContainerSimple.test.tsx | 31    | 0       | ✅     |
+| CanvasPolygon.test.tsx         | 37    | 0       | ✅     |
+| CanvasPolygonSimple.test.tsx   | 19    | 0       | ✅     |
+| CanvasVertex.test.tsx          | 43    | 0       | ✅     |
 
 **Subtotal:** 5 test files, 164 tests
 
 #### Context Menu Tests
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| VertexContextMenu.test.tsx | 31 | 0 | ✅ |
+
+| File                       | Tests | Skipped | Status |
+| -------------------------- | ----- | ------- | ------ |
+| VertexContextMenu.test.tsx | 31    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 31 tests
 
 #### Segmentation Component Tests
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| SegmentationStatusIndicator.test.tsx | 12 | 0 | ✅ |
+
+| File                                 | Tests | Skipped | Status |
+| ------------------------------------ | ----- | ------- | ------ |
+| SegmentationStatusIndicator.test.tsx | 12    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 12 tests
 
 #### Configuration Tests
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| modeConfig.test.ts | 33 | 0 | ✅ |
+
+| File               | Tests | Skipped | Status |
+| ------------------ | ----- | ------- | ------ |
+| modeConfig.test.ts | 33    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 33 tests
 
 #### Hook Tests
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| useAdvancedInteractions.vertex.test.tsx | 23 | 0 | ✅ |
-| useEnhancedSegmentationEditor.test.tsx | 33 | 0 | ✅ |
-| usePolygonSlicing.test.tsx | 34 | 0 | ✅ |
-| useSegmentationReload.test.tsx | 12 | 0 | ✅ |
+
+| File                                    | Tests | Skipped | Status |
+| --------------------------------------- | ----- | ------- | ------ |
+| useAdvancedInteractions.vertex.test.tsx | 23    | 0       | ✅     |
+| useEnhancedSegmentationEditor.test.tsx  | 33    | 0       | ✅     |
+| usePolygonSlicing.test.tsx              | 34    | 0       | ✅     |
+| useSegmentationReload.test.tsx          | 12    | 0       | ✅     |
 
 **Subtotal:** 4 test files, 102 tests
 
 #### Integration Tests
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| EventHandling.test.tsx | 30 | 0 | ✅ |
-| HoleRendering.test.tsx | 23 | 0 | ✅ |
-| ModeHandling.test.tsx | 25 | 0 | ✅ |
-| PolygonDataEdgeCases.test.tsx | 36 | 0 | ✅ |
-| PolygonIdValidation.test.tsx | 27 | 0 | ⚠️ Has console.log |
-| PolygonInteractionIntegration.test.tsx | 21 | 0 | ✅ |
-| PolygonPerformanceRegression.test.tsx | 28 | 0 | ⚠️ Has console.log |
-| PolygonSelection.test.tsx | 25 | 0 | ✅ |
-| ReactKeyGeneration.test.tsx | 16 | 0 | ✅ |
-| SegmentationEditor.integration.test.tsx | 7 | 0 | ✅ |
-| VertexContextMenu.e2e.test.tsx | 18 | 0 | ✅ |
-| VertexDeletionIntegration.test.tsx | 20 | 0 | ✅ |
+
+| File                                    | Tests | Skipped | Status             |
+| --------------------------------------- | ----- | ------- | ------------------ |
+| EventHandling.test.tsx                  | 30    | 0       | ✅                 |
+| HoleRendering.test.tsx                  | 23    | 0       | ✅                 |
+| ModeHandling.test.tsx                   | 25    | 0       | ✅                 |
+| PolygonDataEdgeCases.test.tsx           | 36    | 0       | ✅                 |
+| PolygonIdValidation.test.tsx            | 27    | 0       | ⚠️ Has console.log |
+| PolygonInteractionIntegration.test.tsx  | 21    | 0       | ✅                 |
+| PolygonPerformanceRegression.test.tsx   | 28    | 0       | ⚠️ Has console.log |
+| PolygonSelection.test.tsx               | 25    | 0       | ✅                 |
+| ReactKeyGeneration.test.tsx             | 16    | 0       | ✅                 |
+| SegmentationEditor.integration.test.tsx | 7     | 0       | ✅                 |
+| VertexContextMenu.e2e.test.tsx          | 18    | 0       | ✅                 |
+| VertexDeletionIntegration.test.tsx      | 20    | 0       | ✅                 |
 
 **Subtotal:** 12 test files, 276 tests
 
 ### 1.6 Page Tests (1 file)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| ShareAccept.test.tsx | 25 | 0 | ✅ |
+| File                 | Tests | Skipped | Status |
+| -------------------- | ----- | ------- | ------ |
+| ShareAccept.test.tsx | 25    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 25 tests
 
 ### 1.7 Service Tests (4 files)
 
-| File | Tests | Skipped | Assertions | Notes |
-|------|-------|---------|------------|-------|
-| webSocketIntegration.test.ts | 19 | 0 | 55 | ⚠️ High assertions |
-| webSocketManager.test.ts | 61 | 0 | 85 | ⚠️ Very high assertions |
-| webSocketPerformance.test.ts | 17 | 0 | - | ✅ |
-| webSocketRealtimeWorkflows.test.ts | 16 | 0 | - | ⚠️ Many setTimeout calls |
+| File                               | Tests | Skipped | Assertions | Notes                    |
+| ---------------------------------- | ----- | ------- | ---------- | ------------------------ |
+| webSocketIntegration.test.ts       | 19    | 0       | 55         | ⚠️ High assertions       |
+| webSocketManager.test.ts           | 61    | 0       | 85         | ⚠️ Very high assertions  |
+| webSocketPerformance.test.ts       | 17    | 0       | -          | ✅                       |
+| webSocketRealtimeWorkflows.test.ts | 16    | 0       | -          | ⚠️ Many setTimeout calls |
 
 **Subtotal:** 4 test files, 113 tests
 
 ### 1.8 Performance Tests (1 file)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| cancel-performance.test.ts | 25 | 0 | ✅ |
+| File                       | Tests | Skipped | Status |
+| -------------------------- | ----- | ------- | ------ |
+| cancel-performance.test.ts | 25    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 25 tests
 
 ### 1.9 Test Utilities (2 files)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| canvasTestUtils.test.ts | 32 | 0 | ✅ |
-| webSocketTestUtils.test.ts | 35 | 0 | ✅ |
+| File                       | Tests | Skipped | Status |
+| -------------------------- | ----- | ------- | ------ |
+| canvasTestUtils.test.ts    | 32    | 0       | ✅     |
+| webSocketTestUtils.test.ts | 35    | 0       | ✅     |
 
 **Subtotal:** 2 test files, 67 tests
 
@@ -252,113 +262,113 @@
 
 ### 2.1 Controller Tests (5 files)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| auth.controller.test.ts | 20 | 0 | ✅ |
-| dashboardMetrics.test.ts | 15 | 0 | ✅ |
-| imageController.test.ts | 24 | 0 | ✅ |
-| projects.controller.test.ts | 29 | 0 | ✅ |
-| queueController.test.ts | 28 | 0 | ✅ |
+| File                        | Tests | Skipped | Status |
+| --------------------------- | ----- | ------- | ------ |
+| auth.controller.test.ts     | 20    | 0       | ✅     |
+| dashboardMetrics.test.ts    | 15    | 0       | ✅     |
+| imageController.test.ts     | 24    | 0       | ✅     |
+| projects.controller.test.ts | 29    | 0       | ✅     |
+| queueController.test.ts     | 28    | 0       | ✅     |
 
 **Subtotal:** 5 test files, 116 tests
 
 ### 2.2 Route Tests (1 file)
 
-| File | Tests | Skipped | Assertions | Notes |
-|------|-------|---------|------------|-------|
-| mlRoutes.test.ts | 38 | 0 | 85 | ⚠️ High assertions |
+| File             | Tests | Skipped | Assertions | Notes              |
+| ---------------- | ----- | ------- | ---------- | ------------------ |
+| mlRoutes.test.ts | 38    | 0       | 85         | ⚠️ High assertions |
 
 **Subtotal:** 1 test file, 38 tests
 
 ### 2.3 API Tests (2 files)
 
-| File | Tests | Skipped | Assertions | Notes |
-|------|-------|---------|------------|-------|
-| queueCancel.test.ts | 37 | 0 | 75 | ⚠️ High assertions |
-| uploadCancel.test.ts | 36 | 0 | 57 | ⚠️ High assertions |
+| File                 | Tests | Skipped | Assertions | Notes              |
+| -------------------- | ----- | ------- | ---------- | ------------------ |
+| queueCancel.test.ts  | 37    | 0       | 75         | ⚠️ High assertions |
+| uploadCancel.test.ts | 36    | 0       | 57         | ⚠️ High assertions |
 
 **Subtotal:** 2 test files, 73 tests
 
 ### 2.4 Middleware Tests (2 files)
 
-| File | Tests | Skipped | Assertions | Notes |
-|------|-------|---------|------------|-------|
-| accessLogger.test.ts | 37 | 0 | 50 | ⚠️ High assertions |
-| upload.test.ts | 24 | 0 | 53 | ⚠️ High assertions |
+| File                 | Tests | Skipped | Assertions | Notes              |
+| -------------------- | ----- | ------- | ---------- | ------------------ |
+| accessLogger.test.ts | 37    | 0       | 50         | ⚠️ High assertions |
+| upload.test.ts       | 24    | 0       | 53         | ⚠️ High assertions |
 
 **Subtotal:** 2 test files, 61 tests
 
 ### 2.5 Service Tests (13 files)
 
-| File | Tests | Skipped | Assertions | Notes |
-|------|-------|---------|------------|-------|
-| authService.test.ts | 23 | 0 | - | ✅ |
-| authService.avatar.test.ts | 10 | 0 | - | ✅ |
-| projectService.test.ts | 23 | 0 | - | ✅ |
-| queueService.parallel.test.ts | 19 | 0 | 54 | ⚠️ High assertions |
-| segmentationService.test.ts | 14 | 0 | - | ✅ |
-| segmentationService.batch-fix.test.ts | 6 | 0 | - | ✅ |
-| segmentationService.concurrent.test.ts | 23 | 0 | - | ✅ |
-| segmentationService.integration.test.ts | 10 | 0 | - | ✅ |
-| userService.stats.test.ts | 16 | 0 | 54 | ⚠️ High assertions |
-| webSocketService.cancel.test.ts | 36 | 0 | 51 | ⚠️ High assertions |
-| websocketService.parallel.test.ts | 25 | 0 | - | ✅ |
-| websocketService.realtime.test.ts | 20 | 0 | - | ✅ |
-| metricsCalculator.test.ts | 13 | 1 | 57 | ⚠️ Has skipped test |
+| File                                    | Tests | Skipped | Assertions | Notes               |
+| --------------------------------------- | ----- | ------- | ---------- | ------------------- |
+| authService.test.ts                     | 23    | 0       | -          | ✅                  |
+| authService.avatar.test.ts              | 10    | 0       | -          | ✅                  |
+| projectService.test.ts                  | 23    | 0       | -          | ✅                  |
+| queueService.parallel.test.ts           | 19    | 0       | 54         | ⚠️ High assertions  |
+| segmentationService.test.ts             | 14    | 0       | -          | ✅                  |
+| segmentationService.batch-fix.test.ts   | 6     | 0       | -          | ✅                  |
+| segmentationService.concurrent.test.ts  | 23    | 0       | -          | ✅                  |
+| segmentationService.integration.test.ts | 10    | 0       | -          | ✅                  |
+| userService.stats.test.ts               | 16    | 0       | 54         | ⚠️ High assertions  |
+| webSocketService.cancel.test.ts         | 36    | 0       | 51         | ⚠️ High assertions  |
+| websocketService.parallel.test.ts       | 25    | 0       | -          | ✅                  |
+| websocketService.realtime.test.ts       | 20    | 0       | -          | ✅                  |
+| metricsCalculator.test.ts               | 13    | 1       | 57         | ⚠️ Has skipped test |
 
 **Subtotal:** 13 test files, 238 tests
 
 #### Export Service Tests (1 file)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| scaleConversionIntegration.test.ts | 9 | 0 | ✅ |
+| File                               | Tests | Skipped | Status |
+| ---------------------------------- | ----- | ------- | ------ |
+| scaleConversionIntegration.test.ts | 9     | 0       | ✅     |
 
 **Subtotal:** 1 test file, 9 tests
 
 #### Visualization Service Tests (1 file)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| numberPaths.test.ts | 20 | 0 | ✅ |
+| File                | Tests | Skipped | Status |
+| ------------------- | ----- | ------- | ------ |
+| numberPaths.test.ts | 20    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 20 tests
 
 ### 2.6 Integration Tests (7 files)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| api.integration.test.ts | 36 | 0 | ✅ |
-| dashboardMetrics.integration.test.ts | 12 | 0 | ✅ |
-| database.integration.test.ts | 27 | 0 | ✅ |
-| database.simple.test.ts | 10 | 0 | ✅ |
-| mlAuthenticationBoundaries.test.ts | 31 | 0 | ✅ |
-| projectCard.realtime.test.ts | 15 | 0 | ✅ |
-| upload.test.ts | 15 | 0 | ✅ |
+| File                                 | Tests | Skipped | Status |
+| ------------------------------------ | ----- | ------- | ------ |
+| api.integration.test.ts              | 36    | 0       | ✅     |
+| dashboardMetrics.integration.test.ts | 12    | 0       | ✅     |
+| database.integration.test.ts         | 27    | 0       | ✅     |
+| database.simple.test.ts              | 10    | 0       | ✅     |
+| mlAuthenticationBoundaries.test.ts   | 31    | 0       | ✅     |
+| projectCard.realtime.test.ts         | 15    | 0       | ✅     |
+| upload.test.ts                       | 15    | 0       | ✅     |
 
 **Subtotal:** 7 test files, 146 tests
 
 ### 2.7 Security Tests (1 file)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| mlAuthenticationSecurity.test.ts | 42 | 0 | ✅ |
+| File                             | Tests | Skipped | Status |
+| -------------------------------- | ----- | ------- | ------ |
+| mlAuthenticationSecurity.test.ts | 42    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 42 tests
 
 ### 2.8 Utility Tests (1 file)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| polygonValidation.test.ts | 15 | 0 | ✅ |
+| File                      | Tests | Skipped | Status |
+| ------------------------- | ----- | ------- | ------ |
+| polygonValidation.test.ts | 15    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 15 tests
 
 ### 2.9 Worker Tests (1 file)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| queueWorker.parallel.test.ts | 29 | 0 | ✅ |
+| File                         | Tests | Skipped | Status |
+| ---------------------------- | ----- | ------- | ------ |
+| queueWorker.parallel.test.ts | 29    | 0       | ✅     |
 
 **Subtotal:** 1 test file, 29 tests
 
@@ -368,29 +378,31 @@
 
 ### 3.1 API Tests (3 files)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| test_cancel_api.py | 17 | 0 | ✅ |
-| test_parallel_processing.py | 12 | 0 | ✅ |
-| test_performance_benchmarks.py | 9 | 0 | ✅ |
+| File                           | Tests | Skipped | Status |
+| ------------------------------ | ----- | ------- | ------ |
+| test_cancel_api.py             | 17    | 0       | ✅     |
+| test_parallel_processing.py    | 12    | 0       | ✅     |
+| test_performance_benchmarks.py | 9     | 0       | ✅     |
 
 **Subtotal:** 3 test files, 38 tests
 
 ### 3.2 Unit Tests (4 files)
 
 #### ML Unit Tests
-| File | Tests | Skipped | Notes |
-|------|-------|---------|-------|
-| test_inference_executor.py | 17 | 0 | ✅ |
-| test_parallel_inference.py | 14 | 1 | ⚠️ CUDA-conditional skip |
+
+| File                       | Tests | Skipped | Notes                    |
+| -------------------------- | ----- | ------- | ------------------------ |
+| test_inference_executor.py | 17    | 0       | ✅                       |
+| test_parallel_inference.py | 14    | 1       | ⚠️ CUDA-conditional skip |
 
 **Subtotal:** 2 test files, 31 tests
 
 #### API Unit Tests
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| test_api_segmentation.py | 6 | 0 | ✅ |
-| test_inference_service.py | 6 | 0 | ✅ |
+
+| File                      | Tests | Skipped | Status |
+| ------------------------- | ----- | ------- | ------ |
+| test_api_segmentation.py  | 6     | 0       | ✅     |
+| test_inference_service.py | 6     | 0       | ✅     |
 
 **Subtotal:** 2 test files, 12 tests
 
@@ -402,34 +414,34 @@
 
 ### 4.1 E2E Root Tests (4 files)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| batch-segmentation-results.spec.ts | 5 | 0 | ✅ |
-| cancel-workflows.spec.ts | 24 | 0 | ✅ |
-| parallel-segmentation.spec.ts | 7 | 0 | ✅ |
-| upload-large-batch.spec.ts | 7 | 0 | ✅ |
+| File                               | Tests | Skipped | Status |
+| ---------------------------------- | ----- | ------- | ------ |
+| batch-segmentation-results.spec.ts | 5     | 0       | ✅     |
+| cancel-workflows.spec.ts           | 24    | 0       | ✅     |
+| parallel-segmentation.spec.ts      | 7     | 0       | ✅     |
+| upload-large-batch.spec.ts         | 7     | 0       | ✅     |
 
 **Subtotal:** 4 test files, 43 tests
 
 ### 4.2 E2E Tests Directory (15 files)
 
-| File | Tests | Skipped | Status |
-|------|-------|---------|--------|
-| api-mocking.spec.ts | 16 | 0 | ✅ |
-| auth.spec.ts | 11 | 0 | ✅ |
-| auth-enhanced.spec.ts | 10 | 0 | ✅ |
-| auth-enhanced-comprehensive.spec.ts | 12 | 0 | ✅ |
-| critical-flows-comprehensive.spec.ts | 16 | 0 | ✅ |
-| environment-check.spec.ts | 3 | 0 | ✅ |
-| error-recovery-comprehensive.spec.ts | 16 | 0 | ✅ |
-| performance-enhanced.spec.ts | 11 | 0 | ✅ |
-| polygon-editing.spec.ts | 11 | 0 | ✅ |
-| project-workflow.spec.ts | 10 | 0 | ✅ |
-| project-workflow-enhanced.spec.ts | 14 | 0 | ✅ |
-| segmentation-editor-enhanced.spec.ts | 19 | 0 | ✅ |
-| segmentation-workflow.spec.ts | 7 | 0 | ✅ |
-| websocket-queue.spec.ts | 8 | 0 | ✅ |
-| segmentation-performance.spec.ts | 8 | 1 | ⚠️ Has skipped test |
+| File                                 | Tests | Skipped | Status              |
+| ------------------------------------ | ----- | ------- | ------------------- |
+| api-mocking.spec.ts                  | 16    | 0       | ✅                  |
+| auth.spec.ts                         | 11    | 0       | ✅                  |
+| auth-enhanced.spec.ts                | 10    | 0       | ✅                  |
+| auth-enhanced-comprehensive.spec.ts  | 12    | 0       | ✅                  |
+| critical-flows-comprehensive.spec.ts | 16    | 0       | ✅                  |
+| environment-check.spec.ts            | 3     | 0       | ✅                  |
+| error-recovery-comprehensive.spec.ts | 16    | 0       | ✅                  |
+| performance-enhanced.spec.ts         | 11    | 0       | ✅                  |
+| polygon-editing.spec.ts              | 11    | 0       | ✅                  |
+| project-workflow.spec.ts             | 10    | 0       | ✅                  |
+| project-workflow-enhanced.spec.ts    | 14    | 0       | ✅                  |
+| segmentation-editor-enhanced.spec.ts | 19    | 0       | ✅                  |
+| segmentation-workflow.spec.ts        | 7     | 0       | ✅                  |
+| websocket-queue.spec.ts              | 8     | 0       | ✅                  |
+| segmentation-performance.spec.ts     | 8     | 1       | ⚠️ Has skipped test |
 
 **Subtotal:** 15 test files, 172 tests
 
@@ -562,24 +574,26 @@
 
 ### 6.1 Skipped Tests (3 found)
 
-| File | Line | Reason |
-|------|------|--------|
-| src/components/__tests__/NewProject.test.tsx | 18 | `describe.skip` - Unknown reason |
-| backend/src/services/metrics/__tests__/metricsCalculator.test.ts | 254 | Excel export units test - needs implementation |
-| backend/segmentation/tests/unit/ml/test_parallel_inference.py | 334 | CUDA not available (conditional) |
-| tests/performance/segmentation-performance.spec.ts | - | Performance test skipped |
+| File                                                             | Line | Reason                                         |
+| ---------------------------------------------------------------- | ---- | ---------------------------------------------- |
+| src/components/**tests**/NewProject.test.tsx                     | 18   | `describe.skip` - Unknown reason               |
+| backend/src/services/metrics/**tests**/metricsCalculator.test.ts | 254  | Excel export units test - needs implementation |
+| backend/segmentation/tests/unit/ml/test_parallel_inference.py    | 334  | CUDA not available (conditional)               |
+| tests/performance/segmentation-performance.spec.ts               | -    | Performance test skipped                       |
 
 **Recommendation:** Review and either fix or document why these tests are skipped.
 
 ### 6.2 Tests with High Assertion Counts (Possible Test Smells)
 
 **Frontend:**
+
 - webSocketManager.test.ts: **85 assertions** (61 tests) - Average 1.4 per test ✅ OK
 - ProjectListItem.test.tsx: **60 assertions** (29 tests) - Average 2.1 per test ✅ OK
 - AuthContext.test.tsx: **56 assertions** (21 tests) - Average 2.7 per test ⚠️ Monitor
 - webSocketIntegration.test.ts: **55 assertions** (19 tests) - Average 2.9 per test ⚠️ Monitor
 
 **Backend:**
+
 - mlRoutes.test.ts: **85 assertions** (38 tests) - Average 2.2 per test ✅ OK
 - queueCancel.test.ts: **75 assertions** (37 tests) - Average 2.0 per test ✅ OK
 - uploadCancel.test.ts: **57 assertions** (36 tests) - Average 1.6 per test ✅ OK
@@ -595,14 +609,17 @@
 ### 6.3 Debug Statements in Tests
 
 **Frontend:**
+
 - **5 console.log instances:**
-  - src/pages/segmentation/__tests__/PolygonPerformanceRegression.test.tsx (lines 552, 617)
-  - src/pages/segmentation/__tests__/PolygonIdValidation.test.tsx (lines 24, 74, 88)
+  - src/pages/segmentation/**tests**/PolygonPerformanceRegression.test.tsx (lines 552, 617)
+  - src/pages/segmentation/**tests**/PolygonIdValidation.test.tsx (lines 24, 74, 88)
 
 **Backend:**
+
 - **0 console.log instances** ✅
 
 **ML Service:**
+
 - **~40 print statements** ⚠️
   - Used for debugging and performance output
   - Should be replaced with proper logging
@@ -630,6 +647,7 @@
    - **Risk: MEDIUM**
 
 **Recommendation:**
+
 - Replace setTimeout with proper async/await patterns
 - Use testing library utilities (waitFor, findBy queries)
 - Mock timers properly with jest.useFakeTimers()
@@ -637,8 +655,9 @@
 ### 6.5 Race Condition Tests ✅
 
 **Dedicated race condition tests (GOOD):**
-- src/hooks/__tests__/useProjectData.race-condition.test.tsx
-- src/lib/__tests__/errorUtils.race-condition.test.ts
+
+- src/hooks/**tests**/useProjectData.race-condition.test.tsx
+- src/lib/**tests**/errorUtils.race-condition.test.ts
 
 These are intentional tests for race conditions - excellent coverage!
 
@@ -650,20 +669,21 @@ These are intentional tests for race conditions - excellent coverage!
 
 **Located in `/src/test-utils/`:**
 
-| File | Purpose | Tests |
-|------|---------|-------|
-| canvasTestUtils.ts | Canvas testing utilities | ✅ Tested (32 tests) |
-| webSocketTestUtils.ts | WebSocket mock utilities | ✅ Tested (35 tests) |
-| polygonTestUtils.ts | Polygon data helpers | No direct tests |
-| polygonTestDataFactory.ts | Test data generation | No direct tests |
-| segmentationTestUtils.ts | Segmentation helpers | No direct tests |
-| cancelTestHelpers.tsx | Cancel workflow helpers | No direct tests |
-| test-helpers.ts | General helpers | No direct tests |
-| reactTestUtils.tsx | React testing utilities | No direct tests |
-| test-components.tsx | Mock components | No direct tests |
-| mockComponents.tsx | UI mock components | No direct tests |
+| File                      | Purpose                  | Tests                |
+| ------------------------- | ------------------------ | -------------------- |
+| canvasTestUtils.ts        | Canvas testing utilities | ✅ Tested (32 tests) |
+| webSocketTestUtils.ts     | WebSocket mock utilities | ✅ Tested (35 tests) |
+| polygonTestUtils.ts       | Polygon data helpers     | No direct tests      |
+| polygonTestDataFactory.ts | Test data generation     | No direct tests      |
+| segmentationTestUtils.ts  | Segmentation helpers     | No direct tests      |
+| cancelTestHelpers.tsx     | Cancel workflow helpers  | No direct tests      |
+| test-helpers.ts           | General helpers          | No direct tests      |
+| reactTestUtils.tsx        | React testing utilities  | No direct tests      |
+| test-components.tsx       | Mock components          | No direct tests      |
+| mockComponents.tsx        | UI mock components       | No direct tests      |
 
 **Additional test utilities:**
+
 - `/src/test/utils/test-utils.tsx` - Main test utilities
 
 ### 7.2 Circular Dependencies
@@ -673,6 +693,7 @@ These are intentional tests for race conditions - excellent coverage!
 ### 7.3 Shared Test Patterns
 
 **Common patterns identified:**
+
 1. ✅ Consistent use of `@testing-library/react`
 2. ✅ Vitest for unit/integration tests
 3. ✅ Playwright for E2E tests
@@ -686,11 +707,11 @@ These are intentional tests for race conditions - excellent coverage!
 
 ### 8.1 Mobile UI Components
 
-| Component | Test File | Status |
-|-----------|-----------|--------|
-| QueueStatsPanel | ✅ 2 test files (34 tests) | **EXCELLENT** |
-| PolygonListPanel | ❌ None | **MISSING** ⚠️ |
-| MobileMenu | ❌ None | **MISSING** ⚠️ |
+| Component        | Test File                  | Status         |
+| ---------------- | -------------------------- | -------------- |
+| QueueStatsPanel  | ✅ 2 test files (34 tests) | **EXCELLENT**  |
+| PolygonListPanel | ❌ None                    | **MISSING** ⚠️ |
+| MobileMenu       | ❌ None                    | **MISSING** ⚠️ |
 
 **Critical Gap:** PolygonListPanel and MobileMenu need tests!
 
@@ -699,6 +720,7 @@ These are intentional tests for race conditions - excellent coverage!
 **Overall Coverage: VERY GOOD** ⭐⭐⭐⭐
 
 **Well-tested:**
+
 - ✅ Canvas components (164 tests)
 - ✅ Polygon operations (276 integration tests)
 - ✅ Hooks (102 tests)
@@ -706,6 +728,7 @@ These are intentional tests for race conditions - excellent coverage!
 - ✅ Vertex interactions (43 tests)
 
 **Missing:**
+
 - ❌ 12 UI components without tests (see section 5)
 
 ### 8.3 WebSocket Functionality
@@ -748,13 +771,16 @@ These are intentional tests for race conditions - excellent coverage!
 ### 9.1 Test Timeouts
 
 **Frontend (Vitest):**
+
 - Default: Not specified in test files
 - Extended timeouts in specific tests (e.g., 100-200ms for async operations)
 
 **E2E (Playwright):**
+
 - Standard Playwright timeouts
 
 **ML Service (Pytest):**
+
 - Default pytest timeouts
 
 **Recommendation:** Document standard timeout configurations in test setup.
@@ -762,6 +788,7 @@ These are intentional tests for race conditions - excellent coverage!
 ### 9.2 Test Execution Commands
 
 **From CLAUDE.md:**
+
 ```bash
 make test           # Unit tests (timeout: 300000)
 make test-e2e       # E2E tests (timeout: 600000)
@@ -893,27 +920,27 @@ make type-check     # TypeScript check
 
 ### Coverage by Layer
 
-| Layer | Files | Tests | Coverage Rating |
-|-------|-------|-------|-----------------|
-| Frontend UI | 98 | 1,969 | ⭐⭐⭐⭐ (85%) |
-| Backend API | 35 | 554 | ⭐⭐⭐⭐⭐ (95%) |
-| ML Service | 7 | 81 | ⭐⭐⭐ (70%) |
-| E2E | 19 | 265 | ⭐⭐⭐⭐ (90%) |
+| Layer       | Files | Tests | Coverage Rating  |
+| ----------- | ----- | ----- | ---------------- |
+| Frontend UI | 98    | 1,969 | ⭐⭐⭐⭐ (85%)   |
+| Backend API | 35    | 554   | ⭐⭐⭐⭐⭐ (95%) |
+| ML Service  | 7     | 81    | ⭐⭐⭐ (70%)     |
+| E2E         | 19    | 265   | ⭐⭐⭐⭐ (90%)   |
 
 ### Critical Features Coverage
 
-| Feature | Coverage | Status |
-|---------|----------|--------|
-| Authentication | 95% | ⭐⭐⭐⭐⭐ Excellent |
-| WebSocket | 95% | ⭐⭐⭐⭐⭐ Excellent |
-| File Upload/Download | 90% | ⭐⭐⭐⭐⭐ Excellent |
-| Polygon Operations | 95% | ⭐⭐⭐⭐⭐ Excellent |
-| API Client | 95% | ⭐⭐⭐⭐⭐ Excellent |
-| Segmentation Canvas | 85% | ⭐⭐⭐⭐ Very Good |
-| Segmentation UI | 40% | ⚠️ Needs Work |
-| Mobile UI | 50% | ⚠️ Needs Work |
-| Header Components | 0% | ❌ Critical Gap |
-| ML Service | 70% | ⭐⭐⭐ Good |
+| Feature              | Coverage | Status               |
+| -------------------- | -------- | -------------------- |
+| Authentication       | 95%      | ⭐⭐⭐⭐⭐ Excellent |
+| WebSocket            | 95%      | ⭐⭐⭐⭐⭐ Excellent |
+| File Upload/Download | 90%      | ⭐⭐⭐⭐⭐ Excellent |
+| Polygon Operations   | 95%      | ⭐⭐⭐⭐⭐ Excellent |
+| API Client           | 95%      | ⭐⭐⭐⭐⭐ Excellent |
+| Segmentation Canvas  | 85%      | ⭐⭐⭐⭐ Very Good   |
+| Segmentation UI      | 40%      | ⚠️ Needs Work        |
+| Mobile UI            | 50%      | ⚠️ Needs Work        |
+| Header Components    | 0%       | ❌ Critical Gap      |
+| ML Service           | 70%      | ⭐⭐⭐ Good          |
 
 ---
 
@@ -942,29 +969,22 @@ make type-check     # TypeScript check
 ### Next Steps 🎯
 
 **Immediate Actions (Week 1):**
+
 1. Add tests for PolygonListPanel.tsx (CRITICAL)
 2. Add tests for MobileMenu.tsx (CRITICAL)
 3. Remove debug statements from tests
 4. Fix or document skipped tests
 
-**Short-term Actions (Weeks 2-4):**
-5. Add tests for EnhancedSegmentationEditor.tsx
-6. Add tests for SegmentationErrorBoundary.tsx
-7. Refactor tests with high assertion counts
-8. Replace setTimeout with proper async patterns
-9. Add tests for header components
+**Short-term Actions (Weeks 2-4):** 5. Add tests for EnhancedSegmentationEditor.tsx 6. Add tests for SegmentationErrorBoundary.tsx 7. Refactor tests with high assertion counts 8. Replace setTimeout with proper async patterns 9. Add tests for header components
 
-**Long-term Actions (Month 2+):**
-10. Complete segmentation UI component coverage
-11. Expand ML service test coverage
-12. Add more edge case tests
-13. Performance boundary testing
+**Long-term Actions (Month 2+):** 10. Complete segmentation UI component coverage 11. Expand ML service test coverage 12. Add more edge case tests 13. Performance boundary testing
 
 ### Risk Assessment
 
 **Current Risk Level:** 🟡 MEDIUM-LOW
 
 **Justification:**
+
 - Core business logic well-tested (✅)
 - API layer well-tested (✅)
 - Authentication secure (✅)
@@ -983,104 +1003,104 @@ make type-check     # TypeScript check
 <details>
 <summary>Click to expand complete list</summary>
 
-1. src/components/project/__tests__/ImageCard.test.tsx
-2. src/components/project/__tests__/ProcessingSlots.test.tsx
-3. src/components/project/__tests__/QueueStatsPanel.cancel.test.tsx
-4. src/components/project/__tests__/QueueStatsPanel.parallel.test.tsx
-5. src/components/settings/__tests__/DeleteAccountDialog.test.tsx
-6. src/components/__tests__/AuthToastProvider.test.tsx
-7. src/components/__tests__/DashboardActions.test.tsx
-8. src/components/__tests__/DashboardHeader.test.tsx
-9. src/components/__tests__/ErrorBoundary.test.tsx
-10. src/components/__tests__/Features.test.tsx
-11. src/components/__tests__/Footer.test.tsx
-12. src/components/__tests__/Hero.test.tsx
-13. src/components/__tests__/ImageUploader.cancel.test.tsx
-14. src/components/__tests__/ImageUploader.test.tsx
-15. src/components/__tests__/LanguageSwitcher.test.tsx
-16. src/components/__tests__/Navbar.test.tsx
-17. src/components/__tests__/NewProjectCard.test.tsx
-18. src/components/__tests__/NewProjectListItem.test.tsx
-19. src/components/__tests__/NewProject.test.tsx
-20. src/components/__tests__/ProjectCallbackChain.test.tsx
-21. src/components/__tests__/ProjectCard.test.tsx
-22. src/components/__tests__/ProjectListItem.test.tsx
-23. src/components/__tests__/ProjectsList.test.tsx
-24. src/components/__tests__/ProtectedRoute.test.tsx
-25. src/components/__tests__/StatsOverview.test.tsx
-26. src/components/__tests__/ThemeSwitcher.test.tsx
-27. src/components/ui/__tests__/cancel-button.test.tsx
-28. src/components/ui/__tests__/universal-cancel-button.test.tsx
-29. src/contexts/__tests__/AuthContext.test.tsx
-30. src/contexts/__tests__/ThemeContext.simple.test.tsx
-31. src/contexts/__tests__/ThemeContext.test.tsx
-32. src/contexts/__tests__/WebSocketContext.test.tsx
-33. src/hooks/shared/__tests__/useAbortController.test.ts
-34. src/hooks/shared/__tests__/useAbortController.unit.test.ts
-35. src/hooks/shared/__tests__/useOperationManager.integration.test.ts
-36. src/hooks/__tests__/useAbortController.enhanced.test.tsx
-37. src/hooks/__tests__/useDebounce.test.ts
-38. src/hooks/__tests__/useOperationManager.test.tsx
-39. src/hooks/__tests__/useProjectData.race-condition.test.tsx
-40. src/hooks/__tests__/useProjectData.test.tsx
-41. src/hooks/__tests__/useSegmentationQueue.parallel.test.tsx
-42. src/hooks/__tests__/useSegmentationQueue.simple.test.tsx
-43. src/hooks/__tests__/useSegmentationQueue.test.tsx
-44. src/hooks/__tests__/useWebSocketToasts.test.ts
-45. src/lib/__tests__/api-advanced.test.ts
-46. src/lib/__tests__/api-chunked-upload.test.ts
-47. src/lib/__tests__/api.integration.test.ts
-48. src/lib/__tests__/api-segmentation.test.ts
-49. src/lib/__tests__/apiSimple.test.ts
-50. src/lib/__tests__/api.test.ts
-51. src/lib/__tests__/constants.test.ts
-52. src/lib/__tests__/coordinateUtils.test.ts
-53. src/lib/__tests__/errorUtils.race-condition.test.ts
-54. src/lib/__tests__/errorUtils.test.ts
-55. src/lib/__tests__/httpUtils.test.ts
-56. src/lib/__tests__/imageProcessingService.test.ts
-57. src/lib/__tests__/performanceMonitor.test.ts
-58. src/lib/__tests__/performanceUtils.test.ts
-59. src/lib/__tests__/polygonGeometry.test.ts
-60. src/lib/__tests__/polygonIdUtils.reactkeys.test.ts
-61. src/lib/__tests__/polygonIdUtils.test.ts
-62. src/lib/__tests__/polygonSlicing.test.ts
-63. src/lib/__tests__/retryUtils.test.ts
-64. src/lib/__tests__/segmentation.test.ts
-65. src/lib/__tests__/utils.test.ts
-66. src/lib/__tests__/websocketEvents.test.ts
-67. src/pages/segmentation/components/canvas/__tests__/CanvasContainerSimple.test.tsx
-68. src/pages/segmentation/components/canvas/__tests__/CanvasContainer.test.tsx
-69. src/pages/segmentation/components/canvas/__tests__/CanvasPolygonSimple.test.tsx
-70. src/pages/segmentation/components/canvas/__tests__/CanvasPolygon.test.tsx
-71. src/pages/segmentation/components/canvas/__tests__/CanvasVertex.test.tsx
-72. src/pages/segmentation/components/context-menu/__tests__/VertexContextMenu.test.tsx
-73. src/pages/segmentation/components/__tests__/SegmentationStatusIndicator.test.tsx
-74. src/pages/segmentation/config/__tests__/modeConfig.test.ts
-75. src/pages/segmentation/hooks/__tests__/useAdvancedInteractions.vertex.test.tsx
-76. src/pages/segmentation/hooks/__tests__/useEnhancedSegmentationEditor.test.tsx
-77. src/pages/segmentation/hooks/__tests__/usePolygonSlicing.test.tsx
-78. src/pages/segmentation/hooks/__tests__/useSegmentationReload.test.tsx
-79. src/pages/segmentation/__tests__/EventHandling.test.tsx
-80. src/pages/segmentation/__tests__/HoleRendering.test.tsx
-81. src/pages/segmentation/__tests__/ModeHandling.test.tsx
-82. src/pages/segmentation/__tests__/PolygonDataEdgeCases.test.tsx
-83. src/pages/segmentation/__tests__/PolygonIdValidation.test.tsx
-84. src/pages/segmentation/__tests__/PolygonInteractionIntegration.test.tsx
-85. src/pages/segmentation/__tests__/PolygonPerformanceRegression.test.tsx
-86. src/pages/segmentation/__tests__/PolygonSelection.test.tsx
-87. src/pages/segmentation/__tests__/ReactKeyGeneration.test.tsx
-88. src/pages/segmentation/__tests__/SegmentationEditor.integration.test.tsx
-89. src/pages/segmentation/__tests__/VertexContextMenu.e2e.test.tsx
-90. src/pages/segmentation/__tests__/VertexDeletionIntegration.test.tsx
-91. src/pages/__tests__/ShareAccept.test.tsx
-92. src/services/__tests__/webSocketIntegration.test.ts
-93. src/services/__tests__/webSocketManager.test.ts
-94. src/services/__tests__/webSocketPerformance.test.ts
-95. src/services/__tests__/webSocketRealtimeWorkflows.test.ts
-96. src/__tests__/performance/cancel-performance.test.ts
-97. src/test-utils/__tests__/canvasTestUtils.test.ts
-98. src/test-utils/__tests__/webSocketTestUtils.test.ts
+1. src/components/project/**tests**/ImageCard.test.tsx
+2. src/components/project/**tests**/ProcessingSlots.test.tsx
+3. src/components/project/**tests**/QueueStatsPanel.cancel.test.tsx
+4. src/components/project/**tests**/QueueStatsPanel.parallel.test.tsx
+5. src/components/settings/**tests**/DeleteAccountDialog.test.tsx
+6. src/components/**tests**/AuthToastProvider.test.tsx
+7. src/components/**tests**/DashboardActions.test.tsx
+8. src/components/**tests**/DashboardHeader.test.tsx
+9. src/components/**tests**/ErrorBoundary.test.tsx
+10. src/components/**tests**/Features.test.tsx
+11. src/components/**tests**/Footer.test.tsx
+12. src/components/**tests**/Hero.test.tsx
+13. src/components/**tests**/ImageUploader.cancel.test.tsx
+14. src/components/**tests**/ImageUploader.test.tsx
+15. src/components/**tests**/LanguageSwitcher.test.tsx
+16. src/components/**tests**/Navbar.test.tsx
+17. src/components/**tests**/NewProjectCard.test.tsx
+18. src/components/**tests**/NewProjectListItem.test.tsx
+19. src/components/**tests**/NewProject.test.tsx
+20. src/components/**tests**/ProjectCallbackChain.test.tsx
+21. src/components/**tests**/ProjectCard.test.tsx
+22. src/components/**tests**/ProjectListItem.test.tsx
+23. src/components/**tests**/ProjectsList.test.tsx
+24. src/components/**tests**/ProtectedRoute.test.tsx
+25. src/components/**tests**/StatsOverview.test.tsx
+26. src/components/**tests**/ThemeSwitcher.test.tsx
+27. src/components/ui/**tests**/cancel-button.test.tsx
+28. src/components/ui/**tests**/universal-cancel-button.test.tsx
+29. src/contexts/**tests**/AuthContext.test.tsx
+30. src/contexts/**tests**/ThemeContext.simple.test.tsx
+31. src/contexts/**tests**/ThemeContext.test.tsx
+32. src/contexts/**tests**/WebSocketContext.test.tsx
+33. src/hooks/shared/**tests**/useAbortController.test.ts
+34. src/hooks/shared/**tests**/useAbortController.unit.test.ts
+35. src/hooks/shared/**tests**/useOperationManager.integration.test.ts
+36. src/hooks/**tests**/useAbortController.enhanced.test.tsx
+37. src/hooks/**tests**/useDebounce.test.ts
+38. src/hooks/**tests**/useOperationManager.test.tsx
+39. src/hooks/**tests**/useProjectData.race-condition.test.tsx
+40. src/hooks/**tests**/useProjectData.test.tsx
+41. src/hooks/**tests**/useSegmentationQueue.parallel.test.tsx
+42. src/hooks/**tests**/useSegmentationQueue.simple.test.tsx
+43. src/hooks/**tests**/useSegmentationQueue.test.tsx
+44. src/hooks/**tests**/useWebSocketToasts.test.ts
+45. src/lib/**tests**/api-advanced.test.ts
+46. src/lib/**tests**/api-chunked-upload.test.ts
+47. src/lib/**tests**/api.integration.test.ts
+48. src/lib/**tests**/api-segmentation.test.ts
+49. src/lib/**tests**/apiSimple.test.ts
+50. src/lib/**tests**/api.test.ts
+51. src/lib/**tests**/constants.test.ts
+52. src/lib/**tests**/coordinateUtils.test.ts
+53. src/lib/**tests**/errorUtils.race-condition.test.ts
+54. src/lib/**tests**/errorUtils.test.ts
+55. src/lib/**tests**/httpUtils.test.ts
+56. src/lib/**tests**/imageProcessingService.test.ts
+57. src/lib/**tests**/performanceMonitor.test.ts
+58. src/lib/**tests**/performanceUtils.test.ts
+59. src/lib/**tests**/polygonGeometry.test.ts
+60. src/lib/**tests**/polygonIdUtils.reactkeys.test.ts
+61. src/lib/**tests**/polygonIdUtils.test.ts
+62. src/lib/**tests**/polygonSlicing.test.ts
+63. src/lib/**tests**/retryUtils.test.ts
+64. src/lib/**tests**/segmentation.test.ts
+65. src/lib/**tests**/utils.test.ts
+66. src/lib/**tests**/websocketEvents.test.ts
+67. src/pages/segmentation/components/canvas/**tests**/CanvasContainerSimple.test.tsx
+68. src/pages/segmentation/components/canvas/**tests**/CanvasContainer.test.tsx
+69. src/pages/segmentation/components/canvas/**tests**/CanvasPolygonSimple.test.tsx
+70. src/pages/segmentation/components/canvas/**tests**/CanvasPolygon.test.tsx
+71. src/pages/segmentation/components/canvas/**tests**/CanvasVertex.test.tsx
+72. src/pages/segmentation/components/context-menu/**tests**/VertexContextMenu.test.tsx
+73. src/pages/segmentation/components/**tests**/SegmentationStatusIndicator.test.tsx
+74. src/pages/segmentation/config/**tests**/modeConfig.test.ts
+75. src/pages/segmentation/hooks/**tests**/useAdvancedInteractions.vertex.test.tsx
+76. src/pages/segmentation/hooks/**tests**/useEnhancedSegmentationEditor.test.tsx
+77. src/pages/segmentation/hooks/**tests**/usePolygonSlicing.test.tsx
+78. src/pages/segmentation/hooks/**tests**/useSegmentationReload.test.tsx
+79. src/pages/segmentation/**tests**/EventHandling.test.tsx
+80. src/pages/segmentation/**tests**/HoleRendering.test.tsx
+81. src/pages/segmentation/**tests**/ModeHandling.test.tsx
+82. src/pages/segmentation/**tests**/PolygonDataEdgeCases.test.tsx
+83. src/pages/segmentation/**tests**/PolygonIdValidation.test.tsx
+84. src/pages/segmentation/**tests**/PolygonInteractionIntegration.test.tsx
+85. src/pages/segmentation/**tests**/PolygonPerformanceRegression.test.tsx
+86. src/pages/segmentation/**tests**/PolygonSelection.test.tsx
+87. src/pages/segmentation/**tests**/ReactKeyGeneration.test.tsx
+88. src/pages/segmentation/**tests**/SegmentationEditor.integration.test.tsx
+89. src/pages/segmentation/**tests**/VertexContextMenu.e2e.test.tsx
+90. src/pages/segmentation/**tests**/VertexDeletionIntegration.test.tsx
+91. src/pages/**tests**/ShareAccept.test.tsx
+92. src/services/**tests**/webSocketIntegration.test.ts
+93. src/services/**tests**/webSocketManager.test.ts
+94. src/services/**tests**/webSocketPerformance.test.ts
+95. src/services/**tests**/webSocketRealtimeWorkflows.test.ts
+96. src/**tests**/performance/cancel-performance.test.ts
+97. src/test-utils/**tests**/canvasTestUtils.test.ts
+98. src/test-utils/**tests**/webSocketTestUtils.test.ts
 
 </details>
 
@@ -1089,31 +1109,31 @@ make type-check     # TypeScript check
 <details>
 <summary>Click to expand complete list</summary>
 
-1. backend/src/api/controllers/__tests__/auth.controller.test.ts
-2. backend/src/api/controllers/__tests__/dashboardMetrics.test.ts
-3. backend/src/api/controllers/__tests__/imageController.test.ts
-4. backend/src/api/controllers/__tests__/projects.controller.test.ts
-5. backend/src/api/controllers/__tests__/queueController.test.ts
-6. backend/src/api/routes/__tests__/mlRoutes.test.ts
-7. backend/src/api/__tests__/queueCancel.test.ts
-8. backend/src/api/__tests__/uploadCancel.test.ts
-9. backend/src/middleware/__tests__/accessLogger.test.ts
-10. backend/src/middleware/__tests__/upload.test.ts
-11. backend/src/services/export/__tests__/scaleConversionIntegration.test.ts
-12. backend/src/services/metrics/__tests__/metricsCalculator.test.ts
-13. backend/src/services/__tests__/authService.avatar.test.ts
-14. backend/src/services/__tests__/authService.test.ts
-15. backend/src/services/__tests__/projectService.test.ts
-16. backend/src/services/__tests__/queueService.parallel.test.ts
-17. backend/src/services/__tests__/segmentationService.batch-fix.test.ts
-18. backend/src/services/__tests__/segmentationService.concurrent.test.ts
-19. backend/src/services/__tests__/segmentationService.integration.test.ts
-20. backend/src/services/__tests__/segmentationService.test.ts
-21. backend/src/services/__tests__/userService.stats.test.ts
-22. backend/src/services/__tests__/webSocketService.cancel.test.ts
-23. backend/src/services/__tests__/websocketService.parallel.test.ts
-24. backend/src/services/__tests__/websocketService.realtime.test.ts
-25. backend/src/services/visualization/__tests__/numberPaths.test.ts
+1. backend/src/api/controllers/**tests**/auth.controller.test.ts
+2. backend/src/api/controllers/**tests**/dashboardMetrics.test.ts
+3. backend/src/api/controllers/**tests**/imageController.test.ts
+4. backend/src/api/controllers/**tests**/projects.controller.test.ts
+5. backend/src/api/controllers/**tests**/queueController.test.ts
+6. backend/src/api/routes/**tests**/mlRoutes.test.ts
+7. backend/src/api/**tests**/queueCancel.test.ts
+8. backend/src/api/**tests**/uploadCancel.test.ts
+9. backend/src/middleware/**tests**/accessLogger.test.ts
+10. backend/src/middleware/**tests**/upload.test.ts
+11. backend/src/services/export/**tests**/scaleConversionIntegration.test.ts
+12. backend/src/services/metrics/**tests**/metricsCalculator.test.ts
+13. backend/src/services/**tests**/authService.avatar.test.ts
+14. backend/src/services/**tests**/authService.test.ts
+15. backend/src/services/**tests**/projectService.test.ts
+16. backend/src/services/**tests**/queueService.parallel.test.ts
+17. backend/src/services/**tests**/segmentationService.batch-fix.test.ts
+18. backend/src/services/**tests**/segmentationService.concurrent.test.ts
+19. backend/src/services/**tests**/segmentationService.integration.test.ts
+20. backend/src/services/**tests**/segmentationService.test.ts
+21. backend/src/services/**tests**/userService.stats.test.ts
+22. backend/src/services/**tests**/webSocketService.cancel.test.ts
+23. backend/src/services/**tests**/websocketService.parallel.test.ts
+24. backend/src/services/**tests**/websocketService.realtime.test.ts
+25. backend/src/services/visualization/**tests**/numberPaths.test.ts
 26. backend/src/test/integration/api.integration.test.ts
 27. backend/src/test/integration/dashboardMetrics.integration.test.ts
 28. backend/src/test/integration/database.integration.test.ts
@@ -1122,8 +1142,8 @@ make type-check     # TypeScript check
 31. backend/src/test/integration/projectCard.realtime.test.ts
 32. backend/src/test/integration/upload.test.ts
 33. backend/src/test/security/mlAuthenticationSecurity.test.ts
-34. backend/src/utils/__tests__/polygonValidation.test.ts
-35. backend/src/workers/__tests__/queueWorker.parallel.test.ts
+34. backend/src/utils/**tests**/polygonValidation.test.ts
+35. backend/src/workers/**tests**/queueWorker.parallel.test.ts
 
 </details>
 

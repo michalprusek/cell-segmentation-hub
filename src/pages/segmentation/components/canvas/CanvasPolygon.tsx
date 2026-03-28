@@ -20,7 +20,10 @@ interface CanvasPolygonProps {
   onDeletePolygon?: (id: string) => void;
   onSlicePolygon?: (id: string) => void;
   onEditPolygon?: (id: string) => void;
-  onChangePartClass?: (polygonId: string, partClass: 'head' | 'midpiece' | 'tail') => void;
+  onChangePartClass?: (
+    polygonId: string,
+    partClass: 'head' | 'midpiece' | 'tail'
+  ) => void;
   onChangeInstanceId?: (polygonId: string, instanceId: string) => void;
   availableInstanceIds?: string[];
   onDeleteVertex?: (polygonId: string, vertexIndex: number) => void;
@@ -159,8 +162,12 @@ const CanvasPolygon = React.memo(
 
     // Compute hover-dependent stroke width multiplier
     const hoverStrokeMultiplier = isPolyline
-      ? (isHovered ? 2.5 : 1.5)
-      : (isHovered ? 1.3 : 1);
+      ? isHovered
+        ? 2.5
+        : 1.5
+      : isHovered
+        ? 1.3
+        : 1;
 
     // Compute SVG filter for glow effects
     const pathFilter = (() => {
@@ -197,7 +204,8 @@ const CanvasPolygon = React.memo(
       [onEditPolygon, id]
     );
     const handleChangePartClass = useCallback(
-      (partClass: 'head' | 'midpiece' | 'tail') => onChangePartClass?.(id, partClass),
+      (partClass: 'head' | 'midpiece' | 'tail') =>
+        onChangePartClass?.(id, partClass),
       [onChangePartClass, id]
     );
     const handleChangeInstanceId = useCallback(
@@ -255,7 +263,11 @@ const CanvasPolygon = React.memo(
             d={pathString || 'M0,0'}
             className={cn(
               'polygon-path cursor-pointer transition-colors',
-              isPolyline ? 'polyline-path' : isInternal ? 'polygon-internal' : 'polygon-external',
+              isPolyline
+                ? 'polyline-path'
+                : isInternal
+                  ? 'polygon-internal'
+                  : 'polygon-external',
               isSelected && 'polygon-selected'
             )}
             fill={

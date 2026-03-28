@@ -4,43 +4,43 @@ global:
 
 scrape_configs:
   # Prometheus self-monitoring
-  - job_name: "prometheus"
+  - job_name: 'prometheus'
     static_configs:
-      - targets: ["localhost:9090"]
+      - targets: ['localhost:9090']
         labels:
-          environment: "production"
-          deployment: "blue"
+          environment: 'production'
+          deployment: 'blue'
 
   # Node Exporter - system metrics (CPU, memory, disk, network)
-  - job_name: "node-exporter"
+  - job_name: 'node-exporter'
     scrape_interval: 15s
     static_configs:
-      - targets: ["node-exporter:9100"]
+      - targets: ['node-exporter:9100']
         labels:
-          environment: "production"
-          deployment: "blue"
-          service: "infrastructure"
+          environment: 'production'
+          deployment: 'blue'
+          service: 'infrastructure'
 
   # SpheroSeg Backend API
-  - job_name: "spheroseg-backend"
-    metrics_path: "/metrics"
+  - job_name: 'spheroseg-backend'
+    metrics_path: '/metrics'
     scrape_interval: 15s
     scrape_timeout: 10s
     static_configs:
-      - targets: ["blue-backend:3001"]
+      - targets: ['blue-backend:3001']
         labels:
-          environment: "production"
-          deployment: "blue"
-          service: "backend"
+          environment: 'production'
+          deployment: 'blue'
+          service: 'backend'
 
   # SpheroSeg ML Service
-  - job_name: "spheroseg-ml"
-    metrics_path: "/metrics"
+  - job_name: 'spheroseg-ml'
+    metrics_path: '/metrics'
     scrape_interval: 15s
     scrape_timeout: 10s
     static_configs:
-      - targets: ["blue-ml:8000"]
+      - targets: ['blue-ml:8000']
         labels:
-          environment: "production"
-          deployment: "blue"
-          service: "ml-service"
+          environment: 'production'
+          deployment: 'blue'
+          service: 'ml-service'

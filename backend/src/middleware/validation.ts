@@ -172,6 +172,9 @@ export const validateFiles = (
     ],
   } = options;
 
+  const safeMaxFiles =
+    typeof maxFiles === 'number' && Number.isFinite(maxFiles) ? maxFiles : 10;
+
   return (req: Request, res: Response, next: NextFunction) => {
     const files = req.files as Express.Multer.File[] | undefined;
 
@@ -184,10 +187,10 @@ export const validateFiles = (
     }
 
     // Check number of files
-    if (files.length > maxFiles) {
+    if (files.length > safeMaxFiles) {
       return ResponseHelper.validationError(
         res,
-        `Příliš mnoho souborů. Maximum je ${maxFiles}`,
+        `Příliš mnoho souborů. Maximum je ${safeMaxFiles}`,
         'FileValidation'
       );
     }

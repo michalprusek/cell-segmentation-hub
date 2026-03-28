@@ -3,7 +3,14 @@
  * Tests WebSocket event emission and handling for cancel operations
  */
 
-import { describe, it, expect, jest, beforeEach, afterEach } from '@jest/globals';
+import {
+  describe,
+  it,
+  expect,
+  jest,
+  beforeEach,
+  afterEach,
+} from '@jest/globals';
 import { Server as SocketIOServer } from 'socket.io';
 import { createServer } from 'http';
 import Client from 'socket.io-client';
@@ -19,13 +26,25 @@ import Client from 'socket.io-client';
 
 // Temporary mock fixtures until test utils are created
 const uploadScenarios = {
-  singleFileUpload: { operation: { id: 'upload-001', type: 'upload' as const } },
-  multipleFileUpload: { operations: [{ operation: { id: 'upload-002', type: 'upload' as const } }] },
-  largeFileUpload: { operation: { id: 'upload-003', type: 'upload' as const, metadata: { fileSize: 10485760, chunksTotal: 100 } } },
+  singleFileUpload: {
+    operation: { id: 'upload-001', type: 'upload' as const },
+  },
+  multipleFileUpload: {
+    operations: [{ operation: { id: 'upload-002', type: 'upload' as const } }],
+  },
+  largeFileUpload: {
+    operation: {
+      id: 'upload-003',
+      type: 'upload' as const,
+      metadata: { fileSize: 10485760, chunksTotal: 100 },
+    },
+  },
 };
 
 const segmentationScenarios = {
-  singleImageSegmentation: { operation: { id: 'seg-001', type: 'segmentation' as const } },
+  singleImageSegmentation: {
+    operation: { id: 'seg-001', type: 'segmentation' as const },
+  },
   batchSegmentation: {
     operations: [
       { metadata: { imageId: 'img-001' } },
@@ -38,21 +57,51 @@ const segmentationScenarios = {
 };
 
 const exportScenarios = {
-  cocoExport: { operation: { id: 'export-001', type: 'export' as const, metadata: { format: 'coco' } } },
-  largeExport: { operation: { id: 'export-002', type: 'export' as const, metadata: { imageCount: 5000, exportSize: '2.5GB (estimated)' } } },
+  cocoExport: {
+    operation: {
+      id: 'export-001',
+      type: 'export' as const,
+      metadata: { format: 'coco' },
+    },
+  },
+  largeExport: {
+    operation: {
+      id: 'export-002',
+      type: 'export' as const,
+      metadata: { imageCount: 5000, exportSize: '2.5GB (estimated)' },
+    },
+  },
   parallelExports: {
     operations: [
-      { id: 'export-003', metadata: { projectId: 'project-1', format: 'coco' } },
-      { id: 'export-004', metadata: { projectId: 'project-2', format: 'yolo' } },
+      {
+        id: 'export-003',
+        metadata: { projectId: 'project-1', format: 'coco' },
+      },
+      {
+        id: 'export-004',
+        metadata: { projectId: 'project-2', format: 'yolo' },
+      },
     ],
   },
 };
 
 const cancelTestUtils = {
   createTestDataFactories: () => ({
-    uploadOperation: () => ({ id: 'upload-factory-001', type: 'upload' as const, progress: 50 }),
-    segmentationOperation: () => ({ id: 'seg-factory-001', type: 'segmentation' as const, progress: 75 }),
-    exportOperation: () => ({ id: 'export-factory-001', type: 'export' as const, progress: 25 }),
+    uploadOperation: () => ({
+      id: 'upload-factory-001',
+      type: 'upload' as const,
+      progress: 50,
+    }),
+    segmentationOperation: () => ({
+      id: 'seg-factory-001',
+      type: 'segmentation' as const,
+      progress: 75,
+    }),
+    exportOperation: () => ({
+      id: 'export-factory-001',
+      type: 'export' as const,
+      progress: 25,
+    }),
   }),
 };
 

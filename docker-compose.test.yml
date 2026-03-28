@@ -9,7 +9,7 @@ services:
       POSTGRES_PASSWORD: testpass
       POSTGRES_DB: spheroseg_test
     ports:
-      - "5433:5432"
+      - '5433:5432'
     tmpfs:
       - /var/lib/postgresql/data
     command: postgres -c fsync=off -c synchronous_commit=off -c full_page_writes=off
@@ -18,7 +18,7 @@ services:
   test-redis:
     image: redis:7-alpine
     ports:
-      - "6380:6379"
+      - '6380:6379'
     tmpfs:
       - /data
     command: redis-server --save ""
@@ -37,7 +37,7 @@ services:
       EMAIL_TIMEOUT: 1000
       LOG_LEVEL: error
     ports:
-      - "3002:3001"
+      - '3002:3001'
     depends_on:
       - test-database
       - test-redis
@@ -56,7 +56,7 @@ services:
       LOG_LEVEL: ERROR
       MODEL_PATH: /tmp/test_models
     ports:
-      - "8001:8000"
+      - '8001:8000'
     volumes:
       - ./backend/segmentation:/app
       - /tmp/test_models:/tmp/test_models

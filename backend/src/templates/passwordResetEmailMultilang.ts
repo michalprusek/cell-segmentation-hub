@@ -149,7 +149,7 @@ export const generateSimplePasswordResetHTML = (
 <p>${t.orCopy}<br>${safeResetUrl}</p>
 <p><strong>${t.validUntil} ${expirationTime}</strong></p>
 <p>${t.ignoreText}</p>
-<p>${t.signature.replace('\n', '<br>')}</p>
+<p>${t.signature.replaceAll('\n', '<br>')}</p>
 </body>
 </html>`;
 };

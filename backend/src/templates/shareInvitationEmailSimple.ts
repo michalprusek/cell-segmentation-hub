@@ -71,7 +71,7 @@ const translations: Record<string, ShareInvitationSimpleTranslations> = {
     greeting: 'Bonjour !',
     shared: 'a partagé un projet avec vous',
     project: 'Projet',
-    clickHere: 'Accepter l\'invitation',
+    clickHere: "Accepter l'invitation",
     orCopy: 'Ou copiez le lien',
     expires: 'Expire',
     footer: 'SpheroSeg',

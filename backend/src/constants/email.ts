@@ -79,12 +79,16 @@ export function getEmailTimeout(): number {
  * Get max retry attempts for current SMTP server
  */
 export function getMaxRetryAttempts(): number {
-  return isUTIASmtpServer() ? EMAIL_RETRY.UTIA_MAX_ATTEMPTS : EMAIL_RETRY.MAX_ATTEMPTS;
+  return isUTIASmtpServer()
+    ? EMAIL_RETRY.UTIA_MAX_ATTEMPTS
+    : EMAIL_RETRY.MAX_ATTEMPTS;
 }
 
 /**
  * Get queue processing delay for current SMTP server
  */
 export function getQueueProcessingDelay(): number {
-  return isUTIASmtpServer() ? EMAIL_TIMEOUTS.UTIA_QUEUE_DELAY : EMAIL_TIMEOUTS.QUEUE_PROCESSING_DELAY;
+  return isUTIASmtpServer()
+    ? EMAIL_TIMEOUTS.UTIA_QUEUE_DELAY
+    : EMAIL_TIMEOUTS.QUEUE_PROCESSING_DELAY;
 }

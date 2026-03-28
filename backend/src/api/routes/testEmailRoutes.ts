@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import validator from 'validator';
 import { sendEmail, testConnection } from '../../services/emailService';
 import {
   getQueueStatus,
@@ -19,18 +20,36 @@ router.get(
     try {
       const result = await testConnection();
       if (result) {
-        return ResponseHelper.success(res, {
-          service: process.env.EMAIL_SERVICE,
-          host: process.env.SMTP_HOST,
-          port: process.env.SMTP_PORT,
-          from: process.env.FROM_EMAIL,
-        }, 'Email service is configured correctly');
+        return ResponseHelper.success(
+          res,
+          {
+            service: process.env.EMAIL_SERVICE,
+            host: process.env.SMTP_HOST,
+            port: process.env.SMTP_PORT,
+            from: process.env.FROM_EMAIL,
+          },
+          'Email service is configured correctly'
+        );
       } else {
-        return ResponseHelper.internalError(res, undefined, 'Email service connection failed');
+        return ResponseHelper.internalError(
+          res,
+          undefined,
+          'Email service connection failed'
+        );
       }
     } catch (error) {
       logger.error('Email test connection failed:', error as Error);
-      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Email service connection failed', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
+      return ResponseHelper.error(
+        res,
+        {
+          code: 'INTERNAL_ERROR',
+          message: 'Email service connection failed',
+          details: { error: (error as Error).message },
+        },
+        500,
+        error as Error,
+        'TestEmailRoutes'
+      );
     }
   }
 );
@@ -42,14 +61,16 @@ router.post('/send-test', authenticate, async (req: Request, res: Response) => {
 
     // Validate email parameter
     if (!to || typeof to !== 'string') {
-      return ResponseHelper.badRequest(res, 'Valid recipient email is required');
+      return ResponseHelper.badRequest(
+        res,
+        'Valid recipient email is required'
+      );
     }
 
     // Trim and validate email format
     const email = to.trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!emailRegex.test(email)) {
+    if (!validator.isEmail(email)) {
       return ResponseHelper.badRequest(res, 'Invalid email format');
     }
 
@@ -79,10 +100,24 @@ Configuration:
 If you received this email, the configuration is working!`,
     });
 
-    return ResponseHelper.success(res, undefined, `Test email sent successfully to ${to}`);
+    return ResponseHelper.success(
+      res,
+      undefined,
+      `Test email sent successfully to ${to}`
+    );
   } catch (error) {
     logger.error('Failed to send test email:', error as Error);
-    return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to send test email', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
+    return ResponseHelper.error(
+      res,
+      {
+        code: 'INTERNAL_ERROR',
+        message: 'Failed to send test email',
+        details: { error: (error as Error).message },
+      },
+      500,
+      error as Error,
+      'TestEmailRoutes'
+    );
   }
 });
 
@@ -96,14 +131,16 @@ router.post(
 
       // Validate email parameter
       if (!to || typeof to !== 'string') {
-        return ResponseHelper.badRequest(res, 'Valid recipient email is required');
+        return ResponseHelper.badRequest(
+          res,
+          'Valid recipient email is required'
+        );
       }
 
       // Trim and validate email format
       const email = to.trim();
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-      if (!emailRegex.test(email)) {
+      if (!validator.isEmail(email)) {
         return ResponseHelper.badRequest(res, 'Invalid email format');
       }
 
@@ -148,16 +185,30 @@ If you received this email, the direct send configuration is working!`,
 
       const totalTime = Date.now() - startTime;
 
-      return ResponseHelper.success(res, {
-        recipient: email,
-        sendTime: totalTime,
-        timestamp: new Date().toISOString(),
-        method: 'direct_send',
-        queueBypassed: true,
-      }, `Direct test email sent successfully to ${email}`);
+      return ResponseHelper.success(
+        res,
+        {
+          recipient: email,
+          sendTime: totalTime,
+          timestamp: new Date().toISOString(),
+          method: 'direct_send',
+          queueBypassed: true,
+        },
+        `Direct test email sent successfully to ${email}`
+      );
     } catch (error) {
       logger.error('Failed to send direct test email:', error as Error);
-      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to send direct test email', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
+      return ResponseHelper.error(
+        res,
+        {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to send direct test email',
+          details: { error: (error as Error).message },
+        },
+        500,
+        error as Error,
+        'TestEmailRoutes'
+      );
     }
   }
 );
@@ -170,10 +221,24 @@ router.get(
     try {
       const status = getQueueStatus();
 
-      return ResponseHelper.success(res, status, `Queue has ${status.length} emails, processing: ${status.processing}`);
+      return ResponseHelper.success(
+        res,
+        status,
+        `Queue has ${status.length} emails, processing: ${status.processing}`
+      );
     } catch (error) {
       logger.error('Failed to get queue status:', error as Error);
-      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to get queue status', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
+      return ResponseHelper.error(
+        res,
+        {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to get queue status',
+          details: { error: (error as Error).message },
+        },
+        500,
+        error as Error,
+        'TestEmailRoutes'
+      );
     }
   }
 );
@@ -193,10 +258,24 @@ router.post(
 
       const newStatus = getQueueStatus();
 
-      return ResponseHelper.success(res, newStatus, 'Queue processing completed');
+      return ResponseHelper.success(
+        res,
+        newStatus,
+        'Queue processing completed'
+      );
     } catch (error) {
       logger.error('Failed to force process queue:', error as Error);
-      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to force process queue', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
+      return ResponseHelper.error(
+        res,
+        {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to force process queue',
+          details: { error: (error as Error).message },
+        },
+        500,
+        error as Error,
+        'TestEmailRoutes'
+      );
     }
   }
 );
@@ -222,7 +301,17 @@ router.get(
       });
     } catch (error) {
       logger.error('Failed to get queue emails:', error as Error);
-      return ResponseHelper.error(res, { code: 'INTERNAL_ERROR', message: 'Failed to get queue emails', details: { error: (error as Error).message } }, 500, error as Error, 'TestEmailRoutes');
+      return ResponseHelper.error(
+        res,
+        {
+          code: 'INTERNAL_ERROR',
+          message: 'Failed to get queue emails',
+          details: { error: (error as Error).message },
+        },
+        500,
+        error as Error,
+        'TestEmailRoutes'
+      );
     }
   }
 );

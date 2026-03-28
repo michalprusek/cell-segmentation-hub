@@ -3,7 +3,7 @@ global:
   evaluation_interval: 15s
 
 rule_files:
-  - "alerts.yml"
+  - 'alerts.yml'
 
 scrape_configs:
   # Prometheus itself
@@ -48,4 +48,4 @@ alerting:
   alertmanagers:
     - static_configs:
         - targets:
-          - alertmanager:9093
+            - alertmanager:9093

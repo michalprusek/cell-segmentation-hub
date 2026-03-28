@@ -348,7 +348,9 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
               },
             }));
 
-            toast.success(`${uploadedImages.length} files uploaded successfully`);
+            toast.success(
+              `${uploadedImages.length} files uploaded successfully`
+            );
           }
 
           // Fire completion callback
@@ -452,7 +454,14 @@ export const UploadProvider: React.FC<{ children: React.ReactNode }> = ({
       cancelUpload,
       clearSession,
     }),
-    [sessions, activeSession, isUploading, startUpload, cancelUpload, clearSession]
+    [
+      sessions,
+      activeSession,
+      isUploading,
+      startUpload,
+      cancelUpload,
+      clearSession,
+    ]
   );
 
   return (

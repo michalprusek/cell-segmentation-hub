@@ -194,13 +194,12 @@ const createMockApp = (): Express => {
       const mlResults = await Promise.allSettled(mlCancellationPromises);
 
       // Remove jobs from Bull queue
-      const queue = new Queue('segmentation', { redis: { host: 'localhost', port: 6379 } }) as any;
+      const queue = new Queue('segmentation', {
+        redis: { host: 'localhost', port: 6379 },
+      }) as any;
       const bullCancellationPromises = queuedJobs.map(job =>
         queue.removeJobs(`${job.id}*`).catch((error: any) => {
-          console.warn(
-            `Failed to remove job ${job.id} from queue:`,
-            error
-          );
+          console.warn(`Failed to remove job ${job.id} from queue:`, error);
           return { success: false, error: error.message };
         })
       );
@@ -305,7 +304,11 @@ describe('Segmentation Batch Cancel API Tests', () => {
     mockMLService = mlService as any;
 
     const Queue = (await import('bull')).default;
-    mockQueue = { removeJobs: jest.fn(), getWaiting: jest.fn(), getActive: jest.fn() } as any;
+    mockQueue = {
+      removeJobs: jest.fn(),
+      getWaiting: jest.fn(),
+      getActive: jest.fn(),
+    } as any;
 
     // Default successful mock implementations
     mockPrisma.segmentationQueue.findMany.mockResolvedValue(
@@ -695,7 +698,9 @@ describe('Segmentation Batch Cancel API Tests', () => {
           .expect(200);
 
         // Should use batch operations, not individual updates
-        expect(mockPrisma.segmentationQueue.updateMany).toHaveBeenCalledTimes(1);
+        expect(mockPrisma.segmentationQueue.updateMany).toHaveBeenCalledTimes(
+          1
+        );
         expect(mockPrisma.image.updateMany).toHaveBeenCalledTimes(1);
       });
     });

@@ -13,15 +13,17 @@
 ## Task 1: Create docker-compose.production.yml
 
 **Files:**
+
 - Create: `docker-compose.production.yml` (from `docker-compose.blue.yml`)
 
 - [ ] **Step 1: Copy blue compose as production base**
+
   ```bash
   cp docker-compose.blue.yml docker-compose.production.yml
   ```
 
 - [ ] **Step 2: Edit docker-compose.production.yml**
-  Rename all services, containers, network, volumes:
+      Rename all services, containers, network, volumes:
   - `blue-frontend` → `frontend` (container: `spheroseg-frontend`)
   - `blue-backend` → `backend` (container: `spheroseg-backend`)
   - `blue-ml` → `ml` (container: `spheroseg-ml`)
@@ -49,15 +51,17 @@
 ## Task 2: Create .env.production
 
 **Files:**
+
 - Create: `.env.production` (from `.env.blue.production`)
 
 - [ ] **Step 1: Copy and clean**
+
   ```bash
   cp .env.blue.production .env.production
   ```
 
 - [ ] **Step 2: Edit .env.production**
-  Remove blue-green specific vars:
+      Remove blue-green specific vars:
   - `DEPLOYMENT_COLOR=blue` → remove
   - `ENVIRONMENT_NAME=production-blue` → `ENVIRONMENT_NAME=production`
   - `SERVICE_PREFIX=blue` → remove
@@ -83,9 +87,11 @@
 ## Task 3: Create nginx.production.conf
 
 **Files:**
+
 - Create: `docker/nginx/nginx.production.conf` (from `nginx.blue.conf`)
 
 - [ ] **Step 1: Copy blue nginx config**
+
   ```bash
   cp docker/nginx/nginx.blue.conf docker/nginx/nginx.production.conf
   ```
@@ -107,6 +113,7 @@
 ## Task 4: Update Makefile
 
 **Files:**
+
 - Modify: `Makefile`
 
 - [ ] **Step 1: Update Makefile targets**
@@ -120,6 +127,7 @@
 ## Task 5: Update CLAUDE.md
 
 **Files:**
+
 - Modify: `CLAUDE.md`
 
 - [ ] **Step 1: Remove all blue-green references**
@@ -133,6 +141,7 @@
 ## Task 6: Delete dead files
 
 - [ ] **Step 1: Delete green/switch/template files**
+
   ```
   docker-compose.green.yml
   docker-compose.green.gpu.yml
@@ -160,6 +169,7 @@
   ```
 
 - [ ] **Step 2: Keep these files** (still needed)
+
   ```
   docker-compose.blue.yml (keep temporarily for rollback reference, delete later)
   docker/nginx/nginx.blue.conf (keep temporarily for rollback)
@@ -172,16 +182,19 @@
 ## Task 7: Production migration
 
 - [ ] **Step 1: Stop nginx-main**
+
   ```bash
   docker stop nginx-main && docker rm nginx-main
   ```
 
 - [ ] **Step 2: Stop blue services**
+
   ```bash
   docker compose -f docker-compose.blue.yml down
   ```
 
 - [ ] **Step 3: Move uploads**
+
   ```bash
   # Move blue uploads to root uploads dir
   cp -a backend/uploads/blue/* backend/uploads/ 2>/dev/null
@@ -189,6 +202,7 @@
   ```
 
 - [ ] **Step 4: Move logs and data**
+
   ```bash
   mkdir -p logs/backend logs/nginx
   cp -a logs/blue/backend/* logs/backend/ 2>/dev/null
@@ -198,11 +212,13 @@
   ```
 
 - [ ] **Step 5: Start production**
+
   ```bash
   docker compose -f docker-compose.production.yml up -d
   ```
 
 - [ ] **Step 6: Verify**
+
   ```bash
   curl -k https://localhost/health
   # Expected: "production-healthy"

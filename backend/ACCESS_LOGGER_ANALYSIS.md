@@ -82,11 +82,13 @@ t5    B completes → logged ❌       key_C (images)
 ### 2.1 File I/O Performance
 
 **Current Implementation**: `fs.appendFileSync()`
+
 - **Blocking**: Holds the event loop during disk write
 - **Typical Duration**: 0.5-5ms on SSD, 5-50ms on HDD
 - **Impact**: Each request completion waits for disk I/O
 
 **Comparison with Other Middleware**:
+
 - `createRequestLogger()` (logger.ts:152-184): Uses console logging (asynchronous)
 - `createMonitoringMiddleware()` (monitoring.ts:75-100): In-memory counters only
 - No other middleware performs synchronous disk I/O
@@ -94,6 +96,7 @@ t5    B completes → logged ❌       key_C (images)
 ### 2.2 Concurrency Impact
 
 With batch processing of 10,000 images:
+
 - **Potential concurrent completions**: 50-100+ requests/second during result fetching
 - **Each synchronous write**: Blocks event loop for ~1-5ms
 - **Cumulative blocking**: 50-500ms total for 100 concurrent requests
@@ -165,7 +168,7 @@ function writeToAccessLog(logEntry: string, deduplicationKey: string): void {
   const lastLogTime = deduplicationCache.get(deduplicationKey);
 
   // Check if this is a duplicate within the time window
-  if (lastLogTime && (now - lastLogTime) < DEDUPLICATION_WINDOW_MS) {
+  if (lastLogTime && now - lastLogTime < DEDUPLICATION_WINDOW_MS) {
     // Skip duplicate within time window
     return;
   }
@@ -191,6 +194,7 @@ function writeToAccessLog(logEntry: string, deduplicationKey: string): void {
 ### 3.3 Memory Management
 
 **LRU Cache Size Calculation**:
+
 - **Key size**: ~150 bytes (IP + username + method + URL + status + user-agent)
 - **Value size**: 8 bytes (timestamp as number)
 - **Total per entry**: ~160 bytes
@@ -198,6 +202,7 @@ function writeToAccessLog(logEntry: string, deduplicationKey: string): void {
 - **TTL**: 5 seconds (auto-cleanup)
 
 **Write Queue Size**:
+
 - **Log entry size**: ~250 bytes average
 - **Max queued**: ~10 entries (flush every 100ms)
 - **Total**: **~2.5 KB**
@@ -206,13 +211,13 @@ function writeToAccessLog(logEntry: string, deduplicationKey: string): void {
 
 ### 3.4 Performance Improvements
 
-| Metric | Current (Sync) | Proposed (Async + Batch) | Improvement |
-|--------|---------------|--------------------------|-------------|
-| Event loop blocking | 1-5ms per request | 0ms | **100% reduction** |
-| Disk I/O operations | 100 ops (100 requests) | 10 ops (batched) | **90% reduction** |
-| Throughput impact | ~200 req/s bottleneck | No bottleneck | **5-10x improvement** |
-| Memory overhead | 0 KB | 200 KB | Negligible |
-| Deduplication accuracy | **Single entry only** | **1000 entries, 5s window** | **Massive improvement** |
+| Metric                 | Current (Sync)         | Proposed (Async + Batch)    | Improvement             |
+| ---------------------- | ---------------------- | --------------------------- | ----------------------- |
+| Event loop blocking    | 1-5ms per request      | 0ms                         | **100% reduction**      |
+| Disk I/O operations    | 100 ops (100 requests) | 10 ops (batched)            | **90% reduction**       |
+| Throughput impact      | ~200 req/s bottleneck  | No bottleneck               | **5-10x improvement**   |
+| Memory overhead        | 0 KB                   | 200 KB                      | Negligible              |
+| Deduplication accuracy | **Single entry only**  | **1000 entries, 5s window** | **Massive improvement** |
 
 ---
 
@@ -221,10 +226,12 @@ function writeToAccessLog(logEntry: string, deduplicationKey: string): void {
 ### 4.1 Stream-based Writing
 
 **Pros**:
+
 - Built-in buffering
 - Automatic backpressure handling
 
 **Cons**:
+
 - Requires stream lifecycle management
 - More complex error handling
 - Stream must stay open during entire application lifecycle
@@ -234,11 +241,13 @@ function writeToAccessLog(logEntry: string, deduplicationKey: string): void {
 ### 4.2 External Logging Service (e.g., Winston, Pino)
 
 **Pros**:
+
 - Battle-tested solutions
 - Built-in async logging
 - Advanced features (rotation, transports)
 
 **Cons**:
+
 - Additional dependency
 - Overkill for simple access logging
 - Current solution is working (just needs optimization)
@@ -248,10 +257,12 @@ function writeToAccessLog(logEntry: string, deduplicationKey: string): void {
 ### 4.3 In-Memory Only with Periodic Flush to Disk
 
 **Pros**:
+
 - Zero blocking during request processing
 - Easy to implement
 
 **Cons**:
+
 - Risk of log loss on crash (acceptable for access logs)
 - Still needs batching logic
 
@@ -268,9 +279,9 @@ describe('Access Logger Deduplication', () => {
   it('should deduplicate identical concurrent requests', async () => {
     // Simulate 10 identical requests completing at nearly same time
     const results = await Promise.all(
-      Array(10).fill(null).map(() =>
-        simulateRequest(mockReq, mockRes)
-      )
+      Array(10)
+        .fill(null)
+        .map(() => simulateRequest(mockReq, mockRes))
     );
 
     // Should only write 1 entry
@@ -292,7 +303,7 @@ describe('Access Logger Deduplication', () => {
     // Simulate A, B, C pattern from analysis
     const reqA = createMockRequest('/api/projects');
     const reqB = createMockRequest('/api/projects'); // Duplicate of A
-    const reqC = createMockRequest('/api/images');   // Different
+    const reqC = createMockRequest('/api/images'); // Different
 
     await simulateRequest(reqA, mockRes);
     await simulateRequest(reqC, mockRes);
@@ -304,9 +315,9 @@ describe('Access Logger Deduplication', () => {
 
   it('should respect LRU cache size limit', async () => {
     // Create 1500 unique requests (exceeds cache size of 1000)
-    const requests = Array(1500).fill(null).map((_, i) =>
-      createMockRequest(`/api/unique-${i}`)
-    );
+    const requests = Array(1500)
+      .fill(null)
+      .map((_, i) => createMockRequest(`/api/unique-${i}`));
 
     // Process all requests
     for (const req of requests) {
@@ -327,9 +338,9 @@ describe('Access Logger Performance', () => {
 
     // Simulate 100 concurrent requests
     await Promise.all(
-      Array(100).fill(null).map(() =>
-        simulateRequest(mockReq, mockRes)
-      )
+      Array(100)
+        .fill(null)
+        .map(() => simulateRequest(mockReq, mockRes))
     );
 
     const duration = Date.now() - startTime;
@@ -342,9 +353,9 @@ describe('Access Logger Performance', () => {
     const writeCountBefore = getFileWriteCount();
 
     // Create 50 unique requests in quick succession
-    const requests = Array(50).fill(null).map((_, i) =>
-      createMockRequest(`/api/endpoint-${i}`)
-    );
+    const requests = Array(50)
+      .fill(null)
+      .map((_, i) => createMockRequest(`/api/endpoint-${i}`));
 
     for (const req of requests) {
       await simulateRequest(req, mockRes);
@@ -372,11 +383,13 @@ describe('Access Logger Integration', () => {
 
     const batchSize = 10000;
     const responses = await Promise.all(
-      Array(batchSize).fill(null).map((_, i) =>
-        request(app)
-          .get(`/api/segmentation/images/${i}/results`)
-          .set('Authorization', `Bearer ${token}`)
-      )
+      Array(batchSize)
+        .fill(null)
+        .map((_, i) =>
+          request(app)
+            .get(`/api/segmentation/images/${i}/results`)
+            .set('Authorization', `Bearer ${token}`)
+        )
     );
 
     // All requests should succeed
@@ -412,6 +425,7 @@ cat /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log | \
 ## 6. Implementation Roadmap
 
 ### Phase 1: Core Implementation (2-3 hours)
+
 1. Add `lru-cache` dependency to `package.json`
 2. Implement time-windowed deduplication logic
 3. Replace synchronous writes with async + batching
@@ -419,6 +433,7 @@ cat /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log | \
 5. Update exports for testing
 
 ### Phase 2: Testing (3-4 hours)
+
 1. Create comprehensive unit tests
 2. Add integration tests
 3. Perform manual load testing
@@ -426,12 +441,14 @@ cat /home/cvat/cell-segmentation-hub/logs/blue/backend/access.log | \
 5. Check log file integrity
 
 ### Phase 3: Documentation (1 hour)
+
 1. Update `ACCESS_LOGGING.md` with new deduplication behavior
 2. Document configuration options
 3. Add troubleshooting section for deduplication issues
 4. Update memory usage estimates
 
 ### Phase 4: Deployment (1 hour)
+
 1. Deploy to green environment (staging)
 2. Monitor for 24 hours
 3. Switch to blue environment (production)
@@ -455,11 +472,11 @@ ACCESS_LOG_BATCH_FLUSH_MS=100        # Batch write interval
 ```typescript
 // For environments with very high traffic
 const DEDUPLICATION_WINDOW_MS = 10000; // 10 seconds
-const MAX_CACHE_SIZE = 5000;           // 5000 entries (~800 KB)
+const MAX_CACHE_SIZE = 5000; // 5000 entries (~800 KB)
 
 // For environments with low traffic
-const DEDUPLICATION_WINDOW_MS = 2000;  // 2 seconds
-const MAX_CACHE_SIZE = 500;            // 500 entries (~80 KB)
+const DEDUPLICATION_WINDOW_MS = 2000; // 2 seconds
+const MAX_CACHE_SIZE = 500; // 500 entries (~80 KB)
 ```
 
 ---
@@ -469,6 +486,7 @@ const MAX_CACHE_SIZE = 500;            // 500 entries (~80 KB)
 ### Metrics to Track
 
 1. **Deduplication Rate**:
+
    ```typescript
    const dedupCounter = new client.Counter({
      name: 'access_log_deduplicated_total',
@@ -477,6 +495,7 @@ const MAX_CACHE_SIZE = 500;            // 500 entries (~80 KB)
    ```
 
 2. **Write Queue Size**:
+
    ```typescript
    const queueSize = new client.Gauge({
      name: 'access_log_queue_size',
@@ -500,7 +519,7 @@ setInterval(() => {
   logger.debug('Access log stats:', {
     cacheSize: deduplicationCache.size,
     queueSize: writeQueue.length,
-    dedupRate: (dedupCount / totalRequests * 100).toFixed(2) + '%',
+    dedupRate: ((dedupCount / totalRequests) * 100).toFixed(2) + '%',
   });
 }, 60000); // Every minute
 ```
@@ -509,30 +528,33 @@ setInterval(() => {
 
 ## 9. Risks & Mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|-----------|
-| Log loss on crash | Low | Medium | Queue flushing is frequent (100ms), acceptable loss |
-| Memory leak from cache | Very Low | High | LRU cache has built-in TTL and size limits |
-| Async write errors | Low | Low | Errors logged but don't crash server |
-| Over-deduplication | Medium | Low | Configurable time window, can be tuned |
-| Under-deduplication | Low | Low | Cache size can be increased if needed |
+| Risk                   | Likelihood | Impact | Mitigation                                          |
+| ---------------------- | ---------- | ------ | --------------------------------------------------- |
+| Log loss on crash      | Low        | Medium | Queue flushing is frequent (100ms), acceptable loss |
+| Memory leak from cache | Very Low   | High   | LRU cache has built-in TTL and size limits          |
+| Async write errors     | Low        | Low    | Errors logged but don't crash server                |
+| Over-deduplication     | Medium     | Low    | Configurable time window, can be tuned              |
+| Under-deduplication    | Low        | Low    | Cache size can be increased if needed               |
 
 ---
 
 ## 10. Success Criteria
 
 ### Must Have
+
 - ✅ No duplicate log entries for truly identical concurrent requests
 - ✅ Zero event loop blocking during request processing
 - ✅ Memory usage < 500 KB for access logger
 - ✅ All tests passing
 
 ### Should Have
+
 - ✅ 90% reduction in duplicate log entries compared to current implementation
 - ✅ No performance degradation under load (10,000 concurrent requests)
 - ✅ Comprehensive test coverage (>80%)
 
 ### Nice to Have
+
 - ✅ Monitoring metrics for deduplication rate
 - ✅ Configurable via environment variables
 - ✅ Detailed documentation for IT team

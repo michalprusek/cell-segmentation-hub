@@ -45,24 +45,20 @@ export class ImageController {
         return;
       }
 
-      // Check if files were uploaded
-      const files = req.files as
-        | Array<{
-            fieldname: string;
-            originalname: string;
-            path: string;
-            size: number;
-            buffer: Buffer;
-            mimetype: string;
-          }>
-        | undefined;
-      if (!files || files.length === 0) {
-        ResponseHelper.validationError(
-          res,
-          'Je nutné vybrat alespoň jeden soubor'
-        );
+      // Check if files were uploaded — runtime validation before type assertion
+      const rawFiles = req.files;
+      if (!Array.isArray(rawFiles) || rawFiles.length === 0) {
+        ResponseHelper.badRequest(res, 'No files provided');
         return;
       }
+      const files = rawFiles as Array<{
+        fieldname: string;
+        originalname: string;
+        path: string;
+        size: number;
+        buffer: Buffer;
+        mimetype: string;
+      }>;
 
       // Validate files before processing
       const allowedMimeTypes = [

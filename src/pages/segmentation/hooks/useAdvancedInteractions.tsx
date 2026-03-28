@@ -383,7 +383,15 @@ export const useAdvancedInteractions = ({
       setTempPoints([]);
       setEditMode(EditMode.View);
     }
-  }, [tempPoints, getPolygons, updatePolygons, setTempPoints, setEditMode, activePartClassRef, activeInstanceIdRef]);
+  }, [
+    tempPoints,
+    getPolygons,
+    updatePolygons,
+    setTempPoints,
+    setEditMode,
+    activePartClassRef,
+    activeInstanceIdRef,
+  ]);
 
   /**
    * Handle Delete Polygon mode clicks
@@ -944,4 +952,3 @@ function insertPointsBetweenVertices(
 
   return perimeter1 <= perimeter2 ? candidate1Points : candidate2Points;
 }
-

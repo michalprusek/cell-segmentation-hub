@@ -110,7 +110,10 @@ export function init(): void {
       // Configure TLS settings for UTIA SMTP (port 25 with STARTTLS)
       if (process.env.SMTP_IGNORE_TLS !== 'true') {
         // Special handling for UTIA SMTP server
-        if (config.smtp.host === SMTP_HOSTS.UTIA_BACKUP || config.smtp.host === SMTP_HOSTS.UTIA) {
+        if (
+          config.smtp.host === SMTP_HOSTS.UTIA_BACKUP ||
+          config.smtp.host === SMTP_HOSTS.UTIA
+        ) {
           transportConfig.requireTLS = true; // Force STARTTLS for UTIA
           transportConfig.tls = {
             // UTIA server certificate validation - disable for production

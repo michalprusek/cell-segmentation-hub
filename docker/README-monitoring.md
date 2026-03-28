@@ -5,6 +5,7 @@ This directory contains comprehensive monitoring and log rotation configurations
 ## Overview
 
 The monitoring setup includes:
+
 - **Grafana Alerting**: 7 alert rules for critical system and application metrics
 - **Log Rotation**: Automated log management with 30-day retention
 - **Enhanced Monitoring**: Node Exporter, cAdvisor, and Alertmanager integration
@@ -36,36 +37,43 @@ docker/
 ## Alert Rules Implemented
 
 ### 1. High CPU Usage Alert
+
 - **Threshold**: >80% for 2 minutes
 - **Severity**: Warning
 - **Description**: Monitors CPU usage across all instances
 
 ### 2. High Memory Usage Alert
+
 - **Threshold**: >90% for 2 minutes
 - **Severity**: Critical
 - **Description**: Monitors memory consumption
 
 ### 3. High API Response Time Alert
+
 - **Threshold**: >2 seconds (95th percentile) for 1 minute
 - **Severity**: Warning
 - **Description**: Monitors backend API performance
 
 ### 4. High Error Rate Alert
+
 - **Threshold**: >5% error rate for 1 minute
 - **Severity**: Critical
 - **Description**: Monitors 5xx HTTP errors from backend
 
 ### 5. Service Down Alert
+
 - **Threshold**: Service unavailable for 30 seconds
 - **Severity**: Critical
 - **Description**: Monitors backend and ML service availability
 
 ### 6. Low Disk Space Alert
+
 - **Threshold**: >90% disk usage for 1 minute
 - **Severity**: Warning
 - **Description**: Monitors filesystem usage
 
 ### 7. Database Connection Failures Alert
+
 - **Threshold**: >5 connection errors in 5 minutes
 - **Severity**: Critical
 - **Description**: Monitors database connectivity issues
@@ -73,6 +81,7 @@ docker/
 ## Log Rotation Configuration
 
 ### Features
+
 - **Daily Rotation**: Logs are rotated every day
 - **30-Day Retention**: Keeps 30 days of historical logs
 - **Compression**: Older logs are compressed to save space
@@ -80,6 +89,7 @@ docker/
 - **Docker Integration**: Runs as a containerized service
 
 ### Services Covered
+
 - **Nginx**: Access and error logs
 - **Backend**: Application logs and API logs
 - **ML Service**: Inference logs and model logs
@@ -87,6 +97,7 @@ docker/
 - **Grafana**: Dashboard and alerting logs
 
 ### Log Locations
+
 - Nginx: `/var/log/nginx/`
 - Backend: `/var/log/spheroseg/backend/`
 - ML Service: `/var/log/spheroseg/ml/`
@@ -96,6 +107,7 @@ docker/
 ## Usage Instructions
 
 ### Basic Setup
+
 ```bash
 # Start with enhanced monitoring and log rotation
 docker compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
@@ -105,6 +117,7 @@ docker compose -f docker-compose.yml -f docker-compose.enhanced.yml up -d
 ```
 
 ### Monitoring Services
+
 - **Grafana**: http://localhost:3030 (dashboards and alerts)
 - **Prometheus**: http://localhost:9090 (metrics and rules)
 - **Alertmanager**: http://localhost:9093 (alert management)
@@ -112,11 +125,14 @@ docker compose -f docker-compose.yml -f docker-compose.enhanced.yml up -d
 - **cAdvisor**: http://localhost:8080 (container metrics)
 
 ### Email Alerts
+
 Email notifications are configured to use MailHog (development) or SMTP (production):
+
 - **Development**: MailHog UI at http://localhost:8025
 - **Production**: Configure SMTP settings in alertmanager.yml
 
 ### Manual Log Rotation
+
 ```bash
 # Test log rotation configuration
 docker exec spheroseg-logrotate logrotate -d /etc/logrotate.conf
@@ -141,10 +157,12 @@ docker logs spheroseg-logrotate -f
 ## Configuration Files Created
 
 ### Grafana Alerting Rules
+
 - `/docker/grafana/alerting/rules.yml` - All 7 alert rules
 - `/docker/grafana/alerting/notification-policies.yml` - Email notification setup
 
 ### Log Rotation
+
 - `/docker/logrotate/logrotate.conf` - Main configuration
 - `/docker/logrotate/spheroseg-nginx.conf` - Nginx log rotation
 - `/docker/logrotate/spheroseg-backend.conf` - Backend log rotation
@@ -155,6 +173,7 @@ docker logs spheroseg-logrotate -f
 - `/docker/logrotate/docker-entrypoint.sh` - Container entrypoint
 
 ### Enhanced Configurations
+
 - `/docker/prometheus/alerts.yml` - Prometheus alert rules
 - `/docker/alertmanager/alertmanager.yml` - Alert routing and notifications
 - `/backend/docker/nginx/nginx.conf` - Enhanced nginx with logging
@@ -164,6 +183,7 @@ docker logs spheroseg-logrotate -f
 ## Troubleshooting
 
 ### Log Rotation Issues
+
 ```bash
 # Check logrotate status
 docker exec spheroseg-logrotate logrotate -d /etc/logrotate.conf
@@ -176,6 +196,7 @@ docker exec spheroseg-logrotate logrotate -f /etc/logrotate.conf
 ```
 
 ### Alert Issues
+
 ```bash
 # Check Prometheus targets
 curl http://localhost:9090/api/v1/targets
@@ -191,6 +212,7 @@ docker logs spheroseg-alertmanager
 ```
 
 ### Performance Monitoring
+
 ```bash
 # View container resource usage
 docker stats

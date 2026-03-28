@@ -73,7 +73,7 @@
     "max_concurrent_users": 1,
     "cuda_streams": 1,
     "memory_pressure_threshold": 0.85,
-    "emergency_cleanup_threshold": 0.90,
+    "emergency_cleanup_threshold": 0.9,
     "total_memory_budget_gb": 8.0,
     "memory_safety_margin_gb": 1.0,
     "description": "Sequential processing - single worker for 8GB GPU limit, leaves 16GB for other applications"

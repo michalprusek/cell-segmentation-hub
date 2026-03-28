@@ -1,5 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Eye, EyeOff, Edit3, Trash2, MoreVertical, ChevronUp, ChevronDown, Spline } from 'lucide-react';
+import {
+  Eye,
+  EyeOff,
+  Edit3,
+  Trash2,
+  MoreVertical,
+  ChevronUp,
+  ChevronDown,
+  Spline,
+} from 'lucide-react';
 import { useLanguage } from '@/contexts/useLanguage';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,10 +86,14 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
   const getPolygonColor = (polygon: any) => {
     if (polygon.geometry === 'polyline') {
       switch (polygon.partClass) {
-        case 'head': return 'bg-green-500';
-        case 'midpiece': return 'bg-orange-500';
-        case 'tail': return 'bg-cyan-500';
-        default: return 'bg-violet-500';
+        case 'head':
+          return 'bg-green-500';
+        case 'midpiece':
+          return 'bg-orange-500';
+        case 'tail':
+          return 'bg-cyan-500';
+        default:
+          return 'bg-violet-500';
       }
     }
     return isInternalPolygon(polygon) ? 'bg-blue-500' : 'bg-red-500';
@@ -160,12 +173,17 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  const currentIndex = polygons.findIndex(p => p.id === selectedPolygonId);
+                  const currentIndex = polygons.findIndex(
+                    p => p.id === selectedPolygonId
+                  );
                   if (currentIndex > 0) {
                     onSelectPolygon(polygons[currentIndex - 1].id);
                   }
                 }}
-                disabled={!selectedPolygonId || polygons.findIndex(p => p.id === selectedPolygonId) === 0}
+                disabled={
+                  !selectedPolygonId ||
+                  polygons.findIndex(p => p.id === selectedPolygonId) === 0
+                }
                 className="h-8 w-8 p-0"
               >
                 <ChevronUp className="h-4 w-4" />
@@ -174,20 +192,25 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
               <span className="text-xs text-gray-500 dark:text-gray-400 min-w-[3rem] text-center">
                 {selectedPolygonId
                   ? `${polygons.findIndex(p => p.id === selectedPolygonId) + 1}/${polygons.length}`
-                  : `0/${polygons.length}`
-                }
+                  : `0/${polygons.length}`}
               </span>
 
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  const currentIndex = polygons.findIndex(p => p.id === selectedPolygonId);
+                  const currentIndex = polygons.findIndex(
+                    p => p.id === selectedPolygonId
+                  );
                   if (currentIndex < polygons.length - 1) {
                     onSelectPolygon(polygons[currentIndex + 1].id);
                   }
                 }}
-                disabled={!selectedPolygonId || polygons.findIndex(p => p.id === selectedPolygonId) === polygons.length - 1}
+                disabled={
+                  !selectedPolygonId ||
+                  polygons.findIndex(p => p.id === selectedPolygonId) ===
+                    polygons.length - 1
+                }
                 className="h-8 w-8 p-0"
               >
                 <ChevronDown className="h-4 w-4" />
@@ -270,9 +293,9 @@ const PolygonListPanel: React.FC<PolygonListPanelProps> = ({
                         <span>•</span>
                         <span>
                           {polygon.geometry === 'polyline'
-                            ? (polygon.partClass
+                            ? polygon.partClass
                               ? t(`sperm.part.${polygon.partClass}`)
-                              : t('segmentation.status.polyline'))
+                              : t('segmentation.status.polyline')
                             : isInternalPolygon(polygon)
                               ? t('segmentation.status.internal')
                               : t('segmentation.status.external')}

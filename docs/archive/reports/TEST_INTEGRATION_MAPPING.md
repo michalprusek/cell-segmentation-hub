@@ -30,6 +30,7 @@ New Feature? → What layer?
 ## Test File Naming Conventions
 
 ### Frontend
+
 ```
 Component:     ComponentName.test.tsx
 Hook:          useHookName.test.ts
@@ -39,6 +40,7 @@ Performance:   FeatureName.performance.test.ts
 ```
 
 ### Backend
+
 ```
 Controller:    controller.test.ts
 Service:       serviceName.test.ts
@@ -47,6 +49,7 @@ Security:      featureName.security.test.ts
 ```
 
 ### ML Service
+
 ```
 API:           test_api_feature.py
 Unit:          test_feature_service.py
@@ -54,6 +57,7 @@ Performance:   test_feature_benchmarks.py
 ```
 
 ### E2E
+
 ```
 Workflow:      feature-workflow.spec.ts
 Performance:   feature-performance.spec.ts
@@ -79,6 +83,7 @@ Performance:   feature-performance.spec.ts
    - Focus: User workflows, cross-browser compatibility
 
 **Example structure:**
+
 ```typescript
 // ComponentName.test.tsx
 import { render, screen, fireEvent } from '@testing-library/react';
@@ -100,6 +105,7 @@ describe('ComponentName', () => {
 ```
 
 **Test utilities to use:**
+
 - `reactTestUtils.tsx` - React testing helpers
 - `test-helpers.ts` - General utilities
 - `mockComponents.tsx` - Mock child components
@@ -125,6 +131,7 @@ describe('ComponentName', () => {
    - Focus: Authorization, authentication boundaries, access control
 
 **Example structure:**
+
 ```typescript
 // controller.test.ts
 describe('FeatureController', () => {
@@ -137,21 +144,19 @@ describe('FeatureController', () => {
 
       expect(response.body).toMatchObject({
         id: expect.any(String),
-        data: 'test'
+        data: 'test',
       });
     });
 
     it('validates required fields', async () => {
-      await request(app)
-        .post('/api/feature')
-        .send({})
-        .expect(400);
+      await request(app).post('/api/feature').send({}).expect(400);
     });
   });
 });
 ```
 
 **Test utilities to use:**
+
 - `supertest` for HTTP requests
 - `prisma` for database mocking
 - Test database isolation
@@ -173,6 +178,7 @@ describe('FeatureController', () => {
    - Focus: Client-server communication, real-time updates
 
 **Example structure:**
+
 ```typescript
 // Frontend
 describe('WebSocket Feature Events', () => {
@@ -180,12 +186,15 @@ describe('WebSocket Feature Events', () => {
     const mockHandler = vi.fn();
     wsManager.on('featureUpdate', mockHandler);
 
-    wsTestUtils.emitServerEvent('featureUpdate', { id: '1', status: 'updated' });
+    wsTestUtils.emitServerEvent('featureUpdate', {
+      id: '1',
+      status: 'updated',
+    });
 
     await waitFor(() => {
       expect(mockHandler).toHaveBeenCalledWith({
         id: '1',
-        status: 'updated'
+        status: 'updated',
       });
     });
   });
@@ -193,6 +202,7 @@ describe('WebSocket Feature Events', () => {
 ```
 
 **Test utilities to use:**
+
 - `webSocketTestUtils.ts` - WebSocket mocking utilities
 - `webSocketManager.test.ts` patterns
 
@@ -217,6 +227,7 @@ describe('WebSocket Feature Events', () => {
    - Focus: Complete user workflows, cross-browser testing
 
 **Example structure:**
+
 ```typescript
 // Canvas test
 describe('FeatureCanvas', () => {
@@ -242,6 +253,7 @@ describe('FeatureCanvas', () => {
 ```
 
 **Test utilities to use:**
+
 - `canvasTestUtils.ts` - Canvas interaction utilities
 - `polygonTestUtils.ts` - Polygon helpers
 - `polygonTestDataFactory.ts` - Test data generation
@@ -264,6 +276,7 @@ describe('FeatureCanvas', () => {
    - Focus: Inference time, memory usage, throughput
 
 **Example structure:**
+
 ```python
 # test_feature_model.py
 def test_model_inference():
@@ -297,26 +310,27 @@ def test_model_handles_errors():
    - Focus: Transactions, migrations, data integrity
 
 **Example structure:**
+
 ```typescript
 describe('Feature Model', () => {
   it('creates feature with relationships', async () => {
     const user = await createTestUser();
     const feature = await featureService.create({
       userId: user.id,
-      data: 'test'
+      data: 'test',
     });
 
     expect(feature).toMatchObject({
       id: expect.any(String),
       userId: user.id,
-      data: 'test'
+      data: 'test',
     });
   });
 
   it('enforces constraints', async () => {
-    await expect(
-      featureService.create({ data: null })
-    ).rejects.toThrow('Validation failed');
+    await expect(featureService.create({ data: null })).rejects.toThrow(
+      'Validation failed'
+    );
   });
 });
 ```
@@ -338,6 +352,7 @@ describe('Feature Model', () => {
    - Focus: User flows, error scenarios, UI feedback
 
 **Test utilities to use:**
+
 - JWT mocking utilities
 - Session management helpers
 - Rate limit testing
@@ -346,15 +361,15 @@ describe('Feature Model', () => {
 
 ### Minimum Coverage by Feature Type
 
-| Feature Type | Unit Tests | Integration Tests | E2E Tests |
-|--------------|-----------|-------------------|-----------|
-| UI Component | ✅ Required | Optional | Optional |
-| API Endpoint | ✅ Required | ✅ Required | Optional |
-| WebSocket | ✅ Required | ✅ Required | Optional |
-| ML Model | ✅ Required | ✅ Required | ✅ Required |
-| Database Model | ✅ Required | ✅ Required | Optional |
-| Auth Flow | ✅ Required | ✅ Required | ✅ Required |
-| User Workflow | Optional | Optional | ✅ Required |
+| Feature Type   | Unit Tests  | Integration Tests | E2E Tests   |
+| -------------- | ----------- | ----------------- | ----------- |
+| UI Component   | ✅ Required | Optional          | Optional    |
+| API Endpoint   | ✅ Required | ✅ Required       | Optional    |
+| WebSocket      | ✅ Required | ✅ Required       | Optional    |
+| ML Model       | ✅ Required | ✅ Required       | ✅ Required |
+| Database Model | ✅ Required | ✅ Required       | Optional    |
+| Auth Flow      | ✅ Required | ✅ Required       | ✅ Required |
+| User Workflow  | Optional    | Optional          | ✅ Required |
 
 ### Coverage Thresholds
 
@@ -433,24 +448,28 @@ it('emits event correctly', async () => {
 ### When Testing Component X, Also Mock:
 
 **UI Components:**
+
 - Child components (use mockComponents.tsx)
 - Contexts (AuthContext, ThemeContext, WebSocketContext)
 - API calls (use vi.spyOn)
 - Router (use createMemoryRouter)
 
 **API Endpoints:**
+
 - Database (use test database or mocks)
 - External services (mock with supertest)
 - WebSocket (mock Socket.io)
 - Authentication (mock JWT)
 
 **WebSocket Events:**
+
 - Socket.io client/server
 - Event emitters
 - State management
 - API calls triggered by events
 
 **ML Inference:**
+
 - Model loading (mock weights)
 - CUDA availability (conditional tests)
 - Input preprocessing
@@ -459,12 +478,14 @@ it('emits event correctly', async () => {
 ## Checklist for New Feature Tests
 
 ### Pre-Development
+
 - [ ] Identify all integration points
 - [ ] Determine test file locations
 - [ ] List required test utilities
 - [ ] Plan test scenarios (happy path, edge cases, errors)
 
 ### During Development
+
 - [ ] Write tests alongside code (TDD)
 - [ ] Test happy path first
 - [ ] Add edge case tests
@@ -472,6 +493,7 @@ it('emits event correctly', async () => {
 - [ ] Mock external dependencies properly
 
 ### Post-Development
+
 - [ ] Verify coverage meets thresholds
 - [ ] Run tests in isolation
 - [ ] Check for flaky tests (run 5x)
@@ -479,6 +501,7 @@ it('emits event correctly', async () => {
 - [ ] Review with team
 
 ### Before Merge
+
 - [ ] All tests passing
 - [ ] No skipped tests (or documented why)
 - [ ] No console.log or debug statements
@@ -490,6 +513,7 @@ it('emits event correctly', async () => {
 ### ❌ Don't Do This
 
 1. **Testing Implementation Details**
+
    ```typescript
    // BAD
    expect(component.state.internalValue).toBe('x');
@@ -499,6 +523,7 @@ it('emits event correctly', async () => {
    ```
 
 2. **Too Many Assertions**
+
    ```typescript
    // BAD - Testing too much in one test
    it('does everything', () => {
@@ -515,6 +540,7 @@ it('emits event correctly', async () => {
    ```
 
 3. **Not Waiting for Async**
+
    ```typescript
    // BAD
    it('updates after API call', () => {
@@ -530,6 +556,7 @@ it('emits event correctly', async () => {
    ```
 
 4. **Sharing State Between Tests**
+
    ```typescript
    // BAD
    let sharedState;
@@ -549,6 +576,7 @@ it('emits event correctly', async () => {
    ```
 
 5. **Not Cleaning Up**
+
    ```typescript
    // BAD
    it('subscribes to events', () => {
@@ -569,6 +597,7 @@ it('emits event correctly', async () => {
 ## Quick Reference: Test File Templates
 
 ### Frontend Component
+
 ```typescript
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ComponentName } from '../ComponentName';
@@ -591,6 +620,7 @@ describe('ComponentName', () => {
 ```
 
 ### Backend Controller
+
 ```typescript
 import request from 'supertest';
 import { app } from '../../app';
@@ -605,7 +635,7 @@ describe('FeatureController', () => {
 
       expect(response.body).toMatchObject({
         id: expect.any(String),
-        data: 'test'
+        data: 'test',
       });
     });
   });
@@ -613,6 +643,7 @@ describe('FeatureController', () => {
 ```
 
 ### ML Service
+
 ```python
 import pytest
 from api.feature import predict
@@ -631,6 +662,7 @@ def test_invalid_input():
 ```
 
 ### E2E Test
+
 ```typescript
 import { test, expect } from '@playwright/test';
 
@@ -647,6 +679,7 @@ test.describe('Feature Workflow', () => {
 ## Test Execution Tips
 
 ### Run Specific Tests
+
 ```bash
 # Single file
 npm test -- ComponentName.test.tsx
@@ -659,6 +692,7 @@ npm test -- --watch
 ```
 
 ### Debug Tests
+
 ```bash
 # Enable debug output
 DEBUG=* npm test
@@ -671,6 +705,7 @@ npm test -- --reporter=verbose
 ```
 
 ### Fix Flaky Tests
+
 ```bash
 # Run test multiple times
 for i in {1..10}; do npm test -- flaky.test.tsx || break; done

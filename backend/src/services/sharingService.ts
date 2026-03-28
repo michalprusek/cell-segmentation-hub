@@ -85,20 +85,27 @@ export async function shareProjectByEmail(
     // FIXED: Call EmailService directly to avoid double wrapper causing duplicate sends
     void EmailService.sendEmail({
       to: share.email,
-      subject: getShareInvitationSimpleSubject(share.project.title, share.locale || 'en'),
+      subject: getShareInvitationSimpleSubject(
+        share.project.title,
+        ((share as Record<string, unknown>).locale as string) || 'en'
+      ),
       html: generateShareInvitationSimpleHTML({
         projectTitle: share.project.title,
         sharedByEmail: share.sharedBy?.email || 'Unknown',
         acceptUrl: `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`,
-        expiresAt: share.tokenExpiry ? new Date(share.tokenExpiry) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        locale: share.locale || 'en',
+        expiresAt: share.tokenExpiry
+          ? new Date(share.tokenExpiry)
+          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        locale: ((share as Record<string, unknown>).locale as string) || 'en',
       }),
       text: generateShareInvitationSimpleText({
         projectTitle: share.project.title,
         sharedByEmail: share.sharedBy?.email || 'Unknown',
         acceptUrl: `${process.env.FRONTEND_URL}/share/accept/${share.shareToken}`,
-        expiresAt: share.tokenExpiry ? new Date(share.tokenExpiry) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        locale: share.locale || 'en',
+        expiresAt: share.tokenExpiry
+          ? new Date(share.tokenExpiry)
+          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        locale: ((share as Record<string, unknown>).locale as string) || 'en',
       }),
     }).catch(emailError => {
       logger.error(

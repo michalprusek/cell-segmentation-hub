@@ -10,14 +10,14 @@ services:
         - VITE_WS_URL=
     container_name: spheroseg-frontend
     ports:
-      - "4000:80"
+      - '4000:80'
     networks:
       - spheroseg-network
     environment:
       - NODE_ENV=production
     restart: always
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:80/health"]
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:80/health']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -30,7 +30,7 @@ services:
     container_name: spheroseg-backend
     env_file: .env.production
     ports:
-      - "4001:3001"
+      - '4001:3001'
     networks:
       - spheroseg-network
     depends_on:
@@ -66,7 +66,7 @@ services:
         reservations:
           memory: 1G
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:3001/health']
       interval: 30s
       timeout: 10s
       retries: 3
@@ -85,7 +85,7 @@ services:
       - postgres_blue_data:/var/lib/postgresql/data
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U spheroseg -d spheroseg_blue"]
+      test: ['CMD-SHELL', 'pg_isready -U spheroseg -d spheroseg_blue']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -100,7 +100,7 @@ services:
       - redis_blue_data:/data
     restart: always
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -113,9 +113,23 @@ services:
     container_name: spheroseg-ml
     runtime: nvidia
     # 1 worker to free GPU memory for Maptimize
-    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "100", "--timeout-keep-alive", "30"]
+    command:
+      [
+        'uvicorn',
+        'api.main:app',
+        '--host',
+        '0.0.0.0',
+        '--port',
+        '8000',
+        '--workers',
+        '1',
+        '--limit-concurrency',
+        '100',
+        '--timeout-keep-alive',
+        '30',
+      ]
     ports:
-      - "4008:8000"
+      - '4008:8000'
     networks:
       - spheroseg-network
     depends_on:
@@ -150,16 +164,22 @@ services:
     deploy:
       resources:
         limits:
-          memory: 12G    # Increased for sperm model (2.1GB model + ConvNeXt backbone)
-          cpus: '4.0'    # Explicit CPU allocation
+          memory: 12G # Increased for sperm model (2.1GB model + ConvNeXt backbone)
+          cpus: '4.0' # Explicit CPU allocation
         reservations:
-          memory: 6G     # Increased for sperm model
+          memory: 6G # Increased for sperm model
           devices:
             - driver: nvidia
               count: 1
               capabilities: [gpu]
     healthcheck:
-      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      test:
+        [
+          'CMD',
+          'python',
+          '-c',
+          "import requests; requests.get('http://localhost:8000/health')",
+        ]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -178,8 +198,8 @@ services:
       # Persistent logs for IT audit trail
       - ./logs/nginx:/var/log/nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     depends_on:
       - frontend
       - backend
@@ -189,7 +209,7 @@ services:
       - maptimize-network
     restart: always
     healthcheck:
-      test: ["CMD", "nginx", "-t"]
+      test: ['CMD', 'nginx', '-t']
       interval: 30s
       timeout: 10s
       retries: 3

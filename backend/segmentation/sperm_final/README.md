@@ -112,12 +112,12 @@ Three cleaning steps are applied to the raw patch predictions:
 
 ### Default Parameters
 
-| Parameter | Value | Purpose |
-|-----------|-------|---------|
-| `score_threshold` | 0.95 | High confidence — model is very certain (0.99-1.00 typical) |
-| `mask_threshold` | 0.3 | Lower than default 0.5 to avoid fragmented masks at patch boundaries |
-| `patch_size` | 1024 | Matches training patch size |
-| `overlap` | 300 | ~29% overlap for smooth transitions |
+| Parameter         | Value | Purpose                                                              |
+| ----------------- | ----- | -------------------------------------------------------------------- |
+| `score_threshold` | 0.95  | High confidence — model is very certain (0.99-1.00 typical)          |
+| `mask_threshold`  | 0.3   | Lower than default 0.5 to avoid fragmented masks at patch boundaries |
+| `patch_size`      | 1024  | Matches training patch size                                          |
+| `overlap`         | 300   | ~29% overlap for smooth transitions                                  |
 
 ---
 
@@ -126,6 +126,7 @@ Three cleaning steps are applied to the raw patch predictions:
 ### Problem
 
 After instance segmentation, we have a flat list of instances (e.g., 15 instances: 3 Heads, 5 Midpieces, 4 Tails, 3 fragments). We need to:
+
 - Group them into complete sperm (Head + Midpiece + Tail)
 - Merge same-class fragments (e.g., Midpiece split at patch boundary)
 - NOT merge different instances of the same class (e.g., two parallel Midpieces)
@@ -138,17 +139,18 @@ Each flow path from Source (S) to Sink (T) represents one complete sperm.
 
 **Edges**:
 
-| Edge | Capacity | Cost | Purpose |
-|------|----------|------|---------|
-| i_in → i_out | 1 | -reward(i) | Reward for using instance (negative = incentive) |
-| S → head_in | 1 | 0 | Only Heads can start a path |
-| tail_out → T | 1 | 0 | Only Tails can end a path |
-| head_out → midpiece_in | 1 | conn_cost(h,m) | Head→Midpiece connection |
-| midpiece_out → tail_in | 1 | conn_cost(m,t) | Midpiece→Tail connection |
-| i_out → j_in (same class) | 1 | merge_cost(i,j) | Same-class fragment merging |
-| S → T | N | 0 | Bypass (absorbs unused supply) |
+| Edge                      | Capacity | Cost            | Purpose                                          |
+| ------------------------- | -------- | --------------- | ------------------------------------------------ |
+| i_in → i_out              | 1        | -reward(i)      | Reward for using instance (negative = incentive) |
+| S → head_in               | 1        | 0               | Only Heads can start a path                      |
+| tail_out → T              | 1        | 0               | Only Tails can end a path                        |
+| head_out → midpiece_in    | 1        | conn_cost(h,m)  | Head→Midpiece connection                         |
+| midpiece_out → tail_in    | 1        | conn_cost(m,t)  | Midpiece→Tail connection                         |
+| i_out → j_in (same class) | 1        | merge_cost(i,j) | Same-class fragment merging                      |
+| S → T                     | N        | 0               | Bypass (absorbs unused supply)                   |
 
 The solver (NetworkX network simplex) finds the minimum-cost flow, which simultaneously:
+
 - Selects which instances to use (high reward = used)
 - Groups them into H+M+T chains
 - Merges compatible same-class fragments
@@ -157,16 +159,19 @@ The solver (NetworkX network simplex) finds the minimum-cost flow, which simulta
 ### Cost Functions
 
 **Detection reward**: `reward(i) = alpha * effective_area(i) * score(i)`
+
 - Larger, higher-confidence instances get bigger rewards
 - Effective area discounts overlap with higher-scoring same-class instances (handles containment)
 
 **Connection cost** (cross-class, Head→Midpiece or Midpiece→Tail):
+
 - Based on endpoint distance + tangent angle penalty
 - Head uses centroid (blob-like, no reliable skeleton endpoints)
 - Midpiece and Tail use skeleton endpoints with tangent vectors
 - No edge if distance > 150px
 
 **Merge cost** (same-class fragments):
+
 - Overlapping fragments: negative cost (reward for merging)
 - Adjacent fragments (gap < 60px): cost based on gap distance + tangent alignment
 - **Orientation guard**: no merge if angle difference > 30 degrees (prevents merging parallel Midpieces from different sperm)
@@ -180,16 +185,16 @@ Only complete sperm (all 3 parts: Head + Midpiece + Tail) are returned. Incomple
 
 ### Configuration (`GraphAssemblyConfig`)
 
-| Parameter | Default | Purpose |
-|-----------|---------|---------|
-| `alpha` | 0.5 | Detection reward scaling |
-| `effective_area_discount` | 0.9 | Overlap discounting for containment |
-| `max_connection_dist` | 150px | Max distance for cross-class connections |
-| `w_dist` | 3.0 | Distance weight in connection cost |
-| `w_angle` | 5.0 | Tangent angle weight in connection cost |
-| `merge_overlap_bonus` | 200 | Reward for merging overlapping fragments |
-| `max_merge_gap` | 60px | Max gap for adjacent fragment merging |
-| `merge_max_angle_diff` | 30 deg | Orientation guard for non-Head merging |
+| Parameter                 | Default | Purpose                                  |
+| ------------------------- | ------- | ---------------------------------------- |
+| `alpha`                   | 0.5     | Detection reward scaling                 |
+| `effective_area_discount` | 0.9     | Overlap discounting for containment      |
+| `max_connection_dist`     | 150px   | Max distance for cross-class connections |
+| `w_dist`                  | 3.0     | Distance weight in connection cost       |
+| `w_angle`                 | 5.0     | Tangent angle weight in connection cost  |
+| `merge_overlap_bonus`     | 200     | Reward for merging overlapping fragments |
+| `max_merge_gap`           | 60px    | Max gap for adjacent fragment merging    |
+| `merge_max_angle_diff`    | 30 deg  | Orientation guard for non-Head merging   |
 
 ---
 
@@ -232,6 +237,7 @@ Output: List of (x, y) coordinate tuples
 ### Fallbacks
 
 If skeletonization fails (mask too small or degenerate):
+
 1. **Contour midline**: Extract contour, find two most distant points, take the shorter arc
 2. **Distant pixels**: Find two most distant mask pixels, connect them
 
@@ -326,6 +332,7 @@ python -m sperm_final.run_pipeline --ckpt sperm_final/best_model.pth --image img
 ```
 
 The checkpoint contains:
+
 - `model_state_dict`: Model weights
 - `config`: Training configuration (automatically loaded)
 

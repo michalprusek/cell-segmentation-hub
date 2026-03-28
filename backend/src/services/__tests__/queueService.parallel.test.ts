@@ -966,7 +966,8 @@ describe('QueueService Parallel Processing', () => {
               return {
                 success: false,
                 operationId: i,
-                error: _error instanceof Error ? _error.message : String(_error),
+                error:
+                  _error instanceof Error ? _error.message : String(_error),
               };
             }
           })();
@@ -997,7 +998,10 @@ describe('QueueService Parallel Processing', () => {
 
       // System should remain stable after potential deadlocks
       const healthCheck = await queueService.getQueueHealthStatus();
-      expect(healthCheck.healthy || (healthCheck.issues && healthCheck.issues.length < 3)).toBe(true);
+      expect(
+        healthCheck.healthy ||
+          (healthCheck.issues && healthCheck.issues.length < 3)
+      ).toBe(true);
     });
 
     test('should maintain processing capability after partial failures', async () => {
