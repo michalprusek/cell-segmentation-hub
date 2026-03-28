@@ -47,9 +47,8 @@ services:
       - ENABLE_TRACING=false
       # Database password from shell environment
       - DB_PASSWORD=${DB_PASSWORD}
-      # Parallel processing configuration
-      # Sequential processing to prevent 400 errors from concurrent multipart requests
-      - QUEUE_MAX_CONCURRENT_BATCHES=1
+      # Queue processing — default 1 to prevent concurrent multipart request errors
+      - QUEUE_MAX_CONCURRENT_BATCHES=${QUEUE_MAX_CONCURRENT_BATCHES:-1}
       - QUEUE_PARALLEL_PROCESSING_ENABLED=true
       - DATABASE_CONNECTION_POOL_SIZE=50
       - WS_PARALLEL_PROCESSING_ENABLED=true
@@ -143,10 +142,10 @@ services:
       - DATABASE_URL=postgresql://spheroseg:${DB_PASSWORD}@postgres:5432/spheroseg_blue
       - REDIS_URL=redis://redis:6379
       # Sequential processing - single worker for 8GB GPU limit safety
-      - ML_INFERENCE_WORKERS=1
-      - ML_ENABLE_PARALLEL_INFERENCE=false
-      - ML_MAX_CONCURRENT_USERS=1
-      - ML_MEMORY_LIMIT_GB=8
+      - ML_INFERENCE_WORKERS=${ML_INFERENCE_WORKERS:-1}
+      - ML_ENABLE_PARALLEL_INFERENCE=${ML_ENABLE_PARALLEL_INFERENCE:-false}
+      - ML_MAX_CONCURRENT_USERS=${ML_MAX_CONCURRENT_USERS:-1}
+      - ML_MEMORY_LIMIT_GB=${ML_MEMORY_LIMIT_GB:-8}
       - ML_ENABLE_CUDA_STREAMS=true
       - GPU_MEMORY_WARNING_THRESHOLD=90
       - GPU_MEMORY_CRITICAL_THRESHOLD=95

@@ -6,11 +6,9 @@ requests==2.32.3
 python-multipart==0.0.6
 psutil==5.9.5
 
-# ML dependencies
-torch==2.0.1
-torchvision==0.15.2
-# Note: For CPU-only version, install with:
-# pip install torch==2.0.1+cpu torchvision==0.15.2+cpu -f https://download.pytorch.org/whl/torch_stable.html
+# ML dependencies (CUDA variant specified in Dockerfiles)
+torch==2.4.1
+torchvision==0.19.1
 
 # Image processing
 opencv-python-headless==4.8.1.78
