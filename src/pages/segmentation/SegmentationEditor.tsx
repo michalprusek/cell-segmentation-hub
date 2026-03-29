@@ -1389,7 +1389,6 @@ const SegmentationEditor = () => {
           />
         </div>
       </EditorLayout>
-
     </SegmentationErrorBoundary>
   );
 };

@@ -345,7 +345,8 @@ export default {
     imageAlreadyProcessing: 'La imagen ya está siendo procesada',
     processImageFailed: 'Error al procesar la imagen',
     upload: {
-      inProgress: 'Subida en progreso. Puede seguir trabajando — vea el progreso en la esquina inferior derecha.',
+      inProgress:
+        'Subida en progreso. Puede seguir trabajando — vea el progreso en la esquina inferior derecha.',
       uploading: 'Subiendo {{success}}/{{total}} archivos',
       completed: '{{count}} archivos subidos correctamente',
       completedWithFailures: '{{success}} subidos, {{failed}} fallidos',
