@@ -624,6 +624,122 @@ export class MetricsCalculator {
   }
 
   /**
+   * Export sperm morphology metrics to Excel.
+   * One row per sperm instance with head/midpiece/tail lengths.
+   */
+  async exportSpermToExcel(
+    images: ImageWithSegmentation[],
+    outputPath: string,
+    pixelToMicrometerScale?: number
+  ): Promise<void> {
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Sperm Metrics');
+
+    const isScaled = pixelToMicrometerScale && pixelToMicrometerScale > 0;
+    const unit = isScaled ? 'µm' : 'px';
+
+    // Headers
+    const columns: Partial<ExcelJS.Column>[] = [
+      { header: 'Image Name', key: 'imageName', width: 25 },
+      { header: 'Instance ID', key: 'instanceId', width: 15 },
+      { header: `Head Length (${unit})`, key: 'headLength', width: 16 },
+      { header: `Midpiece Length (${unit})`, key: 'midpieceLength', width: 18 },
+      { header: `Tail Length (${unit})`, key: 'tailLength', width: 16 },
+      { header: `Total Length (${unit})`, key: 'totalLength', width: 16 },
+    ];
+    worksheet.columns = columns;
+
+    // Helper: polyline arc length
+    const polylineLength = (points: Point[]): number => {
+      let len = 0;
+      for (let i = 1; i < points.length; i++) {
+        const dx = points[i].x - points[i - 1].x;
+        const dy = points[i].y - points[i - 1].y;
+        len += Math.sqrt(dx * dx + dy * dy);
+      }
+      return len;
+    };
+
+    const scale = isScaled ? pixelToMicrometerScale! : 1;
+
+    for (const image of images) {
+      if (!image.segmentation?.polygons) continue;
+
+      let polygons: any[];
+      try {
+        polygons = JSON.parse(image.segmentation.polygons);
+      } catch {
+        continue;
+      }
+
+      // Get polylines grouped by instanceId
+      const polylines = polygons.filter(
+        (p: any) => p.geometry === 'polyline' && p.instanceId
+      );
+      const groups = new Map<string, any[]>();
+      for (const pl of polylines) {
+        const id = pl.instanceId;
+        if (!groups.has(id)) groups.set(id, []);
+        groups.get(id)!.push(pl);
+      }
+
+      for (const [instanceId, parts] of groups) {
+        const head = parts.find((p: any) => p.partClass === 'head');
+        const mid = parts.find((p: any) => p.partClass === 'midpiece');
+        const tail = parts.find((p: any) => p.partClass === 'tail');
+
+        const headLen = head ? polylineLength(head.points) * scale : 0;
+        const midLen = mid ? polylineLength(mid.points) * scale : 0;
+        const tailLen = tail ? polylineLength(tail.points) * scale : 0;
+
+        worksheet.addRow({
+          imageName: image.name,
+          instanceId,
+          headLength: parseFloat(headLen.toFixed(2)),
+          midpieceLength: parseFloat(midLen.toFixed(2)),
+          tailLength: parseFloat(tailLen.toFixed(2)),
+          totalLength: parseFloat((headLen + midLen + tailLen).toFixed(2)),
+        });
+      }
+    }
+
+    // Style header
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4472C4' },
+    };
+
+    // Create parent directory
+    const parentDir = path.dirname(outputPath);
+    await fs.mkdir(parentDir, { recursive: true });
+
+    await workbook.xlsx.writeFile(outputPath);
+    this.logger.info(
+      `Sperm metrics Excel created: ${outputPath}`,
+      'MetricsCalculator'
+    );
+  }
+
+  /**
+   * Check if images contain polylines (sperm data)
+   */
+  hasPolylines(images: ImageWithSegmentation[]): boolean {
+    for (const image of images) {
+      if (!image.segmentation?.polygons) continue;
+      try {
+        const polygons = JSON.parse(image.segmentation.polygons);
+        if (polygons.some((p: any) => p.geometry === 'polyline')) return true;
+      } catch {
+        continue;
+      }
+    }
+    return false;
+  }
+
+  /**
    * Export metrics to CSV
    */
   async exportToCSV(

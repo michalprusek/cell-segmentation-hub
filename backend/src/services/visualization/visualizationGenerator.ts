@@ -151,15 +151,62 @@ export class VisualizationGenerator {
 
       // Draw polygons and polylines - reset numbering for each image
       let polygonNumber = 1;
+
+      // For polylines: collect sperm instance IDs for labeling
+      const spermInstances = new Map<string, { midpoints: { x: number; y: number }[] }>();
+      for (const polygon of polygons) {
+        if (polygon.geometry === 'polyline' && polygon.instanceId) {
+          if (!spermInstances.has(polygon.instanceId)) {
+            spermInstances.set(polygon.instanceId, { midpoints: [] });
+          }
+          // Use the midpoint of each polyline for label positioning
+          if (polygon.points && polygon.points.length >= 2) {
+            const mid = polygon.points[Math.floor(polygon.points.length / 2)];
+            spermInstances.get(polygon.instanceId)!.midpoints.push(mid);
+          }
+        }
+      }
+
       for (const polygon of polygons) {
         if (polygon.geometry === 'polyline') {
-          // Polylines don't get numbers
           await this.drawPolygon(ctx, polygon, mergedOptions);
         } else if (polygon.type === 'external') {
           await this.drawPolygon(ctx, polygon, mergedOptions, polygonNumber);
           polygonNumber++;
         } else {
           await this.drawPolygon(ctx, polygon, mergedOptions);
+        }
+      }
+
+      // Draw sperm instance labels (S1, S2, ...) near each sperm's midpiece
+      if (mergedOptions.showNumbers) {
+        let spermIdx = 1;
+        for (const [, data] of spermInstances) {
+          if (data.midpoints.length > 0) {
+            // Average of midpoints = center of the sperm group
+            const cx = data.midpoints.reduce((s, p) => s + p.x, 0) / data.midpoints.length;
+            const cy = data.midpoints.reduce((s, p) => s + p.y, 0) / data.midpoints.length;
+            const label = `S${spermIdx}`;
+            const fontSize = Math.max(14, Math.min(24, Math.round(image.width / 60)));
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            // Background pill
+            const tm = ctx.measureText(label);
+            const pad = 4;
+            ctx.fillStyle = 'rgba(168, 85, 247, 0.85)';
+            ctx.beginPath();
+            const rx = cx - tm.width / 2 - pad;
+            const ry = cy - fontSize / 2 - pad;
+            const rw = tm.width + pad * 2;
+            const rh = fontSize + pad * 2;
+            ctx.roundRect(rx, ry, rw, rh, 4);
+            ctx.fill();
+            // Text
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(label, cx, cy);
+            spermIdx++;
+          }
         }
       }
 
