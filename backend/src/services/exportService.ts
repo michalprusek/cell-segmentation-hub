@@ -986,13 +986,18 @@ export class ExportService {
 
       if (format === 'excel') {
         const excelPath = path.join(metricsDir, 'metrics.xlsx');
-        // Try sperm export first; falls back to standard if no polyline data found
+        // Try sperm-specific export first (writes to same path); falls back to standard polygon metrics if no polyline data found
         const exportedSperm = await this.metricsCalculator.exportSpermToExcel(
           metricsImages,
           excelPath,
           options?.pixelToMicrometerScale
         );
         if (!exportedSperm) {
+          logger.info(
+            `No sperm polyline data found — falling back to standard polygon metrics export`,
+            'ExportService',
+            { jobId, imageCount: metricsImages.length }
+          );
           await this.metricsCalculator.exportToExcel(
             allMetrics,
             excelPath,

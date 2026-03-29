@@ -134,7 +134,12 @@ export class MetricsCalculator {
         const result = image.segmentation;
         if (result.polygons) {
           try {
-            const polygons = JSON.parse(result.polygons);
+            const parsed: ParsedPolygon[] = JSON.parse(result.polygons);
+            // Filter to closed polygons only (exclude polylines used for sperm morphology)
+            const polygons = parsed.filter(
+              (p): p is ParsedPolygon & { type: 'external' | 'internal' } =>
+                p.geometry !== 'polyline' && !!p.type
+            );
             totalPolygonCount += polygons.length;
 
             const imageMetrics = await this.calculateImageMetrics(
@@ -644,7 +649,8 @@ export class MetricsCalculator {
   /**
    * Export sperm morphology metrics to Excel.
    * One row per sperm instance with head/midpiece/tail lengths.
-   * Returns true if sperm data was found and exported, false otherwise.
+   * Returns true if sperm data was found and the Excel file was written,
+   * false if no polyline data exists (no file is created in that case).
    */
   async exportSpermToExcel(
     images: ImageWithSegmentation[],
@@ -675,12 +681,30 @@ export class MetricsCalculator {
 
       let polygons: ParsedPolygon[];
       try {
-        polygons = JSON.parse(image.segmentation.polygons);
-      } catch {
+        const parsed = JSON.parse(image.segmentation.polygons);
+        if (!Array.isArray(parsed)) continue;
+        polygons = parsed;
+      } catch (parseError) {
+        this.logger.warn(
+          `Failed to parse polygons for image "${image.name}" (${image.id}) during sperm export — skipping`,
+          'MetricsCalculator',
+          { imageId: image.id, error: String(parseError) }
+        );
         continue;
       }
 
       // Get polylines grouped by instanceId
+      const orphanedCount = polygons.filter(
+        p => p.geometry === 'polyline' && !p.instanceId
+      ).length;
+      if (orphanedCount > 0) {
+        this.logger.warn(
+          `Image "${image.name}" has ${orphanedCount} polyline(s) without instanceId — excluded from sperm metrics`,
+          'MetricsCalculator',
+          { imageId: image.id }
+        );
+      }
+
       const polylines = polygons.filter(
         (p): p is ParsedPolygon & { instanceId: string } =>
           p.geometry === 'polyline' && !!p.instanceId
@@ -948,7 +972,7 @@ export class MetricsCalculator {
   }
 
   /**
-   * Calculate convex hull using Graham scan algorithm
+   * Calculate convex hull using Andrew's monotone chain algorithm
    */
   private calculateConvexHull(points: Point[]): Point[] {
     if (points.length < 3) {
@@ -1012,7 +1036,7 @@ export class MetricsCalculator {
   }
 
   /**
-   * Calculate the distance from a point to a line defined by two points
+   * Calculate the distance from a point to a line segment defined by two endpoints
    */
   private pointToLineDistance(
     point: Point,
@@ -1052,8 +1076,8 @@ export class MetricsCalculator {
   }
 
   /**
-   * Rotating calipers algorithm to find Feret diameters
-   * Returns max, min, and orthogonal Feret diameters
+   * Find Feret diameters via brute-force pairwise distance on the convex hull.
+   * Returns max, min, and orthogonal Feret diameters.
    */
   private rotatingCalipers(hull: Point[]): {
     max: number;
@@ -1113,7 +1137,10 @@ export class MetricsCalculator {
         maxOrthDist = Math.max(maxOrthDist, dist);
       }
 
-      orthogonalDist = maxOrthDist * 2; // Width is twice the max distance from centerline
+      // NOTE: This doubles the max one-sided perpendicular distance from the Feret axis.
+      // This is an approximation — a true orthogonal caliper width would measure between
+      // two parallel supporting lines, not double the one-sided distance.
+      orthogonalDist = maxOrthDist * 2;
     }
 
     // Handle edge cases

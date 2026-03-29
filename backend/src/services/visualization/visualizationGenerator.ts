@@ -156,7 +156,7 @@ export class VisualizationGenerator {
       for (const polygon of polygons) {
         if (polygon.geometry === 'polyline') {
           await this.drawPolygon(ctx, polygon, mergedOptions);
-          // Collect sperm instance midpoints for labeling
+          // Collect per-polyline center points (by array index) for label positioning
           if (polygon.instanceId) {
             if (!spermInstances.has(polygon.instanceId)) {
               spermInstances.set(polygon.instanceId, { midpoints: [] });
@@ -174,7 +174,7 @@ export class VisualizationGenerator {
         }
       }
 
-      // Draw sperm instance labels (S1, S2, ...) near each sperm's midpiece
+      // Draw sperm instance labels (S1, S2, ...) at the centroid of each sperm's part midpoints
       if (mergedOptions.showNumbers) {
         let spermIdx = 1;
         for (const [, data] of spermInstances) {
