@@ -345,7 +345,8 @@ export default {
     imageAlreadyProcessing: 'Obrázek se již zpracovává',
     processImageFailed: 'Zpracování obrázku selhalo',
     upload: {
-      inProgress: 'Nahrávání probíhá. Můžete pokračovat v práci — průběh sledujte v pravém dolním rohu.',
+      inProgress:
+        'Nahrávání probíhá. Můžete pokračovat v práci — průběh sledujte v pravém dolním rohu.',
       uploading: 'Nahrávání {{success}}/{{total}} souborů',
       completed: '{{count}} souborů úspěšně nahráno',
       completedWithFailures: '{{success}} nahráno, {{failed}} selhalo',

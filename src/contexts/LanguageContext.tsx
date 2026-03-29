@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import apiClient from '@/lib/api';
 import en from '@/translations/en';
 import cs from '@/translations/cs';
@@ -101,53 +101,50 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   // Funkce pro překlad
-  const t = (
-    key: string,
-    options?: Record<string, unknown>
-  ): string | string[] => {
-    // Rozdělení klíče podle teček pro přístup k vnořeným objektům
-    const keys = key.split('.');
+  const t = useCallback(
+    (key: string, options?: Record<string, unknown>): string | string[] => {
+      // Rozdělení klíče podle teček pro přístup k vnořeným objektům
+      const keys = key.split('.');
 
-    // Získání překladu
-    let translation: Record<string, unknown> = translations[language];
+      // Získání překladu
+      let translation: Record<string, unknown> = translations[language];
 
-    for (const k of keys) {
-      if (
-        translation &&
-        typeof translation === 'object' &&
-        translation[k] !== undefined
-      ) {
-        translation = translation[k] as Record<string, unknown>;
-      } else {
-        // Pokud překlad neexistuje, logujeme chybějící klíč a vrátíme původní klíč
+      for (const k of keys) {
+        if (
+          translation &&
+          typeof translation === 'object' &&
+          translation[k] !== undefined
+        ) {
+          translation = translation[k] as Record<string, unknown>;
+        } else {
+          i18nLogger.logMissingKey(key);
+          return key;
+        }
+      }
+
+      if (Array.isArray(translation)) {
+        return translation;
+      }
+
+      if (typeof translation !== 'string') {
         i18nLogger.logMissingKey(key);
         return key;
       }
-    }
 
-    // Pokud je překlad pole, vrátíme ho
-    if (Array.isArray(translation)) {
+      // Nahrazení placeholderů
+      if (options) {
+        return Object.entries(options).reduce((result, [optKey, optValue]) => {
+          return result.replace(
+            new RegExp(`{{${optKey}}}`, 'g'),
+            String(optValue)
+          );
+        }, translation);
+      }
+
       return translation;
-    }
-
-    // Pokud překlad není řetězec, vrátíme původní klíč
-    if (typeof translation !== 'string') {
-      i18nLogger.logMissingKey(key);
-      return key;
-    }
-
-    // Nahrazení placeholderů
-    if (options) {
-      return Object.entries(options).reduce((result, [optKey, optValue]) => {
-        return result.replace(
-          new RegExp(`{{${optKey}}}`, 'g'),
-          String(optValue)
-        );
-      }, translation);
-    }
-
-    return translation;
-  };
+    },
+    [language]
+  );
 
   // Čekáme, dokud se nenačte jazykové nastavení
   if (!loaded) {

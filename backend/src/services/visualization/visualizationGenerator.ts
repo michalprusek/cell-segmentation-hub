@@ -151,25 +151,21 @@ export class VisualizationGenerator {
 
       // Draw polygons and polylines - reset numbering for each image
       let polygonNumber = 1;
-
-      // For polylines: collect sperm instance IDs for labeling
       const spermInstances = new Map<string, { midpoints: { x: number; y: number }[] }>();
-      for (const polygon of polygons) {
-        if (polygon.geometry === 'polyline' && polygon.instanceId) {
-          if (!spermInstances.has(polygon.instanceId)) {
-            spermInstances.set(polygon.instanceId, { midpoints: [] });
-          }
-          // Use the midpoint of each polyline for label positioning
-          if (polygon.points && polygon.points.length >= 2) {
-            const mid = polygon.points[Math.floor(polygon.points.length / 2)];
-            spermInstances.get(polygon.instanceId)!.midpoints.push(mid);
-          }
-        }
-      }
 
       for (const polygon of polygons) {
         if (polygon.geometry === 'polyline') {
           await this.drawPolygon(ctx, polygon, mergedOptions);
+          // Collect per-polyline center points (by array index) for label positioning
+          if (polygon.instanceId) {
+            if (!spermInstances.has(polygon.instanceId)) {
+              spermInstances.set(polygon.instanceId, { midpoints: [] });
+            }
+            if (polygon.points && polygon.points.length >= 2) {
+              const mid = polygon.points[Math.floor(polygon.points.length / 2)];
+              spermInstances.get(polygon.instanceId)!.midpoints.push(mid);
+            }
+          }
         } else if (polygon.type === 'external') {
           await this.drawPolygon(ctx, polygon, mergedOptions, polygonNumber);
           polygonNumber++;
@@ -178,7 +174,7 @@ export class VisualizationGenerator {
         }
       }
 
-      // Draw sperm instance labels (S1, S2, ...) near each sperm's midpiece
+      // Draw sperm instance labels (S1, S2, ...) at the centroid of each sperm's part midpoints
       if (mergedOptions.showNumbers) {
         let spermIdx = 1;
         for (const [, data] of spermInstances) {

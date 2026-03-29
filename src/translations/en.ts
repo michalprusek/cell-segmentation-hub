@@ -358,7 +358,8 @@ export default {
     imageAlreadyProcessing: 'Image is already being processed',
     processImageFailed: 'Failed to process image',
     upload: {
-      inProgress: 'Upload in progress. You can navigate away — check progress in the bottom-right corner.',
+      inProgress:
+        'Upload in progress. You can navigate away — check progress in the bottom-right corner.',
       uploading: 'Uploading {{success}}/{{total}} files',
       completed: '{{count}} files uploaded successfully',
       completedWithFailures: '{{success}} uploaded, {{failed}} failed',

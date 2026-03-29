@@ -76,10 +76,16 @@ const FloatingUploadProgress: React.FC = () => {
     if (!status) return '';
     switch (status) {
       case 'uploading':
-        return t('images.upload.uploading', { success: successCount, total: totalFiles });
+        return t('images.upload.uploading', {
+          success: successCount,
+          total: totalFiles,
+        });
       case 'completed':
         return failedCount > 0
-          ? t('images.upload.completedWithFailures', { success: successCount, failed: failedCount })
+          ? t('images.upload.completedWithFailures', {
+              success: successCount,
+              failed: failedCount,
+            })
           : t('images.upload.completed', { count: successCount });
       case 'failed':
         return t('images.upload.failed');
@@ -106,12 +112,15 @@ const FloatingUploadProgress: React.FC = () => {
   const estimatedTotal =
     overallProgress > 5 ? elapsed / (overallProgress / 100) : 0;
   const remaining = Math.max(0, estimatedTotal - elapsed);
-  const remainingTime = remaining > 60
-    ? `${Math.ceil(remaining / 60)}m ${Math.round(remaining % 60)}s`
-    : remaining > 0
-      ? `${Math.round(remaining)}s`
-      : '';
-  const remainingText = remainingTime ? t('images.upload.remaining', { time: remainingTime }) : '';
+  const remainingTime =
+    remaining > 60
+      ? `${Math.ceil(remaining / 60)}m ${Math.round(remaining % 60)}s`
+      : remaining > 0
+        ? `${Math.round(remaining)}s`
+        : '';
+  const remainingText = remainingTime
+    ? t('images.upload.remaining', { time: remainingTime })
+    : '';
 
   const handleClose = () => {
     setVisibleSessionId(null);
@@ -155,7 +164,8 @@ const FloatingUploadProgress: React.FC = () => {
                 handleViewProject();
               }}
             >
-              {t('images.upload.view')} <ExternalLink className="ml-1 h-3 w-3" />
+              {t('images.upload.view')}{' '}
+              <ExternalLink className="ml-1 h-3 w-3" />
             </Button>
           )}
 
@@ -211,17 +221,27 @@ const FloatingUploadProgress: React.FC = () => {
               <div className="px-3 pb-3 space-y-2 border-t border-gray-100 dark:border-gray-700 pt-2">
                 {projectName && (
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    <span className="font-medium">{t('images.upload.project')}</span> {projectName}
+                    <span className="font-medium">
+                      {t('images.upload.project')}
+                    </span>{' '}
+                    {projectName}
                   </div>
                 )}
 
                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {t('images.upload.filesProgress', { success: successCount, total: totalFiles, percent: Math.round(overallProgress) })}
+                  {t('images.upload.filesProgress', {
+                    success: successCount,
+                    total: totalFiles,
+                    percent: Math.round(overallProgress),
+                  })}
                 </div>
 
                 {chunkProgress && (
                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {t('images.upload.chunkProgress', { current: chunkProgress.chunkIndex + 1, total: chunkProgress.totalChunks })}
+                    {t('images.upload.chunkProgress', {
+                      current: chunkProgress.chunkIndex + 1,
+                      total: chunkProgress.totalChunks,
+                    })}
                     {remainingText && ` \u00B7 ${remainingText}`}
                   </div>
                 )}
