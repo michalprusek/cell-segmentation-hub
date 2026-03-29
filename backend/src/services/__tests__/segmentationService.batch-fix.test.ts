@@ -18,6 +18,15 @@ import axios from 'axios';
 jest.mock('axios');
 jest.mock('../../storage');
 jest.mock('../../utils/logger');
+jest.mock('../../utils/config', () => ({
+  config: {
+    SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
+    NODE_ENV: 'test',
+    JWT_SECRET: 'test-secret',
+    JWT_REFRESH_SECRET: 'test-refresh-secret',
+    DATABASE_URL: 'file:./test.db',
+  },
+}));
 
 describe('SegmentationService - Batch Index Fix', () => {
   let service: SegmentationService;
@@ -32,11 +41,11 @@ describe('SegmentationService - Batch Index Fix', () => {
     (axios.create as any).mockReturnValue(mockAxiosInstance);
 
     mockStorage = {
-      getBuffer: jest.fn().mockResolvedValue(Buffer.from('test-image-data')),
+      getBuffer: (jest.fn() as any).mockResolvedValue(Buffer.from('test-image-data')),
     };
     (getStorageProvider as any).mockReturnValue(mockStorage);
 
-    service = new SegmentationService();
+    service = new SegmentationService({} as any, {} as any);
   });
 
   afterEach(() => {

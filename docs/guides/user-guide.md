@@ -362,7 +362,7 @@ Each processed image provides:
 ### Requesting Data Removal
 
 1. **Via Account Settings**: Settings > Privacy > Delete My Data
-2. **Email Request**: Send request to spheroseg@utia.cas.cz
+2. **Email Request**: Send request to prusek@utia.cas.cz
 3. **Verification**: Identity verification required for security
 4. **Confirmation**: Email confirmation sent upon completion
 5. **Timeline**: Complete removal within 30 days
@@ -376,7 +376,7 @@ Each processed image provides:
 
 ### Contact for Privacy Concerns
 
-- **Email**: spheroseg@utia.cas.cz
+- **Email**: prusek@utia.cas.cz
 - **Response Time**: Within 48 hours on business days
 - **Privacy Policy**: Full policy at [Privacy Policy](/privacy-policy)
 
@@ -412,7 +412,7 @@ Each processed image provides:
 
 #### Support Channels
 
-- **Email Support**: spheroseg@utia.cas.cz
+- **Email Support**: prusek@utia.cas.cz
 - **User Forum**: community.cellsegmentation.com
 - **Bug Reports**: Use the in-app feedback form
 

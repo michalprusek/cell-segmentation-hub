@@ -1,360 +1,198 @@
-# Cell Segmentation Hub
+# SpheroSeg - Cell Segmentation Hub
 
-Advanced cell segmentation platform powered by deep learning models. Complete system with React frontend, Node.js backend, and Python ML microservice.
+Advanced cell and sperm segmentation platform powered by deep learning. Full-stack system with React frontend, Node.js backend, and Python ML microservice supporting 4 AI models with real-time processing.
 
-> 📚 **Resources**: [Dataset, Paper & Supplementary Materials](https://staff.utia.cas.cz/novozada/spheroseg/)
+> **Resources**: [Dataset, Paper & Supplementary Materials](https://staff.utia.cas.cz/novozada/spheroseg/)
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 
-- **Docker** (version 20.10+) and **Docker Compose** v2
+- **Docker** (20.10+) and **Docker Compose** v2
 - **Git**
 - **8GB+ RAM** recommended
-- **(Optional) NVIDIA GPU** for ML service acceleration
+- **(Optional) NVIDIA GPU** with CUDA for ML acceleration
 
-### Start Development Environment
+### Start Development
 
 ```bash
-# Clone the repository
 git clone https://github.com/your-org/cell-segmentation-hub.git
 cd cell-segmentation-hub
-
-# Start all services with Docker
-make dev
+make up
 ```
 
-**That's it!** 🎉 All services will start automatically.
+All services start automatically:
 
-> **Note on Model Weights**: The ML service requires model weights (~1.8 GB). On first start, the container will automatically download them from Google Drive. See [Model Weights Setup Guide](./docs/MODEL_WEIGHTS_SETUP.md) for manual download options.
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Frontend | http://localhost:3000 | React application |
+| Backend API | http://localhost:3001 | REST API |
+| API Docs | http://localhost:3001/api-docs | Swagger/OpenAPI |
+| ML Service | http://localhost:8000 | AI inference |
 
-Access the application:
+> **Model Weights**: The ML service requires model weights (~1.8 GB). On first start, they are auto-downloaded from Google Drive. Run `make check-weights` to verify.
 
-- **Frontend**: http://localhost:5174
-- **Backend API**: http://localhost:3001
-- **API Documentation**: http://localhost:3001/api-docs
-- **ML Service**: http://localhost:8000
+## Key Features
 
-Development tools:
+- **4 AI Models** for segmentation: HRNet, CBAM-ResUNet, U-Net, Sperm Morphology
+- **Interactive Polygon Editor** with undo/redo, vertex editing, polygon slicing, hole detection
+- **Sperm Morphology Analysis** with skeleton extraction for head/midpiece/tail measurement
+- **Batch Processing** up to 10,000 images per project
+- **Real-time Updates** via WebSocket (segmentation progress, queue status)
+- **Multiple Export Formats**: COCO JSON, YOLO, Excel (with metrics), CSV
+- **6 Languages**: English, Czech, Spanish, German, French, Chinese
+- **Project Sharing** via email or link with role-based access
 
-- **Grafana Dashboard**: http://localhost:3030
-- **Prometheus**: http://localhost:9090
-- **MailHog (Email Testing)**: http://localhost:8025
+## Architecture
 
-### Development Commands
+```
+                    ┌──────────────────┐
+                    │     Nginx        │ (Production SSL/reverse proxy)
+                    └────────┬─────────┘
+          ┌─────────────────┼─────────────────┐
+          ▼                 ▼                  ▼
+┌──────────────────┐ ┌──────────────────┐ ┌──────────────────┐
+│  React Frontend  │ │  Node.js Backend │ │  Python ML       │
+│  :3000           │ │  :3001           │ │  :8000           │
+│  Vite + React 18 │ │  Express + Prisma│ │  FastAPI + PyTorch│
+│  shadcn/ui       │ │  Socket.io       │ │  CUDA / CPU      │
+│  TanStack Query  │ │  JWT Auth        │ │  4 Models        │
+└──────────────────┘ └────────┬─────────┘ └──────────────────┘
+                              │
+                    ┌─────────┼─────────┐
+                    ▼                   ▼
+          ┌──────────────────┐ ┌──────────────────┐
+          │  PostgreSQL      │ │  Redis           │
+          │  (prod) / SQLite │ │  Sessions, Queue │
+          │  (dev)           │ │  Cache           │
+          └──────────────────┘ └──────────────────┘
+```
 
-This project uses **Makefile** for all common tasks:
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 + TypeScript + Vite + shadcn/ui (Radix + Tailwind) |
+| Backend | Node.js + Express + TypeScript + Prisma ORM |
+| ML Service | Python + FastAPI + PyTorch (HRNet, CBAM-ResUNet, U-Net, Sperm) |
+| Database | SQLite (dev) / PostgreSQL (prod) |
+| Real-time | Socket.io with auto-reconnect + exponential backoff |
+| Auth | JWT access + refresh tokens |
+| i18n | 6 languages via i18next (EN, CS, ES, DE, FR, ZH) |
+| Deployment | Docker + Docker Compose + Nginx |
+
+## AI Models
+
+| Model | Inference | Throughput | Use Case |
+|-------|-----------|-----------|----------|
+| HRNet | ~200ms | 4.9 img/s | Balanced speed and accuracy |
+| CBAM-ResUNet | ~400ms | 2.7 img/s | Highest accuracy with attention mechanisms |
+| U-Net (SpheroHQ) | ~200ms | 5.5 img/s | Fastest, optimized for real-time |
+| Sperm | specialized | varies | Morphology with skeleton extraction |
+
+Performance measured on NVIDIA GPU. CPU fallback is supported.
+
+## Development
+
+### Commands
 
 ```bash
-# Starting & Stopping
-make dev              # Start development environment
-make up               # Start all services
-make down             # Stop all services
-make restart          # Restart all services
+# Start/Stop
+make up                    # Start all services
+make down                  # Stop services
+make logs-f                # Tail all logs
+make health                # Health check all services
 
-# Monitoring
-make logs-f           # Follow logs from all services
-make logs-fe          # View frontend logs
-make logs-be          # View backend logs
-make logs-ml          # View ML service logs
-make health           # Check health of all services
-make status           # Show container status
+# Container Shells (run npm/prisma inside these)
+make shell-fe              # Frontend container
+make shell-be              # Backend container
+make shell-ml              # ML service container
 
-# Development
-make shell-fe         # Open shell in frontend container
-make shell-be         # Open shell in backend container
-make shell-ml         # Open shell in ML service container
+# Code Quality
+npx tsc --noEmit           # TypeScript check (frontend)
+make lint                  # ESLint
+make type-check            # Full TypeScript check
 
-# Testing & Quality
-make test             # Run all tests in Docker
-make test-e2e         # Run end-to-end tests
-make lint             # Run linting
-make type-check       # TypeScript type checking
-
-# Model Weights
-make download-weights # Download ML model weights (~1.8 GB)
-make check-weights    # Verify weights are present
-make weights-info     # Show weights information
+# Testing
+make test                  # Unit tests (Vitest frontend, Jest backend)
+make test-e2e              # Playwright E2E tests
 
 # Building
-make build-optimized  # Build with optimization (auto cleanup)
-make build-clean      # Clean rebuild without cache
-
-# Monitoring & Metrics
-make prometheus       # Open Prometheus dashboard
-make grafana          # Open Grafana dashboard
-make metrics          # View metrics endpoint
-
-# Cleanup
-make clean            # Clean Docker resources
-make deep-clean       # Aggressive cleanup
-make docker-usage     # Show Docker disk usage
+make build-optimized       # Smart build with auto-cleanup
+make build-clean           # Full rebuild without cache
 ```
 
-See all available commands: `make help`
-
----
-
-## 📚 Next Steps
-
-- **[Documentation](./docs/)** - Complete documentation
-- **[Contributing Guidelines](#contributing)** - How to contribute
-- **[Architecture Overview](#system-overview)** - System architecture
-
----
-
-## 🛠️ Manual Setup (Alternative)
-
-**⚠️ Note:** Docker is the recommended approach. Use manual setup only for specific debugging needs.
+### Database (inside `make shell-be`)
 
 ```bash
-# 1. Backend API
-cd backend
-npm install
-npm run dev          # http://localhost:3001
-
-# 2. Python ML Service
-cd backend/segmentation
-pip install -r requirements.txt
-python main.py       # http://localhost:8000
-
-# 3. Frontend
-npm install
-npm run dev          # http://localhost:5173
+npx prisma migrate dev --name migration_name
+npx prisma generate
+npx prisma studio          # Visual DB browser
 ```
 
-## 📚 Documentation
+### Git Conventions
 
-### 🏗️ [System Architecture](./docs/architecture/)
+- **Conventional commits required**: `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`, `perf:`
+- **Direct commits to `main` blocked** -- use feature branches + PRs
+- Pre-commit hooks validate: no `console.log`/`debugger`, ESLint (0 warnings), Prettier, TypeScript
 
-Complete system design and component documentation
+### Internationalization
 
-- [Architecture Overview](./docs/architecture/README.md) - High-level system design
-- [Frontend Architecture](./docs/architecture/frontend.md) - React app structure
-- [Backend Architecture](./docs/architecture/backend.md) - Node.js API design
-- [ML Service Architecture](./docs/architecture/ml-service.md) - Python segmentation service
+All user-facing strings must exist in all 6 translation files (`src/translations/{en,cs,es,de,fr,zh}.ts`).
 
-### 🔌 [API Documentation](./docs/api/)
+## Testing
 
-Complete REST API reference
+The project has comprehensive test coverage across all layers:
 
-- [API Overview](./docs/api/README.md) - General API information
-- [Authentication](./docs/api/authentication.md) - User auth and JWT tokens
+| Layer | Framework | Files | Tests | Coverage Target |
+|-------|-----------|-------|-------|----------------|
+| Frontend | Vitest + React Testing Library | 142 | ~2500 | 80% |
+| Backend | Jest + Supertest | 63 | ~980 | 75% |
+| ML Service | pytest | 14 | ~170 | 80% |
+| E2E | Playwright | 14 | varies | critical flows |
 
-**Interactive API Documentation**: http://localhost:3001/api-docs (when running locally)
+```bash
+# Run tests
+make test                  # All unit tests
+make test-e2e              # Playwright E2E
 
-### 💻 [Development](./docs/development/)
-
-Developer setup and contribution guide
-
-- [Getting Started](./docs/development/getting-started.md) - Local development setup
-- [Testing Guide](./docs/development/testing.md) - Testing procedures
-
-### 📖 [User Guide](./docs/guides/)
-
-End-user documentation
-
-- [User Guide](./docs/guides/user-guide.md) - Complete application usage guide
-
-### 📋 [Reference](./docs/reference/)
-
-Technical reference materials
-
-- [Database Schema](./docs/reference/database-schema.md) - Complete database structure
-- [ML Models](./docs/reference/ml-models.md) - Available segmentation models
-
-## 🏗️ System Overview
-
-```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   React Client  │───▶│  Node.js API    │───▶│  Python ML      │
-│   Port: 5173    │    │  Port: 3001     │    │  Port: 8000     │
-│   (Vite + React)│    │  (Express)      │    │  (FastAPI)      │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-       │                        │                        │
-       │                        ▼                        ▼
-       │               ┌─────────────────┐    ┌─────────────────┐
-       │               │  PostgreSQL DB  │    │  PyTorch Models │
-       └──────────────▶│   Prisma ORM    │    │  HRNet, ResUNet │
-                       │   + Redis       │    │  + GPU (CUDA)   │
-                       └─────────────────┘    └─────────────────┘
+# Coverage
+npx vitest run --coverage  # Frontend coverage
+cd backend && npx jest --coverage  # Backend coverage
 ```
 
-**Architecture Highlights:**
+## Production Deployment
 
-- **Frontend**: React 18 + TypeScript + Vite (hot reload)
-- **Backend**: Node.js + Express + Prisma ORM
-- **Database**: PostgreSQL (production) / SQLite (development)
-- **ML Service**: Python + FastAPI + PyTorch + CUDA
-- **Caching**: Redis for session and queue management
-- **Monitoring**: Prometheus + Grafana for metrics
+```bash
+make build-optimized
+make prod                  # Build + deploy with docker-compose.production.yml
+curl https://spherosegapp.utia.cas.cz/health
+```
 
-## 🤖 AI Models
+| Service | Production | Dev |
+|---------|-----------|-----|
+| Nginx (SSL) | 80/443 | -- |
+| Frontend | 4000 | 3000 |
+| Backend | 4001 | 3001 |
+| ML | 4008 | 8000 |
 
-### Available Models
+## Documentation
 
-- **HRNetV2**: High-Resolution Network (0.2s per image, highest throughput)
-- **CBAM-ResUNet**: Advanced with attention mechanisms (0.3s per image, best accuracy)
+| Topic | Link |
+|-------|------|
+| Architecture Overview | [docs/architecture/README.md](docs/architecture/README.md) |
+| Frontend Architecture | [docs/architecture/frontend.md](docs/architecture/frontend.md) |
+| Backend Architecture | [docs/architecture/backend.md](docs/architecture/backend.md) |
+| ML Service | [docs/architecture/ml-service.md](docs/architecture/ml-service.md) |
+| Database Schema | [docs/reference/database-schema.md](docs/reference/database-schema.md) |
+| API Reference | [docs/api/README.md](docs/api/README.md) |
+| Testing Guide | [docs/testing-guide.md](docs/testing-guide.md) |
+| i18n Guide | [docs/i18n-guide.md](docs/i18n-guide.md) |
+| Getting Started | [docs/development/getting-started.md](docs/development/getting-started.md) |
 
-### Performance Benchmarks
+## About
 
-| Model        | Inference Time | Throughput  | Best Use Case              |
-| ------------ | -------------- | ----------- | -------------------------- |
-| HRNet        | ~0.2s/image    | 5.5 img/sec | High-throughput processing |
-| CBAM-ResUNet | ~0.3s/image    | 3.0 img/sec | Maximum accuracy analysis  |
+Developed at **UTIA AV CR** (Institute of Information Theory and Automation, Czech Academy of Sciences).
 
-_Performance measured on NVIDIA GPU. CPU inference is also supported._
-
-## 🏢 About
-
-Developed at **ÚTIA AV ČR** (Institute of Information Theory and Automation, Czech Academy of Sciences)
-
-- **Contact**: spheroseg@utia.cas.cz
+- **Contact**: prusek@utia.cas.cz
 - **Project Page**: [Dataset, Papers & Code](https://staff.utia.cas.cz/novozada/spheroseg/)
-
-## 🔑 Key Features
-
-### For Researchers
-
-- **Multiple AI Models**: Choose the best model for your needs
-- **Advanced Editor**: Precise polygon editing tools with undo/redo
-- **Batch Processing**: Upload and process multiple images at once
-- **Export Options**: COCO format, Excel, CSV exports
-- **Project Organization**: Organize work into logical projects
-
-### For Developers
-
-- **REST API**: Complete programmatic access
-- **Microservices**: Scalable architecture with independent services
-- **Docker Support**: Easy deployment and development
-- **TypeScript**: Full type safety across frontend and backend
-- **Modern Stack**: React 18, Node.js, FastAPI, PyTorch
-
-## 📊 Technical Stack
-
-| Component          | Technology                       | Purpose          |
-| ------------------ | -------------------------------- | ---------------- |
-| **Frontend**       | React + TypeScript + Vite        | User interface   |
-| **Backend**        | Node.js + Express + Prisma       | REST API server  |
-| **Database**       | SQLite (dev) / PostgreSQL (prod) | Data persistence |
-| **ML Service**     | Python + FastAPI + PyTorch       | AI inference     |
-| **Authentication** | JWT tokens                       | Secure user auth |
-| **Deployment**     | Docker + Docker Compose          | Containerization |
-
-## 🚀 Getting Started
-
-1. **⚡ Quick Start** - Run `make dev` and you're ready!
-2. **📖 Read the [Getting Started Guide](./docs/development/getting-started.md)** - Complete setup instructions
-3. **🏗️ Understand the [Architecture](./docs/architecture/README.md)** - System design overview
-4. **🔌 Explore the [API](http://localhost:3001/api-docs)** - Interactive API documentation
-5. **👨‍💻 Start Developing** - Use `make help` to see all commands
-
-## ⚡ Essential Commands
-
-```bash
-# Start & Stop
-make dev                   # Start development environment
-make down                  # Stop all services
-make restart               # Restart services
-
-# Monitoring
-make logs-f                # Follow all logs
-make health                # Check service health
-make status                # Show container status
-
-# Development
-make shell-be              # Access backend shell
-make test                  # Run tests
-make lint                  # Run linting
-
-# Database (from backend shell)
-npx prisma migrate dev     # Run migrations
-npx prisma studio          # Open database browser
-
-# Health Checks
-curl http://localhost:3001/health  # Backend
-curl http://localhost:8000/health  # ML Service
-curl http://localhost:5173         # Frontend
-```
-
-**See all commands**: `make help`
-
-## 🔧 Configuration
-
-### Environment Variables
-
-The application uses `.env` files for configuration. **Default development settings work out of the box!**
-
-For local development, the `.env.development` file is automatically created when you run `make dev`.
-
-**Key environment variables (for customization):**
-
-```bash
-# Backend API
-PORT=3001
-DATABASE_URL=postgresql://user:password@localhost:5432/spheroseg
-
-# Frontend (Vite)
-VITE_API_BASE_URL=http://localhost:3001/api
-VITE_ML_SERVICE_URL=http://localhost:8000
-
-# ML Service
-ML_SERVICE_PORT=8000
-MODEL_WEIGHTS_DIR=/app/weights
-ENABLE_GPU=true  # Set to false for CPU-only mode
-```
-
-> ⚠️ **Security Note**: Never commit `.env` files with secrets to version control!
-
-## 🛠️ Development Workflow
-
-1. **Start Development**: `make dev` - All services start with hot reload
-2. **Make Changes**: Edit code - changes apply automatically
-3. **Test**: `make test` - Run tests in Docker
-4. **Quality Check**: `make lint && make type-check`
-5. **View Logs**: `make logs-f` - Monitor all services
-6. **Database**: `make shell-be` then run Prisma commands
-
-**Typical Development Session:**
-
-```bash
-make dev              # Start everything
-make logs-f           # Watch logs in another terminal
-# ... make your changes ...
-make test             # Run tests
-make lint             # Check code quality
-make down             # Stop when done
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Here's how to get started:
-
-1. **Fork and Clone**: Fork the repository and clone locally
-2. **Create Branch**: `git checkout -b feature/your-feature`
-3. **Make Changes**: Follow the development workflow above
-4. **Test**: Ensure all tests pass (`make test`)
-5. **Commit**: Use clear commit messages
-6. **Push and PR**: Push to your fork and create a pull request
-
-**Code Standards:**
-
-- TypeScript for frontend and backend
-- Python type hints for ML service
-- Run `make lint` before committing
-- Write tests for new features
-
-## 📝 License
-
-This project is developed at ÚTIA AV ČR. For licensing information, please contact spheroseg@utia.cas.cz.
-
-## 🆘 Support
-
-- **📚 Documentation**: Check the [docs](./docs/) directory
-- **🐛 Issues**: Report bugs via GitHub Issues
-- **💬 Discussions**: Join community discussions
-- **📧 Contact**: Reach out for enterprise support
-
----
-
-Built with ❤️ using modern web technologies | Last updated: 2025-08-14

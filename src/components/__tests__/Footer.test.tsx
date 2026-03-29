@@ -34,10 +34,10 @@ describe('Footer', () => {
 
     // Email contact
     const emailLink = screen.getByRole('link', {
-      name: 'spheroseg@utia.cas.cz',
+      name: 'prusek@utia.cas.cz',
     });
     expect(emailLink).toBeInTheDocument();
-    expect(emailLink).toHaveAttribute('href', 'mailto:spheroseg@utia.cas.cz');
+    expect(emailLink).toHaveAttribute('href', 'mailto:prusek@utia.cas.cz');
 
     // Institution - should display institution name from translations
     expect(screen.getByText(/ÚTIA AV ČR/)).toBeInTheDocument();
@@ -73,7 +73,7 @@ describe('Footer', () => {
 
     // Contact Us (email)
     const contactLink = screen.getByRole('link', { name: 'Contact Us' });
-    expect(contactLink).toHaveAttribute('href', 'mailto:spheroseg@utia.cas.cz');
+    expect(contactLink).toHaveAttribute('href', 'mailto:prusek@utia.cas.cz');
   });
 
   it('displays copyright with current year', () => {
@@ -131,7 +131,7 @@ describe('Footer', () => {
     expect(docLink).toHaveClass('hover:text-blue-600');
 
     const emailLink = screen.getByRole('link', {
-      name: 'spheroseg@utia.cas.cz',
+      name: 'prusek@utia.cas.cz',
     });
     expect(emailLink).toHaveClass('hover:underline');
   });

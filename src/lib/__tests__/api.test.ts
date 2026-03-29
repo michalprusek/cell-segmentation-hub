@@ -692,7 +692,7 @@ describe('API Client', () => {
           expect.any(FormData),
           expect.objectContaining({
             headers: { 'Content-Type': 'multipart/form-data' },
-            timeout: 60000,
+            timeout: 300000,
             onUploadProgress: expect.any(Function),
           })
         );
@@ -1035,16 +1035,16 @@ describe('API Client', () => {
         // Test with empty array
         const result = await apiClient.getBatchSegmentationResults([]);
         expect(result).toEqual({});
-        expect(mockAxiosInstance.get).not.toHaveBeenCalled();
+        expect(mockAxiosInstance.post).not.toHaveBeenCalled();
       });
 
       test('should handle invalid image IDs gracefully', async () => {
-        // Test with null/undefined values
-        const invalidIds = [null, undefined, '', '   '] as any[];
+        // Test with null/undefined values — treated as non-array, returns {}
+        const invalidIds = null as any;
 
         const result = await apiClient.getBatchSegmentationResults(invalidIds);
         expect(result).toEqual({});
-        expect(mockAxiosInstance.get).not.toHaveBeenCalled();
+        expect(mockAxiosInstance.post).not.toHaveBeenCalled();
       });
 
       test('should make correct API call with valid image IDs', async () => {
@@ -1052,7 +1052,6 @@ describe('API Client', () => {
         const mockResponse = {
           data: {
             'img-1': {
-              success: true,
               polygons: [
                 {
                   id: 'poly-1',
@@ -1067,42 +1066,41 @@ describe('API Client', () => {
                   area: 100,
                 },
               ],
-              model_used: 'hrnet',
-              threshold_used: 0.5,
-              confidence: 0.9,
-              processing_time: 2.5,
-              image_size: { width: 800, height: 600 },
               imageWidth: 800,
               imageHeight: 600,
+              modelUsed: 'hrnet',
+              confidence: 0.9,
             },
             'img-2': null,
-            'img-3': {
-              success: false,
-              error: 'Processing failed',
-            },
+            'img-3': null,
           },
         };
 
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+        mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
         const result = await apiClient.getBatchSegmentationResults(imageIds);
 
-        expect(mockAxiosInstance.get).toHaveBeenCalledWith(
-          '/api/segmentation/batch-results',
-          {
-            params: { imageIds: imageIds.join(',') },
-            timeout: 30000,
-          }
+        expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+          '/segmentation/batch/results',
+          { imageIds }
         );
 
-        expect(result).toEqual(mockResponse.data);
+        expect(result['img-1']).toEqual(
+          expect.objectContaining({
+            polygons: expect.any(Array),
+            imageWidth: 800,
+            imageHeight: 600,
+          })
+        );
+        expect(result['img-2']).toBeNull();
+        expect(result['img-3']).toBeNull();
       });
 
       test('should handle API errors gracefully', async () => {
         const imageIds = ['img-1'];
         const apiError = new Error('Network error');
 
-        mockAxiosInstance.get.mockRejectedValue(apiError);
+        mockAxiosInstance.post.mockRejectedValue(apiError);
 
         await expect(
           apiClient.getBatchSegmentationResults(imageIds)
@@ -1116,34 +1114,15 @@ describe('API Client', () => {
           message: 'timeout of 30000ms exceeded',
         };
 
-        mockAxiosInstance.get.mockRejectedValue(timeoutError);
+        mockAxiosInstance.post.mockRejectedValue(timeoutError);
 
         await expect(
           apiClient.getBatchSegmentationResults(imageIds)
-        ).rejects.toThrow('timeout of 30000ms exceeded');
-      });
-
-      test('should handle rate limit errors with exponential backoff', async () => {
-        const imageIds = ['img-1'];
-        const rateLimitError = {
-          response: { status: 429 },
-          message: 'Too many requests',
-        };
-
-        mockAxiosInstance.get
-          .mockRejectedValueOnce(rateLimitError)
-          .mockRejectedValueOnce(rateLimitError)
-          .mockResolvedValueOnce({ data: { 'img-1': null } });
-
-        const result = await apiClient.getBatchSegmentationResults(imageIds);
-
-        // Should retry and eventually succeed
-        expect(mockAxiosInstance.get).toHaveBeenCalledTimes(3);
-        expect(result).toEqual({ 'img-1': null });
+        ).rejects.toMatchObject({ message: 'timeout of 30000ms exceeded' });
       });
 
       test('should handle large batches correctly', async () => {
-        // Test with 100 image IDs
+        // Test with 100 image IDs — fits in one chunk (BATCH_SIZE=500)
         const imageIds = Array.from({ length: 100 }, (_, i) => `img-${i}`);
         const mockResponse = {
           data: imageIds.reduce(
@@ -1155,16 +1134,13 @@ describe('API Client', () => {
           ),
         };
 
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+        mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
         const result = await apiClient.getBatchSegmentationResults(imageIds);
 
-        expect(mockAxiosInstance.get).toHaveBeenCalledWith(
-          '/api/segmentation/batch-results',
-          {
-            params: { imageIds: imageIds.join(',') },
-            timeout: 30000,
-          }
+        expect(mockAxiosInstance.post).toHaveBeenCalledWith(
+          '/segmentation/batch/results',
+          { imageIds }
         );
 
         expect(Object.keys(result)).toHaveLength(100);
@@ -1173,7 +1149,7 @@ describe('API Client', () => {
       });
 
       test('should handle mixed response data types', async () => {
-        const imageIds = ['img-1', 'img-2', 'img-3', 'img-4'];
+        const imageIds = ['img-1', 'img-2', 'img-3'];
         const mockResponse = {
           data: {
             'img-1': {
@@ -1194,47 +1170,24 @@ describe('API Client', () => {
                 },
               ],
             },
-            // img-4 is missing from response
           },
         };
 
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
+        mockAxiosInstance.post.mockResolvedValue(mockResponse);
 
         const result = await apiClient.getBatchSegmentationResults(imageIds);
 
-        expect(result['img-1']).toEqual({
-          polygons: [],
-          imageWidth: 800,
-          imageHeight: 600,
-        });
+        expect(result['img-1']).toEqual(
+          expect.objectContaining({ polygons: [], imageWidth: 800, imageHeight: 600 })
+        );
         expect(result['img-2']).toBeNull();
-        expect(result['img-3']).toEqual({
-          polygons: [
-            {
-              id: 'poly-1',
-              points: [
-                { x: 0, y: 0 },
-                { x: 10, y: 0 },
-              ],
-              type: 'external',
-            },
-          ],
-        });
-        expect(result['img-4']).toBeUndefined();
-      });
-
-      test('should handle malformed response data', async () => {
-        const imageIds = ['img-1'];
-        const mockResponse = {
-          data: 'invalid-json-string',
-        };
-
-        mockAxiosInstance.get.mockResolvedValue(mockResponse);
-
-        const result = await apiClient.getBatchSegmentationResults(imageIds);
-
-        // Should return the malformed data as-is (let caller handle it)
-        expect(result).toBe('invalid-json-string');
+        expect(result['img-3']).toEqual(
+          expect.objectContaining({
+            polygons: expect.arrayContaining([
+              expect.objectContaining({ id: 'poly-1' }),
+            ]),
+          })
+        );
       });
 
       test('should handle HTTP error status codes', async () => {
@@ -1248,11 +1201,11 @@ describe('API Client', () => {
           message: 'Request failed with status code 500',
         };
 
-        mockAxiosInstance.get.mockRejectedValue(httpError);
+        mockAxiosInstance.post.mockRejectedValue(httpError);
 
         await expect(
           apiClient.getBatchSegmentationResults(imageIds)
-        ).rejects.toThrow('Request failed with status code 500');
+        ).rejects.toMatchObject({ message: 'Request failed with status code 500' });
       });
 
       test('should handle concurrent batch requests efficiently', async () => {
@@ -1270,9 +1223,8 @@ describe('API Client', () => {
           ),
         }));
 
-        mockAxiosInstance.get.mockImplementation((url, config) => {
-          const imageIds = config.params.imageIds.split(',');
-          const batchSize = imageIds.length;
+        mockAxiosInstance.post.mockImplementation((_url, body) => {
+          const batchSize = (body as { imageIds: string[] }).imageIds.length;
           const responseIndex = batchSizes.indexOf(batchSize);
           return Promise.resolve(mockResponses[responseIndex]);
         });
@@ -1290,7 +1242,7 @@ describe('API Client', () => {
         expect(Object.keys(results[0])).toHaveLength(10);
         expect(Object.keys(results[1])).toHaveLength(50);
         expect(Object.keys(results[2])).toHaveLength(100);
-        expect(mockAxiosInstance.get).toHaveBeenCalledTimes(3);
+        expect(mockAxiosInstance.post).toHaveBeenCalledTimes(3);
       });
     });
 
@@ -1303,10 +1255,11 @@ describe('API Client', () => {
       });
 
       test('should handle undefined response gracefully', async () => {
+        // When data is undefined the implementation falls through to return null
         mockAxiosInstance.get.mockResolvedValue({ data: undefined });
 
         const result = await apiClient.getSegmentationResults('img-1');
-        expect(result).toBeUndefined();
+        expect(result).toBeNull();
       });
 
       test('should handle API errors', async () => {

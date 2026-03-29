@@ -6,14 +6,41 @@ import {
 import { ImageService } from '../imageService';
 import { PrismaClient } from '@prisma/client';
 import axios, { AxiosInstance } from 'axios';
+import { getStorageProvider } from '../../storage/index';
 
 // Mock dependencies
 jest.mock('axios');
 jest.mock('@prisma/client');
 jest.mock('../imageService');
-jest.mock('../thumbnailService');
 jest.mock('../segmentationThumbnailService');
 jest.mock('../thumbnailManager');
+jest.mock('../../utils/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+jest.mock('../../utils/config', () => ({
+  config: {
+    SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
+    NODE_ENV: 'test',
+    JWT_SECRET: 'test-secret',
+    JWT_REFRESH_SECRET: 'test-refresh-secret',
+    DATABASE_URL: 'file:./test.db',
+    STORAGE_TYPE: 'local',
+    STORAGE_LOCAL_PATH: '/tmp/test-storage',
+  },
+}));
+jest.mock('../../storage/index', () => ({
+  getStorageProvider: jest.fn(() => ({
+    getFileUrl: jest.fn((path: string) => Promise.resolve(`http://localhost/${path}`)),
+    saveFile: jest.fn(() => Promise.resolve('/saved/path')),
+    deleteFile: jest.fn(() => Promise.resolve()),
+    getBuffer: jest.fn(() => Promise.resolve(Buffer.from('mock-image-data'))),
+  })),
+}));
 
 describe('SegmentationService - Concurrent Request Handling', () => {
   let segmentationService: SegmentationService;
@@ -25,6 +52,7 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     success: true,
     polygons: [
       {
+        id: 'polygon-1',
         points: [
           { x: 0, y: 0 },
           { x: 100, y: 0 },
@@ -55,7 +83,26 @@ describe('SegmentationService - Concurrent Request Handling', () => {
     jest.clearAllMocks();
 
     // Setup mocks
-    mockPrisma = {} as any;
+    mockPrisma = {
+      segmentation: {
+        upsert: jest.fn().mockResolvedValue({ id: 'seg-1' }),
+        create: jest.fn().mockResolvedValue({ id: 'seg-1' }),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue({}),
+        delete: jest.fn().mockResolvedValue({}),
+        deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+      },
+      image: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+        update: jest.fn().mockResolvedValue({}),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      project: {
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+    } as any;
     mockImageService = {
       getImageById: jest.fn().mockResolvedValue(mockImage),
       updateSegmentationStatus: jest.fn().mockResolvedValue(undefined),
@@ -73,6 +120,14 @@ describe('SegmentationService - Concurrent Request Handling', () => {
 
     // Mock axios.create to return our mock instance
     (axios.create as jest.Mock).mockReturnValue(mockAxios);
+
+    // Re-setup storage mock after clearAllMocks (clearAllMocks resets implementations)
+    (getStorageProvider as jest.Mock).mockReturnValue({
+      getFileUrl: jest.fn((path: string) => Promise.resolve(`http://localhost/${path}`)),
+      saveFile: jest.fn(() => Promise.resolve('/saved/path')),
+      deleteFile: jest.fn(() => Promise.resolve()),
+      getBuffer: jest.fn(() => Promise.resolve(Buffer.from('mock-image-data'))),
+    });
 
     // Create SegmentationService instance
     segmentationService = new SegmentationService(mockPrisma, mockImageService);

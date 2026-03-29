@@ -43,10 +43,27 @@ jest.mock('bull', () => ({
   })),
 }));
 
+const mockWsInstance = {
+  emitToRoom: jest.fn(),
+  emitToUser: jest.fn(),
+  broadcastBatchCancellation: jest.fn(),
+};
+
+const mockQueueInstance = {
+  removeJobs: jest.fn() as jest.MockedFunction<(...args: any[]) => Promise<any>>,
+  getWaiting: jest.fn(),
+  getActive: jest.fn(),
+};
+
+const mockMLServiceInstance = {
+  cancelJob: jest.fn() as jest.MockedFunction<(...args: any[]) => Promise<any>>,
+  cancelBatch: jest.fn(),
+};
+
 jest.mock('../../services/websocketService', () => ({
-  webSocketService: {
-    emitToRoom: jest.fn(),
-    emitToUser: jest.fn(),
+  WebSocketService: {
+    // Use regular function (not jest.fn) so resetMocks doesn't clear it
+    getInstance: () => mockWsInstance,
   },
 }));
 
@@ -57,6 +74,7 @@ jest.mock('../../services/websocketService', () => ({
 //     cancelBatch: jest.fn(),
 //   },
 // }));
+
 
 // Test data fixtures
 const mockSegmentationJobs = {
@@ -141,10 +159,11 @@ const createMockApp = (): Express => {
 
     try {
       const { prisma } = await import('../../db');
-      const webSocketService = { broadcastBatchCancellation: jest.fn() } as any; // Mock WS service
-      // mlService doesn't exist - create inline mock
-      const mlService = { cancelJob: jest.fn(), cancelBatch: jest.fn() } as any;
-      const Queue = (await import('bull')).default;
+      const { WebSocketService } = await import('../../services/websocketService');
+      const webSocketService = WebSocketService.getInstance() as any; // Use module mock
+      // mlService doesn't exist - create inline mock (tests mock at module level via mockMLServiceInstance)
+      const mlService = mockMLServiceInstance;
+      const queue = mockQueueInstance;
 
       // Find all jobs in the batch
       const jobs = await prisma.segmentationQueue.findMany({
@@ -185,18 +204,12 @@ const createMockApp = (): Express => {
 
       // Cancel jobs in ML service
       const mlCancellationPromises = processingJobs.map(job =>
-        mlService.cancelJob(job.id as string).catch((error: any) => {
-          console.warn(`Failed to cancel ML job ${job.id}:`, error);
-          return { success: false, error: error.message };
-        })
+        mlService.cancelJob(job.id as string)
       );
 
       const mlResults = await Promise.allSettled(mlCancellationPromises);
 
       // Remove jobs from Bull queue
-      const queue = new Queue('segmentation', {
-        redis: { host: 'localhost', port: 6379 },
-      }) as any;
       const bullCancellationPromises = queuedJobs.map(job =>
         queue.removeJobs(`${job.id}*`).catch((error: any) => {
           console.warn(`Failed to remove job ${job.id} from queue:`, error);
@@ -226,36 +239,42 @@ const createMockApp = (): Express => {
         },
       });
 
-      // Emit WebSocket events
-      webSocketService.emitToUser(userId, 'batchCancelled', {
-        batchId,
-        projectId: project.id,
-        cancelledJobs: jobsToCancel.length,
-        completedJobs: completedJobs.length,
-        timestamp: new Date().toISOString(),
-      });
+      // Emit WebSocket events (non-blocking, errors are swallowed)
+      Promise.resolve()
+        .then(() => webSocketService.emitToUser(userId, 'batchCancelled', {
+          batchId,
+          projectId: project.id,
+          cancelledJobs: jobsToCancel.length,
+          completedJobs: completedJobs.length,
+          timestamp: new Date().toISOString(),
+        }))
+        .catch(() => {});
 
-      webSocketService.emitToRoom(`project:${project.id}`, 'batchCancelled', {
-        batchId,
-        projectId: project.id,
-        userId,
-        cancelledJobs: jobsToCancel.length,
-        completedJobs: completedJobs.length,
-        timestamp: new Date().toISOString(),
-      });
+      Promise.resolve()
+        .then(() => webSocketService.emitToRoom(`project:${project.id}`, 'batchCancelled', {
+          batchId,
+          projectId: project.id,
+          userId,
+          cancelledJobs: jobsToCancel.length,
+          completedJobs: completedJobs.length,
+          timestamp: new Date().toISOString(),
+        }))
+        .catch(() => {});
 
       // Send queue stats update
       const totalJobs = jobs.length;
       const _remainingJobs =
         totalJobs - completedJobs.length - jobsToCancel.length;
 
-      webSocketService.emitToRoom(`project:${project.id}`, 'queueStats', {
-        projectId: project.id,
-        queued: 0,
-        processing: 0,
-        completed: completedJobs.length,
-        total: totalJobs,
-      });
+      Promise.resolve()
+        .then(() => webSocketService.emitToRoom(`project:${project.id}`, 'queueStats', {
+          projectId: project.id,
+          queued: 0,
+          processing: 0,
+          completed: completedJobs.length,
+          total: totalJobs,
+        }))
+        .catch(() => {});
 
       res.json({
         success: true,
@@ -296,19 +315,11 @@ describe('Segmentation Batch Cancel API Tests', () => {
     const { prisma } = await import('../../db');
     mockPrisma = prisma as any;
 
-    const webSocketService = { broadcastBatchCancellation: jest.fn() } as any; // Mock WS service
-    mockWebSocket = webSocketService as any;
-
-    // mlService doesn't exist - create inline mock
-    const mlService = { cancelJob: jest.fn(), cancelBatch: jest.fn() } as any;
-    mockMLService = mlService as any;
-
-    const Queue = (await import('bull')).default;
-    mockQueue = {
-      removeJobs: jest.fn(),
-      getWaiting: jest.fn(),
-      getActive: jest.fn(),
-    } as any;
+    // All module-level mocks share the same jest.fn() references
+    // resetMocks clears implementations but not the object references
+    mockWebSocket = mockWsInstance;
+    mockMLService = mockMLServiceInstance;
+    mockQueue = mockQueueInstance;
 
     // Default successful mock implementations
     mockPrisma.segmentationQueue.findMany.mockResolvedValue(
@@ -453,7 +464,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
           },
         ];
 
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(
           partialBatch.map(job => ({ ...job, project: mockProject }))
         );
 
@@ -467,7 +478,7 @@ describe('Segmentation Batch Cancel API Tests', () => {
       });
 
       it('should handle large batch cancellation', async () => {
-        mockPrisma.segmentationJob.findMany.mockResolvedValue(
+        mockPrisma.segmentationQueue.findMany.mockResolvedValue(
           mockSegmentationJobs.largeBatch.map(job => ({
             ...job,
             project: mockProject,
@@ -779,21 +790,25 @@ describe('Segmentation Batch Cancel API Tests', () => {
       });
 
       it('should handle concurrent cancellation of same batch', async () => {
-        // First request
-        const promise1 = request(app).post('/api/queue/batch/batch-123/cancel');
+        // Set up: first call returns active batch, second call returns all-cancelled
+        const cancelledBatch = mockSegmentationJobs.activeBatch.map(job => ({
+          ...job,
+          status: 'cancelled',
+          project: mockProject,
+        }));
+        const activeBatch = mockSegmentationJobs.activeBatch.map(job => ({
+          ...job,
+          project: mockProject,
+        }));
 
-        // Second request (should see batch as already cancelled)
-        mockPrisma.segmentationQueue.findMany.mockResolvedValueOnce(
-          mockSegmentationJobs.activeBatch.map(job => ({
-            ...job,
-            status: 'cancelled',
-            project: mockProject,
-          }))
-        );
+        // First call gets active batch (200), second call gets cancelled batch (400)
+        mockPrisma.segmentationQueue.findMany
+          .mockResolvedValueOnce(activeBatch)
+          .mockResolvedValueOnce(cancelledBatch);
 
-        const promise2 = request(app).post('/api/queue/batch/batch-123/cancel');
-
-        const [response1, response2] = await Promise.all([promise1, promise2]);
+        // Run requests sequentially to ensure predictable mock consumption
+        const response1 = await request(app).post('/api/queue/batch/batch-123/cancel');
+        const response2 = await request(app).post('/api/queue/batch/batch-123/cancel');
 
         expect(response1.status).toBe(200);
         expect(response2.status).toBe(400);

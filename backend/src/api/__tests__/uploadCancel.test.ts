@@ -23,7 +23,12 @@ jest.mock('@/db', () => ({
   },
 }));
 
-jest.mock('@/redis', () => ({
+jest.mock('@/redis/client', () => ({
+  default: {
+    del: jest.fn(),
+    get: jest.fn(),
+    set: jest.fn(),
+  },
   redisClient: {
     del: jest.fn(),
     get: jest.fn(),
@@ -31,7 +36,7 @@ jest.mock('@/redis', () => ({
   },
 }));
 
-jest.mock('@/services/webSocketService', () => ({
+jest.mock('@/services/websocketService', () => ({
   webSocketService: {
     emitToRoom: jest.fn(),
     emitToUser: jest.fn(),
@@ -102,11 +107,13 @@ const createMockApp = (): Express => {
 
     try {
       const { prisma } = await import('@/db');
-      const { webSocketService } = await import('@/services/webSocketService');
-      const { redisClient } = await import('@/redis');
+      const wsModule = await import('@/services/websocketService') as any;
+      const webSocketService = wsModule.webSocketService;
+      const redisModule = await import('@/redis/client') as any;
+      const redisClient = redisModule.redisClient;
 
       // Find upload
-      const upload = await prisma.upload.findUnique({
+      const upload = await (prisma as any).upload.findUnique({
         where: { id: uploadId },
       });
 
@@ -129,7 +136,7 @@ const createMockApp = (): Express => {
       }
 
       // Update upload status
-      await prisma.upload.update({
+      await (prisma as any).upload.update({
         where: { id: uploadId },
         data: {
           status: 'cancelled',
@@ -138,7 +145,7 @@ const createMockApp = (): Express => {
       });
 
       // Clean up upload chunks
-      await prisma.uploadChunk.deleteMany({
+      await (prisma as any).uploadChunk.deleteMany({
         where: { uploadId },
       });
 
@@ -150,18 +157,24 @@ const createMockApp = (): Express => {
         console.warn('Failed to cleanup temp directory:', error);
       }
 
-      // Clear Redis cache
-      await redisClient.del(`upload:${uploadId}`);
+      // Clear Redis cache (errors are non-fatal)
+      try {
+        await redisClient.del(`upload:${uploadId}`);
+      } catch (_redisError) {
+        console.warn('Failed to clear Redis cache:', _redisError);
+      }
 
-      // Emit WebSocket event
-      webSocketService.emitToUser(userId, 'uploadCancelled', {
+      // Emit WebSocket events (errors are non-fatal)
+      Promise.resolve(webSocketService.emitToUser(userId, 'uploadCancelled', {
         uploadId,
         fileName: upload.fileName,
         reason: 'User cancelled',
         timestamp: new Date().toISOString(),
+      })).catch((_wsError: unknown) => {
+        console.warn('Failed to emit WebSocket event to user:', _wsError);
       });
 
-      webSocketService.emitToRoom(
+      Promise.resolve(webSocketService.emitToRoom(
         `project:${upload.projectId}`,
         'uploadCancelled',
         {
@@ -170,7 +183,9 @@ const createMockApp = (): Express => {
           userId,
           timestamp: new Date().toISOString(),
         }
-      );
+      )).catch((_wsError: unknown) => {
+        console.warn('Failed to emit WebSocket event to room:', _wsError);
+      });
 
       res.json({
         success: true,
@@ -208,19 +223,19 @@ describe('Upload Cancel API Tests', () => {
     const dbModule = jest.mocked(await import('@/db'));
     mockPrisma = dbModule.prisma;
 
-    const redisModule = jest.mocked(await import('@/redis'));
+    const redisModule = await import('@/redis/client') as any;
     mockRedis = redisModule.redisClient;
 
-    const wsModule = jest.mocked(await import('@/services/webSocketService'));
+    const wsModule = await import('@/services/websocketService') as any;
     mockWebSocket = wsModule.webSocketService;
 
     // Default successful mock implementations
-    mockPrisma.upload.findUnique.mockResolvedValue(mockUploadData.active);
-    mockPrisma.upload.update.mockResolvedValue({
+    (mockPrisma as any).upload.findUnique.mockResolvedValue(mockUploadData.active);
+    (mockPrisma as any).upload.update.mockResolvedValue({
       ...mockUploadData.active,
       status: 'cancelled',
     });
-    mockPrisma.uploadChunk.deleteMany.mockResolvedValue({ count: 3 });
+    (mockPrisma as any).uploadChunk.deleteMany.mockResolvedValue({ count: 3 });
     mockRedis.del.mockResolvedValue(1);
     mockWebSocket.emitToUser.mockResolvedValue(undefined);
     mockWebSocket.emitToRoom.mockResolvedValue(undefined);
@@ -432,21 +447,27 @@ describe('Upload Cancel API Tests', () => {
 
     describe('Concurrent Operations', () => {
       it('should handle concurrent cancellation requests', async () => {
+        // First call returns active, second returns already cancelled
+        (mockPrisma as any).upload.findUnique
+          .mockResolvedValueOnce(mockUploadData.active)
+          .mockResolvedValueOnce(mockUploadData.cancelled);
+
         // Both requests should be processed, but only first should succeed
-        const promises = [
+        const responses = await Promise.all([
           request(app).post('/api/uploads/upload-123/cancel'),
           request(app).post('/api/uploads/upload-123/cancel'),
-        ];
+        ]);
 
-        const responses = await Promise.all(promises);
+        // Sort by status: 200 first, 400 second
+        const sorted = [...responses].sort((a, b) => a.status - b.status);
 
-        // First request succeeds
-        expect(responses[0].status).toBe(200);
-        expect(responses[0].body.success).toBe(true);
+        // One request succeeds
+        expect(sorted[0].status).toBe(200);
+        expect(sorted[0].body.success).toBe(true);
 
-        // Second request should fail (upload already cancelled)
-        expect(responses[1].status).toBe(400);
-        expect(responses[1].body.error).toBe('Upload already cancelled');
+        // Other request should fail (upload already cancelled)
+        expect(sorted[1].status).toBe(400);
+        expect(sorted[1].body.error).toBe('Upload already cancelled');
       });
 
       it('should handle cancellation during chunk upload', async () => {
@@ -471,8 +492,8 @@ describe('Upload Cancel API Tests', () => {
     describe('File Cleanup', () => {
       it('should clean up temporary files', async () => {
         // Mock filesystem operations
-        const fsModule = jest.mocked(await import('fs/promises'));
-        fsModule.rm = jest.fn().mockResolvedValue(undefined);
+        const fsModule = await import('fs/promises') as any;
+        fsModule.rm = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
 
         await request(app).post('/api/uploads/upload-123/cancel').expect(200);
 
@@ -482,9 +503,9 @@ describe('Upload Cancel API Tests', () => {
 
       it('should handle file cleanup errors gracefully', async () => {
         // Mock filesystem error
-        const fsModule = jest.mocked(await import('fs/promises'));
+        const fsModule = await import('fs/promises') as any;
         fsModule.rm = jest
-          .fn()
+          .fn<() => Promise<void>>()
           .mockRejectedValue(new Error('Permission denied'));
 
         // Should still succeed even if file cleanup fails
@@ -541,6 +562,9 @@ describe('Upload Cancel API Tests', () => {
 
     describe('Input Validation', () => {
       it('should handle invalid upload ID format', async () => {
+        // Non-existent upload IDs should return 404
+        (mockPrisma as any).upload.findUnique.mockResolvedValue(null);
+
         const response = await request(app)
           .post('/api/uploads/invalid-id-format/cancel')
           .expect(404);
@@ -549,6 +573,9 @@ describe('Upload Cancel API Tests', () => {
       });
 
       it('should handle empty upload ID', async () => {
+        // Non-existent upload IDs should return 404
+        (mockPrisma as any).upload.findUnique.mockResolvedValue(null);
+
         const response = await request(app)
           .post('/api/uploads/ /cancel')
           .expect(404);
@@ -596,10 +623,19 @@ describe('Upload Cancel API Tests', () => {
 
     describe('Rate Limiting', () => {
       it('should handle rate limiting for excessive requests', async () => {
-        // Simulate rate limiting
+        // Build a rate-limited app with middleware BEFORE the route
         let requestCount = 0;
 
-        const rateLimitedApp = createMockApp();
+        const rateLimitedApp = express();
+        rateLimitedApp.use(express.json());
+
+        // Auth middleware
+        rateLimitedApp.use((req: any, _res: any, next: any) => {
+          req.user = { id: 'user-789', email: 'test@example.com' };
+          next();
+        });
+
+        // Rate limiter registered BEFORE the route
         rateLimitedApp.use(
           '/api/uploads/:uploadId/cancel',
           (req: any, res: any, next: any) => {
@@ -610,6 +646,11 @@ describe('Upload Cancel API Tests', () => {
             next();
           }
         );
+
+        // The cancel route handler (simplified inline)
+        rateLimitedApp.post('/api/uploads/:uploadId/cancel', async (req: any, res: any) => {
+          res.json({ success: true });
+        });
 
         // Make many requests
         const promises = Array.from({ length: 15 }, () =>

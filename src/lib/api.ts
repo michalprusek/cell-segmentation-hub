@@ -4,9 +4,7 @@ import { logger } from '@/lib/logger';
 import config from '@/lib/config';
 import {
   retryWithBackoff,
-  makeRetryable,
   RETRY_CONFIGS,
-  sleep,
 } from '@/lib/retryUtils';
 import {
   chunkFiles,
@@ -15,7 +13,6 @@ import {
   ChunkProgress,
   ChunkedUploadResult,
   validateFiles,
-  formatFileSize,
 } from '@/lib/uploadUtils';
 
 export interface LoginRequest {
@@ -218,7 +215,7 @@ class ApiClient {
               // Retry the original request with new token
               originalRequest.headers.Authorization = `Bearer ${this.accessToken}`;
               return this.instance(originalRequest);
-            } catch (refreshError) {
+            } catch (_refreshError) {
               logger.debug('🔄 Token refresh failed, forcing logout');
               // Fall through to force logout below
             }
@@ -1310,6 +1307,14 @@ class ApiClient {
       );
       const data = this.extractData(response);
 
+      // If it's just an array of polygons (backward compatibility — check before object test
+      // since arrays also satisfy typeof data === 'object')
+      if (Array.isArray(data)) {
+        return {
+          polygons: data,
+        };
+      }
+
       // Return the full segmentation result data as received from backend
       if (data && typeof data === 'object') {
         // Ensure we have the required structure
@@ -1325,13 +1330,6 @@ class ApiClient {
           updatedAt: data.updatedAt,
         };
         return result;
-      }
-
-      // If it's just an array of polygons (backward compatibility)
-      if (Array.isArray(data)) {
-        return {
-          polygons: data,
-        };
       }
 
       return null;

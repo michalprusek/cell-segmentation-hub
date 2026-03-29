@@ -6,6 +6,38 @@ import {
   afterEach,
   jest,
 } from '@jest/globals';
+
+jest.mock('../../../utils/config', () => ({
+  config: {
+    SEGMENTATION_SERVICE_URL: 'http://localhost:8000',
+    NODE_ENV: 'test',
+    JWT_SECRET: 'test-secret',
+    JWT_REFRESH_SECRET: 'test-refresh-secret',
+    DATABASE_URL: 'file:./test.db',
+  },
+}));
+
+jest.mock('../../../utils/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+
+jest.mock('../../sharingService', () => ({
+  hasProjectAccess: () => Promise.resolve({ hasAccess: true }),
+}));
+
+jest.mock('../../../db', () => ({
+  prisma: {
+    project: {
+      findUnique: () => Promise.resolve(null),
+    },
+  },
+}));
+
 import { ExportService, ExportOptions } from '../../exportService';
 import { MetricsCalculator } from '../../metrics/metricsCalculator';
 import * as fs from 'fs/promises';
@@ -166,8 +198,8 @@ describe('Scale Conversion Integration Tests', () => {
             // Should use pixel values when scale is invalid
             expect(metrics[0]?.area).toBe(10000); // Original pixel area
           } else {
-            // Should apply scale when valid
-            const expectedArea = 10000 / (testCase.value * testCase.value);
+            // Should apply scale when valid (scale is um/pixel, so area in µm² = px² * scale²)
+            const expectedArea = 10000 * (testCase.value * testCase.value);
             expect(metrics[0]?.area).toBeCloseTo(expectedArea, 2);
           }
         }
@@ -227,17 +259,17 @@ describe('Scale Conversion Integration Tests', () => {
         metricsNoScale[0]?.feretAspectRatio
       );
 
-      // Area should be scaled (converted from px² to µm²)
+      // Area should be scaled (converted from px² to µm²: multiply by scale²)
       expect(metricsWithScale[0]?.area).toBe(
-        (metricsNoScale[0]?.area || 0) / (scale * scale)
+        (metricsNoScale[0]?.area || 0) * (scale * scale)
       );
 
-      // Linear measurements should be scaled (converted from px to µm)
+      // Linear measurements should be scaled (converted from px to µm: multiply by scale)
       expect(metricsWithScale[0]?.perimeter).toBe(
-        (metricsNoScale[0]?.perimeter || 0) / scale
+        (metricsNoScale[0]?.perimeter || 0) * scale
       );
       expect(metricsWithScale[0]?.equivalentDiameter).toBe(
-        (metricsNoScale[0]?.equivalentDiameter || 0) / scale
+        (metricsNoScale[0]?.equivalentDiameter || 0) * scale
       );
     });
 

@@ -14,8 +14,28 @@ import { apiLimiter } from '../../../middleware/rateLimiter';
 import { logger } from '../../../utils/logger';
 import { verifyAccessToken } from '../../../auth/jwt';
 import { prisma } from '../../../db';
+import axios from 'axios';
+
+// Mock axios to prevent real HTTP calls to ML service
+jest.mock('axios');
+const mockedAxios = axios as jest.Mocked<typeof axios>;
 
 // Mock dependencies
+jest.mock('../../../utils/config', () => ({
+  config: {
+    NODE_ENV: 'test',
+    PORT: 3001,
+    HOST: 'localhost',
+    DATABASE_URL: 'file:./test.db',
+    JWT_ACCESS_SECRET: 'test-access-secret-for-testing-only-32-characters-long',
+    JWT_REFRESH_SECRET: 'test-refresh-secret-for-testing-only-32-characters-long',
+    JWT_ACCESS_EXPIRY: '15m',
+    JWT_REFRESH_EXPIRY: '7d',
+    JWT_REFRESH_EXPIRY_REMEMBER: '30d',
+    ALLOWED_ORIGINS: 'http://localhost:3000',
+    WS_ALLOWED_ORIGINS: 'http://localhost:3000',
+  },
+}));
 jest.mock('../../../middleware/auth');
 jest.mock('../../../middleware/rateLimiter');
 jest.mock('../../../utils/logger');
@@ -23,10 +43,8 @@ jest.mock('../../../auth/jwt');
 jest.mock('../../../db');
 
 // Create mocked functions with proper typing
-const mockedAuthenticate = authenticate as jest.MockedFunction<
-  typeof authenticate
->;
-const mockedApiLimiter = apiLimiter as jest.MockedFunction<typeof apiLimiter>;
+const mockedAuthenticate = authenticate as any;
+const mockedApiLimiter = apiLimiter as any;
 const mockedLogger = logger as jest.Mocked<typeof logger>;
 const _mockedVerifyAccessToken = verifyAccessToken as jest.MockedFunction<
   typeof verifyAccessToken
@@ -89,6 +107,11 @@ describe('ML Routes Authentication Tests', () => {
     (mockedPrisma as any).user = {
       findUnique: jest.fn(),
     };
+
+    // Default axios mock: ML service returns healthy response
+    mockedAxios.get = jest.fn(() =>
+      Promise.resolve({ data: { status: 'healthy', gpu_available: false } })
+    ) as any;
   });
 
   afterEach(() => {
@@ -99,6 +122,10 @@ describe('ML Routes Authentication Tests', () => {
     beforeEach(() => {
       // Setup app with ML routes
       app.use('/api/ml', mlRoutes);
+      // JSON error handler for tests (catches next(error) calls)
+      app.use((err: any, req: any, res: any, _next: any) => {
+        res.status(500).json({ success: false, error: err.message });
+      });
     });
 
     describe('GET /api/ml/health', () => {
@@ -133,22 +160,16 @@ describe('ML Routes Authentication Tests', () => {
       });
 
       it('should handle health check errors gracefully', async () => {
-        // Mock process.uptime to throw an error
-        const originalUptime = process.uptime;
-        (process as any).uptime = jest.fn().mockImplementation(() => {
-          throw new Error('Uptime calculation failed');
-        }) as any;
+        // Override axios to simulate ML service being unavailable
+        mockedAxios.get = jest.fn(() =>
+          Promise.reject(new Error('connect ECONNREFUSED'))
+        ) as any;
 
-        const response = await request(app).get('/api/ml/health').expect(500);
+        const response = await request(app).get('/api/ml/health');
 
+        // Route returns 503 when ML service is unavailable
+        expect(response.status).toBe(503);
         expect(response.body.success).toBe(false);
-        expect(mockedLogger.error).toHaveBeenCalledWith(
-          '❌ ML: Health check failed:',
-          expect.any(Error)
-        );
-
-        // Restore original uptime
-        process.uptime = originalUptime;
       });
 
       it('should work without Authorization header', async () => {
@@ -195,22 +216,16 @@ describe('ML Routes Authentication Tests', () => {
       });
 
       it('should handle status check errors', async () => {
-        // Force an error by mocking Date to throw
-        const originalDate = Date;
-        (global as any).Date = jest.fn().mockImplementation(() => {
-          throw new Error('Date creation failed');
-        }) as any as any;
+        // Override axios to simulate ML service being unavailable
+        mockedAxios.get = jest.fn(() =>
+          Promise.reject(new Error('connect ECONNREFUSED'))
+        ) as any;
 
-        const response = await request(app).get('/api/ml/status').expect(500);
+        const response = await request(app).get('/api/ml/status');
 
+        // Route returns 503 when ML service is unavailable
+        expect(response.status).toBe(503);
         expect(response.body.success).toBe(false);
-        expect(mockedLogger.error).toHaveBeenCalledWith(
-          '❌ ML: Error checking service status:',
-          expect.any(Error)
-        );
-
-        // Restore original Date
-        global.Date = originalDate;
       });
     });
 
@@ -274,13 +289,17 @@ describe('ML Routes Authentication Tests', () => {
   describe('Protected ML Endpoints (Authentication Required)', () => {
     beforeEach(() => {
       // Setup successful authentication mock by default
-      mockedAuthenticate.mockImplementation((req: any, res, next) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         req.user = mockUser;
         next();
       });
 
       // Setup app with ML routes
       app.use('/api/ml', mlRoutes);
+      // JSON error handler for tests (catches next(error) calls)
+      app.use((err: any, req: any, res: any, _next: any) => {
+        res.status(500).json({ success: false, error: err.message });
+      });
     });
 
     describe('GET /api/ml/queue', () => {
@@ -483,6 +502,9 @@ describe('ML Routes Authentication Tests', () => {
   describe('Authentication Boundary Tests', () => {
     beforeEach(() => {
       app.use('/api/ml', mlRoutes);
+      app.use((err: any, req: any, res: any, _next: any) => {
+        res.status(500).json({ success: false, error: err.message });
+      });
     });
 
     it('should verify middleware execution order - public endpoints before auth', async () => {
@@ -495,7 +517,7 @@ describe('ML Routes Authentication Tests', () => {
       });
 
       // Mock authentication to track execution
-      mockedAuthenticate.mockImplementation((req, res, next) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         middlewareOrder.push('authenticate');
         next();
       });
@@ -518,7 +540,7 @@ describe('ML Routes Authentication Tests', () => {
       });
 
       // Mock authentication to track execution and set user
-      mockedAuthenticate.mockImplementation((req: any, res, next) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         middlewareOrder.push('authenticate');
         req.user = mockUser;
         next();
@@ -530,8 +552,9 @@ describe('ML Routes Authentication Tests', () => {
         .set('Authorization', 'Bearer valid-token')
         .expect(200);
 
-      // Should have both rate limiter and authentication
-      expect(middlewareOrder).toEqual(['rateLimiter', 'authenticate']);
+      // Should have both authenticate and rate limiter
+      // authenticate runs first (router.use(authenticate)), then apiLimiter inline on route
+      expect(middlewareOrder).toEqual(['authenticate', 'rateLimiter']);
     });
 
     it('should handle authentication failures gracefully', async () => {
@@ -591,6 +614,9 @@ describe('ML Routes Authentication Tests', () => {
   describe('Security Edge Cases', () => {
     beforeEach(() => {
       app.use('/api/ml', mlRoutes);
+      app.use((err: any, req: any, res: any, _next: any) => {
+        res.status(500).json({ success: false, error: err.message });
+      });
     });
 
     it('should handle malformed Authorization headers', async () => {
@@ -607,7 +633,7 @@ describe('ML Routes Authentication Tests', () => {
         'Bearer ',
         'InvalidFormat token',
         'Bearer token-with-spaces token',
-        'Bearer token\nwith\nnewlines',
+        // Note: headers with newlines cannot be set in HTTP (RFC 7230 violation)
         'Bearer <script>alert("xss")</script>',
       ];
 
@@ -623,7 +649,7 @@ describe('ML Routes Authentication Tests', () => {
 
     it('should handle concurrent requests to protected endpoints', async () => {
       // Mock authentication to succeed
-      mockedAuthenticate.mockImplementation((req: any, res, next) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         req.user = mockUser;
         next();
       });
@@ -649,7 +675,7 @@ describe('ML Routes Authentication Tests', () => {
 
     it('should handle user context injection attempts', async () => {
       // Mock authentication to set malicious user data
-      mockedAuthenticate.mockImplementation((req: any, res, next) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         req.user = {
           ...mockUser,
           id: '<script>alert("xss")</script>',
@@ -676,7 +702,7 @@ describe('ML Routes Authentication Tests', () => {
         next();
       });
 
-      mockedAuthenticate.mockImplementation((req: any, res, next) => {
+      mockedAuthenticate.mockImplementation((req: any, res: any, next: any) => {
         req.user = mockUser;
         next();
       });
@@ -702,6 +728,9 @@ describe('ML Routes Authentication Tests', () => {
   describe('Error Handling', () => {
     beforeEach(() => {
       app.use('/api/ml', mlRoutes);
+      app.use((err: any, req: any, res: any, _next: any) => {
+        res.status(500).json({ success: false, error: err.message });
+      });
     });
 
     it('should handle database connectivity issues during authentication', async () => {

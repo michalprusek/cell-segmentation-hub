@@ -120,7 +120,8 @@ function ensureLogDirectory(): void {
   }
 }
 
-// Initialize log directory
+// Initialize log directory at module load for production use
+// Also called inside the middleware for testability
 ensureLogDirectory();
 
 /**
@@ -236,6 +237,9 @@ export const accessLogger = (
   res: Response,
   next: NextFunction
 ): void => {
+  // Ensure log directory exists (called per-request for testability)
+  ensureLogDirectory();
+
   const url = req.originalUrl || req.url;
 
   // Skip health check endpoints to reduce log verbosity

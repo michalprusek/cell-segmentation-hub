@@ -673,7 +673,7 @@ export const NUMBER_PATHS = {
   /**
    * Get cache statistics for monitoring
    */
-  getCacheStats: (): unknown => pathCache.getStats(),
+  getCacheStats: (): { hits: number; misses: number; size: number; hitRate: number } => pathCache.getStats(),
 
   /**
    * Clear the cache (useful for testing)

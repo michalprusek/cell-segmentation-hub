@@ -10,10 +10,10 @@ set -euo pipefail
 # ============================================================================
 
 DOMAIN="${DOMAIN:-spherosegapp.utia.cas.cz}"
-EMAIL="${EMAIL:-spheroseg@utia.cas.cz}"
+EMAIL="${EMAIL:-prusek@utia.cas.cz}"
 CERT_PATH="/etc/letsencrypt/live/$DOMAIN/cert.pem"
 LOGFILE="/var/log/ssl-renewal-$(date +%Y%m%d-%H%M%S).log"
-ALERT_EMAIL="${ALERT_EMAIL:-spheroseg@utia.cas.cz}"
+ALERT_EMAIL="${ALERT_EMAIL:-prusek@utia.cas.cz}"
 
 # ============================================================================
 # Logging Setup

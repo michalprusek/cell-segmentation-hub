@@ -17,6 +17,9 @@ describe('WebSocketService - Parallel Processing', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // Reset singleton so each test gets a fresh instance with new mocks
+    (WebSocketService as any).instance = null;
+
     // Setup mocks
     mockHttpServer = {} as any;
     mockPrisma = {} as any;
@@ -29,7 +32,7 @@ describe('WebSocketService - Parallel Processing', () => {
     } as any;
 
     // Mock Socket.IO constructor
-    (SocketIOServer as jest.Mock).mockReturnValue(mockSocketIOServer);
+    (SocketIOServer as unknown as jest.Mock).mockReturnValue(mockSocketIOServer);
 
     // Create WebSocketService instance
     webSocketService = WebSocketService.getInstance(mockHttpServer, mockPrisma);

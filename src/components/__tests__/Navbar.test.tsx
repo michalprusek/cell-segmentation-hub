@@ -38,13 +38,22 @@ describe('Navbar', () => {
     render(<Navbar />);
 
     expect(screen.getByText('Documentation')).toBeInTheDocument();
-    expect(screen.getByText('Terms')).toBeInTheDocument();
-    expect(screen.getByText('Privacy')).toBeInTheDocument();
-    expect(screen.getByText('Login')).toBeInTheDocument();
+    expect(screen.getByText('Terms of Service')).toBeInTheDocument();
+    expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
+    expect(screen.getByText('Sign In')).toBeInTheDocument();
   });
 
-  it('renders language and theme switchers', () => {
+  it('renders language and theme switchers', async () => {
+    const user = userEvent.setup();
     render(<Navbar />);
+
+    // Desktop nav only has 1 of each before mobile menu is opened
+    expect(screen.getAllByTestId('language-switcher')).toHaveLength(1);
+    expect(screen.getAllByTestId('theme-switcher')).toHaveLength(1);
+
+    // Open mobile menu — now both desktop and mobile instances are rendered
+    const menuButton = screen.getByLabelText('Toggle menu');
+    await user.click(menuButton);
 
     expect(screen.getAllByTestId('language-switcher')).toHaveLength(2); // Desktop and mobile
     expect(screen.getAllByTestId('theme-switcher')).toHaveLength(2); // Desktop and mobile
@@ -64,21 +73,20 @@ describe('Navbar', () => {
 
     const menuButton = screen.getByLabelText('Toggle menu');
 
-    // Initially, mobile menu should not be visible
-    expect(screen.queryByText('Terms of Service')).not.toBeInTheDocument();
+    // Initially, mobile menu is closed — Settings label not visible
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
 
     // Click to open mobile menu
     await user.click(menuButton);
 
-    // Mobile menu should now be visible with full link text
-    expect(screen.getByText('Terms of Service')).toBeInTheDocument();
-    expect(screen.getByText('Privacy Policy')).toBeInTheDocument();
+    // Mobile menu should now be visible
+    expect(screen.getByText('Settings')).toBeInTheDocument();
 
     // Click to close mobile menu
     await user.click(menuButton);
 
     // Mobile menu should be hidden again
-    expect(screen.queryByText('Terms of Service')).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
   });
 
   it('shows correct icon based on mobile menu state', async () => {
@@ -103,16 +111,16 @@ describe('Navbar', () => {
 
     const menuButton = screen.getByLabelText('Toggle menu');
 
-    // Open mobile menu
+    // Open mobile menu — Settings label is unique to mobile menu
     await user.click(menuButton);
-    expect(screen.getByText('Terms of Service')).toBeInTheDocument();
+    expect(screen.getByText('Settings')).toBeInTheDocument();
 
-    // Click on a mobile menu link
+    // Click on a mobile menu link (second Documentation link is the mobile one)
     const documentationLink = screen.getAllByText('Documentation')[1]; // Mobile version
     await user.click(documentationLink);
 
     // Mobile menu should close
-    expect(screen.queryByText('Terms of Service')).not.toBeInTheDocument();
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
   });
 
   it('applies scroll styles when scrolled', () => {
@@ -175,14 +183,15 @@ describe('Navbar', () => {
 
     const links = [
       { text: 'Documentation', href: '/documentation' },
-      { text: 'Terms', href: '/terms-of-service' },
-      { text: 'Privacy', href: '/privacy-policy' },
-      { text: 'Login', href: '/sign-in' },
+      { text: 'Terms of Service', href: '/terms-of-service' },
+      { text: 'Privacy Policy', href: '/privacy-policy' },
+      { text: 'Sign In', href: '/sign-in' },
     ];
 
     links.forEach(({ text, href }) => {
-      const link = screen.getByRole('link', { name: text });
-      expect(link).toHaveAttribute('href', href);
+      // getByRole with name may match multiple — use getAllByRole and check the first
+      const matchingLinks = screen.getAllByRole('link', { name: text });
+      expect(matchingLinks[0]).toHaveAttribute('href', href);
     });
   });
 

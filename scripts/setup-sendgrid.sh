@@ -17,7 +17,7 @@ if [ ! -f ".env.sendgrid" ]; then
 # SendGrid Configuration
 SENDGRID_API_KEY=YOUR_API_KEY_HERE
 EMAIL_SERVICE=sendgrid
-FROM_EMAIL=spheroseg@utia.cas.cz
+FROM_EMAIL=prusek@utia.cas.cz
 FROM_NAME=SpheroSeg Platform
 EOF
 fi
@@ -50,7 +50,7 @@ echo "✅ SendGrid API key saved to .env.sendgrid"
 echo ""
 
 # Ask about sender email
-read -p "Enter sender email (default: spheroseg@utia.cas.cz): " sender_email
+read -p "Enter sender email (default: prusek@utia.cas.cz): " sender_email
 if [ ! -z "$sender_email" ]; then
     sed -i "s/FROM_EMAIL=.*/FROM_EMAIL=$sender_email/" .env.sendgrid
     echo "✅ Sender email updated: $sender_email"

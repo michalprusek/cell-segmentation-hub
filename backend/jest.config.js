@@ -27,6 +27,7 @@ export default {
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],
+  setupFiles: ['<rootDir>/jest.env.js'],
   setupFilesAfterEnv: [
     '<rootDir>/jest.setup.js',
     '<rootDir>/src/test/setup.ts',

@@ -132,3 +132,10 @@ real-*-measurements-*.json
 
 # Serena AI memory files (development artifacts)
 .serena/memories/
+
+# Debug/test artifacts
+screenshots/
+videos/
+backups/
+.playwright-mcp/
+scripts/certbot-logs/

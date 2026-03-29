@@ -432,6 +432,8 @@ export default {
         'Segmentación más precisa con mecanismos de atención (E2E ~482ms, 2.7 img/s)',
       unet_spherohq:
         '¡El modelo más rápido después de las optimizaciones! Excelente para procesamiento en tiempo real (E2E ~286ms, 5.5 img/s)',
+      sperm:
+        'Modelo de morfología espermática con extracción de esqueleto para medir cabeza, pieza media y cola',
     },
     dataUsageTitle: 'Uso de datos y privacidad',
     dataUsageDescription:
@@ -1569,7 +1571,7 @@ export default {
       contact: {
         title: 'Información de Contacto:',
         content:
-          'Si tienes preguntas sobre estos Términos, por favor contáctanos en spheroseg@utia.cas.cz',
+          'Si tienes preguntas sobre estos Términos, por favor contáctanos en prusek@utia.cas.cz',
       },
       navigation: {
         backToHome: 'Volver al Inicio',
@@ -1702,7 +1704,7 @@ export default {
             'Restricción: Limitar cómo procesamos tu información',
           ],
           contactNote:
-            'Para ejercer estos derechos, contáctanos en spheroseg@utia.cas.cz. Responderemos dentro de 30 días.',
+            'Para ejercer estos derechos, contáctanos en prusek@utia.cas.cz. Responderemos dentro de 30 días.',
         },
         dataRetention: {
           title: '8. Retención de Datos',
@@ -1712,7 +1714,7 @@ export default {
             'Datos Personales/de Cuenta: Todos los identificadores personales, información de perfil, configuraciones de cuenta e historial de transacciones serán eliminados permanentemente dentro de 90 días del cierre de cuenta.',
             'Datos de Investigación: Imágenes originales y datos de proyecto vinculados a tu cuenta serán eliminados dentro de 90 días del cierre de cuenta.',
             'Datos de Entrenamiento de ML: Los datos usados para entrenamiento de ML son primero anonimizados/pseudonimizados para eliminar todos los identificadores personales. Estos datos anonimizados pueden retenerse indefinidamente para preservar mejoras del modelo, a menos que específicamente te excluyas del entrenamiento de ML o solicites eliminación completa.',
-            'Opciones de Exclusión: Puedes solicitar eliminación completa de todos los datos, incluyendo datos anonimizados de entrenamiento de ML, contactando spheroseg@utia.cas.cz. El tiempo de procesamiento es típicamente 30 días.',
+            'Opciones de Exclusión: Puedes solicitar eliminación completa de todos los datos, incluyendo datos anonimizados de entrenamiento de ML, contactando prusek@utia.cas.cz. El tiempo de procesamiento es típicamente 30 días.',
           ],
         },
         internationalTransfers: {
@@ -1732,8 +1734,8 @@ export default {
         },
         contact: {
           title: '12. Información de Contacto',
-          dpo: 'Oficial de Protección de Datos: spheroseg@utia.cas.cz',
-          general: 'Consultas Generales: spheroseg@utia.cas.cz',
+          dpo: 'Oficial de Protección de Datos: prusek@utia.cas.cz',
+          general: 'Consultas Generales: prusek@utia.cas.cz',
           postal: 'Dirección Postal:',
           address: {
             line1: 'ÚTIA AV ČR',

@@ -426,7 +426,7 @@ describe('WebSocket Service Cancel Integration', () => {
     it('should emit upload cancelled events', done => {
       const { operation } = uploadScenarios.singleFileUpload;
 
-      clientSocket.on('uploadCancelled', (data: CancelEvent) => {
+      clientSocket.once('uploadCancelled', (data: CancelEvent) => {
         expect(data.operationId).toBe(operation.id);
         expect(data.operationType).toBe('upload');
         expect(data.reason).toBe('User cancelled');
@@ -446,7 +446,7 @@ describe('WebSocket Service Cancel Integration', () => {
     it('should emit upload cancelled events to project room', done => {
       const { operation } = uploadScenarios.multipleFileUpload.operations[0];
 
-      clientSocket.on('uploadCancelled', (data: CancelEvent) => {
+      clientSocket.once('uploadCancelled', (data: CancelEvent) => {
         expect(data.operationId).toBe(operation.id);
         expect(data.projectId).toBe('project-456');
         done();
@@ -469,7 +469,7 @@ describe('WebSocket Service Cancel Integration', () => {
     it('should handle large file upload cancellation events', done => {
       const { operation } = uploadScenarios.largeFileUpload;
 
-      clientSocket.on('uploadCancelled', (data: CancelEvent) => {
+      clientSocket.once('uploadCancelled', (data: CancelEvent) => {
         expect(data.operationId).toBe(operation.id);
         expect(data.metadata?.fileSize).toBe(operation.metadata.fileSize);
         expect(data.metadata?.chunksTotal).toBe(operation.metadata.chunksTotal);
@@ -571,7 +571,8 @@ describe('WebSocket Service Cancel Integration', () => {
       const { totalImages, batchId } =
         segmentationScenarios.highVolumeSegmentation;
 
-      clientSocket.on('batchCancelled', (data: any) => {
+      // Listen on the project room that the client has joined in beforeEach
+      clientSocket.once('batchCancelled', (data: any) => {
         expect(data.batchId).toBe(batchId);
         expect(data.metadata?.totalImages).toBe(totalImages);
         done();
@@ -582,7 +583,7 @@ describe('WebSocket Service Cancel Integration', () => {
         operationType: 'segmentation',
         reason: 'High volume batch cancelled',
         timestamp: new Date().toISOString(),
-        projectId: 'project-high-volume',
+        projectId: 'project-456', // Use the same project the client joined in beforeEach
         batchId,
         metadata: { totalImages },
       });
@@ -611,7 +612,7 @@ describe('WebSocket Service Cancel Integration', () => {
     it('should emit export cancelled events', done => {
       const { operation } = exportScenarios.cocoExport;
 
-      clientSocket.on('exportCancelled', (data: CancelEvent) => {
+      clientSocket.once('exportCancelled', (data: CancelEvent) => {
         expect(data.operationId).toBe(operation.id);
         expect(data.operationType).toBe('export');
         expect(data.metadata?.format).toBe('coco');
@@ -699,7 +700,7 @@ describe('WebSocket Service Cancel Integration', () => {
         .createTestDataFactories()
         .uploadOperation();
 
-      clientSocket.on('operationCancelled', (data: CancelEvent) => {
+      clientSocket.once('operationCancelled', (data: CancelEvent) => {
         expect(data.operationId).toBe(operation.id);
         expect(data.operationType).toBe(operation.type);
         expect(data.reason).toBe('Universal cancel');
@@ -825,17 +826,16 @@ describe('WebSocket Service Cancel Integration', () => {
 
   describe('Error Handling and Resilience', () => {
     it('should handle connection errors gracefully', done => {
-      clientSocket.connect();
-
-      clientSocket.on('connect_error', (error: any) => {
-        expect(error).toBeDefined();
-        done();
-      });
-
       // Force connection error by connecting to wrong port
       const wrongClient = Client('http://localhost:99999', {
         transports: ['websocket'] as string[],
         timeout: 1000,
+      });
+
+      wrongClient.once('connect_error', (error: any) => {
+        expect(error).toBeDefined();
+        wrongClient.disconnect();
+        done();
       });
 
       wrongClient.connect();
@@ -952,7 +952,11 @@ describe('WebSocket Service Cancel Integration', () => {
       });
 
       clientSocket.on('authenticated', () => {
-        clientSocket.on('batchCancelled', (data: any) => {
+        clientSocket.emit('joinProject', { projectId: 'project-456' });
+      });
+
+      clientSocket.on('joinedProject', () => {
+        clientSocket.once('batchCancelled', (data: any) => {
           expect(data.imageIds).toHaveLength(1000);
           expect(data.metadata.largeData).toHaveLength(1000);
           done();

@@ -26,10 +26,10 @@ const Footer = () => {
               <p className="text-gray-600">
                 <strong>{t('footer.contact')}:</strong>{' '}
                 <a
-                  href="mailto:spheroseg@utia.cas.cz"
+                  href="mailto:prusek@utia.cas.cz"
                   className="text-blue-600 hover:underline"
                 >
-                  spheroseg@utia.cas.cz
+                  prusek@utia.cas.cz
                 </a>
               </p>
               <p className="text-gray-600">
@@ -82,7 +82,7 @@ const Footer = () => {
               </li>
               <li>
                 <a
-                  href="mailto:spheroseg@utia.cas.cz"
+                  href="mailto:prusek@utia.cas.cz"
                   className="text-base text-gray-600 hover:text-blue-600 transition-colors"
                 >
                   {t('footer.contactUs')}
